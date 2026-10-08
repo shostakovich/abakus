@@ -1357,22 +1357,46 @@
   document.addEventListener("click", e => {
     const f = e.target.closest("[data-fetch]");
     if (f) {
+      // a sync takes a moment: spinner, then a new history line
       const k = f.dataset.fetch;
-      fetches[k]++;
-      $(`[data-fetch-count="${k}"]`).textContent = fetches[k] >= 4 ? "4 von 4 Abrufen heute, wieder ab 00:00" : `${fetches[k]} von 4 Abrufen heute`;
-      f.disabled = fetches[k] >= 4;
-      $("[data-sync-log]").insertAdjacentHTML("afterbegin", `<li class="list-group-item d-flex justify-content-between"><span>08.10. ${new Date().toTimeString().slice(0, 5)} · Musterbank</span><span class="text-body-secondary">0 neu</span></li>`);
-      return toast("Abgerufen, keine neuen Buchungen.");
+      f.disabled = true; $(".spinner-border", f).hidden = false; $("svg", f).style.display = "none"; $("[data-fetch-label]", f).textContent = "Synchronisiere …";
+      return setTimeout(() => {
+        fetches[k]++;
+        const now = new Date().toTimeString().slice(0, 5), log = $("[data-sync-log]");
+        log.insertAdjacentHTML("afterbegin", `<li class="d-flex justify-content-between gap-3"><span>08.10. ${now}</span><span class="text-body-secondary">keine neuen</span></li>`);
+        while (log.children.length > 5) log.lastElementChild.remove();
+        $("[data-conn-last]").textContent = "gerade eben";
+        $(`[data-fetch-count="${k}"]`).textContent = fetches[k] >= 4 ? "4 von 4 Abrufen heute, wieder ab 00:00" : `${fetches[k]} von 4 Abrufen heute`;
+        $(".spinner-border", f).hidden = true; $("svg", f).style.display = ""; $("[data-fetch-label]", f).textContent = "Jetzt synchronisieren";
+        f.disabled = fetches[k] >= 4;
+        toast("Synchronisiert, keine neuen Buchungen.");
+      }, 1200);
     }
-    const r = e.target.closest("[data-renew]");
-    if (r) {
-      const card = r.closest(".card"), b = $(".card-header .badge", card);
-      b.className = "badge text-bg-success"; b.textContent = "Freigabe gültig";
-      $(".card-body", card).textContent = "Freigabe erneuert am 08.10.2026, gültig bis 06.04.2027 (180 Tage).";
-      r.remove();
-      return toast("Freigabe erneuert (im Echtbetrieb: Weiterleitung zur Bank).");
+    if (e.target.closest("[data-renew]")) { renewStep(1); renewed = false; return bootstrap.Modal.getOrCreateInstance(renewModal).show(); }
+    if (e.target.closest("[data-renew-next]")) return renewStep(2);
+    const rc = e.target.closest("[data-renew-confirm]");
+    if (rc) {
+      rc.disabled = true; $(".spinner-border", rc).hidden = false;
+      return setTimeout(() => {
+        rc.disabled = false; $(".spinner-border", rc).hidden = true;
+        renewed = true; renewStep(3);
+        const card = $('[data-conn="mb"]'), badge = $("[data-conn-badge]", card), exp = $("[data-conn-expiry]", card);
+        badge.className = "badge text-bg-success"; badge.textContent = "Freigabe gültig";
+        exp.className = "text-success fw-semibold"; exp.textContent = "Freigabe bis 06.04.2027, noch 180 Tage";
+        $("[data-renew]", card).remove();
+      }, 900);
     }
   });
+  // renewing the bank consent: explanation → (simulated) bank → done
+  const renewModal = $("#renewModal");
+  let renewed = false;
+  const renewStep = n => {
+    $$("[data-renew-step]", renewModal).forEach(el => (el.hidden = +el.dataset.renewStep !== n));
+    $("[data-renew-next]", renewModal).hidden = n !== 1;
+    $("[data-renew-cancel]", renewModal).hidden = n === 3;
+    $("[data-renew-done]", renewModal).hidden = n !== 3;
+  };
+  renewModal.addEventListener("hidden.bs.modal", () => { if (renewed) { renewed = false; toast("Freigabe erneuert, gültig bis 06.04.2027."); } });
   const impRows = [
     ["07.10.", "Lastschrift Stadtwerke", -42, "new"], ["05.10.", "Fahrradladen Speiche", -89, "dup"], ["03.10.", "Bäckerei Korn", -6.4, "match"],
     ["02.10.", "Umbuchung Girokonto", 200, "dup"], ["30.09.", "Stadtbibliothek", -12, "new"], ["28.09.", "Paketshop Muster", -4.99, "new"],

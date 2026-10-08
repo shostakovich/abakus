@@ -391,19 +391,32 @@
         <div class="tab-pane fade show active" id="imp-banks" role="tabpanel">
           <div class="row g-4">
             <div class="col-lg-8 d-flex flex-column gap-3">
-              <div class="card">
+              <div class="card" data-conn="mb">
                 <div class="card-header d-flex flex-wrap align-items-center gap-2">
                   <svg class="app-icon" aria-hidden="true"><use href="#i-bank"/></svg><span class="fw-semibold me-auto">Musterbank</span>
-                  <span class="badge text-bg-warning">Freigabe läuft in 9 Tagen ab</span>
+                  <span class="badge text-bg-warning" data-conn-badge>Freigabe läuft in 9 Tagen ab</span>
+                </div>
+                <div class="card-body small d-flex flex-wrap column-gap-4 row-gap-1 py-2">
+                  <span>Letzter Abruf: <strong data-conn-last>heute 06:12</strong></span>
+                  <span>Nächster Abruf: <strong>heute 18:00</strong></span>
+                  <span class="text-warning-emphasis fw-semibold" data-conn-expiry>Freigabe bis 17.10.2026, noch 9 Tage</span>
                 </div>
                 <ul class="list-group list-group-flush">
-                  <li class="list-group-item d-flex justify-content-between gap-3"><span>💶 Girokonto <span class="small text-body-secondary">DE89 3704 … 3000</span></span><span class="small text-body-secondary text-end">heute 06:12 · 4 neu, 1 zugeordnet</span></li>
-
+                  <li class="list-group-item d-flex justify-content-between gap-3"><span>💶 Girokonto <span class="small text-body-secondary">DE89 3704 … 3000</span></span><span class="small text-body-secondary text-end">verknüpft mit 💶 Girokonto</span></li>
                 </ul>
-                <div class="card-body small text-body-secondary">Freigabe erteilt am 19.01.2026, gültig bis <strong class="text-warning-emphasis">17.10.2026</strong>. Danach ruft Abakus nichts mehr ab, bis du die Freigabe in der Banking-App erneuerst.</div>
+                <div class="card-body small border-top">
+                  <div class="fw-semibold mb-1">Letzte Abrufe</div>
+                  <ul class="list-unstyled mb-0 d-flex flex-column gap-1" data-sync-log>
+                    <li class="d-flex justify-content-between gap-3"><span>08.10. 06:12</span><span class="text-body-secondary">4 neu, 1 zugeordnet</span></li>
+                    <li class="d-flex justify-content-between gap-3"><span>07.10. 18:00</span><span class="text-body-secondary">5 neu</span></li>
+                    <li class="d-flex justify-content-between gap-3"><span>07.10. 06:00</span><span class="text-danger">Fehler: Bank nicht erreichbar, nächster Versuch 18:00</span></li>
+                    <li class="d-flex justify-content-between gap-3"><span>06.10. 18:00</span><span class="text-body-secondary">2 neu</span></li>
+                    <li class="d-flex justify-content-between gap-3"><span>06.10. 06:00</span><span class="text-body-secondary">keine neuen</span></li>
+                  </ul>
+                </div>
                 <div class="card-footer d-flex flex-wrap align-items-center gap-2">
                   <button type="button" class="btn btn-sm btn-warning" data-renew><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-key"/></svg> Freigabe erneuern</button>
-                  <button type="button" class="btn btn-sm btn-outline-primary" data-fetch="mb"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-sync"/></svg> Jetzt abrufen</button>
+                  <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" data-fetch="mb"><span class="spinner-border spinner-border-sm" aria-hidden="true" hidden></span><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-sync"/></svg><span data-fetch-label>Jetzt synchronisieren</span></button>
                   <span class="small text-body-secondary ms-auto" data-fetch-count="mb">2 von 4 Abrufen heute</span>
                 </div>
               </div>
@@ -417,13 +430,6 @@
                   <li class="list-group-item"><span class="fw-semibold">Girokonto Nordbank</span><div class="text-body-secondary">Datei-Import aus MoneyMoney (QFX), zuletzt 07.10. Banksaldo zum Abgleichen kommt aus der Datei.</div></li>
                   <li class="list-group-item"><span class="fw-semibold">Geteilt</span><div class="text-body-secondary">Zipfelkasse bucht gemeinsame Ausgaben über die API, zuletzt heute 07:55</div></li>
                   <li class="list-group-item"><span class="fw-semibold">Depot</span><div class="text-body-secondary">Wert kommt aus zipfelfolio als „Wertänderung“, zuletzt 08.10.</div></li>
-                </ul>
-              </div>
-              <div class="card">
-                <div class="card-header">Letzte Abrufe</div>
-                <ul class="list-group list-group-flush small" data-sync-log>
-                                    <li class="list-group-item d-flex justify-content-between"><span>08.10. 06:12 · Musterbank</span><span class="text-body-secondary">4 neu, 1 zugeordnet</span></li>
-                  <li class="list-group-item d-flex justify-content-between"><span>07.10. 18:00 · Musterbank</span><span class="text-body-secondary">5 neu</span></li>
                 </ul>
               </div>
             </div>
@@ -600,6 +606,47 @@
 
   <!-- Popover for covering overspending and reconciling -->
   <div class="card shadow-lg app-pop" role="dialog" aria-modal="false" data-pop hidden></div>
+
+  <!-- ===================================================== Freigabe erneuern (simulated) -->
+  <div class="modal fade" id="renewModal" tabindex="-1" aria-labelledby="renewTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h5" id="renewTitle">Freigabe erneuern · Musterbank</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
+        </div>
+        <div class="modal-body" data-renew-step="1">
+          <div class="small text-body-secondary d-flex gap-3 mb-3 app-steps"><span class="fw-semibold text-body">1 · Erklärung</span><span class="">2 · Bank</span><span class="">3 · Fertig</span></div>
+          <p>Banken geben den Kontozugriff nach PSD2 nur befristet frei, je nach Bank für 90 bis 180 Tage. Danach muss die Freigabe einmal bei der Bank bestätigt werden.</p>
+          <p class="small text-body-secondary mb-0">Abakus leitet dich über Enable Banking zur Musterbank. Deine Zugangsdaten gibst du nur dort ein; Abakus sieht sie nie.</p>
+        </div>
+        <div class="modal-body" data-renew-step="2" hidden>
+          <div class="small text-body-secondary d-flex gap-3 mb-3 app-steps"><span class="">1 · Erklärung</span><span class="fw-semibold text-body">2 · Bank</span><span class="">3 · Fertig</span></div>
+          <div class="border border-2 rounded-3 p-3" style="border-style:dashed !important">
+            <div class="badge text-bg-secondary mb-2">Simulation – im Klickdummy gibt es keine echte Bank</div>
+            <div class="fw-bold mb-2">🏦 Musterbank Online (Beispiel)</div>
+            <p class="small mb-2">Abakus möchte über Enable Banking bis <strong>06.04.2027</strong> Kontostände und Umsätze lesen von:</p>
+            <ul class="small mb-3"><li>Girokonto DE89 3704 … 3000</li></ul>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" data-renew-confirm><span class="spinner-border spinner-border-sm" aria-hidden="true" hidden></span>In der Banking-App bestätigen</button>
+              <button type="button" class="btn btn-light" data-bs-dismiss="modal">Ablehnen</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body text-center" data-renew-step="3" hidden>
+          <div class="small text-body-secondary d-flex justify-content-center gap-3 mb-3 app-steps"><span class="">1 · Erklärung</span><span class="">2 · Bank</span><span class="fw-semibold text-body">3 · Fertig</span></div>
+          <div class="text-success mb-2"><svg class="app-icon" style="width:3rem;height:3rem" aria-hidden="true"><use href="#i-okc"/></svg></div>
+          <p class="fw-semibold mb-1">Freigabe erneuert</p>
+          <p class="small text-body-secondary mb-0">Gültig bis 06.04.2027 (180 Tage). Abakus ruft wieder automatisch ab.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" data-bs-dismiss="modal" data-renew-cancel>Abbrechen</button>
+          <button type="button" class="btn btn-primary" data-renew-next>Weiter zur Bank</button>
+          <button type="button" class="btn btn-primary" data-bs-dismiss="modal" data-renew-done hidden>Fertig</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ===================================================== Buchung erfassen -->
   <div class="modal fade" id="bookingModal" tabindex="-1" aria-labelledby="bookingTitle" aria-hidden="true">
