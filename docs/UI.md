@@ -1,8 +1,8 @@
 # UI direction
 
 Abakus should feel familiar to someone coming from YNAB 4, today's YNAB and Actual Budget: same structure, same
-vocabulary, same interaction patterns. The visual language is felt-css (clean look by default, felt look per
-toggle), not a new design. Take the best of each app.
+vocabulary, same interaction patterns. The visual language is felt-css in its clean look only (no felt look;
+dense money tables don't suit it), not a new design. Take the best of each app.
 
 References are public: Actual's demo (https://demo.actualbudget.org/budget), screenshots of YNAB 4 and today's
 YNAB from the web and YNAB's help center. No screenshots of real budgets in this repo.
@@ -48,8 +48,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   slim cards (big number, Verteilen, calculation collapsible) and quiet numbers (zeros dimmed, negatives red,
   a dot for underfunded). Light month card in clean light
 - Two-line category rows like YNAB: name on line 1, bar and status on line 2; rows about 36 px
-- Felt is the frame, the table body stays flat: felt on sidebar, month cards, cards, buttons, chips; no felt
-  wells or stitches inside the table
+- Clean look only: the felt look is dropped (owner decision), no look toggle; the table body stays flat
 
 ## Method
 
@@ -59,10 +58,9 @@ borrowing from next month's income).
 
 ## Review
 
-Two art-director subagents rate every screen 1–10 with concrete feedback, per look × theme (clean light, clean
-dark, felt light, felt dark as a sample), desktop (3, 2, 1 months) and phone (390 px):
+Two art-director subagents rate every screen 1–10 with concrete feedback, per theme (clean light, clean dark), desktop (3, 2, 1 months) and phone (390 px):
 
-- AD A, material/craft: felt-css fit, typography, spacing, numbers, details
+- AD A, material/craft: felt-css fit (clean look), typography, spacing, numbers, details
 - AD B, UI/product: hierarchy, familiarity for YNAB/Actual users, task flow, mobile, dark contrast
 
 Both get the reference screenshots and the brief "steal the best from all three".

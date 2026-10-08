@@ -20,8 +20,8 @@ Zipfelkasse's recurring expenses through the API.
 ## Stack
 
 - Elixir, Phoenix 1.8, LiveView, SQLite (`ecto_sqlite3`), esbuild, one amd64 container
-- felt-css (`https://felt-css.rocu.de/felt.css`), Bootstrap class names in `core_components`, clean look by
-  default, felt look per toggle
+- felt-css (`https://felt-css.rocu.de/felt.css`), Bootstrap class names in `core_components`, clean look
+  only (no felt look)
 - HTTP: `req`; mail: `swoosh`
 - New dependencies only with a reason
 - Same conventions as zipfelfolio, ZiWoAS and FeatherPage: `default_transaction_mode: :immediate`, WAL,
