@@ -1101,7 +1101,7 @@
     e.target.reset();
   });
 
-  // ------------------------------------------------------------ toast, look, theme
+  // ------------------------------------------------------------ toast, theme
   function toast(text, tone = "success") {
     const el = $("#toast");
     el.className = `toast text-bg-${tone}`;
@@ -1111,9 +1111,7 @@
 
   const root = document.documentElement;
   const store = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
-  $(`#look-${root.dataset.look}`).checked = true;
   $(`#theme-${root.dataset.bsTheme || "auto"}`).checked = true;
-  $$('input[name="look"]').forEach(i => i.addEventListener("change", () => { root.dataset.look = i.value; store("look", i.value); }));
   $$('input[name="theme"]').forEach(i => i.addEventListener("change", () => {
     if (i.value === "auto") delete root.dataset.bsTheme; else root.dataset.bsTheme = i.value;
     store("theme", i.value);

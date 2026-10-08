@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-look="clean">
+<html lang="de">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -10,11 +10,10 @@
   <meta name="theme-color" content="#3f7d5a">
   <script>
     (() => {
-      const root = document.documentElement, q = new URLSearchParams(location.search);
-      const stored = k => { try { return localStorage.getItem(k); } catch { return null; } };
-      const look = q.get("look") || stored("look"), theme = q.get("theme") || stored("theme");
-      root.dataset.look = look === "felt" ? "felt" : "clean";
-      if (theme === "light" || theme === "dark") root.dataset.bsTheme = theme;
+      const q = new URLSearchParams(location.search);
+      let theme = q.get("theme");
+      try { theme ||= localStorage.getItem("theme"); } catch {}
+      if (theme === "light" || theme === "dark") document.documentElement.dataset.bsTheme = theme;
     })();
   </script>
   <style>
@@ -431,13 +430,6 @@
           <div class="card">
             <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-palette"/></svg>Aussehen</div>
             <div class="card-body d-flex flex-column gap-3">
-              <div>
-                <div class="small text-body-secondary mb-1">Look</div>
-                <div class="btn-group btn-group-sm" role="group" aria-label="Look">
-                  <input type="radio" class="btn-check" name="look" id="look-clean" value="clean"><label class="btn btn-outline-primary" for="look-clean">Clean</label>
-                  <input type="radio" class="btn-check" name="look" id="look-felt" value="felt"><label class="btn btn-outline-primary" for="look-felt">Filz</label>
-                </div>
-              </div>
               <div>
                 <div class="small text-body-secondary mb-1">Theme</div>
                 <div class="btn-group btn-group-sm" role="group" aria-label="Theme">
