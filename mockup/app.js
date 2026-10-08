@@ -1003,7 +1003,7 @@
     if (t.cat === "rta") return "Einnahme: Zu verteilen";
     if (acc(t.acc).type === "tracking") return "";
     // unapproved rows keep the category editable inline, prefilled from the payee
-    if (t.approved === false || !t.cat) return `<select class="form-select form-select-sm${t.cat ? "" : " border-warning text-warning-emphasis"}" style="max-width:15rem" data-categorize="${t.id}" aria-label="Kategorie">${t.cat ? "" : '<option value="">Kategorie wählen</option>'}${catOnlyOpts(t.cat)}</select>`;
+    if (t.approved === false || !t.cat) return `<select class="form-select form-select-sm${t.cat ? "" : " border-warning text-warning-emphasis"}" style="max-width:14rem" data-categorize="${t.id}" aria-label="Kategorie">${t.cat ? "" : '<option value="">Kategorie wählen</option>'}${catOnlyOpts(t.cat)}</select>`;
     return groupedCat(cat(t.cat));
   };
   const clearCell = t => acc(t.acc).type === "tracking" ? '<span class="app-clear is-cleared" title="Von zipfelfolio gemeldet">C</span>'
@@ -1011,7 +1011,9 @@
     : `<button type="button" class="app-clear${t.status === "c" ? " is-cleared" : ""}" data-toggle-clear="${t.id}" aria-label="${t.status === "c" ? "Abgeglichen" : "Nicht abgeglichen"}, umschalten">C</button>`;
   const FLAGS = [null, ["Rot", "tomato"], ["Orange", "pumpkin"], ["Gelb", "mustard"], ["Grün", "moss"], ["Blau", "denim"], ["Lila", "plum"]];
   const flagCell = t => { const f = FLAGS[t.flag || 0]; return `<button type="button" class="app-flag${f ? " is-set" : ""}" data-flag="${t.id}"${f ? ` style="color:var(--felt-${f[1]})"` : ""} aria-label="Markierung: ${f ? f[0] : "keine"}, ändern" title="Markierung">${icon("i-flag")}</button>`; };
-  const matchBar = t => { const m = t.matchOf && txById(t.matchOf); return m ? `<span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">${icon("i-link")} passt zu manueller Buchung vom ${dShort(m.date)}</span> <button type="button" class="btn btn-sm btn-primary py-0" data-merge="${t.id}">Zuordnen</button> <button type="button" class="btn btn-sm btn-outline-secondary py-0" data-approve="${t.id}">Trennen</button>` : ""; };
+  const flagPicker = t => `<div class="fw-semibold small mb-2">Markierung</div><div class="d-flex flex-wrap gap-1">${FLAGS.map((f, i) => `<button type="button" class="btn btn-sm btn-light d-inline-flex align-items-center gap-1${(t.flag || 0) === i ? " active" : ""}" data-flag-set="${t.id}|${i}"${f ? ` style="color:var(--felt-${f[1]})"` : ""}>${f ? icon("i-flag") : ""}<span class="text-body">${f ? f[0] : "keine"}</span></button>`).join("")}</div>`;
+  const approveBtn = t => (t.approved === false && !t.matchOf ? `<button type="button" class="btn btn-sm btn-primary app-approve" data-approve="${t.id}" title="Bestätigen" aria-label="${esc(t.payee)} bestätigen">${icon("i-check")}</button>` : "");
+  const matchBar = t => { const m = t.matchOf && txById(t.matchOf); return m ? `<span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">${icon("i-link")} passt zu manueller Buchung vom ${dShort(m.date)}</span> <button type="button" class="btn btn-sm btn-primary" data-merge="${t.id}">Zuordnen</button> <button type="button" class="btn btn-sm btn-outline-secondary" data-approve="${t.id}">Trennen</button>` : ""; };
   // Depot and Geteilt are fed by zipfelfolio and Zipfelkasse, not by hand or file
   const FEEDS = { depot: "Wert kommt aus zipfelfolio", geteilt: "Buchungen kommen aus Zipfelkasse" };
   const equation = (cl, wb) => {
@@ -1037,12 +1039,14 @@
     const scope = txs.filter(t => list.some(x => x.id === t.acc));
     const fresh = scope.filter(t => t.approved === false);
     if (!fresh.length && state.regFilter === "new") state.regFilter = "all";
-    $("[data-reg-banner]").innerHTML = fresh.length ? `<div class="alert alert-primary d-flex flex-wrap align-items-center gap-2 py-2 mb-3">${icon("i-info")}<span class="me-auto">${fresh.length} neue Buchungen zu bestätigen oder zu kategorisieren</span><button type="button" class="btn btn-sm btn-primary" data-reg-filter="new">Ansehen</button><button type="button" class="btn btn-sm btn-outline-primary" data-approve-all>Alle bestätigen</button></div>` : "";
+    const nNew = `${fresh.length} ${fresh.length === 1 ? "neue Buchung" : "neue Buchungen"}`;
+    $("[data-reg-banner]").innerHTML = fresh.length ? `<div class="alert alert-primary d-flex align-items-center gap-2 py-1 py-md-2 mb-3 app-banner">${icon("i-info")}<span class="me-auto text-truncate"><span class="d-md-none">${fresh.length} neu</span><span class="d-none d-md-inline">${nNew} zu bestätigen oder zu kategorisieren</span></span><button type="button" class="btn btn-sm btn-primary" data-reg-filter="new">Ansehen</button><button type="button" class="btn btn-sm btn-outline-primary" data-approve-all><span class="d-md-none">Alle</span><span class="d-none d-md-inline">Alle bestätigen</span></button></div>` : "";
     $("[data-reg-title]").textContent = all ? "Alle Konten" : accText(a);
     $("[data-reg-meta]").innerHTML = all ? "<span>Budget- und Tracking-Konten</span>"
       : `<span>${esc(a.kind)}</span><span class="d-inline-flex align-items-center gap-1">${icon(a.type === "tracking" ? "i-trend" : a.id === "giro" ? "i-check" : a.id === "geteilt" ? "i-users" : "i-file")}${esc(a.link)}</span>${a.rec ? `<span class="d-inline-flex align-items-center gap-1">${icon("i-lock")}Abgeglichen ${ago(a.rec)}</span>` : ""}${a.note ? `<span>${esc(a.note)}</span>` : ""}`;
-    $("[data-reconcile-open]").hidden = all || track;
-    $("[data-reg-edit]").hidden = all;
+    $$("[data-reconcile-open]").forEach(b => (b.closest("li") || b).hidden = all || track);
+    $$("[data-reg-edit]").forEach(b => (b.closest("li") || b).hidden = all);
+    $("[data-reg-more]").hidden = all;
     $("[data-reg-legend]").hidden = track;
     $("[data-book-account]").hidden = !!feed;
     $("[data-file-import]").hidden = !!feed;
@@ -1053,6 +1057,11 @@
     $("[data-reg-balances]").innerHTML = track ? plainVal(balance(a), "Wert laut zipfelfolio")
       : all ? `<div><div class="small fw-semibold text-uppercase text-body-secondary mb-1">Budgetkonten</div>${equation(cl, wb)}</div><div class="vr d-none d-sm-block"></div>${plainVal(sum(trk, balance), "Tracking")}<div class="vr d-none d-sm-block"></div>${plainVal(wb + sum(trk, balance), "Gesamt")}`
       : equation(cl, wb);
+    // phones: one compact line that opens the equation
+    const headline = track ? [balance(a), "Wert"] : all ? [wb + sum(trk, balance), "Gesamt"] : [wb, "Arbeitssaldo"];
+    const ph = $("[data-reg-balances-phone]"), wasOpen = ph.open;
+    ph.innerHTML = `<summary class="d-flex align-items-center gap-2"><span class="fw-semibold tabular-nums ${headline[0] < 0 ? "text-danger" : ""}">${eur(headline[0])}</span><span class="text-body-secondary small">${headline[1]}</span>${icon("i-chevron", "app-icon app-icon-sm text-body-secondary app-sum-chev")}</summary><div class="pt-2">${track ? "" : equation(cl, wb)}${all ? `<div class="d-flex gap-3 mt-2">${plainVal(sum(trk, balance), "Tracking")}</div>` : ""}</div>`;
+    ph.open = wasOpen;
     $("[data-reg-view-label]").textContent = { all: "Ansicht", new: "Ansicht: zu bestätigen", open: "Ansicht: nicht abgeglichen" }[state.regFilter];
     const runBtn = $("[data-reg-running]");
     runBtn.hidden = all;
@@ -1073,17 +1082,17 @@
     if (run) { let b = balance(a); rows.forEach(t => { if (t.matchOf) return; after[t.id] = b; b -= t.amount; }); }
     const amt = (v, side) => ((side === "out" ? v < 0 : v > 0) ? num(Math.abs(v)) : "");
     const payee = t => (t.transfer ? `↔ ${esc(accText(acc(t.transfer)))}` : esc(t.payee));
-    $("[data-reg-head]").innerHTML = `<tr><th style="width:2rem"><input class="form-check-input" type="checkbox" data-pick-all aria-label="Alle auswählen"${picked.length && picked.length === rows.length ? " checked" : ""}></th><th style="width:1.75rem"><span class="visually-hidden">Markierung</span>${icon("i-flag")}</th><th>Datum</th>${all ? "<th>Konto</th>" : ""}<th>Empfänger</th><th>Kategorie</th><th>Memo</th><th class="text-end">Ausgang</th><th class="text-end">Eingang</th>${run ? '<th class="text-end">Saldo</th>' : ""}<th style="width:2rem" class="text-center"><span class="visually-hidden">Abgeglichen</span>C</th><th style="width:2.75rem"><span class="visually-hidden">Bestätigen</span></th></tr>`;
-    const cols = 11 + (all ? 1 : 0) + (run ? 1 : 0) - 1;
+    // below ~1300 px the memo moves under the payee, dates and accounts get short, so amounts, C and approve stay in view
+    $("[data-reg-head]").innerHTML = `<tr><th style="width:2rem"><input class="form-check-input" type="checkbox" data-pick-all aria-label="Alle auswählen"${picked.length && picked.length === rows.length ? " checked" : ""}></th><th style="width:1.75rem"><span class="visually-hidden">Markierung</span>${icon("i-flag")}</th><th>Datum</th>${all ? "<th>Konto</th>" : ""}<th class="app-payee">Empfänger</th><th>Kategorie</th><th class="app-memo-col">Memo</th><th class="text-end">Ausgang</th><th class="text-end">Eingang</th>${run ? '<th class="text-end">Saldo</th>' : ""}<th class="text-center app-c-col"><span class="visually-hidden">Abgeglichen, bestätigen</span>C</th></tr>`;
+    const cols = 9 + (all ? 1 : 0) + (run ? 1 : 0);
     $("[data-reg-table]").innerHTML = rows.map(t => `
       <tr class="${t.approved === false ? "app-unapproved" : ""}${state.picked.has(t.id) ? " table-active" : ""}">
         <td><input class="form-check-input" type="checkbox" data-pick-tx="${t.id}"${state.picked.has(t.id) ? " checked" : ""} aria-label="Buchung auswählen"></td>
         <td>${flagCell(t)}</td>
-        <td>${dLong(t.date)}</td>${all ? `<td class="text-truncate" style="max-width:9rem">${esc(accText(acc(t.acc)))}</td>` : ""}
-        <td class="text-truncate app-payee" style="max-width:14rem">${payee(t)}</td><td class="text-truncate" style="max-width:16rem">${catCell(t)}</td>
-        <td class="small text-body-secondary text-truncate" style="max-width:14rem">${esc(t.memo)}</td>
-        <td class="text-end tabular-nums">${amt(t.amount, "out")}</td><td class="text-end tabular-nums">${amt(t.amount, "in")}</td>${run ? `<td class="text-end tabular-nums text-body-secondary">${t.id in after ? num(after[t.id]) : ""}</td>` : ""}<td class="text-center">${clearCell(t)}</td>
-        <td class="text-end">${t.approved === false && !t.matchOf ? `<button type="button" class="btn btn-sm btn-primary py-0 px-2" data-approve="${t.id}" title="Bestätigen" aria-label="${esc(t.payee)} bestätigen">${icon("i-check")}</button>` : ""}</td>
+        <td><span class="app-wide">${dLong(t.date)}</span><span class="app-narrow">${dShort(t.date)}</span></td>${all ? `<td class="text-truncate" style="max-width:9rem" title="${esc(acc(t.acc).name)}">${acc(t.acc).e}<span class="app-wide"> ${esc(acc(t.acc).name)}</span></td>` : ""}
+        <td class="app-payee"><div class="text-truncate app-payee-name">${payee(t)}</div>${t.memo ? `<div class="small text-body-secondary text-truncate app-narrow">${esc(t.memo)}</div>` : ""}</td><td class="text-truncate" style="max-width:14rem">${catCell(t)}</td>
+        <td class="small text-body-secondary text-truncate app-memo-col" style="max-width:14rem">${esc(t.memo)}</td>
+        <td class="text-end tabular-nums">${amt(t.amount, "out")}</td><td class="text-end tabular-nums">${amt(t.amount, "in")}</td>${run ? `<td class="text-end tabular-nums text-body-secondary">${t.id in after ? num(after[t.id]) : ""}</td>` : ""}<td class="text-end text-nowrap app-c-col">${approveBtn(t)}${clearCell(t)}</td>
       </tr>${t.matchOf ? `<tr class="app-actrow"><td colspan="2"></td><td colspan="${cols - 2}">${matchBar(t)}</td></tr>` : ""}`).join("") ||
       `<tr><td colspan="${cols}" class="text-center text-body-secondary py-4">Keine Buchungen in dieser Ansicht.</td></tr>`;
     const uncategorized = t => !t.cat && !t.transfer && !t.splits && acc(t.acc).type === "budget";
@@ -1125,7 +1134,9 @@
       return toast(`${open.length - props.length} bestätigt.${props.length ? ` ${props.length} Zuordnungsvorschlag bleibt offen: Zuordnen oder Trennen.` : ""}`, props.length ? "warning" : "success");
     }
     const fg = t.closest("[data-flag]");
-    if (fg) { commit(); const x = txById(fg.dataset.flag); x.flag = ((x.flag || 0) + 1) % FLAGS.length; return renderAccounts(); }
+    if (fg) return openPop(fg, flagPicker(txById(fg.dataset.flag)));
+    const fs = t.closest("[data-flag-set]");
+    if (fs) { const [id, i] = fs.dataset.flagSet.split("|"); commit(); txById(id).flag = +i; closePop(); return renderAccounts(); }
     if (t.closest("[data-reg-running]")) { state.running = !state.running; return renderAccounts(); }
     const pt = t.closest("[data-pick-tx]");
     if (pt) { pt.checked ? state.picked.add(pt.dataset.pickTx) : state.picked.delete(pt.dataset.pickTx); return renderAccounts(); }
@@ -1135,7 +1146,7 @@
     if (t.closest("[data-bulk-clear]")) { state.picked.clear(); return renderAccounts(); }
     if (t.closest("[data-reg-edit]")) return toast("Konto bearbeiten: Name, Emoji, Bankverbindung (im Klickdummy nicht umgesetzt).");
     const ro = t.closest("[data-reconcile-open]");
-    if (ro) { rcManual = null; return openReconcile(ro); }
+    if (ro) { rcManual = null; return openReconcile(ro.closest(".dropdown")?.querySelector("[data-bs-toggle]") || ro); }
   });
   document.addEventListener("change", e => {
     const s = e.target.closest("[data-categorize]");
@@ -1176,7 +1187,7 @@
     const v = parse($("#rc-bank").value);
     if (Number.isNaN(v) || !$("#rc-bank").value.trim()) return;
     rcManual = v;
-    openReconcile($("[data-reconcile-open]"));
+    openReconcile(popAnchor || $("[data-reconcile-open]"));
   });
 
   // ------------------------------------------------------------ booking form

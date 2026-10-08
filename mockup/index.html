@@ -131,6 +131,23 @@
     .app-unapproved > :first-child { box-shadow: inset 3px 0 0 var(--felt-primary), inset 0 0 0 9999px color-mix(in srgb, var(--felt-primary) 10%, transparent); }
     .app-unapproved .app-payee { font-weight: 700; }
     .app-actrow > td { border-top: 0; padding-top: 0; }
+    td.app-payee { width: 100%; max-width: 0; }
+    .app-reg .app-icon { max-width: none; }
+    .app-narrow { display: none; }
+    @media (max-width: 1299.98px) { .app-reg .app-wide, .app-reg .app-memo-col { display: none; } .app-reg .app-narrow { display: block; } .app-reg span.app-narrow { display: inline; } }
+    .app-approve { padding: .05rem .3rem; margin-right: .3rem; line-height: 1; }
+    .app-reg .app-flag:not(.is-set) { opacity: 0; }
+    .app-reg tr:hover .app-flag:not(.is-set), .app-reg .app-flag:focus-visible { opacity: .45; }
+    .app-bal-compact > summary { list-style: none; cursor: pointer; }
+    .app-bal-compact > summary::-webkit-details-marker { display: none; }
+    .app-bal-compact[open] .app-sum-chev { transform: rotate(90deg); }
+    .app-reg-search { max-width: 14rem; }
+    @media (max-width: 767.98px) {
+      .app-banner { font-size: .875rem; } .app-banner .btn { padding-block: .15rem; }
+      .app-reg-tools { flex-wrap: nowrap !important; } .app-reg-tools .dropdown { margin-left: 0 !important; }
+      .app-reg-search { max-width: none; flex: 1 1 auto; width: auto; min-width: 0; }
+      .app-reg-meta > :nth-child(n+3) { display: none !important; }
+    }
     .app-clear { width: 1.4rem; height: 1.4rem; padding: 0; border-radius: 50%; font-size: .68rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid var(--felt-border-color); background: transparent; color: var(--felt-secondary-color); }
     .app-clear.is-cleared { background: var(--felt-success); border-color: var(--felt-success); color: #fff; }
     .app-clear.is-reconciled { border-color: transparent; color: var(--felt-success); cursor: default; }
@@ -274,19 +291,27 @@
       </div>
       <div data-reg-pane>
         <div data-reg-banner></div>
-        <div class="d-flex flex-wrap align-items-start gap-2 mb-2">
-          <div class="me-auto" style="min-width:0">
+        <div class="d-flex align-items-start gap-2 mb-2">
+          <div class="flex-grow-1" style="min-width:0">
             <a href="#konten" class="d-inline-flex d-lg-none align-items-center gap-1 small text-decoration-none mb-1"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-back"/></svg> Konten</a>
             <h1 class="h3 mb-0" id="t-konten" data-reg-title>Girokonto</h1>
-            <div class="small text-body-secondary d-flex flex-wrap gap-3 mt-1" data-reg-meta></div>
+            <div class="small text-body-secondary d-flex flex-wrap column-gap-3 mt-1 app-reg-meta" data-reg-meta></div>
           </div>
-          <button type="button" class="btn btn-sm btn-light" data-reg-edit aria-label="Konto bearbeiten"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-pencil"/></svg></button>
-          <button type="button" class="btn btn-sm btn-primary" data-reconcile-open>Abgleichen</button>
+          <button type="button" class="btn btn-sm btn-light d-none d-md-inline-flex" data-reg-edit aria-label="Konto bearbeiten"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-pencil"/></svg></button>
+          <button type="button" class="btn btn-sm btn-primary d-none d-md-inline-flex" data-reconcile-open>Abgleichen</button>
+          <div class="dropdown d-md-none" data-reg-more>
+            <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Kontoaktionen"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-dots"/></svg></button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><button class="dropdown-item" type="button" data-reconcile-open>Abgleichen</button></li>
+              <li><button class="dropdown-item" type="button" data-reg-edit>Konto bearbeiten</button></li>
+            </ul>
+          </div>
         </div>
-        <div class="d-flex flex-wrap align-items-center gap-3 mb-3" data-reg-balances></div>
-        <div class="d-flex flex-wrap align-items-center gap-1 border-top border-bottom py-2 mb-2">
-          <button type="button" class="btn btn-sm btn-link text-decoration-none" data-book-account><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Buchung</button>
-          <a href="#import" class="btn btn-sm btn-link text-decoration-none" data-file-import><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-file"/></svg> Datei-Import</a>
+        <div class="d-none d-md-flex flex-wrap align-items-center gap-3 mb-3" data-reg-balances></div>
+        <details class="d-md-none mb-2 app-bal-compact" data-reg-balances-phone></details>
+        <div class="d-flex flex-wrap flex-md-wrap align-items-center gap-1 border-top border-bottom py-2 mb-2 app-reg-tools">
+          <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-md-inline-flex" data-book-account><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Buchung</button>
+          <a href="#import" class="btn btn-sm btn-link text-decoration-none" data-file-import aria-label="Datei-Import"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-file"/></svg><span class="d-none d-md-inline"> Datei-Import</span></a>
           <span class="small text-body-secondary d-inline-flex align-items-center gap-1 px-2" data-feed-hint hidden></span>
           <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-sm-inline-flex" data-undo><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-undo"/></svg> Rückgängig</button>
           <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-sm-inline-flex" data-redo><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-redo"/></svg> Wiederholen</button>
@@ -300,7 +325,7 @@
               <li><button class="dropdown-item d-flex align-items-center gap-2" type="button" data-reg-running><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Laufender Saldo</button></li>
             </ul>
           </div>
-          <div class="input-group input-group-sm" style="max-width:14rem">
+          <div class="input-group input-group-sm app-reg-search">
             <span class="input-group-text"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-search"/></svg></span>
             <input type="search" class="form-control" placeholder="Suchen" aria-label="Buchungen durchsuchen" data-reg-search>
           </div>
