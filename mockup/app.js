@@ -210,6 +210,9 @@
       if (s.rta <= free) { free = s.rta; at = m; }
       s.free = free; s.freeAt = at;
       s.show = s.rta - s.future;
+      // past months are closed: their card shows Zu verteilen as it stood at the month's end
+      s.closed = m < CUR;
+      s.disp = s.closed ? s.rta : s.show;
     }
     return M;
   }
@@ -457,7 +460,8 @@
     if (spent > 0) { const p = Math.round((spent / budget) * 100); return { text: `Finanziert. ${eur(spent)} von ${eur(budget)} ausgegeben`, bars: [[p, "bg-success progress-bar-striped opacity-50"], [100 - p, "bg-success"]] }; }
     return { text: c.target.cadence === "year" ? "Im Plan" : "Finanziert", bars: [[100, "bg-success"]] };
   }
-  const rtaState = s => s.show > 0 ? ["text-success", "Zu verteilen"] : s.show === 0 ? ["", "Alles verteilt ✓"] : ["text-danger", "Zu viel verteilt"];
+  const rtaState = s => s.disp < 0 ? ["text-danger", "Zu viel verteilt"] : s.closed ? ["text-body-secondary", "Nicht verteilt am Monatsende"]
+    : s.disp > 0 ? ["text-success", "Zu verteilen"] : ["", "Alles verteilt ✓"];
   // How much more can go into month m without borrowing, and which month sets the limit
   const capText = m => {
     const s = state.M.months[m], free = Math.max(0, s.free), k = s.freeAt;
@@ -469,18 +473,21 @@
     $$("[data-calc]", root).forEach(el => {
       const m = +el.dataset.calc, s = M.months[m], p = m - 1;
       const ln = (v, label, cls = "") => `<div class="${cls}"><span>${v}</span><span>${label}</span></div>`;
-      // after the current month the first line is the previous card's "Zu verteilen", plus what that card held back
-      const linked = m > CUR, prev = M.months[p];
-      el.innerHTML = (linked ? ln(num(prev.show), `Nicht verteilt im ${mShort(p)}`, prev.show < 0 ? "text-danger" : "") + ln("+" + num(prev.future), `im ${mShort(p)} für ${mShort(m)}${s.future ? " ff." : ""} reserviert`)
-        : ln(num(s.prevRta), `Übrig aus ${mShort(p)}`, s.prevRta < 0 ? "text-danger" : "")) +
+      // the first line is the previous card's number, plus what that card held back for this month and later
+      const before = p >= 0 ? M.months[p].disp : s.prevRta, held = s.prevRta - before;
+      el.innerHTML = ln(num(before), `Nicht verteilt im ${mShort(p)}`, before < 0 ? "text-danger" : "") +
+        (held ? ln("+" + num(held), `im ${mShort(p)} für ${mShort(m)}${s.future ? " ff." : ""} reserviert`) : "") +
         ln(num(s.prevOver), `Überzogen im ${mShort(p)}`, s.prevOver < 0 ? "text-danger" : "") +
         ln("+" + num(s.income), `Einnahmen im ${mShort(m)}`) + ln(num(-s.assigned), `Zugewiesen im ${mShort(m)}`) +
-        ln(num(-s.future), s.future ? `für ${mShort(m + 1)}${M.months[m + 1]?.future ? " ff." : ""} reserviert` : "In künftigen Monaten zugewiesen");
+        (s.closed ? "" : ln(num(-s.future), s.future ? `für ${mShort(m + 1)}${M.months[m + 1]?.future ? " ff." : ""} reserviert` : "In künftigen Monaten zugewiesen"));
     });
-    $$("[data-rta]", root).forEach(el => { const s = M.months[el.dataset.rta]; el.textContent = (el.closest(".app-mcard") ? "= " : "") + eur(s.show); el.className = "app-rta-big " + rtaState(s)[0]; });
-    $$("[data-rta-label]", root).forEach(el => (el.textContent = rtaState(M.months[el.dataset.rtaLabel])[1]));
+    $$("[data-rta]", root).forEach(el => { const s = M.months[el.dataset.rta]; el.textContent = (el.closest(".app-mcard") ? "= " : "") + eur(s.disp); el.className = "app-rta-big " + rtaState(s)[0]; });
+    $$("[data-rta-label]", root).forEach(el => {
+      const s = M.months[el.dataset.rtaLabel];
+      el.innerHTML = esc(rtaState(s)[1]) + (s.closed ? ' <span class="fw-normal text-body-secondary">· abgeschlossen</span>' : "");
+    });
     $$("[data-rta-act]", root).forEach(el => {
-      const m = el.dataset.rtaAct, v = M.months[m].show;
+      const m = el.dataset.rtaAct, v = M.months[m].closed ? 0 : M.months[m].show;
       el.innerHTML = v > 0 ? `<div class="dropdown"><button class="btn btn-sm btn-success dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Verteilen</button><ul class="dropdown-menu dropdown-menu-end">${menuItems(m)}</ul></div>`
         : v < 0 ? `<button type="button" class="btn btn-sm btn-danger" data-cover-rta="${m}">Aus Kategorien decken</button>` : "";
     });
