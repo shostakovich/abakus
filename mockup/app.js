@@ -301,9 +301,9 @@
 
   // Months and inspector from the available width: the inspector comes before a third month (about 1280 px: 1 month
   // and inspector, 1600: 2, 1920: 3; below that 1 or 2 months only). A month is as wide as its widest content.
-  const INSP_W = 312;
+  const INSP_W = 304;
   let MONTH_W = 300, COLS = [96, 84, 108];
-  const catW = () => Math.round(clamp(innerWidth * 0.24, 256, 384));
+  const catW = () => Math.round(clamp(innerWidth * 0.22, 256, 352));
   function measure() {
     const M = model(), vals = [];
     Object.values(M.cats).forEach(rows => rows.forEach(r => vals.push(r.assigned, r.activity)));
@@ -319,7 +319,7 @@
     const w = k => Math.max(...$$(`[data-w="${k}"]`, box).map(e => Math.ceil(e.getBoundingClientRect().width)));
     const n = w("n"), p = w("p"), l = w("l");
     box.remove();
-    COLS = [Math.max(n + 12, l) + 12 + 10, Math.max(n, l) + 12, Math.max(p, n, l) + 12];
+    COLS = [Math.max(n + 10, l) + 10 + 10, Math.max(n, l) + 10, Math.max(p, n, l) + 10];
     MONTH_W = sum(COLS, v => v) + 4;
   }
   function sizeCols() {
@@ -863,6 +863,12 @@
       if (av.closest("[data-budget-list]")) { if (over && c !== "uncat") { e.stopPropagation(); return selectCat(c, "cover"); } }
       else return openMove(cat(c), +m, av);
     }
+    if (t.closest("[data-side-toggle]")) {
+      const mini = document.documentElement.classList.toggle("app-side-mini");
+      try { localStorage.setItem("side", mini ? "mini" : "full"); } catch {}
+      $$("[data-side-toggle]").forEach(b => { b.title = b.ariaLabel = mini ? "Seitenleiste ausklappen" : "Seitenleiste einklappen"; });
+      return layout(false);
+    }
     if (t.closest("[data-sheet-details]")) { state.sheet = null; return renderPanel(); }
     const oc = t.closest("[data-open-cat]");
     if (oc) return selectCat(oc.dataset.openCat);
@@ -983,7 +989,7 @@
   function renderSide() {
     const item = a => {
       const b = balance(a), on = state.screen === "konten" && state.acc === a.id, n = txs.filter(t => t.acc === a.id && t.approved === false).length;
-      return `<a class="nav-link app-acc${on ? " active" : ""}" href="#konten?konto=${a.id}"${on ? ' aria-current="page"' : ""}><span class="me-auto" title="${esc(a.name)}">${esc(accText(a))}</span>${n ? `<span class="badge rounded-pill text-bg-primary">${n}</span>` : ""}<span class="app-bal${b < 0 ? " text-danger" : ""}">${num(b)}</span></a>`;
+      return `<a class="nav-link app-acc${on ? " active" : ""}" href="#konten?konto=${a.id}"${on ? ' aria-current="page"' : ""} title="${esc(a.name)} · ${eur(b)}"><span class="app-acc-e" aria-hidden="true">${a.e}</span><span class="app-acc-name">${esc(a.name)}</span>${n ? `<span class="badge rounded-pill text-bg-primary">${n}</span>` : ""}<span class="app-bal${b < 0 ? " text-danger" : ""}">${num(b)}</span></a>`;
     };
     const grp = (type, label) => { const list = accounts.filter(a => a.type === type); return `<div class="d-flex justify-content-between gap-2 app-side-h mt-2 mb-1"><span>${label}</span><span class="tabular-nums">${num(sum(list, balance))}</span></div><nav class="nav flex-column">${list.map(item).join("")}</nav>`; };
     $("[data-side-accounts]").innerHTML = grp("budget", "Budget") + grp("tracking", "Tracking");
@@ -1347,6 +1353,7 @@
   }));
 
   renderCatAdmin();
+  if (document.documentElement.classList.contains("app-side-mini")) $$("[data-side-toggle]").forEach(b => { b.title = b.ariaLabel = "Seitenleiste ausklappen"; });
   measure();
   route();
   document.fonts?.ready.then(() => { measure(); layout(true); });
