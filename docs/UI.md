@@ -20,8 +20,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 
 - Dark sidebar: budget name, Budget, Konten, account groups (Budget, Tracking) with balances, add account, bank
   connections; account names with emoji
-- Zu verteilen box: green with "Verteilen ▾" while money is unassigned, grey when everything is assigned, red if
-  negative; line "In künftigen Monaten zugewiesen"
+- Zu verteilen colours: green with "Verteilen ▾" while money is unassigned, grey when everything is assigned,
+  red if negative; line "In künftigen Monaten zugewiesen" (shown in the month card, see decisions below)
 - Filter chips: Alle, Überzogen (count, red), Unterfinanziert, Überfinanziert, Geld verfügbar, Pausiert
 - Columns ZUGEWIESEN | AKTIVITÄT | VERFÜGBAR; available as pills (check = funded, half circle = underfunded,
   red = overspent, grey = 0)
@@ -37,6 +37,19 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 ## From Actual
 
 - Month cards and per-month column groups in the multi-month table; group rows with totals; collapsible groups
+
+## Decisions after review round 1
+
+- Width rule: inspector before a third month. About 1280 px → 1 month + inspector, 1600 → 2 + inspector,
+  1920 → 3 + inspector; below that months only. Still automatic, no selector
+- One home per concept: Zu verteilen lives only in the month cards (on phones in a sticky month header); the
+  inspector shows the selected category or the month summary, never its own RTA box
+- Focus month: full month card with the YNAB 4 calculation, pills, target bars and status; other months get
+  slim cards (big number, Verteilen, calculation collapsible) and quiet numbers (zeros dimmed, negatives red,
+  a dot for underfunded). Light month card in clean light
+- Two-line category rows like YNAB: name on line 1, bar and status on line 2; rows about 36 px
+- Felt is the frame, the table body stays flat: felt on sidebar, month cards, cards, buttons, chips; no felt
+  wells or stitches inside the table
 
 ## Method
 
