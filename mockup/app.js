@@ -1400,22 +1400,24 @@
 
   // ------------------------------------------------------------ import & sync
   const fetches = { mb: 2 };
+  let clock = 7 * 60 + 58;
   document.addEventListener("click", e => {
     const f = e.target.closest("[data-fetch]");
     if (f) {
       // a sync takes a moment: spinner, then a new history line
       const k = f.dataset.fetch;
-      f.disabled = true; $(".spinner-border", f).hidden = false; $("svg", f).style.display = "none"; $("[data-fetch-label]", f).textContent = "Synchronisiere …";
+      f.disabled = true; $(".spinner-border", f).hidden = false; $("svg", f).style.display = "none"; $("[data-fetch-label]", f).textContent = "Rufe ab …";
       return setTimeout(() => {
         fetches[k]++;
-        const now = new Date().toTimeString().slice(0, 5), log = $("[data-sync-log]");
-        log.insertAdjacentHTML("afterbegin", `<li class="d-flex justify-content-between gap-3"><span>08.10. ${now}</span><span class="text-body-secondary">keine neuen</span></li>`);
+        // the mockup's clock stands at 08.10.2026, just before 8 am
+        const now = `${String(Math.floor(clock / 60)).padStart(2, "0")}:${String(clock++ % 60).padStart(2, "0")}`, log = $("[data-sync-log]");
+        log.insertAdjacentHTML("afterbegin", `<li class="app-hist"><span class="app-hdot bg-secondary"></span><span class="app-hdate">08.10. ${now}</span><span class="app-hmsg text-body-secondary">manuell</span><span class="app-hcount">0 neu</span></li>`);
         while (log.children.length > 5) log.lastElementChild.remove();
-        $("[data-conn-last]").textContent = "gerade eben";
+        $("[data-conn-last]").textContent = `heute ${now}`;
         $(`[data-fetch-count="${k}"]`).textContent = fetches[k] >= 4 ? "4 von 4 Abrufen heute, wieder ab 00:00" : `${fetches[k]} von 4 Abrufen heute`;
-        $(".spinner-border", f).hidden = true; $("svg", f).style.display = ""; $("[data-fetch-label]", f).textContent = "Jetzt synchronisieren";
+        $(".spinner-border", f).hidden = true; $("svg", f).style.display = ""; $("[data-fetch-label]", f).textContent = "Jetzt abrufen";
         f.disabled = fetches[k] >= 4;
-        toast("Synchronisiert, keine neuen Buchungen.");
+        toast("Abgerufen, keine neuen Buchungen.");
       }, 1200);
     }
     if (e.target.closest("[data-renew]")) { renewStep(1); renewed = false; return bootstrap.Modal.getOrCreateInstance(renewModal).show(); }

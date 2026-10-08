@@ -203,6 +203,16 @@
       .app-part-off { display: none !important; }
       [data-screen="mehr"][data-teil=""] [data-mehr-back], [data-screen="mehr"]:not([data-teil=""]) [data-mehr-index] { display: none !important; }
     }
+    .app-imp-col { max-width: 48rem; }
+    @media (max-width: 575.98px) {
+      .app-conn-actions .btn { flex: 1 1 0; justify-content: center; white-space: nowrap; font-size: .8125rem; padding-inline: .5rem; }
+      .app-conn-actions [data-fetch-count] { flex-basis: 100%; margin-left: 0 !important; }
+    }
+    .app-hist { display: grid; grid-template-columns: .5rem 5.5rem minmax(0, 1fr) 6rem; gap: .5rem; align-items: center; }
+    .app-hdot { width: .5rem; height: .5rem; border-radius: 50%; }
+    .app-hdate { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .app-hmsg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .app-hcount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .app-sign { font-size: 1.75rem; font-weight: 700; width: 3.5rem; line-height: 1; }
     .app-kind > .btn { flex: 1 1 0; min-width: 0; padding-inline: .25rem; }
     .app-toasts { position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); z-index: 1090; pointer-events: none; }
@@ -405,15 +415,14 @@
       </ul>
       <div class="tab-content">
         <div class="tab-pane fade show active" id="imp-banks" role="tabpanel">
-          <div class="row g-4">
-            <div class="col-lg-8 d-flex flex-column gap-3">
+          <div class="d-flex flex-column gap-3 app-imp-col">
               <div class="card" data-conn="mb">
                 <div class="card-header d-flex flex-wrap align-items-center gap-2">
                   <svg class="app-icon" aria-hidden="true"><use href="#i-bank"/></svg><span class="fw-semibold me-auto">Musterbank</span>
                   <span class="badge text-bg-warning" data-conn-badge>Freigabe läuft in 9 Tagen ab</span>
                 </div>
                 <div class="card-body small d-flex flex-wrap column-gap-4 row-gap-1 py-2">
-                  <span>Letzter Abruf: <strong data-conn-last>heute 06:12</strong></span>
+                  <span>Letzter Abruf: <strong data-conn-last>heute 07:41</strong></span>
                   <span>Nächster Abruf: <strong>heute 18:00</strong></span>
                   <span class="text-warning-emphasis fw-semibold" data-conn-expiry>Freigabe bis 17.10.2026, noch 9 Tage</span>
                 </div>
@@ -423,23 +432,21 @@
                 <div class="card-body small border-top">
                   <div class="fw-semibold mb-1">Letzte Abrufe</div>
                   <ul class="list-unstyled mb-0 d-flex flex-column gap-1" data-sync-log>
-                    <li class="d-flex justify-content-between gap-3"><span>08.10. 06:12</span><span class="text-body-secondary">4 neu, 1 zugeordnet</span></li>
-                    <li class="d-flex justify-content-between gap-3"><span>07.10. 18:00</span><span class="text-body-secondary">5 neu</span></li>
-                    <li class="d-flex justify-content-between gap-3"><span>07.10. 06:00</span><span class="text-danger">Fehler: Bank nicht erreichbar, nächster Versuch 18:00</span></li>
-                    <li class="d-flex justify-content-between gap-3"><span>06.10. 18:00</span><span class="text-body-secondary">2 neu</span></li>
-                    <li class="d-flex justify-content-between gap-3"><span>06.10. 06:00</span><span class="text-body-secondary">keine neuen</span></li>
+                    <li class="app-hist"><span class="app-hdot bg-success"></span><span class="app-hdate">08.10. 07:41</span><span class="app-hmsg text-body-secondary">manuell</span><span class="app-hcount">1 neu</span></li>
+                    <li class="app-hist"><span class="app-hdot bg-success"></span><span class="app-hdate">08.10. 06:12</span><span class="app-hmsg text-body-secondary">1 zugeordnet</span><span class="app-hcount">4 neu</span></li>
+                    <li class="app-hist"><span class="app-hdot bg-success"></span><span class="app-hdate">07.10. 18:00</span><span class="app-hmsg text-body-secondary"></span><span class="app-hcount">5 neu</span></li>
+                    <li class="app-hist"><span class="app-hdot bg-danger"></span><span class="app-hdate">07.10. 06:00</span><span class="app-hmsg text-danger">Bank nicht erreichbar</span><span class="app-hcount text-danger">Fehler</span></li>
+                    <li class="app-hist"><span class="app-hdot bg-secondary"></span><span class="app-hdate">06.10. 18:00</span><span class="app-hmsg text-body-secondary"></span><span class="app-hcount">0 neu</span></li>
                   </ul>
                 </div>
-                <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+                <div class="card-footer d-flex flex-wrap align-items-center gap-2 app-conn-actions">
                   <button type="button" class="btn btn-sm btn-warning" data-renew><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-key"/></svg> Freigabe erneuern</button>
-                  <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" data-fetch="mb"><span class="spinner-border spinner-border-sm" aria-hidden="true" hidden></span><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-sync"/></svg><span data-fetch-label>Jetzt synchronisieren</span></button>
+                  <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" data-fetch="mb"><span class="spinner-border spinner-border-sm" aria-hidden="true" hidden></span><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-sync"/></svg><span data-fetch-label>Jetzt abrufen</span></button>
                   <span class="small text-body-secondary ms-auto" data-fetch-count="mb">2 von 4 Abrufen heute</span>
                 </div>
               </div>
-              <button type="button" class="btn btn-outline-secondary align-self-start"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Bank verbinden</button>
-            </div>
-            <div class="col-lg-4 d-flex flex-column gap-3">
               <div class="alert alert-info small mb-0">Banken erlauben ohne dich höchstens <strong>4 Abrufe pro Tag</strong> und Konto. Abakus ruft automatisch um 06:00 und 18:00 ab; zwei Abrufe bleiben für „Jetzt abrufen“.</div>
+              <button type="button" class="btn btn-outline-secondary align-self-start"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Bank verbinden</button>
               <div class="card">
                 <div class="card-header">Ohne Bankabruf</div>
                 <ul class="list-group list-group-flush small">
@@ -448,7 +455,6 @@
                   <li class="list-group-item"><span class="fw-semibold">Depot</span><div class="text-body-secondary">Wert kommt aus zipfelfolio als „Wertänderung“, zuletzt 08.10.</div></li>
                 </ul>
               </div>
-            </div>
           </div>
         </div>
 
