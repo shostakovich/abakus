@@ -159,16 +159,23 @@
     @media (max-width: 1299.98px) { .app-reg .app-wide, .app-reg .app-memo-col { display: none; } .app-reg .app-narrow { display: block; } .app-reg span.app-narrow { display: inline; } }
     .app-approve { padding: .05rem .3rem; margin-right: .3rem; line-height: 1; }
     .app-reg .app-flag:not(.is-set) { opacity: 0; }
-    .app-reg tr:hover .app-flag:not(.is-set), .app-reg .app-flag:focus-visible { opacity: .45; }
+    .app-reg tr:is(:hover, :focus-within, .table-active) .app-flag:not(.is-set), .app-reg .app-flag:focus-visible { opacity: .3; }
+    .app-btn-28 { padding: .25rem .6rem; font-size: .8125rem; line-height: 1.2; }
+    .app-approve-ph { width: 2.75rem; height: 2.75rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .app-cat-ph .form-select { max-width: none !important; padding-block: .2rem; font-size: .8125rem; }
     .app-bal-compact > summary { list-style: none; cursor: pointer; }
     .app-bal-compact > summary::-webkit-details-marker { display: none; }
     .app-bal-compact[open] .app-sum-chev { transform: rotate(90deg); }
     .app-reg-search { max-width: 14rem; }
+    @media (min-width: 768px) { .app-reg-tools { flex-wrap: wrap; } }
     @media (max-width: 767.98px) {
       .app-banner { font-size: .875rem; } .app-banner .btn { padding-block: .15rem; }
-      .app-reg-tools { flex-wrap: nowrap !important; } .app-reg-tools .dropdown { margin-left: 0 !important; }
+      .app-reg-tools .dropdown { margin-left: 0 !important; }
       .app-reg-search { max-width: none; flex: 1 1 auto; width: auto; min-width: 0; }
-      .app-reg-meta > :nth-child(n+3) { display: none !important; }
+      .app-reg-meta { flex-wrap: nowrap !important; overflow: hidden; white-space: nowrap; }
+      .app-reg-meta > :first-child, .app-reg-meta > :nth-child(n+4) { display: none !important; }
+      .app-unapproved-item { padding-block: .375rem; }
+      .app-ph-l2 { margin-top: .25rem; }
     }
     .app-clear { width: 1.4rem; height: 1.4rem; padding: 0; border-radius: 50%; font-size: .68rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid var(--felt-border-color); background: transparent; color: var(--felt-secondary-color); }
     .app-clear.is-cleared { background: var(--felt-success); border-color: var(--felt-success); color: #fff; }
@@ -338,9 +345,9 @@
         </div>
         <div class="d-none d-md-flex flex-wrap align-items-center gap-3 mb-3" data-reg-balances></div>
         <details class="d-md-none mb-2 app-bal-compact" data-reg-balances-phone></details>
-        <div class="d-flex flex-wrap flex-md-wrap align-items-center gap-1 border-top border-bottom py-2 mb-2 app-reg-tools">
+        <div class="d-flex align-items-center gap-1 border-top border-bottom py-2 mb-2 app-reg-tools">
           <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-md-inline-flex" data-book-account><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Buchung</button>
-          <a href="#import" class="btn btn-sm btn-link text-decoration-none" data-file-import aria-label="Datei-Import"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-file"/></svg><span class="d-none d-md-inline"> Datei-Import</span></a>
+          <a href="#import" class="btn btn-sm btn-link text-decoration-none" data-file-import aria-label="Datei-Import"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-file"/></svg><span class="d-md-none"> Import</span><span class="d-none d-md-inline"> Datei-Import</span></a>
           <span class="small text-body-secondary d-inline-flex align-items-center gap-1 px-2" data-feed-hint hidden></span>
           <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-sm-inline-flex" data-undo><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-undo"/></svg> Rückgängig</button>
           <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-sm-inline-flex" data-redo><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-redo"/></svg> Wiederholen</button>

@@ -1088,7 +1088,7 @@
   const flagCell = t => { const f = FLAGS[t.flag || 0]; return `<button type="button" class="app-flag${f ? " is-set" : ""}" data-flag="${t.id}"${f ? ` style="color:var(--felt-${f[1]})"` : ""} aria-label="Markierung: ${f ? f[0] : "keine"}, ändern" title="Markierung">${icon("i-flag")}</button>`; };
   const flagPicker = t => `<div class="fw-semibold small mb-2">Markierung</div><div class="d-flex flex-wrap gap-1">${FLAGS.map((f, i) => `<button type="button" class="btn btn-sm btn-light d-inline-flex align-items-center gap-1${(t.flag || 0) === i ? " active" : ""}" data-flag-set="${t.id}|${i}"${f ? ` style="color:var(--felt-${f[1]})"` : ""}>${f ? icon("i-flag") : ""}<span class="text-body">${f ? f[0] : "keine"}</span></button>`).join("")}</div>`;
   const approveBtn = t => (t.approved === false && !t.matchOf ? `<button type="button" class="btn btn-sm btn-primary app-approve" data-approve="${t.id}" title="Bestätigen" aria-label="${esc(t.payee)} bestätigen">${icon("i-check")}</button>` : "");
-  const matchBar = t => { const m = t.matchOf && txById(t.matchOf); return m ? `<span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">${icon("i-link")} passt zu manueller Buchung vom ${dShort(m.date)}</span> <button type="button" class="btn btn-sm btn-primary" data-merge="${t.id}">Zuordnen</button> <button type="button" class="btn btn-sm btn-outline-secondary" data-approve="${t.id}">Trennen</button>` : ""; };
+  const matchBar = t => { const m = t.matchOf && txById(t.matchOf); return m ? `<span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">${icon("i-link")} passt zu manueller Buchung vom ${dShort(m.date)}</span> <button type="button" class="btn btn-sm btn-primary app-btn-28" data-merge="${t.id}">Zuordnen</button> <button type="button" class="btn btn-sm btn-outline-secondary app-btn-28" data-approve="${t.id}">Trennen</button>` : ""; };
   // Depot and Geteilt are fed by zipfelfolio and Zipfelkasse, not by hand or file
   const FEEDS = { depot: "Wert kommt aus zipfelfolio", geteilt: "Buchungen kommen aus Zipfelkasse" };
   const equation = (cl, wb) => {
@@ -1171,8 +1171,18 @@
       </tr>${t.matchOf ? `<tr class="app-actrow"><td colspan="2"></td><td colspan="${cols - 2}">${matchBar(t)}</td></tr>` : ""}`).join("") ||
       `<tr><td colspan="${cols}" class="text-center text-body-secondary py-4">Keine Buchungen in dieser Ansicht.</td></tr>`;
     const uncategorized = t => !t.cat && !t.transfer && !t.splits && acc(t.acc).type === "budget";
-    $("[data-reg-list]").innerHTML = rows.map(t => `
-      <div class="list-group-item d-flex gap-2 align-items-start${t.approved === false ? " app-unapproved-item" : ""}">
+    // unapproved on phones: one compact card (payee, amount, ✓ / date, category), so several fit on a screen
+    const fresh1 = t => `
+      <div class="list-group-item app-unapproved-item d-flex align-items-center gap-2">
+        <div class="flex-grow-1" style="min-width:0">
+          <div class="d-flex align-items-center gap-2"><span class="fw-bold text-truncate flex-grow-1">${payee(t)}</span><span class="tabular-nums text-nowrap fw-bold ${t.amount > 0 ? "text-success" : ""}">${signed(t.amount)}</span></div>
+          <div class="d-flex align-items-center gap-2 app-ph-l2"><span class="small text-body-secondary flex-shrink-0">${dShort(t.date)}${all ? " · " + acc(t.acc).e : ""}</span><div class="flex-grow-1 app-cat-ph" style="min-width:0">${catCell(t)}</div></div>
+          ${t.matchOf ? `<div class="d-flex flex-wrap align-items-center gap-1 app-ph-l2">${matchBar(t)}</div>` : ""}
+        </div>
+        ${t.matchOf ? "" : `<button type="button" class="btn btn-primary app-approve-ph" data-approve="${t.id}" aria-label="${esc(t.payee)} bestätigen" title="Bestätigen">${icon("i-check")}</button>`}
+      </div>`;
+    $("[data-reg-list]").innerHTML = rows.map(t => t.approved === false ? fresh1(t) : `
+      <div class="list-group-item d-flex gap-2 align-items-start">
         <span class="pt-1">${t.approved === false ? `<span class="app-dot">${icon("i-info")}</span>` : clearCell(t)}</span>
         <div class="flex-grow-1" style="min-width:0">
           <div class="text-truncate ${t.approved === false ? "fw-bold" : "fw-semibold"}">${payee(t)}</div>
