@@ -1227,6 +1227,7 @@
       .filter(t => !q || [t.payee, t.memo, t.cat && t.cat !== "rta" ? cat(t.cat).name : "Zu verteilen"].join(" ").toLowerCase().includes(q))
       .sort((x, y) => y.date.localeCompare(x.date) || (y.approved === false) - (x.approved === false));
     // running balance after each row, newest first; only for one account and the full list
+    $(".app-reg").classList.toggle("app-reg-all", all);
     const run = !all && state.running && state.regFilter === "all" && !q, after = {};
     if (run) { let b = balance(a); rows.forEach(t => { if (t.matchOf) return; after[t.id] = b; b -= t.amount; }); }
     const amt = (v, side) => ((side === "out" ? v < 0 : v > 0) ? num(Math.abs(v)) : "");
@@ -1238,8 +1239,8 @@
       <tr class="${t.approved === false ? "app-unapproved" : ""}${state.picked.has(t.id) ? " table-active" : ""}">
         <td><input class="form-check-input" type="checkbox" data-pick-tx="${t.id}"${state.picked.has(t.id) ? " checked" : ""} aria-label="Buchung auswählen"></td>
         <td>${flagCell(t)}</td>
-        <td><span class="app-wide">${dLong(t.date)}</span><span class="app-narrow">${dShort(t.date)}</span></td>${all ? `<td class="text-truncate" style="max-width:9rem" title="${esc(acc(t.acc).name)}">${acc(t.acc).e}<span class="app-wide"> ${esc(acc(t.acc).name)}</span></td>` : ""}
-        <td class="app-payee"><div class="text-truncate app-payee-name">${payee(t)}</div>${t.memo ? `<div class="small text-body-secondary text-truncate app-narrow">${esc(t.memo)}</div>` : ""}</td><td class="text-truncate" style="max-width:14rem">${catCell(t)}</td>
+        <td>${all ? dShort(t.date) : `<span class="app-wide">${dLong(t.date)}</span><span class="app-narrow">${dShort(t.date)}</span>`}</td>${all ? `<td class="app-konto" title="${esc(acc(t.acc).name)}">${acc(t.acc).e}<span class="app-wide"> ${esc(acc(t.acc).name)}</span></td>` : ""}
+        <td class="app-payee"><div class="text-truncate app-payee-name">${payee(t)}</div>${t.memo ? `<div class="small text-body-secondary text-truncate app-narrow">${esc(t.memo)}</div>` : ""}</td><td class="app-catcol">${catCell(t)}</td>
         <td class="small text-body-secondary text-truncate app-memo-col" style="max-width:14rem">${esc(t.memo)}</td>
         <td class="text-end tabular-nums">${amt(t.amount, "out")}</td><td class="text-end tabular-nums">${amt(t.amount, "in")}</td>${run ? `<td class="text-end tabular-nums text-body-secondary">${t.id in after ? num(after[t.id]) : ""}</td>` : ""}<td class="text-end text-nowrap app-c-col">${approveBtn(t)}${clearCell(t)}</td>
       </tr>${t.matchOf ? `<tr class="app-actrow"><td colspan="2"></td><td colspan="${cols - 2}">${matchBar(t)}</td></tr>` : ""}`).join("") ||
@@ -1517,6 +1518,7 @@
     const good = isEmoji(input.value.trim());
     input.classList.toggle("is-invalid", !good);
     $("[data-emoji-hint]").hidden = good;
+    input.setCustomValidity(good ? "" : "Genau ein Emoji, z. B. 🛒");
     return good;
   }
   document.addEventListener("input", e => { if (e.target.matches("[data-emoji]")) checkEmoji(e.target); });
@@ -1531,7 +1533,7 @@
           <div style="width:5rem"><label class="form-label small mb-1" for="ce-e">Emoji</label><input class="form-control text-center" id="ce-e" name="e" value="${esc(c.e)}" autocomplete="off" aria-describedby="ce-e-hint" data-emoji></div>
           <div class="flex-grow-1"><label class="form-label small mb-1" for="ce-name">Name</label><input class="form-control" id="ce-name" name="name" value="${esc(c.name)}" required autocomplete="off"></div>
         </div>
-        <div class="small text-danger" id="ce-e-hint" data-emoji-hint hidden>Bitte genau ein Emoji, z. B. 🛒</div>
+        <div class="small text-danger" id="ce-e-hint" role="alert" data-emoji-hint hidden>Genau ein Emoji, z. B. 🛒</div>
         <div><label class="form-label small mb-1" for="ce-group">Gruppe</label><select class="form-select" id="ce-group" name="group">${groups.map(x => `<option value="${x.id}"${x === g ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select></div>
         <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="ce-hidden" name="hidden"${c.hidden ? " checked" : ""}><label class="form-check-label" for="ce-hidden">Im Budget ausblenden</label></div>
         <div class="d-flex gap-2"><button type="submit" class="btn btn-sm btn-primary">Speichern</button><a class="btn btn-sm" href="#mehr?teil=kategorien">Abbrechen</a></div>

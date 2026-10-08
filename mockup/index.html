@@ -176,6 +176,16 @@
     .app-reg .app-flag:not(.is-set) { opacity: 0; }
     .app-reg tr:is(:hover, :focus-within, .table-active) .app-flag:not(.is-set), .app-reg .app-flag:focus-visible { opacity: .3; }
     .app-btn-28 { padding: .25rem .6rem; font-size: .8125rem; line-height: 1.2; }
+    @media (pointer: fine) { .app-btn-28 { height: 1.75rem; padding-block: 0; } }
+    .app-reg td.app-konto { max-width: 10.5rem; overflow: hidden; text-overflow: ellipsis; }
+    .app-reg td.app-catcol { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
+    /* all accounts on wide screens: account and category in full, the memo takes what is left */
+    @media (min-width: 1600px) {
+      .app-reg-all td.app-konto { min-width: 11rem; max-width: none; overflow: visible; }
+      .app-reg-all td.app-catcol { max-width: none; overflow: visible; }
+      .app-reg-all td.app-payee { width: auto; max-width: none; }
+      .app-reg-all td.app-memo-col { width: 100%; max-width: 0 !important; }
+    }
     .app-approve-ph { width: 2.75rem; height: 2.75rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .app-cat-ph .form-select { max-width: none !important; padding-block: .2rem; font-size: .8125rem; }
     .app-bal-compact > summary { list-style: none; cursor: pointer; }
