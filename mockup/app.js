@@ -239,7 +239,7 @@
   const undoRedo = (from, to) => { if (!from.length) return; to.push(snap()); restore(from.pop()); renderAll(); };
 
   // ------------------------------------------------------------ state, routing
-  const state = { m: CUR, n: 1, insp: false, sel: null, filter: "all", editTarget: false, screen: null, acc: null, regFilter: "all", search: "", picked: new Set(), collapsed: new Set(), M: null };
+  const state = { m: CUR, n: 1, insp: false, sel: null, filter: "all", editTarget: false, screen: null, acc: null, regFilter: "all", running: false, search: "", picked: new Set(), collapsed: new Set(), M: null };
   const screens = $$("[data-screen]");
   const parseHash = () => { const [s, q] = location.hash.slice(1).split("?"); return { screen: s || "budget", q: new URLSearchParams(q || "") }; };
   const go = (screen, params = {}) => {
@@ -266,7 +266,7 @@
     }
     if (id === "konten") {
       const k = q.get("konto");
-      if (k !== state.acc) state.picked.clear();
+      if (k !== state.acc) { state.picked.clear(); state.regFilter = "all"; }
       state.acc = k && (k === "alle" || acc(k)) ? k : null;
       renderAccounts();
     }
@@ -536,7 +536,8 @@
       <div class="d-flex justify-content-end gap-2">${inline ? "" : '<button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button>'}<button type="submit" class="btn btn-sm btn-primary">OK</button></div></form>`;
   };
   const moveOpts = sel => `<option value="rta"${sel === "rta" ? " selected" : ""}>📥 Zu verteilen</option>` + groups.map(g => `<optgroup label="${esc(g.name)}">${g.cats.map(x => `<option value="${x.id}"${x.id === sel ? " selected" : ""}>${esc(catText(x))}</option>`).join("")}</optgroup>`).join("");
-  const catOnlyOpts = () => groups.map(g => `<optgroup label="${esc(g.name)}">${g.cats.map(x => `<option value="${x.id}">${esc(catText(x))}</option>`).join("")}</optgroup>`).join("");
+  const catOnlyOpts = (sel, skip) => groups.map(g => `<optgroup label="${esc(g.name)}">${g.cats.filter(x => x.id !== skip).map(x => `<option value="${x.id}"${x.id === sel ? " selected" : ""}>${esc(catText(x))}</option>`).join("")}</optgroup>`).join("");
+
 
   function catDetail(c, m) {
     const M = state.M, r = M.cats[c.id][m], p = m > 0 ? M.cats[c.id][m - 1] : null, t = c.target, [cls, ic] = tone(c, r);
@@ -788,25 +789,35 @@
   function renderSide() {
     const item = a => {
       const b = balance(a), on = state.screen === "konten" && state.acc === a.id, n = txs.filter(t => t.acc === a.id && t.approved === false).length;
-      return `<a class="nav-link app-acc${on ? " active" : ""}" href="#konten?konto=${a.id}"${on ? ' aria-current="page"' : ""}><span class="text-truncate me-auto">${esc(accText(a))}</span>${n ? `<span class="badge rounded-pill text-bg-primary">${n}</span>` : ""}${b < 0 ? `<span class="badge rounded-pill text-bg-danger tabular-nums">${num(b)}</span>` : `<span class="small tabular-nums">${num(b)}</span>`}</a>`;
+      return `<a class="nav-link app-acc${on ? " active" : ""}" href="#konten?konto=${a.id}"${on ? ' aria-current="page"' : ""}><span class="me-auto" title="${esc(a.name)}">${esc(accText(a))}</span>${n ? `<span class="badge rounded-pill text-bg-primary">${n}</span>` : ""}<span class="app-bal${b < 0 ? " text-danger" : ""}">${num(b)}</span></a>`;
     };
-    const grp = (type, label) => { const list = accounts.filter(a => a.type === type); return `<div class="d-flex justify-content-between app-side-h mt-2 mb-1"><span>${label}</span><span class="tabular-nums">${num(sum(list, balance))}</span></div><nav class="nav flex-column">${list.map(item).join("")}</nav>`; };
+    const grp = (type, label) => { const list = accounts.filter(a => a.type === type); return `<div class="d-flex justify-content-between gap-2 app-side-h mt-2 mb-1"><span>${label}</span><span class="tabular-nums">${num(sum(list, balance))}</span></div><nav class="nav flex-column">${list.map(item).join("")}</nav>`; };
     $("[data-side-accounts]").innerHTML = grp("budget", "Budget") + grp("tracking", "Tracking");
   }
 
   const regAccounts = () => (state.acc === "alle" ? accounts : [acc(state.acc || "giro")]);
+  const groupedCat = c => `${esc(plain(groupOf(c.id).name))}: ${c.e} ${esc(c.name)}`;
   const catCell = t => {
     if (t.transfer) return "";
     if (t.splits) return `<span class="text-body-secondary">Aufgeteilt (${t.splits.length})</span>`;
     if (t.cat === "rta") return "Einnahme: Zu verteilen";
-    if (t.cat) { const c = cat(t.cat); return `${esc(plain(groupOf(c.id).name))}: ${c.e} ${esc(c.name)}`; }
     if (acc(t.acc).type === "tracking") return "";
-    return `<select class="form-select form-select-sm border-warning text-warning-emphasis" style="max-width:14rem" data-categorize="${t.id}" aria-label="Kategorie wählen"><option value="">Kategorie wählen</option>${catOnlyOpts()}</select>`;
+    // unapproved rows keep the category editable inline, prefilled from the payee
+    if (t.approved === false || !t.cat) return `<select class="form-select form-select-sm${t.cat ? "" : " border-warning text-warning-emphasis"}" style="max-width:15rem" data-categorize="${t.id}" aria-label="Kategorie">${t.cat ? "" : '<option value="">Kategorie wählen</option>'}${catOnlyOpts(t.cat)}</select>`;
+    return groupedCat(cat(t.cat));
   };
-  const clearCell = t => acc(t.acc).type === "tracking" ? ""
+  const clearCell = t => acc(t.acc).type === "tracking" ? '<span class="app-clear is-cleared" title="Von zipfelfolio gemeldet">C</span>'
     : t.status === "r" ? `<span class="app-clear is-reconciled" title="Abgeschlossen">${icon("i-lock")}</span>`
     : `<button type="button" class="app-clear${t.status === "c" ? " is-cleared" : ""}" data-toggle-clear="${t.id}" aria-label="${t.status === "c" ? "Abgeglichen" : "Nicht abgeglichen"}, umschalten">C</button>`;
+  const FLAGS = [null, ["Rot", "tomato"], ["Orange", "pumpkin"], ["Gelb", "mustard"], ["Grün", "moss"], ["Blau", "denim"], ["Lila", "plum"]];
+  const flagCell = t => { const f = FLAGS[t.flag || 0]; return `<button type="button" class="app-flag${f ? " is-set" : ""}" data-flag="${t.id}"${f ? ` style="color:var(--felt-${f[1]})"` : ""} aria-label="Markierung: ${f ? f[0] : "keine"}, ändern" title="Markierung">${icon("i-flag")}</button>`; };
   const matchBar = t => { const m = t.matchOf && txById(t.matchOf); return m ? `<span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">${icon("i-link")} passt zu manueller Buchung vom ${dShort(m.date)}</span> <button type="button" class="btn btn-sm btn-primary py-0" data-merge="${t.id}">Zuordnen</button> <button type="button" class="btn btn-sm btn-outline-secondary py-0" data-approve="${t.id}">Trennen</button>` : ""; };
+  // Depot and Geteilt are fed by zipfelfolio and Zipfelkasse, not by hand or file
+  const FEEDS = { depot: "Wert kommt aus zipfelfolio", geteilt: "Buchungen kommen aus Zipfelkasse" };
+  const equation = (cl, wb) => {
+    const part = (op, v, label, cls = "") => `<div class="d-flex align-items-baseline gap-2"><span class="fs-5 text-body-secondary${op ? "" : " invisible d-sm-none"}" aria-hidden="true">${op || "+"}</span><div><div class="fs-5 fw-semibold tabular-nums text-nowrap ${cls}">${eur(v)}</div><div class="small text-body-secondary">${label}</div></div></div>`;
+    return `<div class="d-flex flex-column flex-sm-row flex-wrap gap-1 gap-sm-3">${part("", cl, "Abgeglichen", cl < 0 ? "text-danger" : "text-success")}${part("+", wb - cl, "Nicht abgeglichen")}${part("=", wb, "Arbeitssaldo", wb < 0 ? "text-danger" : "text-success")}</div>`;
+  };
 
   function renderAccounts() {
     const showReg = isDesktop() || !!state.acc;
@@ -818,27 +829,34 @@
         <div class="list-group mb-4">${list.map(a => { const n = txs.filter(t => t.acc === a.id && t.approved === false).length; return `<a href="#konten?konto=${a.id}" class="list-group-item list-group-item-action d-flex align-items-center gap-3">
           <span class="me-auto" style="min-width:0"><span class="d-block fw-semibold text-truncate">${esc(accText(a))}${n ? ` <span class="badge rounded-pill text-bg-primary">${n}</span>` : ""}</span><span class="small text-body-secondary">${esc(a.link)}</span></span>
           <span class="fw-bold tabular-nums text-nowrap ${balance(a) < 0 ? "text-danger" : ""}">${eur(balance(a))}</span></a>`; }).join("")}</div>`;
-    }).join("") + '<a href="#konten?konto=alle" class="btn btn-light w-100">Alle Konten</a>';
+    }).join("") + `<div class="d-flex justify-content-between small text-uppercase fw-bold mb-3"><span>Gesamt</span><span class="tabular-nums">${eur(sum(accounts, balance))}</span></div><a href="#konten?konto=alle" class="btn btn-light w-100">Alle Konten</a>`;
     renderSide();
     if (!showReg) return;
 
-    const list = regAccounts(), all = state.acc === "alle", a = list[0], track = !all && a.type === "tracking";
+    const list = regAccounts(), all = state.acc === "alle", a = list[0], track = !all && a.type === "tracking", feed = !all && FEEDS[a.id];
     const scope = txs.filter(t => list.some(x => x.id === t.acc));
     const fresh = scope.filter(t => t.approved === false);
-    $("[data-reg-banner]").innerHTML = fresh.length ? `<div class="alert alert-primary d-flex flex-wrap align-items-center gap-2 py-2">${icon("i-info")}<span class="me-auto">${fresh.length} neue Buchungen zu bestätigen oder zu kategorisieren</span><button type="button" class="btn btn-sm btn-primary" data-reg-filter="new">Ansehen</button><button type="button" class="btn btn-sm btn-outline-primary" data-approve-all>Alle bestätigen</button></div>` : "";
+    if (!fresh.length && state.regFilter === "new") state.regFilter = "all";
+    $("[data-reg-banner]").innerHTML = fresh.length ? `<div class="alert alert-primary d-flex flex-wrap align-items-center gap-2 py-2 mb-3">${icon("i-info")}<span class="me-auto">${fresh.length} neue Buchungen zu bestätigen oder zu kategorisieren</span><button type="button" class="btn btn-sm btn-primary" data-reg-filter="new">Ansehen</button><button type="button" class="btn btn-sm btn-outline-primary" data-approve-all>Alle bestätigen</button></div>` : "";
     $("[data-reg-title]").textContent = all ? "Alle Konten" : accText(a);
     $("[data-reg-meta]").innerHTML = all ? "<span>Budget- und Tracking-Konten</span>"
       : `<span>${esc(a.kind)}</span><span class="d-inline-flex align-items-center gap-1">${icon(a.type === "tracking" ? "i-trend" : a.id === "giro" ? "i-check" : a.id === "geteilt" ? "i-users" : "i-file")}${esc(a.link)}</span>${a.rec ? `<span class="d-inline-flex align-items-center gap-1">${icon("i-lock")}Abgeglichen ${ago(a.rec)}</span>` : ""}${a.note ? `<span>${esc(a.note)}</span>` : ""}`;
     $("[data-reconcile-open]").hidden = all || track;
     $("[data-reg-edit]").hidden = all;
     $("[data-reg-legend]").hidden = track;
-    const bud = list.filter(x => x.type === "budget"), cl = sum(bud, cleared), wb = sum(bud, balance);
-    $("[data-reg-balances]").innerHTML = track
-      ? `<div><div class="fs-5 fw-semibold tabular-nums">${eur(balance(a))}</div><div class="small text-body-secondary">Wert laut zipfelfolio</div></div>`
-      : `<div><div class="fs-5 fw-semibold tabular-nums ${cl < 0 ? "text-danger" : "text-success"}">${eur(cl)}</div><div class="small text-body-secondary">Abgeglichen</div></div><span class="fs-5">+</span>
-         <div><div class="fs-5 fw-semibold tabular-nums">${eur(wb - cl)}</div><div class="small text-body-secondary">Nicht abgeglichen</div></div><span class="fs-5">=</span>
-         <div><div class="fs-5 fw-semibold tabular-nums ${wb < 0 ? "text-danger" : "text-success"}">${eur(wb)}</div><div class="small text-body-secondary">Arbeitssaldo</div></div>`;
+    $("[data-book-account]").hidden = !!feed;
+    $("[data-file-import]").hidden = !!feed;
+    $("[data-feed-hint]").hidden = !feed;
+    $("[data-feed-hint]").innerHTML = feed ? `${icon("i-info")}${feed}, keine Buchungen von Hand oder per Datei` : "";
+    const bud = list.filter(x => x.type === "budget"), trk = list.filter(x => x.type === "tracking"), cl = sum(bud, cleared), wb = sum(bud, balance);
+    const plainVal = (v, label) => `<div><div class="fs-5 fw-semibold tabular-nums text-nowrap">${eur(v)}</div><div class="small text-body-secondary">${label}</div></div>`;
+    $("[data-reg-balances]").innerHTML = track ? plainVal(balance(a), "Wert laut zipfelfolio")
+      : all ? `<div><div class="small fw-semibold text-uppercase text-body-secondary mb-1">Budgetkonten</div>${equation(cl, wb)}</div><div class="vr d-none d-sm-block"></div>${plainVal(sum(trk, balance), "Tracking")}<div class="vr d-none d-sm-block"></div>${plainVal(wb + sum(trk, balance), "Gesamt")}`
+      : equation(cl, wb);
     $("[data-reg-view-label]").textContent = { all: "Ansicht", new: "Ansicht: zu bestätigen", open: "Ansicht: nicht abgeglichen" }[state.regFilter];
+    const runBtn = $("[data-reg-running]");
+    runBtn.hidden = all;
+    $("svg", runBtn).style.visibility = state.running ? "visible" : "hidden";
 
     const picked = [...state.picked].filter(txById);
     $("[data-reg-bulk]").innerHTML = picked.length ? `<div class="alert alert-secondary d-flex flex-wrap align-items-center gap-2 py-2 small"><strong class="me-2">${picked.length} ausgewählt</strong>
@@ -850,28 +868,32 @@
     const rows = scope.filter(t => state.regFilter === "all" || (state.regFilter === "new" ? t.approved === false : t.status === "u"))
       .filter(t => !q || [t.payee, t.memo, t.cat && t.cat !== "rta" ? cat(t.cat).name : "Zu verteilen"].join(" ").toLowerCase().includes(q))
       .sort((x, y) => y.date.localeCompare(x.date) || (y.approved === false) - (x.approved === false));
+    // running balance after each row, newest first; only for one account and the full list
+    const run = !all && state.running && state.regFilter === "all" && !q, after = {};
+    if (run) { let b = balance(a); rows.forEach(t => { if (t.matchOf) return; after[t.id] = b; b -= t.amount; }); }
     const amt = (v, side) => ((side === "out" ? v < 0 : v > 0) ? num(Math.abs(v)) : "");
     const payee = t => (t.transfer ? `↔ ${esc(accText(acc(t.transfer)))}` : esc(t.payee));
-    $("[data-reg-head]").innerHTML = `<tr><th style="width:2rem"><input class="form-check-input" type="checkbox" data-pick-all aria-label="Alle auswählen"${picked.length && picked.length === rows.length ? " checked" : ""}></th><th style="width:1.5rem"><span class="visually-hidden">Neu</span>${icon("i-info")}</th><th>Datum</th>${all ? "<th>Konto</th>" : ""}<th>Empfänger</th><th>Kategorie</th><th>Memo</th><th class="text-end">Ausgang</th><th class="text-end">Eingang</th><th style="width:2rem" class="text-center"><span class="visually-hidden">Abgeglichen</span>C</th></tr>`;
-    const cols = all ? 10 : 9;
+    $("[data-reg-head]").innerHTML = `<tr><th style="width:2rem"><input class="form-check-input" type="checkbox" data-pick-all aria-label="Alle auswählen"${picked.length && picked.length === rows.length ? " checked" : ""}></th><th style="width:1.75rem"><span class="visually-hidden">Markierung</span>${icon("i-flag")}</th><th>Datum</th>${all ? "<th>Konto</th>" : ""}<th>Empfänger</th><th>Kategorie</th><th>Memo</th><th class="text-end">Ausgang</th><th class="text-end">Eingang</th>${run ? '<th class="text-end">Saldo</th>' : ""}<th style="width:2rem" class="text-center"><span class="visually-hidden">Abgeglichen</span>C</th><th style="width:2.75rem"><span class="visually-hidden">Bestätigen</span></th></tr>`;
+    const cols = 11 + (all ? 1 : 0) + (run ? 1 : 0) - 1;
     $("[data-reg-table]").innerHTML = rows.map(t => `
       <tr class="${t.approved === false ? "app-unapproved" : ""}${state.picked.has(t.id) ? " table-active" : ""}">
         <td><input class="form-check-input" type="checkbox" data-pick-tx="${t.id}"${state.picked.has(t.id) ? " checked" : ""} aria-label="Buchung auswählen"></td>
-        <td>${t.approved === false ? `<span class="app-dot" title="Neu, noch nicht bestätigt">${icon("i-info")}</span>` : ""}</td>
+        <td>${flagCell(t)}</td>
         <td>${dLong(t.date)}</td>${all ? `<td class="text-truncate" style="max-width:9rem">${esc(accText(acc(t.acc)))}</td>` : ""}
-        <td class="text-truncate" style="max-width:14rem">${payee(t)}</td><td class="text-truncate" style="max-width:16rem">${catCell(t)}</td>
+        <td class="text-truncate app-payee" style="max-width:14rem">${payee(t)}</td><td class="text-truncate" style="max-width:16rem">${catCell(t)}</td>
         <td class="small text-body-secondary text-truncate" style="max-width:14rem">${esc(t.memo)}</td>
-        <td class="text-end tabular-nums">${amt(t.amount, "out")}</td><td class="text-end tabular-nums">${amt(t.amount, "in")}</td><td class="text-center">${clearCell(t)}</td>
+        <td class="text-end tabular-nums">${amt(t.amount, "out")}</td><td class="text-end tabular-nums">${amt(t.amount, "in")}</td>${run ? `<td class="text-end tabular-nums text-body-secondary">${t.id in after ? num(after[t.id]) : ""}</td>` : ""}<td class="text-center">${clearCell(t)}</td>
+        <td class="text-end">${t.approved === false && !t.matchOf ? `<button type="button" class="btn btn-sm btn-primary py-0 px-2" data-approve="${t.id}" title="Bestätigen" aria-label="${esc(t.payee)} bestätigen">${icon("i-check")}</button>` : ""}</td>
       </tr>${t.matchOf ? `<tr class="app-actrow"><td colspan="2"></td><td colspan="${cols - 2}">${matchBar(t)}</td></tr>` : ""}`).join("") ||
       `<tr><td colspan="${cols}" class="text-center text-body-secondary py-4">Keine Buchungen in dieser Ansicht.</td></tr>`;
     const uncategorized = t => !t.cat && !t.transfer && !t.splits && acc(t.acc).type === "budget";
     $("[data-reg-list]").innerHTML = rows.map(t => `
-      <div class="list-group-item d-flex gap-2 align-items-start">
+      <div class="list-group-item d-flex gap-2 align-items-start${t.approved === false ? " app-unapproved-item" : ""}">
         <span class="pt-1">${t.approved === false ? `<span class="app-dot">${icon("i-info")}</span>` : clearCell(t)}</span>
         <div class="flex-grow-1" style="min-width:0">
           <div class="text-truncate ${t.approved === false ? "fw-bold" : "fw-semibold"}">${payee(t)}</div>
-          <div class="small text-body-secondary text-truncate">${dShort(t.date)}${all ? " · " + esc(acc(t.acc).name) : ""}${uncategorized(t) || t.transfer ? "" : " · " + catCell(t)}</div>
-          ${uncategorized(t) ? `<div class="mt-1">${catCell(t)}</div>` : ""}
+          <div class="small text-body-secondary text-truncate">${dShort(t.date)}${all ? " · " + esc(acc(t.acc).name) : ""}${uncategorized(t) || t.transfer || (t.approved === false && t.cat !== "rta") ? "" : " · " + catCell(t)}</div>
+          ${uncategorized(t) || (t.approved === false && t.cat && t.cat !== "rta") ? `<div class="mt-1">${catCell(t)}</div>` : ""}
           ${t.memo ? `<div class="small text-body-secondary text-truncate">${esc(t.memo)}</div>` : ""}
           ${t.approved === false ? `<div class="d-flex flex-wrap align-items-center gap-1 mt-1">${t.matchOf ? matchBar(t) : `<button type="button" class="btn btn-sm btn-primary py-0" data-approve="${t.id}">Bestätigen</button>`}</div>` : ""}
         </div>
@@ -894,7 +916,17 @@
     if (ap) { commit(); const x = txById(ap.dataset.approve), split = !!x.matchOf; x.approved = true; delete x.matchOf; refresh(); return toast(split ? "Getrennt und als eigene Buchung bestätigt." : "Bestätigt."); }
     const mg = t.closest("[data-merge]");
     if (mg) { commit(); merge(txById(mg.dataset.merge)); refresh(); return toast("Mit der manuellen Buchung zusammengeführt."); }
-    if (t.closest("[data-approve-all]")) { commit(); txs.filter(x => x.approved === false && regAccounts().some(a => a.id === x.acc)).forEach(approve); state.regFilter = "all"; refresh(); return toast("Alle bestätigt."); }
+    if (t.closest("[data-approve-all]")) {
+      // match proposals stay open: merging or splitting them is a decision of its own
+      commit();
+      const open = txs.filter(x => x.approved === false && regAccounts().some(a => a.id === x.acc)), props = open.filter(x => x.matchOf);
+      open.filter(x => !x.matchOf).forEach(approve);
+      state.regFilter = props.length ? "new" : "all"; refresh();
+      return toast(`${open.length - props.length} bestätigt.${props.length ? ` ${props.length} Zuordnungsvorschlag bleibt offen: Zuordnen oder Trennen.` : ""}`, props.length ? "warning" : "success");
+    }
+    const fg = t.closest("[data-flag]");
+    if (fg) { commit(); const x = txById(fg.dataset.flag); x.flag = ((x.flag || 0) + 1) % FLAGS.length; return renderAccounts(); }
+    if (t.closest("[data-reg-running]")) { state.running = !state.running; return renderAccounts(); }
     const pt = t.closest("[data-pick-tx]");
     if (pt) { pt.checked ? state.picked.add(pt.dataset.pickTx) : state.picked.delete(pt.dataset.pickTx); return renderAccounts(); }
     const pa = t.closest("[data-pick-all]");
@@ -907,7 +939,7 @@
   });
   document.addEventListener("change", e => {
     const s = e.target.closest("[data-categorize]");
-    if (s && s.value) { commit(); txById(s.dataset.categorize).cat = s.value; refresh(); return toast("Kategorisiert."); }
+    if (s && s.value) { commit(); txById(s.dataset.categorize).cat = s.value; refresh(); return toast(`Kategorie: ${catText(cat(s.value))}.`); }
     const b = e.target.closest("[data-bulk-cat]");
     if (b && b.value) { commit(); [...state.picked].map(txById).filter(x => x && !x.transfer && acc(x.acc).type === "budget").forEach(x => (x.cat = b.value)); refresh(); return toast("Kategorisiert."); }
   });
@@ -983,7 +1015,7 @@
     bookAcc = null;
     bkLayout();
   });
-  bkModal.addEventListener("shown.bs.modal", () => $("[data-bk-payee]").focus());
+  bkModal.addEventListener("shown.bs.modal", () => $("[data-bk-amount]").focus());
   bk.addEventListener("change", e => { if (e.target.matches('[name="bk-kind"], [data-bk-split]')) bkLayout(); if (e.target.matches('[name="bk-kind"]') && kind() === "in") $("[data-bk-cat]").value = "rta"; });
   bk.addEventListener("input", e => {
     if (e.target.matches("[data-bk-payee]")) {
@@ -1053,6 +1085,9 @@
   const showImport = () => {
     $("[data-imp-rows]").innerHTML = impRows.map(([d, p, v, s]) => `<tr${s === "dup" ? ' class="text-body-secondary"' : ""}><td>${d}</td><td>${esc(p)}${s === "match" ? `<div class="small text-info-emphasis">passt zu manueller Buchung vom ${p.startsWith("Bäckerei") ? "03.10." : "23.09."}</div>` : ""}</td><td class="text-end ${v > 0 ? "text-success" : ""}">${signed(C(v))}</td><td>${impBadge[s]}</td></tr>`).join("") +
       '<tr><td colspan="4" class="small text-body-secondary text-center">… und 20 weitere</td></tr>';
+    // the file's ledger balance is what reconciling the account offers later
+    const a = acc("giro2");
+    $("[data-imp-bank]").textContent = eur(cleared(a) + a.bank.diff);
     $("[data-imp-preview]").hidden = false;
   };
   $("[data-imp-sample]").addEventListener("click", showImport);

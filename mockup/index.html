@@ -26,11 +26,15 @@
     .app-fab { position: fixed; inset: auto 0 5.25rem; display: flex; justify-content: flex-end; padding-inline: var(--felt-space-3); pointer-events: none; z-index: 1030; }
     .app-fab > * { pointer-events: auto; }
     /* shell: dark sidebar like YNAB / Actual */
-    .app-side { position: fixed; inset: 0 auto 0 0; width: 15rem; z-index: 1030; overflow-y: auto; background: color-mix(in srgb, #1d2550 72%, var(--felt-body-bg)); color: var(--felt-body-color); }
-    .app-side .nav-link { color: inherit; border-radius: var(--felt-radius); padding: .35rem .75rem; display: flex; align-items: center; gap: .6rem; }
+    .app-side { position: fixed; inset: 0 auto 0 0; width: 15rem; z-index: 1030; overflow: hidden auto; background: color-mix(in srgb, #1d2550 72%, var(--felt-body-bg)); color: var(--felt-body-color); }
+    .app-side > * { padding-inline: .5rem .75rem !important; }
+    .app-side .nav { flex-wrap: nowrap; }
+    .app-side .nav-link { color: inherit; border-radius: var(--felt-radius); padding: .35rem .5rem; display: flex; align-items: center; gap: .5rem; min-width: 0; }
     .app-side .nav-link:hover, .app-side .nav-link.active { background: rgb(255 255 255 / .12); }
     .app-side .app-acc { font-size: .875rem; padding-block: .25rem; }
-    .app-side-h { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .7; padding: 0 .75rem; }
+    .app-side .app-acc > :first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .app-side .app-bal { font-size: .8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
+    .app-side-h { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .7; padding: 0 .5rem; }
     @media (min-width: 992px) { body { padding-left: 15rem; } .app { padding-bottom: 3rem; } }
     /* shared bits */
     .app-catbtn { border: 0; background: none; padding: 0; color: inherit; text-align: left; width: 100%; font: inherit; min-width: 0; }
@@ -77,17 +81,29 @@
     /* register */
     .app-reg { font-size: .875rem; }
     .app-reg td, .app-reg th { white-space: nowrap; }
+    .table-responsive { position: relative; }   /* keeps visually-hidden header labels inside the scroll box */
+    .app-reg .form-check-input { margin-top: 0; vertical-align: middle; }
     .app-reg th { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--felt-secondary-color); }
-    .app-unapproved > td { font-weight: 700; }
+    .app-unapproved > * { --felt-table-accent-bg: color-mix(in srgb, var(--felt-primary) 10%, transparent); }
+    .app-unapproved > :first-child { box-shadow: inset 3px 0 0 var(--felt-primary), inset 0 0 0 9999px color-mix(in srgb, var(--felt-primary) 10%, transparent); }
+    .app-unapproved .app-payee { font-weight: 700; }
     .app-actrow > td { border-top: 0; padding-top: 0; }
     .app-clear { width: 1.4rem; height: 1.4rem; padding: 0; border-radius: 50%; font-size: .68rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid var(--felt-border-color); background: transparent; color: var(--felt-secondary-color); }
     .app-clear.is-cleared { background: var(--felt-success); border-color: var(--felt-success); color: #fff; }
     .app-clear.is-reconciled { border-color: transparent; color: var(--felt-success); cursor: default; }
+    .app-flag { border: 0; background: none; padding: 0; line-height: 1; color: var(--felt-border-color); }
+    .app-flag .app-icon { fill: currentColor; }
+    .app-flag:not(.is-set) .app-icon { fill: none; }
     .app-dot { color: var(--felt-primary); }
     .app-pop { position: fixed; z-index: 1080; width: 20rem; max-width: calc(100vw - 2rem); }
     .app-drop { border: 2px dashed var(--felt-border-color); border-radius: var(--felt-radius-lg); }
     .app-sheet.offcanvas-bottom { --felt-offcanvas-height: auto; max-height: 92vh; }
     .app-sheet.offcanvas-end { --felt-offcanvas-width: 24rem; }
+    .app-amount { font-size: 2rem; font-weight: 700; }
+    .app-kind > .btn { flex: 1 1 0; min-width: 0; padding-inline: .25rem; }
+    .app-toasts { position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); z-index: 1090; pointer-events: none; }
+    .app-toasts .toast { pointer-events: auto; }
+    @media (max-width: 991.98px) { .app-toasts { bottom: calc(5.5rem + env(safe-area-inset-bottom)); } }
   </style>
 </head>
 <body>
@@ -126,6 +142,7 @@
     <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H9a5 5 0 0 0 0 10h3"/></symbol>
     <symbol id="i-dots" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01"/></symbol>
     <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h12l-2 4 2 4H5"/></symbol>
     <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a5 5 0 0 1 3.5 6"/></symbol>
   </svg>
   <!-- Desktop sidebar -->
@@ -223,6 +240,7 @@
         <div class="d-flex flex-wrap align-items-center gap-1 border-top border-bottom py-2 mb-2">
           <button type="button" class="btn btn-sm btn-link text-decoration-none" data-book-account><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Buchung</button>
           <a href="#import" class="btn btn-sm btn-link text-decoration-none" data-file-import><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-file"/></svg> Datei-Import</a>
+          <span class="small text-body-secondary d-inline-flex align-items-center gap-1 px-2" data-feed-hint hidden></span>
           <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-sm-inline-flex" data-undo><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-undo"/></svg> Rückgängig</button>
           <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-sm-inline-flex" data-redo><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-redo"/></svg> Wiederholen</button>
           <div class="dropdown ms-auto">
@@ -231,6 +249,8 @@
               <li><button class="dropdown-item" type="button" data-reg-filter="all">Alle Buchungen</button></li>
               <li><button class="dropdown-item" type="button" data-reg-filter="new">Zu bestätigen</button></li>
               <li><button class="dropdown-item" type="button" data-reg-filter="open">Nicht abgeglichen</button></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><button class="dropdown-item d-flex align-items-center gap-2" type="button" data-reg-running><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-check"/></svg>Laufender Saldo</button></li>
             </ul>
           </div>
           <div class="input-group input-group-sm" style="max-width:14rem">
@@ -334,7 +354,7 @@
                     <span class="badge text-bg-info">2 zugeordnet</span>
                   </div>
                   <div class="row g-2 align-items-center">
-                    <div class="col-sm-5 small">Konto in der Datei<div class="fw-semibold">DE12 5001 … 4411 (Nordbank Direkt)</div><div class="text-body-secondary">Banksaldo laut Datei: <span class="tabular-nums">1.873,52 €</span></div></div>
+                    <div class="col-sm-5 small">Konto in der Datei<div class="fw-semibold">DE12 5001 … 4411 (Nordbank Direkt)</div><div class="text-body-secondary">Banksaldo laut Datei: <span class="tabular-nums text-nowrap" data-imp-bank></span></div></div>
                     <div class="col-sm-1 text-center d-none d-sm-block"><svg class="app-icon" aria-hidden="true"><use href="#i-chevron"/></svg></div>
                     <div class="col-sm-6"><label class="form-label small mb-1" for="imp-acc">Abakus-Konto</label><select class="form-select form-select-sm" id="imp-acc"><option>Girokonto</option><option selected>Girokonto Nordbank</option><option>Geteilt</option></select></div>
                   </div>
@@ -376,7 +396,7 @@
           <div class="card">
             <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-plug"/></svg>API-Tokens</div>
             <div class="card-body">
-              <p class="small text-body-secondary mb-2">YNAB-kompatible API, z. B. für Zipfelkasse. Pfade wie bei YNAB (<code>/budgets/{id}/transactions</code>).</p>
+              <p class="small text-body-secondary mb-2">YNAB-kompatible API, z. B. für Zipfelkasse. Pfade wie bei YNAB (<code>/plans/{plan_id}/transactions</code>).</p>
               <div class="input-group input-group-sm">
                 <span class="input-group-text">Basis-URL</span>
                 <input class="form-control font-monospace" value="https://abakus.example/api/v1" readonly aria-label="Basis-URL">
@@ -482,37 +502,25 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Schließen"></button>
         </div>
         <div class="modal-body">
-          <div class="btn-group w-100 mb-3" role="group" aria-label="Art">
-            <input type="radio" class="btn-check" name="bk-kind" id="bk-out" value="out" checked><label class="btn btn-outline-secondary" for="bk-out">Ausgabe</label>
-            <input type="radio" class="btn-check" name="bk-kind" id="bk-in" value="in"><label class="btn btn-outline-secondary" for="bk-in">Einnahme</label>
-            <input type="radio" class="btn-check" name="bk-kind" id="bk-tr" value="transfer"><label class="btn btn-outline-secondary" for="bk-tr">Umbuchung</label>
-          </div>
           <div class="row g-3">
-            <div class="col-sm-6">
-              <label class="form-label" for="bk-account" data-bk-account-label>Konto</label>
-              <select class="form-select" id="bk-account" data-bk-account></select>
+            <div class="col-12">
+              <label class="form-label visually-hidden" for="bk-amount">Betrag</label>
+              <div class="input-group"><input class="form-control text-end tabular-nums app-amount" id="bk-amount" inputmode="decimal" placeholder="0,00" required data-bk-amount><span class="input-group-text fs-4">€</span></div>
             </div>
-            <div class="col-sm-6">
-              <label class="form-label" for="bk-date">Datum</label>
-              <input type="date" class="form-control" id="bk-date" value="2026-10-08" data-bk-date>
-            </div>
+            <div class="col-12"><div class="btn-group w-100 app-kind" role="group" aria-label="Art">
+              <input type="radio" class="btn-check" name="bk-kind" id="bk-out" value="out" checked><label class="btn btn-outline-secondary" for="bk-out">Ausgabe</label>
+              <input type="radio" class="btn-check" name="bk-kind" id="bk-in" value="in"><label class="btn btn-outline-secondary" for="bk-in">Einnahme</label>
+              <input type="radio" class="btn-check" name="bk-kind" id="bk-tr" value="transfer"><label class="btn btn-outline-secondary" for="bk-tr">Umbuchung</label>
+            </div></div>
             <div class="col-12" data-bk-only="payee">
               <label class="form-label" for="bk-payee">Empfänger</label>
               <input class="form-control" id="bk-payee" list="payees" placeholder="z. B. Frischmarkt" autocomplete="off" data-bk-payee>
               <datalist id="payees" data-payees></datalist>
             </div>
-            <div class="col-12" data-bk-only="transfer" hidden>
-              <label class="form-label" for="bk-to">Nach Konto</label>
-              <select class="form-select" id="bk-to" data-bk-to></select>
-            </div>
-            <div class="col-sm-6" data-bk-only="single">
+            <div class="col-12" data-bk-only="single">
               <label class="form-label" for="bk-cat">Kategorie</label>
               <select class="form-select" id="bk-cat" data-bk-cat></select>
               <div class="form-text" data-bk-cat-hint></div>
-            </div>
-            <div class="col-sm-6">
-              <label class="form-label" for="bk-amount">Betrag</label>
-              <div class="input-group"><input class="form-control text-end tabular-nums" id="bk-amount" inputmode="decimal" placeholder="0,00" required data-bk-amount><span class="input-group-text">€</span></div>
             </div>
             <div class="col-12" data-bk-only="payee">
               <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="bk-split" data-bk-split><label class="form-check-label" for="bk-split">Aufteilen auf mehrere Kategorien</label></div>
@@ -523,6 +531,18 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bk-addsplit><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Teil hinzufügen</button>
                 <span class="small ms-auto tabular-nums" data-bk-rest></span>
               </div>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="bk-account" data-bk-account-label>Konto</label>
+              <select class="form-select" id="bk-account" data-bk-account></select>
+            </div>
+            <div class="col-sm-6" data-bk-only="transfer" hidden>
+              <label class="form-label" for="bk-to">Nach Konto</label>
+              <select class="form-select" id="bk-to" data-bk-to></select>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label" for="bk-date">Datum</label>
+              <input type="date" class="form-control" id="bk-date" value="2026-10-08" data-bk-date>
             </div>
             <div class="col-12">
               <label class="form-label" for="bk-memo">Notiz <span class="text-body-secondary">(optional)</span></label>
@@ -538,7 +558,7 @@
     </div>
   </div>
 
-  <div class="toast-container position-fixed top-0 end-0 p-3">
+  <div class="app-toasts">
     <div class="toast text-bg-success" id="toast" role="status" aria-live="polite" aria-atomic="true">
       <div class="toast-body" data-toast-text>Gebucht.</div>
     </div>
