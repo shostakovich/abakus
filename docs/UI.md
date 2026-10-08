@@ -41,7 +41,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 
 ## Decisions after review round 1
 
-- Width rule: inspector before a third month. About 1280 px → 1 month + inspector, 1600 → 2 + inspector,
+- Width rule: inspector before a third month; a month is only added while the category column keeps 20rem
+  (exact status amounts need the room). About 1280 px → 1 month + inspector, 1600 → 2 + inspector,
   1920 → 3 + inspector; below that months only. Still automatic, no selector
 - One home per concept: Zu verteilen lives only in the month cards (on phones in a sticky month header); the
   inspector shows the selected category or the month summary, never its own RTA box
@@ -70,3 +71,6 @@ Round 1 is exploration, not polish: avoid a local maximum. The ADs say what is m
 better, and where the screens should ideally go (direction, bigger structural changes, alternatives worth
 trying), with a first score only as a baseline. The direction is agreed before polishing. From round 2 they rate
 and say what is missing for 9.5. After every round the owner gets a score table with the history. Stop at 9.5.
+
+Status 2026-10-08: seven rounds, both ADs at 9.5 or higher on every screen in light and dark (desktop 1100–1920
+with full and collapsed sidebar, phone 390 px).
