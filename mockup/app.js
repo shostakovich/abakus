@@ -78,7 +78,7 @@
     if (c.target) c.target = { ...c.target, amount: C(c.target.amount) };
   };
   groups.forEach(g => g.cats.forEach(prepCat));
-  const UNCAT = { id: "uncat", e: "⚠️", name: "Nicht kategorisiert" };
+  const UNCAT = { id: "uncat", e: "⚠️", name: "Ohne Kategorie" };
   prepCat(UNCAT);
   const cats = () => groups.flatMap(g => g.cats);
   const cat = id => (id === "uncat" ? UNCAT : cats().find(c => c.id === id));
@@ -352,7 +352,7 @@
     if (force || n !== state.n || insp !== state.insp) {
       state.n = n; state.insp = insp;
       if (state.screen === "budget") renderBudget();
-    } else sizeCols();
+    } else { sizeCols(); fitChips(); fitBars(); }
   }
   new ResizeObserver(() => layout(false)).observe($('[data-screen="budget"]'));
   const visibleMonths = () => { const start = clamp(state.m, 0, LAST - state.n + 1); return Array.from({ length: state.n }, (_, i) => start + i); };
@@ -401,7 +401,7 @@
     $("[data-budget-table]").innerHTML = h + "</tbody>";
 
     const mainW = $('[data-screen="budget"]').clientWidth - (state.insp ? INSP_W : 0);
-    const span = clamp(Math.floor((mainW - 760 - 150) / 38), 7, 12);
+    const span = clamp(Math.floor((mainW - catW() - 140) / 34), 7, 12);
     const from = clamp(months[0] - Math.floor((span - months.length) / 2), 0, Math.max(0, LAST - span + 1)), vis = new Set(months);
     let strip = `<button type="button" data-month-step="-1" aria-label="Früher">${icon("i-back")}</button>`;
     for (let m = from; m <= Math.min(LAST, from + span - 1); m++) {
@@ -440,7 +440,8 @@
   const calcToggle = (m, open) => `<button type="button" class="app-calc-toggle d-inline-flex align-items-center gap-1" data-calc-toggle="${m}" aria-expanded="${open}">${icon(open ? "i-down" : "i-chevron")}So rechnet sich „Zu verteilen“</button>`;
   const monthCard = (m, full) => {
     const open = full || state.calcOpen.has(m);
-    const menu = locked(m) ? `<li><button class="dropdown-item" type="button" data-reopen="${m}">Monat wieder öffnen …</button></li>` : menuItems(m);
+    const menu = locked(m) ? `<li><button class="dropdown-item" type="button" data-reopen="${m}">Monat wieder öffnen …</button></li>`
+      : menuItems(m) + (state.reopened.has(m) ? `<li><hr class="dropdown-divider"></li><li><button class="dropdown-item" type="button" data-relock="${m}">Wieder abschließen</button></li>` : "");
     const result = `<div class="d-flex align-items-end gap-2${full ? " mt-auto pt-1" : ""}">
           <div class="me-auto" style="min-width:0"><div class="app-rta-big" data-rta="${m}"></div><div class="fw-semibold" data-rta-label="${m}"></div></div>
           <div data-rta-act="${m}"></div>
@@ -471,7 +472,7 @@
   const tone = (c, r) => r.avail < 0 ? ["text-bg-danger", ""] : r.under > 0 ? ["text-bg-warning", "i-half"] : r.avail > 0 ? ["text-bg-success", c.target && !r.snoozed ? "i-okc" : ""] : ["app-pill-zero", ""];
   function targetStatus(c, r, m) {
     const budget = r.carry + r.assigned, spent = -r.activity;
-    if (c.id === "uncat" && r.avail < 0) return { text: `${eur(spent)} ohne Kategorie – zuordnen`, bars: [] };
+    if (c.id === "uncat" && r.avail < 0) return { text: `${eur(spent)} – zuordnen`, bars: [] };
     if (r.avail < 0) return { text: `Überzogen ${num(spent)} / ${eur(budget)}`, bars: [[100, "bg-danger"]] };
     if (!c.target) return null;
     if (r.snoozed) return { text: "Pausiert", bars: [] };
@@ -504,7 +505,7 @@
     $$("[data-rta]", root).forEach(el => { const s = M.months[el.dataset.rta]; el.textContent = (el.closest(".app-mcard") ? "= " : "") + eur(s.disp); el.className = "app-rta-big " + rtaState(s)[0]; });
     $$("[data-rta-label]", root).forEach(el => {
       const s = M.months[el.dataset.rtaLabel];
-      el.innerHTML = esc(rtaState(s)[1]) + (s.closed ? ' <span class="fw-normal text-body-secondary">· abgeschlossen</span>' : "");
+      el.innerHTML = esc(rtaState(s)[1]) + (s.closed ? ` <span class="fw-normal text-body-secondary">· ${state.reopened.has(+el.dataset.rtaLabel) ? "wieder geöffnet" : "abgeschlossen"}</span>` : "");
     });
     $$("[data-rta-act]", root).forEach(el => {
       const m = el.dataset.rtaAct, s = M.months[m], v = locked(m) ? 0 : s.closed ? Math.max(0, s.disp) : s.show;
@@ -535,18 +536,19 @@
       } else {
         const [cls, ic] = tone(cat(c), r);
         el.className = cls === "app-pill-zero" ? "app-pill app-pill-zero" : `badge rounded-pill app-pill border-0 ${cls}`;
-        el.innerHTML = (ic ? icon(ic) : "") + eur(r.avail);
+        el.innerHTML = cls === "app-pill-zero" ? num(0) : (ic ? icon(ic) : "") + eur(r.avail);
       }
-      el.title = r.avail < 0 ? "Überzogen – klicken zum Decken" : r.under > 0 ? `Ziel: noch ${eur(r.under)} nötig` : "Geld verschieben";
+      el.title = locked(+m) ? "" : r.avail < 0 ? "Überzogen – klicken zum Decken" : r.under > 0 ? `Ziel: noch ${eur(r.under)} nötig` : "Geld verschieben";
     });
     $$("[data-line2]").forEach(el => {
       const c = el.dataset.line2, r = M.cats[c][f], st = targetStatus(cat(c), r, f), bar = $("[data-bar]", el), ts = $("[data-tstat]", el);
       el.hidden = !st;
-      bar.hidden = !st?.bars.length;
+      bar.style.visibility = st?.bars.length ? "" : "hidden";
       bar.innerHTML = st ? st.bars.map(([w, cls]) => `<div class="progress-bar ${cls}" style="width:${w}%"></div>`).join("") : "";
       ts.textContent = st ? st.text : ""; ts.title = ts.textContent;
       ts.classList.toggle("is-over", r.avail < 0);
     });
+    fitBars();
     $$("[data-gsum]").forEach(el => { const [g, m, k] = el.dataset.gsum.split("|"), v = sum(groups.find(x => x.id === g).cats, c => M.cats[c.id][m][k]); el.textContent = num(v); el.classList.toggle("app-zero", v === 0); el.classList.toggle("app-neg", v < 0 && k === "avail"); });
     $$("[data-msum]").forEach(el => { const [m, k] = el.dataset.msum.split("|"); el.textContent = num(M.months[m][k]); });
     $$("[data-inc]").forEach(el => { const [i, m] = el.dataset.inc.split("|"), v = M.income[state.incomeKeys[i]][m]; el.textContent = el.closest("[data-budget-list]") ? eur(v) : num(v); el.classList.toggle("app-zero", v === 0); });
@@ -556,10 +558,11 @@
     const count = key => [...cats(), UNCAT].filter(c => (c !== UNCAT || M.cats.uncat[f].activity) && FILTERS[key](c, M.cats[c.id][f])).length;
     const chip = (key, label, extra = "") => `<button type="button" class="btn btn-sm btn-pill ${state.filter === key ? "btn-primary" : extra || "btn-light"}" data-filter="${key}" aria-pressed="${state.filter === key}">${label}</button>`;
     const ov = count("over"), un = count("under"), pa = count("paused");
-    // short labels when the chips share a narrow row with the month strip
-    const short = isDesktop() && $("[data-chips]").parentElement.parentElement.clientWidth < 1100;
-    $("[data-chips]").innerHTML = chip("all", "Alle") + chip("over", `${ov ? icon("i-alert") + " " : ""}${ov} überzogen`, ov ? "btn-outline-danger" : "") +
-      chip("under", `${short ? "Unterfin." : "Unterfinanziert"}${un ? " · " + un : ""}`) + chip("overfunded", short ? "Überfin." : "Überfinanziert") + chip("money", short ? "Verfügbar" : "Geld verfügbar") + chip("paused", `Pausiert${pa ? " · " + pa : ""}`);
+    const chips = [["all", "Alle"], ["over", `${ov ? icon("i-alert") + " " : ""}${ov} überzogen`, ov ? "btn-outline-danger" : ""], ["under", `Unterfinanziert${un ? " · " + un : ""}`],
+      ["overfunded", "Überfinanziert"], ["money", "Geld verfügbar"], ["paused", `Pausiert${pa ? " · " + pa : ""}`]];
+    $("[data-chips]").innerHTML = chips.map(c => chip(...c)).join("") +
+      `<div class="dropdown" data-chips-more hidden><button class="btn btn-sm btn-pill btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Filter</button><ul class="dropdown-menu dropdown-menu-end">${chips.map(([key, label]) => `<li><button class="dropdown-item${state.filter === key ? " active" : ""}" type="button" data-filter="${key}" data-fold="${key}">${label}</button></li>`).join("")}</ul></div>`;
+    fitChips();
 
     const hints = [];
     const neg = M.months.findIndex((x, k) => k > f && x.rta < 0);
@@ -575,6 +578,28 @@
     if (ai?.matches("[data-assign]") && !ai.classList.contains("is-invalid")) showCap(ai, capText(+ai.dataset.assign.split("|")[1]));
     renderSide();
     renderPanel();
+  }
+
+  // one bar length per width: as long as possible while the longest status still fits next to it
+  function fitBars() {
+    const t = $("[data-budget-table]"), stats = $$("[data-tstat]", t).filter(e => e.offsetParent);
+    if (!stats.length) return;
+    const line = stats[0].parentElement, area = line.clientWidth - parseFloat(getComputedStyle(line).paddingLeft);
+    const widest = Math.max(...stats.map(e => e.scrollWidth)), max = catW() <= 352 ? 144 : 224;
+    t.style.setProperty("--bar-w", clamp(area - widest - 8, 40, max) + "px");
+  }
+
+  // fold trailing chips into "Filter" until the row fits; never a half-cut chip
+  function fitChips() {
+    const box = $("[data-chips]"), more = $("[data-chips-more]", box);
+    if (!more || !box.clientWidth) return;
+    const inline = $$(":scope > [data-filter]", box), items = $$("[data-fold]", box);
+    inline.forEach(b => (b.hidden = false)); items.forEach(i => (i.parentElement.hidden = true)); more.hidden = true;
+    for (let k = inline.length - 1; k > 0 && box.scrollWidth > box.clientWidth; k--) {
+      more.hidden = false; inline[k].hidden = true; items[k].parentElement.hidden = false;
+    }
+    const folded = items.some(i => !i.parentElement.hidden && i.dataset.fold === state.filter);
+    $(".btn", more).className = `btn btn-sm btn-pill dropdown-toggle ${folded ? "btn-primary" : "btn-light"}`;
   }
 
   // the assign limit as a small note under the focused input
@@ -609,7 +634,9 @@
       const r = state.M.cats[c.id][m];
       // the likeliest sources (most money available) as one tap each, the rest behind "Andere"
       const free = Math.max(0, state.M.months[m].free);
-      const srcs = [...(free > 0 ? [["rta", "📥 Zu verteilen", free]] : []), ...cats().filter(x => x.id !== c.id && state.M.cats[x.id][m].avail > 0).map(x => [x.id, catText(x), state.M.cats[x.id][m].avail])].sort((a, b) => b[2] - a[2]);
+      // Zu verteilen comes first when it covers everything, then the categories with the most money
+      const srcs = [...(free > 0 ? [["rta", "📥 Zu verteilen", free]] : []), ...cats().filter(x => x.id !== c.id && state.M.cats[x.id][m].avail > 0).map(x => [x.id, catText(x), state.M.cats[x.id][m].avail])]
+        .sort((a, b) => (b[0] === "rta" && free >= -r.avail) - (a[0] === "rta" && free >= -r.avail) || b[2] - a[2]);
       el.innerHTML = r.avail < 0 ? `<p class="mb-2">Decke <strong class="text-nowrap">${eur(-r.avail)}</strong> aus:</p>
         <div class="list-group mb-3">${srcs.slice(0, 3).map(([id, label, v]) => `<button type="button" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between gap-2 py-3" data-cover-src="${c.id}|${m}|${id}"><span class="text-truncate">${esc(label)}</span><span class="tabular-nums text-nowrap text-body-secondary">${eur(v)}</span></button>`).join("")}</div>
         <details><summary class="small">Andere …</summary><div class="mt-2">${coverForm(c, m, -r.avail, true)}</div></details>
@@ -646,13 +673,13 @@
     const futureList = M.months.map((x, k) => [k, x.assigned]).filter(([k, v]) => k > m && v > 0);
     return `
       ${state.insp ? `<h2 class="app-insp-title mb-3">${mLabel(m)}</h2>` : ""}
-      ${locked(m) ? `<div class="alert alert-secondary small py-2">Abgeschlossen. Zum Ändern im Monatsmenü „Monat wieder öffnen“.</div>` : ""}
+      ${locked(m) ? `<div class="card mb-3"><div class="card-header d-flex align-items-center gap-2">${icon("i-lock")}Abgeschlossen</div><div class="card-body small text-body-secondary">Zum Ändern im Monatsmenü „Monat wieder öffnen“.</div></div>` : ""}
       <div class="card mb-3"><div class="card-header">Zusammenfassung</div><div class="card-body small d-flex flex-column gap-1">
         ${line("Übrig aus Vormonat", eur(s.carry))}${line("Zugewiesen", eur(s.assigned))}${line("Aktivität", eur(s.activity))}${line("Verfügbar", eur(s.avail), "fw-bold border-top pt-1")}
         <div class="mt-2 fw-semibold">Monatsbedarf</div>${line("Ziele", eur(s.req))}${s.under ? line("Noch offen", eur(s.under), "text-warning-emphasis fw-semibold") : ""}
       </div></div>
-      ${overs.length ? `<div class="card mb-3 border-danger"><div class="card-header text-danger d-flex align-items-center gap-2">${icon("i-alert")}${overs.length} überzogen</div><div class="list-group list-group-flush">${overs.map(c => `
-        <div class="list-group-item d-flex align-items-center gap-2 small"><span class="flex-grow-1" style="min-width:0">${catName(c)}</span><span class="badge rounded-pill app-pill text-bg-danger">${eur(M.cats[c.id][m].avail)}</span>${locked(m) ? "" : `<button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" data-cover="${c.id}|${m}">Decken</button>`}</div>`).join("")}</div></div>` : ""}
+      ${overs.length ? `<div class="card mb-3 border-danger"><div class="card-header text-danger d-flex align-items-center gap-2">${icon("i-alert")}${overs.length} überzogen</div><div class="list-group list-group-flush app-overs">${overs.map(c => `
+        <div class="list-group-item d-flex align-items-center gap-2 small"><span class="flex-grow-1" style="min-width:0">${catName(c)}</span><span class="app-overs-act"><span class="badge rounded-pill app-pill text-bg-danger">${eur(M.cats[c.id][m].avail)}</span>${locked(m) ? "" : `<button type="button" class="btn btn-sm btn-outline-danger" data-cover="${c.id}|${m}">Decken</button>`}</span></div>`).join("")}</div></div>` : ""}
       ${locked(m) ? "" : `<div class="card mb-3"><div class="card-header d-flex align-items-center gap-2">${icon("i-bolt")}Auto-Verteilen</div><div class="list-group list-group-flush small">
         ${auto("under", "Unterfinanzierte", s.under)}${auto("last", "Wie letzten Monat", p ? p.assigned : 0)}${auto("spent", "Ausgaben letzten Monat", p ? -p.activity : 0)}${auto("avg", "Durchschnitt (3 Monate)", avg)}${auto("reset", "Verfügbar zurücksetzen", sum(cats(), c => Math.max(0, M.cats[c.id][m].avail)))}
       </div></div>`}
@@ -669,7 +696,7 @@
   const targetHead = t => t.cadence === "month"
     ? [t.mode === "refill" ? `Jeden Monat auffüllen bis ${eur(t.amount)}` : `Jeden Monat weitere ${eur(t.amount)} zurücklegen`, "Bis zum Monatsende"]
     : [`${eur(t.amount)} bis ${dLong(t.due)} ansparen`, `Jedes Jahr · ${t.mode === "refill" ? "auffüllen bis" : "weitere zurücklegen"}, verteilt auf die Monate bis dahin`];
-  const targetText = t => (t ? targetHead(t)[0] : "Kein Ziel");
+  const targetShort = t => (!t ? "Kein Ziel" : t.cadence === "month" ? `${eur(t.amount)} / Monat` : `${eur(t.amount)} bis ${t.due.slice(5, 7)}/${t.due.slice(2, 4)}`);
   const coverForm = (c, m, need, inline) => {
     const M = state.M, opts = cats().filter(x => x.id !== c.id && M.cats[x.id][m].avail > 0).sort((a, b) => M.cats[b.id][m].avail - M.cats[a.id][m].avail);
     const free = Math.max(0, M.months[m].free);
@@ -775,7 +802,7 @@
   document.addEventListener("click", e => { if (!pop.hidden && !pop.contains(e.target) && !popAnchor?.contains(e.target)) closePop(); }, true);
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !pop.hidden) closePop(); });
   const openCover = (c, m, anchor) => {
-    if (c.id === "uncat") return openPop(anchor, '<div class="fw-semibold mb-1">Nicht kategorisiert</div><p class="small">Ordne die Buchungen einer Kategorie zu, dann ist der Überzug weg.</p><a class="btn btn-sm btn-primary" href="#konten?konto=alle">Zu den Buchungen</a>');
+    if (c.id === "uncat") return openPop(anchor, '<div class="fw-semibold mb-1">Ohne Kategorie</div><p class="small">Ordne die Buchungen einer Kategorie zu, dann ist der Überzug weg.</p><a class="btn btn-sm btn-primary" href="#konten?konto=alle">Zu den Buchungen</a>');
     openPop(anchor, `<div class="fw-semibold mb-2">Überzug decken · ${esc(catText(c))}</div>${coverForm(c, m, -state.M.cats[c.id][m].avail)}`);
   };
   function openMove(c, m, anchor) {
@@ -943,6 +970,8 @@
       const m = +ro.dataset.reopen;
       return openPop(ro.closest(".dropdown").querySelector("[data-bs-toggle]"), `<div class="fw-semibold mb-1">${mLabel(m)} wieder öffnen?</div><p class="small mb-2">Der Monat ist abgeschlossen. Änderungen daran wirken auf „Zu verteilen“ in allen späteren Monaten.</p><div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button><button type="button" class="btn btn-sm btn-primary" data-reopen-ok="${m}">Wieder öffnen</button></div>`);
     }
+    const rl = t.closest("[data-relock]");
+    if (rl) { state.reopened.delete(+rl.dataset.relock); renderBudget(); return toast(`${mLabel(+rl.dataset.relock)} ist wieder abgeschlossen.`); }
     const rok = t.closest("[data-reopen-ok]");
     if (rok) { state.reopened.add(+rok.dataset.reopenOk); closePop(); renderBudget(); return toast(`${mLabel(+rok.dataset.reopenOk)} ist wieder offen.`); }
     if (t.closest("[data-side-toggle]")) {
@@ -1279,7 +1308,7 @@
   const bk = $("[data-booking-form]"), bkModal = $("#bookingModal");
   const catOptions = (withRta = true) => (withRta ? '<option value="">Kategorie wählen …</option><option value="rta">📥 Zu verteilen (Einnahme)</option>' : "") + catOnlyOpts();
   const budgetAccs = () => accounts.filter(a => a.type === "budget");
-  let bookAcc = null;
+  let bookAcc = null, bkSuggested = false;
   $("[data-book-account]").addEventListener("click", () => { bookAcc = acc(state.acc || "")?.type === "budget" ? state.acc : "giro"; bootstrap.Modal.getOrCreateInstance(bkModal).show(); });
   const kind = () => $('input[name="bk-kind"]:checked').value;
   const splitRow = () => `<div class="d-flex gap-2" data-split-row><select class="form-select form-select-sm" aria-label="Kategorie">${catOptions(false)}</select><div class="input-group input-group-sm" style="max-width:9rem"><input class="form-control text-end tabular-nums" inputmode="decimal" placeholder="0,00" aria-label="Betrag"><span class="input-group-text">€</span></div><button type="button" class="btn btn-sm btn-outline-secondary" data-split-remove aria-label="Teil entfernen">×</button></div>`;
@@ -1310,6 +1339,7 @@
     $("[data-bk-to]").value = "giro2";
     $("[data-bk-cat]").innerHTML = catOptions();
     $("[data-bk-cat]").value = "";
+    bkSuggested = false;
     $("[data-bk-cat-hint]").textContent = "";
     $("[data-payees]").innerHTML = [...new Set(txs.filter(t => t.payee !== "Wertänderung" && !t.transfer).map(t => t.payee))].sort().map(p => `<option value="${esc(p)}"></option>`).join("");
     $("[data-bk-splits]").innerHTML = splitRow() + splitRow();
@@ -1318,6 +1348,7 @@
   });
   bkModal.addEventListener("shown.bs.modal", () => $("[data-bk-amount]").focus());
   bk.addEventListener("change", e => {
+    if (e.target.matches("[data-bk-cat]")) bkSuggested = false;
     if (e.target.matches('[name="bk-kind"], [data-bk-split]')) bkLayout();
     if (e.target.matches('[name="bk-kind"]')) { const c = $("[data-bk-cat]"); if (kind() === "in" && !c.value) c.value = "rta"; else if (kind() === "out" && c.value === "rta") c.value = ""; }
   });
@@ -1327,9 +1358,14 @@
       if (last) {
         $("[data-bk-cat]").value = last.cat;
         $("[data-bk-cat-hint]").textContent = `Vorschlag aus der letzten Buchung bei ${last.payee} (${dShort(last.date)}, ${eur(Math.abs(last.amount))})`;
+        bkSuggested = true;
         $(last.amount > 0 ? "#bk-in" : "#bk-out").checked = true;
         bkLayout();
-      } else $("[data-bk-cat-hint]").textContent = "";
+      } else {
+        // a payee without history must not keep the previous suggestion
+        $("[data-bk-cat-hint]").textContent = "";
+        if (bkSuggested) { $("[data-bk-cat]").value = ""; bkSuggested = false; }
+      }
     }
     restSplit();
   });
@@ -1430,9 +1466,9 @@
   function renderCatAdmin() {
     $("[data-cat-admin]").innerHTML = groups.map(g => `
       <div class="list-group-item d-flex align-items-center gap-2 bg-body-tertiary fw-semibold">${icon("i-grip", "app-icon app-icon-sm text-body-secondary")}<span class="me-auto text-truncate">${esc(g.name)}</span><button type="button" class="btn btn-sm btn-link" data-add-cat="${g.id}">+ Kategorie</button></div>
-      ${g.cats.map(c => `<div class="list-group-item d-flex align-items-center gap-2">${icon("i-grip", "app-icon app-icon-sm text-body-secondary")}
-        <span class="flex-grow-1" style="min-width:0">${catName(c)}<span class="d-block small text-body-secondary text-truncate">${esc(targetText(c.target))}</span></span>
-        <a class="btn btn-sm btn-outline-secondary" href="#budget?m=${mKey(CUR)}&kat=${c.id}">Bearbeiten</a></div>`).join("")}`).join("");
+      ${g.cats.map(c => `<a class="list-group-item list-group-item-action d-flex align-items-center gap-2" href="#budget?m=${mKey(CUR)}&kat=${c.id}" aria-label="${esc(c.name)} bearbeiten">${icon("i-grip", "app-icon app-icon-sm text-body-secondary")}
+        <span class="flex-grow-1" style="min-width:0">${catName(c)}<span class="d-block small text-body-secondary text-truncate" style="padding-left:calc(1.4em + .4rem)">${esc(targetShort(c.target))}</span></span>
+        ${icon("i-chevron", "app-icon app-icon-sm text-body-secondary")}</a>`).join("")}`).join("");
   }
   document.addEventListener("click", e => {
     const ac = e.target.closest("[data-add-cat]");

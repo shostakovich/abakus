@@ -39,13 +39,15 @@
     .app-side .app-acc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
     .app-side .app-acc-e { width: 1.25rem; text-align: center; flex-shrink: 0; }
     .app-side-btns { display: grid; gap: .5rem; }
+    .app-side .app-side-btn { background: transparent; border: 1px solid rgb(255 255 255 / .22); color: inherit; font-size: .875rem; font-weight: 500; }
+    .app-side .app-side-btn:hover { background: rgb(255 255 255 / .1); border-color: rgb(255 255 255 / .35); }
     .app-side-toggle { color: inherit; opacity: .75; }
     .app-side-toggle:hover { opacity: 1; }
     .app-side-mini .app-side > * { padding-inline: .5rem !important; }
     .app-side-mini .app-side-text, .app-side-mini .app-side .app-bal, .app-side-mini .app-side .app-acc-name, .app-side-mini .app-side-h > span { display: none !important; }
     .app-side-mini .app-side .nav-link { justify-content: center; position: relative; }
     .app-side-mini .app-side-brand { justify-content: center; padding-inline: 0; }
-    .app-side-mini .app-side .app-acc .badge { position: absolute; top: 0; right: 0; font-size: .6rem; padding: .1rem .3rem; }
+    .app-side-mini .app-side .app-acc .badge { position: absolute; top: .3rem; left: calc(50% + .15rem); transform: translate(25%, -40%); font-size: .625rem; padding: .1rem .3rem; }
     .app-side-mini .app-side-h { border-top: 1px solid rgb(255 255 255 / .15); margin: .5rem .25rem !important; padding: 0; }
     .app-side-mini .app-side-toggle svg { transform: scaleX(-1); }
     .app-side-mini .app-side > :last-child { justify-content: center !important; }
@@ -61,20 +63,22 @@
     .app-pill .app-icon { width: .85rem; height: .85rem; }
     /* line 2 of a category: a fixed bar with the status right next to it, under the name (YNAB) */
     .app-line2 { display: flex; align-items: center; gap: .5rem; margin-top: .125rem; padding-left: calc(1.4em + .4rem); min-width: 0; }
-    .app-target { height: .25rem; flex: 0 1 14rem; min-width: 0; max-width: 60%; }
+    .app-target { height: .25rem; flex: 0 0 var(--bar-w, 9rem); }
     .app-tstat { font-size: .6875rem; line-height: 1.2; color: var(--felt-secondary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; max-width: calc(100% - 2.5rem); }
     .app-tstat.is-over { color: var(--felt-danger-text); }
-    .app-target[hidden] + .app-tstat { max-width: 100%; }
     .app-colh { display: block; font-size: .625rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--felt-secondary-color); }
     .app-colh b { display: block; font-size: .875rem; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--felt-body-color); font-variant-numeric: tabular-nums; }
-    .app-zero { color: var(--felt-secondary-color); opacity: .45; }
-    .app-neg { color: var(--felt-danger-text); }
     .app-q { border: 0; background: none; padding: 0; color: inherit; font: inherit; }
+    /* zeros are dimmed by colour, not opacity, so selection tint and grid lines stay even */
+    .app-zero { color: color-mix(in srgb, var(--felt-body-color) 45%, var(--felt-body-bg)); }
+    .app-neg { color: var(--felt-danger-text); }
+
     .app-udot { display: inline-block; width: .4rem; height: .4rem; border-radius: 50%; background: var(--felt-warning); margin-right: .3rem; vertical-align: .1rem; }
     /* month strip */
     .app-strip { display: flex; flex-direction: row; align-items: stretch; overflow: hidden; min-width: 0; }
-    .app-strip button { border: 0; background: none; color: inherit; padding: .3rem 0; font-size: .8rem; flex: 0 0 2.375rem; white-space: nowrap; }
-    .app-strip button[data-month-step] { flex-basis: 2rem; }
+    .app-strip { height: 2rem; }
+    .app-strip button { border: 0; background: none; color: inherit; padding: 0; font-size: .8rem; flex: 1 1 0; min-width: 2rem; white-space: nowrap; }
+    .app-strip button[data-month-step] { flex: 0 0 2rem; }
     .app-strip .is-sel { background: color-mix(in srgb, var(--felt-primary) 22%, transparent); }
     .app-strip .is-focus { background: var(--felt-primary); color: #fff; }
     .app-strip .is-cur { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
@@ -86,9 +90,10 @@
     .app-budget > tbody > tr.app-grp > * { height: 2rem; }
     .app-budget .app-catbtn { font-size: .875rem; line-height: 1.25; }
     .app-budget .app-ro { padding-inline: .3rem; }
-    .app-tools { display: inline-flex; margin-bottom: -.2rem; }
+    .app-tools { display: inline-flex; margin-bottom: -.25rem; }
+    .app-tools .btn { width: 1.75rem; height: 1.75rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
     .app-inc-gutter { width: 1rem; flex-shrink: 0; }
-    .app-pill-zero { border: 0; background: none; color: var(--felt-secondary-color); opacity: .55; }
+    .app-pill-zero { border: 0; background: none; padding: 0; font-size: .875rem; font-weight: 400; color: color-mix(in srgb, var(--felt-body-color) 45%, var(--felt-body-bg)); }
     .app-budget .app-cat { position: sticky; left: 0; z-index: 2; border-right: 1px solid var(--felt-border-color); text-align: left; padding-left: .5rem; }
     .app-budget .app-ms { border-left: .625rem solid var(--felt-surface-sunk); }
     .app-budget > thead > tr:first-child > * { border-bottom: 0; padding: 0 0 .5rem; vertical-align: top; height: 1px; }
@@ -107,6 +112,7 @@
     .app-mcard.is-focus .app-rta-big.text-success { color: light-dark(var(--felt-success-text), var(--felt-success-emphasis)) !important; }
     /* dark: cards one step further from the page */
     .card { border-color: light-dark(var(--felt-border-color), rgb(255 255 255 / .16)); }
+    .app-mcard:not(.is-focus) { height: auto; }
     .app-mcard.is-focus { border-color: var(--felt-primary); box-shadow: 0 0 0 1px var(--felt-primary); }
     .app-mcard:not(.is-focus) { cursor: pointer; }
     .app-mcard .app-mname { font-size: 1rem; font-weight: 700; line-height: 1.1; }
@@ -118,18 +124,20 @@
     .app-rta-big { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; }
     .app-calc-toggle { border: 0; background: none; padding: 0; color: var(--felt-secondary-color); font-size: .7rem; }
     .app-insp-title { font-size: 1.25rem; font-weight: 700; }
+    :is(.app-inspector, #panel) .card { --felt-card-bg: light-dark(var(--felt-surface), var(--felt-surface-raised)); }
+    .app-overs-act { display: flex; align-items: center; gap: .375rem; flex-shrink: 0; }
+    .app-overs-act .btn { padding: .15rem .4rem; font-size: .8125rem; }
+    .app-inspector .app-overs > .list-group-item, #panel .app-overs > .list-group-item { padding-inline: .625rem; gap: .375rem !important; }
+    .app-overs .app-catname { gap: .25rem; }
     :is(.app-inspector, #panel) .card-header { font-size: .875rem; font-weight: 600; }
     :is(.app-inspector, #panel) .app-amt { min-width: 6.5rem; }
     .app-inspector .card-body, .app-inspector .card-header, .app-inspector .list-group-item { padding-inline: .875rem; }
     .app-mb-3q { margin-bottom: .75rem; }
     .app-inspector { width: 18rem; flex-shrink: 0; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
     .app-ring { width: 6rem; height: 6rem; }
-    .app-chips-wrap { position: relative; min-width: 0; flex: 1 1 auto; }
-    .app-chips { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: none; }
-    .app-chips .btn { white-space: nowrap; }
-    .app-chips-wrap::after { content: ""; position: absolute; top: 0; right: 0; bottom: .25rem; width: 2.5rem; background: linear-gradient(to right, transparent, var(--felt-body-bg)); pointer-events: none; }
-    .app-chips { padding-right: 2rem; }
-    @media (max-width: 991.98px) { .app-chips-wrap { flex-basis: 100%; } }
+    /* filter chips: whole chips only, the trailing ones fold into "Filter" when the row is short */
+    .app-chips { display: flex; gap: .4rem; flex-wrap: nowrap; min-width: 0; }
+    .app-chips > .btn, .app-chips .dropdown > .btn { white-space: nowrap; flex-shrink: 0; }
     /* phone: sticky month header, rows */
     .app-mhead { position: sticky; top: 0; z-index: 1020; background: var(--felt-body-bg); margin-inline: -1rem; padding: .5rem 1rem .6rem; border-bottom: 1px solid var(--felt-border-color); }
     .app-mhead-mini { display: none; min-height: 2.5rem; }
@@ -263,8 +271,8 @@
     </nav>
     <div class="mt-3 flex-grow-1" data-side-accounts></div>
     <div class="app-side-btns mb-2 app-side-text">
-      <button type="button" class="btn btn-sm btn-secondary" data-toast-msg="Konto anlegen: Girokonto, Tracking oder Bankverbindung (im Klickdummy nicht umgesetzt).">+ Konto hinzufügen</button>
-      <a href="#import" class="btn btn-sm btn-secondary">Bankverbindungen</a>
+      <button type="button" class="btn btn-sm app-side-btn" data-toast-msg="Konto anlegen: Girokonto, Tracking oder Bankverbindung (im Klickdummy nicht umgesetzt).">+ Konto hinzufügen</button>
+      <a href="#import" class="btn btn-sm app-side-btn">Bankverbindungen</a>
     </div>
     <nav class="nav flex-column pt-2 border-top" data-nav>
       <a class="nav-link" href="#import" title="Import &amp; Sync"><svg class="app-icon" aria-hidden="true"><use href="#i-sync"/></svg><span class="app-side-text">Import &amp; Sync</span></a>
@@ -298,10 +306,7 @@
             </div>
             <div class="app-mhead-full" data-rta-phone></div>
           </div>
-          <div class="d-flex align-items-center gap-3 mb-2">
-            <div class="app-chips-wrap"><div class="app-chips" role="group" aria-label="Filter" data-chips></div></div>
-            <div class="card app-strip d-none d-lg-flex flex-shrink-0" data-month-strip aria-label="Monate"></div>
-          </div>
+          <div class="app-chips mb-2" role="group" aria-label="Filter" data-chips></div>
           <div class="d-flex d-lg-none align-items-center mb-2">
             <div class="d-flex flex-wrap gap-1 ms-auto">
               <button type="button" class="btn btn-sm btn-link text-decoration-none" data-add-group>+ Kategoriegruppe</button>
@@ -310,6 +315,10 @@
             </div>
           </div>
           <div class="d-flex flex-column gap-2 mb-2" data-budget-hint></div>
+          <div class="d-none d-lg-flex mb-2">
+            <div style="width:var(--cat-w);flex-shrink:0"></div>
+            <div class="card app-strip flex-grow-1" data-month-strip aria-label="Monate"></div>
+          </div>
           <div class="d-none d-lg-block">
             <table class="app-budget" data-budget-table></table>
           </div>
@@ -555,7 +564,7 @@
 
         <div class="col-lg-6 d-flex flex-column gap-4">
           <div class="card" data-part="kategorien">
-            <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-budget"/></svg><span class="me-auto">Kategorien &amp; Gruppen</span><button type="button" class="btn btn-sm btn-outline-primary" data-add-group>Gruppe hinzufügen</button></div>
+            <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon d-none d-lg-inline-block" aria-hidden="true"><use href="#i-budget"/></svg><span class="me-auto"><span class="d-none d-lg-inline">Kategorien &amp; Gruppen</span></span><button type="button" class="btn btn-sm btn-outline-primary" data-add-group>Gruppe hinzufügen</button></div>
             <div class="list-group list-group-flush" data-cat-admin></div>
           </div>
 
