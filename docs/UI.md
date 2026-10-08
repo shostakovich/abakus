@@ -18,7 +18,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 
 ## From today's YNAB
 
-- Dark sidebar: budget name, Budget, Konten, account groups (Budget, Tracking) with balances, add account, bank
+- Dark sidebar, collapsible like YNAB (toggle at the bottom, collapsed to an icon rail, remembered per
+  device; the freed width counts for the month/inspector rule): budget name, Budget, Konten, account groups (Budget, Tracking) with balances, add account, bank
   connections; account names with emoji
 - Zu verteilen colours: green with "Verteilen ▾" while money is unassigned, grey when everything is assigned,
   red if negative; line "In künftigen Monaten zugewiesen" (shown in the month card, see decisions below)
