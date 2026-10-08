@@ -11,7 +11,7 @@ The click dummy in `mockup/` shows the intended screens (example data only).
 - one budget, 1–2 users, EUR only
 - mobile and desktop, one LiveView app, installable as PWA
 - runs on the home server, reachable from the internet at `https://abakus.rocu.de` (HTTPS only)
-- online only; an offline entry queue is a later option (v3), not a sync protocol like Actual's CRDTs
+- online only; offline entry comes in v3, not a sync protocol like Actual's CRDTs
 
 Not in scope for now: reports beyond the budget view, payee rename rules, multiple budgets, other currencies,
 investment tracking (that is zipfelfolio). No scheduled transactions: the only recurring one (rent) comes from
@@ -237,9 +237,10 @@ without duplicates; Zipfelkasse's sync runs against Abakus.
 
 Enable Banking connections, scheduled sync, consent reminders by mail, bank balance in reconcile; MCP endpoint.
 
-### v3 — only if missed
+### v3 — offline entry
 
-Offline entry queue in the PWA (create only, no edits, so no conflicts).
+Only offline entry: a queue in the PWA that creates transactions while offline and sends them when back online
+(create only, no edits, so no conflicts). Nothing else is planned for v3; scheduled transactions stay out.
 
 ## Operations
 
