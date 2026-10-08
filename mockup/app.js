@@ -293,10 +293,19 @@
     }
     if (id === "mehr") {
       // phones show one part of the settings at a time
-      const parts = { kategorien: "Kategorien & Gruppen", zugang: "Zugang & API", aussehen: "Aussehen", ynab: "YNAB-Import" }, teil = parts[q.get("teil")] ? q.get("teil") : "";
+      // one section at a time: desktop with the section nav beside it (Kategorien by default), phones as sub-pages
+      const parts = { kategorien: "Kategorien & Gruppen", zugang: "Zugang & API", aussehen: "Aussehen", ynab: "YNAB-Import" };
+      const teil = parts[q.get("teil")] ? q.get("teil") : isDesktop() ? "kategorien" : "", edit = teil === "kategorien" && cat(q.get("kat") || "") ? q.get("kat") : null;
+      state.mehrCat = edit; if (!edit) state.mehrTarget = false;
       target.dataset.teil = teil;
-      $$("[data-part]").forEach(c => c.classList.toggle("app-part-off", c.dataset.part !== teil));
-      $("[data-mehr-title]").textContent = teil && !isDesktop() ? parts[teil] : "Einstellungen";
+      const show = edit ? "kategorie" : teil;
+      $$("[data-part]").forEach(c => c.classList.toggle("app-part-off", c.dataset.part !== show));
+      $$("[data-mehr-index] a").forEach(a => a.classList.toggle("active", a.getAttribute("href") === `#mehr?teil=${teil}`));
+      $("[data-mehr-title]").textContent = edit && !isDesktop() ? catText(cat(edit)) : teil && !isDesktop() ? parts[teil] : "Einstellungen";
+      const back = $("[data-mehr-back]");
+      back.setAttribute("href", edit ? "#mehr?teil=kategorien" : "#mehr");
+      back.lastChild.textContent = edit ? " Kategorien" : " Einstellungen";
+      renderCatEdit();
       window.scrollTo({ top: 0 });
     }
     if (changed) window.scrollTo({ top: 0 });
@@ -370,7 +379,7 @@
   function renderBudget() {
     const months = visibleMonths(), f = focusMonth(), M = (state.M = model());
     $("[data-month-title]").textContent = mLabel(f);
-    const shown = groups.map(g => ({ g, cats: g.cats.filter(c => FILTERS[state.filter](c, M.cats[c.id][f])) })).filter(x => state.filter === "all" || x.cats.length);
+    const shown = groups.map(g => ({ g, cats: g.cats.filter(c => !c.hidden && FILTERS[state.filter](c, M.cats[c.id][f])) })).filter(x => state.filter === "all" || x.cats.length);
     const uncat = months.some(m => M.cats.uncat[m].activity !== 0) && FILTERS[state.filter](UNCAT, M.cats.uncat[f]);
     const income = state.filter === "all" ? Object.keys(M.income).filter(p => months.some(m => M.income[p][m])) : [];
     state.incomeKeys = income;
@@ -472,13 +481,15 @@
   const tone = (c, r) => r.avail < 0 ? ["text-bg-danger", ""] : r.under > 0 ? ["text-bg-warning", "i-half"] : r.avail > 0 ? ["text-bg-success", c.target && !r.snoozed ? "i-okc" : ""] : ["app-pill-zero", ""];
   function targetStatus(c, r, m) {
     const budget = r.carry + r.assigned, spent = -r.activity;
-    if (c.id === "uncat" && r.avail < 0) return { text: `${eur(spent)} – zuordnen`, bars: [] };
-    if (r.avail < 0) return { text: `Überzogen ${num(spent)} / ${eur(budget)}`, bars: [[100, "bg-danger"]] };
+    if (c.id === "uncat" && r.avail < 0) return { text: eur(spent), bars: [], link: true };
+    // short enough next to a 6rem bar at 1100 px: ratios in whole euros (exact amounts are in the pill and the inspector)
+    const amt = v => (v < 0 ? "−" : "") + Math.round(Math.abs(v) / 100).toLocaleString("de-DE");
+    if (r.avail < 0) return { text: `${amt(spent)} / ${amt(budget)} €`, bars: [[100, "bg-danger"]] };
     if (!c.target) return null;
     if (r.snoozed) return { text: "Pausiert", bars: [] };
-    if (r.under > 0) return { text: c.target.cadence === "month" ? `noch ${eur(r.under)} bis ${lastDay(m)}.` : `noch ${eur(r.under)} im ${mShort(m)}`, bars: [[Math.round(r.progress * 100), "bg-warning"]] };
-    if (spent > 0 && r.avail === 0) return { text: "Ganz ausgegeben", bars: [[100, "bg-success progress-bar-striped"]] };
-    if (spent > 0) { const p = Math.round((spent / budget) * 100); return { text: `${num(spent)} / ${eur(budget)}`, bars: [[p, "bg-success progress-bar-striped opacity-50"], [100 - p, "bg-success"]] }; }
+    if (r.under > 0) return { text: `noch ${eur(r.under)}`, bars: [[Math.round(r.progress * 100), "bg-warning"]] };
+    if (spent > 0 && r.avail === 0) return { text: "Ausgegeben", bars: [[100, "bg-success progress-bar-striped"]] };
+    if (spent > 0) { const p = Math.round((spent / budget) * 100); return { text: `${amt(spent)} / ${amt(budget)} €`, bars: [[p, "bg-success progress-bar-striped opacity-50"], [100 - p, "bg-success"]] }; }
     return { text: c.target.cadence === "year" ? "Im Plan" : "Finanziert", bars: [[100, "bg-success"]] };
   }
   const rtaState = s => s.disp < 0 ? ["text-danger", "Zu viel verteilt"] : s.closed ? ["text-body-secondary", "Nicht verteilt am Monatsende"]
@@ -536,16 +547,20 @@
       } else {
         const [cls, ic] = tone(cat(c), r);
         el.className = cls === "app-pill-zero" ? "app-pill app-pill-zero" : `badge rounded-pill app-pill border-0 ${cls}`;
-        el.innerHTML = cls === "app-pill-zero" ? num(0) : (ic ? icon(ic) : "") + eur(r.avail);
+        // the table drops € for zeros like its other numbers; the phone list keeps € on every amount
+        el.innerHTML = cls === "app-pill-zero" ? (el.closest("[data-budget-list]") ? eur(0) : num(0)) : (ic ? icon(ic) : "") + eur(r.avail);
       }
       el.title = locked(+m) ? "" : r.avail < 0 ? "Überzogen – klicken zum Decken" : r.under > 0 ? `Ziel: noch ${eur(r.under)} nötig` : "Geld verschieben";
     });
     $$("[data-line2]").forEach(el => {
       const c = el.dataset.line2, r = M.cats[c][f], st = targetStatus(cat(c), r, f), bar = $("[data-bar]", el), ts = $("[data-tstat]", el);
       el.hidden = !st;
+      // rows without a bar keep its space (status at one x), except the uncategorized row: text under the name
       bar.style.visibility = st?.bars.length ? "" : "hidden";
+      bar.style.display = st?.link ? "none" : "";
       bar.innerHTML = st ? st.bars.map(([w, cls]) => `<div class="progress-bar ${cls}" style="width:${w}%"></div>`).join("") : "";
       ts.textContent = st ? st.text : ""; ts.title = ts.textContent;
+      if (st?.link) { if (el.closest("[data-budget-list]")) ts.append(" · zuordnen"); else ts.insertAdjacentHTML("beforeend", ' · <a href="#konten?konto=alle" class="app-tlink">zuordnen</a>'); }
       ts.classList.toggle("is-over", r.avail < 0);
     });
     fitBars();
@@ -558,9 +573,10 @@
     const count = key => [...cats(), UNCAT].filter(c => (c !== UNCAT || M.cats.uncat[f].activity) && FILTERS[key](c, M.cats[c.id][f])).length;
     const chip = (key, label, extra = "") => `<button type="button" class="btn btn-sm btn-pill ${state.filter === key ? "btn-primary" : extra || "btn-light"}" data-filter="${key}" aria-pressed="${state.filter === key}">${label}</button>`;
     const ov = count("over"), un = count("under"), pa = count("paused");
-    const chips = [["all", "Alle"], ["over", `${ov ? icon("i-alert") + " " : ""}${ov} überzogen`, ov ? "btn-outline-danger" : ""], ["under", `Unterfinanziert${un ? " · " + un : ""}`],
-      ["overfunded", "Überfinanziert"], ["money", "Geld verfügbar"], ["paused", `Pausiert${pa ? " · " + pa : ""}`]];
-    $("[data-chips]").innerHTML = chips.map(c => chip(...c)).join("") +
+    // [key, label, extra class, short label for phones]
+    const chips = [["all", "Alle", "", "Alle"], ["over", `${ov ? icon("i-alert") + " " : ""}${ov} überzogen`, ov ? "btn-outline-danger" : "", `${ov ? icon("i-alert") + " " : ""}${ov}`],
+      ["under", `Unterfinanziert${un ? " · " + un : ""}`, "", `Unterfin.${un ? " · " + un : ""}`], ["overfunded", "Überfinanziert", "", "Überfin."], ["money", "Geld verfügbar", "", "Verfügbar"], ["paused", `Pausiert${pa ? " · " + pa : ""}`, "", `Pausiert${pa ? " · " + pa : ""}`]];
+    $("[data-chips]").innerHTML = chips.map(([k, l, x, sh]) => chip(k, `<span class="app-chip-l">${l}</span><span class="app-chip-s">${sh}</span>`, x)).join("") +
       `<div class="dropdown" data-chips-more hidden><button class="btn btn-sm btn-pill btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Filter</button><ul class="dropdown-menu dropdown-menu-end">${chips.map(([key, label]) => `<li><button class="dropdown-item${state.filter === key ? " active" : ""}" type="button" data-filter="${key}" data-fold="${key}">${label}</button></li>`).join("")}</ul></div>`;
     fitChips();
 
@@ -582,11 +598,11 @@
 
   // one bar length per width: as long as possible while the longest status still fits next to it
   function fitBars() {
-    const t = $("[data-budget-table]"), stats = $$("[data-tstat]", t).filter(e => e.offsetParent);
+    const t = $("[data-budget-table]"), stats = $$("[data-tstat]:not([data-tstat=uncat])", t).filter(e => e.offsetParent);
     if (!stats.length) return;
     const line = stats[0].parentElement, area = line.clientWidth - parseFloat(getComputedStyle(line).paddingLeft);
     const widest = Math.max(...stats.map(e => e.scrollWidth)), max = catW() <= 352 ? 144 : 224;
-    t.style.setProperty("--bar-w", clamp(area - widest - 8, 40, max) + "px");
+    t.style.setProperty("--bar-w", clamp(area - widest - 8, 96, max) + "px");
   }
 
   // fold trailing chips into "Filter" until the row fits; never a half-cut chip
@@ -595,6 +611,9 @@
     if (!more || !box.clientWidth) return;
     const inline = $$(":scope > [data-filter]", box), items = $$("[data-fold]", box);
     inline.forEach(b => (b.hidden = false)); items.forEach(i => (i.parentElement.hidden = true)); more.hidden = true;
+    // phones shorten the labels before anything folds, so "Unterfinanziert" stays in view
+    box.classList.remove("is-short");
+    box.classList.toggle("is-short", !isDesktop() && box.scrollWidth > box.clientWidth);
     for (let k = inline.length - 1; k > 0 && box.scrollWidth > box.clientWidth; k--) {
       more.hidden = false; inline[k].hidden = true; items[k].parentElement.hidden = false;
     }
@@ -633,12 +652,12 @@
       $("#panelTitle").textContent = `Überzug decken · ${catText(c)}`;
       const r = state.M.cats[c.id][m];
       // the likeliest sources (most money available) as one tap each, the rest behind "Andere"
-      const free = Math.max(0, state.M.months[m].free);
+      const free = Math.max(0, state.M.months[m].free), capped = free < state.M.months[m].show;
       // Zu verteilen comes first when it covers everything, then the categories with the most money
       const srcs = [...(free > 0 ? [["rta", "📥 Zu verteilen", free]] : []), ...cats().filter(x => x.id !== c.id && state.M.cats[x.id][m].avail > 0).map(x => [x.id, catText(x), state.M.cats[x.id][m].avail])]
         .sort((a, b) => (b[0] === "rta" && free >= -r.avail) - (a[0] === "rta" && free >= -r.avail) || b[2] - a[2]);
       el.innerHTML = r.avail < 0 ? `<p class="mb-2">Decke <strong class="text-nowrap">${eur(-r.avail)}</strong> aus:</p>
-        <div class="list-group mb-3">${srcs.slice(0, 3).map(([id, label, v]) => `<button type="button" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between gap-2 py-3" data-cover-src="${c.id}|${m}|${id}"><span class="text-truncate">${esc(label)}</span><span class="tabular-nums text-nowrap text-body-secondary">${eur(v)}</span></button>`).join("")}</div>
+        <div class="list-group mb-3">${srcs.slice(0, 3).map(([id, label, v]) => `<button type="button" class="list-group-item list-group-item-action d-flex align-items-center justify-content-between gap-2 py-3" data-cover-src="${c.id}|${m}|${id}"><span class="text-truncate">${esc(label)}</span><span class="tabular-nums text-nowrap text-body-secondary">${id === "rta" && capped ? "max. " : ""}${eur(v)}</span></button>`).join("")}</div>
         <details><summary class="small">Andere …</summary><div class="mt-2">${coverForm(c, m, -r.avail, true)}</div></details>
         <button type="button" class="btn btn-sm btn-link px-0 mt-3" data-sheet-details>Details und Ziel</button>`
         : `<p class="small">${esc(catText(c))} ist gedeckt.</p><button type="button" class="btn btn-sm btn-primary" data-sheet-details>Details und Ziel</button>`;
@@ -755,30 +774,35 @@
     } else if (!t && !state.editTarget) {
       h += `<p class="text-body-secondary">Kein Ziel. Ein Ziel sagt dir, wie viel diese Kategorie jeden Monat braucht.</p><button type="button" class="btn btn-sm btn-primary w-100" data-edit-target>Ziel festlegen</button>`;
     } else {
-      const v = t || { amount: 0, cadence: "month", mode: "setaside", due: "" };
-      h += `<form class="d-flex flex-column gap-2" data-target-form>
-        <div class="fw-semibold">Für Ausgaben benötigt</div>
-        <label class="form-label mb-0" for="tg-amount">Ich brauche</label>
-        <div class="input-group input-group-sm"><input class="form-control text-end tabular-nums" id="tg-amount" name="amount" inputmode="decimal" value="${v.amount ? num(v.amount) : ""}" required><span class="input-group-text">€</span></div>
-        <div class="btn-group btn-group-sm w-100" role="group" aria-label="Rhythmus">
-          <input type="radio" class="btn-check" name="cadence" id="tg-m" value="month"${v.cadence === "month" ? " checked" : ""}><label class="btn btn-outline-secondary" for="tg-m">Jeden Monat</label>
-          <input type="radio" class="btn-check" name="cadence" id="tg-y" value="year"${v.cadence === "year" ? " checked" : ""}><label class="btn btn-outline-secondary" for="tg-y">Jedes Jahr (bis Datum)</label>
-        </div>
-        <div data-tg-due${v.cadence === "year" ? "" : " hidden"}><label class="form-label mb-1" for="tg-due">Fällig am</label><input type="date" class="form-control form-control-sm" id="tg-due" name="due" min="2026-10-09" value="${v.due || ""}"></div>
-        <label class="form-label mb-0" for="tg-mode">Nächsten Monat möchte ich:</label>
-        <select class="form-select form-select-sm" id="tg-mode" name="mode"><option value="setaside"${v.mode === "setaside" ? " selected" : ""}>Weitere zurücklegen</option><option value="refill"${v.mode === "refill" ? " selected" : ""}>Auffüllen bis</option></select>
-        <div class="form-text mt-0" data-tg-preview></div>
-        <div class="d-flex flex-wrap gap-2 mt-1"><button type="submit" class="btn btn-sm btn-primary">Speichern</button>${t ? `${snooze}<button type="button" class="btn btn-sm btn-outline-danger" data-delete-target>Löschen</button>` : ""}<button type="button" class="btn btn-sm ms-auto" data-cancel-target>Abbrechen</button></div>
-      </form>`;
+      h += targetForm(c, snooze, "tg");
     }
     h += `</div></div>` + (locked(m) ? "" : `
       <details class="card"><summary class="card-header d-flex align-items-center gap-2" style="cursor:pointer">${icon("i-swap")}Geld verschieben</summary>
         <div class="card-body small">${moveForm(c, m, "mvd", true)}</div></details>`);
     return h;
   }
+  // the target editor, used by the inspector and by Einstellungen › Kategorien
+  function targetForm(c, snooze, k) {
+    const t = c.target, v = t || { amount: 0, cadence: "month", mode: "setaside", due: "" };
+    return `<form class="d-flex flex-column gap-2" data-target-form="${c.id}">
+        <div class="fw-semibold">Für Ausgaben benötigt</div>
+        <label class="form-label mb-0" for="${k}-amount">Ich brauche</label>
+        <div class="input-group input-group-sm"><input class="form-control text-end tabular-nums" id="${k}-amount" name="amount" inputmode="decimal" value="${v.amount ? num(v.amount) : ""}" required><span class="input-group-text">€</span></div>
+        <div class="btn-group btn-group-sm w-100" role="group" aria-label="Rhythmus">
+          <input type="radio" class="btn-check" name="cadence" id="${k}-m" value="month"${v.cadence === "month" ? " checked" : ""}><label class="btn btn-outline-secondary" for="${k}-m">Jeden Monat</label>
+          <input type="radio" class="btn-check" name="cadence" id="${k}-y" value="year"${v.cadence === "year" ? " checked" : ""}><label class="btn btn-outline-secondary" for="${k}-y">Jedes Jahr (bis Datum)</label>
+        </div>
+        <div data-tg-due${v.cadence === "year" ? "" : " hidden"}><label class="form-label mb-1" for="${k}-due">Fällig am</label><input type="date" class="form-control form-control-sm" id="${k}-due" name="due" min="2026-10-09" value="${v.due || ""}"></div>
+        <label class="form-label mb-0" for="${k}-mode">Nächsten Monat möchte ich:</label>
+        <select class="form-select form-select-sm" id="${k}-mode" name="mode"><option value="setaside"${v.mode === "setaside" ? " selected" : ""}>Weitere zurücklegen</option><option value="refill"${v.mode === "refill" ? " selected" : ""}>Auffüllen bis</option></select>
+        <div class="form-text mt-0" data-tg-preview></div>
+        <div class="d-flex flex-wrap gap-2 mt-1"><button type="submit" class="btn btn-sm btn-primary">Speichern</button>${t ? `${snooze}<button type="button" class="btn btn-sm btn-outline-secondary" data-delete-target>Löschen</button>` : ""}<button type="button" class="btn btn-sm ms-auto" data-cancel-target>Abbrechen</button></div>
+      </form>`;
+  }
+
   // what a target editor draft asks for this month, so a yearly date target shows its monthly amount right away
   function targetPreview(f) {
-    const el = $("[data-tg-preview]", f), amount = parse(f.amount.value), c = cat(state.sel), m = focusMonth();
+    const el = $("[data-tg-preview]", f), amount = parse(f.amount.value), c = cat(f.dataset.targetForm), m = f.closest("[data-cat-edit]") ? CUR : focusMonth();
     if (!el || !c) return;
     if (!(amount > 0) || (f.cadence.value === "year" && !f.due.value)) return (el.textContent = "");
     const r = state.M.cats[c.id][m], t = { amount, cadence: f.cadence.value, mode: f.mode.value, due: f.due.value };
@@ -871,7 +895,7 @@
       if (tryAssign(c, m, v)) { if (before) { undoStack.push(before); redoStack.length = 0; } pending = null; d.blur(); paint(); }
       else { d.classList.add("is-invalid"); $("[data-detail-hint]").className = "form-text mt-0 text-danger"; $("[data-detail-hint]").textContent = `${NO_MONEY} ${capText(m)}`; }
     }
-    if (e.target.matches('[data-target-form] [name="cadence"]')) $("[data-tg-due]").hidden = e.target.value !== "year";
+    if (e.target.matches('[data-target-form] [name="cadence"]')) $("[data-tg-due]", e.target.form).hidden = e.target.value !== "year";
     const tf = e.target.closest("[data-target-form]");
     if (tf) targetPreview(tf);
     if (e.target.matches("[data-pm]")) $$("[data-pm-pane]", pop).forEach(p => (p.hidden = p.dataset.pmPane !== e.target.value));
@@ -1032,8 +1056,12 @@
       return toast(on ? `Ziel im ${mName(m)} pausiert.` : "Ziel läuft wieder.");
     }
     if (t.closest("[data-edit-target]")) { state.editTarget = true; renderPanel(); const f = $("[data-target-form]"); if (f) targetPreview(f); return; }
-    if (t.closest("[data-cancel-target]")) { state.editTarget = false; return renderPanel(); }
-    if (t.closest("[data-delete-target]")) { commit(); cat(state.sel).target = null; state.editTarget = false; renderCatAdmin(); paint(); return toast("Ziel gelöscht."); }
+    if (t.closest("[data-cancel-target]")) { state.editTarget = state.mehrTarget = false; renderCatEdit(); return renderPanel(); }
+    const dt = t.closest("[data-delete-target]");
+    if (dt) return openPop(dt, `<div class="fw-semibold mb-1">Ziel löschen?</div><p class="small mb-2">${esc(catText(cat(dt.form.dataset.targetForm)))} hat danach kein Ziel mehr.</p><div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button><button type="button" class="btn btn-sm btn-danger" data-delete-target-ok="${dt.form.dataset.targetForm}">Löschen</button></div>`);
+    const dto = t.closest("[data-delete-target-ok]");
+    if (dto) { commit(); cat(dto.dataset.deleteTargetOk).target = null; state.editTarget = state.mehrTarget = false; closePop(); renderCatAdmin(); renderCatEdit(); paint(); return toast("Ziel gelöscht."); }
+    if (t.closest("[data-mehr-target]")) { state.mehrTarget = true; renderCatEdit(); const f = $("[data-cat-edit] [data-target-form]"); if (f) targetPreview(f); return; }
     if (t.closest("[data-rename]")) return toast("Umbenennen und Emoji ändern (im Klickdummy nicht umgesetzt).");
     if (t.closest("[data-undo]")) return undoRedo(undoStack, redoStack);
     if (t.closest("[data-redo]")) return undoRedo(redoStack, undoStack);
@@ -1060,12 +1088,23 @@
       if (!(amount > 0)) return toast("Bitte einen Betrag angeben.", "danger");
       if (cadence === "year" && !due) return toast("Bitte ein Fälligkeitsdatum angeben.", "danger");
       commit();
-      const old = cat(state.sel).target;
-      cat(state.sel).target = { amount, cadence, mode: f.mode.value, ...(cadence === "year" ? { due } : {}), ...(old?.snooze ? { snooze: old.snooze } : {}) };
-      state.editTarget = false;
+      const c = cat(f.dataset.targetForm), old = c.target;
+      c.target = { amount, cadence, mode: f.mode.value, ...(cadence === "year" ? { due } : {}), ...(old?.snooze ? { snooze: old.snooze } : {}) };
+      state.editTarget = state.mehrTarget = false;
       document.activeElement?.blur();
-      renderCatAdmin(); paint();
+      renderCatAdmin(); renderCatEdit(); paint();
       return toast("Ziel gespeichert.");
+    }
+    if (f.matches("[data-cat-edit-form]")) {
+      e.preventDefault();
+      const c = cat(f.dataset.catEditForm), name = f.name.value.trim(), from = groupOf(c.id), to = groups.find(g => g.id === f.group.value);
+      if (!name) return toast("Bitte einen Namen angeben.", "danger");
+      commit();
+      c.name = name; c.e = f.e.value.trim() || c.e; c.hidden = f.hidden.checked;
+      if (to !== from) { from.cats.splice(from.cats.indexOf(c), 1); to.cats.push(c); }
+      renderCatAdmin();
+      go("mehr", { teil: "kategorien" });
+      return toast(`${catText(c)} gespeichert.`);
     }
     if (f.matches("[data-move-form]")) {
       e.preventDefault();
@@ -1144,6 +1183,8 @@
     const fresh = scope.filter(t => t.approved === false);
     if (!fresh.length && state.regFilter === "new") state.regFilter = "all";
     const nNew = `${fresh.length} ${fresh.length === 1 ? "neue Buchung" : "neue Buchungen"}`;
+    // phones: while transactions wait for approval the add button moves into the header, so it never covers a ✓
+    document.body.classList.toggle("app-fab-off", fresh.length > 0);
     $("[data-reg-banner]").innerHTML = fresh.length ? `<div class="alert alert-primary d-flex align-items-center gap-2 py-1 py-md-2 mb-3 app-banner">${icon("i-info")}<span class="me-auto text-truncate"><span class="d-md-none">${fresh.length} neu</span><span class="d-none d-md-inline">${nNew} zu bestätigen oder zu kategorisieren</span></span><button type="button" class="btn btn-sm btn-primary" data-reg-filter="new">Ansehen</button><button type="button" class="btn btn-sm btn-outline-primary" data-approve-all><span class="d-md-none">Alle</span><span class="d-none d-md-inline">Alle bestätigen</span></button></div>` : "";
     $("[data-reg-title]").textContent = all ? "Alle Konten" : accText(a);
     $("[data-reg-meta]").innerHTML = all ? "<span>Budget- und Tracking-Konten</span>"
@@ -1152,7 +1193,7 @@
     $$("[data-reg-edit]").forEach(b => (b.closest("li") || b).hidden = all);
     $("[data-reg-more]").hidden = all;
     $("[data-reg-legend]").hidden = track;
-    $("[data-book-account]").hidden = !!feed;
+    $$("[data-book-account]").forEach(b => (b.hidden = !!feed));
     $("[data-file-import]").hidden = !!feed;
     $("[data-feed-hint]").hidden = !feed;
     $("[data-feed-hint]").innerHTML = feed ? `${icon("i-info")}${feed}, keine Buchungen von Hand oder per Datei` : "";
@@ -1205,8 +1246,8 @@
       <div class="list-group-item app-unapproved-item d-flex align-items-center gap-2">
         <div class="flex-grow-1" style="min-width:0">
           <div class="d-flex align-items-center gap-2"><span class="fw-bold text-truncate flex-grow-1">${payee(t)}</span><span class="tabular-nums text-nowrap fw-bold ${t.amount > 0 ? "text-success" : ""}">${signed(t.amount)}</span></div>
-          <div class="d-flex align-items-center gap-2 app-ph-l2"><span class="small text-body-secondary flex-shrink-0">${dShort(t.date)}${all ? " · " + acc(t.acc).e : ""}</span><div class="flex-grow-1 app-cat-ph" style="min-width:0">${catCell(t)}</div></div>
-          ${t.matchOf ? `<div class="d-flex flex-wrap align-items-center gap-1 app-ph-l2">${matchBar(t)}</div>` : ""}
+          ${t.matchOf ? `<div class="d-flex align-items-center gap-2 app-ph-l2"><span class="small text-info-emphasis text-truncate flex-grow-1" style="min-width:0">${icon("i-link")} ${dShort(t.date)} · passt zu ${dShort(txById(t.matchOf).date)}</span><button type="button" class="btn btn-sm btn-primary app-btn-28" data-merge="${t.id}">Zuordnen</button><button type="button" class="btn btn-sm btn-outline-secondary app-btn-28" data-approve="${t.id}">Trennen</button></div>`
+            : `<div class="d-flex align-items-center gap-2 app-ph-l2"><span class="small text-body-secondary flex-shrink-0">${dShort(t.date)}${all ? " · " + acc(t.acc).e : ""}</span><div class="flex-grow-1 app-cat-ph" style="min-width:0">${catCell(t)}</div></div>`}
         </div>
         ${t.matchOf ? "" : `<button type="button" class="btn btn-primary app-approve-ph" data-approve="${t.id}" aria-label="${esc(t.payee)} bestätigen" title="Bestätigen">${icon("i-check")}</button>`}
       </div>`;
@@ -1309,7 +1350,7 @@
   const catOptions = (withRta = true) => (withRta ? '<option value="">Kategorie wählen …</option><option value="rta">📥 Zu verteilen (Einnahme)</option>' : "") + catOnlyOpts();
   const budgetAccs = () => accounts.filter(a => a.type === "budget");
   let bookAcc = null, bkSuggested = false;
-  $("[data-book-account]").addEventListener("click", () => { bookAcc = acc(state.acc || "")?.type === "budget" ? state.acc : "giro"; bootstrap.Modal.getOrCreateInstance(bkModal).show(); });
+  document.addEventListener("click", e => { if (!e.target.closest("[data-book-account]")) return; bookAcc = acc(state.acc || "")?.type === "budget" ? state.acc : "giro"; bootstrap.Modal.getOrCreateInstance(bkModal).show(); });
   const kind = () => $('input[name="bk-kind"]:checked').value;
   const splitRow = () => `<div class="d-flex gap-2" data-split-row><select class="form-select form-select-sm" aria-label="Kategorie">${catOptions(false)}</select><div class="input-group input-group-sm" style="max-width:9rem"><input class="form-control text-end tabular-nums" inputmode="decimal" placeholder="0,00" aria-label="Betrag"><span class="input-group-text">€</span></div><button type="button" class="btn btn-sm btn-outline-secondary" data-split-remove aria-label="Teil entfernen">×</button></div>`;
   const restSplit = () => {
@@ -1465,11 +1506,30 @@
   $("[data-imp-go]").addEventListener("click", () => { $("[data-imp-preview]").hidden = true; $("[data-imp-file]").value = ""; toast("23 Buchungen importiert, zur Bestätigung im Girokonto Nordbank. Banksaldo aus der Datei gemerkt."); });
 
   // ------------------------------------------------------------ settings
+  let pendingRemove = null;
+  function renderCatEdit() {
+    const el = $("[data-cat-edit]"), c = state.mehrCat && cat(state.mehrCat);
+    if (!c) return void (el.innerHTML = "");
+    const g = groupOf(c.id);
+    el.innerHTML = `<a href="#mehr?teil=kategorien" class="d-none d-lg-inline-flex align-items-center gap-1 small text-decoration-none mb-3">${icon("i-back")} Kategorien</a>
+      <form class="d-flex flex-column gap-3" data-cat-edit-form="${c.id}">
+        <div class="d-flex gap-2">
+          <div style="width:5rem"><label class="form-label small mb-1" for="ce-e">Emoji</label><input class="form-control text-center" id="ce-e" name="e" value="${esc(c.e)}" maxlength="4" autocomplete="off"></div>
+          <div class="flex-grow-1"><label class="form-label small mb-1" for="ce-name">Name</label><input class="form-control" id="ce-name" name="name" value="${esc(c.name)}" required autocomplete="off"></div>
+        </div>
+        <div><label class="form-label small mb-1" for="ce-group">Gruppe</label><select class="form-select" id="ce-group" name="group">${groups.map(x => `<option value="${x.id}"${x === g ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select></div>
+        <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="ce-hidden" name="hidden"${c.hidden ? " checked" : ""}><label class="form-check-label" for="ce-hidden">Im Budget ausblenden</label></div>
+        <div class="d-flex gap-2"><button type="submit" class="btn btn-sm btn-primary">Speichern</button><a class="btn btn-sm" href="#mehr?teil=kategorien">Abbrechen</a></div>
+      </form>
+      <hr>
+      <div class="d-flex align-items-center gap-2 fw-semibold small mb-2">${icon("i-target", "app-icon app-icon-sm text-body-secondary")}Ziel</div>
+      ${state.mehrTarget ? targetForm(c, "", "ce") : `<div class="d-flex flex-wrap align-items-center gap-2"><span class="me-auto small">${c.target ? esc(targetHead(c.target)[0]) : "Kein Ziel"}</span><button type="button" class="btn btn-sm btn-outline-secondary" data-mehr-target>${c.target ? "Ziel bearbeiten" : "Ziel festlegen"}</button></div>`}`;
+  }
   function renderCatAdmin() {
     $("[data-cat-admin]").innerHTML = groups.map(g => `
       <div class="list-group-item d-flex align-items-center gap-2 bg-body-tertiary fw-semibold">${icon("i-grip", "app-icon app-icon-sm text-body-secondary")}<span class="me-auto text-truncate">${esc(g.name)}</span><button type="button" class="btn btn-sm btn-link" data-add-cat="${g.id}">+ Kategorie</button></div>
-      ${g.cats.map(c => `<a class="list-group-item list-group-item-action d-flex align-items-center gap-2" href="#budget?m=${mKey(CUR)}&kat=${c.id}" aria-label="${esc(c.name)} bearbeiten">${icon("i-grip", "app-icon app-icon-sm text-body-secondary")}
-        <span class="flex-grow-1" style="min-width:0">${catName(c)}<span class="d-block small text-body-secondary text-truncate" style="padding-left:calc(1.4em + .4rem)">${esc(targetShort(c.target))}</span></span>
+      ${g.cats.map(c => `<a class="list-group-item list-group-item-action d-flex align-items-center gap-2" href="#mehr?teil=kategorien&kat=${c.id}" aria-label="${esc(c.name)} bearbeiten">${icon("i-grip", "app-icon app-icon-sm text-body-secondary")}
+        <span class="flex-grow-1" style="min-width:0">${catName(c)}<span class="d-block small text-body-secondary text-truncate" style="padding-left:calc(1.4em + .4rem)">${esc(targetShort(c.target))}${c.hidden ? " · im Budget ausgeblendet" : ""}</span></span>
         ${icon("i-chevron", "app-icon app-icon-sm text-body-secondary")}</a>`).join("")}`).join("");
   }
   document.addEventListener("click", e => {
@@ -1483,12 +1543,23 @@
       groups.push({ id: "g" + seq++, name: "📦 Neue Gruppe", cats: [] });
       renderCatAdmin(); if (state.screen === "budget") renderBudget(); return toast("Gruppe angelegt.");
     }
+    // removing asks first; only the confirm button is red
     const rm = e.target.closest("[data-remove]");
-    if (rm) { const li = rm.closest("li"); toast(`${$(".fw-semibold", li).textContent} ${rm.textContent === "Widerrufen" ? "widerrufen" : "entfernt"}.`); return li.remove(); }
+    if (rm) {
+      pendingRemove = rm.closest("li");
+      const name = $(".fw-semibold", pendingRemove).textContent, verb = rm.textContent.trim();
+      return openPop(rm, `<div class="fw-semibold mb-1">${esc(name)} ${verb === "Widerrufen" ? "widerrufen" : "entfernen"}?</div><p class="small mb-2">${verb === "Widerrufen" ? "Programme mit diesem Token verlieren den Zugriff sofort." : "Auf diesem Gerät meldest du dich danach per Mail-Link an."}</p><div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button><button type="button" class="btn btn-sm btn-danger" data-remove-ok>${verb}</button></div>`);
+    }
+    if (e.target.closest("[data-remove-ok]") && pendingRemove) {
+      const li = pendingRemove, verb = $("[data-remove]", li).textContent.trim();
+      pendingRemove = null; closePop();
+      toast(`${$(".fw-semibold", li).textContent} ${verb === "Widerrufen" ? "widerrufen" : "entfernt"}.`);
+      return li.remove();
+    }
     const cp = e.target.closest("[data-copy]");
     if (cp) { navigator.clipboard?.writeText($("input", cp.parentElement).value).catch(() => {}); return toast("Kopiert."); }
     if (e.target.closest("[data-add-passkey]")) {
-      $("[data-passkeys]").insertAdjacentHTML("beforeend", '<li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Neues Gerät</span><span class="small text-body-secondary">gerade eben angelegt</span></span><button type="button" class="btn btn-sm btn-outline-danger" data-remove>Entfernen</button></li>');
+      $("[data-passkeys]").insertAdjacentHTML("beforeend", '<li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Neues Gerät</span><span class="small text-body-secondary">gerade eben angelegt</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Entfernen</button></li>');
       return toast("Passkey hinzugefügt (im Echtbetrieb fragt der Browser nach).");
     }
     if (e.target.closest("[data-mcp-new]")) { $("[data-mcp-url]").value = "https://abakus.example/mcp/" + Math.random().toString(16).slice(2, 8) + "…" + Math.random().toString(16).slice(2, 6); return toast("Neue URL erzeugt, die alte gilt nicht mehr."); }
@@ -1500,7 +1571,7 @@
   $("[data-token-form]").addEventListener("submit", e => {
     e.preventDefault();
     const [name, scope] = [$("input", e.target).value, $("select", e.target).value];
-    $("[data-tokens]").insertAdjacentHTML("beforeend", `<li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">${esc(name)}</span><span class="small text-body-secondary">${scope} · erstellt 08.10.2026 · nie benutzt</span></span><button type="button" class="btn btn-sm btn-outline-danger" data-remove>Widerrufen</button></li>`);
+    $("[data-tokens]").insertAdjacentHTML("beforeend", `<li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">${esc(name)}</span><span class="small text-body-secondary">${scope} · erstellt 08.10.2026 · nie benutzt</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Widerrufen</button></li>`);
     $("[data-token-new]").hidden = false;
     e.target.reset();
   });

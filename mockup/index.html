@@ -18,7 +18,8 @@
     })();
   </script>
   <style>
-    :root { --cat-w: 16rem; }
+    /* secondary text a step stronger than felt's default: ≥ 4.5:1 on cards, selected rows and raised surfaces */
+    :root { --cat-w: 16rem; --felt-secondary-color: light-dark(#5f6779, #b0b8c2); }
     .app { padding-top: 1rem; padding-bottom: 10rem; }
     .app-icon { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
     .app-icon-sm { width: 1rem; height: 1rem; }
@@ -43,11 +44,11 @@
     .app-side .app-side-btn:hover { background: rgb(255 255 255 / .1); border-color: rgb(255 255 255 / .35); }
     .app-side-toggle { color: inherit; opacity: .75; }
     .app-side-toggle:hover { opacity: 1; }
-    .app-side-mini .app-side > * { padding-inline: .5rem !important; }
+    .app-side-mini .app-side > * { padding-inline: .25rem !important; }
     .app-side-mini .app-side-text, .app-side-mini .app-side .app-bal, .app-side-mini .app-side .app-acc-name, .app-side-mini .app-side-h > span { display: none !important; }
     .app-side-mini .app-side .nav-link { justify-content: center; position: relative; }
     .app-side-mini .app-side-brand { justify-content: center; padding-inline: 0; }
-    .app-side-mini .app-side .app-acc .badge { position: absolute; top: .3rem; left: calc(50% + .15rem); transform: translate(25%, -40%); font-size: .625rem; padding: .1rem .3rem; }
+    .app-side-mini .app-side .app-acc .badge { position: absolute; top: .3rem; left: calc(50% + .75rem); transform: translateY(-40%); font-size: .625rem; padding: .1rem .3rem; }
     .app-side-mini .app-side-h { border-top: 1px solid rgb(255 255 255 / .15); margin: .5rem .25rem !important; padding: 0; }
     .app-side-mini .app-side-toggle svg { transform: scaleX(-1); }
     .app-side-mini .app-side > :last-child { justify-content: center !important; }
@@ -64,8 +65,9 @@
     /* line 2 of a category: a fixed bar with the status right next to it, under the name (YNAB) */
     .app-line2 { display: flex; align-items: center; gap: .5rem; margin-top: .125rem; padding-left: calc(1.4em + .4rem); min-width: 0; }
     .app-target { height: .25rem; flex: 0 0 var(--bar-w, 9rem); }
-    .app-tstat { font-size: .6875rem; line-height: 1.2; color: var(--felt-secondary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 0 auto; max-width: calc(100% - 2.5rem); }
+    .app-tstat { font-size: .6875rem; line-height: 1.2; color: var(--felt-secondary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
     .app-tstat.is-over { color: var(--felt-danger-text); }
+    .app-tlink { color: var(--felt-primary-text); text-decoration: underline; text-underline-offset: 2px; }
     .app-colh { display: block; font-size: .625rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--felt-secondary-color); }
     .app-colh b { display: block; font-size: .875rem; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--felt-body-color); font-variant-numeric: tabular-nums; }
     .app-q { border: 0; background: none; padding: 0; color: inherit; font: inherit; }
@@ -96,7 +98,8 @@
     .app-pill-zero { border: 0; background: none; padding: 0; font-size: .875rem; font-weight: 400; color: color-mix(in srgb, var(--felt-body-color) 45%, var(--felt-body-bg)); }
     .app-budget .app-cat { position: sticky; left: 0; z-index: 2; border-right: 1px solid var(--felt-border-color); text-align: left; padding-left: .5rem; }
     .app-budget .app-ms { border-left: .625rem solid var(--felt-surface-sunk); }
-    .app-budget > thead > tr:first-child > * { border-bottom: 0; padding: 0 0 .5rem; vertical-align: top; height: 1px; }
+    /* slim cards sit on the column headers (YNAB 4); the focus card sets the row height */
+    .app-budget > thead > tr:first-child > * { border-bottom: 0; padding: 0 0 .5rem; vertical-align: bottom; }
     .app-budget > thead > tr:first-child > .app-ms { padding-left: 0; }
     .app-budget > thead > tr:nth-child(2) > * { vertical-align: bottom; }
     .app-budget .app-num { text-align: right; }
@@ -108,11 +111,10 @@
     .app-assign.app-zero:focus { opacity: 1; color: inherit; }
     .app-cap { position: fixed; z-index: 1070; max-width: 16rem; font-size: .75rem; padding: .3rem .5rem; border-radius: var(--felt-radius); background: var(--felt-surface-overlay); border: 1px solid var(--felt-border-color); box-shadow: var(--felt-shadow); pointer-events: none; }
     /* month cards: light in light mode, raised in dark mode */
-    .app-mcard { height: 100%; font-size: .75rem; white-space: normal; background: light-dark(var(--felt-surface), var(--felt-surface-raised)); border: 1px solid light-dark(var(--felt-border-color), rgb(255 255 255 / .22)); }
+    .app-mcard { font-size: .75rem; white-space: normal; background: light-dark(var(--felt-surface), var(--felt-surface-raised)); border: 1px solid light-dark(var(--felt-border-color), rgb(255 255 255 / .22)); }
     .app-mcard.is-focus .app-rta-big.text-success { color: light-dark(var(--felt-success-text), var(--felt-success-emphasis)) !important; }
     /* dark: cards one step further from the page */
     .card { border-color: light-dark(var(--felt-border-color), rgb(255 255 255 / .16)); }
-    .app-mcard:not(.is-focus) { height: auto; }
     .app-mcard.is-focus { border-color: var(--felt-primary); box-shadow: 0 0 0 1px var(--felt-primary); }
     .app-mcard:not(.is-focus) { cursor: pointer; }
     .app-mcard .app-mname { font-size: 1rem; font-weight: 700; line-height: 1.1; }
@@ -126,8 +128,10 @@
     .app-insp-title { font-size: 1.25rem; font-weight: 700; }
     :is(.app-inspector, #panel) .card { --felt-card-bg: light-dark(var(--felt-surface), var(--felt-surface-raised)); }
     .app-overs-act { display: flex; align-items: center; gap: .375rem; flex-shrink: 0; }
-    .app-overs-act .btn { padding: .15rem .4rem; font-size: .8125rem; }
-    .app-inspector .app-overs > .list-group-item, #panel .app-overs > .list-group-item { padding-inline: .625rem; gap: .375rem !important; }
+    .app-overs-act .btn { padding: .25rem .625rem; font-size: .8125rem; line-height: 1.35; }
+    .offcanvas-bottom .app-overs-act .btn { min-height: 2.75rem; }
+    .app-inspector .app-overs > .list-group-item, #panel .app-overs > .list-group-item { padding-inline: .5rem; gap: .375rem !important; }
+    .app-overs .app-pill { padding-inline: .4rem; }
     .app-overs .app-catname { gap: .25rem; }
     :is(.app-inspector, #panel) .card-header { font-size: .875rem; font-weight: 600; }
     :is(.app-inspector, #panel) .app-amt { min-width: 6.5rem; }
@@ -138,6 +142,9 @@
     /* filter chips: whole chips only, the trailing ones fold into "Filter" when the row is short */
     .app-chips { display: flex; gap: .4rem; flex-wrap: nowrap; min-width: 0; }
     .app-chips > .btn, .app-chips .dropdown > .btn { white-space: nowrap; flex-shrink: 0; }
+    .app-chip-s, .app-chips.is-short .app-chip-l { display: none; }
+    .app-chips.is-short .app-chip-s { display: inline; }
+    .dropdown-item .app-chip-s { display: none !important; }
     /* phone: sticky month header, rows */
     .app-mhead { position: sticky; top: 0; z-index: 1020; background: var(--felt-body-bg); margin-inline: -1rem; padding: .5rem 1rem .6rem; border-bottom: 1px solid var(--felt-border-color); }
     .app-mhead-mini { display: none; min-height: 2.5rem; }
@@ -175,11 +182,17 @@
     .app-bal-compact > summary::-webkit-details-marker { display: none; }
     .app-bal-compact[open] .app-sum-chev { transform: rotate(90deg); }
     .app-reg-search { max-width: 14rem; }
+    .app-book-btn { display: none; }
+    @media (min-width: 768px) { .app-book-btn { display: inline-flex; } }
+    .app-book-ph { display: none; align-items: center; gap: .25rem; white-space: nowrap; }
+    @media (max-width: 767.98px) { .app-fab-off .app-book-ph { display: inline-flex; } }
+    body.app-fab-off:has([data-screen="konten"]:not([hidden])) .app-fab { display: none; }
     @media (min-width: 768px) { .app-reg-tools { flex-wrap: wrap; } }
     @media (max-width: 767.98px) {
       .app-banner { font-size: .875rem; } .app-banner .btn { padding-block: .15rem; }
       .app-reg-tools .dropdown { margin-left: 0 !important; }
       .app-reg-search { max-width: none; flex: 1 1 auto; width: auto; min-width: 0; }
+      .app-reg-search .form-control { min-width: 0; width: 1%; }
       .app-reg-meta { flex-wrap: nowrap !important; overflow: hidden; white-space: nowrap; }
       .app-reg-meta > :first-child, .app-reg-meta > :nth-child(n+4) { display: none !important; }
       .app-unapproved-item { padding-block: .375rem; }
@@ -199,9 +212,14 @@
     .app-amount { font-size: 2rem; font-weight: 700; }
     .app-mehr-back { display: inline-flex; }
     @media (min-width: 992px) { .app-mehr-back { display: none; } }
+    /* settings: section nav + one section; phones show the nav or the section */
+    .app-part-off { display: none !important; }
+    .app-mehr-content { max-width: 52rem; }
+    .app-nav-sub { color: var(--felt-secondary-color); }
+    .app-mehr-nav .active .app-nav-sub { color: inherit; opacity: .85; }
+    @media (min-width: 992px) { .app-mehr-nav .list-group-item { padding-block: .6rem !important; } }
     @media (max-width: 991.98px) {
-      .app-part-off { display: none !important; }
-      [data-screen="mehr"][data-teil=""] [data-mehr-back], [data-screen="mehr"]:not([data-teil=""]) [data-mehr-index] { display: none !important; }
+      [data-screen="mehr"][data-teil=""] .app-mehr-content, [data-screen="mehr"]:not([data-teil=""]) .app-mehr-nav-col, [data-screen="mehr"][data-teil=""] [data-mehr-back] { display: none !important; }
     }
     .app-imp-col { max-width: 48rem; }
     @media (max-width: 575.98px) {
@@ -213,6 +231,9 @@
     .app-hdate { white-space: nowrap; font-variant-numeric: tabular-nums; }
     .app-hmsg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .app-hcount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    /* one card header style everywhere */
+    .card-header { font-size: .875rem; font-weight: 600; }
+    .card-header:not(.text-danger) > .app-icon { color: var(--felt-secondary-color); }
     .app-sign { font-size: 1.75rem; font-weight: 700; width: 3.5rem; line-height: 1; }
     .app-kind > .btn { flex: 1 1 0; min-width: 0; padding-inline: .25rem; }
     .app-toasts { position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%); z-index: 1090; pointer-events: none; }
@@ -354,6 +375,7 @@
           </div>
           <button type="button" class="btn btn-sm btn-light d-none d-md-inline-flex" data-reg-edit aria-label="Konto bearbeiten"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-pencil"/></svg></button>
           <button type="button" class="btn btn-sm btn-primary d-none d-md-inline-flex" data-reconcile-open>Abgleichen</button>
+          <button type="button" class="btn btn-sm btn-primary app-book-ph" data-book-account><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Buchung</button>
           <div class="dropdown d-md-none" data-reg-more>
             <button class="btn btn-sm btn-light" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Kontoaktionen"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-dots"/></svg></button>
             <ul class="dropdown-menu dropdown-menu-end">
@@ -365,7 +387,7 @@
         <div class="d-none d-md-flex flex-wrap align-items-center gap-3 mb-3" data-reg-balances></div>
         <details class="d-md-none mb-2 app-bal-compact" data-reg-balances-phone></details>
         <div class="d-flex align-items-center gap-1 border-top border-bottom py-2 mb-2 app-reg-tools">
-          <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-md-inline-flex" data-book-account><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Buchung</button>
+          <button type="button" class="btn btn-sm btn-link text-decoration-none app-book-btn" data-book-account><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Buchung</button>
           <a href="#import" class="btn btn-sm btn-link text-decoration-none" data-file-import aria-label="Datei-Import"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-file"/></svg><span class="d-md-none"> Import</span><span class="d-none d-md-inline"> Datei-Import</span></a>
           <span class="small text-body-secondary d-inline-flex align-items-center gap-1 px-2" data-feed-hint hidden></span>
           <button type="button" class="btn btn-sm btn-link text-decoration-none d-none d-sm-inline-flex" data-undo><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-undo"/></svg> Rückgängig</button>
@@ -510,25 +532,30 @@
     <section data-screen="mehr" aria-labelledby="t-mehr" hidden>
       <a href="#mehr" class="app-mehr-back align-items-center gap-1 small text-decoration-none mb-1" data-mehr-back><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-back"/></svg> Einstellungen</a>
       <h1 class="h2 mb-3" id="t-mehr" data-mehr-title>Einstellungen</h1>
-      <div class="list-group d-lg-none mb-3" data-mehr-index>
-        <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="#mehr?teil=kategorien"><svg class="app-icon" aria-hidden="true"><use href="#i-budget"/></svg><span class="me-auto"><span class="d-block fw-semibold">Kategorien &amp; Gruppen</span><span class="small text-body-secondary">Reihenfolge, Ziele, neue Kategorien</span></span><svg class="app-icon app-icon-sm text-body-secondary" aria-hidden="true"><use href="#i-chevron"/></svg></a>
-        <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="#mehr?teil=zugang"><svg class="app-icon" aria-hidden="true"><use href="#i-key"/></svg><span class="me-auto"><span class="d-block fw-semibold">Zugang &amp; API</span><span class="small text-body-secondary">Passkeys, API-Tokens, MCP</span></span><svg class="app-icon app-icon-sm text-body-secondary" aria-hidden="true"><use href="#i-chevron"/></svg></a>
-        <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="#mehr?teil=aussehen"><svg class="app-icon" aria-hidden="true"><use href="#i-palette"/></svg><span class="me-auto"><span class="d-block fw-semibold">Aussehen</span><span class="small text-body-secondary">Hell, Dunkel oder automatisch</span></span><svg class="app-icon app-icon-sm text-body-secondary" aria-hidden="true"><use href="#i-chevron"/></svg></a>
-        <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="#mehr?teil=ynab"><svg class="app-icon" aria-hidden="true"><use href="#i-history"/></svg><span class="me-auto"><span class="d-block fw-semibold">YNAB-Import</span><span class="small text-body-secondary">Einmalig übernommen am 12.07.2026</span></span><svg class="app-icon app-icon-sm text-body-secondary" aria-hidden="true"><use href="#i-chevron"/></svg></a>
-      </div>
       <div class="row g-4">
-        <div class="col-lg-6 d-flex flex-column gap-4">
+        <div class="col-lg-3 app-mehr-nav-col">
+          <div class="list-group app-mehr-nav" data-mehr-index>
+            <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="#mehr?teil=kategorien"><svg class="app-icon" aria-hidden="true"><use href="#i-budget"/></svg><span class="me-auto"><span class="d-block fw-semibold">Kategorien &amp; Gruppen</span><span class="small app-nav-sub">Reihenfolge, Ziele, neue Kategorien</span></span><svg class="app-icon app-icon-sm text-body-secondary" aria-hidden="true"><use href="#i-chevron"/></svg></a>
+            <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="#mehr?teil=zugang"><svg class="app-icon" aria-hidden="true"><use href="#i-key"/></svg><span class="me-auto"><span class="d-block fw-semibold">Zugang &amp; API</span><span class="small app-nav-sub">Passkeys, API-Tokens, MCP</span></span><svg class="app-icon app-icon-sm text-body-secondary" aria-hidden="true"><use href="#i-chevron"/></svg></a>
+            <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="#mehr?teil=aussehen"><svg class="app-icon" aria-hidden="true"><use href="#i-palette"/></svg><span class="me-auto"><span class="d-block fw-semibold">Aussehen</span><span class="small app-nav-sub">Hell, Dunkel oder automatisch</span></span><svg class="app-icon app-icon-sm text-body-secondary" aria-hidden="true"><use href="#i-chevron"/></svg></a>
+            <a class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" href="#mehr?teil=ynab"><svg class="app-icon" aria-hidden="true"><use href="#i-history"/></svg><span class="me-auto"><span class="d-block fw-semibold">YNAB-Import</span><span class="small app-nav-sub">Einmalig übernommen am 12.07.2026</span></span><svg class="app-icon app-icon-sm text-body-secondary" aria-hidden="true"><use href="#i-chevron"/></svg></a>
+          </div>
+        </div>
+        <div class="col-lg-9 d-flex flex-column gap-4 app-mehr-content">
+          <div class="card" data-part="kategorien">
+            <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon d-none d-lg-inline-block" aria-hidden="true"><use href="#i-budget"/></svg><span class="me-auto"><span class="d-none d-lg-inline">Kategorien &amp; Gruppen</span></span><button type="button" class="btn btn-sm btn-outline-primary" data-add-group>Gruppe hinzufügen</button></div>
+            <div class="list-group list-group-flush" data-cat-admin></div>
+          </div>
           <div class="card" data-part="zugang">
             <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-key"/></svg>Passkeys</div>
             <ul class="list-group list-group-flush" data-passkeys>
-              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">MacBook Pro</span><span class="small text-body-secondary">iCloud-Schlüsselbund · zuletzt heute 07:41</span></span><button type="button" class="btn btn-sm btn-outline-danger" data-remove>Entfernen</button></li>
-              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">iPhone</span><span class="small text-body-secondary">iCloud-Schlüsselbund · zuletzt gestern</span></span><button type="button" class="btn btn-sm btn-outline-danger" data-remove>Entfernen</button></li>
-              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Sicherheitsschlüssel</span><span class="small text-body-secondary">USB-C · zuletzt 02.09.2026</span></span><button type="button" class="btn btn-sm btn-outline-danger" data-remove>Entfernen</button></li>
+              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">MacBook Pro</span><span class="small text-body-secondary">iCloud-Schlüsselbund · zuletzt heute 07:41</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Entfernen</button></li>
+              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">iPhone</span><span class="small text-body-secondary">iCloud-Schlüsselbund · zuletzt gestern</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Entfernen</button></li>
+              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Sicherheitsschlüssel</span><span class="small text-body-secondary">USB-C · zuletzt 02.09.2026</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Entfernen</button></li>
             </ul>
             <div class="card-body small text-body-secondary d-flex gap-2"><svg class="app-icon app-icon-sm mt-1" aria-hidden="true"><use href="#i-mail"/></svg><span>Ohne Passkey zur Hand: Anmeldelink per Mail an r…@… anfordern. Der Link gilt 15 Minuten und nur einmal.</span></div>
             <div class="card-footer"><button type="button" class="btn btn-sm btn-primary" data-add-passkey><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-plus"/></svg> Passkey hinzufügen</button></div>
           </div>
-
           <div class="card" data-part="zugang">
             <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-plug"/></svg>API-Tokens</div>
             <div class="card-body">
@@ -540,8 +567,8 @@
               </div>
             </div>
             <ul class="list-group list-group-flush" data-tokens>
-              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Zipfelkasse</span><span class="small text-body-secondary">lesen + schreiben · erstellt 14.07.2026 · zuletzt heute 07:55</span></span><button type="button" class="btn btn-sm btn-outline-danger" data-remove>Widerrufen</button></li>
-              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Tabellen-Export</span><span class="small text-body-secondary">nur lesen · erstellt 02.08.2026 · nie benutzt</span></span><button type="button" class="btn btn-sm btn-outline-danger" data-remove>Widerrufen</button></li>
+              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Zipfelkasse</span><span class="small text-body-secondary">lesen + schreiben · erstellt 14.07.2026 · zuletzt heute 07:55</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Widerrufen</button></li>
+              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Tabellen-Export</span><span class="small text-body-secondary">nur lesen · erstellt 02.08.2026 · nie benutzt</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Widerrufen</button></li>
             </ul>
             <div class="card-body border-top">
               <form class="d-flex flex-wrap gap-2" data-token-form>
@@ -552,7 +579,6 @@
               <div class="alert alert-success small mt-3 mb-0" data-token-new hidden>Neues Token, wird nur jetzt angezeigt:<br><code class="user-select-all">abk_live_7Qm2…demo…xR4</code></div>
             </div>
           </div>
-
           <div class="card" data-part="zugang">
             <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-plug"/></svg><span class="me-auto">MCP für Claude</span>
               <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" role="switch" id="mcp-on" checked data-mcp-toggle><label class="form-check-label" for="mcp-on">aktiv</label></div>
@@ -566,23 +592,6 @@
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="col-lg-6 d-flex flex-column gap-4">
-          <div class="card" data-part="kategorien">
-            <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon d-none d-lg-inline-block" aria-hidden="true"><use href="#i-budget"/></svg><span class="me-auto"><span class="d-none d-lg-inline">Kategorien &amp; Gruppen</span></span><button type="button" class="btn btn-sm btn-outline-primary" data-add-group>Gruppe hinzufügen</button></div>
-            <div class="list-group list-group-flush" data-cat-admin></div>
-          </div>
-
-          <div class="card" data-part="ynab">
-            <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-history"/></svg>YNAB-Import</div>
-            <div class="card-body">
-              <div class="d-flex align-items-center gap-2 mb-2"><span class="badge text-bg-success">abgeschlossen</span><span class="small text-body-secondary">einmalig am 12.07.2026</span></div>
-              <p class="small mb-2">Aus dem YNAB-Budget „Haushalt“ übernommen: 6 Konten, 5 Gruppen mit 22 Kategorien, 1.842 Buchungen, Budget ab Januar 2025, Ziele und Empfänger.</p>
-              <p class="small text-body-secondary mb-0">Der Import läuft nur einmal. Danach ist Abakus die Quelle; YNAB kann gekündigt werden.</p>
-            </div>
-          </div>
-
           <div class="card" data-part="aussehen">
             <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-palette"/></svg>Aussehen</div>
             <div class="card-body d-flex flex-column gap-3">
@@ -596,6 +605,17 @@
               </div>
               <div class="small text-body-secondary">Als App installieren: im Browser „Zum Home-Bildschirm“ wählen.</div>
             </div>
+          </div>
+          <div class="card" data-part="ynab">
+            <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-history"/></svg>YNAB-Import</div>
+            <div class="card-body">
+              <div class="d-flex align-items-center gap-2 mb-2"><span class="badge text-bg-success">abgeschlossen</span><span class="small text-body-secondary">einmalig am 12.07.2026</span></div>
+              <p class="small mb-2">Aus dem YNAB-Budget „Haushalt“ übernommen: 6 Konten, 5 Gruppen mit 22 Kategorien, 1.842 Buchungen, Budget ab Januar 2025, Ziele und Empfänger.</p>
+              <p class="small text-body-secondary mb-0">Der Import läuft nur einmal. Danach ist Abakus die Quelle; YNAB kann gekündigt werden.</p>
+            </div>
+          </div>
+          <div class="card" data-part="kategorie">
+            <div class="card-body" data-cat-edit></div>
           </div>
         </div>
       </div>
