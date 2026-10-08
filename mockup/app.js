@@ -89,7 +89,7 @@
 
   // "Zu verteilen" before October: Juni starts with the YNAB opening amount and Mai's overspending.
   const OPENING = C(150), OVER_BEFORE = C(-126.4);
-  const incomeHist = [C(3240), C(3240), C(3240 + 248.7), C(3240 + 11.8)];
+  const incomeHist = { "Arbeitgeber Muster GmbH": [3240, 3240, 3240, 3240], "Finanzamt Musterstadt": [0, 0, 248.7, 0], "Nordbank Direkt": [0, 0, 0, 11.8] };
 
   const accounts = [
     { id: "giro", e: "💶", name: "Girokonto", kind: "Girokonto", type: "budget", base: C(2184.37), link: "Verbunden", rec: "2026-10-01", bank: { src: "aus deiner Verbindung, vor 2 Stunden", diff: 0 } },
@@ -149,30 +149,40 @@
   const parts = t => (t.splits ? t.splits.map(s => [s.cat, s.amount]) : t.transfer ? [] : [[t.cat || "uncat", t.amount]]);
 
   // ------------------------------------------------------------ budget model
+  // Yearly targets spread what is still missing over the months up to the due month. "Set aside another" counts what
+  // was assigned since the cycle started, "refill up to" counts what is available.
+  const snoozed = (c, m) => !!c.target?.snooze?.includes(m);
   function targetFor(c, m, carry, assigned) {
     const t = c.target;
     if (!t) return { req: 0, under: 0, progress: null };
-    let req;
+    if (snoozed(c, m)) return { req: 0, under: 0, progress: null, snoozed: true };
+    let req, have = carry;
     if (t.cadence === "month") req = t.mode === "refill" ? Math.max(0, t.amount - carry) : t.amount;
-    else if (t.mode === "setaside") req = Math.ceil(t.amount / 12);
     else {
       let due = dIdx(t.due);
       while (due < m) due += 12;
-      req = Math.max(0, Math.ceil((t.amount - carry) / (due - m + 1)));
+      if (t.mode === "setaside") {
+        const from = due - 11;
+        have = (from <= 0 ? c.start : 0) + sum(c.assigned.slice(Math.max(0, from), m), v => v);
+      }
+      req = Math.max(0, Math.ceil((t.amount - have) / (due - m + 1)));
     }
     const under = Math.max(0, req - assigned);
-    const progress = t.cadence === "year" ? clamp((carry + assigned) / t.amount, 0, 1) : req ? (req - under) / req : 1;
+    const progress = t.cadence === "year" ? clamp((have + assigned) / t.amount, 0, 1) : req ? (req - under) / req : 1;
     return { req, under, progress };
   }
 
   function model() {
-    const act = {}, income = Array.from({ length: LAST + 1 }, (_, i) => incomeHist[i] || 0);
+    const act = {}, src = {};
+    const months = () => Array(LAST + 1).fill(0);
+    Object.entries(incomeHist).forEach(([p, list]) => (src[p] = months().map((_, i) => C(list[i] || 0))));
     txs.filter(counted).forEach(t => {
       const m = dIdx(t.date);
       if (m < 0 || m > LAST) return;
-      parts(t).forEach(([c, v]) => { if (c === "rta") income[m] += v; else act[c + "|" + m] = (act[c + "|" + m] || 0) + v; });
+      parts(t).forEach(([c, v]) => { if (c === "rta") (src[t.payee] ||= months())[m] += v; else act[c + "|" + m] = (act[c + "|" + m] || 0) + v; });
     });
-    const M = { cats: {}, months: [] };
+    const income = months().map((_, m) => sum(Object.values(src), l => l[m]));
+    const M = { cats: {}, months: [], income: src };
     [...cats(), UNCAT].forEach(c => {
       const rows = [];
       for (let m = 0; m <= LAST; m++) {
@@ -194,10 +204,11 @@
       s.rta = s.prevRta + s.prevOver + s.income - s.assigned;
       M.months.push(s);
     }
-    for (let m = LAST, fut = 0, free = Infinity; m >= 0; m--) {
+    for (let m = LAST, fut = 0, free = Infinity, at = LAST; m >= 0; m--) {
       const s = M.months[m];
       s.future = fut; fut += s.assigned;
-      free = Math.min(free, s.rta); s.free = free;
+      if (s.rta <= free) { free = s.rta; at = m; }
+      s.free = free; s.freeAt = at;
       s.show = s.rta - s.future;
     }
     return M;
@@ -239,7 +250,7 @@
   const undoRedo = (from, to) => { if (!from.length) return; to.push(snap()); restore(from.pop()); renderAll(); };
 
   // ------------------------------------------------------------ state, routing
-  const state = { m: CUR, n: 1, insp: false, sel: null, filter: "all", editTarget: false, screen: null, acc: null, regFilter: "all", running: false, search: "", picked: new Set(), collapsed: new Set(), M: null };
+  const state = { m: CUR, n: 1, focus: null, insp: false, sel: null, sheet: null, pushed: false, calcOpen: new Set(), incomeKeys: [], running: false, filter: "all", editTarget: false, screen: null, acc: null, regFilter: "all", search: "", picked: new Set(), collapsed: new Set(), M: null };
   const screens = $$("[data-screen]");
   const parseHash = () => { const [s, q] = location.hash.slice(1).split("?"); return { screen: s || "budget", q: new URLSearchParams(q || "") }; };
   const go = (screen, params = {}) => {
@@ -256,10 +267,14 @@
     screens.forEach(s => (s.hidden = s !== target));
     state.screen = id;
     if (id === "budget") {
+      const had = state.sel;
       state.m = q.has("m") ? clamp(keyIdx(q.get("m")), 0, LAST) : CUR;
       state.sel = q.get("kat") && cat(q.get("kat")) ? q.get("kat") : null;
+      if (!state.sel) state.pushed = false;
       layout(true);
       if (state.sel && !state.insp) openPanel();
+      // back from a category: the sheet closes with it
+      else if (had && !state.sel && panel.classList.contains("show")) bootstrap.Offcanvas.getInstance(panel)?.hide();
     } else {
       if (panel.classList.contains("show")) bootstrap.Offcanvas.getInstance(panel)?.hide();
       paint();
@@ -281,81 +296,115 @@
   });
   addEventListener("hashchange", route);
 
-  // number of month blocks (max 3, like YNAB 4) and inspector, from the available width
-  const CAT_W = 256, MONTH_W = 290, INSP_W = 352;
+  // Months and inspector from the available width: the inspector comes before a third month (about 1280 px: 1 month
+  // and inspector, 1600: 2, 1920: 3; below that 1 or 2 months only). A month is as wide as its widest content.
+  const INSP_W = 312;
+  let MONTH_W = 300, COLS = [96, 84, 108];
+  const catW = () => Math.round(clamp(innerWidth * 0.24, 256, 384));
+  function measure() {
+    const M = model(), vals = [];
+    Object.values(M.cats).forEach(rows => rows.forEach(r => vals.push(r.assigned, r.activity)));
+    M.months.forEach(s => vals.push(s.assigned, s.activity, s.avail));
+    groups.forEach(g => M.months.forEach((_, m) => ["assigned", "activity", "avail"].forEach(k => vals.push(sum(g.cats, c => M.cats[c.id][m][k])))));
+    const longest = list => list.reduce((a, b) => (b.length > a.length ? b : a), "");
+    const big = longest(vals.map(num)), pill = longest(Object.values(M.cats).flatMap(rows => rows.map(r => eur(r.avail))));
+    const box = document.createElement("div");
+    box.style.cssText = "position:absolute;left:-9999px;top:0;visibility:hidden";
+    box.innerHTML = `<table class="app-budget"><tbody><tr><td><b data-w="n">${big}</b> <span class="badge rounded-pill app-pill" data-w="p">${icon("i-okc")}${pill}</span></td></tr></tbody></table>` +
+      ["Zugewiesen", "Aktivität", "Verfügbar"].map(l => `<span class="app-colh d-inline-block" data-w="l">${l}</span>`).join("");
+    document.body.append(box);
+    const w = k => Math.max(...$$(`[data-w="${k}"]`, box).map(e => Math.ceil(e.getBoundingClientRect().width)));
+    const n = w("n"), p = w("p"), l = w("l");
+    box.remove();
+    COLS = [Math.max(n + 12, l) + 12 + 10, Math.max(n, l) + 12, Math.max(p, n, l) + 12];
+    MONTH_W = sum(COLS, v => v) + 4;
+  }
+  function sizeCols() {
+    const t = $("[data-budget-table]"), cols = $$("col[data-col]", t);
+    if (!cols.length || !t.parentElement.clientWidth) return;
+    const cw = catW(), per = (t.parentElement.clientWidth - cw) / state.n, k = Math.max(1, per / MONTH_W);
+    $("col", t).style.width = cw + "px";
+    cols.forEach(c => (c.style.width = (COLS[+c.dataset.col] * k).toFixed(1) + "px"));
+  }
   function layout(force) {
-    const W = $('[data-screen="budget"]').clientWidth;
+    const W = $('[data-screen="budget"]').clientWidth, cw = catW();
+    document.documentElement.style.setProperty("--cat-w", cw + "px");
     let n = 1, insp = false;
     if (isDesktop() && W) {
-      n = clamp(Math.floor((W - CAT_W) / MONTH_W), 1, 3);
-      insp = W - CAT_W - n * MONTH_W >= INSP_W;
+      const room = W - cw;
+      insp = room - INSP_W >= MONTH_W;
+      n = clamp(Math.floor((room - (insp ? INSP_W : 0)) / MONTH_W), 1, insp ? 3 : 2);
     }
     if (force || n !== state.n || insp !== state.insp) {
       state.n = n; state.insp = insp;
       if (state.screen === "budget") renderBudget();
-    }
+    } else sizeCols();
   }
   new ResizeObserver(() => layout(false)).observe($('[data-screen="budget"]'));
   const visibleMonths = () => { const start = clamp(state.m, 0, LAST - state.n + 1); return Array.from({ length: state.n }, (_, i) => start + i); };
-  const focusMonth = () => visibleMonths()[0];
+  const focusMonth = () => { const v = visibleMonths(); return v.includes(state.focus) ? state.focus : v.includes(CUR) ? CUR : v[0]; };
 
   // ------------------------------------------------------------ budget rendering
   const FILTERS = {
     all: () => true, over: (c, r) => r.avail < 0, under: (c, r) => r.under > 0,
-    overfunded: (c, r) => !!c.target && r.under === 0 && r.assigned > r.req, money: (c, r) => r.avail > 0, paused: () => false,
+    overfunded: (c, r) => !!c.target && r.under === 0 && r.assigned > r.req, money: (c, r) => r.avail > 0, paused: (c, r) => !!r.snoozed,
   };
+  const zero = v => (v === 0 ? "app-zero" : "");
 
   function renderBudget() {
-    const months = visibleMonths(), f = months[0], M = model();
+    const months = visibleMonths(), f = focusMonth(), M = (state.M = model());
     $("[data-month-title]").textContent = mLabel(f);
     const shown = groups.map(g => ({ g, cats: g.cats.filter(c => FILTERS[state.filter](c, M.cats[c.id][f])) })).filter(x => state.filter === "all" || x.cats.length);
     const uncat = months.some(m => M.cats.uncat[m].activity !== 0) && FILTERS[state.filter](UNCAT, M.cats.uncat[f]);
+    const income = state.filter === "all" ? Object.keys(M.income) : [];
+    state.incomeKeys = income;
 
     const colh = (m, k, label) => `<th class="app-num${k === "assigned" ? " app-ms" : ""}"><span class="app-colh">${label}<b data-msum="${m}|${k}"></b></span></th>`;
-    let h = `<colgroup><col style="width:${CAT_W}px">${months.map(() => "<col><col><col>").join("")}</colgroup>
-      <thead><tr><th class="app-cat"></th>${months.map(m => `<th colspan="3" class="app-ms">${monthCard(m)}</th>`).join("")}</tr>
+    const line2 = (c, tag = "div") => `<${tag} class="app-line2" data-line2="${c.id}"><${tag} class="progress app-target" data-bar="${c.id}"></${tag}><span class="app-tstat" data-tstat="${c.id}"></span></${tag}>`;
+    let h = `<colgroup><col>${months.map(() => '<col data-col="0"><col data-col="1"><col data-col="2">').join("")}</colgroup>
+      <thead><tr><th class="app-cat"></th>${months.map(m => `<th colspan="3" class="app-ms">${monthCard(m, m === f)}</th>`).join("")}</tr>
       <tr><th class="app-cat"><span class="app-colh">Kategorie</span></th>${months.map(m => colh(m, "assigned", "Zugewiesen") + colh(m, "activity", "Aktivität") + colh(m, "avail", "Verfügbar")).join("")}</tr></thead><tbody>`;
     const row = c => `<tr data-row="${c.id}"${state.sel === c.id ? ' class="is-sel"' : ""}>
-        <td class="app-cat"><div class="d-flex align-items-start gap-2"><input class="form-check-input mt-1" type="checkbox" data-pick-cat="${c.id}"${state.sel === c.id ? " checked" : ""} aria-label="${esc(c.name)} auswählen">
-          <div class="flex-grow-1" style="min-width:0"><div class="d-flex align-items-center gap-2"><button type="button" class="app-catbtn" style="width:auto" data-open-cat="${c.id}">${catName(c)}</button><span class="app-tstat ms-auto" data-tstat="${c.id}"></span></div>
-          <div class="progress app-target mt-1" data-bar="${c.id}"></div></div></div></td>${months.map(m => `
-        <td class="app-ms app-num">${c.id === "uncat" ? "" : `<input class="form-control form-control-sm app-assign" inputmode="decimal" autocomplete="off" data-assign="${c.id}|${m}" aria-label="${esc(c.name)}, zugewiesen im ${mLabel(m)}"><div class="app-ahint" data-ahint="${c.id}|${m}"></div>`}</td>
-        <td class="app-num text-body-secondary" data-act="${c.id}|${m}"></td>
-        <td class="app-num"><button type="button" class="badge rounded-pill app-pill border-0" data-avail="${c.id}|${m}"></button></td>`).join("")}</tr>`;
+        <td class="app-cat"><div class="d-flex align-items-center gap-2"><input class="form-check-input mt-0 flex-shrink-0" type="checkbox" data-pick-cat="${c.id}"${state.sel === c.id ? " checked" : ""} aria-label="${esc(c.name)} auswählen">
+          <div class="flex-grow-1" style="min-width:0"><button type="button" class="app-catbtn" data-open-cat="${c.id}">${catName(c)}</button>${line2(c)}</div></div></td>${months.map(m => `
+        <td class="app-ms app-num">${c.id === "uncat" ? "" : `<input class="form-control form-control-sm app-assign" inputmode="decimal" autocomplete="off" data-assign="${c.id}|${m}" aria-label="${esc(c.name)}, zugewiesen im ${mLabel(m)}">`}</td>
+        <td class="app-num" data-act="${c.id}|${m}"></td>
+        <td class="app-num">${m === f ? `<button type="button" class="badge rounded-pill app-pill border-0" data-avail="${c.id}|${m}"></button>` : `<button type="button" class="app-q" data-avail="${c.id}|${m}"></button>`}</td>`).join("")}</tr>`;
+    const grpRow = (id, name, cells) => `<tr class="app-grp"><th class="app-cat"><button type="button" class="app-catbtn d-flex align-items-center gap-1" data-group-toggle="${id}" aria-expanded="${!state.collapsed.has(id)}">${icon("i-down")}<span class="app-label">${esc(name)}</span></button></th>${months.map(cells).join("")}</tr>`;
     if (uncat) h += row(UNCAT);
     shown.forEach(({ g, cats: list }) => {
-      const col = state.collapsed.has(g.id);
-      h += `<tr class="app-grp"><th class="app-cat"><button type="button" class="app-catbtn d-flex align-items-center gap-1" data-group-toggle="${g.id}" aria-expanded="${!col}">${icon("i-down")}<span class="app-label">${esc(g.name)}</span></button></th>` +
-        months.map(m => `<td class="app-ms app-num" data-gsum="${g.id}|${m}|assigned"></td><td class="app-num" data-gsum="${g.id}|${m}|activity"></td><td class="app-num" data-gsum="${g.id}|${m}|avail"></td>`).join("") + "</tr>";
-      if (!col) list.forEach(c => (h += row(c)));
+      h += grpRow(g.id, g.name, m => `<td class="app-ms app-num" data-gsum="${g.id}|${m}|assigned"></td><td class="app-num" data-gsum="${g.id}|${m}|activity"></td><td class="app-num" data-gsum="${g.id}|${m}|avail"></td>`);
+      if (!state.collapsed.has(g.id)) list.forEach(c => (h += row(c)));
     });
-    if (!shown.length && !uncat) h += `<tr><td class="app-cat"></td><td colspan="${months.length * 3}" class="text-center text-body-secondary py-4">${state.filter === "paused" ? "Keine pausierten Kategorien." : "Keine Kategorien in diesem Filter."}</td></tr>`;
+    if (income.length) {
+      h += grpRow("income", "💰 Einnahmen", m => `<td class="app-ms"></td><td class="app-num" data-isum="${m}"></td><td></td>`);
+      if (!state.collapsed.has("income")) income.forEach((p, i) => (h += `<tr class="app-inc"><td class="app-cat"><span class="app-catname ps-4"><span class="app-label">${esc(p)}</span></span></td>${months.map(m => `<td class="app-ms"></td><td class="app-num" data-inc="${i}|${m}"></td><td></td>`).join("")}</tr>`));
+    }
+    if (!shown.length && !uncat) h += `<tr><td class="app-cat"></td><td colspan="${months.length * 3}" class="text-center text-body-secondary py-4">${state.filter === "paused" ? `Keine pausierten Ziele im ${mName(f)}.` : "Keine Kategorien in diesem Filter."}</td></tr>`;
     $("[data-budget-table]").innerHTML = h + "</tbody>";
 
-    const from = clamp(f - 3, 0, Math.max(0, LAST - 11)), vis = new Set(months);
+    const span = clamp(Math.floor((($('[data-screen="budget"]').clientWidth - (state.insp ? INSP_W : 0)) - catW() - 90) / 42), 5, 12);
+    const from = clamp(months[0] - Math.floor((span - months.length) / 2), 0, Math.max(0, LAST - span + 1)), vis = new Set(months);
     let strip = `<button type="button" data-month-step="-1" aria-label="Früher">${icon("i-back")}</button>`;
-    for (let m = from; m <= Math.min(LAST, from + 11); m++) {
+    for (let m = from; m <= Math.min(LAST, from + span - 1); m++) {
       if (m === from || ym(m)[1] === 0) strip += `<span class="app-year">${ym(m)[0]}</span>`;
-      strip += `<button type="button" class="${vis.has(m) ? "is-sel" : ""}${m === CUR ? " is-cur" : ""}" data-goto-month="${m}"${m === CUR ? ' aria-current="date"' : ""}>${mShort(m)}</button>`;
+      strip += `<button type="button" class="${m === f ? "is-focus" : vis.has(m) ? "is-sel" : ""}${m === CUR ? " is-cur" : ""}" data-goto-month="${m}"${m === CUR ? ' aria-current="date"' : ""}>${mShort(m)}</button>`;
     }
     $("[data-month-strip]").innerHTML = strip + `<button type="button" data-month-step="1" aria-label="Später">${icon("i-chevron")}</button>`;
 
-    const prow = c => `<button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3" data-open-cat="${c.id}">
-        <span class="flex-grow-1" style="min-width:0"><span class="d-flex align-items-center gap-2">${catName(c)}<span class="app-tstat ms-auto" data-tstat="${c.id}"></span></span><span class="progress app-target mt-1 d-flex" data-bar="${c.id}"></span></span>
-        <span class="badge rounded-pill app-pill" data-avail="${c.id}|${f}"></span></button>`;
+    const prow = c => `<button type="button" class="list-group-item list-group-item-action app-prow" data-open-cat="${c.id}">
+        <span class="app-crow"><span class="flex-grow-1" style="min-width:0">${catName(c)}</span><span class="badge rounded-pill app-pill" data-avail="${c.id}|${f}"></span></span>${line2(c, "span")}</button>`;
+    const pgroup = (id, name, sumAttr, body) => `<div class="card mb-3"><button type="button" class="card-header app-catbtn d-flex align-items-center gap-2" data-group-toggle="${id}" aria-expanded="${!state.collapsed.has(id)}">${icon("i-down")}<span class="fw-semibold text-truncate">${esc(name)}</span><span class="ms-auto small tabular-nums text-body-secondary text-nowrap app-gsum" ${sumAttr}></span></button>${state.collapsed.has(id) ? "" : `<div class="list-group list-group-flush">${body}</div>`}</div>`;
     let l = uncat ? `<div class="list-group mb-3">${prow(UNCAT)}</div>` : "";
-    shown.forEach(({ g, cats: list }) => {
-      const col = state.collapsed.has(g.id);
-      l += `<div class="card mb-3"><button type="button" class="card-header app-catbtn d-flex align-items-center gap-2" data-group-toggle="${g.id}" aria-expanded="${!col}">${icon("i-down")}<span class="fw-semibold text-truncate">${esc(g.name)}</span><span class="ms-auto small tabular-nums text-body-secondary text-nowrap" data-gsum="${g.id}|${f}|avail"></span></button>`;
-      if (!col) l += `<div class="list-group list-group-flush">${list.map(prow).join("")}</div>`;
-      l += "</div>";
-    });
+    shown.forEach(({ g, cats: list }) => (l += pgroup(g.id, g.name, `data-gsum="${g.id}|${f}|avail"`, list.map(prow).join(""))));
+    if (income.length) l += pgroup("income", "💰 Einnahmen", `data-isum="${f}"`, income.map((p, i) => `<div class="list-group-item d-flex align-items-center gap-3"><span class="flex-grow-1 text-truncate">${esc(p)}</span><span class="tabular-nums text-nowrap" data-inc="${i}|${f}"></span></div>`).join(""));
     $("[data-budget-list]").innerHTML = l || '<p class="text-center text-body-secondary py-4">Keine Kategorien in diesem Filter.</p>';
-    $("[data-rta-phone]").innerHTML = rtaBox(f);
+    $("[data-rta-phone]").innerHTML = rtaPhone(f);
     $$("[data-group-toggle] svg").forEach(s => (s.style.transform = state.collapsed.has(s.parentElement.dataset.groupToggle) ? "rotate(-90deg)" : ""));
 
     $("[data-inspector]").classList.toggle("d-none", !state.insp);
     if (state.insp && $("#panel").classList.contains("show")) bootstrap.Offcanvas.getInstance($("#panel"))?.hide();
+    sizeCols();
     paint();
   }
 
@@ -367,96 +416,113 @@
     <li><button class="dropdown-item" type="button" data-auto="reset|${m}">Verfügbar zurücksetzen</button></li>
     <li><hr class="dropdown-divider"></li>
     <li><button class="dropdown-item" type="button" data-auto="pick|${m}">In eine Kategorie …</button></li>`;
-  const monthCard = m => `
-    <div class="card app-mcard${m === CUR ? " is-current" : ""}" data-bs-theme="dark">
-      <div class="card-body p-2">
-        <div class="d-flex gap-2 align-items-start">
-          <div class="lh-sm"><div class="fs-5 fw-bold text-uppercase">${mShort(m)}</div><div>${ym(m)[0]}</div></div>
-          <div class="app-calc flex-grow-1" data-calc="${m}"></div>
-          <div class="dropdown"><button class="btn btn-sm btn-link text-reset p-0" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Monatsmenü">${icon("i-dots")}</button>
+  // The focus month gets the full YNAB 4 card, the others a slim one with the calculation behind a toggle.
+  const calcToggle = (m, open) => `<button type="button" class="app-calc-toggle d-inline-flex align-items-center gap-1" data-calc-toggle="${m}" aria-expanded="${open}">${icon(open ? "i-down" : "i-chevron")}So rechnet sich „Zu verteilen“</button>`;
+  const monthCard = (m, full) => {
+    const open = full || state.calcOpen.has(m);
+    return `
+    <div class="card app-mcard${full ? " is-focus" : ""}" data-focus-month="${m}">
+      <div class="card-body p-2 d-flex flex-column gap-1">
+        <div class="d-flex align-items-center gap-2">
+          <span class="app-mname">${mName(m)}</span><span class="text-body-secondary">${ym(m)[0]}</span>
+          ${m === CUR ? '<span class="badge text-bg-warning">aktuell</span>' : ""}${m === IMPORTED ? '<span class="badge text-bg-secondary">aus YNAB</span>' : ""}
+          <div class="dropdown ms-auto"><button class="btn btn-sm btn-link text-reset p-0" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Monatsmenü ${mName(m)}">${icon("i-dots")}</button>
             <ul class="dropdown-menu dropdown-menu-end">${menuItems(m)}<li><hr class="dropdown-divider"></li><li><button class="dropdown-item" type="button" data-summary="${m}">Monatsübersicht</button></li></ul></div>
         </div>
-        <div class="d-flex align-items-end gap-2 mt-1">
-          <div class="me-auto"><div class="app-rta-big" data-rta="${m}"></div><div class="fw-semibold" data-rta-label="${m}"></div></div>
+        ${full ? "" : calcToggle(m, open)}
+        <div class="app-calc" data-calc="${m}"${open ? "" : " hidden"}></div>
+        <div class="d-flex align-items-end gap-2 mt-auto pt-1">
+          <div class="me-auto" style="min-width:0"><div class="app-rta-big" data-rta="${m}"></div><div class="fw-semibold" data-rta-label="${m}"></div></div>
           <div data-rta-act="${m}"></div>
         </div>
-        <div class="d-flex flex-wrap gap-1 mt-1">${m === CUR ? '<span class="badge text-bg-warning">aktueller Monat</span>' : ""}${m === IMPORTED ? '<span class="badge text-bg-secondary">aus YNAB übernommen</span>' : ""}</div>
-        <button type="button" class="app-catbtn small fw-semibold text-danger mt-1" data-over-line="${m}" hidden></button>
       </div>
     </div>`;
-  const rtaBox = m => `
-    <div class="rounded-3 p-3 d-flex align-items-center gap-3" data-rta-box="${m}">
-      <div class="me-auto"><div class="app-rta-big" data-rta="${m}"></div><div class="small fw-semibold" data-rta-label="${m}"></div></div>
+  };
+  const rtaPhone = m => `
+    <div class="d-flex align-items-center gap-2 mt-2">
+      <div class="me-auto" style="min-width:0"><div class="app-rta-big" data-rta="${m}"></div><div class="small fw-semibold" data-rta-label="${m}"></div></div>
       <div data-rta-act="${m}"></div>
     </div>
-    <button type="button" class="app-catbtn small fw-semibold text-danger mt-1" data-over-line="${m}" hidden></button>
-    <details class="small mt-1"><summary class="text-body-secondary">So rechnet sich „Zu verteilen“</summary><div class="app-calc mt-1" data-calc="${m}"></div></details>`;
+    ${calcToggle(m, state.calcOpen.has(m))}
+    <div class="app-calc mt-1" data-calc="${m}"${state.calcOpen.has(m) ? "" : " hidden"}></div>`;
 
-  const tone = (c, r) => r.avail < 0 ? ["text-bg-danger", ""] : r.under > 0 ? ["text-bg-warning", "i-half"] : r.avail > 0 ? ["text-bg-success", c.target ? "i-okc" : ""] : ["bg-body-secondary text-body-secondary", ""];
+  const tone = (c, r) => r.avail < 0 ? ["text-bg-danger", ""] : r.under > 0 ? ["text-bg-warning", "i-half"] : r.avail > 0 ? ["text-bg-success", c.target && !r.snoozed ? "i-okc" : ""] : ["bg-body-secondary text-body-secondary", ""];
   function targetStatus(c, r, m) {
     const budget = r.carry + r.assigned, spent = -r.activity;
     if (r.avail < 0) return { text: `Überzogen. ${eur(spent)} von ${eur(budget)}`, bars: [[100, "bg-danger"]] };
     if (!c.target) return null;
+    if (r.snoozed) return { text: `Pausiert im ${mName(m)}`, bars: [] };
     if (r.under > 0) return { text: c.target.cadence === "month" ? `Noch ${eur(r.under)} nötig bis zum ${lastDay(m)}.` : `Noch ${eur(r.under)} diesen Monat nötig`, bars: [[Math.round(r.progress * 100), "bg-warning"]] };
     if (spent > 0 && r.avail === 0) return { text: "Ganz ausgegeben", bars: [[100, "bg-success progress-bar-striped"]] };
     if (spent > 0) { const p = Math.round((spent / budget) * 100); return { text: `Finanziert. ${eur(spent)} von ${eur(budget)} ausgegeben`, bars: [[p, "bg-success progress-bar-striped opacity-50"], [100 - p, "bg-success"]] }; }
     return { text: c.target.cadence === "year" ? "Im Plan" : "Finanziert", bars: [[100, "bg-success"]] };
   }
   const rtaState = s => s.show > 0 ? ["text-success", "Zu verteilen"] : s.show === 0 ? ["", "Alles verteilt ✓"] : ["text-danger", "Zu viel verteilt"];
+  // How much more can go into month m without borrowing, and which month sets the limit
+  const capText = m => {
+    const s = state.M.months[m], free = Math.max(0, s.free), k = s.freeAt;
+    if (!free) return `Nichts mehr frei, sonst wird ${k === m ? "„Zu verteilen“" : mName(k)} negativ.`;
+    return k === m ? `max. +${eur(free)} (Zu verteilen im ${mName(m)})` : `max. +${eur(free)}, damit ${mName(k)} nicht negativ wird`;
+  };
 
   function paintMonths(M, root = document) {
     $$("[data-calc]", root).forEach(el => {
       const m = +el.dataset.calc, s = M.months[m], p = m - 1;
       const ln = (v, label, cls = "") => `<div class="${cls}"><span>${v}</span><span>${label}</span></div>`;
-      el.innerHTML = ln(num(s.prevRta), `Nicht verteilt im ${mShort(p)}`, s.prevRta < 0 ? "text-danger" : "") +
+      // after the current month the first line is the previous card's "Zu verteilen", plus what that card held back
+      const linked = m > CUR, prev = M.months[p];
+      el.innerHTML = (linked ? ln(num(prev.show), `Nicht verteilt im ${mShort(p)}`, prev.show < 0 ? "text-danger" : "") + ln("+" + num(prev.future), `im ${mShort(p)} für ${mShort(m)}${s.future ? " ff." : ""} reserviert`)
+        : ln(num(s.prevRta), `Übrig aus ${mShort(p)}`, s.prevRta < 0 ? "text-danger" : "")) +
         ln(num(s.prevOver), `Überzogen im ${mShort(p)}`, s.prevOver < 0 ? "text-danger" : "") +
         ln("+" + num(s.income), `Einnahmen im ${mShort(m)}`) + ln(num(-s.assigned), `Zugewiesen im ${mShort(m)}`) +
-        ln(num(-s.future), "In künftigen Monaten zugewiesen");
+        ln(num(-s.future), s.future ? `für ${mShort(m + 1)}${M.months[m + 1]?.future ? " ff." : ""} reserviert` : "In künftigen Monaten zugewiesen");
     });
     $$("[data-rta]", root).forEach(el => { const s = M.months[el.dataset.rta]; el.textContent = (el.closest(".app-mcard") ? "= " : "") + eur(s.show); el.className = "app-rta-big " + rtaState(s)[0]; });
     $$("[data-rta-label]", root).forEach(el => (el.textContent = rtaState(M.months[el.dataset.rtaLabel])[1]));
-    $$("[data-rta-box]", root).forEach(el => { const v = M.months[el.dataset.rtaBox].show; el.className = "rounded-3 p-3 d-flex align-items-center gap-3 " + (v > 0 ? "bg-success-subtle" : v < 0 ? "bg-danger-subtle" : "bg-body-secondary"); });
     $$("[data-rta-act]", root).forEach(el => {
       const m = el.dataset.rtaAct, v = M.months[m].show;
       el.innerHTML = v > 0 ? `<div class="dropdown"><button class="btn btn-sm btn-success dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Verteilen</button><ul class="dropdown-menu dropdown-menu-end">${menuItems(m)}</ul></div>`
         : v < 0 ? `<button type="button" class="btn btn-sm btn-danger" data-cover-rta="${m}">Aus Kategorien decken</button>` : "";
     });
-    $$("[data-over-line]", root).forEach(el => {
-      const s = M.months[el.dataset.overLine];
-      el.hidden = !s.overN;
-      el.textContent = `Überzogen: ${s.overN} ${s.overN === 1 ? "Kategorie" : "Kategorien"}, ${eur(-s.over)}`;
-    });
-
   }
 
   function paint() {
     const M = (state.M = model());
     checkBooks(M);
     const f = focusMonth();
-    $$("[data-assign]").forEach(i => { const [c, m] = i.dataset.assign.split("|"); if (i !== document.activeElement) { i.value = num(M.cats[c][m].assigned); i.classList.remove("is-invalid"); } });
-    $$("[data-ahint]").forEach(el => { const m = +el.dataset.ahint.split("|")[1]; if (!el.classList.contains("text-danger")) el.textContent = `noch ${eur(Math.max(0, M.months[m].free))} verfügbar`; });
-    $$("[data-act]").forEach(el => { const [c, m] = el.dataset.act.split("|"); el.textContent = num(M.cats[c][m].activity); });
+    $$("[data-assign]").forEach(i => { const [c, m] = i.dataset.assign.split("|"), v = M.cats[c][m].assigned; if (i !== document.activeElement) { i.value = num(v); i.classList.remove("is-invalid"); } i.classList.toggle("app-zero", v === 0); });
+    $$("[data-act]").forEach(el => { const [c, m] = el.dataset.act.split("|"), v = M.cats[c][m].activity; el.textContent = num(v); el.className = "app-num " + (zero(v) || "text-body-secondary"); });
     $$("[data-avail]").forEach(el => {
-      const [c, m] = el.dataset.avail.split("|"), r = M.cats[c][m], [cls, ic] = tone(cat(c), r);
-      el.className = `badge rounded-pill app-pill border-0 ${cls}`;
-      el.innerHTML = (ic ? icon(ic) : "") + eur(r.avail);
-      el.title = r.avail < 0 ? "Überzogen – klicken zum Decken" : r.under > 0 ? `Ziel: noch ${eur(r.under)} nötig` : "";
+      const [c, m] = el.dataset.avail.split("|"), r = M.cats[c][m];
+      if (el.classList.contains("app-q")) {
+        el.className = "app-q " + (r.avail < 0 ? "app-neg" : zero(r.avail));
+        el.innerHTML = (r.under > 0 ? '<span class="app-udot"></span>' : "") + num(r.avail);
+      } else {
+        const [cls, ic] = tone(cat(c), r);
+        el.className = `badge rounded-pill app-pill border-0 ${cls}`;
+        el.innerHTML = (ic ? icon(ic) : "") + eur(r.avail);
+      }
+      el.title = r.avail < 0 ? "Überzogen – klicken zum Decken" : r.under > 0 ? `Ziel: noch ${eur(r.under)} nötig` : "Geld verschieben";
     });
-    $$("[data-tstat]").forEach(el => { const c = el.dataset.tstat, st = targetStatus(cat(c), M.cats[c][f], f); el.textContent = st ? st.text : ""; el.title = el.textContent; el.classList.toggle("text-danger", M.cats[c][f].avail < 0); });
-    $$("[data-bar]").forEach(el => {
-      const st = targetStatus(cat(el.dataset.bar), M.cats[el.dataset.bar][f], f);
+    $$("[data-line2]").forEach(el => {
+      const c = el.dataset.line2, r = M.cats[c][f], st = targetStatus(cat(c), r, f), bar = $("[data-bar]", el), ts = $("[data-tstat]", el);
       el.hidden = !st;
-      el.innerHTML = st ? st.bars.map(([w, cls]) => `<div class="progress-bar ${cls}" style="width:${w}%"></div>`).join("") : "";
+      bar.hidden = !st?.bars.length;
+      bar.innerHTML = st ? st.bars.map(([w, cls]) => `<div class="progress-bar ${cls}" style="width:${w}%"></div>`).join("") : "";
+      ts.textContent = st ? st.text : ""; ts.title = ts.textContent;
+      ts.classList.toggle("is-over", r.avail < 0);
     });
-    $$("[data-gsum]").forEach(el => { const [g, m, k] = el.dataset.gsum.split("|"); el.textContent = num(sum(groups.find(x => x.id === g).cats, c => M.cats[c.id][m][k])); });
+    $$("[data-gsum]").forEach(el => { const [g, m, k] = el.dataset.gsum.split("|"), v = sum(groups.find(x => x.id === g).cats, c => M.cats[c.id][m][k]); el.textContent = num(v); el.classList.toggle("app-zero", v === 0); el.classList.toggle("app-neg", v < 0 && k === "avail"); });
     $$("[data-msum]").forEach(el => { const [m, k] = el.dataset.msum.split("|"); el.textContent = num(M.months[m][k]); });
+    $$("[data-inc]").forEach(el => { const [i, m] = el.dataset.inc.split("|"), v = M.income[state.incomeKeys[i]][m]; el.textContent = el.closest("[data-budget-list]") ? eur(v) : num(v); el.classList.toggle("app-zero", v === 0); });
+    $$("[data-isum]").forEach(el => { const m = +el.dataset.isum; el.textContent = num(M.months[m].income); });
     paintMonths(M);
 
     const count = key => [...cats(), UNCAT].filter(c => (c !== UNCAT || M.cats.uncat[f].activity) && FILTERS[key](c, M.cats[c.id][f])).length;
     const chip = (key, label, extra = "") => `<button type="button" class="btn btn-sm btn-pill ${state.filter === key ? "btn-primary" : extra || "btn-light"}" data-filter="${key}" aria-pressed="${state.filter === key}">${label}</button>`;
-    const ov = count("over"), un = count("under");
+    const ov = count("over"), un = count("under"), pa = count("paused");
     $("[data-chips]").innerHTML = chip("all", "Alle") + chip("over", `${ov ? icon("i-alert") + " " : ""}${ov} überzogen`, ov ? "btn-outline-danger" : "") +
-      chip("under", `Unterfinanziert${un ? " · " + un : ""}`) + chip("overfunded", "Überfinanziert") + chip("money", "Geld verfügbar") + chip("paused", "Pausiert");
+      chip("under", `Unterfinanziert${un ? " · " + un : ""}`) + chip("overfunded", "Überfinanziert") + chip("money", "Geld verfügbar") + chip("paused", `Pausiert${pa ? " · " + pa : ""}`);
 
     const hints = [];
     const neg = M.months.findIndex((x, k) => k > f && x.rta < 0);
@@ -468,9 +534,24 @@
     $$("[data-unapproved-badge]").forEach(b => { b.textContent = open; b.hidden = !open; });
     $$("[data-undo]").forEach(b => (b.disabled = !undoStack.length));
     $$("[data-redo]").forEach(b => (b.disabled = !redoStack.length));
+    const ai = document.activeElement;
+    if (ai?.matches("[data-assign]") && !ai.classList.contains("is-invalid")) showCap(ai, capText(+ai.dataset.assign.split("|")[1]));
     renderSide();
     renderPanel();
   }
+
+  // the assign limit as a small note under the focused input
+  const cap = document.createElement("div");
+  cap.className = "app-cap"; cap.hidden = true; cap.setAttribute("role", "status");
+  document.body.append(cap);
+  function showCap(i, text, bad = false) {
+    cap.textContent = text; cap.classList.toggle("text-danger", bad); cap.hidden = false;
+    const r = i.getBoundingClientRect();
+    cap.style.left = clamp(r.right - cap.offsetWidth, 8, innerWidth - cap.offsetWidth - 8) + "px";
+    cap.style.top = r.bottom + 4 + "px";
+  }
+  document.addEventListener("focusout", e => { if (e.target.matches("[data-assign]")) cap.hidden = true; });
+  addEventListener("scroll", () => (cap.hidden = true), { passive: true });
 
   // ------------------------------------------------------------ inspector / overlay panel
   const panel = $("#panel");
@@ -480,9 +561,16 @@
     if (!state.insp && !panel.classList.contains("show") && !panel.classList.contains("showing")) return;
     const el = panelBody();
     if (el.contains(document.activeElement) && document.activeElement.matches("input, select, textarea")) return;
-    const m = focusMonth();
-    $("#panelTitle").textContent = state.sel ? catText(cat(state.sel)) : `Zusammenfassung ${mName(m)}`;
-    el.innerHTML = state.sel ? catDetail(cat(state.sel), m) : monthSummary(m);
+    const m = focusMonth(), c = state.sel && cat(state.sel);
+    if (c && state.sheet === "cover" && !state.insp) {
+      $("#panelTitle").textContent = `Überzug decken · ${catText(c)}`;
+      const r = state.M.cats[c.id][m];
+      el.innerHTML = r.avail < 0 ? `${coverForm(c, m, -r.avail, true)}<button type="button" class="btn btn-sm btn-link px-0 mt-3" data-sheet-details>Details und Ziel</button>`
+        : `<p class="small">${esc(catText(c))} ist gedeckt.</p><button type="button" class="btn btn-sm btn-primary" data-sheet-details>Details und Ziel</button>`;
+      return;
+    }
+    $("#panelTitle").textContent = c ? catText(c) : `Zusammenfassung ${mName(m)}`;
+    el.innerHTML = c ? catDetail(c, m) : monthSummary(m);
     paintMonths(state.M, el);
   }
   const openPanel = () => {
@@ -493,28 +581,33 @@
     }
     renderPanel();
   };
-  panel.addEventListener("hidden.bs.offcanvas", () => { if (!state.insp && state.sel) { state.sel = null; state.editTarget = false; if (state.screen === "budget") go("budget", budgetParams()); } });
+  panel.addEventListener("hidden.bs.offcanvas", () => {
+    state.sheet = null;
+    if (state.insp || !state.sel) return;
+    state.sel = null; state.editTarget = false;
+    if (state.pushed) { state.pushed = false; history.back(); } else if (state.screen === "budget") go("budget", budgetParams());
+  });
 
   const line = (k, v, cls = "") => `<div class="d-flex justify-content-between gap-3 ${cls}"><span>${k}</span><span class="tabular-nums text-nowrap">${v}</span></div>`;
   function monthSummary(m) {
     const M = state.M, s = M.months[m], p = m > 0 ? M.months[m - 1] : null;
     const neg = M.months.findIndex((x, k) => k > m && x.rta < 0);
     const overs = [...cats(), UNCAT].filter(c => M.cats[c.id][m].avail < 0);
-    const auto = (k, label, v) => `<button type="button" class="list-group-item list-group-item-action d-flex justify-content-between" data-auto="${k}|${m}"><span>${label}</span><span class="tabular-nums">${eur(v)}</span></button>`;
+    const auto = (k, label, v) => `<button type="button" class="list-group-item list-group-item-action d-flex justify-content-between gap-2" data-auto="${k}|${m}"><span>${label}</span><span class="tabular-nums text-nowrap">${eur(v)}</span></button>`;
     const avg = sum(cats(), c => Math.round(sum([1, 2, 3], d => (m - d >= 0 ? c.assigned[m - d] : 0)) / 3));
     const futureList = M.months.map((x, k) => [k, x.assigned]).filter(([k, v]) => k > m && v > 0);
     return `
-      <div class="mb-3">${rtaBox(m).replace(/data-rta-box="\d+"/, `data-rta-box="${m}"`)}</div>
-      <div class="card mb-3"><div class="card-header fw-semibold">Zusammenfassung ${mName(m)}</div><div class="card-body small d-flex flex-column gap-1">
+      ${state.insp ? `<h2 class="h5 mb-3">${mLabel(m)}</h2>` : ""}
+      <div class="card mb-3"><div class="card-header fw-semibold">Zusammenfassung</div><div class="card-body small d-flex flex-column gap-1">
         ${line("Übrig aus Vormonat", eur(s.carry))}${line(`Zugewiesen im ${mName(m)}`, eur(s.assigned))}${line("Aktivität", eur(s.activity))}${line("Verfügbar", eur(s.avail), "fw-bold border-top pt-1")}
-        <div class="mt-2 fw-semibold">Kosten für mich</div>${line(`Ziele im ${mName(m)}`, eur(s.req))}${s.under ? line("Davon noch offen", eur(s.under), "text-warning-emphasis fw-semibold") : ""}
+        <div class="mt-2 fw-semibold">Monatsbedarf</div>${line(`Ziele im ${mName(m)}`, eur(s.req))}${s.under ? line("Davon noch offen", eur(s.under), "text-warning-emphasis fw-semibold") : ""}
       </div></div>
       ${overs.length ? `<div class="card mb-3 border-danger"><div class="card-header fw-semibold text-danger d-flex align-items-center gap-2">${icon("i-alert")}${overs.length} überzogen</div><div class="list-group list-group-flush">${overs.map(c => `
-        <div class="list-group-item d-flex align-items-center gap-2 small"><span class="flex-grow-1" style="min-width:0">${catName(c)}</span><span class="badge rounded-pill text-bg-danger">${eur(M.cats[c.id][m].avail)}</span><button type="button" class="btn btn-sm btn-outline-danger" data-cover="${c.id}|${m}">Decken</button></div>`).join("")}</div></div>` : ""}
+        <div class="list-group-item d-flex align-items-center gap-2 small"><span class="flex-grow-1" style="min-width:0">${catName(c)}</span><span class="badge rounded-pill app-pill text-bg-danger">${eur(M.cats[c.id][m].avail)}</span><button type="button" class="btn btn-sm btn-outline-danger" data-cover="${c.id}|${m}">Decken</button></div>`).join("")}</div></div>` : ""}
       <div class="card mb-3"><div class="card-header fw-semibold d-flex align-items-center gap-2">${icon("i-bolt")}Auto-Verteilen</div><div class="list-group list-group-flush small">
         ${auto("under", "Unterfinanzierte", s.under)}${auto("last", "Wie letzten Monat", p ? p.assigned : 0)}${auto("spent", "Ausgaben letzten Monat", p ? -p.activity : 0)}${auto("avg", "Durchschnitt (3 Monate)", avg)}${auto("reset", "Verfügbar zurücksetzen", sum(cats(), c => Math.max(0, M.cats[c.id][m].avail)))}
       </div></div>
-      <div class="card mb-3"><div class="card-header fw-semibold d-flex justify-content-between gap-2"><span>${neg > 0 ? icon("i-alert") + " " : ""}In künftigen Monaten zugewiesen</span><span class="tabular-nums">${eur(s.future)}</span></div><div class="card-body small">
+      <div class="card mb-3"><div class="card-header fw-semibold d-flex justify-content-between gap-2"><span>${neg > 0 ? icon("i-alert") + " " : ""}In künftigen Monaten zugewiesen</span><span class="tabular-nums text-nowrap">${eur(s.future)}</span></div><div class="card-body small">
         ${neg > 0 ? `<div class="alert alert-danger text-center py-2 mb-2"><strong>Zu verteilen im ${mName(neg)} ist ${eur(M.months[neg].rta)}</strong></div>
           <p class="text-body-secondary text-center">Überzug im ${mName(neg - 1)} verringert das Geld, das im ${mName(neg)} zu verteilen ist.</p>
           <div class="d-grid gap-2 mb-2"><button type="button" class="btn btn-sm btn-primary" data-cover-month="${neg - 1}">Überzug decken</button><button type="button" class="btn btn-sm btn-light" data-goto-month="${neg}">Zum ${mName(neg)}</button></div>` : ""}
@@ -525,19 +618,29 @@
   const ring = (p, cls) => { const r = 40, c = 2 * Math.PI * r; return `<svg class="app-ring" viewBox="0 0 100 100" role="img" aria-label="${Math.round(p * 100)} Prozent"><circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--felt-border-color)" stroke-width="10"/><circle cx="50" cy="50" r="${r}" fill="none" stroke="var(--felt-${cls})" stroke-width="10" stroke-linecap="round" stroke-dasharray="${(c * p).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/><text x="50" y="57" text-anchor="middle" font-size="20" font-weight="700" fill="currentColor">${Math.round(p * 100)} %</text></svg>`; };
   const targetHead = t => t.cadence === "month"
     ? [t.mode === "refill" ? `Jeden Monat auffüllen bis ${eur(t.amount)}` : `Jeden Monat weitere ${eur(t.amount)} zurücklegen`, "Bis zum Monatsende"]
-    : [`${eur(t.amount)} bis ${dLong(t.due)} ansparen`, `Jedes Jahr · ${t.mode === "refill" ? "auffüllen bis" : "weitere zurücklegen"}`];
+    : [`${eur(t.amount)} bis ${dLong(t.due)} ansparen`, `Jedes Jahr · ${t.mode === "refill" ? "auffüllen bis" : "weitere zurücklegen"}, verteilt auf die Monate bis dahin`];
   const targetText = t => (t ? targetHead(t)[0] : "Kein Ziel");
   const coverForm = (c, m, need, inline) => {
     const M = state.M, opts = cats().filter(x => x.id !== c.id && M.cats[x.id][m].avail > 0).sort((a, b) => M.cats[b.id][m].avail - M.cats[a.id][m].avail);
     const free = Math.max(0, M.months[m].free);
     return `<form class="d-flex flex-column gap-2" data-cover-form="${c.id}|${m}">
-      <label class="small" for="cv-${c.id}">Decke <strong>${eur(need)}</strong> aus:</label>
+      <label class="small" for="cv-${c.id}">Decke <strong class="text-nowrap">${eur(need)}</strong> aus:</label>
       <select class="form-select form-select-sm" id="cv-${c.id}" name="from">${free > 0 ? `<option value="rta">📥 Zu verteilen (${eur(free)})</option>` : ""}${opts.map(x => `<option value="${x.id}">${esc(catText(x))} (${eur(M.cats[x.id][m].avail)})</option>`).join("")}</select>
-      <div class="d-flex justify-content-end gap-2">${inline ? "" : '<button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button>'}<button type="submit" class="btn btn-sm btn-primary">OK</button></div></form>`;
+      <div class="d-flex justify-content-end gap-2">${inline ? "" : '<button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button>'}<button type="submit" class="btn btn-sm btn-primary">Decken</button></div></form>`;
   };
-  const moveOpts = sel => `<option value="rta"${sel === "rta" ? " selected" : ""}>📥 Zu verteilen</option>` + groups.map(g => `<optgroup label="${esc(g.name)}">${g.cats.map(x => `<option value="${x.id}"${x.id === sel ? " selected" : ""}>${esc(catText(x))}</option>`).join("")}</optgroup>`).join("");
   const catOnlyOpts = (sel, skip) => groups.map(g => `<optgroup label="${esc(g.name)}">${g.cats.filter(x => x.id !== skip).map(x => `<option value="${x.id}"${x.id === sel ? " selected" : ""}>${esc(catText(x))}</option>`).join("")}</optgroup>`).join("");
-
+  // move money between this category and another one (or "Zu verteilen"), YNAB style
+  const moveForm = (c, m, key, inline) => {
+    const r = state.M.cats[c.id][m], give = r.avail > 0;
+    return `<form class="d-flex flex-column gap-2" data-move-form="${c.id}|${m}">
+      <div class="input-group input-group-sm"><input class="form-control text-end tabular-nums" name="amount" inputmode="decimal" aria-label="Betrag" value="${num(give ? r.avail : r.under || Math.max(0, -r.avail))}"><span class="input-group-text">€</span></div>
+      <div class="btn-group btn-group-sm w-100" role="group" aria-label="Richtung">
+        <input type="radio" class="btn-check" name="dir" id="${key}-to" value="to"${give ? " checked" : ""}><label class="btn btn-outline-secondary" for="${key}-to">Abgeben an</label>
+        <input type="radio" class="btn-check" name="dir" id="${key}-from" value="from"${give ? "" : " checked"}><label class="btn btn-outline-secondary" for="${key}-from">Holen aus</label>
+      </div>
+      <select class="form-select form-select-sm" name="other" aria-label="Andere Kategorie"><option value="rta">📥 Zu verteilen</option>${catOnlyOpts(null, c.id)}</select>
+      <div class="d-flex justify-content-end gap-2">${inline ? "" : '<button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button>'}<button type="submit" class="btn btn-sm btn-primary">Verschieben</button></div></form>`;
+  };
 
   function catDetail(c, m) {
     const M = state.M, r = M.cats[c.id][m], p = m > 0 ? M.cats[c.id][m - 1] : null, t = c.target, [cls, ic] = tone(c, r);
@@ -551,22 +654,27 @@
           ${line("Diesen Monat zugewiesen", signed(r.assigned))}${line("Ausgaben", signed(r.activity))}
           <label class="form-label mt-2 mb-1 fw-semibold" for="cd-assign">Zugewiesen im ${mName(m)}</label>
           <div class="input-group input-group-sm has-validation"><input class="form-control text-end tabular-nums" id="cd-assign" inputmode="decimal" autocomplete="off" value="${num(r.assigned)}" data-detail-assign aria-describedby="cd-hint"><span class="input-group-text">€</span></div>
-          <div class="form-text mt-0" id="cd-hint" data-detail-hint>noch ${eur(Math.max(0, M.months[m].free))} verfügbar</div>
-          <div class="d-flex flex-wrap gap-1 mt-1">
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-set="${p ? p.assigned : 0}"${p ? "" : " disabled"}>Wie letzten Monat (${eur(p ? p.assigned : 0)})</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-set="${p ? -p.activity : 0}"${p ? "" : " disabled"}>Ausgaben letzten Monat (${eur(p ? -p.activity : 0)})</button>
+          <div class="form-text mt-0" id="cd-hint" data-detail-hint>${capText(m)}</div>
+          <div class="d-grid gap-1 mt-1">
+            <button type="button" class="btn btn-sm btn-outline-secondary d-flex justify-content-between gap-2" data-set="${p ? p.assigned : 0}"${p ? "" : " disabled"}><span>Wie Vormonat</span><span class="tabular-nums">${eur(p ? p.assigned : 0)}</span></button>
+            <button type="button" class="btn btn-sm btn-outline-secondary d-flex justify-content-between gap-2" data-set="${p ? -p.activity : 0}"${p ? "" : " disabled"}><span>Ausgaben Vormonat</span><span class="tabular-nums">${eur(p ? -p.activity : 0)}</span></button>
           </div>
         </div></div>`;
     if (r.avail < 0) h += `<div class="card mb-3 border-danger"><div class="card-header fw-semibold text-danger">Überzug decken</div><div class="card-body">${m < CUR ? `<p class="small text-body-secondary">Im ${mName(m)} überzogen; am 1. ${mName(m + 1)} von „Zu verteilen“ abgezogen.</p>` : ""}${coverForm(c, m, -r.avail, true)}</div></div>`;
-    h += `<div class="card mb-3"><div class="card-header fw-semibold d-flex align-items-center gap-2">${icon("i-target")}Ziel</div><div class="card-body small">`;
-    if (t && !state.editTarget) {
+    const snooze = t ? `<button type="button" class="btn btn-sm btn-outline-secondary" data-snooze="${m}">${r.snoozed ? "Fortsetzen" : "Pausieren"}</button>` : "";
+    h += `<div class="card mb-3"><div class="card-header fw-semibold d-flex align-items-center gap-2">${icon("i-target")}Ziel${r.snoozed ? '<span class="badge text-bg-secondary ms-auto">pausiert</span>' : ""}</div><div class="card-body small">`;
+    if (t && !state.editTarget && r.snoozed) {
+      h += `<div class="fw-semibold">${targetHead(t)[0]}</div><div class="text-body-secondary mb-2">${targetHead(t)[1]}</div>
+        <div class="alert alert-secondary text-center py-2">Im ${mName(m)} pausiert: das Ziel zählt diesen Monat nicht als unterfinanziert.</div>
+        <div class="d-flex gap-2">${snooze}<button type="button" class="btn btn-sm btn-light flex-grow-1" data-edit-target>Ziel bearbeiten</button></div>`;
+    } else if (t && !state.editTarget) {
       const [head, sub] = targetHead(t), pct = t.cadence === "year" ? r.progress : r.req ? (r.req - r.under) / r.req : 1;
       h += `<div class="fw-semibold">${head}</div><div class="text-body-secondary mb-2">${sub}</div>
         <div class="text-center mb-2">${ring(pct, r.under > 0 ? "warning" : "success")}</div>
-        ${r.under > 0 ? `<div class="alert alert-warning text-center py-2"><div>Weise noch <strong>${eur(r.under)}</strong> zu, um dein Ziel zu erreichen</div><button type="button" class="btn btn-sm btn-warning w-100 mt-2" data-set="${r.assigned + r.under}">Zuweisen</button></div>`
+        ${r.under > 0 ? `<div class="alert alert-warning text-center py-2"><div>Weise noch <strong class="text-nowrap">${eur(r.under)}</strong> zu, um dein Ziel zu erreichen</div><button type="button" class="btn btn-sm btn-warning w-100 mt-2" data-set="${r.assigned + r.under}">Zuweisen</button></div>`
           : `<div class="alert alert-success text-center py-2">${t.cadence === "year" ? `Im Plan, ${eur(r.req)} diesen Monat` : "Ziel für diesen Monat erreicht"}</div>`}
         ${line("Diesen Monat zuzuweisen", eur(r.req))}${line("Bisher zugewiesen", eur(r.assigned))}
-        <button type="button" class="btn btn-sm btn-light w-100 mt-2" data-edit-target>Ziel bearbeiten</button>`;
+        <div class="d-flex gap-2 mt-2">${snooze}<button type="button" class="btn btn-sm btn-light flex-grow-1" data-edit-target>Ziel bearbeiten</button></div>`;
     } else if (!t && !state.editTarget) {
       h += `<p class="text-body-secondary">Kein Ziel. Ein Ziel sagt dir, wie viel diese Kategorie jeden Monat braucht.</p><button type="button" class="btn btn-sm btn-primary w-100" data-edit-target>Ziel festlegen</button>`;
     } else {
@@ -582,21 +690,26 @@
         <div data-tg-due${v.cadence === "year" ? "" : " hidden"}><label class="form-label mb-1" for="tg-due">Fällig am</label><input type="date" class="form-control form-control-sm" id="tg-due" name="due" min="2026-10-09" value="${v.due || ""}"></div>
         <label class="form-label mb-0" for="tg-mode">Nächsten Monat möchte ich:</label>
         <select class="form-select form-select-sm" id="tg-mode" name="mode"><option value="setaside"${v.mode === "setaside" ? " selected" : ""}>Weitere zurücklegen</option><option value="refill"${v.mode === "refill" ? " selected" : ""}>Auffüllen bis</option></select>
-        <div class="d-flex gap-2 mt-1"><button type="submit" class="btn btn-sm btn-primary">Speichern</button>${t ? '<button type="button" class="btn btn-sm btn-outline-danger" data-delete-target>Ziel löschen</button>' : ""}<button type="button" class="btn btn-sm ms-auto" data-cancel-target>Abbrechen</button></div>
+        <div class="form-text mt-0" data-tg-preview></div>
+        <div class="d-flex flex-wrap gap-2 mt-1"><button type="submit" class="btn btn-sm btn-primary">Speichern</button>${t ? `${snooze}<button type="button" class="btn btn-sm btn-outline-danger" data-delete-target>Löschen</button>` : ""}<button type="button" class="btn btn-sm ms-auto" data-cancel-target>Abbrechen</button></div>
       </form>`;
     }
     h += `</div></div>
       <details class="card"><summary class="card-header fw-semibold d-flex align-items-center gap-2" style="cursor:pointer">${icon("i-swap")}Geld verschieben</summary>
-        <form class="card-body row g-2 small" data-move-form="${c.id}|${m}">
-          <div class="col-6"><label class="form-label mb-1" for="mv-from">Von</label><select class="form-select form-select-sm" id="mv-from" name="from">${moveOpts(c.id)}</select></div>
-          <div class="col-6"><label class="form-label mb-1" for="mv-to">Nach</label><select class="form-select form-select-sm" id="mv-to" name="to">${moveOpts("rta")}</select></div>
-          <div class="col-6"><div class="input-group input-group-sm"><input class="form-control text-end tabular-nums" name="amount" inputmode="decimal" aria-label="Betrag" value="${num(Math.max(0, r.avail))}"><span class="input-group-text">€</span></div></div>
-          <div class="col-6"><button type="submit" class="btn btn-sm btn-primary w-100">Verschieben</button></div>
-        </form></details>`;
+        <div class="card-body small">${moveForm(c, m, "mvd", true)}</div></details>`;
     return h;
   }
+  // what a target editor draft asks for this month, so a yearly date target shows its monthly amount right away
+  function targetPreview(f) {
+    const el = $("[data-tg-preview]", f), amount = parse(f.amount.value), c = cat(state.sel), m = focusMonth();
+    if (!el || !c) return;
+    if (!(amount > 0) || (f.cadence.value === "year" && !f.due.value)) return (el.textContent = "");
+    const r = state.M.cats[c.id][m], t = { amount, cadence: f.cadence.value, mode: f.mode.value, due: f.due.value };
+    const req = targetFor({ ...c, target: t }, m, r.carry, r.assigned).req;
+    el.textContent = `Im ${mName(m)} zuzuweisen: ${eur(req)}` + (t.cadence === "year" ? ` (bis ${dLong(t.due)})` : "");
+  }
 
-  // ------------------------------------------------------------ popover (cover overspending, reconcile)
+  // ------------------------------------------------------------ popovers (move money, cover overspending, reconcile)
   const pop = $("[data-pop]");
   let popAnchor = null;
   function openPop(anchor, html) {
@@ -606,7 +719,7 @@
     const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
     pop.style.left = clamp(r.right - w, 8, innerWidth - w - 8) + "px";
     pop.style.top = (r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + "px";
-    $("select, input, button.btn-primary", pop)?.focus();
+    $("select, input:not([type=radio]), button.btn-primary", pop)?.focus();
   }
   const closePop = () => { pop.hidden = true; popAnchor = null; };
   document.addEventListener("click", e => { if (!pop.hidden && !pop.contains(e.target) && !popAnchor?.contains(e.target)) closePop(); }, true);
@@ -615,36 +728,70 @@
     if (c.id === "uncat") return openPop(anchor, '<div class="fw-semibold mb-1">Nicht kategorisiert</div><p class="small">Ordne die Buchungen einer Kategorie zu, dann ist der Überzug weg.</p><a class="btn btn-sm btn-primary" href="#konten?konto=alle">Zu den Buchungen</a>');
     openPop(anchor, `<div class="fw-semibold mb-2">Überzug decken · ${esc(catText(c))}</div>${coverForm(c, m, -state.M.cats[c.id][m].avail)}`);
   };
+  function openMove(c, m, anchor) {
+    if (c.id === "uncat") return openCover(c, m, anchor);
+    const r = state.M.cats[c.id][m], over = r.avail < 0, [cls, ic] = tone(c, r);
+    openPop(anchor, `<div class="d-flex align-items-center gap-2 mb-2"><span class="fw-semibold me-auto text-truncate">${esc(catText(c))}</span><span class="badge rounded-pill app-pill ${cls}">${ic ? icon(ic) : ""}${eur(r.avail)}</span></div>
+      <div class="small text-body-secondary mb-2">${mLabel(m)}</div>
+      ${over ? `<div class="btn-group btn-group-sm w-100 mb-2" role="group" aria-label="Aktion"><input type="radio" class="btn-check" name="pm" id="pm-cover" value="cover" checked data-pm><label class="btn btn-outline-secondary" for="pm-cover">Decken</label><input type="radio" class="btn-check" name="pm" id="pm-move" value="move" data-pm><label class="btn btn-outline-secondary" for="pm-move">Verschieben</label></div>` : ""}
+      ${over ? `<div data-pm-pane="cover">${coverForm(c, m, -r.avail)}</div>` : ""}
+      <div data-pm-pane="move"${over ? " hidden" : ""}>${moveForm(c, m, "mvp")}</div>
+      <button type="button" class="btn btn-sm btn-link px-0 mt-2 text-decoration-none" data-open-cat="${c.id}">Details und Ziel ${icon("i-chevron")}</button>`);
+  }
+  function openPick(m, anchor) {
+    const M = state.M, first = cats().find(x => M.cats[x.id][m].under > 0) || cats()[0], free = Math.max(0, M.months[m].free);
+    openPop(anchor, `<div class="fw-semibold mb-2">In eine Kategorie verteilen · ${mName(m)}</div>
+      <form class="d-flex flex-column gap-2" data-pick-form="${m}">
+        <select class="form-select form-select-sm" name="cat" aria-label="Kategorie" data-pick-cat-select>${catOnlyOpts(first.id)}</select>
+        <div class="input-group input-group-sm"><input class="form-control text-end tabular-nums" name="amount" inputmode="decimal" aria-label="Betrag" value="${num(Math.min(free, M.cats[first.id][m].under || free))}"><span class="input-group-text">€</span></div>
+        <div class="form-text mt-0">${capText(m)}</div>
+        <div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button><button type="submit" class="btn btn-sm btn-primary">Zuweisen</button></div>
+      </form>`);
+  }
 
   // ------------------------------------------------------------ budget interactions
   let pending = null;
-  document.addEventListener("focusin", e => { if (e.target.matches("[data-assign], [data-detail-assign]")) pending = snap(); });
+  document.addEventListener("focusin", e => {
+    if (e.target.matches("[data-assign], [data-detail-assign]")) pending = snap();
+    if (e.target.matches("[data-assign]")) showCap(e.target, capText(+e.target.dataset.assign.split("|")[1]));
+  });
   document.addEventListener("input", e => {
     const i = e.target.closest("[data-assign]");
-    if (!i) return;
-    const v = parse(i.value), [c, m] = i.dataset.assign.split("|"), hint = $(`[data-ahint="${c}|${m}"]`);
-    if (Number.isNaN(v)) return;
-    const before = pending;
-    if (tryAssign(cat(c), +m, v)) {
-      if (before) { undoStack.push(before); redoStack.length = 0; pending = null; }
-      i.classList.remove("is-invalid"); hint.classList.remove("text-danger");
-      paint();
-    } else {
-      i.classList.add("is-invalid"); hint.classList.add("text-danger"); hint.textContent = NO_MONEY;
+    if (i) {
+      const v = parse(i.value), [c, m] = i.dataset.assign.split("|");
+      if (Number.isNaN(v)) return;
+      const before = pending;
+      if (tryAssign(cat(c), +m, v)) {
+        if (before) { undoStack.push(before); redoStack.length = 0; pending = null; }
+        i.classList.remove("is-invalid");
+        paint();
+      } else {
+        i.classList.add("is-invalid");
+        showCap(i, `${NO_MONEY} ${capText(+m)}`, true);
+      }
     }
+    const tf = e.target.closest("[data-target-form]");
+    if (tf) targetPreview(tf);
   });
   document.addEventListener("change", e => {
     const i = e.target.closest("[data-assign]");
-    if (i) { const [c, m] = i.dataset.assign.split("|"); i.value = num(cat(c).assigned[m]); i.classList.remove("is-invalid"); $(`[data-ahint="${c}|${m}"]`).classList.remove("text-danger"); paint(); }
+    if (i) { const [c, m] = i.dataset.assign.split("|"); i.value = num(cat(c).assigned[m]); i.classList.remove("is-invalid"); paint(); }
     const d = e.target.closest("[data-detail-assign]");
     if (d) {
       const v = parse(d.value), c = cat(state.sel), m = focusMonth();
       if (Number.isNaN(v)) return;
       const before = pending;
       if (tryAssign(c, m, v)) { if (before) { undoStack.push(before); redoStack.length = 0; } pending = null; d.blur(); paint(); }
-      else { d.classList.add("is-invalid"); $("[data-detail-hint]").className = "form-text mt-0 text-danger"; $("[data-detail-hint]").textContent = NO_MONEY; }
+      else { d.classList.add("is-invalid"); $("[data-detail-hint]").className = "form-text mt-0 text-danger"; $("[data-detail-hint]").textContent = `${NO_MONEY} ${capText(m)}`; }
     }
     if (e.target.matches('[data-target-form] [name="cadence"]')) $("[data-tg-due]").hidden = e.target.value !== "year";
+    const tf = e.target.closest("[data-target-form]");
+    if (tf) targetPreview(tf);
+    if (e.target.matches("[data-pm]")) $$("[data-pm-pane]", pop).forEach(p => (p.hidden = p.dataset.pmPane !== e.target.value));
+    if (e.target.matches("[data-pick-cat-select]")) {
+      const m = +e.target.form.dataset.pickForm, r = state.M.cats[e.target.value][m], free = Math.max(0, state.M.months[m].free);
+      e.target.form.amount.value = num(Math.min(free, r.under || free));
+    }
   });
   document.addEventListener("keydown", e => {
     const i = e.target.closest("[data-assign]");
@@ -656,16 +803,22 @@
     if (e.target.matches("[data-detail-assign]") && e.key === "Enter") { e.preventDefault(); e.target.dispatchEvent(new Event("change", { bubbles: true })); }
   });
 
-  function selectCat(id) {
-    state.sel = id; state.editTarget = false;
-    history.replaceState(null, "", "#budget?" + new URLSearchParams(Object.entries(budgetParams()).filter(([, v]) => v != null)));
+  // On phones the sheet is a history entry, so "back" closes it.
+  function selectCat(id, sheet = null) {
+    const push = !state.insp && !panel.classList.contains("show") && !state.pushed;
+    state.sel = id; state.editTarget = false; state.sheet = sheet;
+    const url = "#budget?" + new URLSearchParams(Object.entries(budgetParams()).filter(([, v]) => v != null));
+    if (push) { history.pushState(null, "", url); state.pushed = true; } else history.replaceState(null, "", url);
     $$("[data-row]").forEach(tr => { tr.classList.toggle("is-sel", tr.dataset.row === id); const cb = $("[data-pick-cat]", tr); if (cb) cb.checked = tr.dataset.row === id; });
+    closePop();
     openPanel();
   }
+  const setFocus = m => { if (m === focusMonth()) return; state.focus = m; renderBudget(); };
+  const undoable = (before, msg) => { undoStack.push(before); redoStack.length = 0; closePop(); paint(); if (state.sheet === "cover") bootstrap.Offcanvas.getInstance(panel)?.hide(); return toast(msg); };
 
-  function autoAssign(kind, m) {
+  function autoAssign(kind, m, anchor) {
     const M = state.M;
-    if (kind === "pick") { const c = cats().find(x => M.cats[x.id][m].under > 0) || cats()[0]; return selectCat(c.id); }
+    if (kind === "pick") return openPick(m, anchor);
     const target = c => {
       const r = M.cats[c.id][m], p = m > 0 ? M.cats[c.id][m - 1] : null;
       return { under: r.assigned + r.under, last: p ? p.assigned : r.assigned, spent: p ? -p.activity : r.assigned, avg: Math.round(sum([1, 2, 3], d => (m - d >= 0 ? c.assigned[m - d] : 0)) / 3), reset: r.assigned - Math.max(0, r.avail) }[kind];
@@ -690,22 +843,31 @@
     const t = e.target;
     const tog = t.closest("[data-group-toggle]");
     if (tog) { const g = tog.dataset.groupToggle; state.collapsed.has(g) ? state.collapsed.delete(g) : state.collapsed.add(g); return renderBudget(); }
-    const av = t.closest("button[data-avail]");
-    if (av) {
-      const [c, m] = av.dataset.avail.split("|");
-      if (state.M.cats[c][m].avail < 0) return openCover(cat(c), +m, av);
-      return selectCat(c);
+    const ct = t.closest("[data-calc-toggle]");
+    if (ct) {
+      const m = +ct.dataset.calcToggle, open = !state.calcOpen.has(m);
+      open ? state.calcOpen.add(m) : state.calcOpen.delete(m);
+      $$(`[data-calc-toggle="${m}"]`).forEach(b => { b.setAttribute("aria-expanded", open); $("use", b).setAttribute("href", open ? "#i-down" : "#i-chevron"); b.nextElementSibling.hidden = !open; });
+      return;
     }
+    const av = t.closest("[data-avail]");
+    if (av && state.screen === "budget" && !pop.contains(av)) {
+      const [c, m] = av.dataset.avail.split("|"), over = state.M.cats[c][m].avail < 0;
+      if (av.closest("[data-budget-list]")) { if (over && c !== "uncat") { e.stopPropagation(); return selectCat(c, "cover"); } }
+      else return openMove(cat(c), +m, av);
+    }
+    if (t.closest("[data-sheet-details]")) { state.sheet = null; return renderPanel(); }
     const oc = t.closest("[data-open-cat]");
     if (oc) return selectCat(oc.dataset.openCat);
     const pk = t.closest("[data-pick-cat]");
     if (pk) { if (pk.checked) return selectCat(pk.dataset.pickCat); state.sel = null; return go("budget", budgetParams()); }
     if (t.closest("[data-close-cat]")) { state.sel = null; state.editTarget = false; return go("budget", budgetParams()); }
     const au = t.closest("[data-auto]");
-    if (au) { const [k, m] = au.dataset.auto.split("|"); return autoAssign(k, +m); }
+    if (au) { const [k, m] = au.dataset.auto.split("|"); return autoAssign(k, +m, au.closest(".dropdown")?.querySelector("[data-bs-toggle]") || au); }
+    const fm = t.closest("[data-focus-month]");
+    if (fm && !t.closest("button, a, .dropdown-menu")) return setFocus(+fm.dataset.focusMonth);
     const fl = t.closest("[data-filter]");
     if (fl) { state.filter = fl.dataset.filter; return renderBudget(); }
-    if (t.closest("[data-over-line]")) { state.filter = "over"; return renderBudget(); }
     const cv = t.closest("[data-cover]");
     if (cv) { const [c, m] = cv.dataset.cover.split("|"); return openCover(cat(c), +m, cv); }
     const cm = t.closest("[data-cover-month]");
@@ -713,19 +875,37 @@
     const cr = t.closest("[data-cover-rta]");
     if (cr) {
       const m = +cr.dataset.coverRta, need = -state.M.months[m].show, src = cats().filter(x => state.M.cats[x.id][m].avail > 0).sort((a, b) => state.M.cats[b.id][m].avail - state.M.cats[a.id][m].avail);
-      return openPop(cr, `<div class="fw-semibold mb-2">Zu viel verteilt im ${mName(m)}</div><form class="d-flex flex-column gap-2" data-unassign-form="${m}"><label class="small" for="ua-from">Nimm <strong>${eur(need)}</strong> zurück aus:</label><select class="form-select form-select-sm" id="ua-from" name="from">${src.map(x => `<option value="${x.id}">${esc(catText(x))} (${eur(state.M.cats[x.id][m].avail)})</option>`).join("")}</select><div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button><button type="submit" class="btn btn-sm btn-primary">OK</button></div></form>`);
+      return openPop(cr, `<div class="fw-semibold mb-2">Zu viel verteilt im ${mName(m)}</div><form class="d-flex flex-column gap-2" data-unassign-form="${m}"><label class="small" for="ua-from">Nimm <strong class="text-nowrap">${eur(need)}</strong> zurück aus:</label><select class="form-select form-select-sm" id="ua-from" name="from">${src.map(x => `<option value="${x.id}">${esc(catText(x))} (${eur(state.M.cats[x.id][m].avail)})</option>`).join("")}</select><div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-sm" data-pop-close>Abbrechen</button><button type="submit" class="btn btn-sm btn-primary">OK</button></div></form>`);
     }
     if (t.closest("[data-pop-close]")) return closePop();
     const st = t.closest("[data-month-step]");
-    if (st) { state.m = clamp(focusMonth() + +st.dataset.monthStep, 0, LAST - (isDesktop() ? state.n - 1 : 0)); return go("budget", budgetParams()); }
-    if (t.closest("[data-month-today]")) { state.m = CUR; return go("budget", budgetParams()); }
+    if (st) {
+      const d = +st.dataset.monthStep;
+      state.focus = clamp(focusMonth() + d, 0, LAST);
+      state.m = clamp(visibleMonths()[0] + d, 0, LAST - (isDesktop() ? state.n - 1 : 0));
+      return go("budget", budgetParams());
+    }
+    if (t.closest("[data-month-today]")) { state.m = state.focus = CUR; return go("budget", budgetParams()); }
     const gm = t.closest("[data-goto-month]");
-    if (gm) { state.m = +gm.dataset.gotoMonth; closePop(); return go("budget", budgetParams()); }
+    if (gm) {
+      const m = +gm.dataset.gotoMonth;
+      state.focus = m; closePop();
+      if (!visibleMonths().includes(m)) state.m = m;
+      return go("budget", budgetParams());
+    }
     const sm = t.closest("[data-summary]");
-    if (sm) { state.m = +sm.dataset.summary; state.sel = null; go("budget", budgetParams()); return openPanel(); }
+    if (sm) { state.focus = +sm.dataset.summary; if (!visibleMonths().includes(state.focus)) state.m = state.focus; state.sel = null; go("budget", budgetParams()); return openPanel(); }
     const set = t.closest("[data-set]");
     if (set) { const before = snap(); if (!tryAssign(cat(state.sel), focusMonth(), +set.dataset.set)) return toast(NO_MONEY, "danger"); undoStack.push(before); redoStack.length = 0; return paint(); }
-    if (t.closest("[data-edit-target]")) { state.editTarget = true; return renderPanel(); }
+    const sz = t.closest("[data-snooze]");
+    if (sz) {
+      commit();
+      const tg = cat(state.sel).target, m = +sz.dataset.snooze, on = !tg.snooze?.includes(m);
+      tg.snooze = on ? [...(tg.snooze || []), m] : tg.snooze.filter(x => x !== m);
+      state.editTarget = false; paint();
+      return toast(on ? `Ziel im ${mName(m)} pausiert.` : "Ziel läuft wieder.");
+    }
+    if (t.closest("[data-edit-target]")) { state.editTarget = true; renderPanel(); const f = $("[data-target-form]"); if (f) targetPreview(f); return; }
     if (t.closest("[data-cancel-target]")) { state.editTarget = false; return renderPanel(); }
     if (t.closest("[data-delete-target]")) { commit(); cat(state.sel).target = null; state.editTarget = false; renderCatAdmin(); paint(); return toast("Ziel gelöscht."); }
     if (t.closest("[data-rename]")) return toast("Umbenennen und Emoji ändern (im Klickdummy nicht umgesetzt).");
@@ -745,13 +925,11 @@
       if (from === "rta") {
         const v = Math.min(need, Math.max(0, state.M.months[m].free));
         if (!tryAssign(c, m, c.assigned[m] + v)) return toast(NO_MONEY, "danger");
-        undoStack.push(before); redoStack.length = 0; closePop(); paint();
-        return toast(`${eur(v)} aus „Zu verteilen“ gedeckt.`);
+        return undoable(before, `${eur(v)} aus „Zu verteilen“ gedeckt.`);
       }
       const src = cat(from), v = Math.min(need, state.M.cats[from][m].avail);
       src.assigned[m] -= v; c.assigned[m] += v;
-      undoStack.push(before); redoStack.length = 0; closePop(); paint();
-      return toast(`${eur(v)} aus ${catText(src)} gedeckt.`);
+      return undoable(before, `${eur(v)} aus ${catText(src)} gedeckt.`);
     }
     if (f.matches("[data-unassign-form]")) {
       e.preventDefault();
@@ -765,7 +943,8 @@
       if (!(amount > 0)) return toast("Bitte einen Betrag angeben.", "danger");
       if (cadence === "year" && !due) return toast("Bitte ein Fälligkeitsdatum angeben.", "danger");
       commit();
-      cat(state.sel).target = cadence === "year" ? { amount, cadence, due, mode: f.mode.value } : { amount, cadence, mode: f.mode.value };
+      const old = cat(state.sel).target;
+      cat(state.sel).target = { amount, cadence, mode: f.mode.value, ...(cadence === "year" ? { due } : {}), ...(old?.snooze ? { snooze: old.snooze } : {}) };
       state.editTarget = false;
       document.activeElement?.blur();
       renderCatAdmin(); paint();
@@ -773,15 +952,23 @@
     }
     if (f.matches("[data-move-form]")) {
       e.preventDefault();
-      const m = +f.dataset.moveForm.split("|")[1], from = f.from.value, to = f.to.value, v = parse(f.amount.value);
-      if (!(v > 0) || from === to) return toast("Betrag und zwei verschiedene Ziele wählen.", "danger");
+      const [id, ms] = f.dataset.moveForm.split("|"), m = +ms, other = f.other.value, v = parse(f.amount.value);
+      const [from, to] = f.dir.value === "to" ? [id, other] : [other, id];
+      if (!(v > 0)) return toast("Bitte einen Betrag angeben.", "danger");
       const before = snap();
-      if (from === "rta") { if (!tryAssign(cat(to), m, cat(to).assigned[m] + v)) return toast(NO_MONEY, "danger"); }
+      if (from === "rta") { if (!tryAssign(cat(to), m, cat(to).assigned[m] + v)) return toast(`${NO_MONEY} ${capText(m)}`, "danger"); }
       else { cat(from).assigned[m] -= v; if (to !== "rta") cat(to).assigned[m] += v; }
-      undoStack.push(before); redoStack.length = 0;
       document.activeElement?.blur();
-      paint();
-      return toast(`${eur(v)} verschoben.`);
+      const name = x => (x === "rta" ? "„Zu verteilen“" : catText(cat(x)));
+      return undoable(before, `${eur(v)} von ${name(from)} nach ${name(to)} verschoben.`);
+    }
+    if (f.matches("[data-pick-form]")) {
+      e.preventDefault();
+      const m = +f.dataset.pickForm, c = cat(f.cat.value), v = parse(f.amount.value);
+      if (!(v > 0)) return toast("Bitte einen Betrag angeben.", "danger");
+      const before = snap();
+      if (!tryAssign(c, m, c.assigned[m] + v)) return toast(`${NO_MONEY} ${capText(m)}`, "danger");
+      return undoable(before, `${eur(v)} an ${catText(c)} verteilt.`);
     }
   });
 
@@ -1153,5 +1340,7 @@
   }));
 
   renderCatAdmin();
+  measure();
   route();
+  document.fonts?.ready.then(() => { measure(); layout(true); });
 })();

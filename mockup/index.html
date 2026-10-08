@@ -17,7 +17,8 @@
     })();
   </script>
   <style>
-    .app { padding-top: 1rem; padding-bottom: 8rem; }
+    :root { --cat-w: 16rem; }
+    .app { padding-top: 1rem; padding-bottom: 10rem; }
     .app-icon { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
     .app-icon-sm { width: 1rem; height: 1rem; }
     .app-avatar { width: 2.25rem; height: 2.25rem; flex-shrink: 0; }
@@ -41,43 +42,70 @@
     .app-catname { display: flex; align-items: center; gap: .4rem; min-width: 0; }
     .app-emoji { flex-shrink: 0; width: 1.4em; text-align: center; }
     .app-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-    .app-pill { white-space: nowrap; display: inline-flex; align-items: center; justify-content: flex-end; gap: .25rem; min-width: 5.5rem; font-variant-numeric: tabular-nums; font-size: .8125rem; }
-    .app-pill .app-icon { width: .9rem; height: .9rem; }
-    .app-target { height: .3rem; }
-    .app-tstat { font-size: .72rem; color: var(--felt-secondary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .app-colh { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--felt-secondary-color); }
-    .app-colh b { display: block; font-size: .8rem; letter-spacing: 0; text-transform: none; color: var(--felt-body-color); font-variant-numeric: tabular-nums; }
+    .app-pill { white-space: nowrap; display: inline-flex; align-items: center; gap: .25rem; padding: .15rem .5rem; font-size: .75rem; font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    .app-pill .app-icon { width: .85rem; height: .85rem; }
+    .app-line2 { display: flex; align-items: center; gap: .5rem; margin-top: .2rem; padding-left: calc(1.4em + .4rem); min-width: 0; }
+    .app-target { height: .25rem; flex: 1 1 auto; min-width: 2.5rem; }
+    .app-tstat { font-size: .6875rem; line-height: 1.2; color: var(--felt-secondary-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; max-width: 70%; }
+    .app-tstat.is-over { color: var(--felt-danger-text); }
+    .app-colh { display: block; font-size: .625rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--felt-secondary-color); }
+    .app-colh b { display: block; font-size: .875rem; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--felt-body-color); font-variant-numeric: tabular-nums; }
+    .app-zero { color: var(--felt-secondary-color); opacity: .45; }
+    .app-neg { color: var(--felt-danger-text); }
+    .app-q { border: 0; background: none; padding: 0; color: inherit; font: inherit; }
+    .app-udot { display: inline-block; width: .4rem; height: .4rem; border-radius: 50%; background: var(--felt-warning); margin-right: .3rem; vertical-align: .1rem; }
     /* month strip */
-    .app-strip { display: flex; flex-direction: row; align-items: stretch; overflow: hidden; }
-    .app-strip button { border: 0; background: none; color: inherit; padding: .3rem .55rem; font-size: .8rem; flex: 1 1 0; white-space: nowrap; }
-    .app-strip .is-sel { background: var(--felt-primary); color: #fff; }
+    .app-strip { display: flex; flex-direction: row; align-items: stretch; overflow: hidden; min-width: 0; }
+    .app-strip button { border: 0; background: none; color: inherit; padding: .3rem .2rem; font-size: .8rem; flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; }
+    .app-strip .is-sel { background: color-mix(in srgb, var(--felt-primary) 22%, transparent); }
+    .app-strip .is-focus { background: var(--felt-primary); color: #fff; }
     .app-strip .is-cur { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
-    .app-strip .app-year { flex: 0 0 auto; font-size: .7rem; font-weight: 700; align-self: center; color: var(--felt-secondary-color); padding: 0 .35rem; }
-    /* budget table: fixed category column, month panels with gaps (YNAB 4) */
+    .app-strip .app-year { flex: 0 0 auto; font-size: .7rem; font-weight: 700; align-self: center; color: var(--felt-secondary-color); padding: 0 .3rem; }
+    /* budget table: fixed category column, month panels with gaps (YNAB 4); the body stays flat */
     .app-budget { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; font-size: .875rem; }
-    .app-budget > :not(caption) > * > * { padding: .3rem .5rem; border-bottom: 1px solid var(--felt-border-color); background: var(--felt-body-bg); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .app-budget .app-cat { position: sticky; left: 0; z-index: 2; width: 16rem; border-right: 1px solid var(--felt-border-color); text-align: left; }
-    .app-budget .app-ms { border-left: .75rem solid var(--felt-surface-sunk); }
-    .app-budget thead > tr:first-child > * { border-bottom: 0; padding-bottom: .5rem; }
+    .app-budget > :not(caption) > * > * { padding: .25rem .375rem; border-bottom: 1px solid var(--felt-border-color); background: var(--felt-body-bg); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+    .app-budget > tbody > tr > * { height: 2.25rem; }
+    .app-budget > tbody > tr.app-grp > * { height: 2rem; }
+    .app-budget .app-cat { position: sticky; left: 0; z-index: 2; border-right: 1px solid var(--felt-border-color); text-align: left; padding-left: .5rem; }
+    .app-budget .app-ms { border-left: .625rem solid var(--felt-surface-sunk); }
+    .app-budget > thead > tr:first-child > * { border-bottom: 0; padding: 0 0 .5rem; vertical-align: top; height: 1px; }
+    .app-budget > thead > tr:first-child > .app-ms { padding-left: 0; }
+    .app-budget > thead > tr:nth-child(2) > * { vertical-align: bottom; }
     .app-budget .app-num { text-align: right; }
     .app-budget .app-grp > * { background: var(--felt-surface-sunk); font-weight: 600; }
+    .app-budget .app-inc > * { color: var(--felt-secondary-color); }
     .app-budget tr.is-sel > * { background: color-mix(in srgb, var(--felt-primary) 10%, var(--felt-body-bg)); }
-    .app-assign { width: 100%; text-align: right; font-variant-numeric: tabular-nums; border-color: transparent; background: transparent; padding-inline: .25rem; }
-    .app-assign:hover, .app-assign:focus { border-color: var(--felt-border-color); background: var(--felt-body-bg); }
-    .app-ahint { font-size: .7rem; white-space: normal; text-align: right; }
-    td:not(:focus-within) > .app-ahint { display: none; }
-    .app-mcard { font-size: .75rem; white-space: normal; }
-    .app-mcard.is-current { outline: 3px solid var(--felt-mustard); outline-offset: -1px; }
-    .app-mcard .app-calc > div { display: flex; gap: .5rem; }
-    .app-mcard .app-calc > div > span:first-child { flex: 0 0 4.75rem; text-align: right; font-variant-numeric: tabular-nums; }
-    .app-calc > div > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .app-assign { width: 100%; text-align: right; font-variant-numeric: tabular-nums; border-color: transparent; background: transparent; padding: .1rem .25rem; box-shadow: none; }
+    .app-assign:hover, .app-assign:focus { border-color: var(--felt-border-color); background: var(--felt-field); }
+    .app-assign.app-zero:focus { opacity: 1; color: inherit; }
+    .app-cap { position: fixed; z-index: 1070; max-width: 16rem; font-size: .75rem; padding: .3rem .5rem; border-radius: var(--felt-radius); background: var(--felt-surface-overlay); border: 1px solid var(--felt-border-color); box-shadow: var(--felt-shadow); pointer-events: none; }
+    /* month cards: light in light mode, raised in dark mode */
+    .app-mcard { height: 100%; font-size: .75rem; white-space: normal; background: light-dark(var(--felt-surface), var(--felt-surface-raised)); border: 1px solid light-dark(var(--felt-border-color), rgb(255 255 255 / .12)); }
+    .app-mcard.is-focus { border-color: var(--felt-primary); box-shadow: 0 0 0 1px var(--felt-primary); }
+    .app-mcard:not(.is-focus) { cursor: pointer; }
+    .app-mcard .app-mname { font-size: 1rem; font-weight: 700; line-height: 1.1; }
     .app-calc { font-size: .7rem; min-width: 0; }
     .app-calc > div { display: flex; gap: .5rem; }
-    .app-rta-big { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
-    .app-inspector { width: 21rem; flex-shrink: 0; }
+    .app-calc > div > span:first-child { flex: 0 0 4.5rem; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .app-calc > div > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .app-calc > .app-sum { border-top: 1px solid var(--felt-border-color); margin-top: .15rem; padding-top: .15rem; font-weight: 700; }
+    .app-rta-big { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; }
+    .app-calc-toggle { border: 0; background: none; padding: 0; color: var(--felt-secondary-color); font-size: .7rem; }
+    .app-inspector { width: 18.5rem; flex-shrink: 0; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
     .app-ring { width: 6rem; height: 6rem; }
-    .app-chips { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: .25rem; min-width: 0; max-width: 100%; }
+    .app-chips-wrap { position: relative; min-width: 0; flex: 1 1 auto; }
+    .app-chips { display: flex; gap: .4rem; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: none; }
     .app-chips .btn { white-space: nowrap; }
+    .app-chips-wrap::after { content: ""; position: absolute; top: 0; right: 0; bottom: .25rem; width: 2.5rem; background: linear-gradient(to right, transparent, var(--felt-body-bg)); pointer-events: none; }
+    .app-chips { padding-right: 2rem; }
+    @media (max-width: 991.98px) { .app-chips-wrap { flex-basis: 100%; } }
+    /* phone: sticky month header, rows */
+    .app-mhead { position: sticky; top: 0; z-index: 1020; background: var(--felt-body-bg); margin-inline: -1rem; padding: .5rem 1rem .6rem; border-bottom: 1px solid var(--felt-border-color); }
+    .app-prow { display: flex; flex-direction: column; gap: 0; }
+    .app-prow .app-crow { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+    .app-gsum { padding-right: .25rem; }
+    .card-header.app-catbtn { padding: .5rem 1rem; }
+    .app-unapproved-item { box-shadow: inset 3px 0 0 var(--felt-primary); background-color: color-mix(in srgb, var(--felt-primary) 8%, var(--felt-list-group-bg, var(--felt-surface))); }
     /* register */
     .app-reg { font-size: .875rem; }
     .app-reg td, .app-reg th { white-space: nowrap; }
@@ -188,21 +216,21 @@
       <h1 class="visually-hidden" id="t-budget">Budget</h1>
       <div class="d-flex gap-3 align-items-start">
         <div class="flex-grow-1" style="min-width:0" data-budget-main>
-          <div class="d-lg-none">
-            <div class="d-flex align-items-center gap-2 mb-2">
+          <div class="d-lg-none app-mhead mb-2" data-mhead>
+            <div class="d-flex align-items-center gap-2">
               <button type="button" class="btn btn-light btn-sm" data-month-step="-1" aria-label="Vorheriger Monat"><svg class="app-icon" aria-hidden="true"><use href="#i-back"/></svg></button>
               <span class="fw-bold fs-5" data-month-title></span>
               <button type="button" class="btn btn-light btn-sm" data-month-step="1" aria-label="Nächster Monat"><svg class="app-icon" aria-hidden="true"><use href="#i-chevron"/></svg></button>
               <button type="button" class="btn btn-sm btn-link ms-auto" data-month-today>Heute</button>
             </div>
-            <div class="mb-2" data-rta-phone></div>
+            <div data-rta-phone></div>
           </div>
           <div class="d-none d-lg-flex mb-2">
-            <div style="width:16rem;flex-shrink:0"></div>
+            <div style="width:var(--cat-w);flex-shrink:0"></div>
             <div class="card app-strip flex-grow-1" data-month-strip aria-label="Monate"></div>
           </div>
           <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-            <div class="app-chips" role="group" aria-label="Filter" data-chips></div>
+            <div class="app-chips-wrap"><div class="app-chips" role="group" aria-label="Filter" data-chips></div></div>
             <div class="d-flex flex-wrap gap-1 ms-auto">
               <button type="button" class="btn btn-sm btn-link text-decoration-none" data-add-group>+ Kategoriegruppe</button>
               <button type="button" class="btn btn-sm btn-link text-decoration-none" data-undo aria-label="Rückgängig"><svg class="app-icon app-icon-sm" aria-hidden="true"><use href="#i-undo"/></svg><span class="d-none d-sm-inline"> Rückgängig</span></button>
