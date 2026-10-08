@@ -345,19 +345,22 @@
   function sizeCols() {
     const t = $("[data-budget-table]"), cols = $$("col[data-col]", t);
     if (!cols.length || !t.parentElement.clientWidth) return;
-    const cw = catW(), per = (t.parentElement.clientWidth - cw) / state.n, k = Math.max(1, per / MONTH_W);
+    const cw = state.cw || catW(), per = (t.parentElement.clientWidth - cw) / state.n, k = Math.max(1, per / MONTH_W);
     $("col", t).style.width = cw + "px";
     cols.forEach(c => (c.style.width = (COLS[+c.dataset.col] * k).toFixed(1) + "px"));
   }
   function layout(force) {
+    // months are only added while the category column keeps at least 20rem (names plus exact status next to a 6rem bar)
     const W = $('[data-screen="budget"]').clientWidth, cw = catW();
-    document.documentElement.style.setProperty("--cat-w", cw + "px");
     let n = 1, insp = false;
     if (isDesktop() && W) {
-      const room = W - cw;
+      const room = W - Math.max(cw, 320);
       insp = room - INSP_W >= MONTH_W;
       n = clamp(Math.floor((room - (insp ? INSP_W : 0)) / MONTH_W), 1, insp ? 3 : 2);
     }
+    // the category column takes what the months leave over (up to 22rem), so names and status text have room
+    state.cw = W && isDesktop() ? clamp(Math.floor(W - (insp ? INSP_W : 0) - n * MONTH_W - 4), cw, 352) : cw;
+    document.documentElement.style.setProperty("--cat-w", state.cw + "px");
     if (force || n !== state.n || insp !== state.insp) {
       state.n = n; state.insp = insp;
       if (state.screen === "budget") renderBudget();
@@ -410,7 +413,7 @@
     $("[data-budget-table]").innerHTML = h + "</tbody>";
 
     const mainW = $('[data-screen="budget"]').clientWidth - (state.insp ? INSP_W : 0);
-    const span = clamp(Math.floor((mainW - catW() - 140) / 34), 7, 12);
+    const span = clamp(Math.floor((mainW - (state.cw || catW()) - 140) / 34), 7, 12);
     const from = clamp(months[0] - Math.floor((span - months.length) / 2), 0, Math.max(0, LAST - span + 1)), vis = new Set(months);
     let strip = `<button type="button" data-month-step="-1" aria-label="Früher">${icon("i-back")}</button>`;
     for (let m = from; m <= Math.min(LAST, from + span - 1); m++) {
@@ -418,6 +421,8 @@
       strip += `<button type="button" class="${m === f ? "is-focus" : vis.has(m) ? "is-sel" : ""}${m === CUR ? " is-cur" : ""}" data-goto-month="${m}"${m === CUR ? ' aria-current="date"' : ""}>${mShort(m)}</button>`;
     }
     $("[data-month-strip]").innerHTML = strip + `<button type="button" data-month-step="1" aria-label="Später">${icon("i-chevron")}</button>`;
+    // at least `span` months: the strip may reach left over the empty space above the category column
+    $("[data-month-strip]").style.minWidth = `calc(${span} * 2rem + 4rem + ${(strip.match(/app-year/g) || []).length} * 2.5rem)`;
 
     const prow = c => `<button type="button" class="list-group-item list-group-item-action app-prow" data-open-cat="${c.id}">
         <span class="app-crow"><span class="flex-grow-1" style="min-width:0">${catName(c)}</span><span class="badge rounded-pill app-pill" data-avail="${c.id}|${f}"></span></span>${line2(c, "span")}</button>`;
@@ -482,14 +487,12 @@
   function targetStatus(c, r, m) {
     const budget = r.carry + r.assigned, spent = -r.activity;
     if (c.id === "uncat" && r.avail < 0) return { text: eur(spent), bars: [], link: true };
-    // short enough next to a 6rem bar at 1100 px: ratios in whole euros (exact amounts are in the pill and the inspector)
-    const amt = v => (v < 0 ? "−" : "") + Math.round(Math.abs(v) / 100).toLocaleString("de-DE");
-    if (r.avail < 0) return { text: `${amt(spent)} / ${amt(budget)} €`, bars: [[100, "bg-danger"]] };
+    if (r.avail < 0) return { text: `Überzogen ${eur(-r.avail)}`, bars: [[100, "bg-danger"]] };
     if (!c.target) return null;
     if (r.snoozed) return { text: "Pausiert", bars: [] };
     if (r.under > 0) return { text: `noch ${eur(r.under)}`, bars: [[Math.round(r.progress * 100), "bg-warning"]] };
     if (spent > 0 && r.avail === 0) return { text: "Ausgegeben", bars: [[100, "bg-success progress-bar-striped"]] };
-    if (spent > 0) { const p = Math.round((spent / budget) * 100); return { text: `${amt(spent)} / ${amt(budget)} €`, bars: [[p, "bg-success progress-bar-striped opacity-50"], [100 - p, "bg-success"]] }; }
+    if (spent > 0) { const p = Math.round((spent / budget) * 100); return { text: `${num(spent)} von ${eur(budget)}`, bars: [[p, "bg-success progress-bar-striped opacity-50"], [100 - p, "bg-success"]] }; }
     return { text: c.target.cadence === "year" ? "Im Plan" : "Finanziert", bars: [[100, "bg-success"]] };
   }
   const rtaState = s => s.disp < 0 ? ["text-danger", "Zu viel verteilt"] : s.closed ? ["text-body-secondary", "Nicht verteilt am Monatsende"]
@@ -576,7 +579,7 @@
     // [key, label, extra class, short label for phones]
     const chips = [["all", "Alle", "", "Alle"], ["over", `${ov ? icon("i-alert") + " " : ""}${ov} überzogen`, ov ? "btn-outline-danger" : "", `${ov ? icon("i-alert") + " " : ""}${ov}`],
       ["under", `Unterfinanziert${un ? " · " + un : ""}`, "", `Unterfin.${un ? " · " + un : ""}`], ["overfunded", "Überfinanziert", "", "Überfin."], ["money", "Geld verfügbar", "", "Verfügbar"], ["paused", `Pausiert${pa ? " · " + pa : ""}`, "", `Pausiert${pa ? " · " + pa : ""}`]];
-    $("[data-chips]").innerHTML = chips.map(([k, l, x, sh]) => chip(k, `<span class="app-chip-l">${l}</span><span class="app-chip-s">${sh}</span>`, x)).join("") +
+    $("[data-chips]").innerHTML = chips.map(([k, l, x, sh]) => chip(k, `<span class="app-chip-l">${l}</span><span class="app-chip-s">${sh}</span>`, x).replace("<button ", `<button aria-label="${l.replace(/<[^>]+>/g, "").trim()}" `)).join("") +
       `<div class="dropdown" data-chips-more hidden><button class="btn btn-sm btn-pill btn-light dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">Filter</button><ul class="dropdown-menu dropdown-menu-end">${chips.map(([key, label]) => `<li><button class="dropdown-item${state.filter === key ? " active" : ""}" type="button" data-filter="${key}" data-fold="${key}">${label}</button></li>`).join("")}</ul></div>`;
     fitChips();
 
@@ -601,7 +604,7 @@
     const t = $("[data-budget-table]"), stats = $$("[data-tstat]:not([data-tstat=uncat])", t).filter(e => e.offsetParent);
     if (!stats.length) return;
     const line = stats[0].parentElement, area = line.clientWidth - parseFloat(getComputedStyle(line).paddingLeft);
-    const widest = Math.max(...stats.map(e => e.scrollWidth)), max = catW() <= 352 ? 144 : 224;
+    const widest = Math.max(...stats.map(e => e.scrollWidth)), max = 144;
     t.style.setProperty("--bar-w", clamp(area - widest - 8, 96, max) + "px");
   }
 
@@ -1099,8 +1102,9 @@
       e.preventDefault();
       const c = cat(f.dataset.catEditForm), name = f.name.value.trim(), from = groupOf(c.id), to = groups.find(g => g.id === f.group.value);
       if (!name) return toast("Bitte einen Namen angeben.", "danger");
+      if (!checkEmoji(f.e)) return f.e.focus();
       commit();
-      c.name = name; c.e = f.e.value.trim() || c.e; c.hidden = f.hidden.checked;
+      c.name = name; c.e = f.e.value.trim(); c.hidden = f.hidden.checked;
       if (to !== from) { from.cats.splice(from.cats.indexOf(c), 1); to.cats.push(c); }
       renderCatAdmin();
       go("mehr", { teil: "kategorien" });
@@ -1245,8 +1249,8 @@
     const fresh1 = t => `
       <div class="list-group-item app-unapproved-item d-flex align-items-center gap-2">
         <div class="flex-grow-1" style="min-width:0">
-          <div class="d-flex align-items-center gap-2"><span class="fw-bold text-truncate flex-grow-1">${payee(t)}</span><span class="tabular-nums text-nowrap fw-bold ${t.amount > 0 ? "text-success" : ""}">${signed(t.amount)}</span></div>
-          ${t.matchOf ? `<div class="d-flex align-items-center gap-2 app-ph-l2"><span class="small text-info-emphasis text-truncate flex-grow-1" style="min-width:0">${icon("i-link")} ${dShort(t.date)} · passt zu ${dShort(txById(t.matchOf).date)}</span><button type="button" class="btn btn-sm btn-primary app-btn-28" data-merge="${t.id}">Zuordnen</button><button type="button" class="btn btn-sm btn-outline-secondary app-btn-28" data-approve="${t.id}">Trennen</button></div>`
+          <div class="d-flex align-items-start gap-2"><span class="app-payee-ph flex-grow-1" style="min-width:0">${payee(t)}</span><span class="tabular-nums text-nowrap fw-bold ${t.amount > 0 ? "text-success" : ""}">${signed(t.amount)}</span></div>
+          ${t.matchOf ? `<div class="small text-info-emphasis app-ph-l2">${icon("i-link")} ${dShort(t.date)} · passt zu manueller Buchung vom ${dShort(txById(t.matchOf).date)}</div><div class="d-flex gap-2 app-ph-l2"><button type="button" class="btn btn-sm btn-primary app-btn-28" data-merge="${t.id}">Zuordnen</button><button type="button" class="btn btn-sm btn-outline-secondary app-btn-28" data-approve="${t.id}">Trennen</button></div>`
             : `<div class="d-flex align-items-center gap-2 app-ph-l2"><span class="small text-body-secondary flex-shrink-0">${dShort(t.date)}${all ? " · " + acc(t.acc).e : ""}</span><div class="flex-grow-1 app-cat-ph" style="min-width:0">${catCell(t)}</div></div>`}
         </div>
         ${t.matchOf ? "" : `<button type="button" class="btn btn-primary app-approve-ph" data-approve="${t.id}" aria-label="${esc(t.payee)} bestätigen" title="Bestätigen">${icon("i-check")}</button>`}
@@ -1255,7 +1259,7 @@
       <div class="list-group-item d-flex gap-2 align-items-start">
         <span class="pt-1">${t.approved === false ? `<span class="app-dot">${icon("i-info")}</span>` : clearCell(t)}</span>
         <div class="flex-grow-1" style="min-width:0">
-          <div class="text-truncate ${t.approved === false ? "fw-bold" : "fw-semibold"}">${payee(t)}</div>
+          <div class="app-payee-ph">${payee(t)}</div>
           <div class="small text-body-secondary text-truncate">${dShort(t.date)}${all ? " · " + esc(acc(t.acc).name) : ""}${uncategorized(t) || t.transfer || (t.approved === false && t.cat !== "rta") ? "" : " · " + catCell(t)}</div>
           ${uncategorized(t) || (t.approved === false && t.cat && t.cat !== "rta") ? `<div class="mt-1">${catCell(t)}</div>` : ""}
           ${t.memo ? `<div class="small text-body-secondary text-truncate">${esc(t.memo)}</div>` : ""}
@@ -1506,6 +1510,16 @@
   $("[data-imp-go]").addEventListener("click", () => { $("[data-imp-preview]").hidden = true; $("[data-imp-file]").value = ""; toast("23 Buchungen importiert, zur Bestätigung im Girokonto Nordbank. Banksaldo aus der Datei gemerkt."); });
 
   // ------------------------------------------------------------ settings
+  // a category emoji is exactly one grapheme that is a pictograph, never text
+  const graphemes = v => [...new Intl.Segmenter("de", { granularity: "grapheme" }).segment(v)];
+  const isEmoji = v => graphemes(v).length === 1 && /\p{Extended_Pictographic}/u.test(v);
+  function checkEmoji(input) {
+    const good = isEmoji(input.value.trim());
+    input.classList.toggle("is-invalid", !good);
+    $("[data-emoji-hint]").hidden = good;
+    return good;
+  }
+  document.addEventListener("input", e => { if (e.target.matches("[data-emoji]")) checkEmoji(e.target); });
   let pendingRemove = null;
   function renderCatEdit() {
     const el = $("[data-cat-edit]"), c = state.mehrCat && cat(state.mehrCat);
@@ -1514,9 +1528,10 @@
     el.innerHTML = `<a href="#mehr?teil=kategorien" class="d-none d-lg-inline-flex align-items-center gap-1 small text-decoration-none mb-3">${icon("i-back")} Kategorien</a>
       <form class="d-flex flex-column gap-3" data-cat-edit-form="${c.id}">
         <div class="d-flex gap-2">
-          <div style="width:5rem"><label class="form-label small mb-1" for="ce-e">Emoji</label><input class="form-control text-center" id="ce-e" name="e" value="${esc(c.e)}" maxlength="4" autocomplete="off"></div>
+          <div style="width:5rem"><label class="form-label small mb-1" for="ce-e">Emoji</label><input class="form-control text-center" id="ce-e" name="e" value="${esc(c.e)}" autocomplete="off" aria-describedby="ce-e-hint" data-emoji></div>
           <div class="flex-grow-1"><label class="form-label small mb-1" for="ce-name">Name</label><input class="form-control" id="ce-name" name="name" value="${esc(c.name)}" required autocomplete="off"></div>
         </div>
+        <div class="small text-danger" id="ce-e-hint" data-emoji-hint hidden>Bitte genau ein Emoji, z. B. 🛒</div>
         <div><label class="form-label small mb-1" for="ce-group">Gruppe</label><select class="form-select" id="ce-group" name="group">${groups.map(x => `<option value="${x.id}"${x === g ? " selected" : ""}>${esc(x.name)}</option>`).join("")}</select></div>
         <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="ce-hidden" name="hidden"${c.hidden ? " checked" : ""}><label class="form-check-label" for="ce-hidden">Im Budget ausblenden</label></div>
         <div class="d-flex gap-2"><button type="submit" class="btn btn-sm btn-primary">Speichern</button><a class="btn btn-sm" href="#mehr?teil=kategorien">Abbrechen</a></div>
