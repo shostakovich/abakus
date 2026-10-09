@@ -5,7 +5,12 @@ defmodule AbakusWeb.RuntimeConfigTest do
   @env %{
     "PHX_HOST" => "abakus.example.org",
     "DATABASE_PATH" => "/tmp/abakus-runtime-config-test.sqlite3",
-    "SECRET_KEY_BASE" => String.duplicate("a", 64)
+    "SECRET_KEY_BASE" => String.duplicate("a", 64),
+    "SMTP_HOST" => "smtp.example.org",
+    "SMTP_PORT" => "465",
+    "SMTP_USERNAME" => "abakus@example.org",
+    "SMTP_PASSWORD" => "secret",
+    "MAIL_FROM" => "abakus@example.org"
   }
 
   setup do
@@ -30,6 +35,20 @@ defmodule AbakusWeb.RuntimeConfigTest do
   test "the port from PORT applies only in development and production" do
     assert Application.fetch_env!(:abakus, AbakusWeb.Endpoint)[:http][:port] == 4002
     refute Config.Reader.read!("config/runtime.exs", env: :test)[:abakus][AbakusWeb.Endpoint]
+  end
+
+  test "production mails over verified TLS and accepts wildcard certificates" do
+    config = Config.Reader.read!("config/runtime.exs", env: :prod)
+    mailer = config[:abakus][Abakus.Mailer]
+
+    assert mailer[:adapter] == Swoosh.Adapters.SMTP
+    assert mailer[:relay] == "smtp.example.org"
+    assert mailer[:ssl] and mailer[:tls] == :never
+    assert mailer[:sockopts][:verify] == :verify_peer
+    assert mailer[:sockopts][:server_name_indication] == ~c"smtp.example.org"
+    assert [match_fun: match_fun] = mailer[:sockopts][:customize_hostname_check]
+    assert is_function(match_fun, 2)
+    assert config[:abakus][:mail_from] == {"Abakus", "abakus@example.org"}
   end
 
   test "production refuses to start without a public host" do

@@ -19,7 +19,7 @@ defmodule Abakus.MixProject do
   def application do
     [
       mod: {Abakus.Application, []},
-      extra_applications: [:logger, :runtime_tools]
+      extra_applications: [:logger, :runtime_tools, :public_key]
     ]
   end
 
@@ -35,6 +35,9 @@ defmodule Abakus.MixProject do
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.22"},
       {:bandit, "~> 1.5"},
+      {:swoosh, "~> 1.16"},
+      # Swoosh's SMTP adapter.
+      {:gen_smtp, "~> 1.2"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test}

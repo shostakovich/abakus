@@ -19,4 +19,17 @@ defmodule AbakusWeb.Router do
 
     live "/", BudgetLive
   end
+
+  if Application.compile_env(:abakus, :dev_routes) do
+    pipeline :dev_tools do
+      plug :fetch_session
+      plug :protect_from_forgery
+    end
+
+    scope "/dev" do
+      pipe_through :dev_tools
+
+      forward "/mailbox", Plug.Swoosh.MailboxPreview
+    end
+  end
 end

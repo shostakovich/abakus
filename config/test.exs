@@ -12,6 +12,8 @@ config :abakus, AbakusWeb.Endpoint,
   secret_key_base: "rOf9VO7HtRU4l1h/MfY/N2mQYh3e2+QcoEsSOK3jp7q4Rieyv5yiJmpDeP915xFP",
   server: false
 
+config :abakus, Abakus.Mailer, adapter: Swoosh.Adapters.Test
+
 config :logger, level: :warning
 
 config :phoenix, :plug_init_mode, :runtime

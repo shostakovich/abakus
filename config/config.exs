@@ -28,6 +28,11 @@ config :abakus, AbakusWeb.Endpoint,
 
 config :phoenix_live_view, root_tag_attribute: "phx-r"
 
+config :abakus, Abakus.Mailer, adapter: Swoosh.Adapters.Local
+config :abakus, :mail_from, {"Abakus", "abakus@localhost"}
+config :swoosh, :api_client, false
+config :swoosh, :json_library, JSON
+
 config :esbuild,
   version: "0.25.4",
   abakus: [

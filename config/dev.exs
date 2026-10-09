@@ -16,6 +16,8 @@ config :abakus, AbakusWeb.Endpoint,
     esbuild_css: {Esbuild, :install_and_run, [:abakus_css, ~w(--sourcemap=inline --watch)]}
   ]
 
+config :abakus, dev_routes: true
+
 config :logger, :default_formatter, format: "[$level] $message\n"
 
 config :phoenix, :stacktrace_depth, 20
