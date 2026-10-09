@@ -10,12 +10,12 @@ The click dummy in `mockup/` shows the intended screens (example data only).
 
 - one budget, 1–2 users, EUR only
 - mobile and desktop, one LiveView app, installable as PWA
-- runs on the home server, reachable from the internet at `https://abakus.rocu.de` (HTTPS only)
+- self-hosted, reachable from the internet over HTTPS only (behind the operator's reverse proxy)
 - online only; offline entry comes in v3, not a sync protocol like Actual's CRDTs
 
 Not in scope for now: reports beyond the budget view, payee rename rules, multiple budgets, other currencies,
-investment tracking (that is zipfelfolio). No scheduled transactions: the only recurring one (rent) comes from
-Zipfelkasse's recurring expenses through the API.
+investment tracking (that is a separate portfolio app). No scheduled transactions: the only recurring one (rent)
+comes from a shared-expenses app's recurring expenses through the API.
 
 ## Stack
 
@@ -24,16 +24,14 @@ Zipfelkasse's recurring expenses through the API.
   only (no felt look)
 - HTTP: `req`; mail: `swoosh`
 - New dependencies only with a reason
-- Same conventions as zipfelfolio, ZiWoAS and FeatherPage: `default_transaction_mode: :immediate`, WAL,
-  `:utc_datetime_usec`, synchronous DB tests, `pool_size: 1` in test
+- SQLite conventions: `default_transaction_mode: :immediate`, WAL, `:utc_datetime_usec`, synchronous DB tests,
+  `pool_size: 1` in test
 
 ## Login
 
-Same as zipfelfolio (port the module once it exists there):
-
 - `phx.gen.auth` magic link as base and recovery; no passwords, no sign-up (invite or mix task)
 - Passkeys implemented in-house with `:crypto`, `:public_key`, `JSON`; attestation `none`; discoverable
-  credentials; relying party id `abakus.rocu.de`
+  credentials; relying party id = the configured host (`PHX_HOST`)
 - Tests fake the authenticator with `:crypto` and break every check once
 - Public internet: magic link requests rate limited, secure cookies, CSP; nothing is reachable without a session
   except `/up`, `/api/v1` (bearer token) and `/mcp/<secret>`
@@ -59,7 +57,7 @@ Mirrors YNAB so the import is lossless and the API can speak YNAB's format.
 - **Bank connection**: provider, bank, session id, valid until, linked accounts (provider account id → account),
   last sync, last error
 - **API token**: name, SHA-256 of the token, created at, last used at
-- **User**, **passkey**, **user token** as in zipfelfolio
+- **User**, **passkey**, **user token** (`phx.gen.auth` plus passkeys, see Login)
 
 Amounts are integers in cents. The API converts to and from YNAB milliunits (× 10) and rejects amounts that are
 not whole cents.
@@ -138,7 +136,7 @@ same source; across sources (and against manual entries) a match is proposed, ne
   imported → shown as "matches manual entry of …"; approving merges (manual category and memo win, date and
   cleared state from the import)
 - **Category suggestion**: the payee's last category
-- **File import (v1)**: OFX/QFX from MoneyMoney (SGML OFX 1.x and XML OFX 2.x); hand-written parser for
+- **File import (v1)**: OFX/QFX exports from a banking app (SGML OFX 1.x and XML OFX 2.x); hand-written parser for
   `BANKACCTFROM`/`CCACCTFROM`, `STMTTRN` (`DTPOSTED`, `TRNAMT`, `FITID`, `NAME`, `MEMO`), `LEDGERBAL`. Account
   mapping by account id from the file, remembered. Preview with counts (new, already there, matched) before
   importing. CSV only if a bank needs it later.
@@ -157,9 +155,9 @@ same source; across sources (and against manual entries) a match is proposed, ne
 
 ## API (YNAB-compatible subset)
 
-Exactly what Zipfelkasse uses today, so it only needs a new base URL and token. Same paths, field names,
-milliunits, envelopes (`{"data": …}`) and error format (`{"error": {"id", "name", "detail"}}`) as YNAB API v1
-with "plans".
+Exactly what the existing YNAB API clients (a shared-expenses app) use today, so they only need a new base URL
+and token. Same paths, field names, milliunits, envelopes (`{"data": …}`) and error format
+(`{"error": {"id", "name", "detail"}}`) as YNAB API v1 with "plans".
 
 - Auth: `Authorization: Bearer <token>`; tokens are created and revoked in the settings, stored hashed
 - `GET /api/v1/plans?include_accounts=true` — the one budget with its accounts
@@ -173,24 +171,23 @@ with "plans".
 - Transaction fields: `id`, `date`, `amount`, `payee_name`, `memo`, `account_id`, `category_id`, `cleared`,
   `approved`, `deleted`; reconciled transactions can be read but not changed (409)
 - Accounts carry YNAB's `balance`, `cleared_balance` and `uncleared_balance`
-- Contract: Zipfelkasse's `spec/support/fake_ynab.cr` describes what it expects; Abakus has request specs for the
-  same cases. Other YNAB endpoints only when a client needs them (zipfelfolio's FI forecast in its v4).
+- Contract: the client's own fake YNAB server describes what it expects; Abakus has request specs for the same
+  cases. Other YNAB endpoints only when a client needs them (e.g. a portfolio app's FI forecast).
 
 ## Tracking accounts
 
-Only used for the portfolios (securities accounts and their cash accounts). Their value comes from zipfelfolio
+Only used for the portfolios (securities accounts and their cash accounts). Their value comes from a portfolio app
 through the same API, the way YNAB tools post market values:
 
 - Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus
-- zipfelfolio reads the account (`balance`) and posts the difference to its own value as one transaction, payee
-  "Wertänderung", approved and cleared; nothing else changes the account
+- The portfolio app reads the account (`balance`) and posts the difference to its own value as one transaction,
+  payee "Wertänderung", approved and cleared; nothing else changes the account
 - Accounts that no aggregator reaches (e.g. a broker's settlement account) are covered this way too
-- Until zipfelfolio does this, the values imported from YNAB stay and can be adjusted by hand
-- Zipfelkasse calls Abakus on the home server directly (container network), not through Pangolin
+- Until the portfolio app does this, the values imported from YNAB stay and can be adjusted by hand
 
 ## MCP
 
-Like Zipfelkasse's: at `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as entered.
+At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as entered.
 
 - Read: `accounts` (balances, cleared, last reconciled), `budget` (RTA and per category for one or more months),
   `search_transactions`, `statistics` (spending by category, payee, month; previous year comparison),
@@ -221,17 +218,17 @@ State that should survive a reload (screen, month, number of months, account, fi
 ### v1 — switch from YNAB
 
 1. Skeleton: Phoenix, SQLite, felt-css `core_components`, login with magic link and passkeys, PWA manifest,
-   container, deploy behind Pangolin/Caddy, CI (format, credo, tests, assets)
+   container, deploy behind a reverse proxy, CI (format, credo, tests, assets)
 2. Domain and `Abakus.Budget` incl. targets, with property tests
 3. YNAB import with the checks above
 4. Budget view, desktop and phone
 5. Accounts, register, transaction form, splits, transfers, reconcile
-6. OFX/QFX import from MoneyMoney with matching and approval
-7. YNAB-compatible API; Zipfelkasse switched to Abakus
+6. OFX/QFX import with matching and approval
+7. YNAB-compatible API; the existing YNAB API clients switched to Abakus
 
 Acceptance: after importing the owner's YNAB budget, every month since the start shows the same RTA and the same
-assigned, activity, available and underfunded per category as YNAB; account balances match; a MoneyMoney export imports
-without duplicates; Zipfelkasse's sync runs against Abakus.
+assigned, activity, available and underfunded per category as YNAB; account balances match; an OFX/QFX
+export imports without duplicates; the existing YNAB API clients' sync runs against Abakus.
 
 ### v2 — bank sync and MCP
 
@@ -244,15 +241,17 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
 
 ## Operations
 
-- Data under `/web/data/abakus` (covered by the existing restic backup), compose under `/web/config/abakus`
-- Host `abakus.rocu.de` (also the passkey relying party id), public via Pangolin → Newt → container
-- Config via env: `PHX_HOST`, `SECRET_KEY_BASE`, SMTP, `MCP_SECRET`, `YNAB_TOKEN` (import only),
-  `ENABLE_BANKING_APP_ID` and the private key as a read-only mounted file (v2)
+- One container; all data (the SQLite database) lives in the data volume at `/app/data`; backups are the
+  operator's job
+- Runs behind the operator's HTTPS reverse proxy, which sets `X-Forwarded-Proto`
+- Config via env: `PHX_HOST` (required: the public host, also the passkey relying party id), `SECRET_KEY_BASE`,
+  SMTP, `MCP_SECRET`, `YNAB_TOKEN` (import only), `ENABLE_BANKING_APP_ID` and the private key as a read-only
+  mounted file (v2)
 - `/up` checks the DB and, from v2, that no bank connection has failed for more than a day
 
 ## Open
 
 - How YNAB computes `goal_under_funded` for yearly targets with a date in detail (check against the import)
-- Whether MoneyMoney's FITIDs stay stable across exports (test with two overlapping exports)
+- Whether the banking app's FITIDs stay stable across exports (test with two overlapping exports)
 - Which banks show up in Enable Banking's restricted mode and their `maximum_consent_validity` (needs the
   owner's Enable Banking account)
