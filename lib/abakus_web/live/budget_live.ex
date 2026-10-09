@@ -4,7 +4,7 @@ defmodule AbakusWeb.BudgetLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash}>
+    <Layouts.app flash={@flash} current_scope={@current_scope} current={:budget}>
       <.header>Budget</.header>
       <.card>
         <p class="mb-0">Hier entsteht das Budget. Es kommt mit den nächsten Schritten.</p>

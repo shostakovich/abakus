@@ -16,4 +16,38 @@ defmodule Abakus.Release do
 
     :ok
   end
+
+  @doc """
+  Invites a user, who gets a sign-in link by mail:
+  `bin/abakus eval 'Abakus.Release.invite("name@example.com")'`.
+  """
+  def invite(email) do
+    Application.load(@app)
+
+    # The link needs the endpoint's URL, but the container's server already holds the port.
+    endpoint = Application.get_env(@app, AbakusWeb.Endpoint, [])
+    Application.put_env(@app, AbakusWeb.Endpoint, Keyword.put(endpoint, :server, false))
+
+    Application.put_env(
+      @app,
+      Abakus.Repo,
+      Keyword.merge(Application.get_env(@app, Abakus.Repo), @repo_opts)
+    )
+
+    {:ok, _apps} = Application.ensure_all_started(@app)
+
+    case Abakus.Users.invite_user(email, &AbakusWeb.UserAuth.magic_link_url/1) do
+      {:ok, user} ->
+        IO.puts("Invited #{user.email}; the mail with the sign-in link is on its way.")
+
+      {:error, :mail_not_delivered, user} ->
+        IO.puts(:stderr, "Created #{user.email}, but the mail failed; see the log above.")
+        IO.puts(:stderr, "Once mail works, they can request a link on the sign-in page.")
+        System.halt(1)
+
+      {:error, changeset} ->
+        IO.puts(:stderr, "Could not invite #{email}: #{inspect(changeset.errors)}")
+        System.halt(1)
+    end
+  end
 end

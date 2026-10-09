@@ -5,7 +5,9 @@ defmodule AbakusWeb.Endpoint do
     store: :cookie,
     key: "_abakus_key",
     signing_salt: "zFoyQv9M",
-    same_site: "Lax"
+    same_site: "Lax",
+    # Behind https, ForwardedSSL marks every cookie `secure`.
+    http_only: true
   ]
 
   if Application.compile_env(:abakus, :forwarded_ssl, false) do
@@ -41,7 +43,10 @@ defmodule AbakusWeb.Endpoint do
   plug Plug.Session, @session_options
   plug AbakusWeb.Router
 
-  # Health checks poll /up and would flood the log.
+  @doc false
+  # Health checks poll /up and would flood the log; the paths of mailed links hold their token.
   def log_level(%Plug.Conn{path_info: ["up"]}), do: false
+  def log_level(%Plug.Conn{path_info: ["users", "log-in", _token]}), do: false
+  def log_level(%Plug.Conn{path_info: ["users", "settings", "confirm-email", _token]}), do: false
   def log_level(_conn), do: :info
 end
