@@ -201,6 +201,48 @@ defmodule Abakus.BudgetTest do
                row(months[@oct], 1)
     end
 
+    # As YNAB reports it: taking out of a surplus is underfunded only below the amount.
+    test "a monthly refill target counts a surplus against money taken out" do
+      months =
+        months(
+          budget(
+            targets: %{
+              1 => [target(amount: 5_000, set_aside: false)],
+              2 => [target(amount: 5_000, set_aside: false)]
+            },
+            assigned: %{
+              {1, @sep} => 8_000,
+              {1, @oct} => -2_000,
+              {2, @sep} => 8_000,
+              {2, @oct} => -4_000
+            }
+          )
+        )
+
+      assert %CategoryMonth{needed: 0, underfunded: 0, progress: 1.0} = row(months[@oct], 1)
+      assert %CategoryMonth{needed: 0, underfunded: 1_000, progress: +0.0} = row(months[@oct], 2)
+    end
+
+    test "a yearly refill target counts a surplus against money taken out" do
+      yearly = target(cadence: :yearly, amount: 10_000, due_on: ~D[2026-11-30], set_aside: false)
+
+      months =
+        months(
+          budget(
+            targets: %{1 => [yearly], 2 => [yearly]},
+            assigned: %{
+              {1, @sep} => 15_000,
+              {1, @oct} => -5_000,
+              {2, @sep} => 15_000,
+              {2, @oct} => -6_000
+            }
+          )
+        )
+
+      assert %CategoryMonth{needed: 0, underfunded: 0} = row(months[@oct], 1)
+      assert %CategoryMonth{needed: 0, underfunded: 1_000} = row(months[@oct], 2)
+    end
+
     test "after its due month a yearly target starts its next cycle" do
       targets = %{1 => [target(cadence: :yearly, amount: 12_000, due_on: ~D[2026-09-15])]}
       months = months(budget(targets: targets, assigned: %{{1, @sep} => 12_000}))

@@ -6,6 +6,9 @@ defmodule Abakus.Budget.Target do
   assigned since the cycle began, "refill up to" what is carried. The first cycle begins with the target (its
   first version of the same cadence since it was last ended), later ones the month after the last due month. A
   snoozed target needs nothing.
+
+  A surplus (more saved than the amount) is not spread: money taken out of it is underfunded only as far as it
+  goes below the amount, as YNAB reports it.
   """
 
   alias Abakus.Budget.CategoryMonth
@@ -42,8 +45,9 @@ defmodule Abakus.Budget.Target do
     do: %{row | target: target, snoozed: true}
 
   def apply(%CategoryMonth{} = row, {target, since}, false, assigned_in) do
-    {needed, saved} = needed(target, since, row, assigned_in)
-    underfunded = max(needed - row.assigned, 0)
+    {asks, saved} = asks(target, since, row, assigned_in)
+    needed = max(asks, 0)
+    underfunded = max(asks - row.assigned, 0)
 
     %{
       row
@@ -54,18 +58,22 @@ defmodule Abakus.Budget.Target do
     }
   end
 
-  # Returns what is needed and, for a yearly target, what counts as saved before this month.
-  defp needed(%{cadence: :monthly, amount: amount, set_aside: true}, _since, _row, _assigned_in),
+  # Returns what the month asks before its assignment, negative for a surplus, and, for a yearly target, what
+  # counts as saved before this month.
+  defp asks(%{cadence: :monthly, amount: amount, set_aside: true}, _since, _row, _assigned_in),
     do: {amount, 0}
 
-  defp needed(%{cadence: :monthly, amount: amount, set_aside: false}, _since, row, _assigned_in),
-    do: {max(amount - row.carried, 0), 0}
+  defp asks(%{cadence: :monthly, amount: amount, set_aside: false}, _since, row, _assigned_in),
+    do: {amount - row.carried, 0}
 
-  defp needed(%{cadence: :yearly} = target, since, row, assigned_in) do
+  defp asks(%{cadence: :yearly} = target, since, row, assigned_in) do
     due = due_month(target.due_on, row.month)
     saved = saved(target, cycle_start(target, since, due), row, assigned_in)
-    {ceil_div(max(target.amount - saved, 0), months_between(row.month, due) + 1), saved}
+    {spread(target.amount - saved, months_between(row.month, due) + 1), saved}
   end
+
+  defp spread(missing, months) when missing > 0, do: ceil_div(missing, months)
+  defp spread(surplus, _months), do: surplus
 
   defp cycle_start(target, since, due) do
     if due == due_month(target.due_on, since), do: since, else: Date.shift(due, month: -11)
@@ -84,8 +92,10 @@ defmodule Abakus.Budget.Target do
   defp progress(%{cadence: :yearly, amount: amount}, _needed, _underfunded, saved),
     do: saved |> Kernel./(amount) |> max(0.0) |> min(1.0)
 
-  defp progress(_monthly, 0, _underfunded, _saved), do: 1.0
-  defp progress(_monthly, needed, underfunded, _saved), do: (needed - underfunded) / needed
+  defp progress(_monthly, _needed, 0, _saved), do: 1.0
+
+  defp progress(_monthly, needed, underfunded, _saved),
+    do: max(needed - underfunded, 0) / max(needed, underfunded)
 
   defp due_month(due_on, month) do
     due_on
