@@ -171,9 +171,10 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
   - monthly amount, or yearly amount due on a date (spread over the months until then)
   - "set aside another" (`goal_needs_whole_amount` true: assigned this month counts) or "refill up to" (false:
     what is carried counts, plus what is assigned)
-  - per category and month: underfunded amount, progress, snoozed; one action fills all underfunded categories
-    from RTA (in budget order, hidden ones skipped, as far as RTA reaches without what later months have
-    assigned, in a closed month too)
+  - per category and month: underfunded amount, progress, snoozed (still underfunded, as YNAB's inspector and
+    API show it, but left out of the month's total and of filling); one action fills all underfunded categories
+    from RTA (in budget order, hidden and snoozed ones skipped, as far as RTA reaches without what later months
+    have assigned, in a closed month too)
   - UI copied from YNAB: progress bar and status under the name ("Finanziert", "Im Plan", "Noch 13,99 € nötig
     bis zum 31.", "Überzogen"), pill icons, inspector with ring, "assign X more" button and target editor
   - other goal types (`TB`, `TBD`, `MF`, `DEBT`) only if needed later
@@ -281,11 +282,15 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 ## YNAB import
 
 - One-shot via the YNAB API with a personal access token (`YNAB_TOKEN`): accounts, payees, category groups and
-  categories with targets (`goal_*` fields), assignments per month (`/months/{month}`), all transactions with
-  splits and transfers, cleared and reconciled state, flags
-- Repeatable until the switch: a re-import replaces everything that came from YNAB; the run reports what differs
+  categories with targets (`goal_*` fields), assignments per month, all transactions with splits and transfers,
+  cleared and reconciled state, flags; all from one request for the plan's export (`/plans/{plan_id}`)
+- Repeatable until the switch: a re-import replaces the whole budget
+  ([ADR 0002](adr/0002-ynab-reimport-replaces.md)); the run reports what differs from YNAB's numbers
+- The API keeps no target history: months before a target's creation month show it too but ask nothing, so a
+  target starts in its creation month; payees with the same lookup key are merged; data Abakus cannot represent
+  (credit cards, loans, other targets, amounts that are not whole cents) stops the import before it writes
 - Checks after the import: per month RTA, and per category assigned, activity, available and underfunded
-  (`goal_under_funded`) equal YNAB's `/months/{month}` numbers; account balances equal
+  (`goal_under_funded`) equal the export's month numbers; account balances equal
 
 ## Screens
 
@@ -335,7 +340,8 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
 
 ## Open
 
-- How YNAB computes `goal_under_funded` for yearly targets with a date in detail (check against the import)
+- How YNAB computes `goal_under_funded` for yearly targets with a date in detail (rounding up to the cent
+  matched a test plan's export; check against the owner's budget)
 - Whether the banking app's FITIDs stay stable across exports (test with two overlapping exports)
 - Which banks show up in Enable Banking's restricted mode and their `maximum_consent_validity` (needs the
   owner's Enable Banking account)
