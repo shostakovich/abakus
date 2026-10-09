@@ -40,20 +40,75 @@ comes from a shared-expenses app's recurring expenses through the API.
 
 Mirrors YNAB so the import is lossless and the API can speak YNAB's format.
 
-- **Account**: name, kind (checking, savings, cash, tracking), on budget, closed, note, position, last
-  reconciled at. No credit cards or loans.
-- **Payee**: name, transfer account (each account has a transfer payee as in YNAB), last used category
-- **Category group** and **category**: name, hidden, position, note; internal category "Ready to Assign".
-  Names usually start with an emoji ("🛒 Lebensmittel"); stored as entered, and lookups by name (MCP, search,
-  suggestions) also match without the emoji and ignoring case.
-- **Assignment**: category, month, amount
-- **Target**: category, amount, cadence (monthly or yearly), target date (yearly), "refill up to" vs. "set
-  aside", snoozed at
-- **Transaction**: account, date, amount (signed), payee, category (none for transfers between budget accounts
-  and for splits), memo, cleared (`uncleared`, `cleared`, `reconciled`), approved, flag colour, transfer
-  counterpart, source (`manual`, `ynab`, `file`, `bank`, `api`), external id (per source), matched transaction,
-  deleted at (soft delete, the API reports deletions)
-- **Subtransaction** (split): amount, category, payee, memo; amounts add up to the parent
+Terms: [`CONTEXT.md`](../CONTEXT.md). Two contexts: `Abakus.Ledger` (accounts, payees, transactions) and
+`Abakus.Categories` (groups, categories, assignments, targets); `Abakus.Budget` is the pure math on top. Domain
+tables have no user: all users see everything.
+
+- **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from a portfolio app,
+  `shared_expenses`: transactions from a shared-expenses app; filled via the API, so the UI hides manual entry and
+  file import for it; the Ledger accepts both), closed, note, position, last reconciled at. Budget account = not
+  tracking (derived; a kind never crosses that line). No credit cards or loans. Closed, never deleted.
+- **Payee**: name, transfer account, last used category. Each account has a transfer payee "Transfer : <account
+  name>" as in YNAB, created and renamed with the account. Other payees are unique by lookup key.
+- **Category group** and **category**: name, hidden, position, note, internal. Hidden, never deleted; lookup keys of
+  categories are not unique (an old hidden "Urlaub" next to "🏖️ Urlaub"); groups have none. A migration creates
+  YNAB's internal group "Internal Master Category" with "Inflow: Ready to Assign" (UI "Zu verteilen"); internal ones
+  are not listed, not editable and take no assignments or targets. Ready to Assign's lookup key is reserved: no
+  other category takes it, and looking it up finds only Ready to Assign.
+- **Names** usually start with an emoji ("🛒 Lebensmittel"), stored as entered. Lookups by name (MCP, search,
+  suggestions, import) use the lookup key: Unicode NFC, without emoji and symbols (incl. ZWJ sequences, skin tones,
+  keycaps, flags, variation selectors), whitespace collapsed, lower case, "ß" as "ss"; emoji-only names keep their
+  emoji without variation selectors and skin tones ("❤️" = "❤", "👍🏽" = "👍"). They prefer visible regular
+  categories and regular payees over transfer payees, else report not found or ambiguous.
+- **Amounts** are integer cents, at most 100 billion euros either way (10^13 cents) on transactions,
+  subtransactions, assignments and targets.
+- **Months** (assignment, target version, snooze) are stored as the first of the month; every function takes any day
+  of it, as a date or ISO 8601 string.
+- **Assignment**: category, month, amount (may be negative); one per category and month
+- **Target version**: category, from month, cadence (monthly, yearly, none = no target from then on), amount
+  (positive), due on (yearly only, not before from month), set aside (YNAB `goal_needs_whole_amount`: "set aside
+  another" vs. "refill up to"). A version applies until the next one, so changing a target keeps past months.
+- **Target snooze**: category, month; one per category and month (snoozing again returns the one there is)
+- **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
+  `reconciled`), approved (manual entries by default, imports and API entries not), flag (red, orange, yellow,
+  green, blue, purple), transfer counterpart (a transaction, or for a split's transfer its subtransaction), source
+  (`manual`, `ynab`, `file`, `bank`, `api`: where it was created, set once), matched transaction (see match
+  proposals), deleted at (soft delete, the API reports deletions; deleted transactions cannot be changed). The
+  register is what counts: transactions not deleted and no match proposal (`Ledger.in_register/0`).
+- **Reconciled lock**: the Ledger refuses any change that alters a reconciled transaction ("ist abgeschlossen"),
+  leaving the reconciled state included, whether made on it directly or through a transfer: its counterpart's or a
+  split's subtransaction's edit kept in step (amount, date, memo, account, category), released (payee no longer a
+  transfer, subtransaction removed, turned into a split) or deleted with it. The caller passes
+  `reconciled: :confirmed` to `update_transaction/3`, `delete_transaction/2` or `accept_match/2` after asking; the
+  UI asks first, the API does not pass it and answers 409.
+- **Transfers**: a transaction or subtransaction is a transfer when its payee is a transfer payee; never to its own
+  account, and a split is none as a whole. The Ledger alone creates and keeps the counterpart in the payee's
+  account (amount negated, same date and memo, payee = the other account's transfer payee; cleared, approved and
+  flag per side), moves it when payee or account change and removes it when the payee stops being a transfer
+  payee. Deleting either side deletes both, deleting a split deletes its subtransactions' counterparts; the
+  counterpart of a subtransaction is changed and deleted in its split. Transfers to closed accounts are allowed.
+- **Category rule**, checked by `Ledger.create_transaction/1` and `update_transaction/3` with all accounts
+  involved: none in tracking accounts, none for transfers between budget accounts, one on the budget side of a
+  transfer between a budget and a tracking account (given as `counterpart_category_id` when that side is the
+  counterpart), none on a split; a split's subtransactions are checked whenever its account changes.
+- **Subtransaction** (split): position, amount, category, payee, memo, transfer counterpart (a subtransaction can
+  be a transfer, as in YNAB). At least two adding up to the parent; deleted and soft-deleted with it.
+- **Match proposal**: an import from a file or the bank with a matched transaction in the same account with the same
+  amount, which is in the register (not deleted, no proposal itself) and not reconciled; one open proposal per
+  transaction. It leaves its payee's last category alone. While it is open, account and amount of both are fixed
+  (also for a counterpart, whose other side then keeps its amount and payee). It counts nowhere (not listed, no
+  balance, no budget) until accepted (checked again, so a transaction reconciled meanwhile refuses it; merged into
+  the existing transaction: that one keeps its id and, where it has them, its category and memo, else takes the
+  import's; it takes the import's date, cleared state and origins; the import row goes) or rejected ("Trennen": the
+  import stays as a transaction of its own and is approved). Deleting the matched transaction leaves the import
+  unapproved; a deleted proposal proposes nothing.
+- **Transaction origin**: transaction, account, source, external id; unique per account, source and external id
+  (FITID, provider or YNAB id). A transaction matched to an import keeps the import's origin, so re-imports
+  dedupe ([ADR 0001](adr/0001-transaction-origins.md)); origins move with their transaction to another account.
+  Moving a transaction, or a counterpart, into an account that has one of its external ids from the same source
+  already is refused.
+- References are restricted: nothing that history points to can be deleted. The contexts check references before
+  writing, so a missing one is a validation error ("existiert nicht"), not a constraint error.
 - **Bank connection**: provider, bank, session id, valid until, linked accounts (provider account id → account),
   last sync, last error
 - **API token**: name, SHA-256 of the token, created at, last used at
@@ -85,7 +140,8 @@ category), and RTA = 0 with nothing overspent as the resting state.
   month; the input shows how much is left. RTA can still turn negative through overspending; then it is red with
   the action "cover from categories". Imported history keeps its negative months as they were.
 - Transfers between budget accounts have no category; transfers between a budget and a tracking account need one
-- Income can be categorised "Ready to Assign" only; it is available in the month it is dated
+- Income is what is categorised "Ready to Assign", the only income category; it is available in the month it is
+  dated. Inflows to other categories (refunds) are valid and count as those categories' activity.
 - Targets: only YNAB's **needed for spending** (`NEED`), the one type in use:
   - monthly amount, or yearly amount due on a date (spread over the months until then)
   - "set aside another" (`goal_needs_whole_amount` true: assigned this month counts) or "refill up to" (false:
@@ -133,8 +189,8 @@ same source; across sources (and against manual entries) a match is proposed, ne
 - **Dedupe within a source**: by (account, source, external id) — FITID for files, the provider's transaction id
   for bank sync
 - **Matching**: same account, same amount, date within ±10 days, existing transaction not yet matched or
-  imported → shown as "matches manual entry of …"; approving merges (manual category and memo win, date and
-  cleared state from the import)
+  imported and not reconciled → shown as "matches manual entry of …"; approving merges (manual category and memo
+  win where present, date and cleared state from the import)
 - **Category suggestion**: the payee's last category
 - **File import (v1)**: OFX/QFX exports from a banking app (SGML OFX 1.x and XML OFX 2.x); hand-written parser for
   `BANKACCTFROM`/`CCACCTFROM`, `STMTTRN` (`DTPOSTED`, `TRNAMT`, `FITID`, `NAME`, `MEMO`), `LEDGERBAL`. Account
