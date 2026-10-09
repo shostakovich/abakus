@@ -1,0 +1,291 @@
+{
+  "description": "A fictional YNAB plan export (GET /plans/{id}, data.plan) with hand-computed month numbers in milliunits: transfers between budget accounts and to a tracking account, a split with a transfer part, payees whose names differ only in case, a hidden category moved to YNAB's hidden group, groups all marked internal and a split whose transfer part is linked to its counterpart only by account, date and amount (as YNAB exports them), a target changed in October, a yearly target and a snoozed month (which YNAB still reports as underfunded).",
+  "plan": {
+    "id": "plan-test",
+    "name": "Testhaushalt",
+    "first_month": "2026-08-01",
+    "last_month": "2026-10-01",
+    "accounts": [
+      {
+        "id": "acc-giro",
+        "name": "💳 Girokonto",
+        "type": "checking",
+        "on_budget": true,
+        "closed": false,
+        "note": null,
+        "balance": 2485000,
+        "cleared_balance": 3315000,
+        "uncleared_balance": -830000,
+        "transfer_payee_id": "payee-tr-giro",
+        "last_reconciled_at": "2026-08-31T18:00:00.000Z",
+        "deleted": false
+      },
+      {
+        "id": "acc-tagesgeld",
+        "name": "🐷 Tagesgeld",
+        "type": "savings",
+        "on_budget": true,
+        "closed": false,
+        "note": null,
+        "balance": 1260000,
+        "cleared_balance": 1060000,
+        "uncleared_balance": 200000,
+        "transfer_payee_id": "payee-tr-tagesgeld",
+        "last_reconciled_at": null,
+        "deleted": false
+      },
+      {
+        "id": "acc-depot",
+        "name": "📈 Depot",
+        "type": "otherAsset",
+        "on_budget": false,
+        "closed": false,
+        "note": "ETF-Sparplan",
+        "balance": 5500000,
+        "cleared_balance": 5500000,
+        "uncleared_balance": 0,
+        "transfer_payee_id": "payee-tr-depot",
+        "last_reconciled_at": null,
+        "deleted": false
+      },
+      {
+        "id": "acc-bargeld",
+        "name": "👛 Bargeld",
+        "type": "cash",
+        "on_budget": true,
+        "closed": true,
+        "note": "Aufgelöst",
+        "balance": 0,
+        "cleared_balance": 0,
+        "uncleared_balance": 0,
+        "transfer_payee_id": "payee-tr-bargeld",
+        "last_reconciled_at": null,
+        "deleted": false
+      },
+      {
+        "id": "acc-deleted",
+        "name": "Altes Konto",
+        "type": "creditCard",
+        "on_budget": true,
+        "closed": true,
+        "note": null,
+        "balance": 0,
+        "cleared_balance": 0,
+        "uncleared_balance": 0,
+        "transfer_payee_id": null,
+        "last_reconciled_at": null,
+        "deleted": true
+      }
+    ],
+    "payees": [
+      { "id": "payee-starting", "name": "Starting Balance", "transfer_account_id": null, "deleted": false },
+      { "id": "payee-rewe", "name": "REWE", "transfer_account_id": null, "deleted": false },
+      { "id": "payee-rewe2", "name": "Rewe", "transfer_account_id": null, "deleted": false },
+      { "id": "payee-arbeit", "name": "Arbeitgeber GmbH", "transfer_account_id": null, "deleted": false },
+      { "id": "payee-vermieter", "name": "Hausverwaltung Muster", "transfer_account_id": null, "deleted": false },
+      { "id": "payee-stadtwerke", "name": "Stadtwerke", "transfer_account_id": null, "deleted": false },
+      { "id": "payee-old", "name": "Altes Café", "transfer_account_id": null, "deleted": true },
+      { "id": "payee-tr-giro", "name": "Transfer : 💳 Girokonto", "transfer_account_id": "acc-giro", "deleted": false },
+      { "id": "payee-tr-tagesgeld", "name": "Transfer : 🐷 Tagesgeld", "transfer_account_id": "acc-tagesgeld", "deleted": false },
+      { "id": "payee-tr-depot", "name": "Transfer : 📈 Depot", "transfer_account_id": "acc-depot", "deleted": false },
+      { "id": "payee-tr-bargeld", "name": "Transfer : 👛 Bargeld", "transfer_account_id": "acc-bargeld", "deleted": false }
+    ],
+    "category_groups": [
+      { "id": "grp-internal", "name": "Internal Master Category", "hidden": false, "internal": true, "deleted": false },
+      { "id": "grp-ccp", "name": "Credit Card Payments", "hidden": false, "internal": true, "deleted": false },
+      { "id": "grp-wohnen", "name": "🏠 Wohnen", "hidden": false, "internal": true, "deleted": false },
+      { "id": "grp-alltag", "name": "🛒 Alltag", "hidden": false, "internal": true, "deleted": false },
+      { "id": "grp-alt", "name": "📦 Alt", "hidden": true, "internal": true, "deleted": false },
+      { "id": "grp-hidden", "name": "Hidden Categories", "hidden": false, "internal": true, "deleted": false },
+      { "id": "grp-deleted", "name": "Gelöscht", "hidden": false, "internal": true, "deleted": true }
+    ],
+    "categories": [
+      {
+        "id": "cat-rta",
+        "category_group_id": "grp-internal",
+        "name": "Inflow: Ready to Assign",
+        "hidden": false,
+        "internal": true,
+        "original_category_group_id": null,
+        "note": null,
+        "deleted": false
+      },
+      {
+        "id": "cat-uncat",
+        "category_group_id": "grp-internal",
+        "name": "Uncategorized",
+        "hidden": false,
+        "internal": true,
+        "original_category_group_id": null,
+        "note": null,
+        "deleted": false
+      },
+      {
+        "id": "cat-miete",
+        "category_group_id": "grp-wohnen",
+        "name": "🏠 Miete",
+        "hidden": false,
+        "internal": false,
+        "original_category_group_id": null,
+        "note": "Warmmiete",
+        "deleted": false
+      },
+      {
+        "id": "cat-strom",
+        "category_group_id": "grp-wohnen",
+        "name": "⚡ Strom",
+        "hidden": false,
+        "internal": false,
+        "original_category_group_id": null,
+        "note": null,
+        "deleted": false
+      },
+      {
+        "id": "cat-lebensmittel",
+        "category_group_id": "grp-alltag",
+        "name": "🛒 Lebensmittel",
+        "hidden": false,
+        "internal": false,
+        "original_category_group_id": null,
+        "note": null,
+        "deleted": false
+      },
+      {
+        "id": "cat-geschenke",
+        "category_group_id": "grp-hidden",
+        "name": "🎁 Geschenke",
+        "hidden": true,
+        "internal": false,
+        "original_category_group_id": "grp-alltag",
+        "note": null,
+        "deleted": false
+      },
+      {
+        "id": "cat-sport",
+        "category_group_id": "grp-alltag",
+        "name": "🏋️ Sport",
+        "hidden": false,
+        "internal": false,
+        "original_category_group_id": null,
+        "note": null,
+        "deleted": false
+      },
+      {
+        "id": "cat-sparplan",
+        "category_group_id": "grp-alltag",
+        "name": "📈 Sparplan",
+        "hidden": false,
+        "internal": false,
+        "original_category_group_id": null,
+        "note": null,
+        "deleted": false
+      },
+      {
+        "id": "cat-urlaub",
+        "category_group_id": "grp-alt",
+        "name": "🧳 Urlaub",
+        "hidden": true,
+        "internal": false,
+        "original_category_group_id": null,
+        "note": null,
+        "deleted": false
+      },
+      {
+        "id": "cat-deleted",
+        "category_group_id": "grp-alltag",
+        "name": "Kino",
+        "hidden": false,
+        "internal": false,
+        "original_category_group_id": null,
+        "note": null,
+        "deleted": true
+      }
+    ],
+    "months": [
+      {
+        "month": "2026-08-01",
+        "income": 4000000,
+        "budgeted": 1230000,
+        "activity": -965000,
+        "to_be_budgeted": 2770000,
+        "deleted": false,
+        "categories": [
+          { "id": "cat-rta", "name": "Inflow: Ready to Assign", "hidden": false, "deleted": false, "budgeted": 0, "activity": 4000000, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-uncat", "name": "Uncategorized", "hidden": false, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-miete", "name": "🏠 Miete", "hidden": false, "deleted": false, "budgeted": 800000, "activity": -800000, "balance": 0, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 800000, "goal_target_date": null, "goal_snoozed_at": null, "goal_under_funded": 0 },
+          { "id": "cat-strom", "name": "⚡ Strom", "hidden": false, "deleted": false, "budgeted": 100000, "activity": 0, "balance": 100000, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 13, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 600000, "goal_target_date": "2026-12-15", "goal_snoozed_at": null, "goal_under_funded": 20000 },
+          { "id": "cat-lebensmittel", "name": "🛒 Lebensmittel", "hidden": false, "deleted": false, "budgeted": 300000, "activity": -165000, "balance": 135000, "goal_type": "NEED", "goal_needs_whole_amount": false, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 300000, "goal_target_date": null, "goal_snoozed_at": null, "goal_under_funded": 0 },
+          { "id": "cat-geschenke", "name": "🎁 Geschenke", "hidden": true, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-sport", "name": "🏋️ Sport", "hidden": false, "deleted": false, "budgeted": 30000, "activity": 0, "balance": 30000, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 30000, "goal_target_date": null, "goal_snoozed_at": null, "goal_under_funded": 0 },
+          { "id": "cat-sparplan", "name": "📈 Sparplan", "hidden": false, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-urlaub", "name": "🧳 Urlaub", "hidden": true, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null }
+        ]
+      },
+      {
+        "month": "2026-09-01",
+        "income": 2500000,
+        "budgeted": 1720000,
+        "activity": -1000000,
+        "to_be_budgeted": 3550000,
+        "deleted": false,
+        "categories": [
+          { "id": "cat-rta", "name": "Inflow: Ready to Assign", "hidden": false, "deleted": false, "budgeted": 0, "activity": 2500000, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-uncat", "name": "Uncategorized", "hidden": false, "deleted": false, "budgeted": 0, "activity": -30000, "balance": -30000, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-miete", "name": "🏠 Miete", "hidden": false, "deleted": false, "budgeted": 800000, "activity": 0, "balance": 800000, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 800000, "goal_target_date": null, "goal_snoozed_at": null, "goal_under_funded": 0 },
+          { "id": "cat-strom", "name": "⚡ Strom", "hidden": false, "deleted": false, "budgeted": 100000, "activity": 0, "balance": 200000, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 13, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 600000, "goal_target_date": "2026-12-15", "goal_snoozed_at": null, "goal_under_funded": 25000 },
+          { "id": "cat-lebensmittel", "name": "🛒 Lebensmittel", "hidden": false, "deleted": false, "budgeted": 300000, "activity": -450000, "balance": -15000, "goal_type": "NEED", "goal_needs_whole_amount": false, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 300000, "goal_target_date": null, "goal_snoozed_at": null, "goal_under_funded": 0 },
+          { "id": "cat-geschenke", "name": "🎁 Geschenke", "hidden": true, "deleted": false, "budgeted": 20000, "activity": -20000, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-sport", "name": "🏋️ Sport", "hidden": false, "deleted": false, "budgeted": 0, "activity": 0, "balance": 30000, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 30000, "goal_target_date": null, "goal_snoozed_at": "2026-09-03T08:00:00.000Z", "goal_under_funded": 30000 },
+          { "id": "cat-sparplan", "name": "📈 Sparplan", "hidden": false, "deleted": false, "budgeted": 500000, "activity": -500000, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-urlaub", "name": "🧳 Urlaub", "hidden": true, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null }
+        ]
+      },
+      {
+        "month": "2026-10-01",
+        "income": 0,
+        "budgeted": 1250000,
+        "activity": -790000,
+        "to_be_budgeted": 2255000,
+        "deleted": false,
+        "categories": [
+          { "id": "cat-rta", "name": "Inflow: Ready to Assign", "hidden": false, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-uncat", "name": "Uncategorized", "hidden": false, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-miete", "name": "🏠 Miete", "hidden": false, "deleted": false, "budgeted": 800000, "activity": -800000, "balance": 800000, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 800000, "goal_target_date": null, "goal_snoozed_at": null, "goal_under_funded": 0 },
+          { "id": "cat-strom", "name": "⚡ Strom", "hidden": false, "deleted": false, "budgeted": 100000, "activity": 0, "balance": 300000, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 13, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 600000, "goal_target_date": "2026-12-15", "goal_snoozed_at": null, "goal_under_funded": 33340 },
+          { "id": "cat-lebensmittel", "name": "🛒 Lebensmittel", "hidden": false, "deleted": false, "budgeted": 350000, "activity": 10000, "balance": 360000, "goal_type": "NEED", "goal_needs_whole_amount": false, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 400000, "goal_target_date": null, "goal_snoozed_at": null, "goal_under_funded": 50000 },
+          { "id": "cat-geschenke", "name": "🎁 Geschenke", "hidden": true, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-sport", "name": "🏋️ Sport", "hidden": false, "deleted": false, "budgeted": 0, "activity": 0, "balance": 30000, "goal_type": "NEED", "goal_needs_whole_amount": true, "goal_cadence": 1, "goal_cadence_frequency": 1, "goal_creation_month": "2026-08-01", "goal_target": 30000, "goal_target_date": null, "goal_snoozed_at": null, "goal_under_funded": 30000 },
+          { "id": "cat-sparplan", "name": "📈 Sparplan", "hidden": false, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null },
+          { "id": "cat-urlaub", "name": "🧳 Urlaub", "hidden": true, "deleted": false, "budgeted": 0, "activity": 0, "balance": 0, "goal_type": null, "goal_under_funded": null }
+        ]
+      }
+    ],
+    "transactions": [
+      { "id": "t01", "date": "2026-08-01", "amount": 3000000, "memo": null, "cleared": "reconciled", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-starting", "category_id": "cat-rta", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t02", "date": "2026-08-01", "amount": 1000000, "memo": null, "cleared": "reconciled", "approved": true, "flag_color": null, "account_id": "acc-tagesgeld", "payee_id": "payee-starting", "category_id": "cat-rta", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t03", "date": "2026-08-01", "amount": 5000000, "memo": null, "cleared": "reconciled", "approved": true, "flag_color": null, "account_id": "acc-depot", "payee_id": "payee-starting", "category_id": null, "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t04", "date": "2026-08-03", "amount": -800000, "memo": "Miete August", "cleared": "reconciled", "approved": true, "flag_color": "blue", "account_id": "acc-giro", "payee_id": "payee-vermieter", "category_id": "cat-miete", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t05", "date": "2026-08-10", "amount": -120000, "memo": null, "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-rewe", "category_id": "cat-lebensmittel", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t06", "date": "2026-08-15", "amount": -45000, "memo": null, "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-rewe2", "category_id": "cat-lebensmittel", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t07", "date": "2026-09-01", "amount": 2500000, "memo": "Gehalt", "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-arbeit", "category_id": "cat-rta", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t08", "date": "2026-09-02", "amount": -200000, "memo": "Sparen", "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-tr-tagesgeld", "category_id": null, "transfer_account_id": "acc-tagesgeld", "transfer_transaction_id": "t09", "deleted": false },
+      { "id": "t09", "date": "2026-09-02", "amount": 200000, "memo": "Sparen", "cleared": "uncleared", "approved": true, "flag_color": "purple", "account_id": "acc-tagesgeld", "payee_id": "payee-tr-giro", "category_id": null, "transfer_account_id": "acc-giro", "transfer_transaction_id": "t08", "deleted": false },
+      { "id": "t11", "date": "2026-09-05", "amount": 50000, "memo": "Kleingeld", "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-tagesgeld", "payee_id": "payee-tr-giro", "category_id": null, "transfer_account_id": "acc-giro", "transfer_transaction_id": null, "deleted": false },
+      { "id": "t10", "date": "2026-09-05", "amount": -150000, "memo": "Wocheneinkauf", "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-rewe", "category_id": "cat-split", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t12", "date": "2026-09-10", "amount": -350000, "memo": null, "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-rewe", "category_id": "cat-lebensmittel", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t13", "date": "2026-09-12", "amount": -30000, "memo": null, "cleared": "uncleared", "approved": false, "flag_color": null, "account_id": "acc-giro", "payee_id": null, "category_id": null, "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t15", "date": "2026-09-20", "amount": 500000, "memo": "Sparplan", "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-depot", "payee_id": "payee-tr-giro", "category_id": null, "transfer_account_id": "acc-giro", "transfer_transaction_id": "t14", "deleted": false },
+      { "id": "t14", "date": "2026-09-20", "amount": -500000, "memo": "Sparplan", "cleared": "cleared", "approved": true, "flag_color": "yellow", "account_id": "acc-giro", "payee_id": "payee-tr-depot", "category_id": "cat-sparplan", "transfer_account_id": "acc-depot", "transfer_transaction_id": "t15", "deleted": false },
+      { "id": "t16", "date": "2026-09-25", "amount": -20000, "memo": null, "cleared": "cleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-rewe2", "category_id": "cat-geschenke", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t17", "date": "2026-10-01", "amount": -800000, "memo": null, "cleared": "uncleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-vermieter", "category_id": "cat-miete", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t19", "date": "2026-10-05", "amount": 10000, "memo": "Erstattung", "cleared": "cleared", "approved": true, "flag_color": "green", "account_id": "acc-tagesgeld", "payee_id": "payee-rewe", "category_id": "cat-lebensmittel", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": false },
+      { "id": "t20", "date": "2026-10-06", "amount": -999990, "memo": null, "cleared": "uncleared", "approved": true, "flag_color": null, "account_id": "acc-giro", "payee_id": "payee-old", "category_id": "cat-deleted", "transfer_account_id": null, "transfer_transaction_id": null, "deleted": true }
+    ],
+    "subtransactions": [
+      { "id": "s10a", "transaction_id": "t10", "amount": -100000, "memo": null, "payee_id": null, "category_id": "cat-lebensmittel", "transfer_account_id": null, "deleted": false },
+      { "id": "s10b", "transaction_id": "t10", "amount": -50000, "memo": "Kleingeld", "payee_id": "payee-tr-tagesgeld", "category_id": null, "transfer_account_id": "acc-tagesgeld", "deleted": false },
+      { "id": "s10c", "transaction_id": "t10", "amount": -12345, "memo": null, "payee_id": null, "category_id": "cat-deleted", "transfer_account_id": null, "deleted": true }
+    ],
+    "scheduled_transactions": []
+  }
+}

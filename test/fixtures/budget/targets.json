@@ -1,5 +1,5 @@
 {
-  "description": "Monthly set-aside and refill targets, yearly set-aside and refill targets with dates, and a snoozed month. Hand-computed, fictional.",
+  "description": "Monthly set-aside and refill targets, yearly set-aside and refill targets with dates, and a snoozed month. Hand-computed, fictional (YNAB still reports a snoozed month's underfunded).",
   "current_month": "2026-10-01",
   "categories": [
     {
@@ -241,7 +241,7 @@
           "budgeted": 0,
           "activity": -10000,
           "balance": -10000,
-          "goal_under_funded": 0
+          "goal_under_funded": 40000
         }
       ]
     },

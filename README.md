@@ -58,6 +58,16 @@ docker compose exec abakus bin/abakus eval 'Abakus.Release.invite("you@example.c
 
 They get a sign-in link by mail (valid 15 minutes) and add a passkey under Einstellungen.
 
+Import the budget from YNAB with a personal access token (YNAB: Account Settings → Developer Settings), passed to
+this one command only. It replaces the whole budget, so it refuses once Abakus holds transactions of its own, and
+then checks every month, category and account against YNAB's numbers (exit code 1 on a difference):
+
+```sh
+docker compose exec -e YNAB_TOKEN=… abakus bin/abakus eval 'Abakus.Release.import_ynab()'
+```
+
+With several plans in YNAB it lists them; pass the id as `import_ynab("…")`. Locally: `mix abakus.ynab_import`.
+
 ## Before you use this
 
 - This is a personal project, built for my own household (one budget, 1–2 people, EUR).

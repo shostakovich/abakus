@@ -1,5 +1,5 @@
 defmodule Abakus.Categories.TargetSnooze do
-  @moduledoc "A category's target is snoozed in this month: it asks for nothing then."
+  @moduledoc "A category's target is snoozed in this month: it counts as done then (see `Abakus.Budget.Month`)."
 
   use Abakus.Schema
 

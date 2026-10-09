@@ -201,6 +201,48 @@ defmodule Abakus.BudgetTest do
                row(months[@oct], 1)
     end
 
+    # As YNAB reports it: taking out of a surplus is underfunded only below the amount.
+    test "a monthly refill target counts a surplus against money taken out" do
+      months =
+        months(
+          budget(
+            targets: %{
+              1 => [target(amount: 5_000, set_aside: false)],
+              2 => [target(amount: 5_000, set_aside: false)]
+            },
+            assigned: %{
+              {1, @sep} => 8_000,
+              {1, @oct} => -2_000,
+              {2, @sep} => 8_000,
+              {2, @oct} => -4_000
+            }
+          )
+        )
+
+      assert %CategoryMonth{needed: 0, underfunded: 0, progress: 1.0} = row(months[@oct], 1)
+      assert %CategoryMonth{needed: 0, underfunded: 1_000, progress: +0.0} = row(months[@oct], 2)
+    end
+
+    test "a yearly refill target counts a surplus against money taken out" do
+      yearly = target(cadence: :yearly, amount: 10_000, due_on: ~D[2026-11-30], set_aside: false)
+
+      months =
+        months(
+          budget(
+            targets: %{1 => [yearly], 2 => [yearly]},
+            assigned: %{
+              {1, @sep} => 15_000,
+              {1, @oct} => -5_000,
+              {2, @sep} => 15_000,
+              {2, @oct} => -6_000
+            }
+          )
+        )
+
+      assert %CategoryMonth{needed: 0, underfunded: 0} = row(months[@oct], 1)
+      assert %CategoryMonth{needed: 0, underfunded: 1_000} = row(months[@oct], 2)
+    end
+
     test "after its due month a yearly target starts its next cycle" do
       targets = %{1 => [target(cadence: :yearly, amount: 12_000, due_on: ~D[2026-09-15])]}
       months = months(budget(targets: targets, assigned: %{{1, @sep} => 12_000}))
@@ -251,7 +293,8 @@ defmodule Abakus.BudgetTest do
       assert %CategoryMonth{target: nil, needed: 0, underfunded: 0} = row(months[@dec], 1)
     end
 
-    test "a snoozed target needs nothing that month" do
+    # As in YNAB: its inspector still asks for the amount, the list shows the month as snoozed.
+    test "a snoozed target still says what is missing, but leaves the month's underfunded total" do
       months =
         months(
           budget(targets: %{1 => [target(amount: 5_000)]}, snoozes: MapSet.new([{1, @oct}])),
@@ -259,9 +302,10 @@ defmodule Abakus.BudgetTest do
           @nov
         )
 
-      assert %CategoryMonth{snoozed: true, needed: 0, underfunded: 0, progress: nil} =
+      assert %CategoryMonth{snoozed: true, needed: 5_000, underfunded: 5_000, progress: +0.0} =
                row(months[@oct], 1)
 
+      assert months[@oct].underfunded == 0
       assert %CategoryMonth{snoozed: false, underfunded: 5_000} = row(months[@nov], 1)
       assert months[@nov].underfunded == 5_000
     end
@@ -282,6 +326,17 @@ defmodule Abakus.BudgetTest do
         )
 
       assert Budget.fill_underfunded(budget, @oct, @oct) == [{2, 4_000}, {3, 1_000}]
+    end
+
+    test "skips snoozed categories" do
+      budget =
+        budget(
+          income: %{@oct => 10_000},
+          targets: %{1 => [target(amount: 4_000)], 2 => [target(amount: 3_000)]},
+          snoozes: MapSet.new([{1, @oct}])
+        )
+
+      assert Budget.fill_underfunded(budget, @oct, @oct) == [{2, 3_000}]
     end
 
     test "keeps what later months have and assigns nothing without money" do

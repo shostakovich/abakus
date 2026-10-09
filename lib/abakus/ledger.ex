@@ -129,6 +129,25 @@ defmodule Abakus.Ledger do
     do: from(t in Transaction, where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id))
 
   @doc """
+  Each account's register as `%{balance, cleared, uncleared}` by account id; cleared counts reconciled
+  transactions too. Accounts without transactions are missing.
+  """
+  def balances do
+    Repo.all(
+      from t in in_register(),
+        group_by: t.account_id,
+        select:
+          {t.account_id,
+           %{
+             balance: sum(t.amount),
+             cleared: coalesce(filter(sum(t.amount), t.cleared != :uncleared), 0),
+             uncleared: coalesce(filter(sum(t.amount), t.cleared == :uncleared), 0)
+           }}
+    )
+    |> Map.new()
+  end
+
+  @doc """
   What the budget accounts' register adds up to per `{category_id, month}` (the month's first day): a split by its
   subtransactions, a transaction or subtransaction without a category under `nil`, unless it is a transfer
   (between budget accounts, which have none). Tracking accounts do not count.
