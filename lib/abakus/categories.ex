@@ -11,7 +11,7 @@ defmodule Abakus.Categories do
     TargetVersion
   }
 
-  alias Abakus.{Names, References, Repo}
+  alias Abakus.{Budget, Ledger, Names, References, Repo}
   alias Ecto.Changeset
 
   @doc "Groups with their categories in budget order, without the internal ones."
@@ -97,16 +97,79 @@ defmodule Abakus.Categories do
     |> Names.pick()
   end
 
-  @doc "Sets the amount assigned to a category in a month (any day of it)."
+  @doc """
+  Sets the amount assigned to a category in a month (any day of it). Never refused for lack of money, as in YNAB:
+  Ready to Assign may go below zero (see `Abakus.Budget`).
+  """
   def assign(%Category{} = category, month, amount) do
     %Assignment{category_id: category.id}
     |> Assignment.changeset(%{month: month, amount: amount})
     |> validate_regular(category)
-    |> Repo.insert(
+    |> upsert_assignment()
+  end
+
+  defp upsert_assignment(changeset) do
+    Repo.insert(changeset,
       on_conflict: {:replace, [:amount, :updated_at]},
       conflict_target: [:category_id, :month],
       returning: true
     )
+  end
+
+  @doc "The budget's data for `Abakus.Budget`: every regular category, hidden ones included, in budget order."
+  def budget do
+    ready_to_assign_id = ready_to_assign!().id
+
+    {income, activity} =
+      Enum.split_with(Ledger.budget_activity(), fn {{id, _month}, _} ->
+        id == ready_to_assign_id
+      end)
+
+    %Budget{
+      categories: budget_categories(),
+      income: Map.new(income, fn {{_id, month}, amount} -> {month, amount} end),
+      activity: Map.new(activity),
+      assigned:
+        Map.new(Repo.all(from a in Assignment, select: {{a.category_id, a.month}, a.amount})),
+      targets: Enum.group_by(Repo.all(TargetVersion), & &1.category_id),
+      snoozes: MapSet.new(Repo.all(from s in TargetSnooze, select: {s.category_id, s.month}))
+    }
+  end
+
+  defp budget_categories do
+    Repo.all(
+      from c in Category,
+        join: g in assoc(c, :category_group),
+        where: not c.internal,
+        order_by: [g.position, g.id, c.position, c.id],
+        select: {c.id, c.hidden, g.hidden}
+    )
+    |> Enum.map(fn {id, hidden, group_hidden} -> %{id: id, hidden: hidden or group_hidden} end)
+  end
+
+  @doc """
+  Fills the month's underfunded categories from Ready to Assign (`Abakus.Budget.fill_underfunded/3`); `current` is
+  the current month, both any day of it. Returns the new assignments as `{category_id, amount}`.
+  """
+  def fill_underfunded(month, current) do
+    month = month!(month)
+
+    Repo.transact(fn ->
+      fills = Budget.fill_underfunded(budget(), month, month!(current))
+      with :ok <- put_assignments(fills, month), do: {:ok, fills}
+    end)
+  end
+
+  defp put_assignments(fills, month) do
+    Enum.reduce_while(fills, :ok, fn {category_id, amount}, :ok ->
+      %Assignment{category_id: category_id}
+      |> Assignment.changeset(%{month: month, amount: amount})
+      |> upsert_assignment()
+      |> case do
+        {:ok, _assignment} -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
   end
 
   @doc """

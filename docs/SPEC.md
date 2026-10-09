@@ -141,40 +141,46 @@ not whole cents.
 
 ## Budget rules
 
-YNAB's math, with one deliberate difference: money is never borrowed from a later month. The method is YNAB's
-too: every euro gets assigned, and overspending is dealt with. The UI treats RTA > 0 and overspent categories as
-open tasks (green "assign" box, red "n overspent" chip, "cover overspending" popover that picks the source
-category), and RTA = 0 with nothing overspent as the resting state.
+YNAB's math as it is today. The method is YNAB's too: every euro gets assigned, and overspending is dealt with.
+The UI treats RTA > 0 and overspent categories as open tasks (green "assign" box, red "n overspent" chip, "cover
+overspending" popover that picks the source category), and RTA = 0 with nothing overspent as the resting state.
 
 - **Ready to Assign (RTA)** per month m, cumulative:
   RTA(m) = income up to and including m − assigned up to and including m − overspending of the months before m
 - **Available** per category and month = max(available last month, 0) + assigned + activity; for the first month
   the carry is 0
-- **Overspending** (negative available): shown red; the category starts the next month at 0 and the amount is
-  subtracted from RTA. There are no credit cards, so YNAB's credit overspending and payment categories do not
-  exist.
+- **Overspending** (negative available): shown red; the category starts the next month at 0 and the full amount
+  is subtracted from that month's RTA. A negative available is never carried into the next month (YNAB 4 could).
+  There are no credit cards, so YNAB's credit overspending and payment categories do not exist.
 - Shown as "Zu verteilen" in a month: RTA(m) − assigned in later months (as YNAB's UI does; the API's
   `to_be_budgeted` is RTA(m) without that subtraction), with a line "assigned in future months"
 - Both formulas reproduce YNAB's API numbers exactly (`to_be_budgeted`, category `balance`), checked against a
   real budget: every month and every category-month matched.
-- **No borrowing** (the difference): YNAB lets assignments push RTA below zero, which silently takes the money
-  from next month's income. Abakus refuses an assignment that would make RTA negative in its month or any later
-  month; the input shows how much is left. RTA can still turn negative through overspending; then it is red with
-  the action "cover from categories". Imported history keeps its negative months as they were.
+- **Assignments are never refused**, as in YNAB: RTA can go below zero through assignments or overspending; then
+  it is red with the action "cover from categories".
+- **Uncovered months**: while a later month's RTA is below zero, the month card warns which months are not covered
+  and by how much ("November nicht gedeckt: es fehlen 300 €"), up to the last month with data or that changes RTA
+  (the empty months after it only repeat it). Overspending only shows up in the next month's RTA, so the month card alone would not
+  tell.
+- Transactions in budget accounts without a category form an "uncategorised" row that carries and overspends
+  like a category but takes no assignments
 - Transfers between budget accounts have no category; transfers between a budget and a tracking account need one
 - Income is what is categorised "Ready to Assign", the only income category; it is available in the month it is
   dated. Inflows to other categories (refunds) are valid and count as those categories' activity.
 - Targets: only YNAB's **needed for spending** (`NEED`), the one type in use:
   - monthly amount, or yearly amount due on a date (spread over the months until then)
   - "set aside another" (`goal_needs_whole_amount` true: assigned this month counts) or "refill up to" (false:
-    available counts)
+    what is carried counts, plus what is assigned)
   - per category and month: underfunded amount, progress, snoozed; one action fills all underfunded categories
-    from RTA (in category order, as far as RTA reaches)
+    from RTA (in budget order, hidden ones skipped, as far as RTA reaches without what later months have
+    assigned, in a closed month too)
   - UI copied from YNAB: progress bar and status under the name ("Finanziert", "Im Plan", "Noch 13,99 € nötig
     bis zum 31.", "Überzogen"), pill icons, inspector with ring, "assign X more" button and target editor
   - other goal types (`TB`, `TBD`, `MF`, `DEBT`) only if needed later
 - All of this is one pure module (`Abakus.Budget`) computed from assignments and transactions; months are not
-  stored as snapshots. Property tests plus fixtures checked against YNAB's own numbers (see acceptance v1).
+  stored as snapshots. It computes every month from the first with data to the month after the last with data,
+  where that month's overspending lands. Property tests plus hand-computed, fictional fixtures in YNAB's month format; the YNAB
+  import checks it against YNAB's own numbers (see acceptance v1).
 
 ## Budget view
 

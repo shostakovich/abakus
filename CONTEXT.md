@@ -25,8 +25,8 @@ A category the app needs for itself and does not list with the others; Ready to 
 _Avoid_: System category
 
 **Ready to Assign**:
-Money that has come in but is not assigned to a category yet; income is booked to this internal category. UI "Zu
-verteilen".
+Money that has come in but is not assigned to a category yet; income is booked to this internal category.
+Cumulative per month; a month shows it less what later months have assigned. UI "Zu verteilen".
 _Avoid_: To be budgeted, RTA in UI text, unassigned
 
 **Assignment**:
@@ -42,10 +42,20 @@ What a category holds at the end of a month: last month's available if positive,
 "Verfügbar".
 _Avoid_: Balance (that is an account's), remaining
 
+**Uncategorised**:
+The budget row of transactions in budget accounts without a category; it carries and overspends like a category
+but takes no assignments. UI "Nicht kategorisiert".
+_Avoid_: Unassigned, no category
+
 **Overspending**:
 A negative available; the category starts the next month at zero and Ready to Assign pays the difference. UI
 "Überzogen".
 _Avoid_: Deficit, borrowing
+
+**Uncovered month**:
+A later month whose Ready to Assign is below zero, seen from an earlier month, which warns about it; assignments
+are never refused for it. UI "nicht gedeckt".
+_Avoid_: Shortfall month, borrowed month
 
 ### Targets
 
@@ -63,7 +73,8 @@ A target counting what is assigned in the month ("set aside another X"). UI "Wei
 _Avoid_: Needs whole amount
 
 **Refill**:
-A target counting what is available in the month ("refill up to X"). UI "Auffüllen bis".
+A target counting what is carried into the month plus what is assigned, spending aside ("refill up to X"). UI
+"Auffüllen bis".
 _Avoid_: Top up
 
 **Snooze**:

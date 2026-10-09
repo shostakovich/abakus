@@ -11,8 +11,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 
 - Months side by side: 1, 2 or 3, chosen automatically from the window width, recalculated on resize, no manual
   setting; one month on phones
-- Month header explains RTA: not assigned last month − overspent last month + income − assigned = Zu verteilen
-  (red "Zu viel verteilt" only in imported history)
+- Month header explains RTA: not assigned last month − overspent last month + income − assigned − assigned in
+  future months = Zu verteilen (red "Zu viel verteilt" when negative)
 - Column headers carry the month totals; fixed category column; months as separate blocks
 - Month strip with year, selected range highlighted, arrows at both ends
 
@@ -55,8 +55,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 ## Method
 
 Every euro gets assigned and overspending is dealt with: RTA > 0 and overspent categories are open tasks, RTA =
-0 with nothing overspent is the resting state. Abakus never lets an assignment push RTA below zero (no
-borrowing from next month's income).
+0 with nothing overspent is the resting state. Assignments are never refused, as in YNAB; while a later month's
+RTA is below zero, the month card says which months are not covered and by how much.
 
 ## Review
 
