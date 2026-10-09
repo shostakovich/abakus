@@ -325,7 +325,7 @@
   <!-- Mobile header -->
   <header class="d-flex d-lg-none align-items-center gap-2 px-3 pt-3">
     <a class="fw-bold fs-5 text-decoration-none text-body me-auto d-flex align-items-center gap-2" href="#budget"><img src="icon.svg" alt="" width="26" height="26"> Haushalt</a>
-    <a href="#mehr" class="app-avatar rounded-circle text-bg-primary d-flex align-items-center justify-content-center fw-bold text-decoration-none" aria-label="Einstellungen (Robert)">R</a>
+    <a href="#mehr" class="app-avatar rounded-circle text-bg-primary d-flex align-items-center justify-content-center fw-bold text-decoration-none" aria-label="Einstellungen (Max)">M</a>
   </header>
 
   <main class="app container-fluid px-3">
@@ -434,7 +434,7 @@
       <div class="d-flex flex-wrap align-items-end gap-3 mb-3">
         <div class="me-auto">
           <h1 class="h2 mb-0" id="t-import">Import &amp; Sync</h1>
-          <div class="small text-body-secondary">Bankabruf über Enable Banking (PSD2) oder Datei aus MoneyMoney. „Geteilt“ füllt Zipfelkasse, das Depot zipfelfolio.</div>
+          <div class="small text-body-secondary">Bankabruf über Enable Banking (PSD2) oder Bank-Export (OFX/QFX). „Geteilt“ füllt die Ausgaben-App, das Depot die Depot-App.</div>
         </div>
       </div>
       <ul class="nav nav-tabs mb-3" role="tablist">
@@ -478,9 +478,9 @@
               <div class="card">
                 <div class="card-header">Ohne Bankabruf</div>
                 <ul class="list-group list-group-flush small">
-                  <li class="list-group-item"><span class="fw-semibold">Girokonto Nordbank</span><div class="text-body-secondary">Datei-Import aus MoneyMoney (QFX), zuletzt 07.10. Banksaldo zum Abgleichen kommt aus der Datei.</div></li>
-                  <li class="list-group-item"><span class="fw-semibold">Geteilt</span><div class="text-body-secondary">Zipfelkasse bucht gemeinsame Ausgaben über die API, zuletzt heute 07:55</div></li>
-                  <li class="list-group-item"><span class="fw-semibold">Depot</span><div class="text-body-secondary">Wert kommt aus zipfelfolio als „Wertänderung“, zuletzt 08.10.</div></li>
+                  <li class="list-group-item"><span class="fw-semibold">Girokonto Nordbank</span><div class="text-body-secondary">Datei-Import aus dem Bank-Export (QFX), zuletzt 07.10. Banksaldo zum Abgleichen kommt aus der Datei.</div></li>
+                  <li class="list-group-item"><span class="fw-semibold">Geteilt</span><div class="text-body-secondary">Die Ausgaben-App bucht gemeinsame Ausgaben über die API, zuletzt heute 07:55</div></li>
+                  <li class="list-group-item"><span class="fw-semibold">Depot</span><div class="text-body-secondary">Wert kommt aus der Depot-App als „Wertänderung“, zuletzt 08.10.</div></li>
                 </ul>
               </div>
           </div>
@@ -492,7 +492,7 @@
               <label class="app-drop d-flex flex-column align-items-center justify-content-center text-center gap-2 p-4" for="imp-input">
                 <svg class="app-icon" style="width:2rem;height:2rem" aria-hidden="true"><use href="#i-upload"/></svg>
                 <span class="fw-semibold">QFX- oder OFX-Datei wählen</span>
-                <span class="small text-body-secondary">MoneyMoney: Konto markieren → Ablage → Umsätze exportieren → OFX</span>
+                <span class="small text-body-secondary">Bank-Export: in der Banking-App die Umsätze des Kontos als OFX oder QFX exportieren</span>
                 <input type="file" class="form-control form-control-sm mt-2" id="imp-input" accept=".qfx,.ofx" data-imp-file>
               </label>
               <button type="button" class="btn btn-outline-secondary btn-sm" data-imp-sample>Beispieldatei laden</button>
@@ -501,7 +501,7 @@
             <div class="col-lg-8" data-imp-preview hidden>
               <div class="card">
                 <div class="card-header d-flex flex-wrap align-items-center gap-2">
-                  <svg class="app-icon" aria-hidden="true"><use href="#i-file"/></svg><span class="fw-semibold me-auto">MoneyMoney-Export_Nordbank_2026-10.qfx</span>
+                  <svg class="app-icon" aria-hidden="true"><use href="#i-file"/></svg><span class="fw-semibold me-auto">Umsaetze_Nordbank_2026-10.qfx</span>
                   <span class="small text-body-secondary">30 Buchungen · 08.09.–07.10.2026</span>
                 </div>
                 <div class="card-body d-flex flex-column gap-3">
@@ -565,7 +565,7 @@
           <div class="card" data-part="zugang">
             <div class="card-header d-flex align-items-center gap-2"><svg class="app-icon" aria-hidden="true"><use href="#i-plug"/></svg>API-Tokens</div>
             <div class="card-body">
-              <p class="small text-body-secondary mb-2">YNAB-kompatible API, z. B. für Zipfelkasse. Pfade wie bei YNAB (<code>/plans/{plan_id}/transactions</code>).</p>
+              <p class="small text-body-secondary mb-2">YNAB-kompatible API, z. B. für eine Ausgaben-App. Pfade wie bei YNAB (<code>/plans/{plan_id}/transactions</code>).</p>
               <div class="input-group input-group-sm">
                 <span class="input-group-text">Basis-URL</span>
                 <input class="form-control font-monospace" value="https://abakus.example/api/v1" readonly aria-label="Basis-URL">
@@ -573,7 +573,7 @@
               </div>
             </div>
             <ul class="list-group list-group-flush" data-tokens>
-              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Zipfelkasse</span><span class="small text-body-secondary">lesen + schreiben · erstellt 14.07.2026 · zuletzt heute 07:55</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Widerrufen</button></li>
+              <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Ausgaben-App</span><span class="small text-body-secondary">lesen + schreiben · erstellt 14.07.2026 · zuletzt heute 07:55</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Widerrufen</button></li>
               <li class="list-group-item d-flex align-items-center gap-3"><span class="me-auto"><span class="d-block fw-semibold">Tabellen-Export</span><span class="small text-body-secondary">nur lesen · erstellt 02.08.2026 · nie benutzt</span></span><button type="button" class="btn btn-sm btn-outline-secondary" data-remove>Widerrufen</button></li>
             </ul>
             <div class="card-body border-top">

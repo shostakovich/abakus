@@ -94,15 +94,15 @@
   const accounts = [
     { id: "giro", e: "💶", name: "Girokonto", kind: "Girokonto", type: "budget", base: C(2184.37), link: "Verbunden", rec: "2026-10-01", bank: { src: "aus deiner Verbindung, vor 2 Stunden", diff: 0 } },
     { id: "giro2", e: "🏦", name: "Girokonto Nordbank", kind: "Girokonto", type: "budget", base: 0, link: "Datei-Import (QFX)", rec: "2026-09-07", bank: { src: "aus Datei-Import vom 07.10.", diff: C(0.42) } },
-    { id: "geteilt", e: "👫", name: "Geteilt", kind: "Geteilt", type: "budget", base: C(-35.6), link: "Zipfelkasse-API", rec: "2026-09-26", note: "Zipfelkasse bucht gemeinsame Ausgaben über die API, zuletzt heute 07:55.", bank: { src: "Saldo laut Zipfelkasse, heute 07:55", diff: 0 } },
-    { id: "depot", e: "📈", name: "Depot", kind: "Tracking", type: "tracking", base: C(48213.4), link: "zipfelfolio", note: "Wert aus zipfelfolio, zuletzt 08.10. Kein Bankabruf." },
+    { id: "geteilt", e: "👫", name: "Geteilt", kind: "Geteilt", type: "budget", base: C(-35.6), link: "Ausgaben-App (API)", rec: "2026-09-26", note: "Die Ausgaben-App bucht gemeinsame Ausgaben über die API, zuletzt heute 07:55.", bank: { src: "Saldo laut Ausgaben-App, heute 07:55", diff: 0 } },
+    { id: "depot", e: "📈", name: "Depot", kind: "Tracking", type: "tracking", base: C(48213.4), link: "Depot-App", note: "Wert aus der Depot-App, zuletzt 08.10. Kein Bankabruf." },
   ];
   const acc = id => accounts.find(a => a.id === id);
   const accText = a => `${a.e} ${a.name}`;
 
   let seq = 100;
   const T = (acc, date, payee, cat, amount, status = "c", more = {}) => ({ id: "t" + seq++, acc, date, payee, cat, amount: C(amount), status, memo: "", ...more });
-  const zk = share => ({ memo: `Zipfelkasse · bezahlt von Jana, dein Anteil ${share}` });
+  const zk = share => ({ memo: `Ausgaben-App · bezahlt von Erika, dein Anteil ${share}` });
   const imp = more => ({ approved: false, imported: true, ...more });
   const txs = [
     T("giro", "2026-10-01", "Arbeitgeber Muster GmbH", "rta", 3240, "c", { memo: "Gehalt Oktober" }),
@@ -126,9 +126,9 @@
     T("giro", "2026-10-07", "Drogerie Sauber", "drog", -48.75, "c", imp({ matchOf: "t-manual" })),
     T("giro", "2026-10-08", "Lastschrift Muster Abo GmbH", null, -9.99, "c", imp({ memo: "Mandat MA-4471" })),
     T("giro", "2026-09-30", "Frischmarkt", "lebensm", -63.12, "c", { hist: true }),
-    T("giro", "2026-09-30", "Geteilt", null, -96.2, "c", { hist: true, transfer: "geteilt", memo: "Ausgleich September (Zipfelkasse)" }),
+    T("giro", "2026-09-30", "Geteilt", null, -96.2, "c", { hist: true, transfer: "geteilt", memo: "Ausgleich September (Ausgaben-App)" }),
     T("giro", "2026-09-29", "Café Kranich", "resto", -12.4, "c", { hist: true }),
-    T("giro", "2026-09-27", "Pizzeria Da Mario", "resto", -46.8, "r", { hist: true, memo: "Geburtstag Jana" }),
+    T("giro", "2026-09-27", "Pizzeria Da Mario", "resto", -46.8, "r", { hist: true, memo: "Geburtstag Erika" }),
     T("giro", "2026-09-26", "Online-Buchhandlung", "buecher", -16.9, "r", { hist: true }),
     T("giro", "2026-09-22", "Werkstatt Schrauber", "kfzrep", -312.8, "r", { hist: true, memo: "Inspektion" }),
     T("giro", "2026-09-01", "Girokonto Nordbank", null, -200, "r", { hist: true, transfer: "giro2", memo: "Rücklagen September" }),
@@ -140,9 +140,9 @@
     T("geteilt", "2026-10-05", "Wochenmarkt", "lebensm", -23.5, "c", zk("50 % von 47,00 €")),
     T("geteilt", "2026-10-06", "Café Kranich", "resto", -7.8, "c", zk("50 % von 15,60 €")),
     T("geteilt", "2026-10-07", "Kino Lichtspiel", "hobby", -12.5, "c", zk("50 % von 25,00 €")),
-    T("geteilt", "2026-09-30", "Girokonto", null, 96.2, "c", { hist: true, transfer: "giro", memo: "Ausgleich September (Zipfelkasse)" }),
+    T("geteilt", "2026-09-30", "Girokonto", null, 96.2, "c", { hist: true, transfer: "giro", memo: "Ausgleich September (Ausgaben-App)" }),
     ...[["08", 412.18, "Kursänderung"], ["07", -186.55, "Kursänderung"], ["06", 95.2, "Kursänderung"], ["02", 196.86, "Ausschüttung"], ["01", 1125, "Sparplan-Kauf"]]
-      .map(([d, v, memo]) => T("depot", `2026-10-${d}`, "Wertänderung", null, v, "c", { hist: true, memo: `${memo} · aus zipfelfolio` })),
+      .map(([d, v, memo]) => T("depot", `2026-10-${d}`, "Wertänderung", null, v, "c", { hist: true, memo: `${memo} · aus der Depot-App` })),
   ];
   const txById = id => txs.find(t => t.id === id);
   const counted = t => !t.hist && !t.matchOf && acc(t.acc).type === "budget";
@@ -1153,7 +1153,7 @@
     if (t.approved === false || !t.cat) return `<select class="form-select form-select-sm${t.cat ? "" : " border-warning text-warning-emphasis"}" style="max-width:14rem" data-categorize="${t.id}" aria-label="Kategorie">${t.cat ? "" : '<option value="">Kategorie wählen</option>'}${catOnlyOpts(t.cat)}</select>`;
     return groupedCat(cat(t.cat));
   };
-  const clearCell = t => acc(t.acc).type === "tracking" ? '<span class="app-clear is-cleared" title="Von zipfelfolio gemeldet">C</span>'
+  const clearCell = t => acc(t.acc).type === "tracking" ? '<span class="app-clear is-cleared" title="Von der Depot-App gemeldet">C</span>'
     : t.status === "r" ? `<span class="app-clear is-reconciled" title="Abgeschlossen">${icon("i-lock")}</span>`
     : `<button type="button" class="app-clear${t.status === "c" ? " is-cleared" : ""}" data-toggle-clear="${t.id}" aria-label="${t.status === "c" ? "Abgeglichen" : "Nicht abgeglichen"}, umschalten">C</button>`;
   const FLAGS = [null, ["Rot", "tomato"], ["Orange", "pumpkin"], ["Gelb", "mustard"], ["Grün", "moss"], ["Blau", "denim"], ["Lila", "plum"]];
@@ -1161,8 +1161,8 @@
   const flagPicker = t => `<div class="fw-semibold small mb-2">Markierung</div><div class="d-flex flex-wrap gap-1">${FLAGS.map((f, i) => `<button type="button" class="btn btn-sm btn-light d-inline-flex align-items-center gap-1${(t.flag || 0) === i ? " active" : ""}" data-flag-set="${t.id}|${i}"${f ? ` style="color:var(--felt-${f[1]})"` : ""}>${f ? icon("i-flag") : ""}<span class="text-body">${f ? f[0] : "keine"}</span></button>`).join("")}</div>`;
   const approveBtn = t => (t.approved === false && !t.matchOf ? `<button type="button" class="btn btn-sm btn-primary app-approve" data-approve="${t.id}" title="Bestätigen" aria-label="${esc(t.payee)} bestätigen">${icon("i-check")}</button>` : "");
   const matchBar = t => { const m = t.matchOf && txById(t.matchOf); return m ? `<span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">${icon("i-link")} passt zu manueller Buchung vom ${dShort(m.date)}</span> <button type="button" class="btn btn-sm btn-primary app-btn-28" data-merge="${t.id}">Zuordnen</button> <button type="button" class="btn btn-sm btn-outline-secondary app-btn-28" data-approve="${t.id}">Trennen</button>` : ""; };
-  // Depot and Geteilt are fed by zipfelfolio and Zipfelkasse, not by hand or file
-  const FEEDS = { depot: "Wert kommt aus zipfelfolio", geteilt: "Buchungen kommen aus Zipfelkasse" };
+  // Depot and Geteilt are fed by a portfolio app and a shared-expenses app, not by hand or file
+  const FEEDS = { depot: "Wert kommt aus der Depot-App", geteilt: "Buchungen kommen aus der Ausgaben-App" };
   const equation = (cl, wb) => {
     const part = (op, v, label, cls = "") => `<div class="d-flex align-items-baseline gap-2"><span class="fs-5 text-body-secondary${op ? "" : " invisible d-sm-none"}" aria-hidden="true">${op || "+"}</span><div><div class="fs-5 fw-semibold tabular-nums text-nowrap ${cls}">${eur(v)}</div><div class="small text-body-secondary">${label}</div></div></div>`;
     return `<div class="d-flex flex-column flex-sm-row flex-wrap gap-1 gap-sm-3">${part("", cl, "Abgeglichen", cl < 0 ? "text-danger" : "text-success")}${part("+", wb - cl, "Nicht abgeglichen")}${part("=", wb, "Arbeitssaldo", wb < 0 ? "text-danger" : "text-success")}</div>`;
@@ -1203,7 +1203,7 @@
     $("[data-feed-hint]").innerHTML = feed ? `${icon("i-info")}${feed}, keine Buchungen von Hand oder per Datei` : "";
     const bud = list.filter(x => x.type === "budget"), trk = list.filter(x => x.type === "tracking"), cl = sum(bud, cleared), wb = sum(bud, balance);
     const plainVal = (v, label) => `<div><div class="fs-5 fw-semibold tabular-nums text-nowrap">${eur(v)}</div><div class="small text-body-secondary">${label}</div></div>`;
-    $("[data-reg-balances]").innerHTML = track ? plainVal(balance(a), "Wert laut zipfelfolio")
+    $("[data-reg-balances]").innerHTML = track ? plainVal(balance(a), "Wert laut Depot-App")
       : all ? `<div><div class="small fw-semibold text-uppercase text-body-secondary mb-1">Budgetkonten</div>${equation(cl, wb)}</div><div class="vr d-none d-sm-block"></div>${plainVal(sum(trk, balance), "Tracking")}<div class="vr d-none d-sm-block"></div>${plainVal(wb + sum(trk, balance), "Gesamt")}`
       : equation(cl, wb);
     // phones: one compact line that opens the equation

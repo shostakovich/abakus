@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#3f7d5a" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#212529" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title default="Abakus" suffix=" · Abakus">
+      {assigns[:page_title]}
+    </.live_title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href={~p"/images/icon.svg"} type="image/svg+xml" />
+    <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
+    <script id="theme-script">
+      (() => {
+        let theme;
+        try { theme = localStorage.getItem("theme"); } catch {}
+        if (theme === "light" || theme === "dark") document.documentElement.dataset.bsTheme = theme;
+      })();
+    </script>
+    <link rel="preconnect" href="https://felt-css.rocu.de" />
+    <link rel="stylesheet" href="https://felt-css.rocu.de/felt.css" />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
+    </script>
+  </head>
+  <body>
+    {@inner_content}
+  </body>
+</html>
