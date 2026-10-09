@@ -1,0 +1,16 @@
+# Example: secrets (SECRET_KEY_BASE, SMTP, ...) go in .env next to this file.
+# Put the app behind your HTTPS reverse proxy; it expects X-Forwarded-Proto.
+# Before the first start: mkdir data && chown 1000:1000 data
+services:
+  abakus:
+    image: ghcr.io/shostakovich/abakus:${ABAKUS_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PHX_HOST: ${PHX_HOST:-abakus.example.org}
+    # For a proxy on the same host; with a containerised proxy, join its network instead.
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      # Owned by uid 1000.
+      - ./data:/app/data

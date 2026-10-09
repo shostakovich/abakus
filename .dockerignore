@@ -1,0 +1,15 @@
+# The Dockerfile copies only what it needs; this keeps the build context small.
+/.git/
+/_build/
+/deps/
+/cover/
+/tmp/
+/storage/
+/data/
+/.env*
+erl_crash.dump
+# Built by esbuild and phx.digest, as in .gitignore; the image builds its own.
+/priv/static/assets/
+/priv/static/cache_manifest.json
+/priv/static/**/*-????????????????????????????????.*
+/priv/static/**/*.gz
