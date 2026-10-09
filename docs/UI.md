@@ -11,8 +11,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 
 - Months side by side: 1, 2 or 3, chosen automatically from the window width, recalculated on resize, no manual
   setting; one month on phones
-- Month header explains RTA: not assigned last month − overspent last month + income − assigned = Zu verteilen
-  (red "Zu viel verteilt" only in imported history)
+- Month header explains RTA: not assigned last month − overspent last month + income − assigned − assigned in
+  future months = Zu verteilen (red "Zu viel verteilt" only in imported history)
 - Column headers carry the month totals; fixed category column; months as separate blocks
 - Month strip with year, selected range highlighted, arrows at both ends
 

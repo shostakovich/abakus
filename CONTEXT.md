@@ -63,7 +63,8 @@ A target counting what is assigned in the month ("set aside another X"). UI "Wei
 _Avoid_: Needs whole amount
 
 **Refill**:
-A target counting what is available in the month ("refill up to X"). UI "Auffüllen bis".
+A target counting what is carried into the month plus what is assigned, spending aside ("refill up to X"). UI
+"Auffüllen bis".
 _Avoid_: Top up
 
 **Snooze**:

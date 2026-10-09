@@ -167,7 +167,7 @@ category), and RTA = 0 with nothing overspent as the resting state.
 - Targets: only YNAB's **needed for spending** (`NEED`), the one type in use:
   - monthly amount, or yearly amount due on a date (spread over the months until then)
   - "set aside another" (`goal_needs_whole_amount` true: assigned this month counts) or "refill up to" (false:
-    available counts)
+    what is carried counts, plus what is assigned)
   - per category and month: underfunded amount, progress, snoozed; one action fills all underfunded categories
     from RTA (in category order, as far as RTA reaches)
   - UI copied from YNAB: progress bar and status under the name ("Finanziert", "Im Plan", "Noch 13,99 € nötig
