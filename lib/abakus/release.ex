@@ -22,19 +22,7 @@ defmodule Abakus.Release do
   `bin/abakus eval 'Abakus.Release.invite("name@example.com")'`.
   """
   def invite(email) do
-    Application.load(@app)
-
-    # The link needs the endpoint's URL, but the container's server already holds the port.
-    endpoint = Application.get_env(@app, AbakusWeb.Endpoint, [])
-    Application.put_env(@app, AbakusWeb.Endpoint, Keyword.put(endpoint, :server, false))
-
-    Application.put_env(
-      @app,
-      Abakus.Repo,
-      Keyword.merge(Application.get_env(@app, Abakus.Repo), @repo_opts)
-    )
-
-    {:ok, _apps} = Application.ensure_all_started(@app)
+    start_without_server()
 
     case Abakus.Users.invite_user(email, &AbakusWeb.UserAuth.magic_link_url/1) do
       {:ok, user} ->
@@ -49,5 +37,21 @@ defmodule Abakus.Release do
         IO.puts(:stderr, "Could not invite #{email}: #{inspect(changeset.errors)}")
         System.halt(1)
     end
+  end
+
+  # The endpoint's URL is needed (links in mails), but the container's server already holds the port.
+  defp start_without_server do
+    Application.load(@app)
+
+    endpoint = Application.get_env(@app, AbakusWeb.Endpoint, [])
+    Application.put_env(@app, AbakusWeb.Endpoint, Keyword.put(endpoint, :server, false))
+
+    Application.put_env(
+      @app,
+      Abakus.Repo,
+      Keyword.merge(Application.get_env(@app, Abakus.Repo), @repo_opts)
+    )
+
+    {:ok, _apps} = Application.ensure_all_started(@app)
   end
 end
