@@ -29,12 +29,34 @@ comes from a shared-expenses app's recurring expenses through the API.
 
 ## Login
 
-- `phx.gen.auth` magic link as base and recovery; no passwords, no sign-up (invite or mix task)
+The context is `Abakus.Users` (an "account" is a bank account here):
+
+- `phx.gen.auth` magic link as base and recovery; no passwords, no sign-up. An invite creates the user and
+  mails a sign-in link at once: `mix abakus.invite EMAIL`, in the container
+  `bin/abakus eval 'Abakus.Release.invite("EMAIL")'`
 - Passkeys implemented in-house with `:crypto`, `:public_key`, `JSON`; attestation `none`; discoverable
-  credentials; relying party id = the configured host (`PHX_HOST`)
+  credentials; relying party id = the configured host (`PHX_HOST`); challenges are valid 5 minutes, one open
+  per session, dropped from the session on any attempt. A sign-in challenge travels in the signed session, so
+  anonymous requests store nothing; a challenge that signed someone in is recorded (as a hash, in ETS) until
+  it expires and refused again, failed attempts record nothing. A registration challenge stays on the server;
+  at most 1 000 are open at a time, beyond that the server asks to try again. Changing passkeys or the email
+  needs a sign-in within 10 minutes, which sends the user back to the settings afterwards; signing in again
+  keeps open tabs working. A new passkey is announced by mail
 - Tests fake the authenticator with `:crypto` and break every check once
-- Public internet: magic link requests rate limited, secure cookies, CSP; nothing is reachable without a session
-  except `/up`, `/api/v1` (bearer token) and `/mcp/<secret>`
+- Public internet: nothing is reachable without a session except `/up`, `/api/v1` (bearer token) and
+  `/mcp/<secret>` (a test walks all routes)
+- Magic link requests: at most 3 per address (trimmed, lower case) per 15 minutes, the validity of a link, and
+  30 in total per hour, sliding windows in ETS. Unknown addresses count in a bucket of their own (30 per hour),
+  so they cannot lock users out. Over a limit no mail goes out, the page answers the same and the log gets a
+  warning with a short hash of the address; mails are sent in the background (at most 50 at a time, more
+  requests are dropped with the same answer), so the response time tells nothing either
+- Cookies `HttpOnly`, `SameSite=Lax`, `secure` behind https
+- CSP with a nonce per request (for the inline theme script) on every response, error pages and static files
+  included; only the LiveView socket's transport responses (`/live`) bypass the plugs. `default-src 'self'`,
+  scripts `'self'` + nonce, styles and their images also from `felt-css.rocu.de` (images also `data:`), fonts
+  `'self'`, `connect-src` `'self'` + the endpoint's `wss://` (`ws://` in development), `object-src` and
+  `frame-ancestors 'none'`, `base-uri` and `form-action` `'self'`. No `'unsafe-inline'`: LiveView sets styles
+  through the CSSOM, which CSP allows. Only the development mailbox gets a looser policy. Error pages are German
 
 ## Domain
 

@@ -23,4 +23,11 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
 - UI: felt-css (clean look) with Bootstrap class names via `core_components`. A felt.css bug becomes an issue in
   `shostakovich/felt-css`, the app keeps plain Bootstrap markup.
 - Theme (light, dark, auto) is per device: `localStorage.theme`, applied by `#theme-script` in the root layout.
+- Sign-in lives in `Abakus.Users` (`User`, `UserToken`, `Passkey`, `Scope`, `UserNotifier`) and
+  `AbakusWeb.UserAuth`. "Account" means a bank account, so nothing about users is called account.
+- Passkeys (`Abakus.WebAuthn`) check origin and RP ID from the endpoint URL, so they work on `localhost` and the
+  configured public host (`PHX_HOST`), not on a LAN IP. Every check has a breaking test in
+  `test/abakus/web_authn_test.exs` using `FakeAuthenticator`; a new check gets one too.
+- Every page needs a session; `test/abakus_web/router_test.exs` lists the public ones. The CSP allows no inline
+  script without `nonce={@csp_nonce}` and no inline `style` attributes.
 - Dependencies: few and mature, each with a reason.
