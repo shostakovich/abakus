@@ -102,7 +102,11 @@ defmodule Abakus.Categories do
     %Assignment{category_id: category.id}
     |> Assignment.changeset(%{month: month, amount: amount})
     |> validate_regular(category)
-    |> Repo.insert(
+    |> upsert_assignment()
+  end
+
+  defp upsert_assignment(changeset) do
+    Repo.insert(changeset,
       on_conflict: {:replace, [:amount, :updated_at]},
       conflict_target: [:category_id, :month],
       returning: true
