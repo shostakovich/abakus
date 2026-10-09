@@ -156,7 +156,7 @@ defmodule Abakus.BudgetPropertyTest do
 
       {expected, _left} =
         before.categories
-        |> Enum.reject(&(&1.category_id in hidden))
+        |> Enum.reject(&(&1.category_id in hidden or &1.snoozed))
         |> Enum.flat_map_reduce(max(free, 0), fn row, left ->
           case min(row.underfunded, left) do
             0 -> {[], left}

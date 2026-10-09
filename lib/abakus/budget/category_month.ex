@@ -2,7 +2,8 @@ defmodule Abakus.Budget.CategoryMonth do
   @moduledoc """
   A category in a month; `category_id` nil is the uncategorised row (transactions without a category).
   `carried` is last month's available if positive. `needed` is what the target asks for this month,
-  `underfunded` what of it is not assigned yet, `progress` from 0 to 1 (nil without a target or when snoozed).
+  `underfunded` what of it is not assigned yet, `progress` from 0 to 1 (nil without a target). A `snoozed` month
+  still has them, but counts as done: the month's underfunded total and filling leave it out.
   """
 
   defstruct [

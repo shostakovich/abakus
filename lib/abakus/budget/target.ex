@@ -5,7 +5,7 @@ defmodule Abakus.Budget.Target do
   to the due month, rounded up to the cent, then the next cycle starts; "set aside another" counts what was
   assigned since the cycle began, "refill up to" what is carried. The first cycle begins with the target (its
   first version of the same cadence since it was last ended), later ones the month after the last due month. A
-  snoozed target needs nothing.
+  snooze changes none of this, as in YNAB; the row only carries it.
 
   A surplus (more saved than the amount) is not spread: money taken out of it is underfunded only as far as it
   goes below the amount, as YNAB reports it.
@@ -41,10 +41,7 @@ defmodule Abakus.Budget.Target do
   """
   def apply(%CategoryMonth{} = row, nil, _snoozed, _assigned_in), do: row
 
-  def apply(%CategoryMonth{} = row, {target, _since}, true, _assigned_in),
-    do: %{row | target: target, snoozed: true}
-
-  def apply(%CategoryMonth{} = row, {target, since}, false, assigned_in) do
+  def apply(%CategoryMonth{} = row, {target, since}, snoozed, assigned_in) do
     {asks, saved} = asks(target, since, row, assigned_in)
     needed = max(asks, 0)
     underfunded = max(asks - row.assigned, 0)
@@ -54,7 +51,8 @@ defmodule Abakus.Budget.Target do
       | target: target,
         needed: needed,
         underfunded: underfunded,
-        progress: progress(target, needed, underfunded, saved + row.assigned)
+        progress: progress(target, needed, underfunded, saved + row.assigned),
+        snoozed: snoozed
     }
   end
 

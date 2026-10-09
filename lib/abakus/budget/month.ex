@@ -5,7 +5,7 @@ defmodule Abakus.Budget.Month do
   in a closed month, as it ended. The month header explains it: `not_assigned_last_month` −
   `overspent_last_month` + `income` − `assigned` = `ready_to_assign`. `uncovered` lists later months whose Ready to
   Assign is below zero as `{month, shortfall}`. Totals include the uncategorised row; `overspent` is the sum of
-  negative availables as a positive amount.
+  negative availables as a positive amount; `underfunded` leaves out snoozed categories.
   """
 
   alias Abakus.Budget.CategoryMonth
@@ -42,7 +42,7 @@ defmodule Abakus.Budget.Month do
       activity: sum(rows, & &1.activity),
       available: sum(rows, & &1.available),
       overspent: sum(rows, &max(-&1.available, 0)),
-      underfunded: sum(rows, & &1.underfunded)
+      underfunded: sum(rows, &if(&1.snoozed, do: 0, else: &1.underfunded))
     }
   end
 
