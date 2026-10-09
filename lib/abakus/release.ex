@@ -1,6 +1,9 @@
 defmodule Abakus.Release do
   @moduledoc "Tasks run from the release, where Mix is not available."
 
+  alias Abakus.YnabImport
+  alias Abakus.YnabImport.Report
+
   @app :abakus
 
   # A second connection would race the first to switch an empty file to WAL.
@@ -35,6 +38,27 @@ defmodule Abakus.Release do
 
       {:error, changeset} ->
         IO.puts(:stderr, "Could not invite #{email}: #{inspect(changeset.errors)}")
+        System.halt(1)
+    end
+  end
+
+  @doc """
+  Replaces the budget with a YNAB plan and checks the numbers (`Abakus.YnabImport`), with the token passed to
+  this command only: `docker compose exec -e YNAB_TOKEN=… abakus bin/abakus eval 'Abakus.Release.import_ynab()'`;
+  with several plans, pass the plan's id. Exits with 1 when it did not run or the numbers differ.
+  """
+  def import_ynab(plan_id \\ nil) do
+    start_without_server()
+
+    result = with {:ok, token} <- YnabImport.token(), do: YnabImport.run(token, plan_id)
+
+    case result do
+      {:ok, report} ->
+        Enum.each(Report.lines(report), &IO.puts/1)
+        if report.differences != [], do: System.halt(1)
+
+      {:error, reason} ->
+        Enum.each(YnabImport.error_lines(reason), &IO.puts(:stderr, &1))
         System.halt(1)
     end
   end
