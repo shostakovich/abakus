@@ -40,7 +40,9 @@ defmodule Abakus.MixProject do
       {:gen_smtp, "~> 1.2"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:lazy_html, ">= 0.1.0", only: :test}
+      {:lazy_html, ">= 0.1.0", only: :test},
+      # Property tests for the budget math.
+      {:stream_data, "~> 1.4", only: :test}
     ]
   end
 

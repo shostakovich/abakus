@@ -1,0 +1,221 @@
+{
+  "description": "Overspending, a negative assignment and uncategorised spending over three months; no targets. Hand-computed, fictional.",
+  "current_month": "2026-11-01",
+  "categories": [
+    {
+      "id": "rent",
+      "hidden": false
+    },
+    {
+      "id": "groceries",
+      "hidden": false
+    },
+    {
+      "id": "fun",
+      "hidden": false
+    }
+  ],
+  "targets": [],
+  "snoozes": [],
+  "transactions": [
+    {
+      "date": "2026-09-01",
+      "amount": 2000000,
+      "category_id": "ready_to_assign"
+    },
+    {
+      "date": "2026-09-03",
+      "amount": -800000,
+      "category_id": "rent"
+    },
+    {
+      "date": "2026-09-10",
+      "amount": -450000,
+      "category_id": "groceries"
+    },
+    {
+      "date": "2026-09-12",
+      "amount": -50000,
+      "category_id": "fun"
+    },
+    {
+      "date": "2026-09-20",
+      "amount": -30000,
+      "category_id": null
+    },
+    {
+      "date": "2026-10-01",
+      "amount": 1500000,
+      "category_id": "ready_to_assign"
+    },
+    {
+      "date": "2026-10-03",
+      "amount": -800000,
+      "category_id": "rent"
+    },
+    {
+      "date": "2026-10-11",
+      "amount": -300000,
+      "category_id": "groceries"
+    },
+    {
+      "date": "2026-10-25",
+      "amount": -400000,
+      "category_id": "fun"
+    },
+    {
+      "date": "2026-11-04",
+      "amount": -20000,
+      "category_id": "groceries"
+    }
+  ],
+  "assigned": [
+    {
+      "category_id": "rent",
+      "month": "2026-09-01",
+      "amount": 800000
+    },
+    {
+      "category_id": "groceries",
+      "month": "2026-09-01",
+      "amount": 400000
+    },
+    {
+      "category_id": "fun",
+      "month": "2026-09-01",
+      "amount": 200000
+    },
+    {
+      "category_id": "rent",
+      "month": "2026-10-01",
+      "amount": 800000
+    },
+    {
+      "category_id": "groceries",
+      "month": "2026-10-01",
+      "amount": 400000
+    },
+    {
+      "category_id": "fun",
+      "month": "2026-10-01",
+      "amount": 100000
+    },
+    {
+      "category_id": "rent",
+      "month": "2026-11-01",
+      "amount": 800000
+    },
+    {
+      "category_id": "groceries",
+      "month": "2026-11-01",
+      "amount": -50000
+    }
+  ],
+  "months": [
+    {
+      "month": "2026-09-01",
+      "income": 2000000,
+      "to_be_budgeted": 600000,
+      "categories": [
+        {
+          "id": "rent",
+          "budgeted": 800000,
+          "activity": -800000,
+          "balance": 0,
+          "goal_under_funded": null
+        },
+        {
+          "id": "groceries",
+          "budgeted": 400000,
+          "activity": -450000,
+          "balance": -50000,
+          "goal_under_funded": null
+        },
+        {
+          "id": "fun",
+          "budgeted": 200000,
+          "activity": -50000,
+          "balance": 150000,
+          "goal_under_funded": null
+        },
+        {
+          "id": "uncategorised",
+          "budgeted": 0,
+          "activity": -30000,
+          "balance": -30000,
+          "goal_under_funded": null
+        }
+      ]
+    },
+    {
+      "month": "2026-10-01",
+      "income": 1500000,
+      "to_be_budgeted": 720000,
+      "categories": [
+        {
+          "id": "rent",
+          "budgeted": 800000,
+          "activity": -800000,
+          "balance": 0,
+          "goal_under_funded": null
+        },
+        {
+          "id": "groceries",
+          "budgeted": 400000,
+          "activity": -300000,
+          "balance": 100000,
+          "goal_under_funded": null
+        },
+        {
+          "id": "fun",
+          "budgeted": 100000,
+          "activity": -400000,
+          "balance": -150000,
+          "goal_under_funded": null
+        },
+        {
+          "id": "uncategorised",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 0,
+          "goal_under_funded": null
+        }
+      ]
+    },
+    {
+      "month": "2026-11-01",
+      "income": 0,
+      "to_be_budgeted": -180000,
+      "categories": [
+        {
+          "id": "rent",
+          "budgeted": 800000,
+          "activity": 0,
+          "balance": 800000,
+          "goal_under_funded": null
+        },
+        {
+          "id": "groceries",
+          "budgeted": -50000,
+          "activity": -20000,
+          "balance": 30000,
+          "goal_under_funded": null
+        },
+        {
+          "id": "fun",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 0,
+          "goal_under_funded": null
+        },
+        {
+          "id": "uncategorised",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 0,
+          "goal_under_funded": null
+        }
+      ]
+    }
+  ]
+}

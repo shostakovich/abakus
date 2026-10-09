@@ -31,6 +31,9 @@ defmodule Abakus.Ledger.Account do
   @doc "Whether the account is a budget account (its money belongs to the budget), not a tracking account."
   def budget_account?(%__MODULE__{kind: kind}), do: kind in @budget_kinds
 
+  @doc "The kinds of budget accounts."
+  def budget_kinds, do: @budget_kinds
+
   def changeset(account, attrs) do
     account
     |> cast(attrs, [:name, :kind, :fed_by, :closed, :note, :position, :last_reconciled_at])

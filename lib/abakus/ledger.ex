@@ -24,9 +24,24 @@ defmodule Abakus.Ledger do
   import Ecto.Query
 
   alias Abakus.Categories.Category
-  alias Abakus.Ledger.{Account, Matches, Payee, Transaction, TransactionOrigin, Transfers}
+
+  alias Abakus.Ledger.{
+    Account,
+    Matches,
+    Payee,
+    Subtransaction,
+    Transaction,
+    TransactionOrigin,
+    Transfers
+  }
+
   alias Abakus.{Names, References, Repo}
   alias Ecto.Changeset
+
+  # The first day of a date's month, in SQL.
+  defmacrop month(date) do
+    quote do: type(fragment("strftime('%Y-%m-01', ?)", unquote(date)), :date)
+  end
 
   def list_accounts, do: Repo.all(from a in Account, order_by: [a.position, a.id])
 
@@ -112,6 +127,39 @@ defmodule Abakus.Ledger do
   @doc "Transactions in the register, which count for listings and balances: not deleted and no match proposal."
   def in_register,
     do: from(t in Transaction, where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id))
+
+  @doc """
+  What the budget accounts' register adds up to per `{category_id, month}` (the month's first day): a split by its
+  subtransactions, a transaction or subtransaction without a category under `nil`, unless it is a transfer
+  (between budget accounts, which have none). Tracking accounts do not count.
+  """
+  def budget_activity do
+    transactions =
+      from t in in_register(),
+        join: a in assoc(t, :account),
+        where: a.kind in ^Account.budget_kinds(),
+        where: t.id not in subquery(from s in Subtransaction, select: s.transaction_id),
+        where:
+          not is_nil(t.category_id) or
+            (is_nil(t.transfer_transaction_id) and is_nil(t.transfer_subtransaction_id)),
+        group_by: [t.category_id, month(t.date)],
+        select: {{t.category_id, month(t.date)}, sum(t.amount)}
+
+    subtransactions =
+      from s in Subtransaction,
+        join: t in subquery(in_register()),
+        on: t.id == s.transaction_id,
+        join: a in Account,
+        on: a.id == t.account_id,
+        where: a.kind in ^Account.budget_kinds(),
+        where: not is_nil(s.category_id) or is_nil(s.transfer_transaction_id),
+        group_by: [s.category_id, month(t.date)],
+        select: {{s.category_id, month(t.date)}, sum(s.amount)}
+
+    (Repo.all(transactions) ++ Repo.all(subtransactions))
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Map.new(fn {key, amounts} -> {key, Enum.sum(amounts)} end)
+  end
 
   @doc """
   Creates a transaction, with subtransactions for a split. Checks the references and the rules for the accounts

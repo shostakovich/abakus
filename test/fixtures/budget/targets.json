@@ -1,0 +1,333 @@
+{
+  "description": "Monthly set-aside and refill targets, yearly set-aside and refill targets with dates, and a snoozed month. Hand-computed, fictional.",
+  "current_month": "2026-10-01",
+  "categories": [
+    {
+      "id": "phone",
+      "hidden": false
+    },
+    {
+      "id": "groceries",
+      "hidden": false
+    },
+    {
+      "id": "insurance",
+      "hidden": false
+    },
+    {
+      "id": "holiday",
+      "hidden": false
+    },
+    {
+      "id": "gym",
+      "hidden": false
+    }
+  ],
+  "targets": [
+    {
+      "category_id": "phone",
+      "from_month": "2026-09-01",
+      "cadence": "monthly",
+      "amount": 30000,
+      "due_on": null,
+      "set_aside": true
+    },
+    {
+      "category_id": "groceries",
+      "from_month": "2026-09-01",
+      "cadence": "monthly",
+      "amount": 400000,
+      "due_on": null,
+      "set_aside": false
+    },
+    {
+      "category_id": "insurance",
+      "from_month": "2026-09-01",
+      "cadence": "yearly",
+      "amount": 600000,
+      "due_on": "2027-01-15",
+      "set_aside": true
+    },
+    {
+      "category_id": "holiday",
+      "from_month": "2026-09-01",
+      "cadence": "yearly",
+      "amount": 1200000,
+      "due_on": "2026-12-20",
+      "set_aside": false
+    },
+    {
+      "category_id": "gym",
+      "from_month": "2026-09-01",
+      "cadence": "monthly",
+      "amount": 40000,
+      "due_on": null,
+      "set_aside": true
+    }
+  ],
+  "snoozes": [
+    {
+      "category_id": "gym",
+      "month": "2026-10-01"
+    }
+  ],
+  "transactions": [
+    {
+      "date": "2026-09-01",
+      "amount": 3000000,
+      "category_id": "ready_to_assign"
+    },
+    {
+      "date": "2026-09-05",
+      "amount": -30000,
+      "category_id": "phone"
+    },
+    {
+      "date": "2026-09-14",
+      "amount": -350000,
+      "category_id": "groceries"
+    },
+    {
+      "date": "2026-09-20",
+      "amount": -40000,
+      "category_id": "gym"
+    },
+    {
+      "date": "2026-10-12",
+      "amount": -320000,
+      "category_id": "groceries"
+    },
+    {
+      "date": "2026-10-20",
+      "amount": -10000,
+      "category_id": "gym"
+    }
+  ],
+  "assigned": [
+    {
+      "category_id": "phone",
+      "month": "2026-09-01",
+      "amount": 30000
+    },
+    {
+      "category_id": "groceries",
+      "month": "2026-09-01",
+      "amount": 400000
+    },
+    {
+      "category_id": "insurance",
+      "month": "2026-09-01",
+      "amount": 100000
+    },
+    {
+      "category_id": "holiday",
+      "month": "2026-09-01",
+      "amount": 300000
+    },
+    {
+      "category_id": "gym",
+      "month": "2026-09-01",
+      "amount": 40000
+    },
+    {
+      "category_id": "phone",
+      "month": "2026-10-01",
+      "amount": 30000
+    },
+    {
+      "category_id": "groceries",
+      "month": "2026-10-01",
+      "amount": 300000
+    },
+    {
+      "category_id": "insurance",
+      "month": "2026-10-01",
+      "amount": 120000
+    },
+    {
+      "category_id": "phone",
+      "month": "2026-11-01",
+      "amount": 30000
+    },
+    {
+      "category_id": "groceries",
+      "month": "2026-11-01",
+      "amount": 400000
+    },
+    {
+      "category_id": "holiday",
+      "month": "2026-11-01",
+      "amount": 250000
+    }
+  ],
+  "months": [
+    {
+      "month": "2026-09-01",
+      "income": 3000000,
+      "to_be_budgeted": 2130000,
+      "categories": [
+        {
+          "id": "phone",
+          "budgeted": 30000,
+          "activity": -30000,
+          "balance": 0,
+          "goal_under_funded": 0
+        },
+        {
+          "id": "groceries",
+          "budgeted": 400000,
+          "activity": -350000,
+          "balance": 50000,
+          "goal_under_funded": 0
+        },
+        {
+          "id": "insurance",
+          "budgeted": 100000,
+          "activity": 0,
+          "balance": 100000,
+          "goal_under_funded": 20000
+        },
+        {
+          "id": "holiday",
+          "budgeted": 300000,
+          "activity": 0,
+          "balance": 300000,
+          "goal_under_funded": 0
+        },
+        {
+          "id": "gym",
+          "budgeted": 40000,
+          "activity": -40000,
+          "balance": 0,
+          "goal_under_funded": 0
+        }
+      ]
+    },
+    {
+      "month": "2026-10-01",
+      "income": 0,
+      "to_be_budgeted": 1680000,
+      "categories": [
+        {
+          "id": "phone",
+          "budgeted": 30000,
+          "activity": 0,
+          "balance": 30000,
+          "goal_under_funded": 0
+        },
+        {
+          "id": "groceries",
+          "budgeted": 300000,
+          "activity": -320000,
+          "balance": 30000,
+          "goal_under_funded": 50000
+        },
+        {
+          "id": "insurance",
+          "budgeted": 120000,
+          "activity": 0,
+          "balance": 220000,
+          "goal_under_funded": 5000
+        },
+        {
+          "id": "holiday",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 300000,
+          "goal_under_funded": 300000
+        },
+        {
+          "id": "gym",
+          "budgeted": 0,
+          "activity": -10000,
+          "balance": -10000,
+          "goal_under_funded": 0
+        }
+      ]
+    },
+    {
+      "month": "2026-11-01",
+      "income": 0,
+      "to_be_budgeted": 990000,
+      "categories": [
+        {
+          "id": "phone",
+          "budgeted": 30000,
+          "activity": 0,
+          "balance": 60000,
+          "goal_under_funded": 0
+        },
+        {
+          "id": "groceries",
+          "budgeted": 400000,
+          "activity": 0,
+          "balance": 430000,
+          "goal_under_funded": 0
+        },
+        {
+          "id": "insurance",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 220000,
+          "goal_under_funded": 126670
+        },
+        {
+          "id": "holiday",
+          "budgeted": 250000,
+          "activity": 0,
+          "balance": 550000,
+          "goal_under_funded": 200000
+        },
+        {
+          "id": "gym",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 0,
+          "goal_under_funded": 40000
+        }
+      ]
+    },
+    {
+      "month": "2026-12-01",
+      "income": 0,
+      "to_be_budgeted": 990000,
+      "categories": [
+        {
+          "id": "phone",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 60000,
+          "goal_under_funded": 30000
+        },
+        {
+          "id": "groceries",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 430000,
+          "goal_under_funded": 0
+        },
+        {
+          "id": "insurance",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 220000,
+          "goal_under_funded": 190000
+        },
+        {
+          "id": "holiday",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 550000,
+          "goal_under_funded": 650000
+        },
+        {
+          "id": "gym",
+          "budgeted": 0,
+          "activity": 0,
+          "balance": 0,
+          "goal_under_funded": 40000
+        }
+      ]
+    }
+  ]
+}
