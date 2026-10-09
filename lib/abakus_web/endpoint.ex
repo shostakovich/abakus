@@ -1,6 +1,8 @@
 defmodule AbakusWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :abakus
 
+  alias Plug.Conn.WrapperError
+
   @session_options [
     store: :cookie,
     key: "_abakus_key",
@@ -14,16 +16,23 @@ defmodule AbakusWeb.Endpoint do
     plug AbakusWeb.ForwardedSSL
   end
 
+  # Every response, error pages and static files included; only the socket transports below are
+  # dispatched before the plugs.
+  plug AbakusWeb.ContentSecurityPolicy
+
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [connect_info: [session: @session_options]],
     longpoll: [connect_info: [session: @session_options]]
 
-  plug Plug.Static,
-    at: "/",
-    from: :abakus,
-    gzip: not code_reloading?,
-    only: AbakusWeb.static_paths(),
-    raise_on_missing_only: code_reloading?
+  @static Plug.Static.init(
+            at: "/",
+            from: :abakus,
+            gzip: not code_reloading?,
+            only: AbakusWeb.static_paths(),
+            raise_on_missing_only: code_reloading?
+          )
+
+  plug :serve_static
 
   if code_reloading? do
     plug Phoenix.CodeReloader
@@ -33,10 +42,13 @@ defmodule AbakusWeb.Endpoint do
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint], log: {__MODULE__, :log_level, []}
 
-  plug Plug.Parsers,
-    parsers: [:urlencoded, :multipart, :json],
-    pass: ["*/*"],
-    json_decoder: Phoenix.json_library()
+  @parsers Plug.Parsers.init(
+             parsers: [:urlencoded, :multipart, :json],
+             pass: ["*/*"],
+             json_decoder: Phoenix.json_library()
+           )
+
+  plug :parse_body
 
   plug Plug.MethodOverride
   plug Plug.Head
@@ -49,4 +61,15 @@ defmodule AbakusWeb.Endpoint do
   def log_level(%Plug.Conn{path_info: ["users", "log-in", _token]}), do: false
   def log_level(%Plug.Conn{path_info: ["users", "settings", "confirm-email", _token]}), do: false
   def log_level(_conn), do: :info
+
+  # Errors of these plugs are wrapped like the router's, so the error page keeps the headers set
+  # above.
+  defp serve_static(conn, _opts), do: keep_headers_on_error(conn, Plug.Static, @static)
+  defp parse_body(conn, _opts), do: keep_headers_on_error(conn, Plug.Parsers, @parsers)
+
+  defp keep_headers_on_error(conn, plug, opts) do
+    plug.call(conn, opts)
+  rescue
+    error -> WrapperError.reraise(conn, :error, error, __STACKTRACE__)
+  end
 end

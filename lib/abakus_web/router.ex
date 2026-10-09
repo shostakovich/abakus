@@ -9,7 +9,6 @@ defmodule AbakusWeb.Router do
     plug :fetch_live_flash
     plug :put_root_layout, html: {AbakusWeb.Layouts, :root}
     plug :protect_from_forgery
-    plug :put_secure_browser_headers
     plug :fetch_current_scope_for_user
   end
 
@@ -77,12 +76,25 @@ defmodule AbakusWeb.Router do
     pipeline :dev_tools do
       plug :fetch_session
       plug :protect_from_forgery
+      plug :mailbox_policy
     end
 
     scope "/dev" do
       pipe_through :dev_tools
 
-      forward "/mailbox", Plug.Swoosh.MailboxPreview
+      forward "/mailbox", Plug.Swoosh.MailboxPreview,
+        csp_nonce_assign_key: %{script: :csp_nonce, style: :csp_nonce}
+    end
+
+    # The mailbox preview frames HTML mails, which bring their own styles.
+    defp mailbox_policy(conn, _opts) do
+      put_resp_header(
+        conn,
+        "content-security-policy",
+        "default-src 'self'; script-src 'self' 'nonce-#{conn.assigns.csp_nonce}'; " <>
+          "style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; " <>
+          "frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+      )
     end
   end
 end
