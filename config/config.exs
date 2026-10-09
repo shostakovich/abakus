@@ -1,5 +1,18 @@
 import Config
 
+config :abakus, :scopes,
+  user: [
+    default: true,
+    module: Abakus.Users.Scope,
+    assign_key: :current_scope,
+    access_path: [:user, :id],
+    schema_key: :user_id,
+    schema_type: :id,
+    schema_table: :users,
+    test_data_fixture: Abakus.UsersFixtures,
+    test_setup_helper: :register_and_log_in_user
+  ]
+
 config :abakus,
   ecto_repos: [Abakus.Repo],
   generators: [timestamp_type: :utc_datetime_usec]
@@ -27,6 +40,11 @@ config :abakus, AbakusWeb.Endpoint,
   live_view: [signing_salt: "cU0R/XpG"]
 
 config :phoenix_live_view, root_tag_attribute: "phx-r"
+
+config :abakus, Abakus.Mailer, adapter: Swoosh.Adapters.Local
+config :abakus, :mail_from, {"Abakus", "abakus@localhost"}
+config :swoosh, :api_client, false
+config :swoosh, :json_library, JSON
 
 config :esbuild,
   version: "0.25.4",

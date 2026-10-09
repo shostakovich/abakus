@@ -5,7 +5,7 @@ defmodule AbakusWeb.LayoutsTest do
        %{
          conn: conn
        } do
-    html = conn |> get(~p"/") |> html_response(200)
+    html = conn |> get(~p"/users/log-in") |> html_response(200)
     document = LazyHTML.from_document(html)
 
     assert document |> LazyHTML.query("html[lang=de]") |> Enum.count() == 1
@@ -32,6 +32,22 @@ defmodule AbakusWeb.LayoutsTest do
     {script_at, _} = :binary.match(html, ~s(id="theme-script"))
     {css_at, _} = :binary.match(html, "felt-css.rocu.de/felt.css")
     assert script_at < css_at
+  end
+
+  test "links into and out of the settings load the page, so the sudo plug runs" do
+    user = Abakus.UsersFixtures.user_fixture()
+    conn = log_in_user(build_conn(), user)
+
+    budget = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
+    settings = conn |> get(~p"/users/settings") |> html_response(200) |> LazyHTML.from_document()
+
+    assert budget |> LazyHTML.query(~s|nav a[href="/"][data-phx-link]|) |> Enum.count() == 1
+
+    assert budget
+           |> LazyHTML.query(~s|nav a[href="/users/settings"][data-phx-link]|)
+           |> Enum.empty?()
+
+    assert settings |> LazyHTML.query("header a[data-phx-link]") |> Enum.empty?()
   end
 
   test "the manifest is served as a static file and lists installable icons", %{conn: conn} do

@@ -6,7 +6,7 @@ meant to replace YNAB for my own use. **The user interface is German.**
 
 ## Status
 
-Skeleton: Phoenix app, container and CI. No budget features yet.
+Skeleton: Phoenix app, container, CI and sign-in with magic link and passkeys. No budget features yet.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, API, phases
 - `mockup/`: click dummy with example data, built with [felt-css](https://felt-css.rocu.de/)
@@ -20,7 +20,18 @@ mix setup
 mix phx.server
 ```
 
-Then open http://localhost:4000.
+Then open http://localhost:4000 (passkeys need `localhost`, not `127.0.0.1` or a LAN IP).
+
+Every page needs a sign-in and there is no sign-up, so invite the first user. In development the mails stay in
+the server's mailbox at http://localhost:4000/dev/mailbox, so invite from the running server:
+
+```sh
+iex -S mix phx.server
+iex> Abakus.Users.invite_user("you@example.com", &AbakusWeb.UserAuth.magic_link_url/1)
+```
+
+`mix abakus.invite you@example.com` works as well and prints the sign-in link, since its mail does not reach
+the server's mailbox. After signing in, add a passkey under Einstellungen.
 
 Click dummy:
 
@@ -32,10 +43,20 @@ python3 -m http.server 8078 --directory mockup
 
 - Image: `ghcr.io/shostakovich/abakus`; `docker-compose.yml` is an example.
 - Required environment: `PHX_HOST` (the public host name) and `SECRET_KEY_BASE` (`openssl rand -hex 64`).
+- Mail for sign-in links: `SMTP_HOST`, `SMTP_PORT` (465 for TLS, otherwise STARTTLS), `SMTP_USERNAME`,
+  `SMTP_PASSWORD` and `MAIL_FROM`.
 - Before the first start: `mkdir data && chown 1000:1000 data`; the database lives there.
 - A reverse proxy must terminate HTTPS and send `X-Forwarded-Proto: https`. Plain HTTP still serves pages, but
   the live UI only connects from `https://$PHX_HOST`.
 - `/up` answers 200 while the app and its database are up, for health checks.
+
+Invite the first user with
+
+```sh
+docker compose exec abakus bin/abakus eval 'Abakus.Release.invite("you@example.com")'
+```
+
+They get a sign-in link by mail (valid 15 minutes) and add a passkey under Einstellungen.
 
 ## Before you use this
 

@@ -8,6 +8,10 @@ defmodule Abakus.Application do
     children = [
       Abakus.Repo,
       {Phoenix.PubSub, name: Abakus.PubSub},
+      Abakus.RateLimit,
+      Abakus.WebAuthn.Challenges,
+      # Sends sign-in links in the background; a flood of requests is dropped.
+      {Task.Supervisor, name: Abakus.TaskSupervisor, max_children: 50},
       AbakusWeb.Endpoint
     ]
 

@@ -12,7 +12,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href={~p"/images/icon.svg"} type="image/svg+xml" />
     <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
-    <script id="theme-script">
+    <script id="theme-script" nonce={assigns[:csp_nonce]}>
       (() => {
         let theme;
         try { theme = localStorage.getItem("theme"); } catch {}

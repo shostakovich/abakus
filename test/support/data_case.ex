@@ -6,6 +6,8 @@ defmodule Abakus.DataCase do
 
   use ExUnit.CaseTemplate
 
+  alias Abakus.RateLimit
+  alias Abakus.WebAuthn.Challenges
   alias Ecto.Adapters.SQL.Sandbox
 
   using do
@@ -24,10 +26,15 @@ defmodule Abakus.DataCase do
     :ok
   end
 
-  @doc "Starts a sandbox owner for the test; shared unless the test is async."
+  @doc """
+  Starts a sandbox owner for the test, shared unless the test is async, and clears the rate
+  limits and passkey challenges, which live outside the database.
+  """
   def setup_sandbox(tags) do
     pid = Sandbox.start_owner!(Abakus.Repo, shared: not tags[:async])
     on_exit(fn -> Sandbox.stop_owner(pid) end)
+    RateLimit.reset()
+    Challenges.reset()
   end
 
   @doc """
