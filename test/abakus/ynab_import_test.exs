@@ -86,8 +86,16 @@ defmodule Abakus.YnabImportTest do
       assert %{amount: 40_000, set_aside: false} =
                Categories.target_for(groceries, ~D[2026-10-01])
 
-      assert %{cadence: :yearly, amount: 60_000, due_on: ~D[2026-12-15], set_aside: true} =
-               Categories.target_for(category("⚡ Strom"), ~D[2026-08-01])
+      assert %{
+               cadence: :by_date,
+               amount: 60_000,
+               due_on: ~D[2026-12-15],
+               repeats_yearly: true,
+               set_aside: true
+             } = Categories.target_for(category("⚡ Strom"), ~D[2026-08-01])
+
+      assert %{cadence: :by_date, amount: 2_000, due_on: ~D[2026-09-20], repeats_yearly: false} =
+               Categories.target_for(category("🎁 Geschenke"), ~D[2026-10-01])
 
       assert Categories.target_snoozed?(category("🏋️ Sport"), ~D[2026-09-01])
       refute Categories.target_snoozed?(category("🏋️ Sport"), ~D[2026-10-01])
@@ -332,7 +340,8 @@ defmodule Abakus.YnabImportTest do
       targets:
         sorted(
           TargetVersion,
-          &{categories[&1.category_id], &1.from_month, &1.cadence, &1.amount, &1.due_on}
+          &{categories[&1.category_id], &1.from_month, &1.cadence, &1.amount, &1.due_on,
+           &1.repeats_yearly}
         ),
       snoozes: sorted(TargetSnooze, &{categories[&1.category_id], &1.month}),
       transactions:

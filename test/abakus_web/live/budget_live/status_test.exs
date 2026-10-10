@@ -8,7 +8,7 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   @nov ~D[2026-11-01]
 
   @monthly %{cadence: :monthly}
-  @yearly %{cadence: :yearly}
+  @by_date %{cadence: :by_date}
 
   defp row(attrs), do: struct!(CategoryMonth, Enum.into(attrs, %{month: @oct}))
 
@@ -35,6 +35,34 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       assert Status.quiet(row(month: @nov, available: 5, underfunded: 5), @oct).dot == false
       assert Status.quiet(row(month: @nov, assigned: 1, underfunded: 5), @oct).dot == true
       assert Status.quiet(row(underfunded: 5, snoozed: true), @oct).dot == false
+    end
+  end
+
+  describe "target_head/1" do
+    test "a monthly target says what it sets aside or refills, without a day" do
+      assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: true}) ==
+               {"Jeden Monat weitere 50,00 € zurücklegen", nil}
+
+      assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: false}) ==
+               {"Jeden Monat auffüllen bis 50,00 €", nil}
+    end
+
+    test "a target by a date names its date, a repeating one without the year" do
+      once = %{
+        cadence: :by_date,
+        amount: 120_000,
+        due_on: ~D[2027-06-01],
+        repeats_yearly: false,
+        set_aside: true
+      }
+
+      assert Status.target_head(once) ==
+               {"1.200,00 € bis 1. Juni 2027 ansparen",
+                "Einmalig · weitere zurücklegen, verteilt auf die Monate bis dahin"}
+
+      assert Status.target_head(%{once | repeats_yearly: true, set_aside: false}) ==
+               {"1.200,00 € bis 1. Juni ansparen",
+                "Jedes Jahr · auffüllen bis, verteilt auf die Monate bis dahin"}
     end
   end
 
@@ -75,7 +103,7 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       assert %{title: "Finanziert", bars: [{100, "bg-success"}]} =
                Status.target_line(row(target: @monthly, assigned: 100, available: 100))
 
-      assert %{title: "Im Plan"} = Status.target_line(row(target: @yearly, available: 100))
+      assert %{title: "Im Plan"} = Status.target_line(row(target: @by_date, available: 100))
     end
   end
 

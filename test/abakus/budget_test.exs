@@ -19,7 +19,16 @@ defmodule Abakus.BudgetTest do
   defp row(%Month{categories: rows}, id), do: Enum.find(rows, &(&1.category_id == id))
 
   defp target(attrs),
-    do: Enum.into(attrs, %{from_month: @sep, cadence: :monthly, due_on: nil, set_aside: true})
+    do:
+      Enum.into(attrs, %{
+        from_month: @sep,
+        cadence: :monthly,
+        due_on: nil,
+        repeats_yearly: false,
+        set_aside: true
+      })
+
+  defp yearly(attrs), do: target([cadence: :by_date, repeats_yearly: true] ++ attrs)
 
   describe "months/3" do
     test "carries what is available and starts an overspent category at zero" do
@@ -187,7 +196,7 @@ defmodule Abakus.BudgetTest do
     end
 
     test "a yearly target spreads what is missing over the months up to its due month, rounded up" do
-      targets = %{1 => [target(cadence: :yearly, amount: 10_000, due_on: ~D[2026-12-24])]}
+      targets = %{1 => [yearly(amount: 10_000, due_on: ~D[2026-12-24])]}
       months = months(budget(targets: targets, assigned: %{{1, @sep} => 2_000}))
 
       assert %CategoryMonth{needed: 2_500, underfunded: 500} = row(months[@sep], 1)
@@ -198,7 +207,7 @@ defmodule Abakus.BudgetTest do
 
     test "a yearly refill target counts what is carried" do
       targets = %{
-        1 => [target(cadence: :yearly, amount: 10_000, due_on: ~D[2026-11-30], set_aside: false)]
+        1 => [yearly(amount: 10_000, due_on: ~D[2026-11-30], set_aside: false)]
       }
 
       months =
@@ -237,7 +246,7 @@ defmodule Abakus.BudgetTest do
     end
 
     test "a yearly refill target counts a surplus against money taken out" do
-      yearly = target(cadence: :yearly, amount: 10_000, due_on: ~D[2026-11-30], set_aside: false)
+      yearly = yearly(amount: 10_000, due_on: ~D[2026-11-30], set_aside: false)
 
       months =
         months(
@@ -257,7 +266,7 @@ defmodule Abakus.BudgetTest do
     end
 
     test "after its due month a yearly target starts its next cycle" do
-      targets = %{1 => [target(cadence: :yearly, amount: 12_000, due_on: ~D[2026-09-15])]}
+      targets = %{1 => [yearly(amount: 12_000, due_on: ~D[2026-09-15])]}
       months = months(budget(targets: targets, assigned: %{{1, @sep} => 12_000}))
 
       assert %CategoryMonth{needed: 12_000, underfunded: 0} = row(months[@sep], 1)
@@ -266,7 +275,7 @@ defmodule Abakus.BudgetTest do
 
     test "a yearly target's first cycle begins with the target, even more than a year before it is due" do
       targets = %{
-        1 => [target(from_month: @oct, cadence: :yearly, amount: 120_000, due_on: ~D[2027-12-15])]
+        1 => [yearly(from_month: @oct, amount: 120_000, due_on: ~D[2027-12-15])]
       }
 
       assigned = Map.new([@oct, @nov, @dec], &{{1, &1}, 8_000})
@@ -279,8 +288,8 @@ defmodule Abakus.BudgetTest do
     test "a yearly set-aside target counts nothing assigned before it began, and keeps counting when changed" do
       targets = %{
         1 => [
-          target(from_month: @sep, cadence: :yearly, amount: 60_000, due_on: ~D[2026-12-01]),
-          target(from_month: @nov, cadence: :yearly, amount: 90_000, due_on: ~D[2026-12-01])
+          yearly(from_month: @sep, amount: 60_000, due_on: ~D[2026-12-01]),
+          yearly(from_month: @nov, amount: 90_000, due_on: ~D[2026-12-01])
         ]
       }
 
@@ -289,6 +298,112 @@ defmodule Abakus.BudgetTest do
 
       assert row(months[@sep], 1).needed == 15_000
       assert row(months[@nov], 1).needed == 25_000
+    end
+
+    test "a target by a date spreads what is missing" do
+      targets = %{
+        1 => [
+          target(from_month: @oct, cadence: :by_date, amount: 120_000, due_on: ~D[2027-06-01])
+        ]
+      }
+
+      months = months(budget(targets: targets), @oct, @nov)
+
+      assert %CategoryMonth{needed: 13_334, underfunded: 13_334} = row(months[@oct], 1)
+      assert %CategoryMonth{needed: 15_000, underfunded: 15_000} = row(months[@nov], 1)
+    end
+
+    test "the bar of a target by a date shows the whole amount" do
+      targets = %{
+        1 => [
+          target(from_month: @oct, cadence: :by_date, amount: 120_000, due_on: ~D[2027-06-01])
+        ]
+      }
+
+      months = months(budget(targets: targets, assigned: %{{1, @oct} => 8_000}))
+
+      assert %CategoryMonth{saved: 8_000, underfunded: 5_334} = row(months[@oct], 1)
+      assert_in_delta row(months[@oct], 1).progress, 8_000 / 120_000, 1.0e-9
+    end
+
+    test "only a target by a date counts what is saved" do
+      months = months(budget(targets: %{1 => [target(amount: 5_000)]}))
+
+      assert %CategoryMonth{saved: nil} = row(months[@oct], 1)
+      assert %CategoryMonth{saved: nil} = row(months[@oct], 2)
+    end
+
+    test "a target by a date without repeating ends after its month" do
+      targets = %{
+        1 => [target(from_month: @oct, cadence: :by_date, amount: 30_000, due_on: ~D[2027-03-01])]
+      }
+
+      assigned = %{{1, ~D[2027-03-01]} => 10_000, {1, ~D[2027-04-01]} => -5_000}
+      months = months(budget(targets: targets, assigned: assigned), @oct, ~D[2027-05-01])
+
+      assert %CategoryMonth{needed: 30_000, underfunded: 20_000} = row(months[~D[2027-03-01]], 1)
+
+      for month <- [~D[2027-04-01], ~D[2027-05-01]] do
+        assert %CategoryMonth{target: %{amount: 30_000}, needed: 0, underfunded: 0} =
+                 row(months[month], 1)
+      end
+    end
+
+    test "a repeating target starts again" do
+      targets = %{1 => [yearly(from_month: @oct, amount: 30_000, due_on: ~D[2027-03-01])]}
+      months = months(budget(targets: targets), @oct, ~D[2028-03-01])
+
+      assert row(months[~D[2027-03-01]], 1).needed == 30_000
+      assert %CategoryMonth{needed: 2_500, underfunded: 2_500} = row(months[~D[2027-04-01]], 1)
+      assert row(months[~D[2028-03-01]], 1).needed == 30_000
+    end
+
+    test "a new target by a date after a due month starts afresh" do
+      targets = %{
+        1 => [
+          target(from_month: @oct, cadence: :by_date, amount: 30_000, due_on: ~D[2026-12-01]),
+          target(
+            from_month: ~D[2027-01-01],
+            cadence: :by_date,
+            amount: 60_000,
+            due_on: ~D[2027-06-01]
+          )
+        ]
+      }
+
+      assigned = Map.new([@oct, @nov, @dec], &{{1, &1}, 10_000})
+      months = months(budget(targets: targets, assigned: assigned), @oct, ~D[2027-01-01])
+
+      assert %CategoryMonth{needed: 10_000, saved: 0} = row(months[~D[2027-01-01]], 1)
+    end
+
+    test "a repeating target changed after its due month counts only the new cycle" do
+      targets = %{
+        1 => [
+          yearly(from_month: @oct, amount: 3_000, due_on: ~D[2026-12-01]),
+          yearly(from_month: ~D[2027-02-01], amount: 24_000, due_on: ~D[2027-12-01])
+        ]
+      }
+
+      assigned =
+        Map.new([@oct, @nov, @dec], &{{1, &1}, 1_000}) |> Map.put({1, ~D[2027-01-01]}, 2_000)
+
+      months = months(budget(targets: targets, assigned: assigned), @oct, ~D[2027-02-01])
+
+      assert %CategoryMonth{needed: 2_000, saved: 2_000} = row(months[~D[2027-02-01]], 1)
+    end
+
+    test "hidden categories leave the month's needed and underfunded totals" do
+      months =
+        months(
+          budget(
+            categories: [%{id: 1, hidden: true}, %{id: 2, hidden: false}],
+            targets: %{1 => [target(amount: 9_000)], 2 => [target(amount: 4_000)]}
+          )
+        )
+
+      assert %Month{needed: 4_000, underfunded: 4_000} = months[@oct]
+      assert %CategoryMonth{underfunded: 9_000} = row(months[@oct], 1)
     end
 
     test "applies the version in effect, none before the first or after cadence none" do
@@ -324,7 +439,7 @@ defmodule Abakus.BudgetTest do
     end
   end
 
-  describe "fill_underfunded/3" do
+  describe "fill_underfunded/4" do
     test "fills in budget order as far as Ready to Assign reaches, skipping hidden categories" do
       budget =
         budget(
@@ -372,6 +487,16 @@ defmodule Abakus.BudgetTest do
         )
 
       assert Budget.fill_underfunded(budget, @sep, @oct) == []
+    end
+
+    test "fills only the category asked for" do
+      budget =
+        budget(
+          income: %{@oct => 10_000},
+          targets: %{1 => [target(amount: 4_000)], 2 => [target(amount: 3_000)]}
+        )
+
+      assert Budget.fill_underfunded(budget, @oct, @oct, 2) == [{2, 3_000}]
     end
   end
 end

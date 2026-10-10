@@ -60,7 +60,8 @@ _Avoid_: Shortfall month, borrowed month
 ### Targets
 
 **Target**:
-What a category should get: a monthly amount, or a yearly amount due on a date. UI "Ziel".
+What a category should get: a monthly amount, or an amount by a date, which repeats yearly or asks nothing after
+its month. UI "Ziel".
 _Avoid_: Goal (YNAB API's name), savings goal
 
 **Target version**:

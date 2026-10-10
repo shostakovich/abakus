@@ -25,7 +25,8 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
       for(
         id <- 1..5,
         do: struct!(CategoryMonth, Map.merge(%{category_id: id, month: month}, rows[id] || %{}))
-      )
+      ),
+      MapSet.new()
     )
   end
 

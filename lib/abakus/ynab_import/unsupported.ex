@@ -1,11 +1,12 @@
 defmodule Abakus.YnabImport.Unsupported do
   @moduledoc """
   What in a YNAB plan Abakus cannot represent, found before anything is written: accounts other than checking,
-  savings and cash in the budget (no credit cards or loans), targets other than "needed for spending" monthly or
-  yearly, amounts that are not whole cents, and transactions that refer to something deleted or internal.
+  savings and cash in the budget (no credit cards or loans), targets other than "needed for spending" monthly,
+  yearly or by a date without repeat, amounts that are not whole cents, and transactions that refer to something
+  deleted or internal.
   """
 
-  alias Abakus.YnabImport.Plan
+  alias Abakus.YnabImport.{Plan, Targets}
 
   @budget_types ["checking", "savings", "cash"]
   @never ["creditCard", "lineOfCredit"]
@@ -34,14 +35,14 @@ defmodule Abakus.YnabImport.Unsupported do
 
   defp need_problem(category) do
     amount = category["goal_target"]
+    cadence = Targets.cadence(category)
 
     cond do
-      {category["goal_cadence"], category["goal_cadence_frequency"]} not in [{1, 1}, {13, 1}] ->
+      cadence == nil ->
         "has a target that repeats neither monthly nor yearly"
 
-      category["goal_cadence"] == 13 and
-          is_nil(category["goal_target_date"] || category["goal_target_month"]) ->
-        "has a yearly target without a due date"
+      cadence in [:yearly, :once] and is_nil(Targets.due_on(category)) ->
+        "has a target by a date without a due date"
 
       not Plan.whole_cents?(amount) or amount <= 0 ->
         "has a target of #{Plan.format(amount)}, which is not a positive amount in whole cents"

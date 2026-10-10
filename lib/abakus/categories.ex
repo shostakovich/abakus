@@ -157,14 +157,56 @@ defmodule Abakus.Categories do
   end
 
   @doc """
-  Fills the month's underfunded categories from Ready to Assign (`Abakus.Budget.fill_underfunded/3`); `current` is
-  the current month, both any day of it. Returns the new assignments as `{category_id, amount}`.
+  Moves an amount assigned in a month (any day of it) from one category to another, `:ready_to_assign` standing
+  for Zu verteilen on either side; never refused for lack of money, as `assign/3`. Returns `{:ok, amount}`.
   """
-  def fill_underfunded(month, current) do
+  def move_assigned(from, to, month, amount) do
     month = month!(month)
 
     Repo.transact(fn ->
-      fills = Budget.fill_underfunded(budget(), month, month!(current))
+      with {:ok, _from} <- add_assigned(from, month, -amount),
+           {:ok, _to} <- add_assigned(to, month, amount),
+           do: {:ok, amount}
+    end)
+  end
+
+  defp add_assigned(:ready_to_assign, _month, _amount), do: {:ok, nil}
+
+  defp add_assigned(%Category{id: id} = category, month, amount) do
+    assigned =
+      Repo.one(
+        from a in Assignment, where: a.category_id == ^id and a.month == ^month, select: a.amount
+      )
+
+    assign(category, month, (assigned || 0) + amount)
+  end
+
+  @doc """
+  Takes back what the visible categories, or only `category`, have assigned in a month (any day of it), so it goes
+  back to Zu verteilen.
+  """
+  def reset_assignments(month, category \\ nil) do
+    month = month!(month)
+
+    ids =
+      if category,
+        do: [category.id],
+        else: for(%{id: id, hidden: false} <- budget_categories(), do: id)
+
+    Repo.delete_all(from a in Assignment, where: a.month == ^month and a.category_id in ^ids)
+    :ok
+  end
+
+  @doc """
+  Fills the month's underfunded categories, or only `category`, from Ready to Assign
+  (`Abakus.Budget.fill_underfunded/4`); `current` is the current month, both any day of it. Returns the new
+  assignments as `{category_id, amount}`.
+  """
+  def fill_underfunded(month, current, category \\ nil) do
+    month = month!(month)
+
+    Repo.transact(fn ->
+      fills = Budget.fill_underfunded(budget(), month, month!(current), category && category.id)
       with :ok <- put_assignments(fills, month), do: {:ok, fills}
     end)
   end
@@ -183,15 +225,16 @@ defmodule Abakus.Categories do
 
   @doc """
   Sets a category's target from a month on (attrs: `from_month`, any day of it, `cadence`, `amount`, `due_on`,
-  `set_aside`); replaces a version that starts in the same month. Cadence `none` removes the target from that
-  month on.
+  `repeats_yearly`, `set_aside`); replaces a version that starts in the same month. Cadence `none` removes the
+  target from that month on.
   """
   def set_target(%Category{} = category, attrs) do
     %TargetVersion{category_id: category.id}
     |> TargetVersion.changeset(attrs)
     |> validate_regular(category)
     |> Repo.insert(
-      on_conflict: {:replace, [:cadence, :amount, :due_on, :set_aside, :updated_at]},
+      on_conflict:
+        {:replace, [:cadence, :amount, :due_on, :repeats_yearly, :set_aside, :updated_at]},
       conflict_target: [:category_id, :from_month],
       returning: true
     )

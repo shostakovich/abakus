@@ -67,6 +67,21 @@ defmodule Abakus.Categories.BudgetTest do
     end
   end
 
+  describe "fill_underfunded/3" do
+    test "fills only the category asked for", c do
+      power = category_fixture(name: "Strom")
+      internet = category_fixture(name: "Internet")
+      Categories.set_target(power, %{from_month: @october, cadence: :monthly, amount: 4_000})
+      Categories.set_target(internet, %{from_month: @october, cadence: :monthly, amount: 3_000})
+      income(c.checking, c.rta, 10_000)
+
+      assert {:ok, [{internet.id, 3_000}]} ==
+               Categories.fill_underfunded(@october, @october, internet)
+
+      assert row(month(@october), power).assigned == 0
+    end
+  end
+
   describe "budget/0" do
     test "the budget accounts' balance is Ready to Assign plus what is available", c do
       groceries = category_fixture()

@@ -33,13 +33,18 @@ defmodule Abakus.YnabImport.UnsupportedTest do
            ]
   end
 
-  test "targets YNAB's starter plan has: weekly ones, other types and empty amounts" do
+  test "targets YNAB's starter plan has: weekly ones, other types, empty amounts and missing dates" do
     plan =
       plan(
         months: [
           month("2026-10-01", [
             Map.merge(@need, %{"goal_cadence" => 2}),
             Map.merge(@need, %{"goal_cadence" => 13, "goal_target_month" => nil}),
+            Map.merge(@need, %{
+              "goal_cadence" => 0,
+              "goal_cadence_frequency" => nil,
+              "goal_target_date" => "2027-03-01"
+            }),
             Map.merge(@need, %{"goal_target" => 0}),
             %{"goal_type" => "TB"}
           ])
@@ -48,9 +53,15 @@ defmodule Abakus.YnabImport.UnsupportedTest do
 
     assert Unsupported.problems(plan) == [
              "Category “🛒 Lebensmittel” has a target that repeats neither monthly nor yearly.",
-             "Category “🛒 Lebensmittel” has a yearly target without a due date.",
+             "Category “🛒 Lebensmittel” has a target by a date without a due date.",
              "Category “🛒 Lebensmittel” has a target of 0.00, which is not a positive amount in whole cents.",
              "Category “🛒 Lebensmittel” has a target of type TB."
+           ]
+
+    without_date = Map.merge(@need, %{"goal_cadence" => 0, "goal_cadence_frequency" => 0})
+
+    assert Unsupported.problems(plan(months: [month("2026-10-01", [without_date])])) == [
+             "Category “🛒 Lebensmittel” has a target by a date without a due date."
            ]
   end
 

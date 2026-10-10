@@ -21,17 +21,25 @@ defmodule Abakus.Categories.TargetsTest do
                version
     end
 
-    test "stores a yearly refill target with its due date", %{category: category} do
+    test "stores a refill target by a date, not repeating by default", %{category: category} do
       attrs = %{
         from_month: ~D[2026-10-01],
-        cadence: "yearly",
+        cadence: "by_date",
         amount: 60_000,
         due_on: ~D[2027-03-31],
         set_aside: false
       }
 
-      assert {:ok, %TargetVersion{cadence: :yearly, due_on: ~D[2027-03-31], set_aside: false}} =
-               Categories.set_target(category, attrs)
+      assert {:ok,
+              %TargetVersion{
+                cadence: :by_date,
+                due_on: ~D[2027-03-31],
+                repeats_yearly: false,
+                set_aside: false
+              }} = Categories.set_target(category, attrs)
+
+      assert {:ok, %TargetVersion{repeats_yearly: true}} =
+               Categories.set_target(category, Map.put(attrs, :repeats_yearly, "true"))
     end
 
     test "any day stands for its month", %{category: category} do
@@ -77,12 +85,14 @@ defmodule Abakus.Categories.TargetsTest do
 
       assert %{cadence: ["is invalid"]} = errors_on(changeset)
 
-      assert {:error, changeset} = Categories.set_target(category, %{set_aside: nil})
+      assert {:error, changeset} =
+               Categories.set_target(category, %{set_aside: nil, repeats_yearly: nil})
 
       assert %{
                from_month: ["can't be blank"],
                cadence: ["can't be blank"],
-               set_aside: ["can't be blank"]
+               set_aside: ["can't be blank"],
+               repeats_yearly: ["can't be blank"]
              } =
                errors_on(changeset)
     end
@@ -104,22 +114,33 @@ defmodule Abakus.Categories.TargetsTest do
                )
 
       assert %{due_on: ["muss bei diesem Rhythmus leer sein"]} = errors_on(changeset)
-    end
-
-    test "a yearly target needs a due date from its first month on", %{category: category} do
-      yearly = %{from_month: ~D[2026-10-01], cadence: :yearly, amount: 100}
-
-      assert {:error, changeset} = Categories.set_target(category, yearly)
-      assert %{due_on: ["can't be blank"]} = errors_on(changeset)
 
       assert {:error, changeset} =
-               Categories.set_target(category, Map.put(yearly, :due_on, ~D[2026-09-30]))
+               Categories.set_target(
+                 category,
+                 monthly(~D[2026-10-01], 100, repeats_yearly: true)
+               )
 
-      assert %{due_on: ["darf nicht vor dem Beginn des Ziels liegen"]} = errors_on(changeset)
+      assert %{repeats_yearly: ["gibt es nur bei einem Ziel bis zu einem Datum"]} =
+               errors_on(changeset)
+    end
 
-      assert {:ok, _} = Categories.set_target(category, Map.put(yearly, :due_on, ~D[2026-10-01]))
+    test "a target by a date needs a due date from its first month on", %{category: category} do
+      by_date = %{from_month: ~D[2026-10-01], cadence: :by_date, amount: 100}
 
-      assert {:error, changeset} = Categories.set_target(category, Map.delete(yearly, :amount))
+      assert {:error, changeset} = Categories.set_target(category, by_date)
+      assert %{due_on: ["can't be blank"]} = errors_on(changeset)
+
+      for repeats_yearly <- [false, true] do
+        attrs = Map.merge(by_date, %{due_on: ~D[2026-09-30], repeats_yearly: repeats_yearly})
+        assert {:error, changeset} = Categories.set_target(category, attrs)
+        assert %{due_on: ["darf nicht vor dem Beginn des Ziels liegen"]} = errors_on(changeset)
+      end
+
+      assert {:ok, _} =
+               Categories.set_target(category, Map.put(by_date, :due_on, ~D[2026-10-01]))
+
+      assert {:error, changeset} = Categories.set_target(category, Map.delete(by_date, :amount))
       assert %{amount: ["can't be blank"]} = errors_on(changeset)
     end
 
@@ -148,6 +169,15 @@ defmodule Abakus.Categories.TargetsTest do
 
       assert {:ok, %TargetVersion{id: ^id, amount: 7_000, set_aside: false}} =
                Categories.set_target(category, monthly(~D[2026-10-01], 7_000, set_aside: false))
+
+      assert {:ok, %TargetVersion{id: ^id, cadence: :by_date, repeats_yearly: true}} =
+               Categories.set_target(category, %{
+                 from_month: ~D[2026-10-01],
+                 cadence: :by_date,
+                 amount: 7_000,
+                 due_on: ~D[2027-01-15],
+                 repeats_yearly: true
+               })
 
       assert Repo.aggregate(TargetVersion, :count) == 1
     end

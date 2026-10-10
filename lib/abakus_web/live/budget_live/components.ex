@@ -1,6 +1,6 @@
 defmodule AbakusWeb.BudgetLive.Components do
   @moduledoc """
-  The budget view's parts: filter chips, month strip, month cards, the table's rows and the inspector. The focus
+  The budget view's parts: filter chips, month strip, month cards and the table's rows. The focus
   month's card is outlined and its column shows pills, the category's target bar follows it; the other months
   stay quiet.
   """
@@ -155,7 +155,62 @@ defmodule AbakusWeb.BudgetLive.Components do
       <div class="card-body p-2 d-flex flex-column align-items-center gap-1 text-center">
         <span class="app-mname">{title(@month.month, @current)}</span>
         <.ready_to_assign month={@month} key={@key} />
+        <.distribute :if={@month.ready_to_assign_shown > 0} key={@key} />
       </div>
+    </div>
+    """
+  end
+
+  attr :key, :string, required: true
+
+  # "Verteilen ▾" while money is unassigned, as in YNAB: fill the underfunded or pick a category.
+  defp distribute(assigns) do
+    ~H"""
+    <div
+      class="dropdown"
+      phx-click-away={hide_dropdown("#distribute-#{@key}", "#distribute-toggle-#{@key}")}
+    >
+      <button
+        id={"distribute-toggle-#{@key}"}
+        type="button"
+        class="btn btn-sm btn-success dropdown-toggle"
+        aria-expanded="false"
+        aria-controls={"distribute-#{@key}"}
+        phx-click={toggle_dropdown("#distribute-#{@key}", "#distribute-toggle-#{@key}")}
+      >
+        Verteilen
+      </button>
+      <ul id={"distribute-#{@key}"} class="dropdown-menu" data-bs-popper="static">
+        <li>
+          <button
+            id={"distribute-underfunded-#{@key}"}
+            type="button"
+            class="dropdown-item"
+            phx-click={
+              JS.push("auto", value: %{kind: "underfunded", month: @key})
+              |> hide_dropdown("#distribute-#{@key}", "#distribute-toggle-#{@key}")
+            }
+          >
+            Unterfinanzierte füllen
+          </button>
+        </li>
+        <li><hr class="dropdown-divider" /></li>
+        <li>
+          <button
+            id={"distribute-pick-#{@key}"}
+            type="button"
+            class="dropdown-item"
+            phx-click={
+              JS.push("open_popover",
+                value: %{kind: "pick", month: @key, anchor: "distribute-toggle-#{@key}"}
+              )
+              |> hide_dropdown("#distribute-#{@key}", "#distribute-toggle-#{@key}")
+            }
+          >
+            In eine Kategorie …
+          </button>
+        </li>
+      </ul>
     </div>
     """
   end
@@ -269,16 +324,28 @@ defmodule AbakusWeb.BudgetLive.Components do
     doc: "`{category_id, month, typed}` for the amount that was no number"
 
   attr :assignable, :boolean, default: true
+  attr :selected, :boolean, default: false
 
   @doc """
-  A category: name with target bar (its status on hover), then per month an assign input, activity and available (a pill in
-  the focus month).
+  A category: name with target bar (its status on hover), then per month an assign input, activity and available (a
+  pill in the focus month, which opens the popover). Its name selects it for the inspector.
   """
   def category_row(assigns) do
     ~H"""
-    <tr id={"category-#{@id}"}>
+    <tr id={"category-#{@id}"} class={@selected && "is-sel"}>
       <td class="app-cat">
-        <.category_name name={@name} icon={not @assignable && "alert"} />
+        <button
+          :if={@assignable}
+          id={"select-#{@id}"}
+          type="button"
+          class="app-catbtn"
+          aria-pressed={to_string(@selected)}
+          phx-click={if @selected, do: "deselect", else: "select"}
+          phx-value-category={@id}
+        >
+          <.category_name name={@name} />
+        </button>
+        <.category_name :if={not @assignable} name={@name} icon="alert" />
         <.target_line line={Status.target_line(@cells[@focus])} />
       </td>
       <%= for {month, key, cell, typed} <- columns(@months, @cells, @id, @invalid) do %>
@@ -307,7 +374,7 @@ defmodule AbakusWeb.BudgetLive.Components do
           {amount(cell.activity)}
         </td>
         <td id={"available-#{@id}-#{key}"} class="app-num">
-          <.pill :if={month == @focus} cell={cell} />
+          <.pill :if={month == @focus} cell={cell} id={@assignable && "pill-#{@id}-#{key}"} />
           <.quiet :if={month != @focus} cell={cell} current={@current} />
         </td>
       <% end %>
@@ -348,29 +415,57 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   defp target_line(assigns) do
     ~H"""
-    <span class="app-line2">
-      <span class="progress app-target" title={@line.title}>
-        <span
-          :for={{percent, class} <- @line.bars}
-          class={["progress-bar", class, "app-w-#{percent}"]}
-        ></span>
-      </span>
+    <span class="app-line2"><.target_bar line={@line} /></span>
+    """
+  end
+
+  attr :line, :map, required: true, doc: "from `Status.target_line/1`"
+
+  @doc "A target's bar, its status as the title."
+  def target_bar(assigns) do
+    ~H"""
+    <span class="progress app-target" title={@line.title}>
+      <span
+        :for={{percent, class} <- @line.bars}
+        class={["progress-bar", class, "app-w-#{percent}"]}
+      ></span>
     </span>
     """
   end
 
   attr :cell, :any, required: true
+  attr :id, :any, default: nil, doc: "set for a pill that opens the popover"
 
-  defp pill(assigns) do
+  @doc "A cell's available amount as a pill coloured by its status."
+  def pill(assigns) do
     assigns = assign(assigns, :status, Status.pill(assigns.cell))
 
     ~H"""
-    <span :if={@status == :zero} class="app-pill app-pill-zero">{amount(0)}</span>
-    <span :if={@status != :zero} class={["badge rounded-pill app-pill", elem(@status, 0)]}>
-      <.icon :if={elem(@status, 1)} name={elem(@status, 1)} />{euros(@cell.available)}
+    <button
+      :if={@id}
+      id={@id}
+      type="button"
+      class={["app-pill", pill_class(@status)]}
+      aria-label={"Verfügbar #{euros(@cell.available)}, Geld verschieben"}
+      phx-click="open_popover"
+      phx-value-kind="pill"
+      phx-value-category={@cell.category_id}
+      phx-value-anchor={@id}
+    >
+      <.icon :if={pill_icon(@status)} name={pill_icon(@status)} />{pill_text(@status, @cell)}
+    </button>
+    <span :if={!@id} class={["app-pill", pill_class(@status)]}>
+      <.icon :if={pill_icon(@status)} name={pill_icon(@status)} />{pill_text(@status, @cell)}
     </span>
     """
   end
+
+  defp pill_class(:zero), do: "app-pill-zero"
+  defp pill_class({class, _icon}), do: ["badge rounded-pill", class]
+  defp pill_icon(:zero), do: nil
+  defp pill_icon({_class, icon}), do: icon
+  defp pill_text(:zero, _cell), do: amount(0)
+  defp pill_text(_status, cell), do: euros(cell.available)
 
   attr :cell, :any, required: true
   attr :current, Date, required: true
@@ -408,70 +503,6 @@ defmodule AbakusWeb.BudgetLive.Components do
         <% end %>
       </tr>
     </.group>
-    """
-  end
-
-  attr :month, Abakus.Budget.Month, required: true
-
-  @doc "The inspector beside the table: how the focus month's Zu verteilen adds up, and its summary."
-  def inspector(assigns) do
-    assigns = assign(assigns, :ready, Status.ready(assigns.month))
-
-    ~H"""
-    <aside id="inspector" class="app-inspector" aria-label="Details">
-      <h2 class="app-insp-title mb-3">{month_year(@month.month)}</h2>
-      <section class="card mb-3">
-        <div class="card-header">Zu verteilen</div>
-        <div class="card-body small d-flex flex-column gap-1">
-          <.summary_line
-            :for={line <- Status.calculation(@month)}
-            label={line.label}
-            value={line.value}
-            class={line.class}
-          />
-          <.summary_line
-            label={elem(@ready, 1)}
-            value={@month.ready_to_assign_shown}
-            class={["fw-bold border-top pt-1", elem(@ready, 0)]}
-          />
-          <ul :if={@month.uncovered != []} class="app-uncovered list-unstyled text-danger mt-2 mb-0">
-            <li :for={line <- Status.uncovered(@month)} class="d-flex align-items-start gap-1">
-              <.icon name="alert" class="app-icon-sm mt-1" /><span>{line}</span>
-            </li>
-          </ul>
-        </div>
-      </section>
-      <section class="card mb-3">
-        <div class="card-header">Zusammenfassung</div>
-        <div class="card-body small d-flex flex-column gap-1">
-          <.summary_line label="Übrig aus Vormonat" value={@month.carried} />
-          <.summary_line label="Zugewiesen" value={@month.assigned} />
-          <.summary_line label="Aktivität" value={@month.activity} />
-          <.summary_line label="Verfügbar" value={@month.available} class="fw-bold border-top pt-1" />
-          <div class="mt-2 fw-semibold">Monatsbedarf</div>
-          <.summary_line label="Ziele" value={@month.needed} />
-          <.summary_line
-            :if={@month.underfunded > 0}
-            label="Noch offen"
-            value={@month.underfunded}
-            class="text-warning-emphasis fw-semibold"
-          />
-        </div>
-      </section>
-    </aside>
-    """
-  end
-
-  attr :label, :string, required: true
-  attr :value, :integer, required: true
-  attr :class, :any, default: nil
-
-  defp summary_line(assigns) do
-    ~H"""
-    <div class={["d-flex justify-content-between gap-3", @class]}>
-      <span class="text-truncate">{@label}</span>
-      <span class="tabular-nums text-nowrap">{euros(@value)}</span>
-    </div>
     """
   end
 end

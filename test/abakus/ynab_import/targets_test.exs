@@ -33,6 +33,7 @@ defmodule Abakus.YnabImport.TargetsTest do
                   cadence: :monthly,
                   amount: 30_000,
                   due_on: nil,
+                  repeats_yearly: false,
                   set_aside: true
                 }
               ]}
@@ -72,12 +73,37 @@ defmodule Abakus.YnabImport.TargetsTest do
 
     assert %{
              from_month: ~D[2026-12-01],
-             cadence: :yearly,
+             cadence: :by_date,
              due_on: ~D[2026-12-15],
+             repeats_yearly: true,
              set_aside: false
            } = first
 
     assert %{from_month: ~D[2027-02-01], amount: 70_000, due_on: ~D[2027-12-15]} = second
+  end
+
+  test "a target by a date without repeat keeps its date, and a date moved by a year is a change" do
+    by_date = %{@yearly | "goal_cadence" => 0, "goal_cadence_frequency" => 0}
+
+    plan =
+      plan(%{
+        "2026-08-01" => by_date,
+        "2026-09-01" => by_date,
+        "2027-01-01" => %{by_date | "goal_target_month" => "2027-12-15"}
+      })
+
+    assert [{"c", [first, second]}] = Targets.versions(plan)
+
+    assert first == %{
+             from_month: ~D[2026-08-01],
+             cadence: :by_date,
+             amount: 60_000,
+             due_on: ~D[2026-12-15],
+             repeats_yearly: false,
+             set_aside: false
+           }
+
+    assert %{from_month: ~D[2027-01-01], due_on: ~D[2027-12-15], repeats_yearly: false} = second
   end
 
   test "a month is snoozed when the snooze date lies in it" do

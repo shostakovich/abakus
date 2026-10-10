@@ -30,6 +30,7 @@
       "cadence": "monthly",
       "amount": 30000,
       "due_on": null,
+      "repeats_yearly": false,
       "set_aside": true
     },
     {
@@ -38,22 +39,25 @@
       "cadence": "monthly",
       "amount": 400000,
       "due_on": null,
+      "repeats_yearly": false,
       "set_aside": false
     },
     {
       "category_id": "insurance",
       "from_month": "2026-09-01",
-      "cadence": "yearly",
+      "cadence": "by_date",
       "amount": 600000,
       "due_on": "2027-01-15",
+      "repeats_yearly": true,
       "set_aside": true
     },
     {
       "category_id": "holiday",
       "from_month": "2026-09-01",
-      "cadence": "yearly",
+      "cadence": "by_date",
       "amount": 1200000,
       "due_on": "2026-12-20",
+      "repeats_yearly": true,
       "set_aside": false
     },
     {
@@ -62,6 +66,7 @@
       "cadence": "monthly",
       "amount": 40000,
       "due_on": null,
+      "repeats_yearly": false,
       "set_aside": true
     }
   ],
