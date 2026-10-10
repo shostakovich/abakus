@@ -1,0 +1,49 @@
+defmodule AbakusWeb.AccountGroups do
+  @moduledoc """
+  Accounts as the sidebar and the account list group them: open budget accounts, open tracking accounts, then the
+  closed ones, each account with its working and cleared balance, each group with its working balance. Empty groups
+  are left out.
+  """
+
+  alias Abakus.Ledger
+  alias Abakus.Ledger.Account
+
+  @no_transactions %{balance: 0, cleared: 0}
+
+  @doc "Assigns `account_groups` for the sidebar of every signed-in page."
+  def on_mount(:assign, _params, _session, socket),
+    do: {:cont, Phoenix.Component.assign(socket, :account_groups, load())}
+
+  def load, do: build(Ledger.list_accounts(), Ledger.balances())
+
+  def build(accounts, balances) do
+    rows = Enum.map(accounts, &row(&1, balances))
+
+    [
+      group(:budget, "Budget", Enum.filter(rows, &(open?(&1) and budget?(&1)))),
+      group(:tracking, "Tracking", Enum.filter(rows, &(open?(&1) and not budget?(&1)))),
+      group(:closed, "Geschlossen", Enum.reject(rows, &open?/1))
+    ]
+    |> Enum.reject(&(&1.rows == []))
+  end
+
+  @doc "The groups without the closed accounts."
+  def open(groups), do: Enum.reject(groups, &(&1.key == :closed))
+
+  defp row(account, balances) do
+    %{balance: balance, cleared: cleared} = Map.get(balances, account.id, @no_transactions)
+    %{account: account, balance: balance, cleared: cleared}
+  end
+
+  defp group(key, label, rows) do
+    %{
+      key: key,
+      label: label,
+      rows: rows,
+      balance: rows |> Enum.map(& &1.balance) |> Enum.sum()
+    }
+  end
+
+  defp open?(%{account: account}), do: not account.closed
+  defp budget?(%{account: account}), do: Account.budget_account?(account)
+end

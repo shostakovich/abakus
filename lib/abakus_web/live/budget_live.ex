@@ -16,7 +16,12 @@ defmodule AbakusWeb.BudgetLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope} current={:budget}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      current={:budget}
+      account_groups={@account_groups}
+    >
       <h1 class="visually-hidden">Budget</h1>
       <div
         id="budget"

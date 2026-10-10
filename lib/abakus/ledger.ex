@@ -47,15 +47,29 @@ defmodule Abakus.Ledger do
 
   def get_account!(id), do: Repo.get!(Account, id)
 
-  @doc "Creates an account together with its transfer payee."
+  def change_account(%Account{} = account, attrs \\ %{}), do: Account.changeset(account, attrs)
+
+  @doc "Creates an account together with its transfer payee; without a position it goes after the others."
   def create_account(attrs) do
     Repo.transact(fn ->
-      with {:ok, account} <- Repo.insert(Account.changeset(%Account{}, attrs)),
+      changeset = %Account{} |> Account.changeset(attrs) |> put_next_position()
+
+      with {:ok, account} <- Repo.insert(changeset),
            {:ok, payee} <- Repo.insert(Payee.transfer_changeset(%Payee{}, account)) do
         {:ok, %{account | transfer_payee: payee}}
       end
     end)
   end
+
+  # Cast params have string keys; a given 0 counts as given, though it changes nothing.
+  defp put_next_position(changeset) do
+    if Map.has_key?(changeset.params, "position"),
+      do: changeset,
+      else: Changeset.put_change(changeset, :position, next_account_position())
+  end
+
+  defp next_account_position,
+    do: Repo.one(from a in Account, select: coalesce(max(a.position) + 1, 0))
 
   @doc "Updates an account; renaming it renames its transfer payee. Returns it with its transfer payee."
   def update_account(%Account{} = account, attrs) do

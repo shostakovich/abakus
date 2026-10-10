@@ -43,6 +43,19 @@ defmodule Abakus.Ledger.AccountsTest do
       assert Ledger.get_account!(account.id).last_reconciled_at == reconciled_at
     end
 
+    test "puts a new account after the others unless it has a position" do
+      account_fixture(position: 4)
+      account_fixture(position: 2)
+
+      assert {:ok, %Account{position: 5}} = Ledger.create_account(%{name: "Bar", kind: :cash})
+
+      assert {:ok, %Account{position: 1}} =
+               Ledger.create_account(%{"name" => "Spar", "kind" => "savings", "position" => "1"})
+
+      assert {:ok, %Account{position: 0}} =
+               Ledger.create_account(%{name: "Depot", kind: :tracking, position: 0})
+    end
+
     test "requires a name and a kind" do
       assert {:error, changeset} = Ledger.create_account(%{name: " "})
       assert %{name: ["can't be blank"], kind: ["can't be blank"]} = errors_on(changeset)

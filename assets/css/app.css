@@ -1,4 +1,5 @@
 .app-auth { max-width: 26rem; }
+.app-narrow { max-width: 40rem; }
 
 /* Secondary text a step stronger than felt's default: at least 4.5:1 on cards, selected rows and raised surfaces. */
 :root { --cat-w: 15rem; --side-w: 18.5rem; --felt-secondary-color: light-dark(#5f6779, #b0b8c2); }
@@ -17,10 +18,20 @@
 .app-side .nav { flex-wrap: nowrap; }
 .app-side .nav-link { color: inherit; border-radius: var(--felt-radius); padding: .35rem .5rem; display: flex; align-items: center; gap: .5rem; min-width: 0; }
 .app-side .nav-link:hover, .app-side .nav-link.active { background: rgb(255 255 255 / .12); }
+.app-side .app-acc { font-size: .875rem; padding-block: .25rem; }
+.app-side .app-acc-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
+.app-side .app-acc-e { width: 1.25rem; text-align: center; flex-shrink: 0; }
+.app-side .app-acc-initial { display: none; }
+.app-side .app-bal { font-size: .8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
+.app-side-h { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; opacity: .7; padding: 0 .5rem; }
+.app-side .app-side-btn { background: transparent; border: 1px solid rgb(255 255 255 / .22); color: inherit; font-size: .875rem; font-weight: 500; }
+.app-side .app-side-btn:hover { background: rgb(255 255 255 / .1); border-color: rgb(255 255 255 / .35); }
 .app-side-toggle { color: inherit; opacity: .75; }
 .app-side-toggle:hover { opacity: 1; }
 .app-side-mini .app-side > * { padding-inline: .25rem !important; }
-.app-side-mini .app-side-text { display: none !important; }
+.app-side-mini .app-side-text, .app-side-mini .app-side .app-bal, .app-side-mini .app-side .app-acc-name, .app-side-mini .app-side-h > span { display: none !important; }
+.app-side-mini .app-side .app-acc-initial { display: inline; }
+.app-side-mini .app-side-h { border-top: 1px solid rgb(255 255 255 / .15); margin: .5rem .25rem !important; padding: 0; }
 .app-side-mini .app-side .nav-link { justify-content: center; }
 .app-side-mini .app-side-brand { justify-content: center; padding-inline: 0; }
 .app-side-mini .app-side-toggle svg { transform: scaleX(-1); }

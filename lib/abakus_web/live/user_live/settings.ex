@@ -8,7 +8,12 @@ defmodule AbakusWeb.UserLive.Settings do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope} current={:settings}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      current={:settings}
+      account_groups={@account_groups}
+    >
       <.header>Einstellungen</.header>
 
       <div class="row g-4">
