@@ -1,0 +1,477 @@
+defmodule AbakusWeb.BudgetLive.Components do
+  @moduledoc """
+  The budget view's parts: filter chips, month strip, month cards, the table's rows and the inspector. The focus
+  month's card is outlined and its column shows pills, the category's target bar follows it; the other months
+  stay quiet.
+  """
+
+  use AbakusWeb, :html
+
+  import AbakusWeb.Format
+
+  alias Abakus.Names
+  alias AbakusWeb.BudgetLive.{Status, Window}
+
+  attr :filter, :atom, required: true
+  attr :counts, :map, required: true
+
+  @doc "The filter chips; the `FilterChips` hook folds the trailing ones into \"Filter\" while the row is too short."
+  def filter_chips(assigns) do
+    assigns = assign(assigns, :chips, chips(assigns.counts))
+
+    ~H"""
+    <div id="filters" class="app-chips mb-2" role="group" aria-label="Filter" phx-hook="FilterChips">
+      <button
+        :for={{key, label, tone} <- @chips}
+        type="button"
+        class={["btn btn-sm btn-pill", chip_class(key == @filter, tone)]}
+        aria-pressed={to_string(key == @filter)}
+        data-chip={key}
+        phx-click="filter"
+        phx-value-filter={key}
+      >
+        <.icon :if={tone} name="alert" class="app-icon-sm" />{label}
+      </button>
+      <div
+        id="filters-more"
+        class="dropdown"
+        hidden
+        phx-click-away={hide_dropdown("#filters-menu", "#filters-toggle")}
+      >
+        <button
+          id="filters-toggle"
+          type="button"
+          class="btn btn-sm btn-pill btn-light dropdown-toggle"
+          aria-expanded="false"
+          aria-controls="filters-menu"
+          phx-click={toggle_dropdown("#filters-menu", "#filters-toggle")}
+        >
+          Filter
+        </button>
+        <ul id="filters-menu" class="dropdown-menu dropdown-menu-end" data-bs-popper="static">
+          <li :for={{key, label, _tone} <- @chips} data-fold={key} hidden>
+            <button
+              type="button"
+              class={["dropdown-item", key == @filter && "active"]}
+              phx-click={
+                JS.push("filter", value: %{filter: key})
+                |> hide_dropdown("#filters-menu", "#filters-toggle")
+              }
+            >
+              {label}
+            </button>
+          </li>
+        </ul>
+      </div>
+    </div>
+    """
+  end
+
+  defp chips(counts) do
+    [
+      {:all, "Alle", nil},
+      {:overspent, "#{counts.overspent} überzogen", if(counts.overspent > 0, do: :danger)},
+      {:underfunded, counted("Unterfinanziert", counts.underfunded), nil},
+      {:overfunded, "Überfinanziert", nil},
+      {:available, "Geld verfügbar", nil},
+      {:snoozed, counted("Pausiert", counts.snoozed), nil}
+    ]
+  end
+
+  defp counted(label, 0), do: label
+  defp counted(label, count), do: "#{label} · #{count}"
+
+  defp chip_class(true = _active, _tone), do: "btn-primary"
+  defp chip_class(false, :danger), do: "btn-outline-danger"
+  defp chip_class(false, nil), do: "btn-light"
+
+  attr :window, Window, required: true
+
+  @doc "The months around the shown ones: the focus month filled, the other shown ones tinted, today underlined."
+  def month_strip(assigns) do
+    ~H"""
+    <div id="strip" class="card app-strip" role="group" aria-label="Monate">
+      <button
+        type="button"
+        class="app-step"
+        aria-label="Früher"
+        disabled={not @window.earlier}
+        phx-click="step"
+        phx-value-by="-1"
+      >
+        <.icon name="back" />
+      </button>
+      <%= for entry <- @window.strip do %>
+        <span :if={entry.year} class="app-year">{entry.year}</span>
+        <button
+          type="button"
+          class={[
+            entry.focus && "is-focus",
+            entry.visible && not entry.focus && "is-sel",
+            entry.current && "is-cur"
+          ]}
+          title={month_year(entry.month)}
+          aria-current={entry.current && "date"}
+          phx-click="show_month"
+          phx-value-month={Window.param(entry.month)}
+        >
+          {month_short(entry.month)}
+        </button>
+      <% end %>
+      <button
+        type="button"
+        class="app-step"
+        aria-label="Später"
+        disabled={not @window.later}
+        phx-click="step"
+        phx-value-by="1"
+      >
+        <.icon name="chevron" />
+      </button>
+    </div>
+    """
+  end
+
+  attr :month, Abakus.Budget.Month, required: true
+  attr :focus, :boolean, required: true
+  attr :current, Date, required: true
+
+  @doc """
+  A month's card, as clean as YNAB's: Zu verteilen, with a sign while later months are not covered. The current
+  month stands out by its background, as in Actual, the focus month by its outline; how Zu verteilen adds up and
+  which months are short is in the inspector.
+  """
+  def month_card(assigns) do
+    assigns = assign(assigns, :key, Window.param(assigns.month.month))
+
+    ~H"""
+    <div
+      id={"month-#{@key}"}
+      class={["card app-mcard", @focus && "is-focus", @month.month == @current && "is-current"]}
+      aria-current={@month.month == @current && "date"}
+      phx-click={not @focus && "focus"}
+      phx-value-month={@key}
+    >
+      <div class="card-body p-2 d-flex flex-column align-items-center gap-1 text-center">
+        <span class="app-mname">{title(@month.month, @current)}</span>
+        <.ready_to_assign month={@month} key={@key} />
+      </div>
+    </div>
+    """
+  end
+
+  # The year only when it is not this year's.
+  defp title(%Date{year: year} = month, %Date{year: year}), do: month_name(month)
+  defp title(month, _current), do: month_year(month)
+
+  attr :month, Abakus.Budget.Month, required: true
+  attr :key, :string, required: true
+
+  defp ready_to_assign(assigns) do
+    assigns = assign(assigns, :status, Status.ready(assigns.month))
+
+    ~H"""
+    <div class="app-min-w-0 mt-auto">
+      <div id={"ready-#{@key}"} class={["app-rta-big", elem(@status, 0)]}>
+        {euros(@month.ready_to_assign_shown)}
+      </div>
+      <div class="fw-semibold d-flex align-items-center justify-content-center gap-1">
+        {elem(@status, 1)}
+        <span
+          :if={@month.uncovered != []}
+          class="app-uncovered text-danger d-inline-flex"
+          title={Enum.join(Status.uncovered(@month), "\n")}
+        >
+          <.icon name="alert" class="app-icon-sm" />
+          <span class="visually-hidden">{Enum.join(Status.uncovered(@month), ", ")}</span>
+        </span>
+      </div>
+    </div>
+    """
+  end
+
+  attr :month, Abakus.Budget.Month, required: true
+
+  @doc "The column heads of a month with its totals."
+  def column_heads(assigns) do
+    assigns = assign(assigns, :key, Window.param(assigns.month.month))
+
+    ~H"""
+    <th
+      :for={{field, label} <- [assigned: "Zugewiesen", activity: "Aktivität", available: "Verfügbar"]}
+      class={["app-num", field == :assigned && "app-ms"]}
+      scope="col"
+    >
+      <span class="app-colh">
+        {label}<b id={"total-#{@key}-#{field}"}>{amount(Map.fetch!(@month, field))}</b>
+      </span>
+    </th>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :months, :list, required: true
+
+  attr :totals, :map,
+    required: true,
+    doc: "per month the totals shown: assigned, activity, available"
+
+  slot :inner_block
+
+  @doc "A group's rows: a collapsible head with its totals per month, then its categories."
+  def group(assigns) do
+    ~H"""
+    <tbody id={"#{@id}-rows"}>
+      <tr id={@id} class="app-grp">
+        <th class="app-cat" scope="rowgroup">
+          <button
+            type="button"
+            class="app-catbtn d-flex align-items-center gap-1"
+            aria-expanded="true"
+            phx-click={
+              JS.toggle_class("is-collapsed", to: "##{@id}-rows")
+              |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+            }
+          >
+            <.icon name="down" class="app-icon-sm" /><span class="app-label">{@name}</span>
+          </button>
+        </th>
+        <%= for {key, totals} <- Enum.map(@months, &{Window.param(&1), Map.get(@totals, &1, %{})}) do %>
+          <td
+            :for={field <- [:assigned, :activity, :available]}
+            id={Map.has_key?(totals, field) && "#{@id}-#{key}-#{field}"}
+            class={["app-num", field == :assigned && "app-ms", total_class(field, totals[field])]}
+          >
+            {totals[field] && amount(totals[field])}
+          </td>
+        <% end %>
+      </tr>
+      {render_slot(@inner_block)}
+    </tbody>
+    """
+  end
+
+  defp total_class(_field, nil), do: nil
+  defp total_class(_field, 0), do: "app-zero"
+  defp total_class(:available, total) when total < 0, do: "app-neg"
+  defp total_class(_field, _total), do: nil
+
+  attr :id, :any, required: true, doc: "the category's id, or \"uncategorised\""
+  attr :name, :string, required: true
+  attr :cells, :map, required: true, doc: "the category's `Abakus.Budget.CategoryMonth` per month"
+  attr :months, :list, required: true
+  attr :focus, Date, required: true
+  attr :current, Date, required: true
+
+  attr :invalid, :any,
+    required: true,
+    doc: "`{category_id, month, typed}` for the amount that was no number"
+
+  attr :assignable, :boolean, default: true
+
+  @doc """
+  A category: name with target bar (its status on hover), then per month an assign input, activity and available (a pill in
+  the focus month).
+  """
+  def category_row(assigns) do
+    ~H"""
+    <tr id={"category-#{@id}"}>
+      <td class="app-cat">
+        <.category_name name={@name} icon={not @assignable && "alert"} />
+        <.target_line line={Status.target_line(@cells[@focus])} />
+      </td>
+      <%= for {month, key, cell, typed} <- columns(@months, @cells, @id, @invalid) do %>
+        <td class="app-ms app-num">
+          <input
+            :if={@assignable}
+            id={"assign-#{@id}-#{key}"}
+            class={[
+              "form-control form-control-sm app-assign",
+              cell.assigned == 0 && "app-zero",
+              typed && "is-invalid"
+            ]}
+            value={typed || amount(cell.assigned)}
+            inputmode="decimal"
+            autocomplete="off"
+            aria-label={"#{@name}, zugewiesen im #{month_year(month)}"}
+            aria-invalid={typed && "true"}
+            title={typed && "Kein gültiger Betrag"}
+            phx-blur="assign"
+            phx-focus={month != @focus && "focus"}
+            phx-value-category={@id}
+            phx-value-month={key}
+          />
+        </td>
+        <td id={"activity-#{@id}-#{key}"} class={["app-num", activity_class(cell.activity)]}>
+          {amount(cell.activity)}
+        </td>
+        <td id={"available-#{@id}-#{key}"} class="app-num">
+          <.pill :if={month == @focus} cell={cell} />
+          <.quiet :if={month != @focus} cell={cell} current={@current} />
+        </td>
+      <% end %>
+    </tr>
+    """
+  end
+
+  # Per month: the key, the cell and what was typed if it was no number.
+  defp columns(months, cells, id, invalid) do
+    for month <- months, do: {month, Window.param(month), cells[month], typed(invalid, id, month)}
+  end
+
+  defp typed({id, month, typed}, id, month), do: typed
+  defp typed(_invalid, _id, _month), do: nil
+
+  defp activity_class(0), do: "app-zero"
+  defp activity_class(_activity), do: "text-body-secondary"
+
+  attr :name, :string, required: true
+  attr :icon, :any, default: nil
+
+  defp category_name(assigns) do
+    assigns = assign(assigns, :parts, Names.split_emoji(assigns.name))
+
+    ~H"""
+    <span class="app-catname">
+      <span class="app-emoji" aria-hidden="true">
+        <.icon :if={@icon} name={@icon} class="app-icon-sm text-warning" />{elem(@parts, 0)}
+      </span>
+      <span class="app-label" title={@name}>{elem(@parts, 1)}</span>
+    </span>
+    """
+  end
+
+  attr :line, :any, required: true
+
+  defp target_line(%{line: nil} = assigns), do: ~H""
+
+  defp target_line(assigns) do
+    ~H"""
+    <span class="app-line2">
+      <span class="progress app-target" title={@line.title}>
+        <span
+          :for={{percent, class} <- @line.bars}
+          class={["progress-bar", class, "app-w-#{percent}"]}
+        ></span>
+      </span>
+    </span>
+    """
+  end
+
+  attr :cell, :any, required: true
+
+  defp pill(assigns) do
+    assigns = assign(assigns, :status, Status.pill(assigns.cell))
+
+    ~H"""
+    <span :if={@status == :zero} class="app-pill app-pill-zero">{amount(0)}</span>
+    <span :if={@status != :zero} class={["badge rounded-pill app-pill", elem(@status, 0)]}>
+      <.icon :if={elem(@status, 1)} name={elem(@status, 1)} />{euros(@cell.available)}
+    </span>
+    """
+  end
+
+  attr :cell, :any, required: true
+  attr :current, Date, required: true
+
+  defp quiet(assigns) do
+    assigns = assign(assigns, :status, Status.quiet(assigns.cell, assigns.current))
+
+    ~H"""
+    <span class={["app-q", @status.class]}>
+      <span :if={@status.dot} class="app-udot" title="unterfinanziert"></span>{amount(@cell.available)}
+    </span>
+    """
+  end
+
+  attr :rows, :list, required: true, doc: "income per payee: `%{payee, amounts}`"
+  attr :months, :list, required: true, doc: "the shown `Abakus.Budget.Month`s"
+
+  @doc "The income group: income per payee in the activity column."
+  def income(assigns) do
+    assigns =
+      assigns
+      |> assign(:totals, Map.new(assigns.months, &{&1.month, %{activity: &1.income}}))
+      |> assign(:months, Enum.map(assigns.months, & &1.month))
+
+    ~H"""
+    <.group id="group-income" name="💰 Einnahmen" months={@months} totals={@totals}>
+      <tr :for={row <- @rows} class="app-inc">
+        <td class="app-cat">
+          <.category_name name={row.payee || "Ohne Empfänger"} />
+        </td>
+        <%= for value <- Enum.map(@months, &Map.get(row.amounts, &1, 0)) do %>
+          <td class="app-ms"></td>
+          <td class={["app-num", value == 0 && "app-zero"]}>{amount(value)}</td>
+          <td></td>
+        <% end %>
+      </tr>
+    </.group>
+    """
+  end
+
+  attr :month, Abakus.Budget.Month, required: true
+
+  @doc "The inspector beside the table: how the focus month's Zu verteilen adds up, and its summary."
+  def inspector(assigns) do
+    assigns = assign(assigns, :ready, Status.ready(assigns.month))
+
+    ~H"""
+    <aside id="inspector" class="app-inspector" aria-label="Details">
+      <h2 class="app-insp-title mb-3">{month_year(@month.month)}</h2>
+      <section class="card mb-3">
+        <div class="card-header">Zu verteilen</div>
+        <div class="card-body small d-flex flex-column gap-1">
+          <.summary_line
+            :for={line <- Status.calculation(@month)}
+            label={line.label}
+            value={line.value}
+            class={line.class}
+          />
+          <.summary_line
+            label={elem(@ready, 1)}
+            value={@month.ready_to_assign_shown}
+            class={["fw-bold border-top pt-1", elem(@ready, 0)]}
+          />
+          <ul :if={@month.uncovered != []} class="app-uncovered list-unstyled text-danger mt-2 mb-0">
+            <li :for={line <- Status.uncovered(@month)} class="d-flex align-items-start gap-1">
+              <.icon name="alert" class="app-icon-sm mt-1" /><span>{line}</span>
+            </li>
+          </ul>
+        </div>
+      </section>
+      <section class="card mb-3">
+        <div class="card-header">Zusammenfassung</div>
+        <div class="card-body small d-flex flex-column gap-1">
+          <.summary_line label="Übrig aus Vormonat" value={@month.carried} />
+          <.summary_line label="Zugewiesen" value={@month.assigned} />
+          <.summary_line label="Aktivität" value={@month.activity} />
+          <.summary_line label="Verfügbar" value={@month.available} class="fw-bold border-top pt-1" />
+          <div class="mt-2 fw-semibold">Monatsbedarf</div>
+          <.summary_line label="Ziele" value={@month.needed} />
+          <.summary_line
+            :if={@month.underfunded > 0}
+            label="Noch offen"
+            value={@month.underfunded}
+            class="text-warning-emphasis fw-semibold"
+          />
+        </div>
+      </section>
+    </aside>
+    """
+  end
+
+  attr :label, :string, required: true
+  attr :value, :integer, required: true
+  attr :class, :any, default: nil
+
+  defp summary_line(assigns) do
+    ~H"""
+    <div class={["d-flex justify-content-between gap-3", @class]}>
+      <span class="text-truncate">{@label}</span>
+      <span class="tabular-nums text-nowrap">{euros(@value)}</span>
+    </div>
+    """
+  end
+end

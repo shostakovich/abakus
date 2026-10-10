@@ -14,9 +14,10 @@
     <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
     <script id="theme-script" nonce={assigns[:csp_nonce]}>
       (() => {
-        let theme;
-        try { theme = localStorage.getItem("theme"); } catch {}
+        let theme, side;
+        try { theme = localStorage.getItem("theme"); side = localStorage.getItem("side"); } catch {}
         if (theme === "light" || theme === "dark") document.documentElement.dataset.bsTheme = theme;
+        if (side === "mini") document.documentElement.classList.add("app-side-mini");
       })();
     </script>
     <link rel="preconnect" href="https://felt-css.rocu.de" />

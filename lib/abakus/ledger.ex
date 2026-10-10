@@ -175,7 +175,39 @@ defmodule Abakus.Ledger do
         group_by: [s.category_id, month(t.date)],
         select: {{s.category_id, month(t.date)}, sum(s.amount)}
 
-    (Repo.all(transactions) ++ Repo.all(subtransactions))
+    sum_by_key(Repo.all(transactions) ++ Repo.all(subtransactions))
+  end
+
+  @doc """
+  What the budget accounts' register adds up to in one category per `{payee_name, month}` (`nil` without a payee):
+  a split by its subtransactions, each under its own payee or else the split's.
+  """
+  def category_activity_by_payee(category_id) do
+    transactions =
+      from t in in_register(),
+        join: a in assoc(t, :account),
+        left_join: p in assoc(t, :payee),
+        where: a.kind in ^Account.budget_kinds() and t.category_id == ^category_id,
+        group_by: [p.name, month(t.date)],
+        select: {{p.name, month(t.date)}, sum(t.amount)}
+
+    subtransactions =
+      from s in Subtransaction,
+        join: t in subquery(in_register()),
+        on: t.id == s.transaction_id,
+        join: a in Account,
+        on: a.id == t.account_id,
+        left_join: p in Payee,
+        on: p.id == coalesce(s.payee_id, t.payee_id),
+        where: a.kind in ^Account.budget_kinds() and s.category_id == ^category_id,
+        group_by: [p.name, month(t.date)],
+        select: {{p.name, month(t.date)}, sum(s.amount)}
+
+    sum_by_key(Repo.all(transactions) ++ Repo.all(subtransactions))
+  end
+
+  defp sum_by_key(pairs) do
+    pairs
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
     |> Map.new(fn {key, amounts} -> {key, Enum.sum(amounts)} end)
   end

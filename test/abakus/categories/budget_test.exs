@@ -200,6 +200,59 @@ defmodule Abakus.Categories.BudgetTest do
     end
   end
 
+  describe "income_by_payee/0" do
+    test "sums income per payee and month, a split's part under its own payee or the split's",
+         c do
+      employer = payee_fixture(name: "Arbeitgeber")
+      bank = payee_fixture(name: "Bank")
+      tax_office = payee_fixture(name: "Finanzamt")
+      groceries = category_fixture()
+      income = &transaction_fixture(Keyword.merge([account_id: c.checking.id], &1))
+
+      income.(category_id: c.rta.id, payee_id: employer.id, amount: 300_000, date: @october)
+      income.(category_id: c.rta.id, payee_id: employer.id, amount: 310_000, date: @november)
+      income.(category_id: c.rta.id, amount: 500, date: ~D[2026-10-20])
+      income.(category_id: groceries.id, payee_id: employer.id, amount: 2_000, date: @october)
+
+      income.(
+        payee_id: bank.id,
+        amount: 1_500,
+        date: ~D[2026-10-03],
+        subtransactions: [
+          %{amount: 1_000, category_id: c.rta.id},
+          %{amount: 400, category_id: c.rta.id, payee_id: tax_office.id},
+          %{amount: 100, category_id: groceries.id}
+        ]
+      )
+
+      assert Categories.income_by_payee() == %{
+               {"Arbeitgeber", @october} => 300_000,
+               {"Arbeitgeber", @november} => 310_000,
+               {nil, @october} => 500,
+               {"Bank", @october} => 1_000,
+               {"Finanzamt", @october} => 400
+             }
+    end
+
+    test "leaves out tracking accounts and deleted transactions", c do
+      employer = payee_fixture(name: "Arbeitgeber")
+
+      deleted =
+        transaction_fixture(
+          account_id: c.checking.id,
+          category_id: c.rta.id,
+          payee_id: employer.id,
+          amount: 1_000
+        )
+
+      Ledger.delete_transaction(deleted)
+      depot = account_fixture(kind: :tracking)
+      transaction_fixture(account_id: depot.id, payee_id: employer.id, amount: 5_000)
+
+      assert Categories.income_by_payee() == %{}
+    end
+  end
+
   describe "fill_underfunded/2" do
     test "takes any day of the months, as a date or ISO 8601 string", c do
       category = category_fixture()

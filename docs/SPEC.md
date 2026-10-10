@@ -175,26 +175,13 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
     API show it, but left out of the month's total and of filling); one action fills all underfunded categories
     from RTA (in budget order, hidden and snoozed ones skipped, as far as RTA reaches without what later months
     have assigned, in a closed month too)
-  - UI copied from YNAB: progress bar and status under the name ("Finanziert", "Im Plan", "Noch 13,99 € nötig
-    bis zum 31.", "Überzogen"), pill icons, inspector with ring, "assign X more" button and target editor
+  - UI copied from YNAB: progress bar under the name with its status on hover ("Finanziert", "Im Plan", "Noch
+    13,99 € nötig", "Überzogen"), pill icons, inspector with ring, "assign X more" button and target editor
   - other goal types (`TB`, `TBD`, `MF`, `DEBT`) only if needed later
 - All of this is one pure module (`Abakus.Budget`) computed from assignments and transactions; months are not
   stored as snapshots. It computes every month from the first with data to the month after the last with data,
   where that month's overspending lands. Property tests plus hand-computed, fictional fixtures in YNAB's month format; the YNAB
   import checks it against YNAB's own numbers (see acceptance v1).
-
-## Budget view
-
-- Desktop: months side by side like YNAB 4 and Actual; 1, 2 or 3 depending on the window width, recalculated on
-  resize, no manual setting; month strip with year, prev/next/today. Each month header explains RTA like YNAB 4: not
-  assigned last month − overspent last month + income − assigned = RTA.
-  Category groups collapsible. Per month: assigned (editable), activity, available (pill: positive, zero,
-  underfunded, negative); categories with a target show a progress bar. Month header with income, assigned,
-  spent, underfunded and "fill underfunded". RTA shown once at the top.
-- Phone: one month, swipe or arrows; a row shows category and available; tapping opens a sheet with the assigned
-  input and quick actions (meet target, as last month, spent last month, cover overspending), the target editor
-  and "move money" between categories.
-- The first visible month lives in the URL; the number of months follows the window.
 
 ## Accounts and reconciling
 
@@ -294,13 +281,14 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 
 ## Screens
 
-- **Budget**: multi-month view (see above)
+- **Budget**: multi-month view
 - **Konten**: account list, register, reconcile
 - **Buchung**: transaction form (FAB on phones)
 - **Import & Sync**: file import with preview, bank connections with consent expiry
 - **Mehr**: categories and groups, passkeys, API tokens, MCP, YNAB import, look and theme
 
-State that should survive a reload (screen, month, number of months, account, filters) lives in the URL.
+State that should survive a reload (screen, month, account, filters) lives in the URL; the number of months
+follows the window.
 
 ## Phases
 

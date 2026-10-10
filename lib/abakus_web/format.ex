@@ -1,0 +1,55 @@
+defmodule AbakusWeb.Format do
+  @moduledoc "Amounts and months as the German UI shows and reads them; amounts are integer cents."
+
+  @months ~w(Januar Februar März April Mai Juni Juli August September Oktober November Dezember)
+
+  # "1.234,56" or "12,5" (a dot only between groups of three); else a dot before the cents, "12.5". A separator
+  # without cents ("12,") stands for whole euros.
+  @german ~r/^([+-]?)(\d{1,3}(?:\.\d{3})+|\d*)(?:,(\d{0,2}))?$/
+  @dotted ~r/^([+-]?)(\d*)\.(\d{0,2})$/
+  @max_length 30
+
+  @doc ~S|Cents as "1.234,56", negative with a real minus sign: "−9,99".|
+  def amount(cents) when is_integer(cents) do
+    euros = cents |> abs() |> div(100) |> Integer.to_string()
+    grouped = Regex.replace(~r/\B(?=(\d{3})+$)/, euros, ".")
+    rest = cents |> abs() |> rem(100) |> Integer.to_string() |> String.pad_leading(2, "0")
+    "#{if cents < 0, do: "−"}#{grouped},#{rest}"
+  end
+
+  def euros(cents), do: amount(cents) <> " €"
+
+  @doc """
+  Reads an amount typed in German ("1.234,56", "12,5", "−5") or with a decimal dot ("12.50") into cents; empty is
+  zero. Anything else, more than two decimals included, is `:error`.
+  """
+  def parse_amount(text) when is_binary(text) do
+    text = text |> String.replace(~r/[\s€]/u, "") |> String.replace("−", "-")
+
+    cond do
+      text == "" -> {:ok, 0}
+      String.length(text) > @max_length -> :error
+      true -> cents(Regex.run(@german, text) || Regex.run(@dotted, text))
+    end
+  end
+
+  defp cents([_, sign, euros]) when euros != "", do: cents([nil, sign, euros, ""])
+
+  defp cents([_, sign, euros, fraction]) when euros != "" or fraction != "" do
+    value =
+      digits(String.replace(euros, ".", "")) * 100 + digits(String.pad_trailing(fraction, 2, "0"))
+
+    {:ok, if(sign == "-", do: -value, else: value)}
+  end
+
+  defp cents(_no_match), do: :error
+
+  defp digits(""), do: 0
+  defp digits(digits), do: String.to_integer(digits)
+
+  def month_name(%Date{month: month}), do: Enum.at(@months, month - 1)
+
+  def month_short(date), do: date |> month_name() |> String.slice(0, 3)
+
+  def month_year(%Date{year: year} = date), do: "#{month_name(date)} #{year}"
+end

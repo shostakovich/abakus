@@ -9,54 +9,30 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 
 ## From YNAB 4
 
-- Months side by side: 1, 2 or 3, chosen automatically from the window width, recalculated on resize, no manual
-  setting; one month on phones
-- Month header explains RTA: not assigned last month − overspent last month + income − assigned − assigned in
-  future months = Zu verteilen (red "Zu viel verteilt" when negative)
-- Column headers carry the month totals; fixed category column; months as separate blocks
-- Month strip with year, selected range highlighted, arrows at both ends
+- One month on phones
 
 ## From today's YNAB
 
-- Dark sidebar, wide enough for full account names and balances (about 18–19rem, YNAB is ~290 px), collapsible like YNAB (toggle at the bottom, collapsed to an icon rail, remembered per
-  device; the freed width counts for the month/inspector rule): budget name, Budget, Konten, account groups (Budget, Tracking) with balances, add account, bank
-  connections; account names with emoji
-- Zu verteilen colours: green with "Verteilen ▾" while money is unassigned, grey when everything is assigned,
-  red if negative; line "In künftigen Monaten zugewiesen" (shown in the month card, see decisions below)
-- Filter chips: Alle, Überzogen (count, red), Unterfinanziert, Überfinanziert, Geld verfügbar, Pausiert
-- Columns ZUGEWIESEN | AKTIVITÄT | VERFÜGBAR; available as pills (check = funded, half circle = underfunded,
-  red = overspent, grey = 0)
-- Targets: bar and status under the category name ("Finanziert", "Im Plan", "Noch 13,99 € nötig bis zum 31.",
-  "Überzogen. 116,98 € von 88,99 €"); inspector with ring, "Weise noch X zu" + "Zuweisen", target editor
-- Inspector: month summary, targets this month, auto-assign (underfunded, as last month, spent last month,
-  average, reset), assigned in future months; "cover overspending" popover picking the source category
+- Sidebar: Konten, account groups (Budget, Tracking) with balances, add account, bank connections; account names
+  with emoji
+- "Verteilen ▾" on Zu verteilen while money is unassigned
+- Targets: inspector with ring, "Weise noch X zu" + "Zuweisen", target editor
+- Inspector: targets this month, overspent categories, auto-assign (underfunded, as last month, spent last month,
+  average, reset); "cover overspending" popover picking the source category
 - Register: balance equation (cleared + uncleared = working), banner "n neue Buchungen zu bestätigen", unapproved
   rows marked, categories prefilled from the payee, outflow/inflow columns, cleared "C" / lock
 - Reconcile popover: latest bank balance vs. cleared balance, "Passt!" in one click, otherwise difference and
   adjustment transaction
 
-## From Actual
-
-- Month cards and per-month column groups in the multi-month table; group rows with totals; collapsible groups
-
 ## Decisions after review round 1
 
-- Width rule: inspector before a third month; a month is only added while the category column keeps 20rem
-  (exact status amounts need the room). About 1280 px → 1 month + inspector, 1600 → 2 + inspector,
-  1920 → 3 + inspector; below that months only. Still automatic, no selector
-- One home per concept: Zu verteilen lives only in the month cards (on phones in a sticky month header); the
-  inspector shows the selected category or the month summary, never its own RTA box
-- Focus month: full month card with the YNAB 4 calculation, pills, target bars and status; other months get
-  slim cards (big number, Verteilen, calculation collapsible) and quiet numbers (zeros dimmed, negatives red,
-  a dot for underfunded). Light month card in clean light
-- Two-line category rows like YNAB: name on line 1, bar and status on line 2; rows about 36 px
-- Clean look only: the felt look is dropped (owner decision), no look toggle; the table body stays flat
+- On phones Zu verteilen lives in a sticky month header; the inspector shows the selected category or the month
+  summary
 
 ## Method
 
 Every euro gets assigned and overspending is dealt with: RTA > 0 and overspent categories are open tasks, RTA =
-0 with nothing overspent is the resting state. Assignments are never refused, as in YNAB; while a later month's
-RTA is below zero, the month card says which months are not covered and by how much.
+0 with nothing overspent is the resting state.
 
 ## Review
 
