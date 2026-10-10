@@ -180,8 +180,8 @@ defmodule AbakusWeb.BudgetInspectorTest do
       assert assigned(c.rent, @october) == 4_000
     end
 
-    test "refuses hidden categories and ids it cannot read", c do
-      hidden = category_fixture(name: "🙈 Versteckt", hidden: true)
+    test "refuses Ready to Assign as a category and ids it cannot read", c do
+      hidden = Categories.ready_to_assign!()
       Categories.assign(c.groceries, @october, 10_000)
       {:ok, view, _html} = open(c.conn)
 

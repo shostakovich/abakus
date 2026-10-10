@@ -10,7 +10,7 @@ defmodule Abakus.BudgetTest do
   @dec ~D[2026-12-01]
 
   defp budget(attrs) do
-    struct!(%Budget{categories: [%{id: 1, hidden: false}, %{id: 2, hidden: false}]}, attrs)
+    struct!(%Budget{categories: [%{id: 1}, %{id: 2}]}, attrs)
   end
 
   defp months(budget, current \\ @oct, through \\ nil),
@@ -393,17 +393,16 @@ defmodule Abakus.BudgetTest do
       assert %CategoryMonth{needed: 2_000, saved: 2_000} = row(months[~D[2027-02-01]], 1)
     end
 
-    test "hidden categories leave the month's needed and underfunded totals" do
+    test "every category counts in the month's needed and underfunded totals" do
       months =
         months(
           budget(
-            categories: [%{id: 1, hidden: true}, %{id: 2, hidden: false}],
+            categories: [%{id: 1}, %{id: 2}],
             targets: %{1 => [target(amount: 9_000)], 2 => [target(amount: 4_000)]}
           )
         )
 
-      assert %Month{needed: 4_000, underfunded: 4_000} = months[@oct]
-      assert %CategoryMonth{underfunded: 9_000} = row(months[@oct], 1)
+      assert %Month{needed: 13_000, underfunded: 13_000} = months[@oct]
     end
 
     test "applies the version in effect, none before the first or after cadence none" do
@@ -440,20 +439,20 @@ defmodule Abakus.BudgetTest do
   end
 
   describe "fill_underfunded/4" do
-    test "fills in budget order as far as Ready to Assign reaches, skipping hidden categories" do
+    test "fills in budget order as far as Ready to Assign reaches" do
       budget =
         budget(
-          categories: [%{id: 1, hidden: true}, %{id: 2, hidden: false}, %{id: 3, hidden: false}],
-          income: %{@oct => 5_000},
+          categories: [%{id: 1}, %{id: 2}, %{id: 3}],
+          income: %{@oct => 8_000},
           assigned: %{{2, @oct} => 1_000},
           targets: %{
-            1 => [target(amount: 9_000)],
+            1 => [target(amount: 3_000)],
             2 => [target(amount: 4_000)],
             3 => [target(amount: 4_000)]
           }
         )
 
-      assert Budget.fill_underfunded(budget, @oct, @oct) == [{2, 4_000}, {3, 1_000}]
+      assert Budget.fill_underfunded(budget, @oct, @oct) == [{1, 3_000}, {2, 4_000}, {3, 1_000}]
     end
 
     test "skips snoozed categories" do

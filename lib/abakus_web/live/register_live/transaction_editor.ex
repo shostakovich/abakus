@@ -817,7 +817,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       payees: payees,
       payees_by_key: Map.new(payees, &{&1.lookup_key, &1}),
       ready_to_assign_id: Categories.ready_to_assign!().id,
-      categories: CategoryOptions.build(socket.assigns.today, category_ids(transaction)),
+      categories: CategoryOptions.build(socket.assigns.today),
       locked: locked?(transaction),
       kept_accounts: kept_accounts(transaction, accounts)
     )
@@ -847,15 +847,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   defp sides(nil), do: []
   defp sides(transaction), do: [transaction | transaction.subtransactions]
-
-  defp category_ids(transaction) do
-    transaction
-    |> sides()
-    |> Enum.flat_map(
-      &[&1.category_id, &1.transfer_transaction && &1.transfer_transaction.category_id]
-    )
-    |> Enum.reject(&is_nil/1)
-  end
 
   @doc "Whether the transaction, one of its parts or a counterpart is reconciled."
   def locked?(transaction) do
@@ -985,7 +976,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     assign(socket, params: params, suggested: set.(socket.assigns.suggested, side))
   end
 
-  # A payee whose last category is not offered (hidden since) suggests nothing.
   defp payee_category(socket, name) do
     case Map.get(socket.assigns.payees_by_key, Names.lookup_key(name)) do
       %{last_category_id: id} -> offered(socket, id)

@@ -7,12 +7,25 @@ defmodule AbakusWeb.BudgetLive do
 
   A category's name selects it for the inspector (`AbakusWeb.BudgetLive.Inspector`); without room for the
   inspector it opens as a panel over the budget. Targets, snoozing, auto-assign, covering and moving money work
-  in the focus month; covering and moving through the available pill's popover (`AbakusWeb.BudgetLive.Popover`).
+  in the focus month; covering and moving through the available pill's popover (`AbakusWeb.BudgetLive.Popover`). Groups and categories are added,
+  renamed and deleted in popovers (`CategoryEditor`): "+ Gruppe" above the table, "+" and the name on a group's row,
+  the pencil in a category's inspector.
   """
   use AbakusWeb, :live_view
 
   alias Abakus.{Budget, Categories}
-  alias AbakusWeb.BudgetLive.{Components, Inspector, Popover, Rows, Status, TargetForm, Window}
+
+  alias AbakusWeb.BudgetLive.{
+    CategoryEditor,
+    Components,
+    Inspector,
+    Popover,
+    Rows,
+    Status,
+    TargetForm,
+    Window
+  }
+
   alias AbakusWeb.Format
 
   import AbakusWeb.Format, only: [amount: 1, euros: 1]
@@ -52,7 +65,9 @@ defmodule AbakusWeb.BudgetLive do
               </colgroup>
               <thead>
                 <tr>
-                  <th class="app-cat"></th>
+                  <th class={["app-cat", popover(@editing, :new_group) && "has-pop"]}>
+                    <CategoryEditor.add_group edit={popover(@editing, :new_group)} />
+                  </th>
                   <th :for={month <- @months} colspan="3" class="app-ms">
                     <Components.month_card
                       month={month}
@@ -84,6 +99,8 @@ defmodule AbakusWeb.BudgetLive do
                 name={group.name}
                 months={@window.months}
                 totals={totals}
+                group_id={group.id}
+                edit={popover(@editing, :group, group.id)}
               >
                 <Components.category_row
                   :for={%{category: category, cells: cells} <- categories}
@@ -110,7 +127,12 @@ defmodule AbakusWeb.BudgetLive do
           </div>
         </div>
         <aside :if={@fit.inspector} id="inspector" class="app-inspector" aria-label="Details">
-          <Inspector.body inspector={@inspector} current={@current} target_form={@target_form} />
+          <Inspector.body
+            inspector={@inspector}
+            current={@current}
+            target_form={@target_form}
+            edit={category_popover(@editing, @inspector)}
+          />
         </aside>
       </div>
       <div :if={@inspector.selected && not @fit.inspector} id="panel">
@@ -120,7 +142,7 @@ defmodule AbakusWeb.BudgetLive do
           role="dialog"
           aria-modal="true"
           aria-label="Details"
-          phx-window-keydown={!@popover && "deselect"}
+          phx-window-keydown={!@popover && !@editing && "deselect"}
           phx-key="Escape"
         >
           <div class="offcanvas-header pb-0">
@@ -137,6 +159,7 @@ defmodule AbakusWeb.BudgetLive do
               current={@current}
               target_form={@target_form}
               back={false}
+              edit={category_popover(@editing, @inspector)}
             />
           </div>
         </div>
@@ -161,13 +184,13 @@ defmodule AbakusWeb.BudgetLive do
        # The budget computes every month up to the browser's.
        current: Date.beginning_of_month(Format.today(connect["today"])),
        fit: fit(connect["fit"]),
-       groups: Categories.list_category_groups(),
        income: Categories.income_by_payee(),
        focus: nil,
        invalid: nil,
        selected: nil,
        popover: nil,
-       target_form: nil
+       target_form: nil,
+       editing: nil
      )
      |> assign_budget()}
   end
@@ -488,6 +511,51 @@ defmodule AbakusWeb.BudgetLive do
     end
   end
 
+  def handle_event("edit_open", params, socket),
+    do: {:noreply, assign(socket, :editing, CategoryEditor.open(params, socket.assigns.groups))}
+
+  def handle_event("edit_close", _params, socket), do: {:noreply, assign(socket, :editing, nil)}
+
+  def handle_event(
+        "edit_save",
+        %{"name" => name},
+        %{assigns: %{editing: %{step: :name}}} = socket
+      ) do
+    editing = socket.assigns.editing
+
+    case CategoryEditor.save(editing, name) do
+      :ok -> {:noreply, socket |> edited() |> show_added(editing.kind)}
+      result -> {:noreply, refused(socket, result)}
+    end
+  end
+
+  def handle_event(
+        "edit_delete",
+        _params,
+        %{assigns: %{editing: %{step: :name, kind: kind}}} = socket
+      )
+      when kind in [:group, :category] do
+    case CategoryEditor.delete(socket.assigns.editing, socket.assigns.groups) do
+      :ok -> {:noreply, edited(socket)}
+      {:ask, editing} -> {:noreply, assign(socket, :editing, editing)}
+      result -> {:noreply, refused(socket, result)}
+    end
+  end
+
+  def handle_event(
+        "edit_confirm_delete",
+        %{"into" => into},
+        %{assigns: %{editing: %{step: :delete}}} = socket
+      ) do
+    case CategoryEditor.confirm_delete(socket.assigns.editing, into, socket.assigns.groups) do
+      :ok -> {:noreply, edited(socket)}
+      result -> {:noreply, refused(socket, result)}
+    end
+  end
+
+  # Late clicks after the popover closed.
+  def handle_event("edit_" <> _event, _params, socket), do: {:noreply, socket}
+
   defp shown_month(socket, param) do
     case Window.parse_param(param) do
       {:ok, month} -> if month in socket.assigns.window.months, do: {:ok, month}, else: :error
@@ -597,6 +665,33 @@ defmodule AbakusWeb.BudgetLive do
   defp target_errors(socket, params, errors),
     do: assign(socket, :target_form, TargetForm.to_target_form(params, errors))
 
+  defp edited(socket), do: socket |> assign(:editing, nil) |> assign_budget() |> assign_view()
+
+  defp refused(socket, {:error, editing}), do: assign(socket, :editing, editing)
+
+  defp refused(socket, :gone),
+    do: socket |> edited() |> put_flash(:error, "Das wurde inzwischen geändert oder gelöscht.")
+
+  # A filter would hide what was just added.
+  defp show_added(%{assigns: %{filter: filter, window: window}} = socket, kind)
+       when kind in [:new_group, :new_category] and filter != :all,
+       do: push_patch(socket, to: budget_path(window.first, :all))
+
+  defp show_added(socket, _kind), do: socket
+
+  defp popover(%{kind: kind} = editing, kind), do: editing
+  defp popover(_editing, _kind), do: nil
+
+  defp popover(%{kind: :group, group: %{id: id}} = editing, :group, id), do: editing
+  defp popover(%{kind: :new_category, group: %{id: id}} = editing, :group, id), do: editing
+  defp popover(%{kind: :category, category: %{id: id}} = editing, :category, id), do: editing
+  defp popover(_editing, _kind, _id), do: nil
+
+  defp category_popover(editing, %Inspector{selected: %{category: %{id: id}}}),
+    do: popover(editing, :category, id)
+
+  defp category_popover(_editing, _inspector), do: nil
+
   # An amount that is no number keeps what was typed, marked, so it can be corrected.
   defp assign_amount(socket, category, month, value) do
     case Format.parse_amount(value) do
@@ -621,14 +716,13 @@ defmodule AbakusWeb.BudgetLive do
 
   defp find_category(groups, id) do
     Enum.find_value(groups, fn group ->
-      Enum.find(
-        group.categories,
-        &(Integer.to_string(&1.id) == id and not (&1.hidden or group.hidden))
-      )
+      Enum.find(group.categories, &(Integer.to_string(&1.id) == id))
     end)
   end
 
-  defp assign_budget(socket), do: assign(socket, :budget, Categories.budget())
+  # Groups load with the budget, so a category deleted in another tab leaves both.
+  defp assign_budget(socket),
+    do: assign(socket, budget: Categories.budget(), groups: Categories.list_category_groups())
 
   # Months, rows and the window for the requested first month, what fits and the chosen focus.
   defp assign_view(socket) do

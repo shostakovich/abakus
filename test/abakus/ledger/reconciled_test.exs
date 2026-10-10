@@ -310,4 +310,18 @@ defmodule Abakus.Ledger.ReconciledTest do
     assert {:ok, _} = Ledger.accept_match(proposal, reconciled: :confirmed)
     assert reload(inflow).date == ~D[2026-10-07]
   end
+
+  test "moving a category refuses reconciled transactions unless confirmed", c do
+    movies = category_fixture()
+    leisure = category_fixture()
+
+    transaction =
+      reconcile(transaction_fixture(account_id: c.checking.id, category_id: movies.id))
+
+    assert {:error, :reconciled} = Ledger.recategorize(movies.id, leisure.id)
+    assert reload(transaction).category_id == movies.id
+
+    assert :ok = Ledger.recategorize(movies.id, leisure.id, reconciled: :confirmed)
+    assert reload(transaction).category_id == leisure.id
+  end
 end

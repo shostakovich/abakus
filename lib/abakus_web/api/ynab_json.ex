@@ -53,7 +53,7 @@ defmodule AbakusWeb.Api.YnabJSON do
     %{
       id: id(group.id),
       name: group.name,
-      hidden: group.hidden,
+      hidden: false,
       internal: group.internal,
       deleted: false,
       categories: Enum.map(group.categories, &category/1)
@@ -65,7 +65,7 @@ defmodule AbakusWeb.Api.YnabJSON do
       id: id(category.id),
       category_group_id: id(category.category_group_id),
       name: category.name,
-      hidden: category.hidden,
+      hidden: false,
       internal: category.internal,
       note: category.note,
       deleted: false

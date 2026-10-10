@@ -175,7 +175,7 @@ defmodule AbakusWeb.Api.YnabApiTest do
     assert accounts["Altes Konto"]["id"] == to_string(old.id)
   end
 
-  test "GET categories lists the groups with Ready to Assign and hidden ones, not internal to the client",
+  test "GET categories lists the groups with Ready to Assign, none hidden, not internal to the client",
        c do
     hidden = category_fixture(category_group_id: c.category.category_group_id, hidden: true)
     rta = Categories.ready_to_assign!()
@@ -197,7 +197,7 @@ defmodule AbakusWeb.Api.YnabApiTest do
 
     assert [
              %{"id" => category_id, "name" => "Lebensmittel", "hidden" => false},
-             %{"id" => hidden_id, "hidden" => true, "deleted" => false}
+             %{"id" => hidden_id, "hidden" => false, "deleted" => false}
            ] = group["categories"]
 
     assert {category_id, hidden_id} == {to_string(c.category.id), to_string(hidden.id)}

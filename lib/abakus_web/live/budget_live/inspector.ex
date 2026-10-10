@@ -5,20 +5,20 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   and what later months have assigned. With a category selected it shows that category in the focus month: what is
   available and how, a hint to cover overspending, the target card, auto-assign for it and its note.
 
-  `new/4` gathers what it shows; only visible categories count, as the table shows them.
+  `new/4` gathers what it shows: every category, as the table shows them.
   """
   use AbakusWeb, :html
 
   import AbakusWeb.Format
 
   alias Abakus.Budget.{CategoryMonth, Month}
-  alias AbakusWeb.BudgetLive.{Components, Status, TargetForm, Window}
+  alias AbakusWeb.BudgetLive.{CategoryEditor, Components, Status, TargetForm, Window}
 
   defstruct [:month, :free, categories: [], overspent: [], future: [], assigned: 0, selected: nil]
 
   @doc """
   The inspector for the focus month among `months` (`Abakus.Budget.Month`s), with the selected category's id or
-  nil. `categories` are the visible categories in budget order with their group and cell; `free` is what can be
+  nil. `categories` are the categories in budget order with their group and cell; `free` is what can be
   assigned without taking what later months have.
   """
   def new(groups, months, focus, selected_id) do
@@ -27,7 +27,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     cells = Map.new(month.categories, &{&1.category_id, &1})
 
     categories =
-      for group <- groups, not group.hidden, category <- group.categories, not category.hidden do
+      for group <- groups, category <- group.categories do
         %{group: group, category: category, cell: cells[category.id]}
       end
 
@@ -63,7 +63,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     end
   end
 
-  @doc "The visible category with the id, with its group and cell, or nil."
+  @doc "The category with the id, with its group and cell, or nil."
   def find(%__MODULE__{categories: categories}, id),
     do: Enum.find(categories, &(&1.category.id == id))
 
@@ -71,6 +71,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   attr :current, Date, required: true
   attr :target_form, :any, required: true, doc: "the target editor's form while it is open"
   attr :back, :boolean, default: true, doc: "whether a selected category leads back to the month"
+  attr :edit, :map, default: nil, doc: "the selected category's open rename or delete popover"
 
   @doc "What the inspector shows: the month, or the selected category."
   def body(%{inspector: %{selected: nil}} = assigns) do
@@ -106,15 +107,22 @@ defmodule AbakusWeb.BudgetLive.Inspector do
       <h2 id="inspector-name" class="app-insp-title mb-0 me-auto text-truncate">
         {@entry.category.name}
       </h2>
-      <button
-        type="button"
-        class="btn btn-sm btn-light"
-        aria-label="Umbenennen"
-        title="Umbenennen folgt"
-        disabled
-      >
-        <.icon name="pencil" class="app-icon-sm" />
-      </button>
+      <div class="dropdown">
+        <button
+          id="edit-category"
+          type="button"
+          class="btn btn-sm btn-light"
+          aria-label="Umbenennen oder löschen"
+          title="Umbenennen oder löschen"
+          aria-expanded={to_string(@edit != nil)}
+          phx-click="edit_open"
+          phx-value-edit="category"
+          phx-value-category={@entry.category.id}
+        >
+          <.icon name="pencil" class="app-icon-sm" />
+        </button>
+        <CategoryEditor.popover :if={@edit} edit={@edit} align_end />
+      </div>
     </div>
     <div class="small text-body-secondary mb-2">
       {month_year(@entry.cell.month)}{if @entry.cell.month == @current, do: " · aktueller Monat"}

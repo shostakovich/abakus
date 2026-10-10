@@ -40,7 +40,6 @@ defmodule Abakus.BudgetPropertyTest do
     gen all(
           count <- integer(1..6),
           months = Enum.map(0..(count - 1), &month/1),
-          hidden <- list_of(boolean(), length: length(@ids)),
           income <- amounts(months, 0..200_000),
           assigned <- amounts(for(id <- @ids, m <- months, do: {id, m}), -20_000..60_000),
           activity <- amounts(for(id <- [nil | @ids], m <- months, do: {id, m}), -80_000..10_000),
@@ -49,7 +48,7 @@ defmodule Abakus.BudgetPropertyTest do
           current <- member_of(months)
         ) do
       budget = %Budget{
-        categories: Enum.zip_with(@ids, hidden, &%{id: &1, hidden: &2}),
+        categories: Enum.map(@ids, &%{id: &1}),
         income: income,
         assigned: assigned,
         activity: activity,
@@ -154,11 +153,10 @@ defmodule Abakus.BudgetPropertyTest do
       before = budget |> Budget.months(current, month) |> Enum.find(&(&1.month == month))
       free = before.ready_to_assign - before.assigned_in_future
       fills = Budget.fill_underfunded(budget, month, current)
-      hidden = for %{id: id, hidden: true} <- budget.categories, do: id
 
       {expected, _left} =
         before.categories
-        |> Enum.reject(&(&1.category_id in hidden or &1.snoozed))
+        |> Enum.reject(& &1.snoozed)
         |> Enum.flat_map_reduce(max(free, 0), fn row, left ->
           case min(row.underfunded, left) do
             0 -> {[], left}

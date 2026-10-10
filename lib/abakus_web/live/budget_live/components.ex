@@ -10,7 +10,7 @@ defmodule AbakusWeb.BudgetLive.Components do
   import AbakusWeb.Format
 
   alias Abakus.Names
-  alias AbakusWeb.BudgetLive.{Status, Window}
+  alias AbakusWeb.BudgetLive.{CategoryEditor, Status, Window}
 
   attr :filter, :atom, required: true
   attr :counts, :map, required: true
@@ -272,25 +272,62 @@ defmodule AbakusWeb.BudgetLive.Components do
     required: true,
     doc: "per month the totals shown: assigned, activity, available"
 
+  attr :group_id, :integer, default: nil, doc: "the group's id when it can be edited"
+  attr :edit, :map, default: nil, doc: "the open popover, when it is this group's"
   slot :inner_block
 
-  @doc "A group's rows: a collapsible head with its totals per month, then its categories."
+  @doc """
+  A group's rows: a collapsible head with its totals per month, then its categories. An editable group's name
+  opens its popover, its "+" (shown on hover) adds a category.
+  """
   def group(assigns) do
     ~H"""
     <tbody id={"#{@id}-rows"}>
       <tr id={@id} class="app-grp">
-        <th class="app-cat" scope="rowgroup">
-          <button
-            type="button"
-            class="app-catbtn d-flex align-items-center gap-1"
-            aria-expanded="true"
-            phx-click={
-              JS.toggle_class("is-collapsed", to: "##{@id}-rows")
-              |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-            }
-          >
-            <.icon name="down" class="app-icon-sm" /><span class="app-label">{@name}</span>
-          </button>
+        <th class={["app-cat", @edit && "has-pop"]} scope="rowgroup">
+          <div class="dropdown app-grp-head">
+            <button
+              type="button"
+              class="app-catbtn app-fold"
+              aria-expanded="true"
+              aria-label={"#{@name} auf- und zuklappen"}
+              phx-click={
+                JS.toggle_class("is-collapsed", to: "##{@id}-rows")
+                |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+              }
+            >
+              <.icon name="down" class="app-icon-sm" />
+            </button>
+            <%= if @group_id do %>
+              <button
+                id={"edit-group-#{@group_id}"}
+                type="button"
+                class="app-catbtn app-label"
+                aria-expanded={to_string(@edit != nil and @edit.kind == :group)}
+                phx-click="edit_open"
+                phx-value-edit="group"
+                phx-value-group={@group_id}
+              >
+                {@name}
+              </button>
+              <button
+                id={"add-category-#{@group_id}"}
+                type="button"
+                class="app-add"
+                title="Kategorie hinzufügen"
+                aria-label={"Kategorie in #{@name} hinzufügen"}
+                aria-expanded={to_string(@edit != nil and @edit.kind == :new_category)}
+                phx-click="edit_open"
+                phx-value-edit="new_category"
+                phx-value-group={@group_id}
+              >
+                <.icon name="plus" class="app-icon-sm" />
+              </button>
+            <% else %>
+              <span class="app-label">{@name}</span>
+            <% end %>
+            <CategoryEditor.popover :if={@edit} edit={@edit} />
+          </div>
         </th>
         <%= for {key, totals} <- Enum.map(@months, &{Window.param(&1), Map.get(@totals, &1, %{})}) do %>
           <td
@@ -323,7 +360,10 @@ defmodule AbakusWeb.BudgetLive.Components do
     required: true,
     doc: "`{category_id, month, typed}` for the amount that was no number"
 
-  attr :assignable, :boolean, default: true
+  attr :assignable, :boolean,
+    default: true,
+    doc: "false for the uncategorised row, which takes no assignments and cannot be selected"
+
   attr :selected, :boolean, default: false
 
   @doc """

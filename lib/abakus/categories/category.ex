@@ -1,7 +1,9 @@
 defmodule Abakus.Categories.Category do
   @moduledoc """
-  An envelope in the budget. Categories are hidden, never deleted, so history keeps its references. Internal
-  categories (Ready to Assign) come from a migration and cannot be changed.
+  An envelope in the budget. A category is deleted only by moving everything it has into another
+  (`Abakus.Categories.delete_category/3`), so history keeps its references. `hidden` comes from YNAB, for the import
+  and its check; the budget ignores it. Internal categories (Ready to Assign) come from a migration and cannot be
+  changed.
   """
 
   use Abakus.Schema

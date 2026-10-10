@@ -97,6 +97,20 @@ defmodule Abakus.CategoriesTest do
     assert {rta.id, group_id, category_id} == {ready_to_assign.id, group.id, category.id}
   end
 
+  test "new groups and categories without a position go to the end" do
+    first = category_group_fixture(position: 5)
+    category_fixture(category_group_id: first.id, position: 3)
+
+    assert {:ok, %CategoryGroup{position: 6} = group} =
+             Categories.create_category_group(%{name: "🎉 Freizeit"})
+
+    assert {:ok, %Category{position: 4}} =
+             Categories.create_category(%{name: "Kino", category_group_id: first.id})
+
+    assert {:ok, %Category{position: 0}} =
+             Categories.create_category(%{name: "Kino", category_group_id: group.id})
+  end
+
   describe "categories" do
     test "store name, note, hidden and position with the lookup key" do
       group = category_group_fixture()
@@ -207,16 +221,7 @@ defmodule Abakus.CategoriesTest do
       assert id == category.id
     end
 
-    test "prefers visible categories over hidden ones" do
-      category_fixture(name: "Urlaub", hidden: true)
-      category_fixture(name: "Urlaub", category_group_id: category_group_fixture(hidden: true).id)
-      visible = category_fixture(name: "🏖️ Urlaub")
-
-      assert {:ok, %Category{id: id}} = Categories.find_category_by_name("urlaub")
-      assert id == visible.id
-    end
-
-    test "falls back to a hidden category" do
+    test "finds a category hidden in YNAB like any other" do
       hidden = category_fixture(name: "Altlast", hidden: true)
 
       assert {:ok, %Category{id: id}} = Categories.find_category_by_name("altlast")
@@ -244,16 +249,16 @@ defmodule Abakus.CategoriesTest do
                Categories.find_category_by_name("Inflow: Ready to Assign")
     end
 
-    test "is ambiguous between equally visible categories" do
+    test "is ambiguous between categories with the same name, hidden in YNAB or not" do
       category_fixture(name: "🚗 Auto")
       category_fixture(name: "Auto")
 
       assert Categories.find_category_by_name("auto") == {:error, :ambiguous}
 
-      category_fixture(name: "Alt", hidden: true)
-      category_fixture(name: "🗄️ Alt", hidden: true)
+      category_fixture(name: "Urlaub", hidden: true)
+      category_fixture(name: "🏖️ Urlaub")
 
-      assert Categories.find_category_by_name("alt") == {:error, :ambiguous}
+      assert Categories.find_category_by_name("urlaub") == {:error, :ambiguous}
     end
 
     test "reports unknown names" do
@@ -388,7 +393,7 @@ defmodule Abakus.CategoriesTest do
   end
 
   describe "reset_assignments/2" do
-    test "resets what visible categories have assigned in the month" do
+    test "resets what every category, hidden in YNAB or not, has assigned in the month" do
       groceries = category_fixture()
       rent = category_fixture()
       hidden = category_fixture(hidden: true)
@@ -399,7 +404,7 @@ defmodule Abakus.CategoriesTest do
 
       assert assigned(groceries, ~D[2026-10-01]) == 0
       assert assigned(rent, ~D[2026-10-01]) == 0
-      assert assigned(hidden, ~D[2026-10-01]) == 1_000
+      assert assigned(hidden, ~D[2026-10-01]) == 0
       assert assigned(groceries, ~D[2026-11-01]) == 1_000
     end
 

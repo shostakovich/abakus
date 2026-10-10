@@ -86,7 +86,15 @@
 .app-budget .app-grp > * { background: var(--felt-surface-sunk); font-weight: 600; }
 .app-budget .app-inc > * { color: var(--felt-secondary-color); }
 .app-budget tbody.is-collapsed > tr:not(.app-grp) { display: none; }
-.app-budget tbody.is-collapsed > .app-grp .app-icon { transform: rotate(-90deg); }
+.app-budget tbody.is-collapsed > .app-grp .app-fold .app-icon { transform: rotate(-90deg); }
+/* Popovers for adding, renaming and deleting groups and categories; the "+" on a group shows on hover. */
+.app-budget .app-cat.has-pop { overflow: visible; z-index: 5; }
+.app-grp-head { display: flex; align-items: center; gap: .25rem; min-width: 0; }
+.app-grp-head > .app-catbtn { width: auto; }
+.app-add { border: 0; background: none; padding: 0 .25rem; color: var(--felt-secondary-color); flex-shrink: 0; visibility: hidden; }
+.app-grp:hover .app-add, .app-add:focus-visible, .app-add[aria-expanded=true] { visibility: visible; }
+@media (hover: none) { .app-add { visibility: visible; } }
+.app-edit-menu { width: 18rem; max-width: calc(100vw - 2rem); white-space: normal; font-weight: 400; text-align: left; }
 .app-col-cat { width: var(--cat-w); }
 .app-col-assigned { width: calc(var(--month-w) * .35); }
 .app-col-activity { width: calc(var(--month-w) * .28); }
