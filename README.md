@@ -6,7 +6,8 @@ meant to replace YNAB for my own use. **The user interface is German.**
 
 ## Status
 
-Skeleton: Phoenix app, container, CI and sign-in with magic link and passkeys. No budget features yet.
+Sign-in with magic link and passkeys, the budget math, the YNAB import and the budget view on desktop. Accounts,
+the register, file import and the API come next.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, API, phases
 - `mockup/`: click dummy with example data, built with [felt-css](https://felt-css.rocu.de/)
