@@ -16,7 +16,7 @@ defmodule AbakusWeb.RegisterLive do
   use AbakusWeb, :live_view
 
   alias Abakus.Ledger
-  alias AbakusWeb.{AccountGroups, CategoryOptions}
+  alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
   alias AbakusWeb.RegisterLive.{Balances, Components, Rows, TransactionDialog}
   alias Plug.Conn.Query
 
@@ -125,7 +125,7 @@ defmodule AbakusWeb.RegisterLive do
 
     {:ok,
      assign(socket,
-       today: today(connect["today"]),
+       today: Format.today(connect["today"]),
        categories: CategoryOptions.build(),
        scope: nil,
        dialog: nil,
@@ -150,14 +150,6 @@ defmodule AbakusWeb.RegisterLive do
 
   defp scope(%{"id" => id}), do: {:account, id}
   defp scope(_params), do: :all
-
-  # The browser's date, as long as it is a plausible one.
-  defp today(param) do
-    case is_binary(param) && Date.from_iso8601(param) do
-      {:ok, %Date{year: year} = date} when year in 2000..2099 -> date
-      _ -> Date.utc_today()
-    end
-  end
 
   # With no account taking manual entries there is nothing to book in.
   defp open_dialog(socket, :new, _params) do
