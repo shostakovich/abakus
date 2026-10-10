@@ -158,19 +158,22 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#feed-hint", "Ausgaben-App")
       assert has_element?(view, "#balance-cleared")
 
+      refute has_element?(view, "#new-transaction")
+
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
       refute has_element?(view, "#feed-hint")
+      assert has_element?(view, "#new-transaction")
 
-      # The form books in another account, unless none takes manual entries.
-      assert {:ok, _view, _html} = live(c.conn, ~p"/accounts/#{c.depot}/transactions/new")
+      # All accounts book in one that takes manual entries, as long as there is one.
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
+      assert has_element?(view, "#new-transaction")
 
       for account <- [c.giro, c.savings],
           do: {:ok, _} = Ledger.update_account(account, %{closed: true})
 
-      assert {:error, {:live_redirect, %{to: to}}} =
-               live(c.conn, ~p"/accounts/#{c.depot}/transactions/new")
-
-      assert to == ~p"/accounts/#{c.depot}"
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
+      refute has_element?(view, "#new-transaction")
+      refute has_element?(view, "#new-transaction-fab")
     end
 
     test "without transactions it says so", c do
@@ -424,12 +427,13 @@ defmodule AbakusWeb.RegisterLiveTest do
       view |> element("#tx-#{c.waiting.id}-select") |> render_click()
       view |> element("#tx-#{c.uncategorised.id}-select") |> render_click()
       view |> element("#tx-#{c.transfer.id}-select") |> render_click()
-      assert has_element?(view, "#bulk", "3 ausgewählt")
+      assert has_element?(view, "#bulk", "3 Buchungen")
       assert has_element?(view, "tr#tx-#{c.waiting.id}.table-active")
 
+      # The category picker puts the pick into the form and submits it.
       view
-      |> form("#categorise-form", category_id: c.groceries.id)
-      |> render_submit()
+      |> form("#categorise-form")
+      |> render_submit(%{category_id: c.groceries.id})
 
       assert reload(c.uncategorised).category_id == c.groceries.id
       # A transfer between budget accounts takes no category.
@@ -446,10 +450,12 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
 
       view |> element("#tx-#{c.shopping.id}-select") |> render_click()
-      view |> element("#approve-selected") |> render_click()
+      # As in YNAB the bar offers approving only when one of them waits.
+      refute has_element?(view, "#approve-selected")
+      render_click(view, "approve_selected", %{})
       refute has_element?(view, "#flash-info", "0 bestätigt")
       assert has_element?(view, "#flash-info", "Keine der ausgewählten Buchungen wartet")
-      assert has_element?(view, "#bulk", "1 ausgewählt")
+      assert has_element?(view, "#bulk", "1 Buchung")
 
       view |> element("#tx-#{c.waiting.id}-select") |> render_click()
       view |> element("#tx-#{c.old.id}-select") |> render_click()
@@ -457,14 +463,14 @@ defmodule AbakusWeb.RegisterLiveTest do
       render_click(view, "approve_selected", %{})
       assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeschlossen")
       refute reload(c.waiting).approved
-      assert has_element?(view, "#bulk", "3 ausgewählt")
+      assert has_element?(view, "#bulk", "3 Buchungen")
     end
 
     test "selecting all takes the shown rows, and the selection can be cleared", c do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}?filter=unapproved")
 
       view |> element("#select-all") |> render_click()
-      assert has_element?(view, "#bulk", "2 ausgewählt")
+      assert has_element?(view, "#bulk", "2 Buchungen")
 
       view |> element("#clear-selection") |> render_click()
       refute has_element?(view, "#bulk")
@@ -479,8 +485,8 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute has_element?(view, "#approve-selected[data-confirm]")
 
       view
-      |> form("#categorise-form", category_id: Categories.ready_to_assign!().id)
-      |> render_submit()
+      |> form("#categorise-form")
+      |> render_submit(%{category_id: Categories.ready_to_assign!().id})
 
       assert reload(c.old).category_id == Categories.ready_to_assign!().id
     end

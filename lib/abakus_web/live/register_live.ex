@@ -12,18 +12,20 @@ defmodule AbakusWeb.RegisterLive do
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
   `account_groups`, so it is as fresh as the sidebar.
 
-  The transaction form (`TransactionDialog`) opens over the register for a new transaction (`…/transactions/new`)
-  or to edit one (`…/transactions/:transaction_id/edit`), keeping the view in the URL. The counterpart of a split's
-  transfer opens its split.
+  Transactions are edited as in YNAB, without a URL (`TransactionEditor`): a click selects a row, a click into a
+  cell of a selected row opens the row for editing, "Buchung" adds an empty row on top; one row at a time. Phones
+  open a sheet from a card or the "+ Buchung" button instead. The counterpart of a split's transfer opens its
+  split. The selection bar approves, categorises and deletes the selected transactions.
   """
   use AbakusWeb, :live_view
 
   alias Abakus.Ledger
+  alias Abakus.Ledger.Transaction
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
-  alias AbakusWeb.RegisterLive.{Balances, Components, Rows, TransactionDialog}
+  alias AbakusWeb.RegisterLive.{Balances, Components, Rows, TransactionEditor}
   alias Plug.Conn.Query
 
-  import TransactionDialog, only: [confirmed: 1]
+  import TransactionEditor, only: [confirmed: 1]
 
   @flags Ecto.Enum.dump_values(Abakus.Ledger.Transaction, :flag)
 
@@ -69,7 +71,7 @@ defmodule AbakusWeb.RegisterLive do
         <Components.balances account={@account} balances={@balances} />
         <Components.toolbar
           account={@account}
-          new_path={@paths.new}
+          manual={@manual}
           filter={@filter}
           query={@query}
           running={@running}
@@ -77,47 +79,42 @@ defmodule AbakusWeb.RegisterLive do
           paths={@paths}
         />
         <Components.bulk
-          :if={MapSet.size(@selected) > 0}
+          :if={MapSet.size(@selected) > 0 and !@editor}
           selected={Enum.filter(@rows, &(&1.id in @selected))}
           categories={@categories}
         />
         <Components.table
           rows={@rows}
           accounts={@accounts}
-          all={is_nil(@account)}
+          columns={@columns}
           selected={@selected}
           flag_menu={@flag_menu}
           running={@running_balances}
-          edit_path={@paths.edit}
+          editor={@editor && @editor.layout == :row && @editor}
           empty={empty_text(@transactions)}
         />
         <Components.cards
           rows={@rows}
           accounts={@accounts}
           all={is_nil(@account)}
-          edit_path={@paths.edit}
           empty={empty_text(@transactions)}
         />
         <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
-        <.link
-          :if={@paths.new && !@dialog}
+        <button
+          :if={@manual && !@editor}
           id="new-transaction-fab"
-          patch={@paths.new}
+          type="button"
           class="btn btn-primary btn-lg rounded-pill shadow-lg d-inline-flex d-md-none align-items-center gap-1 app-fab"
+          phx-click="new"
+          phx-value-layout="sheet"
         >
           <.icon name="plus" /> Buchung
-        </.link>
+        </button>
       </div>
       <.live_component
-        :if={@dialog}
-        module={TransactionDialog}
-        id="transaction-dialog"
-        transaction={@dialog.transaction}
-        split_of={@dialog.split_of}
-        account={@account}
-        accounts={@accounts}
-        today={@today}
-        return_to={@paths.list}
+        :if={@editor && @editor.layout == :sheet}
+        module={TransactionEditor}
+        {@editor.assigns}
       />
     </Layouts.app>
     """
@@ -133,9 +130,8 @@ defmodule AbakusWeb.RegisterLive do
     {:ok,
      assign(socket,
        today: Format.today(connect["today"]),
-       categories: CategoryOptions.build(),
        scope: nil,
-       dialog: nil,
+       editor: nil,
        selected: MapSet.new(),
        flag_menu: nil
      )}
@@ -151,34 +147,13 @@ defmodule AbakusWeb.RegisterLive do
        running: params["running"] == "1"
      )
      |> load(scope(params))
-     |> assign_rows()
-     |> open_dialog(socket.assigns.live_action, params)}
+     |> assign_rows()}
   end
 
   defp scope(%{"id" => id}), do: {:account, id}
   defp scope(_params), do: :all
 
-  # With no account taking manual entries there is nothing to book in.
-  defp open_dialog(socket, :new, _params) do
-    if Enum.any?(Map.values(socket.assigns.accounts), &TransactionDialog.manual?/1),
-      do: assign(socket, :dialog, %{transaction: nil, split_of: false}),
-      else: socket |> assign(:dialog, nil) |> push_patch(to: socket.assigns.paths.list)
-  end
-
-  defp open_dialog(socket, :edit, %{"transaction_id" => id}) do
-    case editable(fetch_transaction(id)) do
-      {:ok, transaction, split_of} ->
-        assign(socket, :dialog, %{transaction: transaction, split_of: split_of})
-
-      :error ->
-        socket
-        |> assign(:dialog, nil)
-        |> put_flash(:error, "Buchung nicht gefunden.")
-        |> push_patch(to: socket.assigns.paths.list)
-    end
-  end
-
-  defp open_dialog(socket, _list, _params), do: assign(socket, :dialog, nil)
+  defp fetch_transaction(id) when is_integer(id), do: Ledger.get_transaction(id)
 
   defp fetch_transaction(id) do
     case Integer.parse(id) do
@@ -202,7 +177,7 @@ defmodule AbakusWeb.RegisterLive do
 
   defp load(socket, :all) do
     socket
-    |> assign(scope: :all, account: nil, selected: MapSet.new())
+    |> assign(scope: :all, account: nil, selected: MapSet.new(), editor: nil)
     |> load_transactions()
   end
 
@@ -210,7 +185,7 @@ defmodule AbakusWeb.RegisterLive do
     account = Ledger.get_account!(id)
 
     socket
-    |> assign(scope: scope, account: account, selected: MapSet.new())
+    |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
     |> load_transactions()
   end
 
@@ -228,17 +203,37 @@ defmodule AbakusWeb.RegisterLive do
 
     rows = transactions |> Rows.filter(filter) |> Rows.search(query)
     balances = balances(account, account_rows)
+    running = running_balances(socket.assigns, rows, balances)
+    columns = Components.columns(account, running != nil)
 
     assign(socket,
       rows: rows,
       accounts: accounts,
+      manual: manual_entry?(account, accounts),
+      columns: columns,
+      editor: follow_rows(socket.assigns.editor, rows, accounts, columns),
+      categories: CategoryOptions.build(socket.assigns.today),
       balances: balances,
       unapproved: Enum.reject(transactions, & &1.approved),
-      running_balances: running_balances(socket.assigns, rows, balances),
+      running_balances: running,
       paths: view_paths(Map.put(socket.assigns, :accounts, accounts)),
       selected: MapSet.intersection(socket.assigns.selected, MapSet.new(rows, & &1.id))
     )
   end
+
+  # The edited row goes when the view or search leaves it out; the editor sees the columns as they are now.
+  defp follow_rows(nil, _rows, _accounts, _columns), do: nil
+
+  defp follow_rows(editor, rows, accounts, columns) do
+    if shown?(editor, rows),
+      do: update_in(editor.assigns, &Map.merge(&1, %{accounts: accounts, columns: columns})),
+      else: nil
+  end
+
+  defp shown?(%{layout: :row, row_id: id}, rows) when id != :new,
+    do: Enum.any?(rows, &(&1.id == id))
+
+  defp shown?(_editor, _rows), do: true
 
   defp balances(nil, account_rows), do: Balances.all(account_rows)
 
@@ -258,13 +253,13 @@ defmodule AbakusWeb.RegisterLive do
   defp running_balances(_assigns, _rows, _balances), do: nil
 
   @impl true
-  def handle_info({TransactionDialog, :done, message}, socket) do
+  def handle_info({TransactionEditor, :done, message}, socket) do
     {:noreply,
      socket
+     |> assign(:editor, nil)
      |> clear_flash()
      |> put_flash(:info, message)
-     |> refresh()
-     |> push_patch(to: socket.assigns.paths.list)}
+     |> refresh()}
   end
 
   @impl true
@@ -307,6 +302,61 @@ defmodule AbakusWeb.RegisterLive do
     end
   end
 
+  # While a row is edited the other rows wait, as only one is edited at a time.
+  def handle_event("row_click", _params, %{assigns: %{editor: editor}} = socket)
+      when not is_nil(editor),
+      do: {:noreply, socket}
+
+  def handle_event("row_click", %{"id" => id} = params, socket) do
+    case find(socket, id) do
+      nil ->
+        {:noreply, socket}
+
+      %{id: id} = transaction ->
+        if id in socket.assigns.selected,
+          do: {:noreply, open_editor(socket, transaction.id, :row, params["field"])},
+          else: {:noreply, assign(socket, :selected, MapSet.new([id]))}
+    end
+  end
+
+  def handle_event("edit", %{"id" => id}, socket),
+    do: {:noreply, open_editor(socket, id, :sheet, nil)}
+
+  def handle_event("new", %{"layout" => layout}, socket) do
+    if socket.assigns.manual do
+      layout = if layout == "sheet", do: :sheet, else: :row
+      {:noreply, assign(socket, :editor, editor(socket, :new, nil, false, layout, "date"))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("cancel_edit", _params, socket), do: {:noreply, assign(socket, :editor, nil)}
+
+  def handle_event("delete_selected", params, socket) do
+    case selected(socket.assigns) do
+      [] ->
+        {:noreply, socket}
+
+      transactions ->
+        transactions = Enum.uniq_by(Enum.map(transactions, &deletable/1), & &1.id)
+
+        case Ledger.delete_transactions(transactions, confirmed(params)) do
+          {:ok, deleted} ->
+            socket
+            |> assign(:selected, MapSet.new())
+            |> saved({:ok, deleted}, deleted_text(length(deleted)))
+            |> noreply()
+
+          {:error, changeset} ->
+            socket
+            |> put_flash(:error, "Nicht gelöscht: #{TransactionEditor.error_message(changeset)}")
+            |> refresh()
+            |> noreply()
+        end
+    end
+  end
+
   def handle_event("select", %{"id" => id}, socket) do
     case find(socket, id) do
       nil -> {:noreply, socket}
@@ -340,6 +390,70 @@ defmodule AbakusWeb.RegisterLive do
     |> assign(:flag_menu, nil)
     |> change(id, &Ledger.update_transaction(&1, %{flag: blank_to_nil(flag)}, confirmed(params)))
   end
+
+  defp deleted_text(1), do: "Buchung gelöscht."
+  defp deleted_text(count), do: "#{count} Buchungen gelöscht."
+
+  # The counterpart of a split's transfer goes with its split, as it is edited there.
+  defp deletable(%Transaction{transfer_subtransaction_id: id} = transaction)
+       when not is_nil(id) do
+    %{transfer_subtransaction: %{transaction_id: split_id}} =
+      Ledger.get_transaction!(transaction.id)
+
+    %Transaction{id: split_id}
+  end
+
+  defp deletable(transaction), do: transaction
+
+  defp open_editor(socket, id, layout, field) do
+    case editable(fetch_transaction(id)) do
+      {:ok, transaction, split_of} ->
+        row_id = if is_integer(id), do: id, else: String.to_integer(id)
+
+        socket
+        |> assign(
+          :selected,
+          if(layout == :row, do: MapSet.new([row_id]), else: socket.assigns.selected)
+        )
+        |> assign(
+          :editor,
+          editor(socket, row_id, transaction, split_of, layout, field || "payee")
+        )
+
+      :error ->
+        socket
+        |> assign(:editor, nil)
+        |> put_flash(:error, "Buchung nicht gefunden.")
+        |> refresh()
+    end
+  end
+
+  defp editor(socket, row_id, transaction, split_of, layout, focus) do
+    %{assigns: assigns} = socket
+
+    %{
+      row_id: row_id,
+      layout: layout,
+      assigns: %{
+        id: "tx-editor",
+        transaction: transaction,
+        split_of: split_of,
+        layout: layout,
+        focus: focus_id(focus),
+        account: assigns.account,
+        accounts: assigns.accounts,
+        columns: assigns.columns,
+        today: assigns.today
+      }
+    }
+  end
+
+  defp focus_id("account"), do: "tx-account"
+
+  defp focus_id(field) when field in ~w(date payee category memo outflow inflow),
+    do: "tx-#{field}"
+
+  defp focus_id(_field), do: "tx-payee"
 
   # A reconciled transaction is unlocked to cleared, so the cleared balance stays as it is.
   defp toggled(:uncleared), do: :cleared
@@ -390,7 +504,7 @@ defmodule AbakusWeb.RegisterLive do
   defp saved(socket, {:error, changeset}, _message),
     do:
       socket
-      |> put_flash(:error, "Nicht geändert: #{TransactionDialog.error_message(changeset)}")
+      |> put_flash(:error, "Nicht geändert: #{TransactionEditor.error_message(changeset)}")
       |> refresh()
 
   defp refresh(socket) do
@@ -411,22 +525,19 @@ defmodule AbakusWeb.RegisterLive do
 
   defp view_paths(assigns) do
     %{
-      list: register_path(assigns, []),
       filters: Map.new(Rows.filters(), &{&1, register_path(assigns, filter: &1)}),
-      running: register_path(assigns, running: !assigns.running),
-      new: manual_entry?(assigns) && register_path(assigns, [], "/transactions/new"),
-      edit: &register_path(assigns, [], "/transactions/#{&1}/edit")
+      running: register_path(assigns, running: !assigns.running)
     }
   end
 
-  defp manual_entry?(%{account: nil, accounts: accounts}),
-    do: Enum.any?(Map.values(accounts), &TransactionDialog.manual?/1)
+  # With no account taking manual entries there is nothing to book in.
+  defp manual_entry?(nil, accounts),
+    do: Enum.any?(Map.values(accounts), &TransactionEditor.manual?/1)
 
-  defp manual_entry?(%{account: account}), do: TransactionDialog.manual?(account)
+  defp manual_entry?(account, _accounts), do: TransactionEditor.manual?(account)
 
-  # The register's URL (or with `suffix` one below it) with the view, search and running balance, changed by
-  # `changes`; defaults stay out.
-  defp register_path(assigns, changes, suffix \\ "") do
+  # The register's URL with the view, search and running balance, changed by `changes`; defaults stay out.
+  defp register_path(assigns, changes) do
     current = %{filter: assigns.filter, q: assigns.query, running: assigns.running}
     %{filter: filter, q: query, running: running} = Map.merge(current, Map.new(changes))
 
@@ -438,8 +549,7 @@ defmodule AbakusWeb.RegisterLive do
       ]
       |> Enum.filter(fn {_key, value} -> value end)
 
-    register = if assigns.account, do: ~p"/accounts/#{assigns.account}", else: ~p"/accounts/all"
-    base = register <> suffix
+    base = if assigns.account, do: ~p"/accounts/#{assigns.account}", else: ~p"/accounts/all"
     if params == [], do: base, else: base <> "?" <> Query.encode(params)
   end
 end

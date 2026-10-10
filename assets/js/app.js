@@ -4,6 +4,7 @@ import { LiveSocket } from "phoenix_live_view"
 
 import { BudgetLayout, FilterChips, initialBudgetFit } from "./hooks/budget.js"
 import { PasskeyLogin, PasskeyRegister } from "./hooks/passkey.js"
+import { Combobox, EditRow } from "./hooks/register.js"
 import { SideToggle } from "./hooks/sidebar.js"
 import { ThemeSwitch } from "./hooks/theme.js"
 
@@ -19,7 +20,7 @@ const today = () => {
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: () => ({ _csrf_token: csrfToken, today: today(), fit: initialBudgetFit() }),
-  hooks: { BudgetLayout, FilterChips, PasskeyLogin, PasskeyRegister, SideToggle, ThemeSwitch },
+  hooks: { BudgetLayout, Combobox, EditRow, FilterChips, PasskeyLogin, PasskeyRegister, SideToggle, ThemeSwitch },
 })
 
 liveSocket.connect()

@@ -138,6 +138,10 @@
   .app-reg-all td.app-catcol { max-width: 16rem; }
   .app-reg-all td.app-payee { width: auto; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
   .app-reg-all td.app-memo-col { width: 100%; max-width: 0; }
+  .app-reg-all.app-reg-editing td.app-payee { min-width: 12rem; }
+  .app-reg-editing td.app-memo-col { min-width: 12rem; }
+  .app-reg-editing td.app-catcol { min-width: 13rem; }
+  .app-reg .app-edit td:is(.app-out, .app-in) { min-width: 6rem; }
 }
 .app-unapproved > * { --felt-table-accent-bg: color-mix(in srgb, var(--felt-primary) 10%, transparent); }
 .app-unapproved > :first-child { box-shadow: inset 3px 0 0 var(--felt-primary), inset 0 0 0 9999px color-mix(in srgb, var(--felt-primary) 10%, transparent); }
@@ -164,7 +168,61 @@
 .app-bal-compact > summary::-webkit-details-marker { display: none; }
 .app-bal-compact[open] .app-sum-chev { transform: rotate(90deg); }
 .app-reg-search { max-width: 14rem; }
-.app-bulk-cat { max-width: 15rem; }
+
+/* Each transaction is a tbody: a split's parts below it, collapsible. */
+.app-reg .app-part > * { font-size: .8125rem; color: var(--felt-secondary-color); border-top: 0; }
+.app-reg .app-tx.is-collapsed .app-part { display: none; }
+.app-parts-toggle { border: 0; background: none; padding: 0; margin-right: .2rem; color: inherit; line-height: 1; }
+.app-parts-toggle .app-icon { transition: transform .15s; }
+.app-tx.is-collapsed .app-parts-toggle .app-icon { transform: rotate(-90deg); }
+.app-reg .app-date-col { width: 1%; }
+.app-reg .app-amount-col { width: 6.5rem; }
+
+/* The edited row, as in YNAB: inputs in the columns, Cancel and Save below. */
+.app-reg .app-edit > tr > * { background: color-mix(in srgb, var(--felt-primary) 9%, var(--felt-body-bg)); border-bottom-width: 0; padding-block: .2rem; }
+.app-reg .app-edit > tr:last-child > * { border-bottom-width: 1px; padding-block: .35rem; }
+.app-reg .app-edit .form-control, .app-reg .app-edit .form-select { min-width: 0; width: 100%; }
+.app-reg .app-edit td.app-payee, .app-reg .app-edit td.app-catcol, .app-reg .app-edit td.app-konto { overflow: visible; }
+.app-reg .app-edit-date .form-control { width: 7.25rem; padding-inline: .375rem; }
+.app-reg .app-edit td.app-out, .app-reg .app-edit td.app-in { min-width: 4.75rem; }
+.app-reg .app-edit :is(.app-out, .app-in) .form-control { padding-inline: .375rem; }
+.app-reg .app-edit-rest > * { white-space: normal; line-height: 1.2; }
+.app-reg .app-edit .app-sub-remove { font-size: 1.25rem; line-height: 1; text-decoration: none; }
+@media (max-width: 1299.98px) {
+  /* While a row is edited the memo gets its column back, as it is typed there. */
+  .app-reg-editing .app-memo-col { display: table-cell !important; }
+  .app-reg-editing td.app-payee div.app-short { display: none !important; }
+}
+@media (max-width: 1599.98px) {
+  /* The inputs need room: account, payee, category and memo share what the other columns leave. */
+  .app-reg-editing td.app-payee { width: 30%; }
+  .app-reg-editing td.app-catcol { width: 30%; max-width: 0; }
+  .app-reg-editing td.app-memo-col { width: 18%; max-width: 0; }
+  .app-reg-editing td.app-konto { width: 10%; max-width: 0; }
+}
+
+/* Payee and category pickers (the Combobox hook). */
+.app-combo { position: relative; min-width: 0; }
+.app-combo-menu { position: absolute; z-index: 1060; top: calc(100% + 2px); left: 0; width: max(100%, 17rem); max-height: 19rem; overflow-y: auto; background: light-dark(var(--felt-surface), var(--felt-surface-raised)); border: 1px solid var(--felt-border-color); border-radius: var(--felt-radius); box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .18); padding: .25rem 0; font-size: .875rem; white-space: nowrap; text-align: left; }
+.app-combo-menu:empty { display: none; }
+.app-combo-head { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--felt-secondary-color); padding: .4rem .75rem .15rem; }
+.app-combo-opt { padding: .3rem .75rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
+.app-combo-opt:hover { background: color-mix(in srgb, var(--felt-primary) 8%, transparent); }
+.app-combo-opt.active { background: color-mix(in srgb, var(--felt-primary) 18%, transparent); }
+.app-combo-create { color: var(--felt-primary-text, var(--felt-primary)); }
+.app-combo-foot { position: sticky; bottom: -.25rem; padding: .4rem .5rem; background: inherit; border-top: 1px solid var(--felt-border-color); }
+.app-combo-none { background: transparent; border-color: transparent; }
+.app-combo-up .app-combo-menu { position: static; width: 100%; box-shadow: none; border: 0; margin-top: .25rem; max-height: 16rem; }
+
+/* The selection bar as in YNAB: floating at the bottom of the register. */
+#register:has(#bulk) { padding-bottom: 4.5rem; }
+.app-bulk { position: fixed; z-index: 1030; bottom: 1.25rem; left: 50%; transform: translateX(-50%); background: color-mix(in srgb, #1d2550 88%, var(--felt-body-bg)); color: #fff; border-radius: .75rem; padding: .35rem .5rem; box-shadow: 0 .5rem 1.5rem rgb(0 0 0 / .3); font-size: .875rem; white-space: nowrap; }
+@media (min-width: 992px) { .app-bulk { left: calc(50% + var(--side-w) / 2); } }
+.app-bulk .app-bulk-btn { color: inherit; border: 0; display: inline-flex; align-items: center; gap: .3rem; }
+.app-bulk .app-bulk-btn:hover, .app-bulk .app-bulk-btn[aria-expanded=true] { background: rgb(255 255 255 / .14); color: inherit; }
+.app-bulk-sep { width: 1px; align-self: stretch; margin: .2rem .25rem; background: rgb(255 255 255 / .25); }
+.app-bulk .dropdown-menu { bottom: calc(100% + .5rem); top: auto; }
+.app-bulk-menu { width: 20rem; }
 .app-side .badge { font-size: .65rem; flex-shrink: 0; }
 .app-side-mini .app-side .badge { display: none; }
 @media (max-width: 767.98px) {
@@ -179,23 +237,19 @@
   .app-ph-l2 { margin-top: .25rem; }
 }
 
-/* Transaction and account form: a modal on desktops; on phones a sheet from the bottom, the amount first. */
+/* Account form and the phone's transaction sheet: a modal on desktops; on phones a sheet from the bottom. */
 body:has(.app-modal) { overflow: hidden; }
 .app-modal { overflow-y: auto; }
 .app-sign { min-width: 2.75rem; font-weight: 700; }
 .app-tx-amount-input { font-size: 1.25rem; font-weight: 700; }
 .app-tx-sub-amount { width: 8.5rem; flex-shrink: 0; }
-.app-tx-kind .btn { flex: 1 1 0; min-width: 0; padding-inline: .25rem; }
 .app-fab { position: fixed; right: 1rem; bottom: 1rem; z-index: 1030; }
 @media (max-width: 767.98px) {
   #register { padding-bottom: 4rem; }
   .app-sheet { position: fixed; inset: auto 0 0; margin: 0; max-width: none; height: auto; max-height: 92vh; }
   .app-sheet .modal-content { max-height: 92vh; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-  .app-tx-amount { order: -2; }
-  .app-tx-kind { order: -1; }
-  .app-tx-late { order: 1; }
-  .app-tx-memo { order: 2; }
   .app-tx-amount-input { font-size: 2rem; }
+  .app-sheet .app-combo-menu { position: static; width: 100%; box-shadow: none; max-height: 40vh; margin-top: .25rem; }
 }
 
 /* Bar widths without inline styles (the CSP allows none). */

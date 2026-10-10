@@ -1,32 +1,63 @@
 defmodule AbakusWeb.CategoryOptions do
   @moduledoc """
-  Categories as selects offer them, in the shape `Phoenix.HTML.Form.options_for_select/2` takes: Ready to Assign
-  first as income, then the visible categories by group. Hidden categories (or those of hidden groups) show only
-  where `keep` names them, so a transaction keeps a category hidden since.
+  Categories as the category pickers offer them, in groups: Ready to Assign first as income, then the visible
+  categories by group, each with what it has available in the month of `today`, as YNAB shows them. Hidden
+  categories (or those of hidden groups) show only where `keep` names them, so a transaction keeps a category
+  hidden since. An option's `text` is how the register names the category, `key` its lookup key.
   """
 
-  alias Abakus.Categories
+  alias Abakus.{Budget, Categories, Names}
 
-  def build(keep \\ []) do
+  def build(%Date{} = today, keep \\ []) do
     ready_to_assign = Categories.ready_to_assign!()
+    month = month(today)
+    available = Map.new(month.categories, &{&1.category_id, &1.available})
 
     groups =
       for group <- Categories.list_category_groups(),
           categories = Enum.filter(group.categories, &(visible?(group, &1) or &1.id in keep)),
           categories != [] do
-        {group.name, Enum.map(categories, &{&1.name, &1.id})}
+        %{
+          name: group.name,
+          options:
+            Enum.map(categories, fn category ->
+              option(category.id, category.name, text(group.name, category.name), available)
+            end)
+        }
       end
 
-    [{"Zu verteilen (Einnahme)", ready_to_assign.id} | groups]
+    income = %{
+      option(ready_to_assign.id, "Zu verteilen", "Einnahme: Zu verteilen", %{})
+      | available: month.ready_to_assign_shown
+    }
+
+    [%{name: "Einnahme", options: [income]} | groups]
   end
+
+  defp month(today) do
+    month = Date.beginning_of_month(today)
+    Categories.budget() |> Budget.months(today) |> Enum.find(&(&1.month == month))
+  end
+
+  defp option(id, name, text, available),
+    do: %{
+      id: id,
+      name: name,
+      text: text,
+      key: Names.lookup_key(name),
+      available: Map.get(available, id, 0)
+    }
 
   defp visible?(group, category), do: not group.hidden and not category.hidden
 
+  @doc ~S|How the register names a category: "Wohnen: Miete", the group without its emoji.|
+  def text(group_name, name), do: "#{elem(Names.split_emoji(group_name), 1)}: #{name}"
+
   @doc "The category ids among the options."
-  def ids(options) do
-    Enum.flat_map(options, fn
-      {_group, categories} when is_list(categories) -> Enum.map(categories, &elem(&1, 1))
-      {_name, id} -> [id]
-    end)
+  def ids(groups), do: Enum.flat_map(groups, fn group -> Enum.map(group.options, & &1.id) end)
+
+  @doc "The option with the id, nil when there is none."
+  def find(groups, id) do
+    Enum.find_value(groups, fn group -> Enum.find(group.options, &(&1.id == id)) end)
   end
 end
