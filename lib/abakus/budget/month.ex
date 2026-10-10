@@ -5,7 +5,7 @@ defmodule Abakus.Budget.Month do
   in a closed month, as it ended. The month header explains it: `not_assigned_last_month` −
   `overspent_last_month` + `income` − `assigned` = `ready_to_assign`. `uncovered` lists later months whose Ready to
   Assign is below zero as `{month, shortfall}`. Totals include the uncategorised row; `overspent` is the sum of
-  negative availables as a positive amount; `needed` and `underfunded` leave out snoozed categories.
+  negative availables as a positive amount; `needed` and `underfunded` leave out snoozed and hidden categories.
   """
 
   alias Abakus.Budget.CategoryMonth
@@ -31,9 +31,10 @@ defmodule Abakus.Budget.Month do
     uncovered: []
   ]
 
-  @doc "The month with its rows and their totals."
-  def new(month, income, %CategoryMonth{} = uncategorised, categories) do
+  @doc "The month with its rows and their totals; `hidden` holds the ids of hidden categories."
+  def new(month, income, %CategoryMonth{} = uncategorised, categories, hidden) do
     rows = [uncategorised | categories]
+    open = Enum.reject(rows, &(&1.snoozed or MapSet.member?(hidden, &1.category_id)))
 
     %__MODULE__{
       month: month,
@@ -45,8 +46,8 @@ defmodule Abakus.Budget.Month do
       activity: sum(rows, & &1.activity),
       available: sum(rows, & &1.available),
       overspent: sum(rows, &max(-&1.available, 0)),
-      needed: sum(rows, &if(&1.snoozed, do: 0, else: &1.needed)),
-      underfunded: sum(rows, &if(&1.snoozed, do: 0, else: &1.underfunded))
+      needed: sum(open, & &1.needed),
+      underfunded: sum(open, & &1.underfunded)
     }
   end
 

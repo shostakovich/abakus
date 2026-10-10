@@ -393,6 +393,19 @@ defmodule Abakus.BudgetTest do
       assert %CategoryMonth{needed: 2_000, saved: 2_000} = row(months[~D[2027-02-01]], 1)
     end
 
+    test "hidden categories leave the month's needed and underfunded totals" do
+      months =
+        months(
+          budget(
+            categories: [%{id: 1, hidden: true}, %{id: 2, hidden: false}],
+            targets: %{1 => [target(amount: 9_000)], 2 => [target(amount: 4_000)]}
+          )
+        )
+
+      assert %Month{needed: 4_000, underfunded: 4_000} = months[@oct]
+      assert %CategoryMonth{underfunded: 9_000} = row(months[@oct], 1)
+    end
+
     test "applies the version in effect, none before the first or after cadence none" do
       targets = %{
         1 => [

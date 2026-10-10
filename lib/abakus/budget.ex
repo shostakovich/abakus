@@ -39,9 +39,11 @@ defmodule Abakus.Budget do
     rows =
       Enum.map([nil | Enum.map(budget.categories, & &1.id)], &category_months(budget, &1, range))
 
+    hidden = hidden(budget)
+
     [range | rows]
     |> Enum.zip_with(fn [month, uncategorised | categories] ->
-      Month.new(month, Map.get(budget.income, month, 0), uncategorised, categories)
+      Month.new(month, Map.get(budget.income, month, 0), uncategorised, categories, hidden)
     end)
     |> chain_ready_to_assign()
     |> look_ahead(current, Enum.max([hd(range) | data], Date))
@@ -56,11 +58,14 @@ defmodule Abakus.Budget do
   def fill_underfunded(%__MODULE__{} = budget, month, current, only \\ nil) do
     month = Date.beginning_of_month(month)
     %Month{} = shown = budget |> months(current, month) |> Enum.find(&(&1.month == month))
-    hidden = for %{id: id, hidden: true} <- budget.categories, into: MapSet.new(), do: id
+    hidden = hidden(budget)
     rows = Enum.filter(shown.categories, &fillable?(&1, hidden, only))
     {fills, _left} = Enum.flat_map_reduce(rows, Month.free(shown), &fill/2)
     fills
   end
+
+  defp hidden(budget),
+    do: for(%{id: id, hidden: true} <- budget.categories, into: MapSet.new(), do: id)
 
   defp fillable?(row, hidden, only) do
     not row.snoozed and not MapSet.member?(hidden, row.category_id) and
