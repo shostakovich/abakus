@@ -63,7 +63,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       assert has_element?(view, "aside #side-account-#{c.cash.id} .app-neg", "−12,50")
       assert has_element?(view, "aside #side-account-#{c.depot.id}", "10.000,00")
       refute has_element?(view, "aside #side-account-#{c.old.id}")
-      assert has_element?(view, ~s|aside a[href="/accounts/new"]|, "Konto hinzufügen")
+      assert has_element?(view, "aside #side-add-account", "Konto hinzufügen")
 
       {:ok, settings, _html} = live(c.conn, ~p"/users/settings")
 
@@ -78,134 +78,183 @@ defmodule AbakusWeb.AccountsLiveTest do
     {:ok, view, _html} = live(conn, ~p"/accounts")
 
     assert has_element?(view, "p", "Noch keine Konten")
-    assert has_element?(view, ~s|main a[href="/accounts/new"]|, "Konto hinzufügen")
+    assert has_element?(view, "main #add-account", "Konto hinzufügen")
   end
 
-  describe "creating" do
-    test "adds the account and lists it", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/accounts/new")
+  defp submit(view, params), do: view |> form("#account-form", account: params) |> render_submit()
 
-      assert has_element?(view, "h1", "Konto hinzufügen")
+  defp open_edit(conn, account) do
+    {:ok, view, _html} = live(conn, ~p"/accounts/#{account}")
+    view |> element("#edit-account") |> render_click()
+    view
+  end
+
+  describe "adding" do
+    test "opens over the account list and goes to the new account's register", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/accounts")
+      refute has_element?(view, "#account-dialog")
+
+      view |> element("#add-account") |> render_click()
+
+      assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
+      assert has_element?(view, "#account-dialog .app-sheet #account_name")
+      refute has_element?(view, "#close-account")
+      refute has_element?(view, "#reopen-account")
 
       for kind <- ["Girokonto", "Sparkonto", "Bargeld", "Tracking"],
           do: assert(has_element?(view, "#account_kind option", kind))
 
-      {:ok, view, _html} =
-        view
-        |> form("#account-form",
-          account: %{name: "🐷 Sparschwein", kind: "cash", note: "Im Regal"}
-        )
-        |> render_submit()
-        |> follow_redirect(conn, ~p"/accounts")
+      submit(view, %{name: "🐷 Sparschwein", kind: "cash", note: "Im Regal"})
 
       assert [account] = Ledger.list_accounts()
       assert %{name: "🐷 Sparschwein", kind: :cash, note: "Im Regal", closed: false} = account
-      assert has_element?(view, "#flash-info", "Konto angelegt")
-      assert has_element?(view, "#group-budget #account-#{account.id}", "Sparschwein")
-      assert has_element?(view, "aside #side-account-#{account.id}", "Sparschwein")
+
+      path = ~p"/accounts/#{account}"
+      assert {^path, %{"info" => "Konto angelegt."}} = assert_redirect(view)
+    end
+
+    test "opens from the sidebar over any page", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/")
+
+      view |> element("aside #side-add-account") |> render_click()
+      assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
+
+      submit(view, %{name: "Giro", kind: "checking"})
+      assert [account] = Ledger.list_accounts()
+      path = ~p"/accounts/#{account}"
+      assert {^path, _flash} = assert_redirect(view)
+
+      {:ok, settings, _html} = live(conn, ~p"/users/settings")
+      settings |> element("aside #side-add-account") |> render_click()
+      assert has_element?(settings, "#account-dialog h2", "Konto hinzufügen")
     end
 
     test "shows what is missing", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/accounts/new")
+      {:ok, view, _html} = live(conn, ~p"/accounts")
+      view |> element("#add-account") |> render_click()
 
-      html = view |> form("#account-form", account: %{name: " "}) |> render_submit()
-
-      assert html =~ "muss ausgefüllt werden"
+      assert submit(view, %{name: " "}) =~ "muss ausgefüllt werden"
+      assert has_element?(view, "#account-dialog")
       assert Ledger.list_accounts() == []
     end
 
     test "takes only name, kind and note from the form", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/accounts/new")
+      {:ok, view, _html} = live(conn, ~p"/accounts")
+      view |> element("#add-account") |> render_click()
 
       view
-      |> render_submit("save", %{
+      |> element("#account-form")
+      |> render_submit(%{
         "account" => %{"name" => "Giro", "kind" => "checking", "closed" => "true"}
       })
 
       assert [%{closed: false}] = Ledger.list_accounts()
     end
+
+    test "cancelling closes the form and adds nothing", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/accounts")
+
+      view |> element("#add-account") |> render_click()
+      view |> element("#account-cancel") |> render_click()
+      refute has_element?(view, "#account-dialog")
+
+      view |> element("#add-account") |> render_click()
+      render_keydown(view, "close_account_dialog", %{"key" => "Escape"})
+      refute has_element?(view, "#account-dialog")
+
+      assert Ledger.list_accounts() == []
+    end
   end
 
   describe "editing" do
-    test "changes name, kind and note", %{conn: conn} do
+    test "the pencil opens the form over the register, which stays", %{conn: conn} do
       account = account_fixture(name: "Giro", kind: :checking)
-      {:ok, view, _html} = live(conn, ~p"/accounts/#{account}/edit")
+      view = open_edit(conn, account)
 
-      assert has_element?(view, "h1", "Konto bearbeiten")
+      assert has_element?(view, "#account-dialog h2", "Konto bearbeiten")
       assert has_element?(view, ~s|#account_name[value="Giro"]|)
+      assert has_element?(view, "#account-dialog #close-account", "Konto schließen")
 
-      {:ok, view, _html} =
-        view
-        |> form("#account-form",
-          account: %{name: "🏦 Gemeinschaftskonto", kind: "savings", note: "Für beide"}
-        )
-        |> render_submit()
-        |> follow_redirect(conn, ~p"/accounts")
+      submit(view, %{name: "🏦 Gemeinschaftskonto", kind: "savings", note: "Für beide"})
 
       assert %{name: "🏦 Gemeinschaftskonto", kind: :savings, note: "Für beide"} =
                Ledger.get_account!(account.id)
 
+      assert_patch(view, ~p"/accounts/#{account}")
+      refute has_element?(view, "#account-dialog")
       assert has_element?(view, "#flash-info", "Konto gespeichert")
-      assert has_element?(view, "#account-#{account.id}", "Gemeinschaftskonto")
+      assert has_element?(view, "#register-title", "Gemeinschaftskonto")
+      assert has_element?(view, "#register-meta", "Für beide")
+      assert has_element?(view, "aside #side-account-#{account.id}", "Gemeinschaftskonto")
+    end
+
+    test "keeps the register's view", %{conn: conn} do
+      account = account_fixture(name: "Giro")
+      {:ok, view, _html} = live(conn, ~p"/accounts/#{account}?filter=unapproved")
+
+      view |> element("#edit-account") |> render_click()
+      submit(view, %{name: "Giro 2"})
+
+      assert_patch(view, ~p"/accounts/#{account}?filter=unapproved")
     end
 
     test "offers only kinds on the account's side of the budget", %{conn: conn} do
       budget = account_fixture(kind: :savings)
       tracking = account_fixture(kind: :tracking)
 
-      {:ok, view, _html} = live(conn, ~p"/accounts/#{budget}/edit")
+      view = open_edit(conn, budget)
       assert has_element?(view, "#account_kind option", "Bargeld")
       refute has_element?(view, "#account_kind option", "Tracking")
 
-      {:ok, view, _html} = live(conn, ~p"/accounts/#{tracking}/edit")
-      assert has_element?(view, "#account_kind option", "Tracking")
-      refute has_element?(view, "#account_kind option", "Girokonto")
+      view = open_edit(conn, tracking)
+      refute has_element?(view, "#account_kind")
+      assert has_element?(view, "#account_note")
     end
 
     test "shows errors of an invalid change", %{conn: conn} do
       account = account_fixture(name: "Giro")
-      {:ok, view, _html} = live(conn, ~p"/accounts/#{account}/edit")
+      view = open_edit(conn, account)
 
       assert view |> form("#account-form", account: %{name: ""}) |> render_change() =~
                "muss ausgefüllt werden"
 
-      assert view |> form("#account-form", account: %{name: ""}) |> render_submit() =~
-               "muss ausgefüllt werden"
-
+      assert submit(view, %{name: ""}) =~ "muss ausgefüllt werden"
+      assert has_element?(view, "#account-dialog")
       assert Ledger.get_account!(account.id).name == "Giro"
+    end
+
+    test "an unknown account opens nothing", %{conn: conn} do
+      account = account_fixture()
+      {:ok, view, _html} = live(conn, ~p"/accounts/#{account}")
+
+      render_click(view, "open_account_dialog", %{"id" => "#{account.id + 1_000}"})
+      refute has_element?(view, "#account-dialog")
     end
   end
 
   describe "closing" do
     test "closes the account and opens it again", %{conn: conn} do
       account = account_fixture(name: "Giro")
-      {:ok, view, _html} = live(conn, ~p"/accounts/#{account}/edit")
+      view = open_edit(conn, account)
 
       refute has_element?(view, "#reopen-account")
-
-      {:ok, view, _html} =
-        view
-        |> element("#close-account")
-        |> render_click()
-        |> follow_redirect(conn, ~p"/accounts")
+      view |> element("#close-account") |> render_click()
 
       assert Ledger.get_account!(account.id).closed
+      assert_patch(view, ~p"/accounts/#{account}")
+      refute has_element?(view, "#account-dialog")
       assert has_element?(view, "#flash-info", "Konto geschlossen")
-      assert has_element?(view, "#group-closed #account-#{account.id}")
+      assert has_element?(view, "#register-meta", "Geschlossen")
       refute has_element?(view, "aside #side-account-#{account.id}")
 
-      {:ok, view, _html} = live(conn, ~p"/accounts/#{account}/edit")
+      view |> element("#edit-account") |> render_click()
+      assert has_element?(view, "#account-closed", "geschlossen")
       refute has_element?(view, "#close-account")
-
-      {:ok, view, _html} =
-        view
-        |> element("#reopen-account")
-        |> render_click()
-        |> follow_redirect(conn, ~p"/accounts")
+      view |> element("#reopen-account") |> render_click()
 
       refute Ledger.get_account!(account.id).closed
       assert has_element?(view, "#flash-info", "Konto wieder geöffnet")
-      assert has_element?(view, "#group-budget #account-#{account.id}")
+      assert has_element?(view, "aside #side-account-#{account.id}")
     end
 
     test "asks first and names a balance that is left", %{conn: conn} do
@@ -213,10 +262,10 @@ defmodule AbakusWeb.AccountsLiveTest do
       full = account_fixture(name: "Voll")
       transaction_fixture(account_id: full.id, amount: 1_200)
 
-      {:ok, view, _html} = live(conn, ~p"/accounts/#{empty}/edit")
+      view = open_edit(conn, empty)
       assert has_element?(view, ~s|#close-account[data-confirm="Konto „Leer“ schließen?"]|)
 
-      {:ok, view, _html} = live(conn, ~p"/accounts/#{full}/edit")
+      view = open_edit(conn, full)
 
       assert has_element?(
                view,

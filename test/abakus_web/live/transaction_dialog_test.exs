@@ -130,7 +130,7 @@ defmodule AbakusWeb.TransactionDialogTest do
 
       view |> element("#new-transaction-fab") |> render_click()
       assert_patch(view, ~p"/accounts/#{c.giro}/transactions/new")
-      assert has_element?(view, "#transaction-dialog .app-tx-sheet #tx-amount")
+      assert has_element?(view, "#transaction-dialog .app-sheet #tx-amount")
     end
 
     test "from all accounts it books in the first budget account", c do

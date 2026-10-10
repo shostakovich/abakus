@@ -140,7 +140,7 @@ defmodule AbakusWeb.RegisterLiveTest do
              )
 
       refute has_element?(view, "aside #side-account-#{c.savings.id}.active")
-      assert has_element?(view, ~s|a[href="/accounts/#{c.giro.id}/edit"]|)
+      assert has_element?(view, ~s|#edit-account[phx-value-id="#{c.giro.id}"]|)
 
       {:ok, list, _html} = live(c.conn, ~p"/accounts")
       assert has_element?(list, ~s|#account-#{c.giro.id}[href="/accounts/#{c.giro.id}"]|)

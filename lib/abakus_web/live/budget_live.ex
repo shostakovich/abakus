@@ -21,6 +21,7 @@ defmodule AbakusWeb.BudgetLive do
       current_scope={@current_scope}
       current={:budget}
       account_groups={@account_groups}
+      account_dialog={@account_dialog}
     >
       <h1 class="visually-hidden">Budget</h1>
       <div

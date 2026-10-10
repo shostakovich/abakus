@@ -43,14 +43,14 @@ defmodule AbakusWeb.RegisterLive.TransactionDialog do
     <div id={@id}>
       <div class="modal-backdrop show"></div>
       <div
-        class="modal d-block app-tx-modal"
+        class="modal d-block app-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="tx-title"
         phx-window-keydown={JS.patch(@return_to)}
         phx-key="Escape"
       >
-        <div class="modal-dialog modal-lg modal-dialog-scrollable app-tx-sheet">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable app-sheet">
           <.form
             for={@form}
             id="transaction-form"

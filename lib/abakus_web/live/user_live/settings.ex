@@ -13,6 +13,7 @@ defmodule AbakusWeb.UserLive.Settings do
       current_scope={@current_scope}
       current={:settings}
       account_groups={@account_groups}
+      account_dialog={@account_dialog}
     >
       <.header>Einstellungen</.header>
 

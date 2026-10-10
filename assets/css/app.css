@@ -179,9 +179,9 @@
   .app-ph-l2 { margin-top: .25rem; }
 }
 
-/* Transaction form: a modal on desktops; on phones a sheet from the bottom with the amount first. */
-body:has(.app-tx-modal) { overflow: hidden; }
-.app-tx-modal { overflow-y: auto; }
+/* Transaction and account form: a modal on desktops; on phones a sheet from the bottom, the amount first. */
+body:has(.app-modal) { overflow: hidden; }
+.app-modal { overflow-y: auto; }
 .app-sign { min-width: 2.75rem; font-weight: 700; }
 .app-tx-amount-input { font-size: 1.25rem; font-weight: 700; }
 .app-tx-sub-amount { width: 8.5rem; flex-shrink: 0; }
@@ -189,8 +189,8 @@ body:has(.app-tx-modal) { overflow: hidden; }
 .app-fab { position: fixed; right: 1rem; bottom: 1rem; z-index: 1030; }
 @media (max-width: 767.98px) {
   #register { padding-bottom: 4rem; }
-  .app-tx-sheet { position: fixed; inset: auto 0 0; margin: 0; max-width: none; height: auto; max-height: 92vh; }
-  .app-tx-sheet .modal-content { max-height: 92vh; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .app-sheet { position: fixed; inset: auto 0 0; margin: 0; max-width: none; height: auto; max-height: 92vh; }
+  .app-sheet .modal-content { max-height: 92vh; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .app-tx-amount { order: -2; }
   .app-tx-kind { order: -1; }
   .app-tx-late { order: 1; }

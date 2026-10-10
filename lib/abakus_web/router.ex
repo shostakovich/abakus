@@ -30,11 +30,13 @@ defmodule AbakusWeb.Router do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :require_authenticated_user,
-      on_mount: [{AbakusWeb.UserAuth, :require_authenticated}, {AbakusWeb.AccountGroups, :assign}] do
+      on_mount: [
+        {AbakusWeb.UserAuth, :require_authenticated},
+        {AbakusWeb.AccountGroups, :assign},
+        {AbakusWeb.AccountDialog, :attach}
+      ] do
       live "/", BudgetLive
-      live "/accounts", AccountsLive, :index
-      live "/accounts/new", AccountsLive, :new
-      live "/accounts/:id/edit", AccountsLive, :edit
+      live "/accounts", AccountsLive
       live "/accounts/all", RegisterLive, :all
       live "/accounts/all/transactions/new", RegisterLive, :new
       live "/accounts/all/transactions/:transaction_id/edit", RegisterLive, :edit
@@ -49,7 +51,11 @@ defmodule AbakusWeb.Router do
     pipe_through [:browser, :require_authenticated_user, :require_sudo_mode]
 
     live_session :require_sudo_mode,
-      on_mount: [{AbakusWeb.UserAuth, :require_authenticated}, {AbakusWeb.AccountGroups, :assign}] do
+      on_mount: [
+        {AbakusWeb.UserAuth, :require_authenticated},
+        {AbakusWeb.AccountGroups, :assign},
+        {AbakusWeb.AccountDialog, :attach}
+      ] do
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
     end

@@ -9,9 +9,12 @@ defmodule AbakusWeb.RegisterLive do
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Match proposals are not in the
   register, so approving all leaves them open. Accounts fed by another app offer no manual entry.
 
-  The transaction form (`TransactionDialog`) opens over the register for a new transaction
-  (`…/transactions/new`) or to edit one (`…/transactions/:transaction_id/edit`), keeping the view in the URL. The
-  counterpart of a split's transfer opens its split.
+  The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
+  `account_groups`, so it is as fresh as the sidebar.
+
+  The transaction form (`TransactionDialog`) opens over the register for a new transaction (`…/transactions/new`)
+  or to edit one (`…/transactions/:transaction_id/edit`), keeping the view in the URL. The counterpart of a split's
+  transfer opens its split.
   """
   use AbakusWeb, :live_view
 
@@ -33,6 +36,7 @@ defmodule AbakusWeb.RegisterLive do
       current={:accounts}
       account_id={@account && @account.id}
       account_groups={@account_groups}
+      account_dialog={@account_dialog}
     >
       <div id="register">
         <Components.banner
@@ -48,15 +52,18 @@ defmodule AbakusWeb.RegisterLive do
         </.link>
         <div class="d-flex align-items-center gap-2">
           <h1 id="register-title" class="h3 mb-0 flex-grow-1 text-truncate">{@page_title}</h1>
-          <.link
+          <button
             :if={@account}
-            navigate={~p"/accounts/#{@account}/edit"}
+            id="edit-account"
+            type="button"
             class="btn btn-sm btn-light"
             aria-label="Konto bearbeiten"
             title="Konto bearbeiten"
+            phx-click="open_account_dialog"
+            phx-value-id={@account.id}
           >
             <.icon name="pencil" class="app-icon-sm" />
-          </.link>
+          </button>
         </div>
         <Components.meta account={@account} />
         <Components.balances account={@account} balances={@balances} />
@@ -195,7 +202,7 @@ defmodule AbakusWeb.RegisterLive do
 
   defp load(socket, :all) do
     socket
-    |> assign(scope: :all, account: nil, page_title: "Alle Konten", selected: MapSet.new())
+    |> assign(scope: :all, account: nil, selected: MapSet.new())
     |> load_transactions()
   end
 
@@ -203,7 +210,7 @@ defmodule AbakusWeb.RegisterLive do
     account = Ledger.get_account!(id)
 
     socket
-    |> assign(scope: scope, account: account, page_title: account.name, selected: MapSet.new())
+    |> assign(scope: scope, account: account, selected: MapSet.new())
     |> load_transactions()
   end
 
@@ -213,9 +220,14 @@ defmodule AbakusWeb.RegisterLive do
   defp assign_rows(socket) do
     %{transactions: transactions, filter: filter, query: query} = socket.assigns
     account_rows = AccountGroups.rows(socket.assigns.account_groups)
-    rows = transactions |> Rows.filter(filter) |> Rows.search(query)
-    balances = balances(socket.assigns.account, account_rows)
     accounts = Map.new(account_rows, &{&1.account.id, &1.account})
+    account = socket.assigns.account && Map.fetch!(accounts, socket.assigns.account.id)
+
+    socket =
+      assign(socket, account: account, page_title: (account && account.name) || "Alle Konten")
+
+    rows = transactions |> Rows.filter(filter) |> Rows.search(query)
+    balances = balances(account, account_rows)
 
     assign(socket,
       rows: rows,

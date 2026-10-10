@@ -17,6 +17,10 @@ defmodule AbakusWeb.Layouts do
 
   attr :account_id, :integer, default: nil, doc: "the account whose register is shown"
 
+  attr :account_dialog, :map,
+    default: nil,
+    doc: "the open account form from `AbakusWeb.AccountDialog`, if any"
+
   slot :inner_block, required: true
 
   @doc """
@@ -70,12 +74,14 @@ defmodule AbakusWeb.Layouts do
           current={@current}
           account_id={@account_id}
         />
-        <.link
+        <button
+          type="button"
+          id="side-add-account"
           class="btn btn-sm w-100 my-2 app-side-btn app-side-text"
-          {nav_link(~p"/accounts/new", @current)}
+          phx-click="open_account_dialog"
         >
           + Konto hinzufügen
-        </.link>
+        </button>
       </div>
       <nav class="nav flex-column pt-2 border-top" aria-label="Weitere">
         <.side_links items={more_items()} current={@current} />
@@ -124,6 +130,14 @@ defmodule AbakusWeb.Layouts do
       <.flash_group flash={@flash} />
       {render_slot(@inner_block)}
     </main>
+
+    <.live_component
+      :if={@account_dialog}
+      module={AbakusWeb.AccountDialog}
+      id="account-dialog"
+      account={@account_dialog.account}
+      balance={@account_dialog.balance}
+    />
     """
   end
 
