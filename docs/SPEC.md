@@ -185,17 +185,10 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
 
 ## Accounts and reconciling
 
-- Account list grouped into budget and tracking accounts with working and cleared balance
-- Register with filters and search; unapproved imported transactions highlighted, approve one or all
-- Transaction form: account, date, payee with suggestions, category suggested from the payee's last category,
-  outflow/inflow, memo, splits, transfers
 - **Reconcile** as in YNAB: a popover compares the latest bank balance (from bank sync, or the ledger balance
   of the last file import) with the cleared balance; equal → one click marks all cleared transactions
   reconciled. Different, or no bank balance → enter the bank balance, Abakus shows the difference and can create
-  an adjustment transaction (category "Ready to Assign", payee "Ausgleichsbuchung") before locking. Reconciled
-  transactions need a confirmation to edit.
-- New imported transactions: banner "n neue Buchungen zu bestätigen oder zu kategorisieren", rows marked until
-  approved, already categorised from the payee's last category; approve one, selected or all
+  an adjustment transaction (category "Ready to Assign", payee "Ausgleichsbuchung") before locking.
 
 ## Import
 
