@@ -51,6 +51,9 @@ defmodule Abakus.Ledger do
 
   def get_account!(id), do: Repo.get!(Account, id)
 
+  @doc "Like `get_account!/1`, but nil for an id that is no account."
+  def get_account(id) when is_integer(id), do: Repo.get(Account, id)
+
   def change_account(%Account{} = account, attrs \\ %{}), do: Account.changeset(account, attrs)
 
   @doc "Creates an account together with its transfer payee; without a position it goes after the others."
@@ -256,12 +259,21 @@ defmodule Abakus.Ledger do
   @doc """
   The account's transactions, or with `:all` every account's, newest first, with payee, category (and its group)
   and subtransactions; without deleted ones and match proposals, which count nowhere (see
-  `list_match_proposals/1`).
+  `list_match_proposals/1`). With `since: date`, only those dated on or after it.
   """
-  def list_transactions(%Account{id: account_id}),
-    do: list_register(from t in in_register(), where: t.account_id == ^account_id)
+  def list_transactions(account, opts \\ [])
 
-  def list_transactions(:all), do: list_register(in_register())
+  def list_transactions(%Account{id: account_id}, opts),
+    do: list_register(from(t in in_register(), where: t.account_id == ^account_id), opts)
+
+  def list_transactions(:all, opts), do: list_register(in_register(), opts)
+
+  defp list_register(query, opts) do
+    case Keyword.get(opts, :since) do
+      nil -> list_register(query)
+      since -> list_register(from t in query, where: t.date >= ^since)
+    end
+  end
 
   defp list_register(query) do
     Repo.all(
@@ -411,6 +423,12 @@ defmodule Abakus.Ledger do
     ])
   end
 
+  @doc "The transactions with these ids by id, with their payees; deleted ones and match proposals included."
+  def get_transactions(ids) do
+    Repo.all(from t in Transaction, where: t.id in ^ids, preload: :payee)
+    |> Map.new(&{&1.id, &1})
+  end
+
   @doc "Transactions in the register, which count for listings and balances: not deleted and no match proposal."
   def in_register,
     do: from(t in Transaction, where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id))
@@ -536,6 +554,11 @@ defmodule Abakus.Ledger do
     end)
   end
 
+  @doc "Creates several transactions with `create_transaction/1`, all or none: the first refusal stops."
+  def create_transactions(attrs_list) do
+    Repo.transact(fn -> all_or_none(attrs_list, &create_transaction/1) end)
+  end
+
   defp put_payee_by_name(attrs) do
     with {:ok, attrs} <- put_own_payee(attrs) do
       put_subtransaction_payees(attrs)
@@ -616,7 +639,23 @@ defmodule Abakus.Ledger do
     Repo.transact(fn -> all_or_none(transactions, &update_transaction(&1, attrs, opts)) end)
   end
 
-  # Applies `fun` to each transaction until one is refused, inside the caller's database transaction.
+  @doc """
+  Updates each transaction with its own attrs (`{transaction, attrs}` pairs) with `update_transaction/3`, all or
+  none: the first refusal stops and returns its changeset.
+  """
+  def update_each_transaction(changes, opts \\ []) do
+    Repo.transact(fn ->
+      all_or_none(changes, fn {transaction, attrs} ->
+        update_transaction(transaction, attrs, opts)
+      end)
+    end)
+  end
+
+  @doc "Whether a refused change was refused because it alters a reconciled transaction or counterpart."
+  def refused_as_reconciled?(%Changeset{errors: errors}),
+    do: Enum.any?(errors, fn {_field, {_message, opts}} -> opts[:reconciled] == true end)
+
+  # Applies `fun` to each item until one is refused, inside the caller's database transaction.
   defp all_or_none(transactions, fun) do
     transactions
     |> Enum.reduce_while({:ok, []}, &apply_next(&1, &2, fun))
@@ -711,7 +750,7 @@ defmodule Abakus.Ledger do
        ) do
     if Map.delete(changeset.changes, :counterpart_category_id) == %{},
       do: changeset,
-      else: Changeset.add_error(changeset, :cleared, @reconciled)
+      else: Changeset.add_error(changeset, :cleared, @reconciled, reconciled: true)
   end
 
   defp validate_reconciled(changeset, _confirmed?), do: changeset
@@ -736,7 +775,7 @@ defmodule Abakus.Ledger do
         :ok
 
       {:error, {:reconciled, _field}} ->
-        {:error, failed(changeset, :subtransactions, @counterpart_reconciled)}
+        {:error, failed(changeset, :subtransactions, @counterpart_reconciled, reconciled: true)}
     end
   end
 
@@ -765,7 +804,8 @@ defmodule Abakus.Ledger do
         {:error, sync_failed(changeset, transaction, field, @counterpart_locked)}
 
       {:error, {:reconciled, field}} ->
-        {:error, sync_failed(changeset, transaction, field, @counterpart_reconciled)}
+        {:error,
+         sync_failed(changeset, transaction, field, @counterpart_reconciled, reconciled: true)}
 
       synced ->
         synced
@@ -776,7 +816,7 @@ defmodule Abakus.Ledger do
   # `counterpart_category_id`, the rest the same field. A split's follow its subtransactions, but for the date.
   @follows %{account_id: :payee_id, payee_id: :account_id, category_id: :counterpart_category_id}
 
-  defp sync_failed(changeset, transaction, counterpart_field, message) do
+  defp sync_failed(changeset, transaction, counterpart_field, message, opts \\ []) do
     field =
       cond do
         counterpart_field == :date -> :date
@@ -784,11 +824,11 @@ defmodule Abakus.Ledger do
         true -> Map.get(@follows, counterpart_field, counterpart_field)
       end
 
-    failed(changeset, field, message)
+    failed(changeset, field, message, opts)
   end
 
-  defp failed(changeset, field, message),
-    do: %{Changeset.add_error(changeset, field, message) | action: :update}
+  defp failed(changeset, field, message, opts \\ []),
+    do: %{Changeset.add_error(changeset, field, message, opts) | action: :update}
 
   # A match proposal is no booking yet, so it leaves the payee alone.
   defp remember_categories(%Transaction{matched_transaction_id: id}) when not is_nil(id), do: :ok
@@ -830,10 +870,12 @@ defmodule Abakus.Ledger do
           )
 
         not confirmed? and transaction.cleared == :reconciled ->
-          delete_failed(transaction, :cleared, @reconciled)
+          delete_failed(transaction, :cleared, @reconciled, reconciled: true)
 
         not confirmed? and Transfers.reconciled?(ids) ->
-          delete_failed(transaction, pair_field(transaction), @counterpart_reconciled)
+          delete_failed(transaction, pair_field(transaction), @counterpart_reconciled,
+            reconciled: true
+          )
 
         true ->
           Transfers.soft_delete(ids)
@@ -850,11 +892,11 @@ defmodule Abakus.Ledger do
   defp pair_field(%Transaction{subtransactions: []}), do: :transfer_transaction_id
   defp pair_field(_split), do: :subtransactions
 
-  defp delete_failed(transaction, field, message) do
+  defp delete_failed(transaction, field, message, opts \\ []) do
     {:error,
      transaction
      |> Changeset.change()
-     |> Changeset.add_error(field, message)
+     |> Changeset.add_error(field, message, opts)
      |> Map.put(:action, :delete)}
   end
 

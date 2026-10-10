@@ -32,12 +32,14 @@ defmodule AbakusWeb.RouterTest do
     end
   end
 
-  # Pages redirect to the sign-in page; the JSON endpoints of the passkey hooks answer 401.
+  # Pages redirect to the sign-in page; the JSON endpoints of the passkey hooks answer 401, the API asks for its
+  # token in YNAB's format.
   defp turned_away?(conn) do
-    case conn.status do
-      302 -> get_resp_header(conn, "location") == [~p"/users/log-in"]
-      401 -> JSON.decode!(conn.resp_body) == %{"error" => "session"}
-      _ -> false
+    case {conn.status, conn.path_info} do
+      {302, _path} -> get_resp_header(conn, "location") == [~p"/users/log-in"]
+      {401, ["api" | _]} -> match?(%{"error" => %{"id" => "401"}}, JSON.decode!(conn.resp_body))
+      {401, _path} -> JSON.decode!(conn.resp_body) == %{"error" => "session"}
+      _other -> false
     end
   end
 

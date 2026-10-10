@@ -757,6 +757,78 @@ defmodule Abakus.Ledger.TransactionsTest do
     end
   end
 
+  describe "create_transactions/1" do
+    test "creates every transaction, or none when one is refused" do
+      account = account_fixture()
+
+      assert {:ok, [first, second]} =
+               Ledger.create_transactions([
+                 attrs(account, memo: "Eins", payee_name: "Bäcker"),
+                 attrs(account, memo: "Zwei")
+               ])
+
+      assert {first.memo, second.memo} == {"Eins", "Zwei"}
+
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Ledger.create_transactions([
+                 attrs(account, memo: "Drei"),
+                 %{account_id: account.id}
+               ])
+
+      assert "can't be blank" in errors_on(changeset).date
+      assert length(Ledger.list_transactions(account)) == 2
+    end
+  end
+
+  describe "update_each_transaction/2" do
+    test "changes each transaction its own way, or none when one is refused" do
+      account = account_fixture()
+      first = transaction_fixture(account_id: account.id)
+      second = transaction_fixture(account_id: account.id)
+      reconciled = transaction_fixture(account_id: account.id, cleared: :reconciled)
+
+      assert {:ok, [%{memo: "Eins"}, %{memo: "Zwei"}]} =
+               Ledger.update_each_transaction([
+                 {first, %{memo: "Eins"}},
+                 {second, %{memo: "Zwei"}}
+               ])
+
+      assert {:error, changeset} =
+               Ledger.update_each_transaction([{first, %{memo: "x"}}, {reconciled, %{memo: "y"}}])
+
+      assert Ledger.refused_as_reconciled?(changeset)
+      assert Repo.get!(Transaction, first.id).memo == "Eins"
+
+      assert {:ok, [_, %{memo: "y"}]} =
+               Ledger.update_each_transaction([{first, %{memo: "x"}}, {reconciled, %{memo: "y"}}],
+                 reconciled: :confirmed
+               )
+    end
+  end
+
+  test "list_transactions/2 with :since lists the account's register from that date on" do
+    account = account_fixture()
+    transaction_fixture(account_id: account.id, date: ~D[2026-09-30])
+    on_the_day = transaction_fixture(account_id: account.id, date: ~D[2026-10-01])
+    later = transaction_fixture(account_id: account.id, date: ~D[2026-10-05])
+    {:ok, _} = Ledger.delete_transaction(transaction_fixture(account_id: account.id))
+
+    assert Enum.map(Ledger.list_transactions(account, since: ~D[2026-10-01]), & &1.id) ==
+             [later.id, on_the_day.id]
+  end
+
+  test "get_transactions/1 finds transactions by id with their payees, deleted ones included" do
+    payee = payee_fixture()
+    transaction = transaction_fixture(payee_id: payee.id)
+    {:ok, deleted} = Ledger.delete_transaction(transaction_fixture())
+
+    found = Ledger.get_transactions([transaction.id, deleted.id, -1])
+
+    assert Map.keys(found) |> Enum.sort() == Enum.sort([transaction.id, deleted.id])
+    assert found[transaction.id].payee.name == payee.name
+    assert found[deleted.id].deleted_at
+  end
+
   describe "references" do
     test "transfer counterparts are the Ledger's, a matched transaction must exist" do
       account = account_fixture()

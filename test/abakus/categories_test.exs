@@ -83,6 +83,20 @@ defmodule Abakus.CategoriesTest do
              {first.id, a.id, b.id, second.id, hidden.id}
   end
 
+  test "list_category_groups(internal: true) lists the internal group with Ready to Assign first" do
+    group = category_group_fixture(position: 0)
+    category = category_fixture(category_group_id: group.id)
+    ready_to_assign = Categories.ready_to_assign!()
+
+    assert [
+             %{internal: true, categories: [rta]},
+             %{id: group_id, categories: [%{id: category_id}]}
+           ] =
+             Categories.list_category_groups(internal: true)
+
+    assert {rta.id, group_id, category_id} == {ready_to_assign.id, group.id, category.id}
+  end
+
   describe "categories" do
     test "store name, note, hidden and position with the lookup key" do
       group = category_group_fixture()

@@ -100,6 +100,26 @@ defmodule Abakus.Ledger.ReconciledTest do
     end
   end
 
+  describe "refused_as_reconciled?/1" do
+    test "tells refusals for a reconciled transaction or counterpart from others", c do
+      transaction = reconcile(transaction_fixture(account_id: c.checking.id))
+      assert {:error, changeset} = Ledger.update_transaction(transaction, %{memo: "x"})
+      assert Ledger.refused_as_reconciled?(changeset)
+      assert {:error, changeset} = Ledger.delete_transaction(transaction)
+      assert Ledger.refused_as_reconciled?(changeset)
+
+      %{outflow: outflow} = transfer(c)
+      assert {:error, changeset} = Ledger.update_transaction(outflow, %{amount: -1})
+      assert Ledger.refused_as_reconciled?(changeset)
+      assert {:error, changeset} = Ledger.delete_transaction(outflow)
+      assert Ledger.refused_as_reconciled?(changeset)
+
+      other = transaction_fixture(account_id: c.checking.id)
+      assert {:error, changeset} = Ledger.update_transaction(other, %{amount: nil})
+      refute Ledger.refused_as_reconciled?(changeset)
+    end
+  end
+
   describe "a reconciled counterpart" do
     test "keeps amount, date and memo unless confirmed", c do
       %{outflow: outflow, inflow: inflow} = transfer(c)

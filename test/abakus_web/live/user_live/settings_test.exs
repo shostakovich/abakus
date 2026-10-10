@@ -1,7 +1,7 @@
 defmodule AbakusWeb.UserLive.SettingsTest do
   use AbakusWeb.ConnCase
 
-  alias Abakus.Users
+  alias Abakus.{ApiTokens, Users}
   import Phoenix.LiveViewTest
   import Abakus.UsersFixtures
 
@@ -234,6 +234,71 @@ defmodule AbakusWeb.UserLive.SettingsTest do
     end
   end
 
+  describe "API tokens" do
+    setup :register_and_log_in_user
+
+    test "creates a token, shows it once and lists it", %{conn: conn} do
+      {:ok, lv, html} = live(conn, ~p"/users/settings")
+
+      assert html =~ "http://localhost:4002/api/v1"
+      assert has_element?(lv, "#api-tokens", "Noch kein Token angelegt.")
+
+      html =
+        lv
+        |> form("#api-token-form", %{"api_token" => %{"name" => "Zipfelkasse"}})
+        |> render_submit()
+
+      assert [api_token] = ApiTokens.list_api_tokens()
+      assert [_, token] = Regex.run(~r/(abk_[\w-]+)/, html)
+      assert {:ok, _} = ApiTokens.authenticate(token)
+      assert has_element?(lv, "#api-token-#{api_token.id}", "Zipfelkasse")
+      assert has_element?(lv, "#api-token-#{api_token.id}", "nie genutzt")
+
+      {:ok, _lv, html} = live(conn, ~p"/users/settings")
+      refute html =~ token
+    end
+
+    test "asks for a name", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      html = lv |> form("#api-token-form", %{"api_token" => %{"name" => " "}}) |> render_submit()
+
+      assert html =~ "muss ausgefüllt werden"
+      assert ApiTokens.list_api_tokens() == []
+    end
+
+    test "revokes a token after asking", %{conn: conn} do
+      {:ok, token, api_token} = ApiTokens.create_api_token(%{name: "Zipfelkasse"})
+      {:ok, _} = ApiTokens.authenticate(token)
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      button = element(lv, "#api-token-#{api_token.id} button", "Widerrufen")
+      assert render(button) =~ "data-confirm"
+      assert render(lv) =~ "zuletzt genutzt"
+
+      render_click(button)
+
+      assert ApiTokens.authenticate(token) == :error
+      refute has_element?(lv, "#api-token-#{api_token.id}")
+      assert render_click(lv, "revoke_api_token", %{"id" => api_token.id}) =~ "gibt es nicht mehr"
+    end
+
+    test "revoking hides the token shown once", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+
+      lv
+      |> form("#api-token-form", %{"api_token" => %{"name" => "Zipfelkasse"}})
+      |> render_submit()
+
+      assert [api_token] = ApiTokens.list_api_tokens()
+      assert has_element?(lv, "#new-api-token")
+
+      lv |> element("#api-token-#{api_token.id} button", "Widerrufen") |> render_click()
+
+      refute has_element?(lv, "#new-api-token")
+    end
+  end
+
   describe "a page left open" do
     # The page mounts in sudo mode; then the window closes or the session ends elsewhere.
     setup %{conn: conn} do
@@ -280,6 +345,27 @@ defmodule AbakusWeb.UserLive.SettingsTest do
                |> render_submit()
 
       refute_received {:email, %{subject: "Abakus: neue E-Mail-Adresse bestätigen"}}
+    end
+
+    test "cannot revoke a token past the sudo window", %{lv: lv, token: token} do
+      {:ok, _token, api_token} = ApiTokens.create_api_token(%{name: "Zipfelkasse"})
+      close_sudo_window(token)
+
+      assert {:error, {:redirect, %{to: "/users/settings"}}} =
+               render_click(lv, "revoke_api_token", %{"id" => api_token.id})
+
+      assert [%{name: "Zipfelkasse"}] = ApiTokens.list_api_tokens()
+    end
+
+    test "cannot create a token past the sudo window", %{lv: lv, token: token} do
+      close_sudo_window(token)
+
+      assert {:error, {:redirect, %{to: "/users/settings"}}} =
+               lv
+               |> form("#api-token-form", %{"api_token" => %{"name" => "Neu"}})
+               |> render_submit()
+
+      assert ApiTokens.list_api_tokens() == []
     end
 
     test "cannot change anything once the session is gone", %{lv: lv, user: user, token: token} do

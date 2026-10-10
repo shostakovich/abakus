@@ -48,6 +48,7 @@ defmodule AbakusWeb.Endpoint do
              json_decoder: Phoenix.json_library()
            )
 
+  plug :api_format
   plug :parse_body
 
   plug Plug.MethodOverride
@@ -61,6 +62,12 @@ defmodule AbakusWeb.Endpoint do
   def log_level(%Plug.Conn{path_info: ["users", "log-in", _token]}), do: false
   def log_level(%Plug.Conn{path_info: ["users", "settings", "confirm-email", _token]}), do: false
   def log_level(_conn), do: :info
+
+  # The API answers JSON, also to a request without an Accept header whose body is no JSON.
+  defp api_format(%Plug.Conn{path_info: ["api" | _]} = conn, _opts),
+    do: Phoenix.Controller.put_format(conn, "json")
+
+  defp api_format(conn, _opts), do: conn
 
   # Errors of these plugs are wrapped like the router's, so the error page keeps the headers set
   # above.
