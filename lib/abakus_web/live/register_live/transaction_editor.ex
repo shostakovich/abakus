@@ -36,7 +36,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     cleared: "Buchung",
     name: "Empfänger",
     transfer_transaction_id: "Gegenbuchung",
-    transfer_subtransaction_id: "Buchung"
+    transfer_subtransaction_id: "Buchung",
+    matched_transaction_id: "Zugeordnete Buchung"
   }
 
   @impl true
@@ -1021,6 +1022,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @doc "The errors of a transaction's changeset as one text, each with its field's label and a split's by part."
   def error_message(text) when is_binary(text), do: text
+  def error_message(:not_a_proposal), do: "Der Zuordnungsvorschlag ist schon entschieden."
 
   def error_message(%Ecto.Changeset{} = changeset) do
     changeset

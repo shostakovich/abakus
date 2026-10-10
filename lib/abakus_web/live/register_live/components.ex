@@ -1,8 +1,9 @@
 defmodule AbakusWeb.RegisterLive.Components do
   @moduledoc """
   The parts of the register: banner, account line, balances, toolbar, selection bar, the table on desktops and the
-  compact cards on phones. A click into a selected row (on phones a card) opens the transaction editor. Actions
-  that change a reconciled transaction carry a `data-confirm` question and send `reconciled: "confirmed"`.
+  compact cards on phones, both with the match proposals among the transactions. A click into a selected row (on
+  phones a card) opens the transaction editor. Actions that change a reconciled transaction carry a `data-confirm`
+  question and send `reconciled: "confirmed"`.
   """
   use AbakusWeb, :html
 
@@ -26,14 +27,20 @@ defmodule AbakusWeb.RegisterLive.Components do
     shared_expenses: "Buchungen kommen aus der Ausgaben-App"
   }
 
-  attr :transactions, :list, required: true
+  attr :transactions, :list, required: true, doc: "the unapproved ones in the register"
+  attr :proposals, :list, required: true
 
   attr :show_path, :any,
     required: true,
     doc: "where \"Ansehen\" leads, false in that view already"
 
+  @doc """
+  What waits: unapproved transactions and match proposals, with "Alle bestätigen" for the ones and "Alle Zuordnungen
+  übernehmen" for the others.
+  """
   def banner(assigns) do
-    assigns = assign(assigns, :count, length(assigns.transactions))
+    assigns =
+      assign(assigns, :count, length(assigns.transactions) + length(assigns.proposals))
 
     ~H"""
     <div
@@ -51,6 +58,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         Ansehen
       </.link>
       <button
+        :if={@transactions != []}
         id="approve-all"
         type="button"
         class="btn btn-sm btn-outline-primary"
@@ -58,6 +66,16 @@ defmodule AbakusWeb.RegisterLive.Components do
         {confirm(@transactions)}
       >
         <span class="d-md-none">Alle</span><span class="d-none d-md-inline">Alle bestätigen</span>
+      </button>
+      <button
+        :if={@proposals != []}
+        id="accept-all-matches"
+        type="button"
+        class="btn btn-sm btn-outline-primary"
+        phx-click="accept_all_matches"
+        {asking(merge_question(@proposals))}
+      >
+        <span class="d-md-none">Alle zuordnen</span><span class="d-none d-md-inline">Alle Zuordnungen übernehmen</span>
       </button>
     </div>
     """
@@ -479,6 +497,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp available_class(_zero), do: "text-body-secondary"
 
   attr :rows, :list, required: true
+  attr :proposals, :list, required: true, doc: "the match proposals shown among the rows"
   attr :accounts, :map, required: true
   attr :columns, :map, required: true, doc: "`%{all, category, running, count}`, see `columns/2`"
   attr :selected, :any, required: true
@@ -495,6 +514,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   The register on desktops, as in YNAB: a click selects a row, a click into a cell of a selected row opens it for
   editing there, with the cursor in that cell. Each transaction is a `<tbody>` of its own, so a split keeps its
   subtransactions below it, collapsible, and the editor (`TransactionEditor`) takes its place while it is edited.
+  A match proposal is no row to select or edit: below it is what it matches, with "Zuordnen" and "Trennen".
   """
   def table(assigns) do
     assigns =
@@ -543,21 +563,24 @@ defmodule AbakusWeb.RegisterLive.Components do
           </tr>
         </thead>
         <.live_component :if={@edited == :new} module={TransactionEditor} {@editor.assigns} />
-        <%= for transaction <- @rows do %>
-          <%= if @edited == transaction.id do %>
-            <.live_component module={TransactionEditor} {@editor.assigns} />
-          <% else %>
-            <.row
-              transaction={transaction}
-              accounts={@accounts}
-              columns={@columns}
-              selected={transaction.id in @selected}
-              flag_open={@flag_menu == transaction.id}
-              running={@running}
-            />
+        <%= for transaction <- Rows.with_proposals(@rows, @proposals) do %>
+          <%= cond do %>
+            <% transaction.matched_transaction_id -> %>
+              <.proposal_row proposal={transaction} accounts={@accounts} columns={@columns} />
+            <% @edited == transaction.id -> %>
+              <.live_component module={TransactionEditor} {@editor.assigns} />
+            <% true -> %>
+              <.row
+                transaction={transaction}
+                accounts={@accounts}
+                columns={@columns}
+                selected={transaction.id in @selected}
+                flag_open={@flag_menu == transaction.id}
+                running={@running}
+              />
           <% end %>
         <% end %>
-        <tbody :if={@rows == []}>
+        <tbody :if={@rows == [] and @proposals == []}>
           <tr>
             <td colspan={@columns.count} class="text-center text-body-secondary py-4">{@empty}</td>
           </tr>
@@ -696,25 +719,132 @@ defmodule AbakusWeb.RegisterLive.Components do
     """
   end
 
+  attr :proposal, Transaction, required: true
+  attr :accounts, :map, required: true
+  attr :columns, :map, required: true
+
+  defp proposal_row(assigns) do
+    ~H"""
+    <tbody id={"proposal-#{@proposal.id}-rows"} class="app-tx">
+      <tr id={"proposal-#{@proposal.id}"} class="app-tx-main app-unapproved">
+        <td class="app-pick"></td>
+        <td></td>
+        <td>
+          <span class="app-wide">{Format.date(@proposal.date)}</span>
+          <span class="app-short">{Format.day(@proposal.date)}</span>
+        </td>
+        <td :if={@columns.all} class="app-konto" title={@accounts[@proposal.account_id].name}>
+          <.account_cell account={@accounts[@proposal.account_id]} />
+        </td>
+        <td class="app-payee">
+          <div class="text-truncate app-payee-name">
+            {payee(@proposal, @accounts)}<span
+              :if={payee(@proposal, @accounts) == ""}
+              class="text-body-secondary"
+            >Ohne Empfänger</span>
+          </div>
+        </td>
+        <td :if={@columns.category} class="app-catcol"></td>
+        <td class="small text-body-secondary text-truncate app-memo-col">{@proposal.memo}</td>
+        <td class="text-end app-q app-out">{outflow(@proposal.amount)}</td>
+        <td class="text-end app-q app-in">{inflow(@proposal.amount)}</td>
+        <td :if={@columns.running}></td>
+        <td></td>
+      </tr>
+      <tr id={"proposal-#{@proposal.id}-match"} class="app-actrow">
+        <td colspan="2"></td>
+        <td colspan={@columns.count - 2}>
+          <.match id={"proposal-#{@proposal.id}"} proposal={@proposal} accounts={@accounts} />
+        </td>
+      </tr>
+    </tbody>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :proposal, Transaction, required: true
+  attr :accounts, :map, required: true
+
+  defp match(assigns) do
+    ~H"""
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">
+        <.icon name="link" class="app-icon-sm" /> {match_text(
+          @proposal.matched_transaction,
+          @accounts
+        )}
+      </span>
+      <button
+        id={"#{@id}-accept"}
+        type="button"
+        class="btn btn-sm btn-primary app-btn-28"
+        phx-click="accept_match"
+        phx-value-id={@proposal.id}
+        {asking(merge_question([@proposal]))}
+      >
+        Zuordnen
+      </button>
+      <button
+        id={"#{@id}-reject"}
+        type="button"
+        class="btn btn-sm btn-outline-secondary app-btn-28"
+        phx-click="reject_match"
+        phx-value-id={@proposal.id}
+      >
+        Trennen
+      </button>
+    </div>
+    """
+  end
+
+  @doc "What a match proposal says about the transaction it matches, `accounts` by id naming transfers."
+  def match_text(matched, accounts) do
+    case payee(matched, accounts) do
+      "" -> "passt zu Buchung vom #{Format.date(matched.date)}"
+      payee -> "passt zu Buchung vom #{Format.date(matched.date)} · #{payee}"
+    end
+  end
+
   # A cell that selects its row, or opens the selected row for editing in that cell.
   defp cell(transaction, field),
     do: ["phx-click": "row_click", "phx-value-id": transaction.id, "phx-value-field": field]
 
   attr :rows, :list, required: true
+  attr :proposals, :list, required: true
   attr :accounts, :map, required: true
   attr :all, :boolean, required: true
   attr :empty, :string, required: true
 
   @doc """
   Phones: one compact card per transaction, which opens the transaction sheet; one waiting for approval puts its ✓
-  at the side.
+  at the side, a match proposal what it matches with "Zuordnen" and "Trennen".
   """
   def cards(assigns) do
     ~H"""
     <div id="register-cards" class="list-group d-md-none">
-      <%= for transaction <- @rows do %>
+      <%= for transaction <- Rows.with_proposals(@rows, @proposals) do %>
         <div
-          :if={!transaction.approved}
+          :if={transaction.matched_transaction_id}
+          id={"proposal-card-#{transaction.id}"}
+          class="list-group-item app-unapproved-item"
+        >
+          <div class="d-flex align-items-start gap-2">
+            <span class="app-payee-ph flex-grow-1 app-min-w-0">{payee(transaction, @accounts)}</span>
+            <.signed amount={transaction.amount} class="fw-bold" />
+          </div>
+          <div class="small text-body-secondary app-ph-l2">
+            {Format.day(transaction.date)}<span :if={@all}> · {@accounts[transaction.account_id].name}</span>
+          </div>
+          <div class="app-ph-l2">
+            <.match
+              id={"proposal-card-#{transaction.id}"}
+              proposal={transaction}
+              accounts={@accounts}
+            />
+          </div>
+        </div>
+        <div
+          :if={!transaction.matched_transaction_id and !transaction.approved}
           id={"tx-card-#{transaction.id}"}
           class="list-group-item app-unapproved-item d-flex align-items-center gap-2"
         >
@@ -743,7 +873,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           />
         </div>
         <div
-          :if={transaction.approved}
+          :if={!transaction.matched_transaction_id and transaction.approved}
           id={"tx-card-#{transaction.id}"}
           class="list-group-item d-flex gap-2 align-items-start"
         >
@@ -777,7 +907,10 @@ defmodule AbakusWeb.RegisterLive.Components do
           <.signed amount={transaction.amount} class="fw-semibold" />
         </div>
       <% end %>
-      <div :if={@rows == []} class="list-group-item text-center text-body-secondary py-4">
+      <div
+        :if={@rows == [] and @proposals == []}
+        class="list-group-item text-center text-body-secondary py-4"
+      >
         {@empty}
       </div>
     </div>
@@ -1019,13 +1152,20 @@ defmodule AbakusWeb.RegisterLive.Components do
     end
   end
 
-  # Attributes that make the browser ask before changing reconciled transactions, and tell the server it did.
-  defp confirm(transactions) do
-    case question(transactions) do
-      nil -> []
-      question -> ["data-confirm": question, "phx-value-reconciled": "confirmed"]
+  # Merging changes the matched transaction's date, also on reconciled counterparts.
+  defp merge_question(proposals) do
+    case proposals |> Enum.map(& &1.matched_transaction) |> locked() |> length() do
+      0 -> nil
+      1 -> "Eine Gegenbuchung ist abgeschlossen. Trotzdem zuordnen?"
+      count -> "#{count} Gegenbuchungen sind abgeschlossen. Trotzdem zuordnen?"
     end
   end
+
+  defp confirm(transactions), do: asking(question(transactions))
+
+  # Attributes that make the browser ask before changing reconciled transactions, and tell the server it did.
+  defp asking(nil), do: []
+  defp asking(question), do: ["data-confirm": question, "phx-value-reconciled": "confirmed"]
 
   defp question([%{cleared: :reconciled}]),
     do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"

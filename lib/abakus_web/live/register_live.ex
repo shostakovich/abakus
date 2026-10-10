@@ -6,8 +6,13 @@ defmodule AbakusWeb.RegisterLive do
 
   Here transactions are approved (one, the selected or all), categorised (the selected), flagged and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
-  `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Match proposals are not in the
-  register, so approving all leaves them open. Accounts fed by another app offer no manual entry.
+  `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
+  no manual entry.
+
+  Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
+  the transaction they match: "Zuordnen" merges them, "Trennen" keeps the import as a transaction of its own, and
+  "Alle Zuordnungen übernehmen" in the banner merges all. Approving all leaves them open, as that is a decision of
+  its own.
 
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
   `account_groups`, so it is as fresh as the sidebar.
@@ -42,8 +47,9 @@ defmodule AbakusWeb.RegisterLive do
     >
       <div id="register">
         <Components.banner
-          :if={@unapproved != []}
+          :if={@unapproved != [] or @proposals != []}
           transactions={@unapproved}
+          proposals={@proposals}
           show_path={@filter != :unapproved && @paths.filters.unapproved}
         />
         <.link
@@ -85,19 +91,21 @@ defmodule AbakusWeb.RegisterLive do
         />
         <Components.table
           rows={@rows}
+          proposals={@shown_proposals}
           accounts={@accounts}
           columns={@columns}
           selected={@selected}
           flag_menu={@flag_menu}
           running={@running_balances}
           editor={@editor && @editor.layout == :row && @editor}
-          empty={empty_text(@transactions)}
+          empty={empty_text(@transactions, @proposals)}
         />
         <Components.cards
           rows={@rows}
+          proposals={@shown_proposals}
           accounts={@accounts}
           all={is_nil(@account)}
-          empty={empty_text(@transactions)}
+          empty={empty_text(@transactions, @proposals)}
         />
         <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
         <button
@@ -120,8 +128,8 @@ defmodule AbakusWeb.RegisterLive do
     """
   end
 
-  defp empty_text([]), do: "Noch keine Buchungen."
-  defp empty_text(_transactions), do: "Keine Buchungen in dieser Ansicht."
+  defp empty_text([], []), do: "Noch keine Buchungen."
+  defp empty_text(_transactions, _proposals), do: "Keine Buchungen in dieser Ansicht."
 
   @impl true
   def mount(_params, _session, socket) do
@@ -189,8 +197,14 @@ defmodule AbakusWeb.RegisterLive do
     |> load_transactions()
   end
 
-  defp load_transactions(socket),
-    do: assign(socket, :transactions, Ledger.list_transactions(socket.assigns.account || :all))
+  defp load_transactions(socket) do
+    scope = socket.assigns.account || :all
+
+    assign(socket,
+      transactions: Ledger.list_transactions(scope),
+      proposals: Ledger.list_match_proposals(scope)
+    )
+  end
 
   defp assign_rows(socket) do
     %{transactions: transactions, filter: filter, query: query} = socket.assigns
@@ -202,12 +216,14 @@ defmodule AbakusWeb.RegisterLive do
       assign(socket, account: account, page_title: (account && account.name) || "Alle Konten")
 
     rows = transactions |> Rows.filter(filter) |> Rows.search(query)
+    shown_proposals = socket.assigns.proposals |> Rows.filter(filter) |> Rows.search(query)
     balances = balances(account, account_rows)
     running = running_balances(socket.assigns, rows, balances)
     columns = Components.columns(account, running != nil)
 
     assign(socket,
       rows: rows,
+      shown_proposals: shown_proposals,
       accounts: accounts,
       manual: manual_entry?(account, accounts),
       columns: columns,
@@ -280,8 +296,28 @@ defmodule AbakusWeb.RegisterLive do
     change(socket, id, &Ledger.update_transaction(&1, %{approved: true}, confirmed(params)))
   end
 
-  def handle_event("approve_all", params, socket),
-    do: approve(socket, socket.assigns.unapproved, params)
+  def handle_event("approve_all", params, socket) do
+    approve(socket, socket.assigns.unapproved, params, & &1, open_proposals_text(socket))
+  end
+
+  def handle_event("accept_match", %{"id" => id} = params, socket) do
+    decide(socket, id, &Ledger.accept_match(&1, confirmed(params)), "Zugeordnet.")
+  end
+
+  def handle_event("reject_match", %{"id" => id}, socket) do
+    decide(socket, id, &Ledger.reject_match/1, "Getrennt und als eigene Buchung bestätigt.")
+  end
+
+  def handle_event("accept_all_matches", params, socket) do
+    proposals = socket.assigns.proposals
+
+    socket
+    |> saved(
+      Ledger.accept_matches(proposals, confirmed(params)),
+      "#{length(proposals)} zugeordnet."
+    )
+    |> noreply()
+  end
 
   # The selection stays until it is approved.
   def handle_event("approve_selected", params, socket) do
@@ -472,10 +508,25 @@ defmodule AbakusWeb.RegisterLive do
     end
   end
 
-  defp approve(socket, transactions, params, approved \\ & &1) do
+  defp approve(socket, transactions, params, approved, note \\ "") do
     result = Ledger.update_transactions(transactions, %{approved: true}, confirmed(params))
     socket = if match?({:ok, _}, result), do: approved.(socket), else: socket
-    socket |> saved(result, "#{length(transactions)} bestätigt.") |> noreply()
+    socket |> saved(result, "#{length(transactions)} bestätigt.#{note}") |> noreply()
+  end
+
+  defp open_proposals_text(%{assigns: %{proposals: []}}), do: ""
+
+  defp open_proposals_text(%{assigns: %{proposals: [_]}}),
+    do: " 1 Zuordnungsvorschlag bleibt offen: Zuordnen oder Trennen."
+
+  defp open_proposals_text(%{assigns: %{proposals: proposals}}),
+    do: " #{length(proposals)} Zuordnungsvorschläge bleiben offen: Zuordnen oder Trennen."
+
+  defp decide(socket, id, fun, message) do
+    case Enum.find(socket.assigns.proposals, &(Integer.to_string(&1.id) == id)) do
+      nil -> {:noreply, socket}
+      proposal -> socket |> saved(fun.(proposal), message) |> noreply()
+    end
   end
 
   defp categorise(socket, category_id, params) do

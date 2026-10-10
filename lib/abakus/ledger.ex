@@ -16,9 +16,10 @@ defmodule Abakus.Ledger do
   (a counterpart kept in step, moved, released or deleted), unless the caller passes `reconciled: :confirmed`
   after asking. Leaving the reconciled state is a change too.
 
-  A match proposal (an import with `matched_transaction_id`) counts nowhere until `accept_match/1` merges it into
-  the existing transaction or `reject_match/1` approves it as a transaction of its own. A transaction (or
-  counterpart) cannot move into an account that has one of its external ids from the same source already.
+  A match proposal (an import with `matched_transaction_id`, see `find_matches/3`) counts nowhere until
+  `accept_match/2` merges it into the existing transaction or `reject_match/1` approves it as a transaction of its
+  own. A transaction (or counterpart) cannot move into an account that has one of its external ids from the same
+  source already.
   """
 
   import Ecto.Query
@@ -224,15 +225,78 @@ defmodule Abakus.Ledger do
     end
   end
 
-  @doc "The account's pending match proposals with the transactions they would merge into."
-  def list_match_proposals(%Account{id: account_id}) do
+  @doc """
+  The account's pending match proposals, or with `:all` every account's, newest first, with what the register
+  shows of them and the transactions they would merge into (with payee and counterparts).
+  """
+  def list_match_proposals(%Account{id: account_id}),
+    do: list_proposals(from t in proposals(), where: t.account_id == ^account_id)
+
+  def list_match_proposals(:all), do: list_proposals(proposals())
+
+  defp proposals,
+    do:
+      from(t in Transaction,
+        where: is_nil(t.deleted_at) and not is_nil(t.matched_transaction_id)
+      )
+
+  defp list_proposals(query) do
     Repo.all(
-      from t in Transaction,
-        where:
-          t.account_id == ^account_id and is_nil(t.deleted_at) and
-            not is_nil(t.matched_transaction_id),
+      from t in query,
         order_by: [desc: t.date, desc: t.id],
-        preload: [:subtransactions, :matched_transaction]
+        preload: [
+          :payee,
+          :subtransactions,
+          category: :category_group,
+          matched_transaction: [
+            :payee,
+            :transfer_transaction,
+            subtransactions: :transfer_transaction
+          ]
+        ]
+    )
+  end
+
+  @doc """
+  The register transactions that imports from `source` look like, one per import (nil for none) in their order:
+  in the account with the same amount, dated within 10 days, the closest pairs first and on a tie the older
+  transaction (see `Abakus.Ledger.Matches.pick/2`). Each is matched once, and only while it is not reconciled, has
+  no open proposal and no external id from `source` yet. Imports are maps with `:date` and `:amount`.
+  """
+  def find_matches(%Account{}, _source, []), do: []
+
+  def find_matches(%Account{id: account_id}, source, imports) do
+    {first, last} = imports |> Enum.map(& &1.date) |> Enum.min_max_by(&Date.to_gregorian_days/1)
+
+    candidates =
+      imports
+      |> Enum.map(& &1.amount)
+      |> Enum.uniq()
+      |> in_chunks(fn amounts ->
+        Repo.all(
+          from t in in_register(),
+            where:
+              t.account_id == ^account_id and t.cleared != :reconciled and t.amount in ^amounts and
+                t.date >= ^Date.add(first, -Matches.days()) and
+                t.date <= ^Date.add(last, Matches.days()),
+            where: t.id not in subquery(from p in proposals(), select: p.matched_transaction_id),
+            where:
+              t.id not in subquery(
+                from o in TransactionOrigin, where: o.source == ^source, select: o.transaction_id
+              ),
+            preload: :payee
+        )
+      end)
+
+    Matches.pick(imports, candidates)
+  end
+
+  @doc "The date of the newest reconciled transaction in the account's register, nil without one."
+  def last_reconciled_date(%Account{id: account_id}) do
+    Repo.one(
+      from t in in_register(),
+        where: t.account_id == ^account_id and t.cleared == :reconciled,
+        select: max(t.date)
     )
   end
 
@@ -262,18 +326,34 @@ defmodule Abakus.Ledger do
 
   @doc """
   Each account's register as `%{balance, cleared, uncleared, unapproved}` by account id; cleared counts reconciled
-  transactions too, unapproved is how many wait for approval. Accounts without transactions are missing.
+  transactions too, unapproved is how many wait for approval, match proposals included. Accounts without
+  transactions are missing.
   """
   def balances do
     Repo.all(
-      from t in in_register(),
+      from t in Transaction,
+        where: is_nil(t.deleted_at),
         group_by: t.account_id,
         select:
           {t.account_id,
            %{
-             balance: sum(t.amount),
-             cleared: coalesce(filter(sum(t.amount), t.cleared != :uncleared), 0),
-             uncleared: coalesce(filter(sum(t.amount), t.cleared == :uncleared), 0),
+             balance: coalesce(filter(sum(t.amount), is_nil(t.matched_transaction_id)), 0),
+             cleared:
+               coalesce(
+                 filter(
+                   sum(t.amount),
+                   is_nil(t.matched_transaction_id) and t.cleared != :uncleared
+                 ),
+                 0
+               ),
+             uncleared:
+               coalesce(
+                 filter(
+                   sum(t.amount),
+                   is_nil(t.matched_transaction_id) and t.cleared == :uncleared
+                 ),
+                 0
+               ),
              unapproved: filter(count(t.id), not t.approved)
            }}
     )
@@ -716,6 +796,11 @@ defmodule Abakus.Ledger do
     end)
   end
 
+  @doc "Accepts several match proposals with `accept_match/2`, all or none: the first refusal stops."
+  def accept_matches(proposals, opts \\ []) do
+    Repo.transact(fn -> all_or_none(proposals, &accept_match(&1, opts)) end)
+  end
+
   defp check_match(proposal, existing) do
     changeset = proposal |> Changeset.change() |> Matches.validate_target(existing)
     if changeset.valid?, do: :ok, else: {:error, %{changeset | action: :update}}
@@ -764,15 +849,22 @@ defmodule Abakus.Ledger do
 
   @doc "Which of `external_ids` the account has from `source`, deleted transactions and proposals included."
   def existing_external_ids(%Account{id: account_id}, source, external_ids) do
-    Repo.all(
-      from o in TransactionOrigin,
-        where:
-          o.account_id == ^account_id and o.source == ^source and
-            o.external_id in ^external_ids,
-        select: o.external_id
-    )
+    external_ids
+    |> in_chunks(fn external_ids ->
+      Repo.all(
+        from o in TransactionOrigin,
+          where:
+            o.account_id == ^account_id and o.source == ^source and
+              o.external_id in ^external_ids,
+          select: o.external_id
+      )
+    end)
     |> MapSet.new()
   end
+
+  # SQLite takes at most 32766 variables in a statement.
+  defp in_chunks(values, query),
+    do: values |> Enum.chunk_every(1000) |> Enum.flat_map(query)
 
   @doc "The transaction an external id was imported as or matched to, deleted ones and proposals included."
   def get_transaction_by_origin(%Account{id: account_id}, source, external_id) do

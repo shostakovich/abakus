@@ -23,10 +23,10 @@ defmodule Abakus.FileImportTest do
       september = statement("girokonto_2026-09.ofx")
       october = statement("girokonto_2026-10.ofx")
 
-      assert {:ok, 4} = FileImport.import([{september, giro}])
-      assert {:ok, 2} = FileImport.import([{october, giro}])
-      assert {:ok, 0} = FileImport.import([{october, giro}])
-      assert {:ok, 0} = FileImport.import([{september, giro}])
+      assert {:ok, %{new: 4, matched: 0}} = FileImport.import([{september, giro}])
+      assert {:ok, %{new: 2, matched: 0}} = FileImport.import([{october, giro}])
+      assert {:ok, %{new: 0, matched: 0}} = FileImport.import([{october, giro}])
+      assert {:ok, %{new: 0, matched: 0}} = FileImport.import([{september, giro}])
 
       assert giro |> register() |> Enum.map(& &1.amount) ==
                [250_000, -640, -5_837, -1_200, -4_200, 3_490]
@@ -40,7 +40,8 @@ defmodule Abakus.FileImportTest do
     test "imports land unapproved and cleared, with payee and memo from the file", %{giro: giro} do
       market = payee_fixture(name: "🛒 Frischmarkt")
 
-      {:ok, 4} = FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+      {:ok, %{new: 4, matched: 0}} =
+        FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
 
       assert [salary, bakery, groceries, library] = register(giro)
 
@@ -65,16 +66,16 @@ defmodule Abakus.FileImportTest do
       statement = statement("girokonto_2026-09.ofx")
       assert FileImport.linked_account(statement) == nil
 
-      {:ok, _count} = FileImport.import([{statement, giro}])
+      {:ok, _counts} = FileImport.import([{statement, giro}])
 
       assert FileImport.linked_account(statement).id == giro.id
       assert FileImport.linked_account(statement("kreditkarte.ofx")) == nil
     end
 
     test "keeps the ledger balance as the account's bank balance from the file", %{giro: giro} do
-      {:ok, _count} = FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
-      {:ok, _count} = FileImport.import([{statement("girokonto_2026-10.ofx"), giro}])
-      {:ok, _count} = FileImport.import([{statement("girokonto_2026-10.ofx"), giro}])
+      {:ok, _counts} = FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+      {:ok, _counts} = FileImport.import([{statement("girokonto_2026-10.ofx"), giro}])
+      {:ok, _counts} = FileImport.import([{statement("girokonto_2026-10.ofx"), giro}])
 
       assert giro.id
              |> then(
@@ -85,20 +86,26 @@ defmodule Abakus.FileImportTest do
     end
 
     test "does not bring back a transaction deleted after its import", %{giro: giro} do
-      {:ok, 4} = FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+      {:ok, %{new: 4, matched: 0}} =
+        FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+
       library = giro |> register() |> List.last()
       {:ok, _deleted} = Ledger.delete_transaction(library)
 
-      assert {:ok, 2} = FileImport.import([{statement("girokonto_2026-10.ofx"), giro}])
+      assert {:ok, %{new: 2, matched: 0}} =
+               FileImport.import([{statement("girokonto_2026-10.ofx"), giro}])
+
       refute Enum.any?(register(giro), &(&1.memo == nil and &1.amount == -1_200))
     end
 
     test "dedupes per account, so another account takes the same FITIDs", %{giro: giro} do
       other = account_fixture()
 
-      {:ok, 4} = FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+      {:ok, %{new: 4, matched: 0}} =
+        FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
 
-      assert {:ok, 4} = FileImport.import([{statement("girokonto_2026-09.ofx"), other}])
+      assert {:ok, %{new: 4, matched: 0}} =
+               FileImport.import([{statement("girokonto_2026-09.ofx"), other}])
     end
 
     test "takes a FITID twice in one file once", %{giro: giro} do
@@ -106,7 +113,7 @@ defmodule Abakus.FileImportTest do
       [first | _rest] = statement.transactions
       statement = %{statement | transactions: [first | statement.transactions]}
 
-      assert {:ok, 4} = FileImport.import([{statement, giro}])
+      assert {:ok, %{new: 4, matched: 0}} = FileImport.import([{statement, giro}])
     end
 
     test "imports several statements at once, all or none", %{giro: giro} do
@@ -126,7 +133,7 @@ defmodule Abakus.FileImportTest do
       assert Repo.aggregate(BankBalance, :count) == 0
       assert Repo.reload!(giro).ofx_acct_id == nil
 
-      assert {:ok, 6} =
+      assert {:ok, %{new: 6, matched: 0}} =
                FileImport.import([{september, giro}, {statement("kreditkarte.ofx"), card}])
     end
 
@@ -155,13 +162,95 @@ defmodule Abakus.FileImportTest do
     end
   end
 
-  describe "preview/2" do
-    test "counts what is new and what is there already", %{giro: giro} do
-      {:ok, 4} = FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+  describe "matching" do
+    setup %{giro: giro} do
+      bakery =
+        transaction_fixture(
+          account_id: giro.id,
+          date: ~D[2026-09-05],
+          amount: -640,
+          memo: "Brötchen",
+          category_id: category_fixture().id
+        )
+
+      %{bakery: bakery}
+    end
+
+    test "proposes a match for an existing transaction, never merges it silently",
+         %{giro: giro, bakery: bakery} do
+      preview = FileImport.preview(statement("girokonto_2026-09.ofx"), giro)
+
+      assert {preview.new, preview.existing, preview.matched, preview.reconciled} == {3, 0, 1, 0}
+      assert %{status: :matched, match: %{id: id}} = Enum.at(preview.rows, 1)
+      assert id == bakery.id
+
+      assert {:ok, %{new: 3, matched: 1}} =
+               FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+
+      assert [%Transaction{matched_transaction_id: ^id, approved: false, date: ~D[2026-09-03]}] =
+               Ledger.list_match_proposals(giro)
+
+      assert %Transaction{date: ~D[2026-09-05], cleared: :uncleared, memo: "Brötchen"} =
+               Repo.reload!(bakery)
+
+      assert length(register(giro)) == 4
+      assert Ledger.balances()[giro.id].balance == 250_000 - 640 - 5_837 - 1_200
+    end
+
+    test "an accepted or rejected match is not imported again", %{giro: giro} do
+      {:ok, %{matched: 1}} = FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+      [proposal] = Ledger.list_match_proposals(giro)
+      {:ok, _merged} = Ledger.accept_match(proposal)
+
+      assert {:ok, %{new: 0, matched: 0}} =
+               FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+
+      other = account_fixture()
+      transaction_fixture(account_id: other.id, date: ~D[2026-09-03], amount: -640)
+      {:ok, %{matched: 1}} = FileImport.import([{statement("girokonto_2026-09.ofx"), other}])
+      [proposal] = Ledger.list_match_proposals(other)
+      {:ok, _separated} = Ledger.reject_match(proposal)
+
+      assert {:ok, %{new: 0, matched: 0}} =
+               FileImport.import([{statement("girokonto_2026-09.ofx"), other}])
+
+      assert length(register(other)) == 5
+    end
+
+    test "skips the rows dated up to the newest reconciled transaction", %{giro: giro} do
+      transaction_fixture(account_id: giro.id, date: ~D[2026-09-15], cleared: :reconciled)
+
+      preview = FileImport.preview(statement("girokonto_2026-09.ofx"), giro)
+
+      assert Enum.map(preview.rows, & &1.status) == [:reconciled, :reconciled, :reconciled, :new]
+      assert {preview.new, preview.matched, preview.reconciled} == {1, 0, 3}
+
+      assert {:ok, %{new: 1, matched: 0}} =
+               FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+
+      assert Ledger.list_match_proposals(giro) == []
+    end
+
+    test "a FITID there already counts as there, also before the last reconcile", %{giro: giro} do
+      {:ok, %{new: 3, matched: 1}} =
+        FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+
+      transaction_fixture(account_id: giro.id, date: ~D[2026-09-30], cleared: :reconciled)
 
       preview = FileImport.preview(statement("girokonto_2026-10.ofx"), giro)
 
-      assert {preview.new, preview.existing} == {2, 2}
+      assert Enum.map(preview.rows, & &1.status) == [:existing, :existing, :new, :new]
+    end
+  end
+
+  describe "preview/2" do
+    test "counts what is new and what is there already", %{giro: giro} do
+      {:ok, %{new: 4, matched: 0}} =
+        FileImport.import([{statement("girokonto_2026-09.ofx"), giro}])
+
+      preview = FileImport.preview(statement("girokonto_2026-10.ofx"), giro)
+
+      assert {preview.new, preview.existing, preview.matched, preview.reconciled} == {2, 2, 0, 0}
 
       assert Enum.map(preview.rows, &{&1.transaction.fitid, &1.status}) == [
                {"MM-0003", :existing},
@@ -174,7 +263,7 @@ defmodule Abakus.FileImportTest do
     test "without an account, everything is new" do
       preview = FileImport.preview(statement("girokonto_2026-09.ofx"), nil)
 
-      assert {preview.new, preview.existing} == {4, 0}
+      assert {preview.new, preview.existing, preview.matched, preview.reconciled} == {4, 0, 0, 0}
     end
   end
 
@@ -191,7 +280,7 @@ defmodule Abakus.FileImportTest do
 
     test "a linked account that no longer takes a file import is not offered", %{giro: giro} do
       statement = statement("girokonto_2026-09.ofx")
-      {:ok, _count} = FileImport.import([{statement, giro}])
+      {:ok, _counts} = FileImport.import([{statement, giro}])
       {:ok, _giro} = Ledger.update_account(giro, %{closed: true})
 
       assert FileImport.linked_account(statement) == nil

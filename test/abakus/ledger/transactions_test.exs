@@ -900,6 +900,14 @@ defmodule Abakus.Ledger.TransactionsTest do
       assert Ledger.existing_external_ids(account, :file, []) == MapSet.new()
     end
 
+    test "tell which of more external ids than SQLite takes variables an account has" do
+      account = account_fixture()
+      {:ok, _} = Ledger.add_origin(transaction_fixture(account_id: account.id), :file, "F40000")
+      external_ids = Enum.map(1..40_000, &"F#{&1}")
+
+      assert Ledger.existing_external_ids(account, :file, external_ids) == MapSet.new(["F40000"])
+    end
+
     test "go with the transaction row" do
       transaction = transaction_fixture()
       {:ok, _} = Ledger.add_origin(transaction, :ynab, "abc")

@@ -2,7 +2,8 @@ defmodule AbakusWeb.RegisterLive.Rows do
   @moduledoc """
   Which transactions the register shows and what it shows beside them: the view (all, waiting for approval, not
   cleared), the search, the running balance and whether a transaction takes a category. Transactions come from
-  `Abakus.Ledger.list_transactions/1`, newest first, with payee, category and subtransactions.
+  `Abakus.Ledger.list_transactions/1` (match proposals from `list_match_proposals/1`), newest first, with payee,
+  category and subtransactions.
   """
 
   alias Abakus.Categories.Category
@@ -51,6 +52,12 @@ defmodule AbakusWeb.RegisterLive.Rows do
 
   defp memo_key(memo) when is_binary(memo), do: Names.lookup_key(memo)
   defp memo_key(_none), do: nil
+
+  @doc "Transactions and match proposals in one list, newest first, as the register shows them."
+  def with_proposals(transactions, []), do: transactions
+
+  def with_proposals(transactions, proposals),
+    do: Enum.sort_by(transactions ++ proposals, &{Date.to_gregorian_days(&1.date), &1.id}, :desc)
 
   @doc "The balance after each transaction by id, going back from the working balance; newest first."
   def running(transactions, working) do

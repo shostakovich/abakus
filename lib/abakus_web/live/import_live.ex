@@ -1,16 +1,17 @@
 defmodule AbakusWeb.ImportLive do
   @moduledoc """
   Import & Sync, for now the file import: a chosen OFX/QFX file is read at once and previewed per statement, with
-  the file's account, the bank balance it reports, the account it goes into and its transactions, new or there
-  already. A file account seen before has its linked account chosen; an unknown one asks for the account. The import
-  remembers the chosen one, so choosing another moves the link. Accounts fed by another app and closed ones are not
-  offered. The preview lives in the LiveView only; the import checks again what is there.
+  the file's account, the bank balance it reports, the account it goes into and its transactions: new, there
+  already, a match proposal for a transaction in the register, or before the last reconcile (skipped). A file
+  account seen before has its linked account chosen; an unknown one asks for the account. The import remembers the
+  chosen one, so choosing another moves the link. Accounts fed by another app and closed ones are not offered. The
+  preview lives in the LiveView only; the import checks again what is there.
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.FileImport
+  alias Abakus.{FileImport, Ledger}
   alias AbakusWeb.Format
-  alias AbakusWeb.RegisterLive.TransactionEditor
+  alias AbakusWeb.RegisterLive.{Components, TransactionEditor}
 
   @max_file_size 5_000_000
 
@@ -55,7 +56,7 @@ defmodule AbakusWeb.ImportLive do
           </p>
         </div>
         <div :if={@preview} class="col-lg-8">
-          <.preview preview={@preview} accounts={@accounts} />
+          <.preview preview={@preview} accounts={@accounts} transfer_accounts={@transfer_accounts} />
         </div>
       </div>
     </Layouts.app>
@@ -64,12 +65,16 @@ defmodule AbakusWeb.ImportLive do
 
   attr :preview, :map, required: true
   attr :accounts, :list, required: true
+  attr :transfer_accounts, :map, required: true
 
   defp preview(assigns) do
     assigns =
       assign(assigns,
         transactions: Enum.flat_map(assigns.preview.statements, & &1.statement.transactions),
-        new: assigns.preview.statements |> Enum.map(& &1.preview.new) |> Enum.sum(),
+        incoming:
+          assigns.preview.statements
+          |> Enum.map(&(&1.preview.new + &1.preview.matched))
+          |> Enum.sum(),
         ready: Enum.all?(assigns.preview.statements, & &1.account)
       )
 
@@ -87,9 +92,12 @@ defmodule AbakusWeb.ImportLive do
         item={item}
         index={index}
         accounts={@accounts}
+        transfer_accounts={@transfer_accounts}
       />
       <div class="card-footer d-flex flex-wrap align-items-center gap-2">
-        <span class="small text-body-secondary me-auto">Neue Buchungen landen unbestätigt im Konto.</span>
+        <span class="small text-body-secondary me-auto">
+          Neue Buchungen landen unbestätigt im Konto, Zuordnungsvorschläge warten auf Zuordnen oder Trennen.
+        </span>
         <button id="import-discard" type="button" class="btn btn-sm" phx-click="discard">
           Verwerfen
         </button>
@@ -100,7 +108,7 @@ defmodule AbakusWeb.ImportLive do
           phx-click="import"
           disabled={!@ready}
         >
-          {import_label(@new)}
+          {import_label(@incoming)}
         </button>
       </div>
     </section>
@@ -110,6 +118,7 @@ defmodule AbakusWeb.ImportLive do
   attr :item, :map, required: true
   attr :index, :integer, required: true
   attr :accounts, :list, required: true
+  attr :transfer_accounts, :map, required: true, doc: "every account by id, naming transfers"
 
   defp statement(assigns) do
     ~H"""
@@ -119,8 +128,22 @@ defmodule AbakusWeb.ImportLive do
           <span id={"statement-#{@index}-new"} class="badge text-bg-success">
             {@item.preview.new} neu
           </span>
+          <span
+            :if={@item.preview.matched > 0}
+            id={"statement-#{@index}-matched"}
+            class="badge text-bg-info"
+          >
+            {matched_label(@item.preview.matched)}
+          </span>
           <span id={"statement-#{@index}-existing"} class="badge text-bg-secondary">
             {@item.preview.existing} bereits vorhanden
+          </span>
+          <span
+            :if={@item.preview.reconciled > 0}
+            id={"statement-#{@index}-reconciled"}
+            class="badge text-bg-secondary"
+          >
+            {@item.preview.reconciled} vor dem letzten Abgleich
           </span>
         </div>
         <div class="row g-2 align-items-center">
@@ -178,20 +201,25 @@ defmodule AbakusWeb.ImportLive do
           </thead>
           <tbody>
             <tr
-              :for={%{transaction: transaction, status: status} <- @item.preview.rows}
-              class={status == :existing && "text-body-secondary"}
+              :for={%{transaction: transaction, status: status} = row <- @item.preview.rows}
+              class={status in [:existing, :reconciled] && "text-body-secondary"}
             >
               <td class="text-nowrap">{Format.date(transaction.date)}</td>
               <td>
                 {transaction.name}
                 <div :if={transaction.memo} class="small text-body-secondary">{transaction.memo}</div>
+                <div :if={row.match} class="small text-info-emphasis">
+                  {Components.match_text(row.match, @transfer_accounts)}
+                </div>
               </td>
               <td class={["text-end text-nowrap", transaction.amount > 0 && "text-success"]}>
                 {Format.signed_euros(transaction.amount)}
               </td>
               <td>
                 <span :if={status == :new} class="badge text-bg-success">neu</span>
+                <span :if={status == :matched} class="badge text-bg-info">Zuordnungsvorschlag</span>
                 <span :if={status == :existing} class="badge text-bg-secondary">vorhanden</span>
+                <span :if={status == :reconciled} class="badge text-bg-secondary">vor Abgleich</span>
               </td>
             </tr>
           </tbody>
@@ -213,6 +241,9 @@ defmodule AbakusWeb.ImportLive do
     " · #{Format.date(first)}–#{Format.date(last)}"
   end
 
+  defp matched_label(1), do: "1 Zuordnungsvorschlag"
+  defp matched_label(count), do: "#{count} Zuordnungsvorschläge"
+
   defp import_label(0), do: "Importieren"
   defp import_label(1), do: "1 Buchung importieren"
   defp import_label(count), do: "#{count} Buchungen importieren"
@@ -228,7 +259,12 @@ defmodule AbakusWeb.ImportLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(page_title: "Import & Sync", preview: nil, accounts: FileImport.accounts())
+     |> assign(
+       page_title: "Import & Sync",
+       preview: nil,
+       accounts: FileImport.accounts(),
+       transfer_accounts: %{}
+     )
      |> allow_upload(:file,
        accept: :any,
        max_entries: 1,
@@ -247,6 +283,7 @@ defmodule AbakusWeb.ImportLive do
         {:noreply,
          socket
          |> clear_flash()
+         |> assign(:transfer_accounts, Map.new(Ledger.list_accounts(), &{&1.id, &1}))
          |> assign(:preview, %{
            file_name: entry.client_name,
            statements: Enum.map(statements, &item/1)
@@ -297,10 +334,10 @@ defmodule AbakusWeb.ImportLive do
 
   def handle_event("import", _params, socket), do: {:noreply, socket}
 
-  defp imported({:ok, count}, statements, socket) do
+  defp imported({:ok, counts}, statements, socket) do
     {:noreply,
      socket
-     |> put_flash(:info, imported_text(count, statements))
+     |> put_flash(:info, imported_text(counts, statements))
      |> push_navigate(to: register_path(statements))}
   end
 
@@ -328,13 +365,19 @@ defmodule AbakusWeb.ImportLive do
 
   defp error_text(reason), do: TransactionEditor.error_message(reason)
 
-  defp imported_text(count, statements) do
+  defp imported_text(%{new: new, matched: matched}, statements) do
+    count = new + matched
+
     balance =
       if Enum.any?(statements, & &1.statement.ledger_balance),
         do: " Banksaldo aus der Datei gemerkt."
 
-    "#{count_text(count)}#{target_text(count, statements)}.#{balance}"
+    "#{count_text(count)}#{matched_text(matched)}#{target_text(count, statements)}.#{balance}"
   end
+
+  defp matched_text(0), do: ""
+  defp matched_text(1), do: ", 1 davon passt zu einer vorhandenen Buchung"
+  defp matched_text(count), do: ", #{count} davon passen zu vorhandenen Buchungen"
 
   defp target_text(count, [%{account: account}]) when count > 0,
     do: ", zur Bestätigung in #{account.name}"

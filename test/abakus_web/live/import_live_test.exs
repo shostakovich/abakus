@@ -145,6 +145,68 @@ defmodule AbakusWeb.ImportLiveTest do
     assert Ledger.get_account_by_ofx("10020030", "DE02100200300000004711").id == other.id
   end
 
+  test "the preview shows match proposals and what lies before the last reconcile; the register decides them",
+       %{conn: conn, giro: giro} do
+    transaction_fixture(account_id: giro.id, date: ~D[2026-09-01], cleared: :reconciled)
+
+    bakery =
+      transaction_fixture(
+        account_id: giro.id,
+        date: ~D[2026-09-05],
+        amount: -640,
+        payee_id: payee_fixture(name: "Bäcker").id
+      )
+
+    {:ok, view, _html} = live(conn, ~p"/import")
+    upload(view, "girokonto_2026-09.ofx")
+    view |> form("#statement-0-form", %{index: "0", account_id: giro.id}) |> render_change()
+
+    assert has_element?(view, "#statement-0-new", "2 neu")
+    assert has_element?(view, "#statement-0-matched", "1 Zuordnungsvorschlag")
+    assert has_element?(view, "#statement-0-reconciled", "1 vor dem letzten Abgleich")
+    assert has_element?(view, "#statement-0 tbody tr", "passt zu Buchung vom 05.09.2026 · Bäcker")
+    assert has_element?(view, "#statement-0 tbody tr.text-body-secondary", "vor Abgleich")
+    assert has_element?(view, "#import-submit", "3 Buchungen importieren")
+
+    {:ok, register, _html} = import_file(view, conn)
+
+    assert render(register) =~
+             "3 Buchungen importiert, 1 davon passt zu einer vorhandenen Buchung, zur Bestätigung in 💶 Girokonto."
+
+    [proposal] = Ledger.list_match_proposals(giro)
+    assert proposal.matched_transaction_id == bakery.id
+    assert has_element?(register, "#proposal-#{proposal.id}", "Bäckerei Korn")
+
+    assert has_element?(
+             register,
+             "#proposal-#{proposal.id}-match",
+             "passt zu Buchung vom 05.09.2026"
+           )
+  end
+
+  test "a match with a transfer names the other account as the register does",
+       %{conn: conn, giro: giro} do
+    depot = Enum.find(Ledger.list_accounts(), &(&1.name == "Depot"))
+
+    transaction_fixture(
+      account_id: giro.id,
+      date: ~D[2026-09-28],
+      amount: -1_200,
+      payee_id: depot.transfer_payee.id,
+      category_id: category_fixture().id
+    )
+
+    {:ok, view, _html} = live(conn, ~p"/import")
+    upload(view, "girokonto_2026-09.ofx")
+    view |> form("#statement-0-form", %{index: "0", account_id: giro.id}) |> render_change()
+
+    assert has_element?(
+             view,
+             "#statement-0 tbody tr",
+             "passt zu Buchung vom 28.09.2026 · ↔ Depot"
+           )
+  end
+
   test "a file with two statements asks for an account each and leads to all accounts",
        %{conn: conn, giro: giro} do
     savings = account_fixture(name: "Tagesgeld", kind: :savings)
