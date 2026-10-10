@@ -14,10 +14,6 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 ## From today's YNAB
 
 - Sidebar: bank connections
-- "Verteilen ▾" on Zu verteilen while money is unassigned
-- Targets: inspector with ring, "Weise noch X zu" + "Zuweisen", target editor
-- Inspector: targets this month, overspent categories, auto-assign (underfunded, as last month, spent last month,
-  average, reset); "cover overspending" popover picking the source category
 
 ## Decisions after review round 1
 

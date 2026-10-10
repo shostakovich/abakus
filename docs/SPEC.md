@@ -177,11 +177,11 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
   - "set aside another" (`goal_needs_whole_amount` true: assigned this month counts) or "refill up to" (false:
     what is carried counts, plus what is assigned)
   - per category and month: underfunded amount, progress, snoozed (still underfunded, as YNAB's inspector and
-    API show it, but left out of the month's total and of filling); one action fills all underfunded categories
-    from RTA (in budget order, hidden and snoozed ones skipped, as far as RTA reaches without what later months
+    API show it, but left out of the month's total and of filling); auto-assign fills the underfunded categories
+    (all, or the selected one) from RTA (in budget order, hidden and snoozed ones skipped, as far as RTA reaches without what later months
     have assigned, in a closed month too)
   - UI copied from YNAB: progress bar under the name with its status on hover ("Finanziert", "Im Plan", "Noch
-    13,99 € nötig", "Überzogen"), pill icons, inspector with ring, "assign X more" button and target editor
+    13,99 € nötig", "Überzogen"), pill icons
   - other goal types (`TB`, `TBD`, `MF`, `DEBT`) only if needed later
 - All of this is one pure module (`Abakus.Budget`) computed from assignments and transactions; months are not
   stored as snapshots. It computes every month from the first with data to the month after the last with data,
