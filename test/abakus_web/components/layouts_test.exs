@@ -35,20 +35,29 @@ defmodule AbakusWeb.LayoutsTest do
     assert script_at < css_at
   end
 
-  test "links into and out of the settings load the page, so the sudo plug runs" do
+  test "links on the settings pages load the page, so the sudo plug runs for Zugang & API" do
     user = Abakus.UsersFixtures.user_fixture()
     conn = log_in_user(build_conn(), user)
 
     budget = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
-    settings = conn |> get(~p"/users/settings") |> html_response(200) |> LazyHTML.from_document()
+    settings_links = budget |> LazyHTML.query(~s|a[href="/settings"]|) |> Enum.to_list()
 
-    budget_links = budget |> LazyHTML.query(~s|a[href="/"]|) |> Enum.to_list()
-    settings_links = budget |> LazyHTML.query(~s|a[href="/users/settings"]|) |> Enum.to_list()
+    # The overview shares the budget's live_session.
+    assert settings_links != []
+    assert Enum.all?(settings_links, &(LazyHTML.attribute(&1, "data-phx-link") != []))
+    assert budget |> LazyHTML.query(~s|a[href="/settings/access"]|) |> Enum.empty?()
 
-    assert budget_links != [] and settings_links != []
-    assert Enum.all?(budget_links, &(LazyHTML.attribute(&1, "data-phx-link") != []))
-    assert Enum.all?(settings_links, &(LazyHTML.attribute(&1, "data-phx-link") == []))
-    assert settings |> LazyHTML.query("a[data-phx-link]") |> Enum.empty?()
+    for path <- [
+          ~p"/settings",
+          ~p"/settings/access",
+          ~p"/settings/appearance",
+          ~p"/settings/ynab"
+        ] do
+      page = conn |> get(path) |> html_response(200) |> LazyHTML.from_document()
+
+      assert page |> LazyHTML.query(~s|a[href="/settings/access"]|) |> Enum.any?()
+      assert page |> LazyHTML.query("a[data-phx-link]") |> Enum.empty?()
+    end
   end
 
   test "the manifest is served as a static file and lists installable icons", %{conn: conn} do

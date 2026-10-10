@@ -66,7 +66,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       refute has_element?(view, "aside #side-account-#{c.old.id}")
       assert has_element?(view, "aside #side-add-account", "Konto hinzufügen")
 
-      {:ok, settings, _html} = live(c.conn, ~p"/users/settings")
+      {:ok, settings, _html} = live(c.conn, ~p"/settings/access")
 
       assert has_element?(
                settings,
@@ -125,7 +125,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       path = ~p"/accounts/#{account}"
       assert {^path, _flash} = assert_redirect(view)
 
-      {:ok, settings, _html} = live(conn, ~p"/users/settings")
+      {:ok, settings, _html} = live(conn, ~p"/settings/access")
       settings |> element("aside #side-add-account") |> render_click()
       assert has_element?(settings, "#account-dialog h2", "Konto hinzufügen")
     end

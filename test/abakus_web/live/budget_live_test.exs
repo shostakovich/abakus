@@ -32,7 +32,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       assert has_element?(view, "h1", "Budget")
       assert has_element?(view, ~s|aside nav a.active[aria-current=page][href="/"]|, "Budget")
-      assert has_element?(view, ~s|aside a[href="/users/settings"]|, "Einstellungen")
+      assert has_element?(view, ~s|aside a[href="/settings"]|, "Einstellungen")
       assert has_element?(view, "aside #side-toggle[phx-hook=SideToggle]")
       assert has_element?(view, ~s|aside #log-out[href="/users/log-out"][data-method=delete]|)
     end

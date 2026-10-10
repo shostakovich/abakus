@@ -61,6 +61,9 @@ defmodule AbakusWeb.Router do
       live "/accounts/all", RegisterLive, :all
       live "/accounts/:id", RegisterLive, :show
       live "/import", ImportLive
+      live "/settings", SettingsLive, :index
+      live "/settings/appearance", SettingsLive, :appearance
+      live "/settings/ynab", SettingsLive, :ynab
     end
   end
 
@@ -74,7 +77,7 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.AccountGroups, :assign},
         {AbakusWeb.AccountDialog, :attach}
       ] do
-      live "/users/settings", UserLive.Settings, :edit
+      live "/settings/access", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
     end
   end
