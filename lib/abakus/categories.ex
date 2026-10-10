@@ -136,6 +136,9 @@ defmodule Abakus.Categories do
     }
   end
 
+  @doc "Income (Ready to Assign's activity) per `{payee_name, month}`, `nil` without a payee."
+  def income_by_payee, do: Ledger.category_activity_by_payee(ready_to_assign!().id)
+
   defp budget_categories do
     Repo.all(
       from c in Category,

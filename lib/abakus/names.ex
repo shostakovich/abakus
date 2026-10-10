@@ -1,7 +1,7 @@
 defmodule Abakus.Names do
   @moduledoc """
-  Lookup keys for names that usually start with an emoji ("🛒 Lebensmittel"): lookups by name match without the
-  emoji and ignoring case.
+  Names usually start with an emoji ("🛒 Lebensmittel"): lookups by name match without the emoji and ignoring case,
+  and the UI shows the leading emoji in a column of its own.
   """
 
   # Keycap sequences ("1️⃣") go as a whole; then symbols, pictographs, skin tones, regional indicators (flags), ZWJ,
@@ -46,6 +46,22 @@ defmodule Abakus.Names do
     |> String.trim()
     |> String.downcase()
     |> String.replace("ß", "ss")
+  end
+
+  @doc """
+  Splits a name into its leading emoji and the rest, so the emoji can stand in a column of its own. A name without
+  a leading emoji, or of emoji only, comes back whole.
+
+      iex> Abakus.Names.split_emoji("🛒 Lebensmittel")
+      {"🛒", "Lebensmittel"}
+  """
+  def split_emoji(name) when is_binary(name) do
+    emoji = Regex.source(emoji())
+
+    case Regex.run(~r/^((?:#{emoji})+)\s*((?!#{emoji})\S.*)$/xsu, name) do
+      [_, leading, rest] -> {leading, rest}
+      nil -> {nil, name}
+    end
   end
 
   @doc """

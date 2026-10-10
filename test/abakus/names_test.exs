@@ -1,7 +1,7 @@
 defmodule Abakus.NamesTest do
   use ExUnit.Case, async: true
 
-  import Abakus.Names, only: [lookup_key: 1, pick: 1]
+  import Abakus.Names, only: [lookup_key: 1, pick: 1, split_emoji: 1]
 
   doctest Abakus.Names
 
@@ -110,6 +110,19 @@ defmodule Abakus.NamesTest do
         assert lookup_key(name) == String.downcase(word),
                "#{inspect(name)} → #{inspect(lookup_key(name))}"
       end
+    end
+  end
+
+  describe "split_emoji/1" do
+    test "splits off the leading emoji, ZWJ sequences and flags included" do
+      assert split_emoji("🛒 Lebensmittel") == {"🛒", "Lebensmittel"}
+      assert split_emoji("👨‍👩‍👧Familie") == {"👨‍👩‍👧", "Familie"}
+      assert split_emoji("🇩🇪  Urlaub zu Hause") == {"🇩🇪", "Urlaub zu Hause"}
+    end
+
+    test "leaves a name without a leading emoji, or of emoji only, as it is" do
+      assert split_emoji("Miete 🏠") == {nil, "Miete 🏠"}
+      assert split_emoji("❤️") == {nil, "❤️"}
     end
   end
 

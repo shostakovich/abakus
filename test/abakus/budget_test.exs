@@ -139,6 +139,19 @@ defmodule Abakus.BudgetTest do
       assert %CategoryMonth{category_id: nil, activity: -200, available: -200} =
                month.uncategorised
     end
+
+    test "totals what is carried and what the targets need, snoozed ones aside" do
+      month =
+        months(
+          budget(
+            assigned: %{{1, @sep} => 2_000},
+            targets: %{1 => [target(amount: 1_000)], 2 => [target(amount: 3_000)]},
+            snoozes: MapSet.new([{2, @oct}])
+          )
+        )[@oct]
+
+      assert %Month{carried: 2_000, needed: 1_000, underfunded: 1_000} = month
+    end
   end
 
   describe "targets" do

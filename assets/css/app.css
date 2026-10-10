@@ -1,7 +1,7 @@
 .app-auth { max-width: 26rem; }
 
 /* Secondary text a step stronger than felt's default: at least 4.5:1 on cards, selected rows and raised surfaces. */
-:root { --side-w: 18.5rem; --felt-secondary-color: light-dark(#5f6779, #b0b8c2); }
+:root { --cat-w: 15rem; --side-w: 18.5rem; --felt-secondary-color: light-dark(#5f6779, #b0b8c2); }
 :root.app-side-mini { --side-w: 4rem; }
 .app-min-w-0 { min-width: 0; }
 .app-icon { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
@@ -26,3 +26,93 @@
 .app-side-mini .app-side-toggle svg { transform: scaleX(-1); }
 .app-side-mini .app-side > :last-child { justify-content: center !important; }
 @media (min-width: 992px) { body { padding-left: var(--side-w); } }
+
+/* Category names: the emoji in a column of its own, then the name; line 2 a fixed-length bar, its status on hover. */
+.app-catbtn { border: 0; background: none; padding: 0; color: inherit; text-align: left; width: 100%; font: inherit; min-width: 0; }
+.app-catname { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.app-emoji { flex-shrink: 0; width: 1.4em; text-align: center; }
+.app-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.app-line2 { display: flex; align-items: center; gap: .5rem; margin-top: .125rem; padding-left: calc(1.4em + .4rem); min-width: 0; }
+.app-target { height: .25rem; flex: 0 1 9rem; min-width: 6rem; }
+.app-pill { white-space: nowrap; display: inline-flex; align-items: center; gap: .25rem; padding: .15rem .5rem; font-size: .75rem; font-weight: 600; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.app-pill .app-icon { width: .85rem; height: .85rem; }
+.app-pill-zero { padding: 0; font-size: .875rem; font-weight: 400; color: color-mix(in srgb, var(--felt-body-color) 45%, var(--felt-body-bg)); }
+.app-colh { display: block; font-size: .625rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--felt-secondary-color); }
+.app-colh b { display: block; font-size: .875rem; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--felt-body-color); font-variant-numeric: tabular-nums; }
+/* zeros are dimmed by colour, not opacity, so grid lines stay even */
+.app-zero { color: color-mix(in srgb, var(--felt-body-color) 45%, var(--felt-body-bg)); }
+.app-neg { color: var(--felt-danger-text); }
+.app-udot { display: inline-block; width: .4rem; height: .4rem; border-radius: 50%; background: var(--felt-warning); margin-right: .3rem; vertical-align: .1rem; }
+
+/* Filter chips: whole chips only, the trailing ones fold into "Filter" when the row is short. */
+.app-chips { display: flex; gap: .4rem; flex-wrap: nowrap; min-width: 0; }
+.app-chips > .btn, .app-chips .dropdown > .btn { white-space: nowrap; flex-shrink: 0; }
+.app-chips .btn .app-icon { margin-right: .25rem; vertical-align: -.15rem; }
+
+/* Month strip on its own row; it may reach left over the space above the category column. */
+.app-strip-gap { flex: 0 1 var(--cat-w); min-width: 0; }
+.app-strip { display: flex; flex-direction: row; flex: 1 1 auto; align-items: stretch; height: 2rem; overflow: hidden; min-width: min-content; }
+.app-strip button { border: 0; background: none; color: inherit; padding: 0; font-size: .8rem; flex: 1 1 0; min-width: 2rem; white-space: nowrap; }
+.app-strip button.app-step { flex: 0 0 2rem; }
+.app-strip button:disabled { opacity: .35; }
+.app-strip .is-sel { background: color-mix(in srgb, var(--felt-primary) 22%, transparent); }
+.app-strip .is-focus { background: var(--felt-primary); color: #fff; }
+.app-strip .is-cur { font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.app-strip .app-year { flex: 0 0 auto; font-size: .7rem; font-weight: 700; align-self: center; color: var(--felt-secondary-color); padding: 0 .3rem; }
+
+/* Budget table: a fixed category column, month panels with gaps (YNAB 4); the body stays flat. */
+.app-budget { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; font-size: .875rem; }
+.app-budget > :not(caption) > * > * { padding: .25rem .3rem; border-bottom: 1px solid var(--felt-border-color); background: var(--felt-body-bg); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.app-budget > tbody > tr > * { height: 2.5rem; padding-block: 0; }
+.app-budget > tbody > tr.app-grp > * { height: 2rem; }
+.app-budget .app-cat { position: sticky; left: 0; z-index: 2; border-right: 1px solid var(--felt-border-color); text-align: left; padding-left: .5rem; }
+.app-budget .app-ms { border-left: .625rem solid var(--felt-surface-sunk); }
+.app-budget > thead > tr:first-child > * { border-bottom: 0; padding: 0 0 .5rem; vertical-align: bottom; }
+.app-budget > thead > tr:first-child > .app-ms { padding-left: 0; }
+.app-budget > thead > tr:nth-child(2) > * { vertical-align: bottom; }
+.app-budget .app-num { text-align: right; }
+.app-budget .app-grp > * { background: var(--felt-surface-sunk); font-weight: 600; }
+.app-budget .app-inc > * { color: var(--felt-secondary-color); }
+.app-budget tbody.is-collapsed > tr:not(.app-grp) { display: none; }
+.app-budget tbody.is-collapsed > .app-grp .app-icon { transform: rotate(-90deg); }
+.app-col-cat { width: var(--cat-w); }
+.app-col-assigned { width: calc(var(--month-w) * .35); }
+.app-col-activity { width: calc(var(--month-w) * .28); }
+.app-col-available { width: calc(var(--month-w) * .37); }
+.app-assign { width: 100%; text-align: right; font-variant-numeric: tabular-nums; border-color: transparent; background: transparent; padding: .1rem .25rem; box-shadow: none; }
+.app-assign:hover, .app-assign:focus { border-color: var(--felt-border-color); background: var(--felt-field); }
+.app-assign.app-zero:focus { color: inherit; }
+.app-assign.is-invalid { border-color: var(--felt-danger); }
+.app-q { font-variant-numeric: tabular-nums; }
+@media (max-width: 991.98px) { .app-budget-wrap { overflow-x: auto; } .app-budget { min-width: 38rem; } }
+
+/* Month cards: light in light mode, raised in dark mode; all as high as the highest, Zu verteilen at the bottom. */
+.app-budget > thead > tr:first-child > .app-ms { height: 1px; }
+.app-mcard { height: 100%; font-size: .75rem; white-space: normal; background: light-dark(var(--felt-surface-sunk), var(--felt-surface)); border: 1px solid light-dark(var(--felt-border-color), rgb(255 255 255 / .22)); }
+.app-mcard.is-current { background: light-dark(var(--felt-surface), var(--felt-surface-raised)); }
+.app-mcard.is-focus { border-color: var(--felt-primary); box-shadow: 0 0 0 1px var(--felt-primary); }
+.app-mcard.is-focus .app-rta-big.text-success { color: light-dark(var(--felt-success-text), var(--felt-success-emphasis)) !important; }
+.app-mcard:not(.is-focus) { cursor: pointer; }
+.app-mcard .app-mname { font-size: 1rem; font-weight: 600; line-height: 1.1; }
+.app-mcard.is-current .app-mname { font-weight: 800; }
+.app-rta-big { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; white-space: nowrap; }
+.app-inspector .app-uncovered { font-weight: 600; }
+
+/* Inspector beside the table. */
+.app-inspector { width: 18rem; flex-shrink: 0; position: sticky; top: 1rem; max-height: calc(100vh - 2rem); overflow-y: auto; }
+.app-inspector .card { --felt-card-bg: light-dark(var(--felt-surface), var(--felt-surface-raised)); }
+.app-inspector .card-header { font-size: .875rem; font-weight: 600; }
+.app-insp-title { font-size: 1.25rem; font-weight: 700; }
+
+/* Bar widths without inline styles (the CSP allows none). */
+.app-w-0 { width: 0%; } .app-w-1 { width: 1%; } .app-w-2 { width: 2%; } .app-w-3 { width: 3%; } .app-w-4 { width: 4%; } .app-w-5 { width: 5%; } .app-w-6 { width: 6%; } .app-w-7 { width: 7%; } .app-w-8 { width: 8%; } .app-w-9 { width: 9%; }
+.app-w-10 { width: 10%; } .app-w-11 { width: 11%; } .app-w-12 { width: 12%; } .app-w-13 { width: 13%; } .app-w-14 { width: 14%; } .app-w-15 { width: 15%; } .app-w-16 { width: 16%; } .app-w-17 { width: 17%; } .app-w-18 { width: 18%; } .app-w-19 { width: 19%; }
+.app-w-20 { width: 20%; } .app-w-21 { width: 21%; } .app-w-22 { width: 22%; } .app-w-23 { width: 23%; } .app-w-24 { width: 24%; } .app-w-25 { width: 25%; } .app-w-26 { width: 26%; } .app-w-27 { width: 27%; } .app-w-28 { width: 28%; } .app-w-29 { width: 29%; }
+.app-w-30 { width: 30%; } .app-w-31 { width: 31%; } .app-w-32 { width: 32%; } .app-w-33 { width: 33%; } .app-w-34 { width: 34%; } .app-w-35 { width: 35%; } .app-w-36 { width: 36%; } .app-w-37 { width: 37%; } .app-w-38 { width: 38%; } .app-w-39 { width: 39%; }
+.app-w-40 { width: 40%; } .app-w-41 { width: 41%; } .app-w-42 { width: 42%; } .app-w-43 { width: 43%; } .app-w-44 { width: 44%; } .app-w-45 { width: 45%; } .app-w-46 { width: 46%; } .app-w-47 { width: 47%; } .app-w-48 { width: 48%; } .app-w-49 { width: 49%; }
+.app-w-50 { width: 50%; } .app-w-51 { width: 51%; } .app-w-52 { width: 52%; } .app-w-53 { width: 53%; } .app-w-54 { width: 54%; } .app-w-55 { width: 55%; } .app-w-56 { width: 56%; } .app-w-57 { width: 57%; } .app-w-58 { width: 58%; } .app-w-59 { width: 59%; }
+.app-w-60 { width: 60%; } .app-w-61 { width: 61%; } .app-w-62 { width: 62%; } .app-w-63 { width: 63%; } .app-w-64 { width: 64%; } .app-w-65 { width: 65%; } .app-w-66 { width: 66%; } .app-w-67 { width: 67%; } .app-w-68 { width: 68%; } .app-w-69 { width: 69%; }
+.app-w-70 { width: 70%; } .app-w-71 { width: 71%; } .app-w-72 { width: 72%; } .app-w-73 { width: 73%; } .app-w-74 { width: 74%; } .app-w-75 { width: 75%; } .app-w-76 { width: 76%; } .app-w-77 { width: 77%; } .app-w-78 { width: 78%; } .app-w-79 { width: 79%; }
+.app-w-80 { width: 80%; } .app-w-81 { width: 81%; } .app-w-82 { width: 82%; } .app-w-83 { width: 83%; } .app-w-84 { width: 84%; } .app-w-85 { width: 85%; } .app-w-86 { width: 86%; } .app-w-87 { width: 87%; } .app-w-88 { width: 88%; } .app-w-89 { width: 89%; }
+.app-w-90 { width: 90%; } .app-w-91 { width: 91%; } .app-w-92 { width: 92%; } .app-w-93 { width: 93%; } .app-w-94 { width: 94%; } .app-w-95 { width: 95%; } .app-w-96 { width: 96%; } .app-w-97 { width: 97%; } .app-w-98 { width: 98%; } .app-w-99 { width: 99%; }
+.app-w-100 { width: 100%; }
