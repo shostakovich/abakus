@@ -136,8 +136,53 @@ defmodule Abakus.Ledger do
     Repo.all(
       from t in query,
         order_by: [desc: t.date, desc: t.id],
-        preload: [:payee, category: :category_group, subtransactions: [:payee, :category]]
+        preload: [
+          :payee,
+          :transfer_transaction,
+          category: :category_group,
+          subtransactions: [:payee, :transfer_transaction, category: :category_group]
+        ]
     )
+  end
+
+  @doc """
+  The category last used on a transfer between a budget account and the account of `transfer_payee_id`: on the
+  newest transaction or subtransaction in the budget account's register with that transfer payee and a category.
+  """
+  def last_transfer_category_id(budget_account_id, transfer_payee_id) do
+    transaction =
+      Repo.one(
+        from t in in_register(),
+          where:
+            t.account_id == ^budget_account_id and t.payee_id == ^transfer_payee_id and
+              not is_nil(t.category_id),
+          order_by: [desc: t.date, desc: t.id],
+          limit: 1,
+          select: {t.date, t.id, t.category_id}
+      )
+
+    subtransaction =
+      Repo.one(
+        from s in Subtransaction,
+          join: t in ^in_register(),
+          on: t.id == s.transaction_id,
+          where:
+            t.account_id == ^budget_account_id and s.payee_id == ^transfer_payee_id and
+              not is_nil(s.category_id),
+          order_by: [desc: t.date, desc: t.id],
+          limit: 1,
+          select: {t.date, t.id, s.category_id}
+      )
+
+    case Enum.reject([transaction, subtransaction], &is_nil/1) do
+      [] ->
+        nil
+
+      found ->
+        found
+        |> Enum.max_by(fn {date, id, _} -> {Date.to_gregorian_days(date), id} end)
+        |> elem(2)
+    end
   end
 
   @doc "The account's pending match proposals with the transactions they would merge into."
@@ -267,8 +312,8 @@ defmodule Abakus.Ledger do
   Approval defaults by source: manual entries are approved, imports and API entries are not. Categories are
   remembered as their payees' last categories.
 
-  Instead of `payee_id`, `payee_name` names the payee: the regular payee with that lookup key, else a new one; a
-  blank name means none. A refused write creates no payee.
+  Instead of `payee_id`, `payee_name` names the payee, also in a subtransaction: the regular payee with that lookup
+  key, else a new one; a blank name means none. A refused write creates no payee.
   """
   def create_transaction(attrs) do
     Repo.transact(fn ->
@@ -281,12 +326,31 @@ defmodule Abakus.Ledger do
     end)
   end
 
-  defp put_payee_by_name(%{payee_name: name} = attrs), do: put_payee(attrs, :payee_name, name)
+  defp put_payee_by_name(attrs) do
+    with {:ok, attrs} <- put_own_payee(attrs) do
+      put_subtransaction_payees(attrs)
+    end
+  end
 
-  defp put_payee_by_name(%{"payee_name" => name} = attrs),
-    do: put_payee(attrs, "payee_name", name)
+  defp put_own_payee(%{payee_name: name} = attrs), do: put_payee(attrs, :payee_name, name)
+  defp put_own_payee(%{"payee_name" => name} = attrs), do: put_payee(attrs, "payee_name", name)
+  defp put_own_payee(attrs), do: {:ok, attrs}
 
-  defp put_payee_by_name(attrs), do: {:ok, attrs}
+  defp put_subtransaction_payees(%{subtransactions: [_ | _] = subtransactions} = attrs) do
+    subtransactions
+    |> Enum.reduce_while({:ok, []}, fn subtransaction, {:ok, done} ->
+      case put_own_payee(subtransaction) do
+        {:ok, subtransaction} -> {:cont, {:ok, [subtransaction | done]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, done} -> {:ok, %{attrs | subtransactions: Enum.reverse(done)}}
+      error -> error
+    end
+  end
+
+  defp put_subtransaction_payees(attrs), do: {:ok, attrs}
 
   defp put_payee(attrs, key, name) do
     id_key = if is_atom(key), do: :payee_id, else: "payee_id"
@@ -339,19 +403,22 @@ defmodule Abakus.Ledger do
   stops and returns its changeset.
   """
   def update_transactions(transactions, attrs, opts \\ []) do
-    Repo.transact(fn ->
-      transactions
-      |> Enum.reduce_while({:ok, []}, &update_next(&1, &2, attrs, opts))
-      |> case do
-        {:ok, updated} -> {:ok, Enum.reverse(updated)}
-        error -> error
-      end
-    end)
+    Repo.transact(fn -> all_or_none(transactions, &update_transaction(&1, attrs, opts)) end)
   end
 
-  defp update_next(transaction, {:ok, updated}, attrs, opts) do
-    case update_transaction(transaction, attrs, opts) do
-      {:ok, transaction} -> {:cont, {:ok, [transaction | updated]}}
+  # Applies `fun` to each transaction until one is refused, inside the caller's database transaction.
+  defp all_or_none(transactions, fun) do
+    transactions
+    |> Enum.reduce_while({:ok, []}, &apply_next(&1, &2, fun))
+    |> case do
+      {:ok, done} -> {:ok, Enum.reverse(done)}
+      error -> error
+    end
+  end
+
+  defp apply_next(transaction, {:ok, done}, fun) do
+    case fun.(transaction) do
+      {:ok, transaction} -> {:cont, {:ok, [transaction | done]}}
       error -> {:halt, error}
     end
   end
@@ -563,6 +630,11 @@ defmodule Abakus.Ledger do
           {:ok, Transaction |> Repo.get!(id) |> Repo.preload(:subtransactions)}
       end
     end)
+  end
+
+  @doc "Deletes several transactions with `delete_transaction/2`, all or none: the first refusal stops."
+  def delete_transactions(transactions, opts \\ []) do
+    Repo.transact(fn -> all_or_none(transactions, &delete_transaction(&1, opts)) end)
   end
 
   defp pair_field(%Transaction{subtransactions: []}), do: :transfer_transaction_id

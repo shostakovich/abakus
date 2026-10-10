@@ -540,6 +540,55 @@ defmodule Abakus.Ledger.TransactionsTest do
     end
   end
 
+  describe "delete_transactions/2" do
+    test "deletes every transaction, or none when one is refused" do
+      account = account_fixture()
+      first = transaction_fixture(account_id: account.id)
+      second = transaction_fixture(account_id: account.id)
+      reconciled = transaction_fixture(account_id: account.id, cleared: :reconciled)
+
+      assert {:error, %Ecto.Changeset{}} = Ledger.delete_transactions([first, reconciled])
+      refute Repo.get!(Transaction, first.id).deleted_at
+
+      assert {:ok, [_, _]} =
+               Ledger.delete_transactions([first, reconciled], reconciled: :confirmed)
+
+      assert Enum.map(Ledger.list_transactions(account), & &1.id) == [second.id]
+    end
+  end
+
+  test "last_transfer_category_id/2 finds the category last used on a transfer with the account" do
+    giro = account_fixture()
+    depot = account_fixture(kind: :tracking)
+    old = category_fixture()
+    newer = category_fixture()
+    payee_id = depot.transfer_payee.id
+
+    assert Ledger.last_transfer_category_id(giro.id, payee_id) == nil
+
+    transaction_fixture(
+      account_id: giro.id,
+      date: ~D[2026-09-01],
+      amount: -100,
+      payee_id: payee_id,
+      category_id: old.id
+    )
+
+    assert Ledger.last_transfer_category_id(giro.id, payee_id) == old.id
+
+    transaction_fixture(
+      account_id: giro.id,
+      date: ~D[2026-10-01],
+      amount: -300,
+      subtransactions: [
+        %{amount: -200, payee_id: payee_id, category_id: newer.id},
+        %{amount: -100}
+      ]
+    )
+
+    assert Ledger.last_transfer_category_id(giro.id, payee_id) == newer.id
+  end
+
   test "list_transactions/1 lists newest first with subtransactions" do
     account = account_fixture()
     older = transaction_fixture(account_id: account.id, date: ~D[2026-10-01])
@@ -616,6 +665,27 @@ defmodule Abakus.Ledger.TransactionsTest do
                Ledger.create_transaction(attrs(account, payee_name: "Transfer : Sparkonto"))
 
       assert %Payee{transfer_account_id: nil} = Repo.get!(Payee, transaction.payee_id)
+    end
+
+    test "names the payees of subtransactions too" do
+      account = account_fixture()
+      rewe = payee_fixture(name: "🛒 Rewe")
+
+      assert {:ok, split} =
+               Ledger.create_transaction(
+                 attrs(account,
+                   subtransactions: [
+                     %{amount: -1_000, payee_name: "rewe"},
+                     %{amount: -250, payee_name: "Bäcker"},
+                     %{amount: 0, payee_name: " "}
+                   ]
+                 )
+               )
+
+      assert [first, second, third] = split.subtransactions
+      assert first.payee_id == rewe.id
+      assert %Payee{name: "Bäcker"} = Repo.get!(Payee, second.payee_id)
+      assert third.payee_id == nil
     end
 
     test "a refused transaction leaves no new payee behind" do
