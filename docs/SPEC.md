@@ -73,16 +73,18 @@ tables have no user: all users see everything.
   No credit cards or loans. Closed, never deleted.
 - **Payee**: name, transfer account, last used category. Each account has a transfer payee "Transfer : <account
   name>" as in YNAB, created and renamed with the account. Other payees are unique by lookup key.
-- **Category group** and **category**: name, hidden, position, note, internal. Hidden, never deleted; lookup keys of
-  categories are not unique (an old hidden "Urlaub" next to "🏖️ Urlaub"); groups have none. A migration creates
-  YNAB's internal group "Internal Master Category" with "Inflow: Ready to Assign" (UI "Zu verteilen"); internal ones
-  are not listed, not editable and take no assignments or targets. Ready to Assign's lookup key is reserved: no
-  other category takes it, and looking it up finds only Ready to Assign.
+- **Category group** and **category**: name, hidden (from YNAB, for the import and its check; the budget ignores
+  it), position (new ones go to the end), note, internal. A category is deleted only into another, which takes over
+  everything it has; a group only when it is empty ([ADR 0003](adr/0003-categories-deleted-with-a-transfer.md)).
+  Lookup keys of categories are not unique (an old "Urlaub" next to "🏖️ Urlaub"); groups have none. A migration
+  creates YNAB's internal group "Internal Master Category" with "Inflow: Ready to Assign" (UI "Zu verteilen");
+  internal ones are not listed, not editable and take no assignments or targets. Ready to Assign's lookup key is
+  reserved: no other category takes it, and looking it up finds only Ready to Assign.
 - **Names** usually start with an emoji ("🛒 Lebensmittel"), stored as entered. Lookups by name (MCP, search,
   suggestions, import) use the lookup key: Unicode NFC, without emoji and symbols (incl. ZWJ sequences, skin tones,
   keycaps, flags, variation selectors), whitespace collapsed, lower case, "ß" as "ss"; emoji-only names keep their
-  emoji without variation selectors and skin tones ("❤️" = "❤", "👍🏽" = "👍"). They prefer visible regular
-  categories and regular payees over transfer payees, else report not found or ambiguous.
+  emoji without variation selectors and skin tones ("❤️" = "❤", "👍🏽" = "👍"). They prefer regular payees
+  over transfer payees, else report not found or ambiguous.
 - **Amounts** are integer cents, at most 100 billion euros either way (10^13 cents) on transactions,
   subtransactions, assignments and targets.
 - **Months** (assignment, target version, snooze) are stored as the first of the month; every function takes any day
@@ -97,14 +99,15 @@ tables have no user: all users see everything.
   `reconciled`), approved (manual entries by default, imports and API entries not), flag (red, orange, yellow,
   green, blue, purple), transfer counterpart (a transaction, or for a split's transfer its subtransaction), source
   (`manual`, `ynab`, `file`, `bank`, `api`: where it was created, set once), matched transaction (see match
-  proposals), deleted at (soft delete, the API reports deletions; deleted transactions cannot be changed). The
-  register is what counts: transactions not deleted and no match proposal (`Ledger.in_register/0`).
+  proposals), deleted at (soft delete, the API reports deletions; deleted transactions cannot be changed, only
+  moved with their category into another). The register is what counts: transactions not deleted and no match
+  proposal (`Ledger.in_register/0`).
 - **Reconciled lock**: the Ledger refuses any change that alters a reconciled transaction ("ist abgeschlossen"),
   leaving the reconciled state included, whether made on it directly or through a transfer: its counterpart's or a
   split's subtransaction's edit kept in step (amount, date, memo, account, category), released (payee no longer a
   transfer, subtransaction removed, turned into a split) or deleted with it. The caller passes
-  `reconciled: :confirmed` to `update_transaction/3`, `delete_transaction/2` or `accept_match/2` after asking; the
-  UI asks first, the API does not pass it and answers 409.
+  `reconciled: :confirmed` to `update_transaction/3`, `delete_transaction/2`, `accept_match/2` or
+  `recategorize/3` (deleting a category) after asking; the UI asks first, the API does not pass it and answers 409.
 - **Transfers**: a transaction or subtransaction is a transfer when its payee is a transfer payee; never to its own
   account, and a split is none as a whole. The Ledger alone creates and keeps the counterpart in the payee's
   account (amount negated, same date and memo, payee = the other account's transfer payee; cleared, approved and
@@ -131,7 +134,8 @@ tables have no user: all users see everything.
   dedupe ([ADR 0001](adr/0001-transaction-origins.md)); origins move with their transaction to another account.
   Moving a transaction, or a counterpart, into an account that has one of its external ids from the same source
   already is refused.
-- References are restricted: nothing that history points to can be deleted. The contexts check references before
+- References are restricted: nothing that history points to can be deleted, except a category moved into another
+  (ADR 0003). The contexts check references before
   writing, so a missing one is a validation error ("existiert nicht"), not a constraint error.
 - **Bank balance**: account, source (`file`: a file's ledger balance, `bank`: bank sync), date, amount; one per
   account, source and date. Reconciling offers the latest.
@@ -178,8 +182,8 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
     what is carried counts, plus what is assigned)
   - per category and month: underfunded amount, progress, snoozed (still underfunded, as YNAB's inspector and
     API show it, but left out of the month's total and of filling); auto-assign fills the underfunded categories
-    (all, or the selected one) from RTA (in budget order, hidden and snoozed ones skipped, as far as RTA reaches without what later months
-    have assigned, in a closed month too)
+    (all, or the selected one) from RTA (in budget order, snoozed ones skipped, as far as RTA reaches without what
+    later months have assigned, in a closed month too)
   - UI copied from YNAB: progress bar under the name with its status on hover ("Finanziert", "Im Plan", "Noch
     13,99 € nötig", "Überzogen"), pill icons
   - other goal types (`TB`, `TBD`, `MF`, `DEBT`) only if needed later
@@ -235,7 +239,7 @@ and token. Same paths, field names, milliunits, envelopes (`{"data": …}`) and 
   unchanged; match proposals are not known to the API. Errors: 400 `bad_request`, 401 `not_authorized`, 404.2
   `resource_not_found`, 409 `conflict`, details in German
 - Accounts carry YNAB's `balance`, `cleared_balance` and `uncleared_balance`; tracking accounts are `otherAsset`.
-  Categories list the internal group with Ready to Assign first and hidden ones with `hidden`
+  Categories list the internal group with Ready to Assign first; none is `hidden` (ADR 0003)
 - Contract: the client's own fake YNAB server describes what it expects; Abakus has request specs for the same
   cases. Other YNAB endpoints only when a client needs them (e.g. a portfolio app's FI forecast).
 
