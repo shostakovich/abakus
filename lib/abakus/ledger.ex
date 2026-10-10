@@ -43,7 +43,9 @@ defmodule Abakus.Ledger do
     quote do: type(fragment("strftime('%Y-%m-01', ?)", unquote(date)), :date)
   end
 
-  def list_accounts, do: Repo.all(from a in Account, order_by: [a.position, a.id])
+  @doc "The accounts in their order, with their transfer payees."
+  def list_accounts,
+    do: Repo.all(from a in Account, order_by: [a.position, a.id], preload: :transfer_payee)
 
   def get_account!(id), do: Repo.get!(Account, id)
 
@@ -104,6 +106,13 @@ defmodule Abakus.Ledger do
     |> Repo.update()
   end
 
+  @doc "The regular payees (no transfer payees) by name."
+  def list_payees,
+    do:
+      Repo.all(
+        from p in Payee, where: is_nil(p.transfer_account_id), order_by: [p.lookup_key, p.id]
+      )
+
   @doc "Finds a payee by name, ignoring emoji and case. Regular payees win over transfer payees."
   def find_payee_by_name(name) when is_binary(name) do
     key = Names.lookup_key(name)
@@ -141,6 +150,26 @@ defmodule Abakus.Ledger do
         order_by: [desc: t.date, desc: t.id],
         preload: [:subtransactions, :matched_transaction]
     )
+  end
+
+  @doc """
+  A transaction with what the transaction form needs: payee, counterpart (and for the counterpart of a split's
+  transfer the subtransaction it belongs to) and the subtransactions with their payees and counterparts.
+  """
+  def get_transaction!(id), do: Transaction |> Repo.get!(id) |> preload_for_form()
+
+  @doc "Like `get_transaction!/1`, but nil for an id that is no transaction."
+  def get_transaction(id) when is_integer(id) do
+    if transaction = Repo.get(Transaction, id), do: preload_for_form(transaction)
+  end
+
+  defp preload_for_form(transaction) do
+    Repo.preload(transaction, [
+      :payee,
+      :transfer_transaction,
+      :transfer_subtransaction,
+      subtransactions: [:payee, :transfer_transaction]
+    ])
   end
 
   @doc "Transactions in the register, which count for listings and balances: not deleted and no match proposal."
@@ -237,14 +266,45 @@ defmodule Abakus.Ledger do
   involved (`Transaction.validate_accounts/4`) and keeps the counterparts of transfers (`Abakus.Ledger.Transfers`).
   Approval defaults by source: manual entries are approved, imports and API entries are not. Categories are
   remembered as their payees' last categories.
+
+  Instead of `payee_id`, `payee_name` names the payee: the regular payee with that lookup key, else a new one; a
+  blank name means none. A refused write creates no payee.
   """
   def create_transaction(attrs) do
     Repo.transact(fn ->
-      %Transaction{}
-      |> Transaction.changeset(attrs)
-      |> put_default_approval()
-      |> write(&Repo.insert/1, [])
+      with {:ok, attrs} <- put_payee_by_name(attrs) do
+        %Transaction{}
+        |> Transaction.changeset(attrs)
+        |> put_default_approval()
+        |> write(&Repo.insert/1, [])
+      end
     end)
+  end
+
+  defp put_payee_by_name(%{payee_name: name} = attrs), do: put_payee(attrs, :payee_name, name)
+
+  defp put_payee_by_name(%{"payee_name" => name} = attrs),
+    do: put_payee(attrs, "payee_name", name)
+
+  defp put_payee_by_name(attrs), do: {:ok, attrs}
+
+  defp put_payee(attrs, key, name) do
+    id_key = if is_atom(key), do: :payee_id, else: "payee_id"
+
+    with {:ok, payee} <- payee_named(String.trim(name || "")) do
+      {:ok, attrs |> Map.delete(key) |> Map.put(id_key, payee && payee.id)}
+    end
+  end
+
+  defp payee_named(""), do: {:ok, nil}
+
+  defp payee_named(name) do
+    key = Names.lookup_key(name)
+
+    case Repo.one(from p in Payee, where: p.lookup_key == ^key and is_nil(p.transfer_account_id)) do
+      nil -> create_payee(%{name: name})
+      payee -> {:ok, payee}
+    end
   end
 
   defp put_default_approval(changeset) do
@@ -259,15 +319,18 @@ defmodule Abakus.Ledger do
   Updates a transaction as stored (the struct only names it) and its counterparts. A deleted transaction cannot
   be changed; the counterpart of a split's subtransaction changes only its own fields (cleared, approved, flag,
   category), the rest in its split. When the account changes, the origins move along. A change that alters a
-  reconciled transaction or counterpart needs `reconciled: :confirmed`.
+  reconciled transaction or counterpart needs `reconciled: :confirmed`. The payee may be given by name, as for
+  `create_transaction/1`.
   """
   def update_transaction(%Transaction{id: id}, attrs, opts \\ []) do
     Repo.transact(fn ->
-      Transaction
-      |> Repo.get!(id)
-      |> Repo.preload(:subtransactions)
-      |> Transaction.changeset(attrs)
-      |> write(&Repo.update/1, opts)
+      with {:ok, attrs} <- put_payee_by_name(attrs) do
+        Transaction
+        |> Repo.get!(id)
+        |> Repo.preload(:subtransactions)
+        |> Transaction.changeset(attrs)
+        |> write(&Repo.update/1, opts)
+      end
     end)
   end
 

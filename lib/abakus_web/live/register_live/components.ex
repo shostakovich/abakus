@@ -1,7 +1,7 @@
 defmodule AbakusWeb.RegisterLive.Components do
   @moduledoc """
   The parts of the register: banner, account line, balances, toolbar, selection bar, the table on desktops and the
-  compact cards on phones. Actions that change a reconciled transaction carry a `data-confirm` question and send
+  compact cards on phones. A transaction's payee (on phones its card) opens the transaction form. Actions that change a reconciled transaction carry a `data-confirm` question and send
   `reconciled: "confirmed"`.
   """
   use AbakusWeb, :html
@@ -195,6 +195,11 @@ defmodule AbakusWeb.RegisterLive.Components do
   end
 
   attr :account, Account, default: nil
+
+  attr :new_path, :any,
+    required: true,
+    doc: "where \"Buchung\" opens the form, false without manual entry"
+
   attr :filter, :atom, required: true
   attr :query, :string, required: true
   attr :running, :boolean, required: true
@@ -204,6 +209,14 @@ defmodule AbakusWeb.RegisterLive.Components do
   def toolbar(assigns) do
     ~H"""
     <div class="d-flex align-items-center gap-1 border-top border-bottom py-2 mb-2 app-reg-tools">
+      <.link
+        :if={@new_path}
+        id="new-transaction"
+        patch={@new_path}
+        class="btn btn-sm btn-link text-decoration-none d-none d-md-inline-flex align-items-center gap-1"
+      >
+        <.icon name="plus" class="app-icon-sm" /> Buchung
+      </.link>
       <span
         :if={@account && @account.fed_by}
         id="feed-hint"
@@ -337,6 +350,11 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :selected, :any, required: true
   attr :flag_menu, :any, required: true
   attr :running, :map, default: nil
+
+  attr :edit_path, :any,
+    required: true,
+    doc: "a function from a transaction id to its form's path"
+
   attr :empty, :string, required: true
 
   def table(assigns) do
@@ -412,7 +430,17 @@ defmodule AbakusWeb.RegisterLive.Components do
               <.account_cell account={@accounts[transaction.account_id]} />
             </td>
             <td class="app-payee">
-              <div class="text-truncate app-payee-name">{payee(transaction, @accounts)}</div>
+              <.link
+                id={"tx-#{transaction.id}-edit"}
+                patch={@edit_path.(transaction.id)}
+                class="d-block text-truncate text-reset text-decoration-none app-payee-name"
+                title="Bearbeiten"
+              >
+                {payee(transaction, @accounts)}<span
+                  :if={payee(transaction, @accounts) == ""}
+                  class="text-body-secondary"
+                >Ohne Empfänger</span>
+              </.link>
               <div :if={transaction.memo} class="small text-body-secondary text-truncate app-short">
                 {transaction.memo}
               </div>
@@ -447,9 +475,17 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :rows, :list, required: true
   attr :accounts, :map, required: true
   attr :all, :boolean, required: true
+
+  attr :edit_path, :any,
+    required: true,
+    doc: "a function from a transaction id to its form's path"
+
   attr :empty, :string, required: true
 
-  @doc "Phones: one compact card per transaction; one waiting for approval puts its ✓ at the side."
+  @doc """
+  Phones: one compact card per transaction, which opens the transaction form; one waiting for approval puts its ✓
+  at the side.
+  """
   def cards(assigns) do
     ~H"""
     <div id="register-cards" class="list-group d-md-none">
@@ -459,7 +495,11 @@ defmodule AbakusWeb.RegisterLive.Components do
           id={"tx-card-#{transaction.id}"}
           class="list-group-item app-unapproved-item d-flex align-items-center gap-2"
         >
-          <div class="flex-grow-1 app-min-w-0">
+          <.link
+            id={"tx-card-#{transaction.id}-edit"}
+            patch={@edit_path.(transaction.id)}
+            class="d-block flex-grow-1 app-min-w-0 text-reset text-decoration-none"
+          >
             <div class="d-flex align-items-start gap-2">
               <span class="app-payee-ph flex-grow-1 app-min-w-0">{payee(transaction, @accounts)}</span>
               <.signed amount={transaction.amount} class="fw-bold" />
@@ -470,7 +510,7 @@ defmodule AbakusWeb.RegisterLive.Components do
               </span>
               <span class="text-truncate"><.category transaction={transaction} accounts={@accounts} /></span>
             </div>
-          </div>
+          </.link>
           <.approve
             id={"tx-card-#{transaction.id}-approve"}
             transaction={transaction}
@@ -486,7 +526,11 @@ defmodule AbakusWeb.RegisterLive.Components do
           <span class="pt-1">
             <.cleared id={"tx-card-#{transaction.id}-cleared"} transaction={transaction} />
           </span>
-          <div class="flex-grow-1 app-min-w-0">
+          <.link
+            id={"tx-card-#{transaction.id}-edit"}
+            patch={@edit_path.(transaction.id)}
+            class="d-block flex-grow-1 app-min-w-0 text-reset text-decoration-none"
+          >
             <div class="app-payee-ph">{payee(transaction, @accounts)}</div>
             <div class="small text-body-secondary text-truncate">
               {Format.day(transaction.date)}<span :if={@all}> · {@accounts[transaction.account_id].name}</span>
@@ -497,7 +541,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             <div :if={transaction.memo} class="small text-body-secondary text-truncate">
               {transaction.memo}
             </div>
-          </div>
+          </.link>
           <span
             :if={transaction.flag}
             class={["app-flag is-set", "app-flag-#{transaction.flag}"]}

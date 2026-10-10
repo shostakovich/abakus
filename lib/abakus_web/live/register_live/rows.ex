@@ -67,13 +67,15 @@ defmodule AbakusWeb.RegisterLive.Rows do
   to another budget account (a transfer to a tracking account needs one). `accounts` maps ids to accounts.
   """
   def categorisable?(transaction, accounts) do
-    Account.budget_account?(accounts[transaction.account_id]) and
-      transaction.subtransactions == [] and
-      not budget_transfer?(transaction.payee, accounts)
+    transaction.subtransactions == [] and
+      Account.takes_category?(
+        accounts[transaction.account_id],
+        transfer_account(transaction.payee, accounts)
+      )
   end
 
-  defp budget_transfer?(%Payee{transfer_account_id: id}, accounts) when not is_nil(id),
-    do: Account.budget_account?(accounts[id])
+  defp transfer_account(%Payee{transfer_account_id: id}, accounts) when not is_nil(id),
+    do: accounts[id]
 
-  defp budget_transfer?(_payee, _accounts), do: false
+  defp transfer_account(_payee, _accounts), do: nil
 end

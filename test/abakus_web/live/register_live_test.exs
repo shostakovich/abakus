@@ -160,6 +160,17 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
       refute has_element?(view, "#feed-hint")
+
+      # The form books in another account, unless none takes manual entries.
+      assert {:ok, _view, _html} = live(c.conn, ~p"/accounts/#{c.depot}/transactions/new")
+
+      for account <- [c.giro, c.savings],
+          do: {:ok, _} = Ledger.update_account(account, %{closed: true})
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               live(c.conn, ~p"/accounts/#{c.depot}/transactions/new")
+
+      assert to == ~p"/accounts/#{c.depot}"
     end
 
     test "without transactions it says so", c do
@@ -313,7 +324,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       render_click(view, "toggle_cleared", %{"id" => "#{c.old.id}"})
 
       assert reload(c.old).cleared == :reconciled
-      assert has_element?(view, "#flash-error", "abgeschlossen")
+      assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeschlossen")
     end
   end
 
@@ -444,7 +455,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       view |> element("#tx-#{c.old.id}-select") |> render_click()
       # Without the confirmation the reconciled one stays locked, and so do the others.
       render_click(view, "approve_selected", %{})
-      assert has_element?(view, "#flash-error", "abgeschlossen")
+      assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeschlossen")
       refute reload(c.waiting).approved
       assert has_element?(view, "#bulk", "3 ausgewählt")
     end

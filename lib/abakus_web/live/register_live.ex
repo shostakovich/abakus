@@ -8,13 +8,19 @@ defmodule AbakusWeb.RegisterLive do
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Match proposals are not in the
   register, so approving all leaves them open. Accounts fed by another app offer no manual entry.
+
+  The transaction form (`TransactionDialog`) opens over the register for a new transaction
+  (`…/transactions/new`) or to edit one (`…/transactions/:transaction_id/edit`), keeping the view in the URL. The
+  counterpart of a split's transfer opens its split.
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{Categories, Ledger}
-  alias AbakusWeb.AccountGroups
-  alias AbakusWeb.RegisterLive.{Balances, Components, Rows}
+  alias Abakus.Ledger
+  alias AbakusWeb.{AccountGroups, CategoryOptions}
+  alias AbakusWeb.RegisterLive.{Balances, Components, Rows, TransactionDialog}
   alias Plug.Conn.Query
+
+  import TransactionDialog, only: [confirmed: 1]
 
   @flags Ecto.Enum.dump_values(Abakus.Ledger.Transaction, :flag)
 
@@ -56,6 +62,7 @@ defmodule AbakusWeb.RegisterLive do
         <Components.balances account={@account} balances={@balances} />
         <Components.toolbar
           account={@account}
+          new_path={@paths.new}
           filter={@filter}
           query={@query}
           running={@running}
@@ -74,16 +81,37 @@ defmodule AbakusWeb.RegisterLive do
           selected={@selected}
           flag_menu={@flag_menu}
           running={@running_balances}
+          edit_path={@paths.edit}
           empty={empty_text(@transactions)}
         />
         <Components.cards
           rows={@rows}
           accounts={@accounts}
           all={is_nil(@account)}
+          edit_path={@paths.edit}
           empty={empty_text(@transactions)}
         />
         <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
+        <.link
+          :if={@paths.new && !@dialog}
+          id="new-transaction-fab"
+          patch={@paths.new}
+          class="btn btn-primary btn-lg rounded-pill shadow-lg d-inline-flex d-md-none align-items-center gap-1 app-fab"
+        >
+          <.icon name="plus" /> Buchung
+        </.link>
       </div>
+      <.live_component
+        :if={@dialog}
+        module={TransactionDialog}
+        id="transaction-dialog"
+        transaction={@dialog.transaction}
+        split_of={@dialog.split_of}
+        account={@account}
+        accounts={@accounts}
+        today={@today}
+        return_to={@paths.list}
+      />
     </Layouts.app>
     """
   end
@@ -93,10 +121,14 @@ defmodule AbakusWeb.RegisterLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    connect = get_connect_params(socket) || %{}
+
     {:ok,
      assign(socket,
-       categories: category_options(),
+       today: today(connect["today"]),
+       categories: CategoryOptions.build(),
        scope: nil,
+       dialog: nil,
        selected: MapSet.new(),
        flag_menu: nil
      )}
@@ -111,12 +143,61 @@ defmodule AbakusWeb.RegisterLive do
        query: params["q"] || "",
        running: params["running"] == "1"
      )
-     |> load(scope(socket.assigns.live_action, params))
-     |> assign_rows()}
+     |> load(scope(params))
+     |> assign_rows()
+     |> open_dialog(socket.assigns.live_action, params)}
   end
 
-  defp scope(:all, _params), do: :all
-  defp scope(:show, %{"id" => id}), do: {:account, id}
+  defp scope(%{"id" => id}), do: {:account, id}
+  defp scope(_params), do: :all
+
+  # The browser's date, as long as it is a plausible one.
+  defp today(param) do
+    case is_binary(param) && Date.from_iso8601(param) do
+      {:ok, %Date{year: year} = date} when year in 2000..2099 -> date
+      _ -> Date.utc_today()
+    end
+  end
+
+  # With no account taking manual entries there is nothing to book in.
+  defp open_dialog(socket, :new, _params) do
+    if Enum.any?(Map.values(socket.assigns.accounts), &TransactionDialog.manual?/1),
+      do: assign(socket, :dialog, %{transaction: nil, split_of: false}),
+      else: socket |> assign(:dialog, nil) |> push_patch(to: socket.assigns.paths.list)
+  end
+
+  defp open_dialog(socket, :edit, %{"transaction_id" => id}) do
+    case editable(fetch_transaction(id)) do
+      {:ok, transaction, split_of} ->
+        assign(socket, :dialog, %{transaction: transaction, split_of: split_of})
+
+      :error ->
+        socket
+        |> assign(:dialog, nil)
+        |> put_flash(:error, "Buchung nicht gefunden.")
+        |> push_patch(to: socket.assigns.paths.list)
+    end
+  end
+
+  defp open_dialog(socket, _list, _params), do: assign(socket, :dialog, nil)
+
+  defp fetch_transaction(id) do
+    case Integer.parse(id) do
+      {id, ""} -> Ledger.get_transaction(id)
+      _other -> nil
+    end
+  end
+
+  defp editable(nil), do: :error
+
+  defp editable(%{deleted_at: deleted_at, matched_transaction_id: matched})
+       when not is_nil(deleted_at) or not is_nil(matched),
+       do: :error
+
+  defp editable(%{transfer_subtransaction: %{transaction_id: split_id}}),
+    do: {:ok, Ledger.get_transaction!(split_id), true}
+
+  defp editable(transaction), do: {:ok, transaction, false}
 
   defp load(%{assigns: %{scope: scope}} = socket, scope), do: socket
 
@@ -142,14 +223,15 @@ defmodule AbakusWeb.RegisterLive do
     account_rows = AccountGroups.rows(socket.assigns.account_groups)
     rows = transactions |> Rows.filter(filter) |> Rows.search(query)
     balances = balances(socket.assigns.account, account_rows)
+    accounts = Map.new(account_rows, &{&1.account.id, &1.account})
 
     assign(socket,
       rows: rows,
-      accounts: Map.new(account_rows, &{&1.account.id, &1.account}),
+      accounts: accounts,
       balances: balances,
       unapproved: Enum.reject(transactions, & &1.approved),
       running_balances: running_balances(socket.assigns, rows, balances),
-      paths: view_paths(socket.assigns),
+      paths: view_paths(Map.put(socket.assigns, :accounts, accounts)),
       selected: MapSet.intersection(socket.assigns.selected, MapSet.new(rows, & &1.id))
     )
   end
@@ -170,6 +252,16 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp running_balances(_assigns, _rows, _balances), do: nil
+
+  @impl true
+  def handle_info({TransactionDialog, :done, message}, socket) do
+    {:noreply,
+     socket
+     |> clear_flash()
+     |> put_flash(:info, message)
+     |> refresh()
+     |> push_patch(to: socket.assigns.paths.list)}
+  end
 
   @impl true
   def handle_event("search", %{"q" => query}, socket),
@@ -205,7 +297,7 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   def handle_event("categorise_selected", %{"category_id" => id} = params, socket) do
-    case Enum.find(category_ids(socket.assigns.categories), &(Integer.to_string(&1) == id)) do
+    case Enum.find(CategoryOptions.ids(socket.assigns.categories), &(Integer.to_string(&1) == id)) do
       nil -> {:noreply, socket}
       category_id -> categorise(socket, category_id, params)
     end
@@ -250,9 +342,6 @@ defmodule AbakusWeb.RegisterLive do
   defp toggled(:cleared), do: :uncleared
   defp toggled(:reconciled), do: :cleared
 
-  defp confirmed(%{"reconciled" => "confirmed"}), do: [reconciled: :confirmed]
-  defp confirmed(_params), do: []
-
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(flag), do: flag
 
@@ -295,17 +384,10 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp saved(socket, {:error, changeset}, _message),
-    do: socket |> put_flash(:error, "Nicht geändert: #{errors(changeset)}") |> refresh()
-
-  defp errors(changeset) do
-    changeset
-    |> Ecto.Changeset.traverse_errors(&translate_error/1)
-    |> Map.values()
-    |> List.flatten()
-    |> Enum.filter(&is_binary/1)
-    |> Enum.uniq()
-    |> Enum.join(", ")
-  end
+    do:
+      socket
+      |> put_flash(:error, "Nicht geändert: #{TransactionDialog.error_message(changeset)}")
+      |> refresh()
 
   defp refresh(socket) do
     socket
@@ -325,13 +407,22 @@ defmodule AbakusWeb.RegisterLive do
 
   defp view_paths(assigns) do
     %{
+      list: register_path(assigns, []),
       filters: Map.new(Rows.filters(), &{&1, register_path(assigns, filter: &1)}),
-      running: register_path(assigns, running: !assigns.running)
+      running: register_path(assigns, running: !assigns.running),
+      new: manual_entry?(assigns) && register_path(assigns, [], "/transactions/new"),
+      edit: &register_path(assigns, [], "/transactions/#{&1}/edit")
     }
   end
 
-  # The register's URL with the view, search and running balance, changed by `changes`; defaults stay out.
-  defp register_path(assigns, changes) do
+  defp manual_entry?(%{account: nil, accounts: accounts}),
+    do: Enum.any?(Map.values(accounts), &TransactionDialog.manual?/1)
+
+  defp manual_entry?(%{account: account}), do: TransactionDialog.manual?(account)
+
+  # The register's URL (or with `suffix` one below it) with the view, search and running balance, changed by
+  # `changes`; defaults stay out.
+  defp register_path(assigns, changes, suffix \\ "") do
     current = %{filter: assigns.filter, q: assigns.query, running: assigns.running}
     %{filter: filter, q: query, running: running} = Map.merge(current, Map.new(changes))
 
@@ -343,29 +434,8 @@ defmodule AbakusWeb.RegisterLive do
       ]
       |> Enum.filter(fn {_key, value} -> value end)
 
-    base = if assigns.account, do: ~p"/accounts/#{assigns.account}", else: ~p"/accounts/all"
+    register = if assigns.account, do: ~p"/accounts/#{assigns.account}", else: ~p"/accounts/all"
+    base = register <> suffix
     if params == [], do: base, else: base <> "?" <> Query.encode(params)
-  end
-
-  # Ready to Assign first, then the visible categories by group, as `options_for_select/2` takes them.
-  defp category_options do
-    ready_to_assign = Categories.ready_to_assign!()
-
-    groups =
-      for group <- Categories.list_category_groups(),
-          not group.hidden,
-          categories = Enum.reject(group.categories, & &1.hidden),
-          categories != [] do
-        {group.name, Enum.map(categories, &{&1.name, &1.id})}
-      end
-
-    [{"Zu verteilen (Einnahme)", ready_to_assign.id} | groups]
-  end
-
-  defp category_ids(options) do
-    Enum.flat_map(options, fn
-      {_group, categories} when is_list(categories) -> Enum.map(categories, &elem(&1, 1))
-      {_name, id} -> [id]
-    end)
   end
 end
