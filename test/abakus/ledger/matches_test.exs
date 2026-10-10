@@ -402,6 +402,15 @@ defmodule Abakus.Ledger.MatchesTest do
     assert Ledger.accept_match(proposal) == {:error, :not_a_proposal}
   end
 
+  test "an accepted proposal is gone, so deciding it again is refused", c do
+    proposal = propose(c)
+    {:ok, _} = Ledger.accept_match(proposal)
+
+    assert Ledger.accept_match(proposal) == {:error, :not_a_proposal}
+    assert Ledger.reject_match(proposal) == {:error, :not_a_proposal}
+    assert Ledger.accept_matches([proposal]) == {:error, :not_a_proposal}
+  end
+
   describe "find_matches/3" do
     defp import_row(date, amount \\ -4_875), do: %{date: date, amount: amount}
 

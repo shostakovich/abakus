@@ -823,7 +823,7 @@ defmodule Abakus.Ledger do
   end
 
   defp pending_proposal(id) do
-    case Repo.get!(Transaction, id) do
+    case Repo.get(Transaction, id) do
       %Transaction{deleted_at: nil, matched_transaction_id: matched} = proposal
       when not is_nil(matched) ->
         {:ok, proposal}

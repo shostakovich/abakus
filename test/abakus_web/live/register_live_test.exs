@@ -643,6 +643,25 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert reload(c.proposal).matched_transaction_id == c.shopping.id
     end
 
+    test "a proposal decided in another tab says so", c do
+      id = c.proposal.id
+      buttons = ["#proposal-#{id}-accept", "#proposal-card-#{id}-reject", "#accept-all-matches"]
+      views = Enum.map(buttons, fn _button -> elem(live(c.conn, ~p"/accounts/#{c.giro}"), 1) end)
+      {:ok, _} = Ledger.accept_match(c.proposal)
+
+      for {view, button} <- Enum.zip(views, buttons) do
+        view |> element(button) |> render_click()
+
+        assert has_element?(
+                 view,
+                 "#flash-error",
+                 "Nicht geändert: Der Zuordnungsvorschlag ist schon entschieden."
+               )
+
+        refute has_element?(view, "#proposal-#{id}")
+      end
+    end
+
     test "Zuordnen asks first when it moves a reconciled counterpart", c do
       counterpart_id = reload(c.transfer).transfer_transaction_id
 
