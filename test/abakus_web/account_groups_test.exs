@@ -10,7 +10,7 @@ defmodule AbakusWeb.AccountGroupsTest do
   @old %Account{id: 4, name: "Alt", kind: :savings, closed: true}
 
   @balances %{
-    1 => %{balance: 10_000, cleared: 12_000, uncleared: -2_000},
+    1 => %{balance: 10_000, cleared: 12_000, uncleared: -2_000, unapproved: 2},
     3 => %{balance: 500_000, cleared: 500_000, uncleared: 0},
     4 => %{balance: 300, cleared: 0, uncleared: 300}
   }
@@ -31,6 +31,18 @@ defmodule AbakusWeb.AccountGroupsTest do
 
     assert Enum.map(budget.rows, &{&1.balance, &1.cleared}) == [{10_000, 12_000}, {0, 0}]
     assert {budget.balance, tracking.balance, closed.balance} == {10_000, 500_000, 300}
+  end
+
+  test "rows count the transactions waiting for approval" do
+    [budget | _] = AccountGroups.build([@giro, @cash], @balances)
+
+    assert Enum.map(budget.rows, & &1.unapproved) == [2, 0]
+  end
+
+  test "rows/1 lists every account, the closed ones included" do
+    groups = AccountGroups.build([@giro, @depot, @old], @balances)
+
+    assert Enum.map(AccountGroups.rows(groups), & &1.account.id) == [1, 3, 4]
   end
 
   test "leaves out empty groups" do

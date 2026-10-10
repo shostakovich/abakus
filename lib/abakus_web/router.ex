@@ -35,6 +35,8 @@ defmodule AbakusWeb.Router do
       live "/accounts", AccountsLive, :index
       live "/accounts/new", AccountsLive, :new
       live "/accounts/:id/edit", AccountsLive, :edit
+      live "/accounts/all", RegisterLive, :all
+      live "/accounts/:id", RegisterLive, :show
     end
   end
 

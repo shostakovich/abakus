@@ -1,16 +1,17 @@
 defmodule AbakusWeb.AccountsLive do
   @moduledoc """
-  The account list (Konten) grouped into budget, tracking and closed accounts with working and cleared balance, and
-  the form to add or edit an account: name, kind and note. Closing and reopening sit beside the edit form; accounts
+  The account list (Konten) grouped into budget, tracking and closed accounts with working and cleared balance, the
+  total and a way into the register of all accounts; each account leads to its register (`AbakusWeb.RegisterLive`).
+  And the form to add or edit an account: name, kind and note. Closing and reopening sit beside the edit form; accounts
   are never deleted. The kind stays on its side of the budget, so editing offers only that side's kinds.
   """
   use AbakusWeb, :live_view
 
   alias Abakus.Ledger
   alias Abakus.Ledger.Account
-  alias AbakusWeb.Format
+  alias AbakusWeb.{AccountGroups, Format}
+  alias AbakusWeb.RegisterLive.Balances
 
-  @kinds [checking: "Girokonto", savings: "Sparkonto", cash: "Bargeld", tracking: "Tracking"]
   @editable ~w(name kind note)
 
   @impl true
@@ -22,7 +23,11 @@ defmodule AbakusWeb.AccountsLive do
       current={:accounts}
       account_groups={@account_groups}
     >
-      <.account_list :if={@live_action == :index} groups={@account_groups} />
+      <.account_list
+        :if={@live_action == :index}
+        groups={@account_groups}
+        total={Balances.all(AccountGroups.rows(@account_groups)).total}
+      />
       <.account_form
         :if={@live_action in [:new, :edit]}
         title={@page_title}
@@ -35,6 +40,7 @@ defmodule AbakusWeb.AccountsLive do
   end
 
   attr :groups, :list, required: true
+  attr :total, :integer, required: true
 
   defp account_list(assigns) do
     ~H"""
@@ -62,11 +68,20 @@ defmodule AbakusWeb.AccountsLive do
           <.link
             :for={row <- group.rows}
             id={"account-#{row.account.id}"}
-            navigate={~p"/accounts/#{row.account}/edit"}
+            navigate={~p"/accounts/#{row.account}"}
             class="list-group-item list-group-item-action d-flex align-items-center gap-3"
           >
             <span class="me-auto app-min-w-0">
-              <span class="d-block fw-semibold text-truncate">{row.account.name}</span>
+              <span class="d-block fw-semibold text-truncate">
+                {row.account.name}
+                <span
+                  :if={row.unapproved > 0}
+                  class="badge rounded-pill text-bg-primary"
+                  title={"#{row.unapproved} zu bestätigen"}
+                >
+                  {row.unapproved}
+                </span>
+              </span>
               <span class="d-block small text-body-secondary text-truncate">
                 {details(row.account)}
               </span>
@@ -89,6 +104,16 @@ defmodule AbakusWeb.AccountsLive do
           </.link>
         </div>
       </section>
+
+      <div :if={@groups != []}>
+        <div class="d-flex justify-content-between small text-uppercase fw-bold mb-3">
+          <span>Gesamt</span>
+          <span id="accounts-total" class={["app-q", @total < 0 && "app-neg"]}>
+            {Format.euros(@total)}
+          </span>
+        </div>
+        <.button variant="light" class="w-100" navigate={~p"/accounts/all"}>Alle Konten</.button>
+      </div>
     </div>
     """
   end
@@ -210,12 +235,12 @@ defmodule AbakusWeb.AccountsLive do
   # The form edits only these; closing has its own buttons, position and feeds are not the user's to set here.
   defp editable(params), do: Map.take(params, @editable)
 
-  defp kind_options(%Account{id: nil}), do: options(@kinds)
+  defp kind_options(%Account{id: nil}), do: options(AccountGroups.kinds())
 
   defp kind_options(account) do
     budget? = Account.budget_account?(account)
 
-    @kinds
+    AccountGroups.kinds()
     |> Enum.filter(fn {kind, _} -> kind in Account.budget_kinds() == budget? end)
     |> options()
   end
@@ -223,7 +248,10 @@ defmodule AbakusWeb.AccountsLive do
   defp options(kinds), do: Enum.map(kinds, fn {kind, label} -> {label, kind} end)
 
   defp details(account),
-    do: [@kinds[account.kind], account.note] |> Enum.reject(&blank?/1) |> Enum.join(" · ")
+    do:
+      [AccountGroups.kind_label(account.kind), account.note]
+      |> Enum.reject(&blank?/1)
+      |> Enum.join(" · ")
 
   defp blank?(text), do: is_nil(text) or String.trim(text) == ""
 

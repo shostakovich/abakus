@@ -15,6 +15,8 @@ defmodule AbakusWeb.Layouts do
     default: [],
     doc: "from `AbakusWeb.AccountGroups`; the sidebar lists the open ones"
 
+  attr :account_id, :integer, default: nil, doc: "the account whose register is shown"
+
   slot :inner_block, required: true
 
   @doc """
@@ -63,7 +65,11 @@ defmodule AbakusWeb.Layouts do
         <.side_links items={main_items()} current={@current} />
       </nav>
       <div class="flex-grow-1 mt-3">
-        <.side_accounts groups={AccountGroups.open(@account_groups)} current={@current} />
+        <.side_accounts
+          groups={AccountGroups.open(@account_groups)}
+          current={@current}
+          account_id={@account_id}
+        />
         <.link
           class="btn btn-sm w-100 my-2 app-side-btn app-side-text"
           {nav_link(~p"/accounts/new", @current)}
@@ -140,6 +146,7 @@ defmodule AbakusWeb.Layouts do
 
   attr :groups, :list, required: true
   attr :current, :atom, required: true
+  attr :account_id, :integer, required: true
 
   defp side_accounts(assigns) do
     ~H"""
@@ -152,11 +159,19 @@ defmodule AbakusWeb.Layouts do
         <.link
           :for={row <- group.rows}
           id={"side-account-#{row.account.id}"}
-          class="nav-link app-acc"
+          class={["nav-link app-acc", row.account.id == @account_id && "active"]}
+          aria-current={row.account.id == @account_id && "page"}
           title={"#{row.account.name} · #{Format.euros(row.balance)}"}
-          {nav_link(~p"/accounts/#{row.account}/edit", @current)}
+          {nav_link(~p"/accounts/#{row.account}", @current)}
         >
           <.account_name name={row.account.name} />
+          <span
+            :if={row.unapproved > 0}
+            class="badge rounded-pill text-bg-primary"
+            title={"#{row.unapproved} zu bestätigen"}
+          >
+            {row.unapproved}
+          </span>
           <span class={["app-bal", row.balance < 0 && "app-neg"]}>{Format.amount(row.balance)}</span>
         </.link>
       </nav>

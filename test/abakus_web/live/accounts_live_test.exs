@@ -48,7 +48,7 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       assert has_element?(
                view,
-               ~s|#account-#{c.giro.id}[href="/accounts/#{c.giro.id}/edit"]|
+               ~s|#account-#{c.giro.id}[href="/accounts/#{c.giro.id}"]|
              )
     end
 
@@ -69,7 +69,7 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       assert has_element?(
                settings,
-               ~s|aside a[href="/accounts/#{c.giro.id}/edit"]:not([data-phx-link])|
+               ~s|aside a[href="/accounts/#{c.giro.id}"]:not([data-phx-link])|
              )
     end
   end

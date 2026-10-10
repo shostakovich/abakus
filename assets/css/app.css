@@ -115,6 +115,70 @@
 .app-inspector .card-header { font-size: .875rem; font-weight: 600; }
 .app-insp-title { font-size: 1.25rem; font-weight: 700; }
 
+/* Register: no horizontal scroll from 1100 px; below 1300 px the memo moves under the payee and dates get short. */
+.app-reg { font-size: .875rem; }
+.app-reg td, .app-reg th { white-space: nowrap; }
+.app-reg th { font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; color: var(--felt-secondary-color); }
+.app-reg .form-check-input { margin-top: 0; vertical-align: middle; }
+.app-reg .app-icon, .app-flag .app-icon { max-width: none; }
+.app-reg .app-pick { width: 2rem; }
+.app-reg .app-flag-col { width: 1.75rem; }
+.app-reg td.app-payee { width: 100%; max-width: 0; }
+.app-reg td.app-konto { max-width: 10.5rem; overflow: hidden; text-overflow: ellipsis; }
+.app-reg td.app-catcol { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
+.app-reg td.app-memo-col { max-width: 14rem; }
+.app-reg .app-short { display: none; }
+@media (max-width: 1299.98px) {
+  .app-reg .app-wide, .app-reg .app-memo-col { display: none; }
+  .app-reg div.app-short { display: block; }
+  .app-reg span.app-short { display: inline; }
+}
+@media (min-width: 1600px) {
+  .app-reg-all td.app-konto { min-width: 11rem; max-width: 12rem; }
+  .app-reg-all td.app-catcol { max-width: 16rem; }
+  .app-reg-all td.app-payee { width: auto; max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
+  .app-reg-all td.app-memo-col { width: 100%; max-width: 0; }
+}
+.app-unapproved > * { --felt-table-accent-bg: color-mix(in srgb, var(--felt-primary) 10%, transparent); }
+.app-unapproved > :first-child { box-shadow: inset 3px 0 0 var(--felt-primary), inset 0 0 0 9999px color-mix(in srgb, var(--felt-primary) 10%, transparent); }
+.app-unapproved .app-payee { font-weight: 700; }
+.app-unapproved-item { box-shadow: inset 3px 0 0 var(--felt-primary); background-color: color-mix(in srgb, var(--felt-primary) 8%, var(--felt-list-group-bg, var(--felt-surface))); }
+.app-approve { padding: .05rem .3rem; margin-right: .3rem; line-height: 1; }
+.app-approve-ph { width: 2.75rem; height: 2.75rem; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.app-clear { width: 1.4rem; height: 1.4rem; padding: 0; border-radius: 50%; font-size: .68rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; border: 1.5px solid var(--felt-border-color); background: transparent; color: var(--felt-secondary-color); }
+.app-clear.is-cleared { background: var(--felt-success); border-color: var(--felt-success); color: #fff; }
+.app-clear.is-reconciled { border-color: transparent; color: var(--felt-success); }
+.app-flag { border: 0; background: none; padding: 0; line-height: 1; color: var(--felt-border-color); }
+.app-flag .app-icon, .app-flag-menu .app-icon { fill: currentColor; }
+.app-flag:not(.is-set) .app-icon { fill: none; }
+.app-reg .app-flag:not(.is-set) { opacity: 0; }
+.app-reg tr:is(:hover, :focus-within, .table-active) .app-flag:not(.is-set), .app-reg .app-flag:focus-visible { opacity: .3; }
+.app-flag-red { color: var(--felt-tomato); }
+.app-flag-orange { color: var(--felt-pumpkin); }
+.app-flag-yellow { color: var(--felt-mustard); }
+.app-flag-green { color: var(--felt-moss); }
+.app-flag-blue { color: var(--felt-denim); }
+.app-flag-purple { color: var(--felt-plum); }
+.app-flag-menu { width: 17rem; }
+.app-bal-compact > summary { list-style: none; cursor: pointer; }
+.app-bal-compact > summary::-webkit-details-marker { display: none; }
+.app-bal-compact[open] .app-sum-chev { transform: rotate(90deg); }
+.app-reg-search { max-width: 14rem; }
+.app-bulk-cat { max-width: 15rem; }
+.app-side .badge { font-size: .65rem; flex-shrink: 0; }
+.app-side-mini .app-side .badge { display: none; }
+@media (max-width: 767.98px) {
+  .app-banner { font-size: .875rem; }
+  .app-banner .btn { padding-block: .15rem; }
+  .app-reg-search { max-width: none; flex: 1 1 auto; width: auto; min-width: 0; }
+  .app-reg-search .form-control { min-width: 0; width: 1%; }
+  .app-reg-tools .dropdown { margin-left: 0 !important; }
+  .app-reg-meta > :nth-child(n+3) { display: none !important; }
+  .app-unapproved-item { padding-block: .375rem; }
+  .app-payee-ph { font-size: .875rem; font-weight: 600; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+  .app-ph-l2 { margin-top: .25rem; }
+}
+
 /* Bar widths without inline styles (the CSP allows none). */
 .app-w-0 { width: 0%; } .app-w-1 { width: 1%; } .app-w-2 { width: 2%; } .app-w-3 { width: 3%; } .app-w-4 { width: 4%; } .app-w-5 { width: 5%; } .app-w-6 { width: 6%; } .app-w-7 { width: 7%; } .app-w-8 { width: 8%; } .app-w-9 { width: 9%; }
 .app-w-10 { width: 10%; } .app-w-11 { width: 11%; } .app-w-12 { width: 12%; } .app-w-13 { width: 13%; } .app-w-14 { width: 14%; } .app-w-15 { width: 15%; } .app-w-16 { width: 16%; } .app-w-17 { width: 17%; } .app-w-18 { width: 18%; } .app-w-19 { width: 19%; }

@@ -556,6 +556,60 @@ defmodule Abakus.Ledger.TransactionsTest do
     assert {newer_id, older_id} == {newer.id, older.id}
   end
 
+  test "list_transactions(:all) lists every account's register with payees and categories" do
+    payee = payee_fixture()
+    category = category_fixture()
+    giro = account_fixture()
+    cash = account_fixture(kind: :cash)
+    older = transaction_fixture(account_id: giro.id, date: ~D[2026-10-01], payee_id: payee.id)
+    newer = transaction_fixture(account_id: cash.id, category_id: category.id)
+    deleted = transaction_fixture(account_id: cash.id)
+    {:ok, _deleted} = Ledger.delete_transaction(deleted)
+
+    assert [listed_newer, listed_older] = Ledger.list_transactions(:all)
+    assert {listed_newer.id, listed_older.id} == {newer.id, older.id}
+    assert listed_older.payee.name == payee.name
+    assert listed_newer.category.category_group.id == category.category_group_id
+    assert listed_newer.subtransactions == []
+  end
+
+  describe "update_transactions/3" do
+    setup do
+      account = account_fixture()
+
+      %{
+        first: transaction_fixture(account_id: account.id, approved: false),
+        second: transaction_fixture(account_id: account.id, approved: false),
+        reconciled:
+          transaction_fixture(account_id: account.id, approved: false, cleared: :reconciled)
+      }
+    end
+
+    test "changes every transaction", c do
+      assert {:ok, [first, second]} =
+               Ledger.update_transactions([c.first, c.second], %{approved: true})
+
+      assert first.approved and second.approved
+    end
+
+    test "changes none when one is refused", c do
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Ledger.update_transactions([c.first, c.reconciled], %{approved: true})
+
+      assert "ist abgeschlossen" in errors_on(changeset).cleared
+      refute Repo.get!(Transaction, c.first.id).approved
+    end
+
+    test "passes the options on", c do
+      assert {:ok, [_first, reconciled]} =
+               Ledger.update_transactions([c.first, c.reconciled], %{approved: true},
+                 reconciled: :confirmed
+               )
+
+      assert reconciled.approved
+    end
+  end
+
   describe "references" do
     test "transfer counterparts are the Ledger's, a matched transaction must exist" do
       account = account_fixture()

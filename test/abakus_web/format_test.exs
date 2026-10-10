@@ -12,6 +12,12 @@ defmodule AbakusWeb.FormatTest do
       assert Format.amount(100_000_000_000) == "1.000.000.000,00"
       assert Format.euros(-999) == "−9,99 €"
     end
+
+    test "signed_euros/1 marks inflows with a plus" do
+      assert Format.signed_euros(4_875) == "+48,75 €"
+      assert Format.signed_euros(-4_875) == "−48,75 €"
+      assert Format.signed_euros(0) == "0,00 €"
+    end
   end
 
   describe "parse_amount/1" do
@@ -56,6 +62,13 @@ defmodule AbakusWeb.FormatTest do
       assert Format.month_short(~D[2026-03-15]) == "Mär"
       assert Format.month_short(~D[2026-10-01]) == "Okt"
       assert Format.month_year(~D[2026-12-31]) == "Dezember 2026"
+    end
+  end
+
+  describe "dates" do
+    test "with and without the year" do
+      assert Format.date(~D[2026-03-07]) == "07.03.2026"
+      assert Format.day(~D[2026-03-07]) == "07.03."
     end
   end
 end

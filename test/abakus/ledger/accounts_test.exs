@@ -144,7 +144,7 @@ defmodule Abakus.Ledger.AccountsTest do
     end
   end
 
-  test "balances/0 sums each account's register, cleared including reconciled" do
+  test "balances/0 sums each account's register, cleared including reconciled, and counts the unapproved" do
     giro = account_fixture()
     cash = account_fixture(%{kind: :cash})
     _empty = account_fixture()
@@ -152,13 +152,13 @@ defmodule Abakus.Ledger.AccountsTest do
     for {amount, cleared} <- [{10_000, :reconciled}, {-2_500, :cleared}, {-1_000, :uncleared}],
         do: transaction_fixture(%{account_id: giro.id, amount: amount, cleared: cleared})
 
-    transaction_fixture(%{account_id: cash.id, amount: -300})
-    deleted = transaction_fixture(%{account_id: cash.id, amount: -99_999})
+    transaction_fixture(%{account_id: cash.id, amount: -300, approved: false})
+    deleted = transaction_fixture(%{account_id: cash.id, amount: -99_999, approved: false})
     {:ok, _deleted} = Ledger.delete_transaction(deleted)
 
     assert Ledger.balances() == %{
-             giro.id => %{balance: 6_500, cleared: 7_500, uncleared: -1_000},
-             cash.id => %{balance: -300, cleared: 0, uncleared: -300}
+             giro.id => %{balance: 6_500, cleared: 7_500, uncleared: -1_000, unapproved: 0},
+             cash.id => %{balance: -300, cleared: 0, uncleared: -300, unapproved: 1}
            }
   end
 

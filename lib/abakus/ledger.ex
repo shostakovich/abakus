@@ -114,15 +114,20 @@ defmodule Abakus.Ledger do
   end
 
   @doc """
-  The account's transactions, newest first, with their subtransactions; without deleted ones and match proposals,
-  which count nowhere (see `list_match_proposals/1`).
+  The account's transactions, or with `:all` every account's, newest first, with payee, category (and its group)
+  and subtransactions; without deleted ones and match proposals, which count nowhere (see
+  `list_match_proposals/1`).
   """
-  def list_transactions(%Account{id: account_id}) do
+  def list_transactions(%Account{id: account_id}),
+    do: list_register(from t in in_register(), where: t.account_id == ^account_id)
+
+  def list_transactions(:all), do: list_register(in_register())
+
+  defp list_register(query) do
     Repo.all(
-      from t in in_register(),
-        where: t.account_id == ^account_id,
+      from t in query,
         order_by: [desc: t.date, desc: t.id],
-        preload: :subtransactions
+        preload: [:payee, category: :category_group, subtransactions: [:payee, :category]]
     )
   end
 
@@ -143,8 +148,8 @@ defmodule Abakus.Ledger do
     do: from(t in Transaction, where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id))
 
   @doc """
-  Each account's register as `%{balance, cleared, uncleared}` by account id; cleared counts reconciled
-  transactions too. Accounts without transactions are missing.
+  Each account's register as `%{balance, cleared, uncleared, unapproved}` by account id; cleared counts reconciled
+  transactions too, unapproved is how many wait for approval. Accounts without transactions are missing.
   """
   def balances do
     Repo.all(
@@ -155,7 +160,8 @@ defmodule Abakus.Ledger do
            %{
              balance: sum(t.amount),
              cleared: coalesce(filter(sum(t.amount), t.cleared != :uncleared), 0),
-             uncleared: coalesce(filter(sum(t.amount), t.cleared == :uncleared), 0)
+             uncleared: coalesce(filter(sum(t.amount), t.cleared == :uncleared), 0),
+             unapproved: filter(count(t.id), not t.approved)
            }}
     )
     |> Map.new()
@@ -263,6 +269,28 @@ defmodule Abakus.Ledger do
       |> Transaction.changeset(attrs)
       |> write(&Repo.update/1, opts)
     end)
+  end
+
+  @doc """
+  Applies the same change to several transactions with `update_transaction/3`, all or none: the first refusal
+  stops and returns its changeset.
+  """
+  def update_transactions(transactions, attrs, opts \\ []) do
+    Repo.transact(fn ->
+      transactions
+      |> Enum.reduce_while({:ok, []}, &update_next(&1, &2, attrs, opts))
+      |> case do
+        {:ok, updated} -> {:ok, Enum.reverse(updated)}
+        error -> error
+      end
+    end)
+  end
+
+  defp update_next(transaction, {:ok, updated}, attrs, opts) do
+    case update_transaction(transaction, attrs, opts) do
+      {:ok, transaction} -> {:cont, {:ok, [transaction | updated]}}
+      error -> {:halt, error}
+    end
   end
 
   # Validates and saves inside the caller's database transaction; the accounts and counterparts involved are
