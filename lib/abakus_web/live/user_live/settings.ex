@@ -83,6 +83,11 @@ defmodule AbakusWeb.UserLive.Settings do
               <.button phx-disable-with="Wird gesendet …">E-Mail ändern</.button>
             </.form>
           </.card>
+
+          <.card title="Aussehen" id="appearance">
+            <p class="text-body-secondary">Gilt für dieses Gerät.</p>
+            <Layouts.theme_switch />
+          </.card>
         </div>
       </div>
     </Layouts.app>

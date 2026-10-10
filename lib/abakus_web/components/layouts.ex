@@ -9,17 +9,80 @@ defmodule AbakusWeb.Layouts do
   attr :current, :atom, default: nil, values: [nil, :budget, :settings]
   slot :inner_block, required: true
 
+  @doc """
+  Signed-in pages: a dark sidebar as in YNAB, collapsible to an icon rail (remembered per device by `SideToggle`);
+  phones get a header instead.
+  """
   def app(assigns) do
     ~H"""
-    <a class="visually-hidden-focusable btn btn-primary m-2" href="#main">Zum Inhalt springen</a>
+    <a class="visually-hidden-focusable btn btn-primary m-2 app-skip" href="#main">Zum Inhalt springen</a>
 
-    <header class="container d-flex flex-wrap align-items-center gap-2 py-3 mb-2">
-      <.link class="fw-bold fs-5 text-decoration-none text-body me-2" {nav_link(~p"/", @current)}>
-        Abakus
+    <aside class="app-side d-none d-lg-flex flex-column" data-bs-theme="dark">
+      <div class="dropdown pt-3 pb-2" phx-click-away={hide_dropdown("#side-menu", "#side-brand")}>
+        <button
+          type="button"
+          id="side-brand"
+          class="btn w-100 text-start d-flex align-items-center gap-2 border-0 text-reset app-side-brand"
+          aria-expanded="false"
+          aria-controls="side-menu"
+          title={"Abakus · #{@current_scope.user.email}"}
+          phx-click={toggle_dropdown("#side-menu", "#side-brand")}
+        >
+          <img src={~p"/images/icon.svg"} alt="" width="30" height="30" />
+          <span class="me-auto lh-sm app-side-text app-min-w-0">
+            <span class="d-block fw-bold">Abakus</span>
+            <span class="d-block small opacity-75 text-truncate">{@current_scope.user.email}</span>
+          </span>
+          <.icon name="down" class="app-icon-sm app-side-text" />
+        </button>
+        <ul id="side-menu" class="dropdown-menu" data-bs-popper="static">
+          <li><.link class="dropdown-item" href={~p"/users/settings"}>Einstellungen</.link></li>
+          <li><hr class="dropdown-divider" /></li>
+          <li>
+            <.link
+              id="log-out"
+              class="dropdown-item"
+              href={~p"/users/log-out"}
+              method="delete"
+              title={@current_scope.user.email}
+            >
+              Abmelden
+            </.link>
+          </li>
+        </ul>
+      </div>
+      <nav class="nav flex-column gap-1" aria-label="Hauptnavigation">
+        <.side_links items={main_items()} current={@current} />
+      </nav>
+      <div class="flex-grow-1"></div>
+      <nav class="nav flex-column pt-2 border-top" aria-label="Weitere">
+        <.side_links items={more_items()} current={@current} />
+      </nav>
+      <div class="d-flex justify-content-end py-2">
+        <button
+          type="button"
+          id="side-toggle"
+          class="btn btn-sm app-side-toggle"
+          aria-label="Seitenleiste einklappen"
+          title="Seitenleiste einklappen"
+          phx-hook="SideToggle"
+          phx-update="ignore"
+        >
+          <.icon name="sidebar" />
+        </button>
+      </div>
+    </aside>
+
+    <header class="d-flex d-lg-none flex-wrap align-items-center gap-2 px-3 pt-3">
+      <.link
+        class="fw-bold fs-5 text-decoration-none text-body me-auto d-flex align-items-center gap-2"
+        {nav_link(~p"/", @current)}
+      >
+        <img src={~p"/images/icon.svg"} alt="" width="26" height="26" /> Abakus
       </.link>
-      <nav class="me-auto" aria-label="Hauptnavigation">
+      <nav aria-label="Hauptnavigation">
         <ul class="nav nav-pills">
-          <li :for={{key, label, path} <- nav_items()} class="nav-item">
+          <li :for={{key, label, _icon, path} <- main_items() ++ more_items()} class="nav-item">
             <.link
               class={["nav-link", @current == key && "active"]}
               aria-current={@current == key && "page"}
@@ -30,27 +93,37 @@ defmodule AbakusWeb.Layouts do
           </li>
         </ul>
       </nav>
-      <.theme_switch />
-      <.link
-        id="log-out"
-        href={~p"/users/log-out"}
-        method="delete"
-        class="btn btn-sm btn-outline-secondary"
-        title={@current_scope.user.email}
-      >
+      <.link href={~p"/users/log-out"} method="delete" class="btn btn-sm btn-outline-secondary">
         Abmelden
       </.link>
     </header>
 
-    <main class="container pb-5" id="main">
+    <main class="app container-fluid px-3" id="main">
       <.flash_group flash={@flash} />
       {render_slot(@inner_block)}
     </main>
     """
   end
 
-  defp nav_items,
-    do: [{:budget, "Budget", ~p"/"}, {:settings, "Einstellungen", ~p"/users/settings"}]
+  attr :items, :list, required: true
+  attr :current, :atom, required: true
+
+  defp side_links(assigns) do
+    ~H"""
+    <.link
+      :for={{key, label, icon, path} <- @items}
+      class={["nav-link", @current == key && "active"]}
+      aria-current={@current == key && "page"}
+      title={label}
+      {nav_link(path, @current)}
+    >
+      <.icon name={icon} /><span class="app-side-text">{label}</span>
+    </.link>
+    """
+  end
+
+  defp main_items, do: [{:budget, "Budget", "budget", ~p"/"}]
+  defp more_items, do: [{:settings, "Einstellungen", "gear", ~p"/users/settings"}]
 
   # The settings have a live_session of their own behind the sudo plug, so links into and out
   # of them load the page.

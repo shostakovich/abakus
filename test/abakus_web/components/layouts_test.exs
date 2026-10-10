@@ -27,6 +27,7 @@ defmodule AbakusWeb.LayoutsTest do
 
     [script] = document |> LazyHTML.query("head script#theme-script") |> Enum.to_list()
     assert LazyHTML.text(script) =~ ~s|localStorage.getItem("theme")|
+    assert LazyHTML.text(script) =~ ~s|localStorage.getItem("side")|
 
     # The stored theme has to be applied before felt.css paints the page.
     {script_at, _} = :binary.match(html, ~s(id="theme-script"))
@@ -41,13 +42,13 @@ defmodule AbakusWeb.LayoutsTest do
     budget = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
     settings = conn |> get(~p"/users/settings") |> html_response(200) |> LazyHTML.from_document()
 
-    assert budget |> LazyHTML.query(~s|nav a[href="/"][data-phx-link]|) |> Enum.count() == 1
+    budget_links = budget |> LazyHTML.query(~s|a[href="/"]|) |> Enum.to_list()
+    settings_links = budget |> LazyHTML.query(~s|a[href="/users/settings"]|) |> Enum.to_list()
 
-    assert budget
-           |> LazyHTML.query(~s|nav a[href="/users/settings"][data-phx-link]|)
-           |> Enum.empty?()
-
-    assert settings |> LazyHTML.query("header a[data-phx-link]") |> Enum.empty?()
+    assert budget_links != [] and settings_links != []
+    assert Enum.all?(budget_links, &(LazyHTML.attribute(&1, "data-phx-link") != []))
+    assert Enum.all?(settings_links, &(LazyHTML.attribute(&1, "data-phx-link") == []))
+    assert settings |> LazyHTML.query("a[data-phx-link]") |> Enum.empty?()
   end
 
   test "the manifest is served as a static file and lists installable icons", %{conn: conn} do

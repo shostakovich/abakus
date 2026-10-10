@@ -25,6 +25,16 @@ defmodule AbakusWeb.CoreComponentsTest do
     end
   end
 
+  test "icon/1 uses a symbol of the icon sprite, hidden from screen readers" do
+    icon =
+      render_component(&CoreComponents.icon/1, name: "budget", class: "app-icon-sm")
+      |> LazyHTML.from_fragment()
+
+    assert LazyHTML.attribute(LazyHTML.query(icon, "svg"), "class") == ["app-icon app-icon-sm"]
+    assert LazyHTML.attribute(LazyHTML.query(icon, "svg"), "aria-hidden") == ["true"]
+    assert LazyHTML.attribute(LazyHTML.query(icon, "use"), "href") == ["/images/icons.svg#budget"]
+  end
+
   describe "flash_group/1" do
     # felt.css hides [hidden] with !important, so JS.show alone never reveals the alerts.
     for id <- ["client-error", "server-error"] do

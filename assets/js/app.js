@@ -3,6 +3,7 @@ import { Socket } from "phoenix"
 import { LiveSocket } from "phoenix_live_view"
 
 import { PasskeyLogin, PasskeyRegister } from "./hooks/passkey.js"
+import { SideToggle } from "./hooks/sidebar.js"
 import { ThemeSwitch } from "./hooks/theme.js"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -10,7 +11,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: { _csrf_token: csrfToken },
-  hooks: { PasskeyLogin, PasskeyRegister, ThemeSwitch },
+  hooks: { PasskeyLogin, PasskeyRegister, SideToggle, ThemeSwitch },
 })
 
 liveSocket.connect()

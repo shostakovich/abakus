@@ -7,7 +7,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
 
   describe "Settings page" do
     test "renders settings page", %{conn: conn} do
-      {:ok, _lv, html} =
+      {:ok, lv, html} =
         conn
         |> log_in_user(user_fixture())
         |> live(~p"/users/settings")
@@ -15,6 +15,17 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       assert html =~ "E-Mail ändern"
       assert html =~ "Passkey hinzufügen"
       refute html =~ "Passwort"
+      assert has_element?(lv, ~s|aside nav a.active[aria-current=page][href="/users/settings"]|)
+    end
+
+    test "chooses the theme under Aussehen", %{conn: conn} do
+      {:ok, lv, _html} = conn |> log_in_user(user_fixture()) |> live(~p"/users/settings")
+
+      assert has_element?(lv, "#appearance #theme-switch[phx-hook=ThemeSwitch]")
+
+      for label <- ["Hell", "Dunkel", "Auto"] do
+        assert has_element?(lv, "#theme-switch label", label)
+      end
     end
 
     test "redirects if user is not logged in", %{conn: conn} do

@@ -10,26 +10,20 @@ defmodule AbakusWeb.BudgetLiveTest do
   describe "signed in" do
     setup :register_and_log_in_user
 
-    test "the start page shows the budget placeholder and the navigation", %{
+    test "the start page shows the budget placeholder in the sidebar's layout", %{
       conn: conn,
       user: user
     } do
-      {:ok, view, html} = live(conn, ~p"/")
+      {:ok, view, _html} = live(conn, ~p"/")
 
-      assert html =~ "<h1"
       assert has_element?(view, "h1", "Budget")
-      assert has_element?(view, "#theme-switch[phx-hook=ThemeSwitch]")
-
-      for label <- ["Hell", "Dunkel", "Auto"] do
-        assert has_element?(view, "#theme-switch label", label)
-      end
-
-      assert has_element?(view, ~s|nav a.active[aria-current=page][href="/"]|, "Budget")
-      assert has_element?(view, ~s|nav a[href="/users/settings"]|, "Einstellungen")
+      assert has_element?(view, ~s|aside nav a.active[aria-current=page][href="/"]|, "Budget")
+      assert has_element?(view, ~s|aside a[href="/users/settings"]|, "Einstellungen")
+      assert has_element?(view, "aside #side-toggle[phx-hook=SideToggle]")
 
       assert has_element?(
                view,
-               ~s|#log-out[href="/users/log-out"][data-method=delete][title="#{user.email}"]|,
+               ~s|aside #log-out[href="/users/log-out"][data-method=delete][title="#{user.email}"]|,
                "Abmelden"
              )
     end

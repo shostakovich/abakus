@@ -1,9 +1,19 @@
 defmodule AbakusWeb.CoreComponents do
   @moduledoc false
   use Phoenix.Component
+  use AbakusWeb, :verified_routes
 
   alias Phoenix.HTML.Form
   alias Phoenix.LiveView.JS
+
+  attr :name, :string, required: true, doc: "a symbol in priv/static/images/icons.svg"
+  attr :class, :any, default: nil
+
+  def icon(assigns) do
+    ~H"""
+    <svg class={["app-icon", @class]} aria-hidden="true"><use href={"#{~p"/images/icons.svg"}##{@name}"} /></svg>
+    """
+  end
 
   attr :title, :string, default: nil
   attr :subtitle, :string, default: nil
@@ -361,6 +371,19 @@ defmodule AbakusWeb.CoreComponents do
       {_, value} -> to_string(value)
       nil -> fallback
     end
+  end
+
+  @doc "Opens or closes a dropdown menu; felt-css places it below its toggle by `data-bs-popper=\"static\"`."
+  def toggle_dropdown(js \\ %JS{}, menu, toggle) do
+    js
+    |> JS.toggle_class("show", to: menu)
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: toggle)
+  end
+
+  def hide_dropdown(js \\ %JS{}, menu, toggle) do
+    js
+    |> JS.remove_class("show", to: menu)
+    |> JS.set_attribute({"aria-expanded", "false"}, to: toggle)
   end
 
   def show(js \\ %JS{}, selector) do

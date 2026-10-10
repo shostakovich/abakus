@@ -1,1 +1,28 @@
 .app-auth { max-width: 26rem; }
+
+/* Secondary text a step stronger than felt's default: at least 4.5:1 on cards, selected rows and raised surfaces. */
+:root { --side-w: 18.5rem; --felt-secondary-color: light-dark(#5f6779, #b0b8c2); }
+:root.app-side-mini { --side-w: 4rem; }
+.app-min-w-0 { min-width: 0; }
+.app-icon { width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.app-icon-sm { width: 1rem; height: 1rem; }
+.app { padding-top: 1rem; padding-bottom: 3rem; }
+.app-skip { position: absolute; z-index: 1040; }
+/* dark: cards one step further from the page */
+.card { border-color: light-dark(var(--felt-border-color), rgb(255 255 255 / .16)); }
+
+/* Shell: a dark sidebar as in YNAB, collapsible to an icon rail. */
+.app-side { position: fixed; inset: 0 auto 0 0; width: var(--side-w); z-index: 1030; overflow: hidden auto; background: color-mix(in srgb, #1d2550 72%, var(--felt-body-bg)); color: var(--felt-body-color); }
+.app-side > * { padding-inline: .5rem .75rem !important; }
+.app-side .nav { flex-wrap: nowrap; }
+.app-side .nav-link { color: inherit; border-radius: var(--felt-radius); padding: .35rem .5rem; display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.app-side .nav-link:hover, .app-side .nav-link.active { background: rgb(255 255 255 / .12); }
+.app-side-toggle { color: inherit; opacity: .75; }
+.app-side-toggle:hover { opacity: 1; }
+.app-side-mini .app-side > * { padding-inline: .25rem !important; }
+.app-side-mini .app-side-text { display: none !important; }
+.app-side-mini .app-side .nav-link { justify-content: center; }
+.app-side-mini .app-side-brand { justify-content: center; padding-inline: 0; }
+.app-side-mini .app-side-toggle svg { transform: scaleX(-1); }
+.app-side-mini .app-side > :last-child { justify-content: center !important; }
+@media (min-width: 992px) { body { padding-left: var(--side-w); } }
