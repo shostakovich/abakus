@@ -88,9 +88,10 @@ tables have no user: all users see everything.
 - **Months** (assignment, target version, snooze) are stored as the first of the month; every function takes any day
   of it, as a date or ISO 8601 string.
 - **Assignment**: category, month, amount (may be negative); one per category and month
-- **Target version**: category, from month, cadence (monthly, yearly, none = no target from then on), amount
-  (positive), due on (yearly only, not before from month), set aside (YNAB `goal_needs_whole_amount`: "set aside
-  another" vs. "refill up to"). A version applies until the next one, so changing a target keeps past months.
+- **Target version**: category, from month, cadence (monthly, by date, none = no target from then on), amount
+  (positive), due on (by date only, not before from month), repeats yearly (by date only), set aside (YNAB
+  `goal_needs_whole_amount`: "set aside another" vs. "refill up to"). A version applies until the next one, so
+  changing a target keeps past months.
 - **Target snooze**: category, month; one per category and month (snoozing again returns the one there is)
 - **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
   `reconciled`), approved (manual entries by default, imports and API entries not), flag (red, orange, yellow,
@@ -171,7 +172,8 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
 - Income is what is categorised "Ready to Assign", the only income category; it is available in the month it is
   dated. Inflows to other categories (refunds) are valid and count as those categories' activity.
 - Targets: only YNAB's **needed for spending** (`NEED`), the one type in use:
-  - monthly amount, or yearly amount due on a date (spread over the months until then)
+  - monthly amount, or amount by a date (spread over the months until then); after its month one that repeats
+    yearly starts again, the others ask nothing
   - "set aside another" (`goal_needs_whole_amount` true: assigned this month counts) or "refill up to" (false:
     what is carried counts, plus what is assigned)
   - per category and month: underfunded amount, progress, snoozed (still underfunded, as YNAB's inspector and
@@ -266,7 +268,8 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   ([ADR 0002](adr/0002-ynab-reimport-replaces.md)); the run reports what differs from YNAB's numbers
 - The API keeps no target history: months before a target's creation month show it too but ask nothing, so a
   target starts in its creation month; payees with the same lookup key are merged; data Abakus cannot represent
-  (credit cards, loans, other targets, amounts that are not whole cents) stops the import before it writes
+  (credit cards, loans, targets other than monthly, yearly or by a date without repeat, amounts that are not
+  whole cents) stops the import before it writes
 - Checks after the import: per month RTA, and per category assigned, activity, available and underfunded
   (`goal_under_funded`) equal the export's month numbers; account balances equal
 
@@ -321,7 +324,8 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
 
 ## Open
 
-- How YNAB computes `goal_under_funded` for yearly targets with a date in detail (rounding up to the cent
-  matched a test plan's export; check against the owner's budget)
+- How YNAB computes `goal_under_funded` for targets by a date in detail (rounding up to the cent matched a test
+  plan's export; check against the owner's budget), and what it reports after the date of one that does not
+  repeat (Abakus asks nothing then)
 - Which banks show up in Enable Banking's restricted mode and their `maximum_consent_validity` (needs the
   owner's Enable Banking account)

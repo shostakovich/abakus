@@ -18,9 +18,10 @@ defmodule Abakus.BudgetPropertyTest do
 
   defp target do
     gen all(
-          cadence <- member_of([:monthly, :yearly]),
+          cadence <- member_of([:monthly, :by_date]),
           amount <- integer(1..50_000),
           set_aside <- boolean(),
+          repeats_yearly <- boolean(),
           from <- integer(0..5),
           due <- integer(0..30)
         ) do
@@ -29,7 +30,8 @@ defmodule Abakus.BudgetPropertyTest do
         cadence: cadence,
         amount: amount,
         set_aside: set_aside,
-        due_on: if(cadence == :yearly, do: Date.shift(month(from + due), day: 14))
+        repeats_yearly: cadence == :by_date and repeats_yearly,
+        due_on: if(cadence == :by_date, do: Date.shift(month(from + due), day: 14))
       }
     end
   end

@@ -48,7 +48,7 @@ defmodule AbakusWeb.BudgetLive.Status do
   def target_line(%CategoryMonth{} = row) do
     spent = -row.activity
     budgeted = row.carried + row.assigned
-    funded = if row.target.cadence == :yearly, do: "Im Plan", else: "Finanziert"
+    funded = if row.target.cadence == :by_date, do: "Im Plan", else: "Finanziert"
 
     cond do
       row.snoozed ->

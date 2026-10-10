@@ -8,7 +8,7 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   @nov ~D[2026-11-01]
 
   @monthly %{cadence: :monthly}
-  @yearly %{cadence: :yearly}
+  @by_date %{cadence: :by_date}
 
   defp row(attrs), do: struct!(CategoryMonth, Enum.into(attrs, %{month: @oct}))
 
@@ -75,7 +75,7 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       assert %{title: "Finanziert", bars: [{100, "bg-success"}]} =
                Status.target_line(row(target: @monthly, assigned: 100, available: 100))
 
-      assert %{title: "Im Plan"} = Status.target_line(row(target: @yearly, available: 100))
+      assert %{title: "Im Plan"} = Status.target_line(row(target: @by_date, available: 100))
     end
   end
 

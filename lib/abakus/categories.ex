@@ -183,15 +183,16 @@ defmodule Abakus.Categories do
 
   @doc """
   Sets a category's target from a month on (attrs: `from_month`, any day of it, `cadence`, `amount`, `due_on`,
-  `set_aside`); replaces a version that starts in the same month. Cadence `none` removes the target from that
-  month on.
+  `repeats_yearly`, `set_aside`); replaces a version that starts in the same month. Cadence `none` removes the
+  target from that month on.
   """
   def set_target(%Category{} = category, attrs) do
     %TargetVersion{category_id: category.id}
     |> TargetVersion.changeset(attrs)
     |> validate_regular(category)
     |> Repo.insert(
-      on_conflict: {:replace, [:cadence, :amount, :due_on, :set_aside, :updated_at]},
+      on_conflict:
+        {:replace, [:cadence, :amount, :due_on, :repeats_yearly, :set_aside, :updated_at]},
       conflict_target: [:category_id, :from_month],
       returning: true
     )
