@@ -168,6 +168,7 @@
 .app-flag-blue { color: var(--felt-denim); }
 .app-flag-purple { color: var(--felt-plum); }
 .app-flag-menu { width: 17rem; }
+.app-reconcile-menu { width: 20rem; max-width: calc(100vw - 2rem); }
 .app-bal-compact > summary { list-style: none; cursor: pointer; }
 .app-bal-compact > summary::-webkit-details-marker { display: none; }
 .app-bal-compact[open] .app-sum-chev { transform: rotate(90deg); }
