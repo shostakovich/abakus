@@ -20,6 +20,13 @@ defmodule AbakusWeb.FormatTest do
     end
   end
 
+  test "count/1 groups by three with a dot" do
+    assert Format.count(0) == "0"
+    assert Format.count(842) == "842"
+    assert Format.count(1_842) == "1.842"
+    assert Format.count(1_000_000) == "1.000.000"
+  end
+
   describe "parse_amount/1" do
     test "reads German and plain amounts into cents" do
       for {text, cents} <- [

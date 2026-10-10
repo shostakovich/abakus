@@ -14,14 +14,20 @@ defmodule Abakus.Categories do
   alias Abakus.{Budget, Ledger, Names, References, Repo}
   alias Ecto.Changeset
 
-  @doc "Groups with their categories in budget order, without the internal ones."
-  def list_category_groups do
-    categories = from c in Category, where: not c.internal, order_by: [c.position, c.id]
+  @doc """
+  Groups with their categories in budget order, without the internal ones; with `internal: true` the internal group
+  with Ready to Assign comes first, as in YNAB's API.
+  """
+  def list_category_groups(opts \\ []) do
+    internal? = Keyword.get(opts, :internal, false)
+
+    categories =
+      from c in Category, where: ^internal? or not c.internal, order_by: [c.position, c.id]
 
     Repo.all(
       from g in CategoryGroup,
-        where: not g.internal,
-        order_by: [g.position, g.id],
+        where: ^internal? or not g.internal,
+        order_by: [desc: g.internal, asc: g.position, asc: g.id],
         preload: [categories: ^categories]
     )
   end

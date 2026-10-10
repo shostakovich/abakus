@@ -524,6 +524,7 @@ defmodule Abakus.UsersTest do
       passkey = passkey_fixture(user, authenticator)
 
       assert Users.delete_passkey(user_fixture(), passkey.id) == {:error, :not_found}
+      assert Users.delete_passkey(user, "99999999999999999999") == {:error, :not_found}
       assert {:ok, _passkey} = Users.delete_passkey(user, passkey.id)
       assert Users.list_passkeys(user) == []
     end

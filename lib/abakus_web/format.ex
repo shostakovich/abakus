@@ -11,11 +11,13 @@ defmodule AbakusWeb.Format do
 
   @doc ~S|Cents as "1.234,56", negative with a real minus sign: "−9,99".|
   def amount(cents) when is_integer(cents) do
-    euros = cents |> abs() |> div(100) |> Integer.to_string()
-    grouped = Regex.replace(~r/\B(?=(\d{3})+$)/, euros, ".")
     rest = cents |> abs() |> rem(100) |> Integer.to_string() |> String.pad_leading(2, "0")
-    "#{if cents < 0, do: "−"}#{grouped},#{rest}"
+    "#{if cents < 0, do: "−"}#{cents |> abs() |> div(100) |> count()},#{rest}"
   end
+
+  @doc ~S|A count of things with a dot between groups of three: "1.842".|
+  def count(number) when is_integer(number) and number >= 0,
+    do: Regex.replace(~r/\B(?=(\d{3})+$)/, Integer.to_string(number), ".")
 
   def euros(cents), do: amount(cents) <> " €"
 

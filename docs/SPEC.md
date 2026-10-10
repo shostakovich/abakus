@@ -39,9 +39,9 @@ The context is `Abakus.Users` (an "account" is a bank account here):
   per session, dropped from the session on any attempt. A sign-in challenge travels in the signed session, so
   anonymous requests store nothing; a challenge that signed someone in is recorded (as a hash, in ETS) until
   it expires and refused again, failed attempts record nothing. A registration challenge stays on the server;
-  at most 1 000 are open at a time, beyond that the server asks to try again. Changing passkeys or the email
-  needs a sign-in within 10 minutes, which sends the user back to the settings afterwards; signing in again
-  keeps open tabs working. A new passkey is announced by mail
+  at most 1 000 are open at a time, beyond that the server asks to try again. Changing passkeys, API tokens or
+  the email needs a sign-in within 10 minutes, which sends the user back to the settings afterwards; signing in
+  again keeps open tabs working. A new passkey is announced by mail
 - Tests fake the authenticator with `:crypto` and break every check once
 - Public internet: nothing is reachable without a session except `/up`, `/api/v1` (bearer token) and
   `/mcp/<secret>` (a test walks all routes)
@@ -214,8 +214,11 @@ Exactly what the existing YNAB API clients (a shared-expenses app) use today, so
 and token. Same paths, field names, milliunits, envelopes (`{"data": …}`) and error format
 (`{"error": {"id", "name", "detail"}}`) as YNAB API v1 with "plans".
 
-- Auth: `Authorization: Bearer <token>`; tokens are created and revoked in the settings, stored hashed
-- `GET /api/v1/plans?include_accounts=true` — the one budget with its accounts
+- Auth: `Authorization: Bearer <token>`; tokens (`abk_…`, shown once) are created and revoked in the settings,
+  stored as SHA-256 with name, created at and last used at; revoking takes effect with the next request
+- IDs: the budget is the one plan with the fixed id `abakus`; everything else has its Abakus id as a string. YNAB
+  ids are not translated: the client finds its transactions again by the marker in its memos
+- `GET /api/v1/plans?include_accounts=true` — the one budget with its accounts (always included)
 - `GET /api/v1/plans/{plan_id}/categories`
 - `GET /api/v1/plans/{plan_id}/accounts/{account_id}`
 - `GET /api/v1/plans/{plan_id}/accounts/{account_id}/transactions` (optional `since_date`; like YNAB without
@@ -224,8 +227,13 @@ and token. Same paths, field names, milliunits, envelopes (`{"data": …}`) and 
 - `PATCH /api/v1/plans/{plan_id}/transactions` with `{"transactions": […]}` (by `id`)
 - `DELETE /api/v1/plans/{plan_id}/transactions/{transaction_id}`
 - Transaction fields: `id`, `date`, `amount`, `payee_name`, `memo`, `account_id`, `category_id`, `cleared`,
-  `approved`, `deleted`; reconciled transactions can be read but not changed (409)
-- Accounts carry YNAB's `balance`, `cleared_balance` and `uncleared_balance`
+  `approved`, `deleted`; all but `id` and `deleted` are writable, any other field (splits, flags, `import_id`) is
+  refused (400), as are amounts that are not whole cents. Writes are all or none. A change the Ledger refuses as
+  altering a reconciled transaction or counterpart answers 409; a PATCH of a deleted transaction returns it
+  unchanged; match proposals are not known to the API. Errors: 400 `bad_request`, 401 `not_authorized`, 404.2
+  `resource_not_found`, 409 `conflict`, details in German
+- Accounts carry YNAB's `balance`, `cleared_balance` and `uncleared_balance`; tracking accounts are `otherAsset`.
+  Categories list the internal group with Ready to Assign first and hidden ones with `hidden`
 - Contract: the client's own fake YNAB server describes what it expects; Abakus has request specs for the same
   cases. Other YNAB endpoints only when a client needs them (e.g. a portfolio app's FI forecast).
 
@@ -268,7 +276,9 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 - **Konten**: account list, register, reconcile
 - **Buchung**: transaction form (FAB on phones)
 - **Import & Sync**: file import with preview, bank connections with consent expiry
-- **Mehr**: categories and groups, passkeys, API tokens, MCP, YNAB import, look and theme
+- **Mehr**: the settings in three sections: Zugang & API (passkeys, email, API tokens), Aussehen (theme, per
+  device) and YNAB-Import (what the import brought over); MCP joins them in v2. Categories and groups are edited
+  in the budget
 
 State that should survive a reload (screen, month, account, filters) lives in the URL; the number of months
 follows the window.

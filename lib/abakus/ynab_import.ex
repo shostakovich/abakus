@@ -10,7 +10,10 @@ defmodule Abakus.YnabImport do
 
   alias Abakus.Ledger.Transaction
   alias Abakus.Repo
-  alias Abakus.YnabImport.{Check, Client, Loader, Report, Unsupported}
+  alias Abakus.YnabImport.{Check, Client, Loader, Report, Status, Unsupported}
+
+  @doc "What the last import brought over and when (`Status`), or nil when nothing came from YNAB."
+  defdelegate status, to: Status, as: :read
 
   @doc "The personal access token from `YNAB_TOKEN`."
   def token do

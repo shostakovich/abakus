@@ -53,7 +53,9 @@ defmodule AbakusWeb.Layouts do
           <.icon name="down" class="app-icon-sm app-side-text" />
         </button>
         <ul id="side-menu" class="dropdown-menu" data-bs-popper="static">
-          <li><.link class="dropdown-item" href={~p"/users/settings"}>Einstellungen</.link></li>
+          <li>
+            <.link class="dropdown-item" {nav_link(~p"/settings", @current)}>Einstellungen</.link>
+          </li>
           <li><hr class="dropdown-divider" /></li>
           <li>
             <.link
@@ -233,15 +235,12 @@ defmodule AbakusWeb.Layouts do
   defp more_items, do: [import_item("Import & Sync"), settings_item()]
 
   defp import_item(label), do: {:import, label, "sync", ~p"/import"}
-  defp settings_item, do: {:settings, "Einstellungen", "gear", ~p"/users/settings"}
+  defp settings_item, do: {:settings, "Einstellungen", "gear", ~p"/settings"}
 
-  # The settings have a live_session of their own behind the sudo plug, so links into and out
-  # of them load the page.
-  defp nav_link(path, current) do
-    if path == ~p"/users/settings" or current == :settings,
-      do: [href: path],
-      else: [navigate: path]
-  end
+  # Zugang & API has a live_session of its own behind the sudo plug; links on the settings pages, which lead into
+  # and out of it, load the page.
+  defp nav_link(path, :settings), do: [href: path]
+  defp nav_link(path, _current), do: [navigate: path]
 
   attr :flash, :map, required: true
   slot :inner_block, required: true

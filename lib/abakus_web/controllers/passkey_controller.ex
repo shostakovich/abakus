@@ -63,7 +63,7 @@ defmodule AbakusWeb.PasskeyController do
       # The hook sends the user to sign in again, and the sign-in back here.
       not sudo_mode_for_ceremony?(user) ->
         conn
-        |> put_session(:user_return_to, ~p"/users/settings")
+        |> put_session(:user_return_to, ~p"/settings/access")
         |> put_status(:forbidden)
         |> json(%{error: "sudo"})
 

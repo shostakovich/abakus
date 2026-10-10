@@ -388,7 +388,7 @@ defmodule AbakusWeb.UserAuthTest do
                UserAuth.on_mount(:require_sudo_mode, %{}, session, socket)
 
       # The page's plug stores the way back before it sends the user to sign in.
-      assert updated_socket.redirected == {:redirect, %{to: ~p"/users/settings", status: 302}}
+      assert updated_socket.redirected == {:redirect, %{to: ~p"/settings/access", status: 302}}
     end
   end
 

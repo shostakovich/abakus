@@ -182,7 +182,7 @@ defmodule AbakusWeb.UserAuth do
       {:cont, socket}
     else
       # Through the page's plug, which sends the user to sign in and back.
-      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/users/settings")}
+      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/settings/access")}
     end
   end
 

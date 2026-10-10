@@ -154,7 +154,7 @@ defmodule AbakusWeb.PasskeyControllerTest do
       conn = post(conn, ~p"/users/settings/passkeys/options", %{name: "Mac"})
 
       assert json_response(conn, 403) == %{"error" => "sudo"}
-      assert get_session(conn, :user_return_to) == ~p"/users/settings"
+      assert get_session(conn, :user_return_to) == ~p"/settings/access"
     end
 
     # Signed in 6 minutes ago: sudo mode ends before the 5-minute ceremony could.

@@ -1,7 +1,7 @@
 defmodule AbakusWeb.UserLive.SettingsTest do
   use AbakusWeb.ConnCase
 
-  alias Abakus.Users
+  alias Abakus.{ApiTokens, Users}
   import Phoenix.LiveViewTest
   import Abakus.UsersFixtures
 
@@ -10,26 +10,16 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       {:ok, lv, html} =
         conn
         |> log_in_user(user_fixture())
-        |> live(~p"/users/settings")
+        |> live(~p"/settings/access")
 
       assert html =~ "E-Mail ändern"
       assert html =~ "Passkey hinzufügen"
       refute html =~ "Passwort"
-      assert has_element?(lv, ~s|aside nav a.active[aria-current=page][href="/users/settings"]|)
-    end
-
-    test "chooses the theme under Aussehen", %{conn: conn} do
-      {:ok, lv, _html} = conn |> log_in_user(user_fixture()) |> live(~p"/users/settings")
-
-      assert has_element?(lv, "#appearance #theme-switch[phx-hook=ThemeSwitch]")
-
-      for label <- ["Hell", "Dunkel", "Auto"] do
-        assert has_element?(lv, "#theme-switch label", label)
-      end
+      assert has_element?(lv, ~s|aside nav a.active[aria-current=page][href="/settings"]|)
     end
 
     test "redirects if user is not logged in", %{conn: conn} do
-      assert {:error, redirect} = live(conn, ~p"/users/settings")
+      assert {:error, redirect} = live(conn, ~p"/settings/access")
 
       assert {:redirect, %{to: path, flash: flash}} = redirect
       assert path == ~p"/users/log-in"
@@ -42,7 +32,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
         |> log_in_user(user_fixture(),
           token_authenticated_at: DateTime.add(DateTime.utc_now(), -11, :minute)
         )
-        |> live(~p"/users/settings")
+        |> live(~p"/settings/access")
         |> follow_redirect(conn, ~p"/users/log-in")
 
       assert conn.resp_body =~ "Bitte melde dich für diese Änderung erneut an."
@@ -58,7 +48,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
     test "updates the user email", %{conn: conn, user: user} do
       new_email = unique_user_email()
 
-      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
 
       result =
         lv
@@ -72,7 +62,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
     end
 
     test "renders errors with invalid data (phx-change)", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
 
       result =
         lv
@@ -87,7 +77,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
     end
 
     test "renders errors with invalid data (phx-submit)", %{conn: conn, user: user} do
-      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
 
       result =
         lv
@@ -118,7 +108,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       {:error, redirect} = live(conn, ~p"/users/settings/confirm-email/#{token}")
 
       assert {:live_redirect, %{to: path, flash: flash}} = redirect
-      assert path == ~p"/users/settings"
+      assert path == ~p"/settings/access"
       assert %{"info" => message} = flash
       assert message == "Die E-Mail-Adresse ist geändert."
       refute Users.get_user_by_email(user.email)
@@ -127,7 +117,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       # use confirm token again
       {:error, redirect} = live(conn, ~p"/users/settings/confirm-email/#{token}")
       assert {:live_redirect, %{to: path, flash: flash}} = redirect
-      assert path == ~p"/users/settings"
+      assert path == ~p"/settings/access"
       assert %{"error" => message} = flash
       assert message == "Der Link ist ungültig oder abgelaufen."
     end
@@ -151,7 +141,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
     test "does not update email with invalid token", %{conn: conn, user: user} do
       {:error, redirect} = live(conn, ~p"/users/settings/confirm-email/oops")
       assert {:live_redirect, %{to: path, flash: flash}} = redirect
-      assert path == ~p"/users/settings"
+      assert path == ~p"/settings/access"
       assert %{"error" => message} = flash
       assert message == "Der Link ist ungültig oder abgelaufen."
       assert Users.get_user_by_email(user.email)
@@ -175,7 +165,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       conn = post(conn, ~p"/users/log-in", %{"user" => %{"token" => link_token}})
       assert redirected_to(conn) == path
 
-      assert {:error, {:live_redirect, %{to: "/users/settings", flash: flash}}} =
+      assert {:error, {:live_redirect, %{to: "/settings/access", flash: flash}}} =
                live(recycle(conn), path)
 
       assert flash["info"] == "Die E-Mail-Adresse ist geändert."
@@ -196,7 +186,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
     setup :register_and_log_in_user
 
     test "lists, refreshes and deletes the user's passkeys", %{conn: conn, user: user} do
-      {:ok, lv, html} = live(conn, ~p"/users/settings")
+      {:ok, lv, html} = live(conn, ~p"/settings/access")
       assert html =~ "Noch kein Passkey hinterlegt."
       assert has_element?(lv, "#passkey-register[phx-hook=PasskeyRegister]")
       # The hook owns the form: a re-render (e.g. for an error flash) keeps the typed name.
@@ -214,7 +204,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
 
     test "cannot delete another user's passkey", %{conn: conn} do
       passkey = passkey_fixture(user_fixture())
-      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
 
       assert render_click(lv, "delete_passkey", %{"id" => passkey.id}) =~
                "Den Passkey gibt es nicht mehr."
@@ -227,10 +217,75 @@ defmodule AbakusWeb.UserLive.SettingsTest do
     setup :register_and_log_in_user
 
     test "ignores one that is not a number", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
 
       assert render_click(lv, "delete_passkey", %{"id" => "abc"}) =~
                "Den Passkey gibt es nicht mehr."
+    end
+  end
+
+  describe "API tokens" do
+    setup :register_and_log_in_user
+
+    test "creates a token, shows it once and lists it", %{conn: conn} do
+      {:ok, lv, html} = live(conn, ~p"/settings/access")
+
+      assert html =~ "http://localhost:4002/api/v1"
+      assert has_element?(lv, "#api-tokens", "Noch kein Token angelegt.")
+
+      html =
+        lv
+        |> form("#api-token-form", %{"api_token" => %{"name" => "Zipfelkasse"}})
+        |> render_submit()
+
+      assert [api_token] = ApiTokens.list_api_tokens()
+      assert [_, token] = Regex.run(~r/(abk_[\w-]+)/, html)
+      assert {:ok, _} = ApiTokens.authenticate(token)
+      assert has_element?(lv, "#api-token-#{api_token.id}", "Zipfelkasse")
+      assert has_element?(lv, "#api-token-#{api_token.id}", "nie genutzt")
+
+      {:ok, _lv, html} = live(conn, ~p"/settings/access")
+      refute html =~ token
+    end
+
+    test "asks for a name", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
+
+      html = lv |> form("#api-token-form", %{"api_token" => %{"name" => " "}}) |> render_submit()
+
+      assert html =~ "muss ausgefüllt werden"
+      assert ApiTokens.list_api_tokens() == []
+    end
+
+    test "revokes a token after asking", %{conn: conn} do
+      {:ok, token, api_token} = ApiTokens.create_api_token(%{name: "Zipfelkasse"})
+      {:ok, _} = ApiTokens.authenticate(token)
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
+
+      button = element(lv, "#api-token-#{api_token.id} button", "Widerrufen")
+      assert render(button) =~ "data-confirm"
+      assert render(lv) =~ "zuletzt genutzt"
+
+      render_click(button)
+
+      assert ApiTokens.authenticate(token) == :error
+      refute has_element?(lv, "#api-token-#{api_token.id}")
+      assert render_click(lv, "revoke_api_token", %{"id" => api_token.id}) =~ "gibt es nicht mehr"
+    end
+
+    test "revoking hides the token shown once", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
+
+      lv
+      |> form("#api-token-form", %{"api_token" => %{"name" => "Zipfelkasse"}})
+      |> render_submit()
+
+      assert [api_token] = ApiTokens.list_api_tokens()
+      assert has_element?(lv, "#new-api-token")
+
+      lv |> element("#api-token-#{api_token.id} button", "Widerrufen") |> render_click()
+
+      refute has_element?(lv, "#new-api-token")
     end
   end
 
@@ -240,7 +295,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       user = user_fixture()
       conn = log_in_user(conn, user)
       token = get_session(conn, :user_token)
-      {:ok, lv, _html} = live(conn, ~p"/users/settings")
+      {:ok, lv, _html} = live(conn, ~p"/settings/access")
       %{lv: lv, user: user, conn: conn, token: token}
     end
 
@@ -252,21 +307,21 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       passkey = passkey_fixture(user)
       close_sudo_window(ctx.token)
 
-      assert {:error, {:redirect, %{to: "/users/settings"}}} =
+      assert {:error, {:redirect, %{to: "/settings/access"}}} =
                render_click(lv, "delete_passkey", %{"id" => passkey.id})
 
       assert [_passkey] = Users.list_passkeys(user)
 
-      conn = get(conn, ~p"/users/settings")
+      conn = get(conn, ~p"/settings/access")
       assert redirected_to(conn) == ~p"/users/log-in"
       conn = get(conn, ~p"/users/log-in")
       assert html_response(conn, 200) =~ "Bitte melde dich für diese Änderung erneut an."
 
       {link_token, _hashed_token} = generate_user_magic_link_token(user)
       conn = post(conn, ~p"/users/log-in", %{"user" => %{"token" => link_token}})
-      assert redirected_to(conn) == ~p"/users/settings"
+      assert redirected_to(conn) == ~p"/settings/access"
 
-      {:ok, lv, _html} = live(recycle(conn), ~p"/users/settings")
+      {:ok, lv, _html} = live(recycle(conn), ~p"/settings/access")
       lv |> element("#passkey-#{passkey.id} button", "Löschen") |> render_click()
       assert Users.list_passkeys(user) == []
     end
@@ -274,7 +329,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
     test "cannot change the email past the sudo window", %{lv: lv, token: token} do
       close_sudo_window(token)
 
-      assert {:error, {:redirect, %{to: "/users/settings"}}} =
+      assert {:error, {:redirect, %{to: "/settings/access"}}} =
                lv
                |> form("#email-form", %{"user" => %{"email" => unique_user_email()}})
                |> render_submit()
@@ -282,11 +337,32 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       refute_received {:email, %{subject: "Abakus: neue E-Mail-Adresse bestätigen"}}
     end
 
+    test "cannot revoke a token past the sudo window", %{lv: lv, token: token} do
+      {:ok, _token, api_token} = ApiTokens.create_api_token(%{name: "Zipfelkasse"})
+      close_sudo_window(token)
+
+      assert {:error, {:redirect, %{to: "/settings/access"}}} =
+               render_click(lv, "revoke_api_token", %{"id" => api_token.id})
+
+      assert [%{name: "Zipfelkasse"}] = ApiTokens.list_api_tokens()
+    end
+
+    test "cannot create a token past the sudo window", %{lv: lv, token: token} do
+      close_sudo_window(token)
+
+      assert {:error, {:redirect, %{to: "/settings/access"}}} =
+               lv
+               |> form("#api-token-form", %{"api_token" => %{"name" => "Neu"}})
+               |> render_submit()
+
+      assert ApiTokens.list_api_tokens() == []
+    end
+
     test "cannot change anything once the session is gone", %{lv: lv, user: user, token: token} do
       passkey = passkey_fixture(user)
       Users.delete_user_session_token(token)
 
-      assert {:error, {:redirect, %{to: "/users/settings"}}} =
+      assert {:error, {:redirect, %{to: "/settings/access"}}} =
                render_click(lv, "delete_passkey", %{"id" => passkey.id})
 
       assert [_passkey] = Users.list_passkeys(user)

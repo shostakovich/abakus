@@ -262,7 +262,7 @@ defmodule Abakus.Users do
 
   @doc "Deletes one of the user's passkeys; `id` may come from the client as it is."
   def delete_passkey(%User{} = user, id) do
-    with {:ok, id} <- Ecto.Type.cast(:id, id),
+    with {:ok, id} <- Abakus.Schema.cast_id(id),
          %Passkey{} = passkey <- Repo.get_by(Passkey, id: id, user_id: user.id) do
       Repo.delete(passkey)
     else

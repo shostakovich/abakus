@@ -272,3 +272,9 @@ body:has(.app-modal) { overflow: hidden; }
 
 /* file import */
 .app-drop { border: 2px dashed var(--felt-border-color); border-radius: var(--felt-radius-lg); cursor: pointer; }
+
+/* Settings: the section navigation beside one section; phones show one or the other. */
+.app-settings-content { max-width: 52rem; }
+.app-settings-nav .app-nav-sub { color: var(--felt-secondary-color); }
+.app-settings-nav .active .app-nav-sub { color: inherit; opacity: .85; }
+@media (min-width: 992px) { .app-settings-nav .list-group-item { padding-block: .6rem !important; } }
