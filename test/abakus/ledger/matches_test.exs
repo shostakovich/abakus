@@ -23,6 +23,8 @@ defmodule Abakus.Ledger.MatchesTest do
   end
 
   defp propose(c, attrs \\ %{}) do
+    {external_id, attrs} = attrs |> Map.new() |> Map.pop(:external_id, "tx-7")
+
     {:ok, proposal} =
       attrs
       |> Enum.into(%{
@@ -36,7 +38,7 @@ defmodule Abakus.Ledger.MatchesTest do
       })
       |> Ledger.create_transaction()
 
-    {:ok, _} = Ledger.add_origin(proposal, :bank, "tx-7")
+    {:ok, _} = Ledger.add_origin(proposal, :bank, external_id)
     proposal
   end
 
@@ -398,5 +400,149 @@ defmodule Abakus.Ledger.MatchesTest do
     proposal = propose(c)
     {:ok, _} = Ledger.reject_match(proposal)
     assert Ledger.accept_match(proposal) == {:error, :not_a_proposal}
+  end
+
+  test "an accepted proposal is gone, so deciding it again is refused", c do
+    proposal = propose(c)
+    {:ok, _} = Ledger.accept_match(proposal)
+
+    assert Ledger.accept_match(proposal) == {:error, :not_a_proposal}
+    assert Ledger.reject_match(proposal) == {:error, :not_a_proposal}
+    assert Ledger.accept_matches([proposal]) == {:error, :not_a_proposal}
+  end
+
+  describe "find_matches/3" do
+    defp import_row(date, amount \\ -4_875), do: %{date: date, amount: amount}
+
+    test "proposes the closest date within 10 days, on a tie the older transaction", c do
+      before = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-01], amount: -4_875)
+      later = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-13], amount: -4_875)
+
+      find =
+        &ids(Ledger.find_matches(c.account, :file, Enum.map(&1, fn date -> import_row(date) end)))
+
+      assert find.([~D[2026-10-04]]) == [c.manual.id]
+      assert find.([~D[2026-10-02]]) == [before.id]
+      # Once 10-03 is taken, 10-01 and 10-13 are both six days from 10-07.
+      assert find.([~D[2026-10-07], ~D[2026-10-03]]) == [before.id, c.manual.id]
+      assert find.([~D[2026-10-23]]) == [later.id]
+      assert find.([~D[2026-10-24]]) == [nil]
+    end
+
+    test "proposes the closest pair, whichever import comes first", c do
+      at = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-05], amount: -450)
+      early = import_row(~D[2026-10-01], -450)
+      same_day = import_row(~D[2026-10-05], -450)
+
+      assert ids(Ledger.find_matches(c.account, :file, [early, same_day])) == [nil, at.id]
+      assert ids(Ledger.find_matches(c.account, :file, [same_day, early])) == [at.id, nil]
+    end
+
+    test "matches a transaction once, with the same amount in the same account", c do
+      other = account_fixture()
+      transaction_fixture(account_id: other.id, date: ~D[2026-10-03], amount: -4_875)
+
+      assert ids(
+               Ledger.find_matches(c.account, :file, [
+                 import_row(~D[2026-10-04]),
+                 import_row(~D[2026-10-03]),
+                 import_row(~D[2026-10-03], -4_876)
+               ])
+             ) == [nil, c.manual.id, nil]
+    end
+
+    test "leaves out reconciled, deleted, already proposed and already imported transactions",
+         c do
+      at = ~D[2026-10-03]
+      reconciled = transaction_fixture(account_id: c.account.id, date: at, cleared: :reconciled)
+      deleted = transaction_fixture(account_id: c.account.id, date: at)
+      {:ok, _} = Ledger.delete_transaction(deleted)
+      imported = transaction_fixture(account_id: c.account.id, date: at, source: :file)
+      {:ok, _} = Ledger.add_origin(imported, :file, "MM-1")
+      from_ynab = transaction_fixture(account_id: c.account.id, date: at, source: :ynab)
+      {:ok, _} = Ledger.add_origin(from_ynab, :ynab, "ynab-1")
+      propose(c)
+
+      rows = [import_row(at, -1_250), import_row(at, -1_250), import_row(at)]
+
+      assert ids(Ledger.find_matches(c.account, :file, rows)) == [from_ynab.id, nil, nil]
+      assert ids(Ledger.find_matches(c.account, :bank, rows)) == [imported.id, from_ynab.id, nil]
+      refute reconciled.id in ids(Ledger.find_matches(c.account, :bank, rows))
+    end
+
+    test "looks up more amounts than SQLite takes variables", c do
+      rows = Enum.map(1..40_000, &import_row(~D[2026-10-03], -&1))
+
+      assert c.manual.id in ids(Ledger.find_matches(c.account, :file, rows))
+    end
+
+    test "finds nothing without imports", c do
+      assert Ledger.find_matches(c.account, :file, []) == []
+    end
+  end
+
+  defp ids(transactions), do: Enum.map(transactions, &(&1 && &1.id))
+
+  test "the newest reconciled transaction's date, of the register", c do
+    assert Ledger.last_reconciled_date(c.account) == nil
+
+    transaction_fixture(account_id: c.account.id, date: ~D[2026-09-15], cleared: :reconciled)
+
+    deleted =
+      transaction_fixture(account_id: c.account.id, date: ~D[2026-09-30], cleared: :reconciled)
+
+    {:ok, _} = Ledger.delete_transaction(deleted, reconciled: :confirmed)
+    transaction_fixture(date: ~D[2026-10-01], cleared: :reconciled)
+
+    assert Ledger.last_reconciled_date(c.account) == ~D[2026-09-15]
+  end
+
+  test "proposals wait for approval in the balances but add nothing to them", c do
+    propose(c)
+
+    assert Ledger.balances()[c.account.id] == %{
+             balance: -4_875,
+             cleared: 0,
+             uncleared: -4_875,
+             unapproved: 1
+           }
+  end
+
+  test "lists every account's proposals with what they would merge into", c do
+    proposal = propose(c)
+    other = account_fixture()
+    elsewhere = transaction_fixture(account_id: other.id, amount: -100)
+    other_proposal = propose(%{c | account: other, manual: elsewhere}, amount: -100)
+
+    assert [%{id: first, matched_transaction: %Transaction{payee: nil}}, %{id: second}] =
+             Ledger.list_match_proposals(:all)
+
+    assert {first, second} == {other_proposal.id, proposal.id}
+  end
+
+  describe "accept_matches/2" do
+    test "accepts all or none", c do
+      proposal = propose(c)
+      blank = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-02], amount: -999)
+      other = propose(c, amount: -999, matched_transaction_id: blank.id, external_id: "tx-8")
+
+      assert {:ok, [_, _]} = Ledger.accept_matches([proposal, other])
+      assert Ledger.list_match_proposals(c.account) == []
+      assert Repo.get!(Transaction, blank.id).approved
+    end
+
+    test "the first refusal stops", c do
+      proposal = propose(c)
+      blank = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-02], amount: -999)
+      other = propose(c, amount: -999, matched_transaction_id: blank.id, external_id: "tx-8")
+
+      Repo.update_all(from(t in Transaction, where: t.id == ^blank.id),
+        set: [cleared: :reconciled]
+      )
+
+      assert {:error, changeset} = Ledger.accept_matches([proposal, other])
+      assert %{matched_transaction_id: ["ist abgeschlossen"]} = errors_on(changeset)
+      assert length(Ledger.list_match_proposals(c.account)) == 2
+    end
   end
 end

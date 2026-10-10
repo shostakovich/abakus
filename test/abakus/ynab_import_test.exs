@@ -5,7 +5,7 @@ defmodule Abakus.YnabImportTest do
 
   alias Abakus.{Categories, FakeYnab, Ledger, YnabImport}
   alias Abakus.Categories.{Assignment, Category, CategoryGroup, TargetSnooze, TargetVersion}
-  alias Abakus.Ledger.{Account, Payee, Transaction}
+  alias Abakus.Ledger.{Account, BankBalance, Payee, Transaction}
   alias Abakus.YnabImport.Report
 
   @fixture Path.expand("../fixtures/ynab/plan.json", __DIR__)
@@ -130,6 +130,18 @@ defmodule Abakus.YnabImportTest do
 
       assert {:ok, %Report{differences: []}} = YnabImport.import_plan(@plan)
       assert content() == first
+    end
+
+    test "replaces accounts that have a bank balance" do
+      {:ok, _balance} =
+        Ledger.put_bank_balance(account_fixture(), %{
+          amount: 1,
+          date: ~D[2026-10-07],
+          source: :file
+        })
+
+      assert {:ok, %Report{}} = YnabImport.import_plan(@plan)
+      assert Repo.aggregate(BankBalance, :count) == 0
     end
 
     test "lists what differs from YNAB and keeps the data" do

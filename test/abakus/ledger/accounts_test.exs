@@ -169,6 +169,47 @@ defmodule Abakus.Ledger.AccountsTest do
     assert Enum.map(Ledger.list_accounts(), & &1.id) == [first.id, second.id]
   end
 
+  describe "link_ofx_account/3" do
+    test "remembers the file's account, so it finds the account again" do
+      account = account_fixture()
+
+      assert {:ok, %Account{ofx_bank_id: "10020030", ofx_acct_id: "DE02"}} =
+               Ledger.link_ofx_account(account, "10020030", "DE02")
+
+      assert Ledger.get_account_by_ofx("10020030", "DE02").id == account.id
+      assert Ledger.get_account_by_ofx("10020031", "DE02") == nil
+      assert Ledger.get_account_by_ofx(nil, "DE02") == nil
+    end
+
+    test "finds a card account by its account id alone" do
+      account = account_fixture()
+      {:ok, _account} = Ledger.link_ofx_account(account, nil, "4111")
+
+      assert Ledger.get_account_by_ofx(nil, "4111").id == account.id
+      assert Ledger.get_account_by_ofx("1", "4111") == nil
+    end
+
+    test "takes the file's account from the account that had it, and replaces the account's own" do
+      old = account_fixture()
+      new = account_fixture()
+      {:ok, _old} = Ledger.link_ofx_account(old, "1", "A")
+
+      assert {:ok, _new} = Ledger.link_ofx_account(new, "1", "A")
+      assert Ledger.get_account_by_ofx("1", "A").id == new.id
+      assert %Account{ofx_bank_id: nil, ofx_acct_id: nil} = Repo.reload!(old)
+
+      assert {:ok, _new} = Ledger.link_ofx_account(new, "1", "B")
+      assert Ledger.get_account_by_ofx("1", "A") == nil
+    end
+
+    test "the account form does not change the link" do
+      {:ok, account} = Ledger.link_ofx_account(account_fixture(), "1", "A")
+
+      assert {:ok, %Account{ofx_bank_id: "1", ofx_acct_id: "A"}} =
+               Ledger.update_account(account, %{name: "Neu", ofx_bank_id: "2", ofx_acct_id: "B"})
+    end
+  end
+
   test "an account cannot be deleted while its transfer payee exists" do
     account = account_fixture()
     assert_raise Ecto.ConstraintError, fn -> Repo.delete(account) end

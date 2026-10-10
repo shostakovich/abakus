@@ -23,6 +23,10 @@ defmodule Abakus.Ledger.Account do
     field :position, :integer, default: 0
     field :last_reconciled_at, :utc_datetime_usec
 
+    # The account in the files it is imported from (BANKID, none for a card, and ACCTID).
+    field :ofx_bank_id, :string
+    field :ofx_acct_id, :string
+
     has_one :transfer_payee, Payee, foreign_key: :transfer_account_id
 
     timestamps()
@@ -41,6 +45,10 @@ defmodule Abakus.Ledger.Account do
   def takes_category?(account, %__MODULE__{} = other),
     do: budget_account?(account) and not budget_account?(other)
 
+  @doc "Whether the UI offers manual entry and file import for the account: open and not fed by another app."
+  def takes_entries?(%__MODULE__{closed: closed, fed_by: fed_by}),
+    do: not closed and is_nil(fed_by)
+
   @doc "The kinds of budget accounts."
   def budget_kinds, do: @budget_kinds
 
@@ -50,6 +58,13 @@ defmodule Abakus.Ledger.Account do
     |> validate_required([:name, :kind])
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_budget_side()
+  end
+
+  @doc "Links the account to a file's account; set by the file import, not the account form."
+  def ofx_changeset(account, bank_id, acct_id) do
+    account
+    |> change(ofx_bank_id: bank_id, ofx_acct_id: acct_id)
+    |> unique_constraint(:ofx_acct_id, name: :accounts_ofx_account_index)
   end
 
   # Moving an account on or off budget would rewrite the budget's history.

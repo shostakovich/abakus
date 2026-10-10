@@ -36,7 +36,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     cleared: "Buchung",
     name: "Empfänger",
     transfer_transaction_id: "Gegenbuchung",
-    transfer_subtransaction_id: "Buchung"
+    transfer_subtransaction_id: "Buchung",
+    matched_transaction_id: "Zugeordnete Buchung"
   }
 
   @impl true
@@ -830,12 +831,12 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   # The register's account if it takes manual entries, else the first that does, budget accounts first.
   defp default_account_id(%{account: account, accounts: accounts}) do
-    if account && manual?(account) do
+    if account && Account.takes_entries?(account) do
       account.id
     else
       case accounts
            |> Map.values()
-           |> Enum.filter(&manual?/1)
+           |> Enum.filter(&Account.takes_entries?/1)
            |> groups()
            |> AccountGroups.rows() do
         [%{account: first} | _rest] -> first.id
@@ -843,9 +844,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       end
     end
   end
-
-  @doc "Whether manual entries go into the account: open and not fed by another app."
-  def manual?(%Account{closed: closed, fed_by: fed_by}), do: not closed and is_nil(fed_by)
 
   defp sides(nil), do: []
   defp sides(transaction), do: [transaction | transaction.subtransactions]
@@ -1024,6 +1022,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @doc "The errors of a transaction's changeset as one text, each with its field's label and a split's by part."
   def error_message(text) when is_binary(text), do: text
+  def error_message(:not_a_proposal), do: "Der Zuordnungsvorschlag ist schon entschieden."
 
   def error_message(%Ecto.Changeset{} = changeset) do
     changeset
@@ -1052,7 +1051,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   defp account_options(assigns) do
     assigns.accounts
     |> Map.values()
-    |> Enum.filter(&(manual?(&1) or &1.id in assigns.kept_accounts))
+    |> Enum.filter(&(Account.takes_entries?(&1) or &1.id in assigns.kept_accounts))
     |> grouped()
   end
 

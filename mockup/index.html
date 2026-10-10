@@ -496,7 +496,7 @@
                 <input type="file" class="form-control form-control-sm mt-2" id="imp-input" accept=".qfx,.ofx" data-imp-file>
               </label>
               <button type="button" class="btn btn-outline-secondary btn-sm" data-imp-sample>Beispieldatei laden</button>
-              <div class="small text-body-secondary">Doppelte Buchungen erkennt Abakus an der FITID der Bank. Buchungen ohne FITID werden mit offenen manuellen Buchungen (Betrag, ±5 Tage) zugeordnet.</div>
+              <div class="small text-body-secondary">Doppelte Buchungen erkennt Abakus an der FITID der Bank; Buchungen mit gleichem Betrag (±10 Tage) werden zur Zuordnung vorgeschlagen.</div>
             </div>
             <div class="col-lg-8" data-imp-preview hidden>
               <div class="card">
@@ -513,7 +513,7 @@
                   <div class="row g-2 align-items-center">
                     <div class="col-sm-5 small">Konto in der Datei<div class="fw-semibold">DE12 5001 … 4411 (Nordbank Direkt)</div><div class="text-body-secondary">Banksaldo laut Datei: <span class="tabular-nums text-nowrap" data-imp-bank></span></div></div>
                     <div class="col-sm-1 text-center d-none d-sm-block"><svg class="app-icon" aria-hidden="true"><use href="#i-chevron"/></svg></div>
-                    <div class="col-sm-6"><label class="form-label small mb-1" for="imp-acc">Abakus-Konto</label><select class="form-select form-select-sm" id="imp-acc"><option>Girokonto</option><option selected>Girokonto Nordbank</option><option>Geteilt</option></select></div>
+                    <div class="col-sm-6"><label class="form-label small mb-1" for="imp-acc">Abakus-Konto</label><select class="form-select form-select-sm" id="imp-acc"><option>Girokonto</option><option selected>Girokonto Nordbank</option></select></div>
                   </div>
                 </div>
                 <div class="table-responsive">

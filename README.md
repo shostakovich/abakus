@@ -7,7 +7,8 @@ meant to replace YNAB for my own use. **The user interface is German.**
 ## Status
 
 Sign-in with magic link and passkeys, the budget math, the YNAB import, the budget view on desktop, the account
-list and the register, where transactions are edited in place as in YNAB. File import and the API come next.
+list, the register, where transactions are edited in place as in YNAB, and the OFX/QFX file import with match
+proposals. The API comes next.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, API, phases
 - `mockup/`: click dummy with example data, built with [felt-css](https://felt-css.rocu.de/)

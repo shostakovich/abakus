@@ -13,6 +13,44 @@ defmodule Abakus.Ledger.Matches do
   alias Ecto.Changeset
 
   @locked "kann bei einem offenen Zuordnungsvorschlag nicht geändert werden"
+  @days 10
+
+  @doc "How many days an import's date may be from the transaction it matches."
+  def days, do: @days
+
+  @doc """
+  The candidate each import matches, nil for none, in the imports' order: the same amount, at most `days/0` days
+  apart. The closest pairs are matched first, on a tie the older transaction (earlier date, then lower id), then the
+  older import; each import and each candidate is matched once.
+  """
+  def pick(imports, candidates) do
+    by_amount = Enum.group_by(candidates, & &1.amount)
+
+    matches =
+      imports
+      |> Enum.with_index()
+      |> Enum.flat_map(fn {import, index} ->
+        for candidate <- Map.get(by_amount, import.amount, []),
+            distance(candidate, import) <= @days,
+            do: {pair_order(import, index, candidate), index, candidate}
+      end)
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.reduce({%{}, MapSet.new()}, fn {_order, index, candidate}, {matches, taken} ->
+        if Map.has_key?(matches, index) or candidate.id in taken,
+          do: {matches, taken},
+          else: {Map.put(matches, index, candidate), MapSet.put(taken, candidate.id)}
+      end)
+      |> elem(0)
+
+    imports |> Enum.with_index() |> Enum.map(fn {_import, index} -> matches[index] end)
+  end
+
+  defp pair_order(import, index, candidate) do
+    {distance(candidate, import), Date.to_gregorian_days(candidate.date), candidate.id,
+     Date.to_gregorian_days(import.date), index}
+  end
+
+  defp distance(candidate, import), do: abs(Date.diff(candidate.date, import.date))
 
   @doc "Checks a new proposal's transaction and that an open proposal or its transaction keeps account and amount."
   def validate(changeset) do

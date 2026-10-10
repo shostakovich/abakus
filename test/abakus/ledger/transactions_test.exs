@@ -886,6 +886,28 @@ defmodule Abakus.Ledger.TransactionsTest do
       assert Ledger.get_transaction_by_origin(checking, :bank, "tx-1").id == transaction.id
     end
 
+    test "tell which external ids an account has from a source, deleted transactions included" do
+      account = account_fixture()
+      kept = transaction_fixture(account_id: account.id, source: :file)
+      deleted = transaction_fixture(account_id: account.id, source: :file)
+      {:ok, _} = Ledger.add_origin(kept, :file, "A")
+      {:ok, _} = Ledger.add_origin(deleted, :file, "B")
+      {:ok, _} = Ledger.add_origin(transaction_fixture(account_id: account.id), :bank, "C")
+      {:ok, _} = Ledger.add_origin(transaction_fixture(), :file, "D")
+      {:ok, _} = Ledger.delete_transaction(deleted)
+
+      assert Ledger.existing_external_ids(account, :file, ~w(A B C D E)) == MapSet.new(~w(A B))
+      assert Ledger.existing_external_ids(account, :file, []) == MapSet.new()
+    end
+
+    test "tell which of more external ids than SQLite takes variables an account has" do
+      account = account_fixture()
+      {:ok, _} = Ledger.add_origin(transaction_fixture(account_id: account.id), :file, "F40000")
+      external_ids = Enum.map(1..40_000, &"F#{&1}")
+
+      assert Ledger.existing_external_ids(account, :file, external_ids) == MapSet.new(["F40000"])
+    end
+
     test "go with the transaction row" do
       transaction = transaction_fixture()
       {:ok, _} = Ledger.add_origin(transaction, :ynab, "abc")

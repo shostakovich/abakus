@@ -3,6 +3,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
   import Phoenix.LiveViewTest
   import Abakus.DomainFixtures
+  import Ecto.Query, only: [from: 2]
 
   alias Abakus.{Categories, Ledger, Repo}
   alias Abakus.Ledger.Transaction
@@ -414,11 +415,17 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute reload(proposal).approved
       assert reload(proposal).matched_transaction_id == c.shopping.id
       refute reload(elsewhere).approved
-      refute has_element?(view, "#unapproved-banner")
-      assert has_element?(view, "#flash-info", "2 bestätigt")
+      assert has_element?(view, "#unapproved-banner", "1 neue Buchung")
+      refute has_element?(view, "#approve-all")
+
+      assert has_element?(
+               view,
+               "#flash-info",
+               "2 bestätigt. 1 Zuordnungsvorschlag bleibt offen: Zuordnen oder Trennen."
+             )
 
       {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
-      assert has_element?(view, "#unapproved-banner", "1 neue Buchung")
+      assert has_element?(view, "#unapproved-banner", "2 neue Buchungen")
       view |> element("#approve-all") |> render_click()
       assert reload(elsewhere).approved
     end
@@ -502,6 +509,185 @@ defmodule AbakusWeb.RegisterLiveTest do
       |> render_submit(%{category_id: Categories.ready_to_assign!().id})
 
       assert reload(c.old).category_id == Categories.ready_to_assign!().id
+    end
+  end
+
+  describe "match proposals" do
+    setup c do
+      {:ok, proposal} =
+        Ledger.create_transaction(%{
+          account_id: c.giro.id,
+          date: ~D[2026-10-04],
+          amount: -8_743,
+          payee_name: "FRISCHMARKT FILIALE 12",
+          memo: "Kartenzahlung",
+          cleared: :cleared,
+          source: :file,
+          matched_transaction_id: c.shopping.id
+        })
+
+      {:ok, _origin} = Ledger.add_origin(proposal, :file, "MM-0001")
+      %{proposal: proposal}
+    end
+
+    test "show beside the register with what they match, counting nowhere", c do
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      id = c.proposal.id
+
+      assert has_element?(view, "tr#proposal-#{id}.app-unapproved", "FRISCHMARKT FILIALE 12")
+      assert has_element?(view, "#proposal-#{id}", "87,43")
+
+      assert has_element?(
+               view,
+               "#proposal-#{id}-match",
+               "passt zu Buchung vom 02.10.2026 · Frischmarkt"
+             )
+
+      assert has_element?(view, "#proposal-#{id}-accept", "Zuordnen")
+      assert has_element?(view, "#proposal-#{id}-reject", "Trennen")
+      assert has_element?(view, "#proposal-card-#{id}", "passt zu Buchung vom 02.10.2026")
+      assert has_element?(view, "#proposal-card-#{id}-accept")
+      refute has_element?(view, "#proposal-#{id}-select")
+
+      assert has_element?(view, "#unapproved-banner", "2 neue Buchungen zu bestätigen")
+      assert has_element?(view, "#accept-all-matches", "Alle Zuordnungen übernehmen")
+      assert has_element?(view, "#accept-all-matches .d-md-none", "Alle zuordnen")
+      assert has_element?(view, "aside #side-account-#{c.giro.id} .badge", "2")
+      assert has_element?(view, "#balance-working", "2.598,71")
+
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
+      assert has_element?(view, "#proposal-#{id}")
+    end
+
+    test "follow the view and the search", c do
+      id = c.proposal.id
+
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}?filter=unapproved")
+      assert has_element?(view, "#proposal-#{id}")
+
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}?filter=uncleared")
+      refute has_element?(view, "#proposal-#{id}")
+
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}?q=filiale")
+      assert has_element?(view, "#proposal-#{id}")
+      refute has_element?(view, "#tx-#{c.shopping.id}")
+
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}?q=gehalt")
+      refute has_element?(view, "#proposal-#{id}")
+    end
+
+    test "Zuordnen merges the import into the existing transaction", c do
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+
+      view |> element("#proposal-#{c.proposal.id}-accept") |> render_click()
+
+      assert %Transaction{date: ~D[2026-10-04], cleared: :cleared, approved: true} =
+               reload(c.shopping)
+
+      assert Repo.get(Transaction, c.proposal.id) == nil
+      assert has_element?(view, "#flash-info", "Zugeordnet.")
+      refute has_element?(view, "#proposal-#{c.proposal.id}")
+      assert has_element?(view, "#unapproved-banner", "1 neue Buchung")
+      refute has_element?(view, "#accept-all-matches")
+    end
+
+    test "Trennen keeps the import as a transaction of its own", c do
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+
+      view |> element("#proposal-card-#{c.proposal.id}-reject") |> render_click()
+
+      assert %Transaction{matched_transaction_id: nil, approved: true} = reload(c.proposal)
+      assert has_element?(view, "#flash-info", "Getrennt und als eigene Buchung bestätigt.")
+      assert has_element?(view, "#tx-#{c.proposal.id}")
+      refute has_element?(view, "#proposal-#{c.proposal.id}")
+    end
+
+    test "Alle Zuordnungen übernehmen accepts every open proposal", c do
+      {:ok, other} =
+        Ledger.create_transaction(%{
+          account_id: c.giro.id,
+          date: ~D[2026-10-02],
+          amount: 324_000,
+          cleared: :cleared,
+          source: :file,
+          matched_transaction_id: c.salary.id
+        })
+
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      assert has_element?(view, "#unapproved-banner", "3 neue Buchungen")
+
+      view |> element("#accept-all-matches") |> render_click()
+
+      assert Ledger.list_match_proposals(c.giro) == []
+      assert reload(c.salary).date == ~D[2026-10-02]
+      assert Repo.get(Transaction, other.id) == nil
+      assert has_element?(view, "#flash-info", "2 zugeordnet.")
+      refute has_element?(view, "#accept-all-matches")
+    end
+
+    test "a refused Zuordnen says why and keeps the proposal", c do
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+
+      Repo.update_all(from(t in Transaction, where: t.id == ^c.shopping.id),
+        set: [cleared: :reconciled]
+      )
+
+      view |> element("#proposal-#{c.proposal.id}-accept") |> render_click()
+
+      assert has_element?(
+               view,
+               "#flash-error",
+               "Nicht geändert: Zugeordnete Buchung ist abgeschlossen"
+             )
+
+      assert reload(c.proposal).matched_transaction_id == c.shopping.id
+    end
+
+    test "a proposal decided in another tab says so", c do
+      id = c.proposal.id
+      buttons = ["#proposal-#{id}-accept", "#proposal-card-#{id}-reject", "#accept-all-matches"]
+      views = Enum.map(buttons, fn _button -> elem(live(c.conn, ~p"/accounts/#{c.giro}"), 1) end)
+      {:ok, _} = Ledger.accept_match(c.proposal)
+
+      for {view, button} <- Enum.zip(views, buttons) do
+        view |> element(button) |> render_click()
+
+        assert has_element?(
+                 view,
+                 "#flash-error",
+                 "Nicht geändert: Der Zuordnungsvorschlag ist schon entschieden."
+               )
+
+        refute has_element?(view, "#proposal-#{id}")
+      end
+    end
+
+    test "Zuordnen asks first when it moves a reconciled counterpart", c do
+      counterpart_id = reload(c.transfer).transfer_transaction_id
+
+      Repo.update_all(from(t in Transaction, where: t.id == ^counterpart_id),
+        set: [cleared: :reconciled]
+      )
+
+      {:ok, proposal} =
+        Ledger.create_transaction(%{
+          account_id: c.giro.id,
+          date: ~D[2026-10-05],
+          amount: -20_000,
+          cleared: :cleared,
+          source: :file,
+          matched_transaction_id: c.transfer.id
+        })
+
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+
+      assert has_element?(view, "#proposal-#{proposal.id}-accept[data-confirm]")
+      refute has_element?(view, "#proposal-#{c.proposal.id}-accept[data-confirm]")
+      assert has_element?(view, "#accept-all-matches[data-confirm]")
+
+      view |> element("#proposal-#{proposal.id}-accept") |> render_click()
+
+      assert Repo.get!(Transaction, counterpart_id).date == ~D[2026-10-05]
     end
   end
 end
