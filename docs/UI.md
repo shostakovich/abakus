@@ -18,8 +18,6 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 - Targets: inspector with ring, "Weise noch X zu" + "Zuweisen", target editor
 - Inspector: targets this month, overspent categories, auto-assign (underfunded, as last month, spent last month,
   average, reset); "cover overspending" popover picking the source category
-- Reconcile popover: latest bank balance vs. cleared balance, "Passt!" in one click, otherwise difference and
-  adjustment transaction
 
 ## Decisions after review round 1
 

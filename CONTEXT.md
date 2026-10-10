@@ -105,9 +105,16 @@ _Avoid_: Synced account, linked account (that is bank sync)
 
 **Reconcile**:
 Confirming that an account's cleared balance equals the bank's balance, which locks its cleared transactions (they
-become reconciled, "Abgeschlossen"). A reconciled transaction changes, directly or through its counterpart, only
-after the user confirms; leaving the reconciled state is a change too. UI "Abgleichen".
+become reconciled, "Abgeschlossen"); one waiting for approval or a match decision stays cleared until then. A
+reconciled transaction changes, directly or through its counterpart, only after the user confirms; leaving the
+reconciled state is a change too. A bank balance counts the transactions up to its date, a balance entered by hand
+up to today. UI "Abgleichen".
 _Avoid_: Balance check, sync
+
+**Adjustment**:
+The transaction reconciling books for a difference to the bank that cannot be found: payee "Ausgleichsbuchung",
+approved and reconciled, in a budget account to Ready to Assign. UI "Ausgleichsbuchung".
+_Avoid_: Correction, balancing entry
 
 ### Transactions
 
