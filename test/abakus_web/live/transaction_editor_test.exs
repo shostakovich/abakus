@@ -134,15 +134,13 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert category(view, c.saving.id)
     end
 
-    test "a payee whose last category is hidden suggests nothing", c do
+    test "a payee whose last category was hidden in YNAB suggests it", c do
       gym = category_fixture(name: "🏋️ Fitness", hidden: true)
       payee_fixture(name: "Studio", last_category_id: gym.id)
       view = open_new(c, c.giro)
 
-      pick(view, "main", "payee", "p:Frischmarkt")
       pick(view, "main", "payee", "p:Studio")
-      assert category(view, "")
-      refute render(view) =~ ~s|data-value="#{gym.id}"|
+      assert category(view, gym.id)
     end
 
     test "the category picker lists Ready to Assign and the categories with what they have", c do

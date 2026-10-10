@@ -25,8 +25,7 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
       for(
         id <- 1..5,
         do: struct!(CategoryMonth, Map.merge(%{category_id: id, month: month}, rows[id] || %{}))
-      ),
-      MapSet.new()
+      )
     )
   end
 
@@ -41,7 +40,7 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
   defp names(%Rows{groups: groups}),
     do: for(%{categories: categories} <- groups, %{category: c} <- categories, do: c.name)
 
-  test "lists the visible groups and categories with their months and the groups' totals" do
+  test "lists the groups and categories, those hidden in YNAB too, with their months and the groups' totals" do
     rows =
       rows([
         month(@oct, %{
@@ -52,13 +51,20 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
         month(@nov, %{1 => %{assigned: 500, available: 1_500}})
       ])
 
-    assert [%{group: @daily, categories: [groceries, fuel]}, %{group: @housing}] = rows.groups
+    assert [
+             %{group: @daily, categories: [groceries, fuel, old]},
+             %{group: @housing},
+             %{group: @gone}
+           ] =
+             rows.groups
+
+    assert old.category == @old
     assert groceries.category == @groceries
     assert %CategoryMonth{assigned: 500, available: 1_500} = groceries.cells[@nov]
     assert %CategoryMonth{available: -300} = fuel.cells[@oct]
 
     assert hd(rows.groups).totals == %{
-             @oct => %{assigned: 1_000, activity: -300, available: 700},
+             @oct => %{assigned: 1_099, activity: -300, available: 700},
              @nov => %{assigned: 500, activity: 0, available: 1_500}
            }
   end
@@ -81,7 +87,7 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
     assert names(rows(months, filter: :underfunded, focus: @nov)) == ["⛽ Tanken"]
     assert names(rows(months, filter: :snoozed)) == ["🏠 Miete"]
     assert [%{group: @daily}] = rows(months, filter: :overspent).groups
-    assert length(rows(months, filter: :all).groups) == 2
+    assert length(rows(months, filter: :all).groups) == 3
   end
 
   test "counts the overspent, underfunded and snoozed categories of the focus month, whatever the filter" do
@@ -98,7 +104,7 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
       )
     ]
 
-    assert rows(months, filter: :snoozed).counts == %{overspent: 2, underfunded: 1, snoozed: 1}
+    assert rows(months, filter: :snoozed).counts == %{overspent: 3, underfunded: 1, snoozed: 1}
   end
 
   test "has the uncategorised row while a shown month has activity or money in it" do

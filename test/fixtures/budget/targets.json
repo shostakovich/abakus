@@ -2,26 +2,11 @@
   "description": "Monthly set-aside and refill targets, yearly set-aside and refill targets with dates, and a snoozed month. Hand-computed, fictional (YNAB still reports a snoozed month's underfunded).",
   "current_month": "2026-10-01",
   "categories": [
-    {
-      "id": "phone",
-      "hidden": false
-    },
-    {
-      "id": "groceries",
-      "hidden": false
-    },
-    {
-      "id": "insurance",
-      "hidden": false
-    },
-    {
-      "id": "holiday",
-      "hidden": false
-    },
-    {
-      "id": "gym",
-      "hidden": false
-    }
+    {"id": "phone"},
+    {"id": "groceries"},
+    {"id": "insurance"},
+    {"id": "holiday"},
+    {"id": "gym"}
   ],
   "targets": [
     {

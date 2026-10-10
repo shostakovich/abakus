@@ -1,22 +1,19 @@
 defmodule AbakusWeb.CategoryOptions do
   @moduledoc """
-  Categories as the category pickers offer them, in groups: Ready to Assign first as income, then the visible
-  categories by group, each with what it has available in the month of `today`, as YNAB shows them. Hidden
-  categories (or those of hidden groups) show only where `keep` names them, so a transaction keeps a category
-  hidden since. An option's `text` is how the register names the category, `key` its lookup key.
+  Categories as the category pickers offer them, in groups: Ready to Assign first as income, then the categories
+  by group, each with what it has available in the month of `today`, as YNAB shows them. An option's `text` is how
+  the register names the category, `key` its lookup key.
   """
 
   alias Abakus.{Budget, Categories, Names}
 
-  def build(%Date{} = today, keep \\ []) do
+  def build(%Date{} = today) do
     ready_to_assign = Categories.ready_to_assign!()
     month = month(today)
     available = Map.new(month.categories, &{&1.category_id, &1.available})
 
     groups =
-      for group <- Categories.list_category_groups(),
-          categories = Enum.filter(group.categories, &(visible?(group, &1) or &1.id in keep)),
-          categories != [] do
+      for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups() do
         %{
           name: group.name,
           options:
@@ -47,8 +44,6 @@ defmodule AbakusWeb.CategoryOptions do
       key: Names.lookup_key(name),
       available: Map.get(available, id, 0)
     }
-
-  defp visible?(group, category), do: not group.hidden and not category.hidden
 
   @doc ~S|How the register names a category: "Wohnen: Miete", the group without its emoji.|
   def text(group_name, name), do: "#{elem(Names.split_emoji(group_name), 1)}: #{name}"

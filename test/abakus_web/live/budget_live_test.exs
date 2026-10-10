@@ -96,13 +96,11 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert Categories.budget().assigned == %{}
     end
 
-    test "assigns only to shown months and visible categories", c do
-      hidden = category_fixture(name: "Alt", category_group_id: c.groceries.category_group_id)
-      Categories.update_category(hidden, %{hidden: true})
+    test "assigns only to shown months and listed categories", c do
       {:ok, view, _html} = open(c.conn)
 
       for {id, month} <- [
-            {hidden.id, "2026-10"},
+            {c.rta.id, "2026-10"},
             {c.groceries.id, "9999-12"},
             {c.rent.id, "2026-11"}
           ] do
@@ -265,7 +263,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       refute has_element?(view, "#category-#{c.rent.id}")
     end
 
-    test "groups show their totals; hidden categories and groups are left out", c do
+    test "groups show their totals; categories and groups hidden in YNAB are shown", c do
       Categories.assign(c.groceries, @october, 10_000)
       hidden = category_fixture(name: "Alt", category_group_id: c.groceries.category_group_id)
       Categories.update_category(hidden, %{hidden: true})
@@ -276,10 +274,14 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       group = c.groceries.category_group_id
 
-      assert has_element?(view, "#group-#{group} button[aria-expanded=true]", "Alltag")
+      assert has_element?(
+               view,
+               ~s|#group-#{group} button[aria-expanded=true][aria-label="🛒 Alltag auf- und zuklappen"]|
+             )
+
       assert has_element?(view, "#group-#{group}-2026-10-assigned", "100,00")
-      refute has_element?(view, "#category-#{hidden.id}")
-      refute has_element?(view, "#group-#{gone.id}")
+      assert has_element?(view, "#category-#{hidden.id}", "Alt")
+      assert has_element?(view, "#group-#{gone.id}", "Weg")
     end
 
     test "the income group lists the income per payee", c do

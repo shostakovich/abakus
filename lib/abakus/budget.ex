@@ -11,10 +11,9 @@ defmodule Abakus.Budget do
   - Assignments are never refused, so Ready to Assign can go below zero; a month lists the later months whose
     Ready to Assign is below zero (`uncovered`), up to the last month with data or that changes it.
 
-  The struct holds `categories` (`%{id, hidden}` in budget order, hidden ones and hidden groups' included),
-  `income` per month, `activity` and `assigned` per `{category_id, month}` (`nil` is the uncategorised row),
-  `targets` (each category's target versions) and `snoozes` (`{category_id, month}`). Months are their first day;
-  amounts are cents.
+  The struct holds `categories` (`%{id}` in budget order), `income` per month, `activity` and `assigned` per
+  `{category_id, month}` (`nil` is the uncategorised row), `targets` (each category's target versions) and
+  `snoozes` (`{category_id, month}`). Months are their first day; amounts are cents.
   """
 
   alias Abakus.Budget.{CategoryMonth, Month, Target}
@@ -39,11 +38,9 @@ defmodule Abakus.Budget do
     rows =
       Enum.map([nil | Enum.map(budget.categories, & &1.id)], &category_months(budget, &1, range))
 
-    hidden = hidden(budget)
-
     [range | rows]
     |> Enum.zip_with(fn [month, uncategorised | categories] ->
-      Month.new(month, Map.get(budget.income, month, 0), uncategorised, categories, hidden)
+      Month.new(month, Map.get(budget.income, month, 0), uncategorised, categories)
     end)
     |> chain_ready_to_assign()
     |> look_ahead(current, Enum.max([hd(range) | data], Date))
@@ -52,24 +49,14 @@ defmodule Abakus.Budget do
   @doc """
   The assignments that fill the month's underfunded categories in budget order, as far as the month's Ready to
   Assign reaches without taking what later months have assigned (also in a closed month), the last one partly;
-  hidden and snoozed categories are skipped, and with `only` (a category id) all others. Returns
-  `{category_id, new_assigned}`.
+  snoozed categories are skipped, and with `only` (a category id) all others. Returns `{category_id, new_assigned}`.
   """
   def fill_underfunded(%__MODULE__{} = budget, month, current, only \\ nil) do
     month = Date.beginning_of_month(month)
     %Month{} = shown = budget |> months(current, month) |> Enum.find(&(&1.month == month))
-    hidden = hidden(budget)
-    rows = Enum.filter(shown.categories, &fillable?(&1, hidden, only))
+    rows = Enum.filter(shown.categories, &(not &1.snoozed and only in [nil, &1.category_id]))
     {fills, _left} = Enum.flat_map_reduce(rows, Month.free(shown), &fill/2)
     fills
-  end
-
-  defp hidden(budget),
-    do: for(%{id: id, hidden: true} <- budget.categories, into: MapSet.new(), do: id)
-
-  defp fillable?(row, hidden, only) do
-    not row.snoozed and not MapSet.member?(hidden, row.category_id) and
-      only in [nil, row.category_id]
   end
 
   defp fill(row, left) do

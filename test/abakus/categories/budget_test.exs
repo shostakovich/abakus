@@ -199,7 +199,7 @@ defmodule Abakus.Categories.BudgetTest do
       assert month(@november).income == 250_000
     end
 
-    test "lists every category in budget order, hidden ones included" do
+    test "lists every category in budget order, those hidden in YNAB included" do
       second = category_group_fixture(position: 1)
       first = category_group_fixture(position: 0)
       b = category_fixture(category_group_id: first.id, position: 1)
@@ -207,11 +207,7 @@ defmodule Abakus.Categories.BudgetTest do
       c = category_fixture(category_group_id: second.id, position: 0)
       Categories.update_category_group(second, %{hidden: true})
 
-      assert Categories.budget().categories == [
-               %{id: a.id, hidden: true},
-               %{id: b.id, hidden: false},
-               %{id: c.id, hidden: true}
-             ]
+      assert Categories.budget().categories == [%{id: a.id}, %{id: b.id}, %{id: c.id}]
     end
   end
 
@@ -278,13 +274,13 @@ defmodule Abakus.Categories.BudgetTest do
                Categories.fill_underfunded("2026-10-15", ~D[2026-10-09])
     end
 
-    test "skips hidden categories and returns nothing when nothing is to assign", c do
+    test "fills categories hidden in YNAB, returns nothing when nothing is to assign", c do
       hidden = category_fixture(hidden: true)
       Categories.set_target(hidden, %{from_month: @october, cadence: :monthly, amount: 4_000})
-      income(c.checking, c.rta, 5_000)
+      income(c.checking, c.rta, 4_000)
 
+      assert {:ok, [{hidden.id, 4_000}]} == Categories.fill_underfunded(@october, @october)
       assert {:ok, []} = Categories.fill_underfunded(@october, @october)
-      assert row(month(@october), hidden).assigned == 0
     end
   end
 end

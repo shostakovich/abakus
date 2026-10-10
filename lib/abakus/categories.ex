@@ -39,30 +39,47 @@ defmodule Abakus.Categories do
     )
   end
 
+  @doc "Creates a group; without a position it goes after the others."
   def create_category_group(attrs) do
     %CategoryGroup{}
     |> CategoryGroup.changeset(attrs)
+    |> put_next_position(fn -> CategoryGroup end)
     |> Repo.insert()
   end
 
+  @doc "Updates a group; one deleted meanwhile gives an error on `id`."
   def update_category_group(%CategoryGroup{} = group, attrs) do
     group
     |> CategoryGroup.changeset(attrs)
-    |> Repo.update()
+    |> Repo.update(stale_error_field: :id)
   end
 
+  @doc "Creates a category; without a position it goes after the others in its group."
   def create_category(attrs) do
-    %Category{}
-    |> Category.changeset(attrs)
-    |> validate_group()
+    changeset = %Category{} |> Category.changeset(attrs) |> validate_group()
+    group_id = Changeset.get_field(changeset, :category_group_id)
+
+    changeset
+    |> put_next_position(fn -> from c in Category, where: c.category_group_id == ^group_id end)
     |> Repo.insert()
   end
 
+  # Cast params have string keys; a given 0 counts as given, though it changes nothing.
+  defp put_next_position(changeset, siblings) do
+    if Map.has_key?(changeset.params, "position") or not changeset.valid?,
+      do: changeset,
+      else: Changeset.put_change(changeset, :position, next_position(siblings.()))
+  end
+
+  defp next_position(siblings),
+    do: Repo.one(from s in siblings, select: coalesce(max(s.position) + 1, 0))
+
+  @doc "Updates a category; one deleted meanwhile gives an error on `id`."
   def update_category(%Category{} = category, attrs) do
     category
     |> Category.changeset(attrs)
     |> validate_group()
-    |> Repo.update()
+    |> Repo.update(stale_error_field: :id)
   end
 
   defp validate_group(changeset) do
@@ -81,25 +98,91 @@ defmodule Abakus.Categories do
     end
   end
 
+  @doc "Deletes a group without categories; the internal one stays."
+  def delete_category_group(%CategoryGroup{id: id}) do
+    Repo.transact(fn -> id |> deletable_group() |> delete_empty() end)
+  end
+
+  defp deletable_group(id) do
+    case Repo.get(CategoryGroup, id) do
+      nil -> {:error, :not_found}
+      %CategoryGroup{internal: true} -> {:error, :internal}
+      group -> {:ok, group}
+    end
+  end
+
+  defp delete_empty({:ok, %CategoryGroup{id: id} = group}) do
+    if Repo.exists?(from c in Category, where: c.category_group_id == ^id),
+      do: {:error, :not_empty},
+      else: Repo.delete(group)
+  end
+
+  defp delete_empty(error), do: error
+
   @doc """
-  Finds a category by name, ignoring emoji and case. Visible regular categories win over hidden ones with the same
-  name; an internal category's name means it alone.
+  Deletes a category and moves everything it has into the regular category `into`: its transactions, split lines and
+  payees' last categories (`Abakus.Ledger.recategorize/3`), and its assignments, added to those of `into` per month.
+  Its targets and snoozes go. Reconciled transactions change too, so they need `reconciled: :confirmed`
+  (see `reconciled_transactions?/1`).
+  """
+  def delete_category(%Category{id: id}, %Category{id: into_id}, opts \\ []) do
+    Repo.transact(fn ->
+      with {:ok, category} <- deletable(id),
+           {:ok, into} <- target(into_id, id),
+           :ok <- Ledger.recategorize(category.id, into.id, opts),
+           :ok <- move_assignments(category, into) do
+        Repo.delete_all(from v in TargetVersion, where: v.category_id == ^id)
+        Repo.delete_all(from s in TargetSnooze, where: s.category_id == ^id)
+        Repo.delete(category)
+      end
+    end)
+  end
+
+  @doc "Whether deleting the category changes reconciled transactions."
+  def reconciled_transactions?(%Category{id: id}), do: Ledger.reconciled_in_category?(id)
+
+  defp deletable(id) do
+    case Repo.get(Category, id) do
+      nil -> {:error, :not_found}
+      %Category{internal: true} -> {:error, :internal}
+      category -> {:ok, category}
+    end
+  end
+
+  defp target(id, id), do: {:error, :target}
+
+  defp target(into_id, _id) do
+    case Repo.get(Category, into_id) do
+      %Category{internal: false} = into -> {:ok, into}
+      _internal_or_gone -> {:error, :target}
+    end
+  end
+
+  defp move_assignments(%Category{id: id}, %Category{id: into_id}) do
+    moved = Repo.all(from a in Assignment, where: a.category_id == ^id)
+
+    held =
+      Map.new(
+        Repo.all(from a in Assignment, where: a.category_id == ^into_id),
+        &{&1.month, &1.amount}
+      )
+
+    Repo.delete_all(from a in Assignment, where: a.category_id == ^id)
+
+    moved
+    |> Enum.map(&{into_id, &1.month, &1.amount + Map.get(held, &1.month, 0)})
+    |> put_assignments()
+  end
+
+  @doc """
+  Finds a category by name, ignoring emoji and case; two regular categories with the same name are ambiguous. An
+  internal category's name means it alone.
   """
   def find_category_by_name(name) when is_binary(name) do
     key = Names.lookup_key(name)
 
-    candidates =
-      Repo.all(
-        from c in Category,
-          join: g in assoc(c, :category_group),
-          where: c.lookup_key == ^key,
-          select: {c, g.hidden}
-      )
-
-    case for {%Category{internal: true} = category, _hidden} <- candidates, do: {category, true} do
-      [] -> Enum.map(candidates, fn {c, group_hidden} -> {c, not (c.hidden or group_hidden)} end)
-      internal -> internal
-    end
+    Repo.all(from c in Category, where: c.lookup_key == ^key)
+    |> Enum.map(&{&1, &1.internal})
     |> Names.pick()
   end
 
@@ -122,7 +205,7 @@ defmodule Abakus.Categories do
     )
   end
 
-  @doc "The budget's data for `Abakus.Budget`: every regular category, hidden ones included, in budget order."
+  @doc "The budget's data for `Abakus.Budget`: every regular category in budget order."
   def budget do
     ready_to_assign_id = ready_to_assign!().id
 
@@ -151,9 +234,8 @@ defmodule Abakus.Categories do
         join: g in assoc(c, :category_group),
         where: not c.internal,
         order_by: [g.position, g.id, c.position, c.id],
-        select: {c.id, c.hidden, g.hidden}
+        select: %{id: c.id}
     )
-    |> Enum.map(fn {id, hidden, group_hidden} -> %{id: id, hidden: hidden or group_hidden} end)
   end
 
   @doc """
@@ -182,7 +264,7 @@ defmodule Abakus.Categories do
   end
 
   @doc """
-  Takes back what the visible categories, or only `category`, have assigned in a month (any day of it), so it goes
+  Takes back what the categories, or only `category`, have assigned in a month (any day of it), so it goes
   back to Zu verteilen.
   """
   def reset_assignments(month, category \\ nil) do
@@ -191,7 +273,7 @@ defmodule Abakus.Categories do
     ids =
       if category,
         do: [category.id],
-        else: for(%{id: id, hidden: false} <- budget_categories(), do: id)
+        else: for(%{id: id} <- budget_categories(), do: id)
 
     Repo.delete_all(from a in Assignment, where: a.month == ^month and a.category_id in ^ids)
     :ok
@@ -207,12 +289,14 @@ defmodule Abakus.Categories do
 
     Repo.transact(fn ->
       fills = Budget.fill_underfunded(budget(), month, month!(current), category && category.id)
-      with :ok <- put_assignments(fills, month), do: {:ok, fills}
+      with :ok <- put_assignments(in_month(fills, month)), do: {:ok, fills}
     end)
   end
 
-  defp put_assignments(fills, month) do
-    Enum.reduce_while(fills, :ok, fn {category_id, amount}, :ok ->
+  defp in_month(fills, month), do: Enum.map(fills, fn {id, amount} -> {id, month, amount} end)
+
+  defp put_assignments(assignments) do
+    Enum.reduce_while(assignments, :ok, fn {category_id, month, amount}, :ok ->
       %Assignment{category_id: category_id}
       |> Assignment.changeset(%{month: month, amount: amount})
       |> upsert_assignment()

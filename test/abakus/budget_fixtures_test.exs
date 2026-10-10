@@ -41,7 +41,7 @@ defmodule Abakus.BudgetFixturesTest do
       |> Enum.split_with(fn {{id, _month}, _amount} -> id == "ready_to_assign" end)
 
     %Budget{
-      categories: Enum.map(fixture["categories"], &%{id: &1["id"], hidden: &1["hidden"]}),
+      categories: Enum.map(fixture["categories"], &%{id: &1["id"]}),
       income: Map.new(income, fn {{_id, month}, amount} -> {month, amount} end),
       activity: Map.new(activity),
       assigned:

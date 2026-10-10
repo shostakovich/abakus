@@ -2,18 +2,9 @@
   "description": "Overspending, a negative assignment and uncategorised spending over three months; no targets. Hand-computed, fictional.",
   "current_month": "2026-11-01",
   "categories": [
-    {
-      "id": "rent",
-      "hidden": false
-    },
-    {
-      "id": "groceries",
-      "hidden": false
-    },
-    {
-      "id": "fun",
-      "hidden": false
-    }
+    {"id": "rent"},
+    {"id": "groceries"},
+    {"id": "fun"}
   ],
   "targets": [],
   "snoozes": [],

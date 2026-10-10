@@ -1,9 +1,9 @@
 defmodule AbakusWeb.BudgetLive.Rows do
   @moduledoc """
   The budget table's rows for the shown months: the uncategorised row while a shown month has activity or money in
-  it, the groups with their categories and totals (hidden ones left out), and the income per payee. A filter keeps
-  the categories in its state in the focus month and the groups that have one; income shows only unfiltered. A
-  snoozed target counts as done, so its category is not underfunded.
+  it, the groups with their categories and totals, and the income per payee. A filter keeps the categories in its
+  state in the focus month and the groups that have one; income shows only unfiltered. A snoozed target counts as
+  done, so its category is not underfunded.
   `counts` are the focus month's overspent, underfunded and snoozed categories, whatever the filter.
   """
 
@@ -21,7 +21,7 @@ defmodule AbakusWeb.BudgetLive.Rows do
     filter = opts[:filter]
     cells = Map.new(for m <- months, row <- m.categories, do: {{row.category_id, m.month}, row})
     uncategorised = uncategorised(months)
-    groups = for g <- groups, not g.hidden, do: group(g, months, cells)
+    groups = Enum.map(groups, &group(&1, months, cells))
 
     %__MODULE__{
       uncategorised:
@@ -34,7 +34,7 @@ defmodule AbakusWeb.BudgetLive.Rows do
 
   defp group(group, months, cells) do
     categories =
-      for c <- group.categories, not c.hidden do
+      for c <- group.categories do
         %{category: c, cells: Map.new(months, &{&1.month, cells[{c.id, &1.month}]})}
       end
 

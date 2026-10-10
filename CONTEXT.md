@@ -16,8 +16,8 @@ A named, ordered set of categories in the budget, e.g. "🏠 Wohnen". UI "Katego
 _Avoid_: Master category
 
 **Category**:
-An envelope money is assigned to and spent from, e.g. "🛒 Lebensmittel"; hidden when no longer used, never deleted.
-UI "Kategorie".
+An envelope money is assigned to and spent from, e.g. "🛒 Lebensmittel"; deleted only into another category, which
+takes over its transactions and money. UI "Kategorie".
 _Avoid_: Envelope, budget item
 
 **Internal category**:

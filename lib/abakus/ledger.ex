@@ -12,9 +12,9 @@ defmodule Abakus.Ledger do
   subtransactions. The counterpart of a subtransaction belongs to its split: it is changed and deleted there, so
   only its own fields (cleared, approved, flag, category) change on it directly.
 
-  A reconciled transaction is locked: the Ledger refuses any change to it, made directly or through a transfer
-  (a counterpart kept in step, moved, released or deleted), unless the caller passes `reconciled: :confirmed`
-  after asking. Leaving the reconciled state is a change too.
+  A reconciled transaction is locked: the Ledger refuses any change to it, made directly, through a transfer
+  (a counterpart kept in step, moved, released or deleted) or by moving its category (`recategorize/3`), unless the
+  caller passes `reconciled: :confirmed` after asking. Leaving the reconciled state is a change too.
 
   A match proposal (an import with `matched_transaction_id`, see `find_matches/3`) counts nowhere until
   `accept_match/2` merges it into the existing transaction or `reject_match/1` approves it as a transaction of its
@@ -526,6 +526,51 @@ defmodule Abakus.Ledger do
         select: {{p.name, month(t.date)}, sum(s.amount)}
 
     sum_by_key(Repo.all(transactions) ++ Repo.all(subtransactions))
+  end
+
+  @doc "Whether a reconciled transaction, not deleted, has the category, itself or in a split line."
+  def reconciled_in_category?(category_id) do
+    Repo.exists?(
+      from t in Transaction,
+        left_join: s in Subtransaction,
+        on: s.transaction_id == t.id,
+        where: t.cleared == :reconciled and is_nil(t.deleted_at),
+        where: t.category_id == ^category_id or s.category_id == ^category_id
+    )
+  end
+
+  @doc """
+  Points everything that has the category `from_id` to `to_id`: transactions and split lines, deleted ones and match
+  proposals included, and payees' last categories. Reconciled transactions among them need `reconciled: :confirmed`
+  (see `reconciled_in_category?/1`).
+  """
+  def recategorize(from_id, to_id, opts \\ []) do
+    if Keyword.get(opts, :reconciled) != :confirmed and reconciled_in_category?(from_id),
+      do: {:error, :reconciled},
+      else: move_category(from_id, to_id)
+  end
+
+  defp move_category(from_id, to_id) do
+    now = DateTime.utc_now()
+    splits = from s in Subtransaction, where: s.category_id == ^from_id, select: s.transaction_id
+
+    Repo.update_all(from(t in Transaction, where: t.id in subquery(splits)),
+      set: [updated_at: now]
+    )
+
+    Repo.update_all(from(s in Subtransaction, where: s.category_id == ^from_id),
+      set: [category_id: to_id, updated_at: now]
+    )
+
+    Repo.update_all(from(t in Transaction, where: t.category_id == ^from_id),
+      set: [category_id: to_id, updated_at: now]
+    )
+
+    Repo.update_all(from(p in Payee, where: p.last_category_id == ^from_id),
+      set: [last_category_id: to_id, updated_at: now]
+    )
+
+    :ok
   end
 
   defp sum_by_key(pairs) do
