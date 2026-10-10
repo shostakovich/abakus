@@ -175,6 +175,11 @@ _Avoid_: Import record
 The id a source gives a transaction (FITID, the bank's or YNAB's id); unique per account and source.
 _Avoid_: Import id, FITID (only files have those)
 
+**Bank balance**:
+What the bank reports an account holds on a date, from a file's ledger balance or from bank sync; reconciling
+offers the latest. UI "Banksaldo".
+_Avoid_: Ledger balance (OFX's name, `LEDGERBAL`), statement balance
+
 **Match**:
 An imported transaction that looks like an existing one, proposed for merging; never merged silently. Until it is
 decided, the proposal counts nowhere and both keep their account and amount. Accepting merges it into the existing

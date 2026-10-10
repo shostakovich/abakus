@@ -68,8 +68,9 @@ tables have no user: all users see everything.
 
 - **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from a portfolio app,
   `shared_expenses`: transactions from a shared-expenses app; filled via the API, so the UI hides manual entry and
-  file import for it; the Ledger accepts both), closed, note, position, last reconciled at. Budget account = not
-  tracking (derived; a kind never crosses that line). No credit cards or loans. Closed, never deleted.
+  file import for it; the Ledger accepts both), closed, note, position, last reconciled at, the file's account it
+  takes imports from (`BANKID`, `ACCTID`). Budget account = not tracking (derived; a kind never crosses that line).
+  No credit cards or loans. Closed, never deleted.
 - **Payee**: name, transfer account, last used category. Each account has a transfer payee "Transfer : <account
   name>" as in YNAB, created and renamed with the account. Other payees are unique by lookup key.
 - **Category group** and **category**: name, hidden, position, note, internal. Hidden, never deleted; lookup keys of
@@ -131,6 +132,8 @@ tables have no user: all users see everything.
   already is refused.
 - References are restricted: nothing that history points to can be deleted. The contexts check references before
   writing, so a missing one is a validation error ("existiert nicht"), not a constraint error.
+- **Bank balance**: account, source (`file`: a file's ledger balance, `bank`: bank sync), date, amount; one per
+  account, source and date. Reconciling offers the latest.
 - **Bank connection**: provider, bank, session id, valid until, linked accounts (provider account id → account),
   last sync, last error
 - **API token**: name, SHA-256 of the token, created at, last used at
@@ -195,16 +198,10 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
 All imports land as unapproved, `cleared`, with an external id. A transaction is never imported twice from the
 same source; across sources (and against manual entries) a match is proposed, never merged silently.
 
-- **Dedupe within a source**: by (account, source, external id) — FITID for files, the provider's transaction id
-  for bank sync
-- **Matching**: same account, same amount, date within ±10 days, existing transaction not yet matched or
-  imported and not reconciled → shown as "matches manual entry of …"; approving merges (manual category and memo
-  win where present, date and cleared state from the import)
+- **Bank sync** imports as the file import does: deduped by (account, source, external id) with the provider's
+  transaction id, match proposals, nothing dated up to the account's newest reconciled transaction
 - **Category suggestion**: the payee's last category
-- **File import (v1)**: OFX/QFX exports from a banking app (SGML OFX 1.x and XML OFX 2.x); hand-written parser for
-  `BANKACCTFROM`/`CCACCTFROM`, `STMTTRN` (`DTPOSTED`, `TRNAMT`, `FITID`, `NAME`, `MEMO`), `LEDGERBAL`. Account
-  mapping by account id from the file, remembered. Preview with counts (new, already there, matched) before
-  importing. CSV only if a bank needs it later.
+- **CSV import**: only if a bank needs it later.
 - **Bank sync (v2)**: Enable Banking (free restricted mode: only the owner's linked accounts), the only free
   aggregator that still accepts individuals (GoCardless closed sign-ups in 2025). Covers the common German
   banks; no FinTS. Template: Actual's `packages/sync-server/src/app-enablebanking/` (MIT).
@@ -323,6 +320,5 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
 
 - How YNAB computes `goal_under_funded` for yearly targets with a date in detail (rounding up to the cent
   matched a test plan's export; check against the owner's budget)
-- Whether the banking app's FITIDs stay stable across exports (test with two overlapping exports)
 - Which banks show up in Enable Banking's restricted mode and their `maximum_consent_validity` (needs the
   owner's Enable Banking account)
