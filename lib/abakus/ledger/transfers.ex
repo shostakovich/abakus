@@ -130,9 +130,8 @@ defmodule Abakus.Ledger.Transfers do
 
   # Only the budget side of a transfer between a budget and a tracking account has a category.
   defp counterpart_category(account, other, side, existing) do
-    if Account.budget_account?(account) or not Account.budget_account?(other),
-      do: nil,
-      else: side.counterpart_category_id || (existing && existing.category_id)
+    if Account.takes_category?(other, account),
+      do: side.counterpart_category_id || (existing && existing.category_id)
   end
 
   defp create_counterpart(side, fields, context) do

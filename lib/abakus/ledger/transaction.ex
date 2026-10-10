@@ -221,25 +221,25 @@ defmodule Abakus.Ledger.Transaction do
   defp validate_not_own_account(changeset, _account, _other), do: changeset
 
   defp validate_category(changeset, account, other) do
-    case {Account.budget_account?(account), other && Account.budget_account?(other)} do
-      {false, _} ->
+    cond do
+      not Account.budget_account?(account) ->
         validate_blank(changeset, :category_id, "muss in einem Tracking-Konto leer sein")
 
-      {true, true} ->
+      not Account.takes_category?(account, other) ->
         validate_blank(
           changeset,
           :category_id,
           "muss bei einer Umbuchung zwischen Budget-Konten leer sein"
         )
 
-      {true, false} ->
+      other ->
         validate_present(
           changeset,
           :category_id,
           "muss bei einer Umbuchung mit einem Tracking-Konto ausgefüllt werden"
         )
 
-      {true, nil} ->
+      true ->
         changeset
     end
   end
@@ -269,8 +269,7 @@ defmodule Abakus.Ledger.Transaction do
 
   defp counterpart_on_budget_side?(_account, nil), do: false
 
-  defp counterpart_on_budget_side?(account, other),
-    do: Account.budget_account?(other) and not Account.budget_account?(account)
+  defp counterpart_on_budget_side?(account, other), do: Account.takes_category?(other, account)
 
   defp validate_blank(changeset, field, message) do
     if is_nil(get_field(changeset, field)),

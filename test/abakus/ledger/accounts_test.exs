@@ -74,6 +74,17 @@ defmodule Abakus.Ledger.AccountsTest do
     refute Account.budget_account?(%Account{kind: :tracking})
   end
 
+  test "takes_category?/2 holds in a budget account unless it transfers to another budget account" do
+    checking = %Account{kind: :checking}
+    depot = %Account{kind: :tracking}
+
+    assert Account.takes_category?(checking)
+    assert Account.takes_category?(checking, depot)
+    refute Account.takes_category?(checking, %Account{kind: :savings})
+    refute Account.takes_category?(depot)
+    refute Account.takes_category?(depot, checking)
+  end
+
   describe "update_account/2" do
     test "renaming renames the transfer payee" do
       account = account_fixture(name: "Girokonto")
