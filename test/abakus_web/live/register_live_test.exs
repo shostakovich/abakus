@@ -193,6 +193,19 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
 
       assert has_element?(view, "h1#register-title", "Alle Konten")
+
+      assert has_element?(
+               view,
+               ~s|aside nav a.active[aria-current=page][href="/accounts/all"]|,
+               "Alle Konten"
+             )
+
+      assert has_element?(
+               view,
+               ~s|header nav a.active[aria-current=page][href="/accounts"]|,
+               "Konten"
+             )
+
       assert has_element?(view, "#register-table th", "Konto")
       assert has_element?(view, "#tx-#{c.gain.id}", "📈")
       assert has_element?(view, "#tx-card-#{c.gain.id}", "📈 Depot")

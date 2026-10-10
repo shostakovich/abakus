@@ -35,7 +35,7 @@ defmodule AbakusWeb.RegisterLive do
     <Layouts.app
       flash={@flash}
       current_scope={@current_scope}
-      current={:accounts}
+      current={if @account, do: :accounts, else: :all_accounts}
       account_id={@account && @account.id}
       account_groups={@account_groups}
       account_dialog={@account_dialog}

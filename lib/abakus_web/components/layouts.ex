@@ -9,7 +9,7 @@ defmodule AbakusWeb.Layouts do
 
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
-  attr :current, :atom, default: nil, values: [nil, :budget, :accounts, :settings]
+  attr :current, :atom, default: nil, values: [nil, :budget, :accounts, :all_accounts, :settings]
 
   attr :account_groups, :list,
     default: [],
@@ -110,10 +110,10 @@ defmodule AbakusWeb.Layouts do
       </.link>
       <nav aria-label="Hauptnavigation">
         <ul class="nav nav-pills">
-          <li :for={{key, label, _icon, path} <- main_items() ++ more_items()} class="nav-item">
+          <li :for={{key, label, _icon, path} <- phone_items() ++ more_items()} class="nav-item">
             <.link
-              class={["nav-link", @current == key && "active"]}
-              aria-current={@current == key && "page"}
+              class={["nav-link", phone_current(@current) == key && "active"]}
+              aria-current={phone_current(@current) == key && "page"}
               {nav_link(path, @current)}
             >
               {label}
@@ -208,8 +208,19 @@ defmodule AbakusWeb.Layouts do
     """
   end
 
+  # Wide screens list the accounts in the sidebar and lead to all of them, as YNAB does; phones have no sidebar and
+  # lead to the account list.
   defp main_items,
+    do: [
+      {:budget, "Budget", "budget", ~p"/"},
+      {:all_accounts, "Alle Konten", "bank", ~p"/accounts/all"}
+    ]
+
+  defp phone_items,
     do: [{:budget, "Budget", "budget", ~p"/"}, {:accounts, "Konten", "bank", ~p"/accounts"}]
+
+  defp phone_current(:all_accounts), do: :accounts
+  defp phone_current(current), do: current
 
   defp more_items, do: [{:settings, "Einstellungen", "gear", ~p"/users/settings"}]
 

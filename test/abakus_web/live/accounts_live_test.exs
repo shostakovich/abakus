@@ -28,7 +28,8 @@ defmodule AbakusWeb.AccountsLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/accounts")
 
       assert has_element?(view, "h1", "Konten")
-      assert has_element?(view, ~s|aside nav a.active[aria-current=page][href="/accounts"]|)
+      assert has_element?(view, ~s|header nav a.active[aria-current=page][href="/accounts"]|)
+      refute has_element?(view, ~s|aside a[href="/accounts"]|)
 
       assert has_element?(view, "#group-budget h2", "Budget")
       assert has_element?(view, "#group-budget-balance", "2.437,51 €")
