@@ -113,4 +113,12 @@ defmodule Abakus.Ledger.PayeesTest do
       assert Ledger.find_payee_by_name("Niemand") == {:error, :not_found}
     end
   end
+
+  test "list_payees/0 lists the regular payees by name" do
+    account_fixture(name: "Girokonto")
+    payee_fixture(name: "🛒 Rewe")
+    payee_fixture(name: "Aldi")
+
+    assert ["Aldi", "🛒 Rewe"] = Enum.map(Ledger.list_payees(), & &1.name)
+  end
 end

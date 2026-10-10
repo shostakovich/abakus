@@ -1,5 +1,5 @@
 defmodule AbakusWeb.Format do
-  @moduledoc "Amounts and months as the German UI shows and reads them; amounts are integer cents."
+  @moduledoc "Amounts, dates and months as the German UI shows and reads them; amounts are integer cents."
 
   @months ~w(Januar Februar März April Mai Juni Juli August September Oktober November Dezember)
 
@@ -18,6 +18,10 @@ defmodule AbakusWeb.Format do
   end
 
   def euros(cents), do: amount(cents) <> " €"
+
+  @doc ~S|Euros with a plus for inflows: "+48,75 €", "−9,99 €".|
+  def signed_euros(cents) when cents > 0, do: "+" <> euros(cents)
+  def signed_euros(cents), do: euros(cents)
 
   @doc """
   Reads an amount typed in German ("1.234,56", "12,5", "−5") or with a decimal dot ("12.50") into cents; empty is
@@ -46,6 +50,20 @@ defmodule AbakusWeb.Format do
 
   defp digits(""), do: 0
   defp digits(digits), do: String.to_integer(digits)
+
+  @doc ~S|"07.03.2026"|
+  def date(%Date{} = date), do: Calendar.strftime(date, "%d.%m.%Y")
+
+  @doc ~S|"07.03.", the date without its year.|
+  def day(%Date{} = date), do: Calendar.strftime(date, "%d.%m.")
+
+  @doc "The browser's date (ISO 8601), as long as it is a plausible one; else today in UTC."
+  def today(param) do
+    case is_binary(param) && Date.from_iso8601(param) do
+      {:ok, %Date{year: year} = date} when year in 2000..2099 -> date
+      _ -> Date.utc_today()
+    end
+  end
 
   def month_name(%Date{month: month}), do: Enum.at(@months, month - 1)
 

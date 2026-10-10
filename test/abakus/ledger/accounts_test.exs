@@ -43,6 +43,19 @@ defmodule Abakus.Ledger.AccountsTest do
       assert Ledger.get_account!(account.id).last_reconciled_at == reconciled_at
     end
 
+    test "puts a new account after the others unless it has a position" do
+      account_fixture(position: 4)
+      account_fixture(position: 2)
+
+      assert {:ok, %Account{position: 5}} = Ledger.create_account(%{name: "Bar", kind: :cash})
+
+      assert {:ok, %Account{position: 1}} =
+               Ledger.create_account(%{"name" => "Spar", "kind" => "savings", "position" => "1"})
+
+      assert {:ok, %Account{position: 0}} =
+               Ledger.create_account(%{name: "Depot", kind: :tracking, position: 0})
+    end
+
     test "requires a name and a kind" do
       assert {:error, changeset} = Ledger.create_account(%{name: " "})
       assert %{name: ["can't be blank"], kind: ["can't be blank"]} = errors_on(changeset)
@@ -72,6 +85,17 @@ defmodule Abakus.Ledger.AccountsTest do
     assert Account.budget_account?(%Account{kind: :savings})
     assert Account.budget_account?(%Account{kind: :cash})
     refute Account.budget_account?(%Account{kind: :tracking})
+  end
+
+  test "takes_category?/2 holds in a budget account unless it transfers to another budget account" do
+    checking = %Account{kind: :checking}
+    depot = %Account{kind: :tracking}
+
+    assert Account.takes_category?(checking)
+    assert Account.takes_category?(checking, depot)
+    refute Account.takes_category?(checking, %Account{kind: :savings})
+    refute Account.takes_category?(depot)
+    refute Account.takes_category?(depot, checking)
   end
 
   describe "update_account/2" do
@@ -120,7 +144,7 @@ defmodule Abakus.Ledger.AccountsTest do
     end
   end
 
-  test "balances/0 sums each account's register, cleared including reconciled" do
+  test "balances/0 sums each account's register, cleared including reconciled, and counts the unapproved" do
     giro = account_fixture()
     cash = account_fixture(%{kind: :cash})
     _empty = account_fixture()
@@ -128,13 +152,13 @@ defmodule Abakus.Ledger.AccountsTest do
     for {amount, cleared} <- [{10_000, :reconciled}, {-2_500, :cleared}, {-1_000, :uncleared}],
         do: transaction_fixture(%{account_id: giro.id, amount: amount, cleared: cleared})
 
-    transaction_fixture(%{account_id: cash.id, amount: -300})
-    deleted = transaction_fixture(%{account_id: cash.id, amount: -99_999})
+    transaction_fixture(%{account_id: cash.id, amount: -300, approved: false})
+    deleted = transaction_fixture(%{account_id: cash.id, amount: -99_999, approved: false})
     {:ok, _deleted} = Ledger.delete_transaction(deleted)
 
     assert Ledger.balances() == %{
-             giro.id => %{balance: 6_500, cleared: 7_500, uncleared: -1_000},
-             cash.id => %{balance: -300, cleared: 0, uncleared: -300}
+             giro.id => %{balance: 6_500, cleared: 7_500, uncleared: -1_000, unapproved: 0},
+             cash.id => %{balance: -300, cleared: 0, uncleared: -300, unapproved: 1}
            }
   end
 

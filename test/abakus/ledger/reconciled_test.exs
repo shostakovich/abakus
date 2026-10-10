@@ -204,20 +204,22 @@ defmodule Abakus.Ledger.ReconciledTest do
     test "keeps amount, date and memo unless confirmed", c do
       %{split: split, groceries: groceries, to_savings: to_savings, inflow: inflow} = split(c)
 
-      lines = fn attrs ->
+      subtransactions = fn attrs ->
         [%{id: groceries.id, amount: -1_000}, Map.put(attrs, :id, to_savings.id)]
       end
 
       assert {:error, changeset} =
                Ledger.update_transaction(split, %{
                  amount: -1_300,
-                 subtransactions: lines.(%{amount: -300})
+                 subtransactions: subtransactions.(%{amount: -300})
                })
 
       assert %{subtransactions: [@counterpart]} = errors_on(changeset)
 
       assert {:error, changeset} =
-               Ledger.update_transaction(split, %{subtransactions: lines.(%{memo: "Rest"})})
+               Ledger.update_transaction(split, %{
+                 subtransactions: subtransactions.(%{memo: "Rest"})
+               })
 
       assert %{subtransactions: [@counterpart]} = errors_on(changeset)
 

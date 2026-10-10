@@ -43,19 +43,35 @@ defmodule Abakus.Ledger do
     quote do: type(fragment("strftime('%Y-%m-01', ?)", unquote(date)), :date)
   end
 
-  def list_accounts, do: Repo.all(from a in Account, order_by: [a.position, a.id])
+  @doc "The accounts in their order, with their transfer payees."
+  def list_accounts,
+    do: Repo.all(from a in Account, order_by: [a.position, a.id], preload: :transfer_payee)
 
   def get_account!(id), do: Repo.get!(Account, id)
 
-  @doc "Creates an account together with its transfer payee."
+  def change_account(%Account{} = account, attrs \\ %{}), do: Account.changeset(account, attrs)
+
+  @doc "Creates an account together with its transfer payee; without a position it goes after the others."
   def create_account(attrs) do
     Repo.transact(fn ->
-      with {:ok, account} <- Repo.insert(Account.changeset(%Account{}, attrs)),
+      changeset = %Account{} |> Account.changeset(attrs) |> put_next_position()
+
+      with {:ok, account} <- Repo.insert(changeset),
            {:ok, payee} <- Repo.insert(Payee.transfer_changeset(%Payee{}, account)) do
         {:ok, %{account | transfer_payee: payee}}
       end
     end)
   end
+
+  # Cast params have string keys; a given 0 counts as given, though it changes nothing.
+  defp put_next_position(changeset) do
+    if Map.has_key?(changeset.params, "position"),
+      do: changeset,
+      else: Changeset.put_change(changeset, :position, next_account_position())
+  end
+
+  defp next_account_position,
+    do: Repo.one(from a in Account, select: coalesce(max(a.position) + 1, 0))
 
   @doc "Updates an account; renaming it renames its transfer payee. Returns it with its transfer payee."
   def update_account(%Account{} = account, attrs) do
@@ -90,6 +106,13 @@ defmodule Abakus.Ledger do
     |> Repo.update()
   end
 
+  @doc "The regular payees (no transfer payees) by name."
+  def list_payees,
+    do:
+      Repo.all(
+        from p in Payee, where: is_nil(p.transfer_account_id), order_by: [p.lookup_key, p.id]
+      )
+
   @doc "Finds a payee by name, ignoring emoji and case. Regular payees win over transfer payees."
   def find_payee_by_name(name) when is_binary(name) do
     key = Names.lookup_key(name)
@@ -100,16 +123,66 @@ defmodule Abakus.Ledger do
   end
 
   @doc """
-  The account's transactions, newest first, with their subtransactions; without deleted ones and match proposals,
-  which count nowhere (see `list_match_proposals/1`).
+  The account's transactions, or with `:all` every account's, newest first, with payee, category (and its group)
+  and subtransactions; without deleted ones and match proposals, which count nowhere (see
+  `list_match_proposals/1`).
   """
-  def list_transactions(%Account{id: account_id}) do
+  def list_transactions(%Account{id: account_id}),
+    do: list_register(from t in in_register(), where: t.account_id == ^account_id)
+
+  def list_transactions(:all), do: list_register(in_register())
+
+  defp list_register(query) do
     Repo.all(
-      from t in in_register(),
-        where: t.account_id == ^account_id,
+      from t in query,
         order_by: [desc: t.date, desc: t.id],
-        preload: :subtransactions
+        preload: [
+          :payee,
+          :transfer_transaction,
+          category: :category_group,
+          subtransactions: [:payee, :transfer_transaction, category: :category_group]
+        ]
     )
+  end
+
+  @doc """
+  The category last used on a transfer between a budget account and the account of `transfer_payee_id`: on the
+  newest transaction or subtransaction in the budget account's register with that transfer payee and a category.
+  """
+  def last_transfer_category_id(budget_account_id, transfer_payee_id) do
+    transaction =
+      Repo.one(
+        from t in in_register(),
+          where:
+            t.account_id == ^budget_account_id and t.payee_id == ^transfer_payee_id and
+              not is_nil(t.category_id),
+          order_by: [desc: t.date, desc: t.id],
+          limit: 1,
+          select: {t.date, t.id, t.category_id}
+      )
+
+    subtransaction =
+      Repo.one(
+        from s in Subtransaction,
+          join: t in ^in_register(),
+          on: t.id == s.transaction_id,
+          where:
+            t.account_id == ^budget_account_id and s.payee_id == ^transfer_payee_id and
+              not is_nil(s.category_id),
+          order_by: [desc: t.date, desc: t.id],
+          limit: 1,
+          select: {t.date, t.id, s.category_id}
+      )
+
+    case Enum.reject([transaction, subtransaction], &is_nil/1) do
+      [] ->
+        nil
+
+      found ->
+        found
+        |> Enum.max_by(fn {date, id, _} -> {Date.to_gregorian_days(date), id} end)
+        |> elem(2)
+    end
   end
 
   @doc "The account's pending match proposals with the transactions they would merge into."
@@ -124,13 +197,33 @@ defmodule Abakus.Ledger do
     )
   end
 
+  @doc """
+  A transaction with what the transaction form needs: payee, counterpart (and for the counterpart of a split's
+  transfer the subtransaction it belongs to) and the subtransactions with their payees and counterparts.
+  """
+  def get_transaction!(id), do: Transaction |> Repo.get!(id) |> preload_for_form()
+
+  @doc "Like `get_transaction!/1`, but nil for an id that is no transaction."
+  def get_transaction(id) when is_integer(id) do
+    if transaction = Repo.get(Transaction, id), do: preload_for_form(transaction)
+  end
+
+  defp preload_for_form(transaction) do
+    Repo.preload(transaction, [
+      :payee,
+      :transfer_transaction,
+      :transfer_subtransaction,
+      subtransactions: [:payee, :transfer_transaction]
+    ])
+  end
+
   @doc "Transactions in the register, which count for listings and balances: not deleted and no match proposal."
   def in_register,
     do: from(t in Transaction, where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id))
 
   @doc """
-  Each account's register as `%{balance, cleared, uncleared}` by account id; cleared counts reconciled
-  transactions too. Accounts without transactions are missing.
+  Each account's register as `%{balance, cleared, uncleared, unapproved}` by account id; cleared counts reconciled
+  transactions too, unapproved is how many wait for approval. Accounts without transactions are missing.
   """
   def balances do
     Repo.all(
@@ -141,7 +234,8 @@ defmodule Abakus.Ledger do
            %{
              balance: sum(t.amount),
              cleared: coalesce(filter(sum(t.amount), t.cleared != :uncleared), 0),
-             uncleared: coalesce(filter(sum(t.amount), t.cleared == :uncleared), 0)
+             uncleared: coalesce(filter(sum(t.amount), t.cleared == :uncleared), 0),
+             unapproved: filter(count(t.id), not t.approved)
            }}
     )
     |> Map.new()
@@ -217,14 +311,64 @@ defmodule Abakus.Ledger do
   involved (`Transaction.validate_accounts/4`) and keeps the counterparts of transfers (`Abakus.Ledger.Transfers`).
   Approval defaults by source: manual entries are approved, imports and API entries are not. Categories are
   remembered as their payees' last categories.
+
+  Instead of `payee_id`, `payee_name` names the payee, also in a subtransaction: the regular payee with that lookup
+  key, else a new one; a blank name means none. A refused write creates no payee.
   """
   def create_transaction(attrs) do
     Repo.transact(fn ->
-      %Transaction{}
-      |> Transaction.changeset(attrs)
-      |> put_default_approval()
-      |> write(&Repo.insert/1, [])
+      with {:ok, attrs} <- put_payee_by_name(attrs) do
+        %Transaction{}
+        |> Transaction.changeset(attrs)
+        |> put_default_approval()
+        |> write(&Repo.insert/1, [])
+      end
     end)
+  end
+
+  defp put_payee_by_name(attrs) do
+    with {:ok, attrs} <- put_own_payee(attrs) do
+      put_subtransaction_payees(attrs)
+    end
+  end
+
+  defp put_own_payee(%{payee_name: name} = attrs), do: put_payee(attrs, :payee_name, name)
+  defp put_own_payee(%{"payee_name" => name} = attrs), do: put_payee(attrs, "payee_name", name)
+  defp put_own_payee(attrs), do: {:ok, attrs}
+
+  defp put_subtransaction_payees(%{subtransactions: [_ | _] = subtransactions} = attrs) do
+    subtransactions
+    |> Enum.reduce_while({:ok, []}, fn subtransaction, {:ok, done} ->
+      case put_own_payee(subtransaction) do
+        {:ok, subtransaction} -> {:cont, {:ok, [subtransaction | done]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, done} -> {:ok, %{attrs | subtransactions: Enum.reverse(done)}}
+      error -> error
+    end
+  end
+
+  defp put_subtransaction_payees(attrs), do: {:ok, attrs}
+
+  defp put_payee(attrs, key, name) do
+    id_key = if is_atom(key), do: :payee_id, else: "payee_id"
+
+    with {:ok, payee} <- payee_named(String.trim(name || "")) do
+      {:ok, attrs |> Map.delete(key) |> Map.put(id_key, payee && payee.id)}
+    end
+  end
+
+  defp payee_named(""), do: {:ok, nil}
+
+  defp payee_named(name) do
+    key = Names.lookup_key(name)
+
+    case Repo.one(from p in Payee, where: p.lookup_key == ^key and is_nil(p.transfer_account_id)) do
+      nil -> create_payee(%{name: name})
+      payee -> {:ok, payee}
+    end
   end
 
   defp put_default_approval(changeset) do
@@ -239,16 +383,44 @@ defmodule Abakus.Ledger do
   Updates a transaction as stored (the struct only names it) and its counterparts. A deleted transaction cannot
   be changed; the counterpart of a split's subtransaction changes only its own fields (cleared, approved, flag,
   category), the rest in its split. When the account changes, the origins move along. A change that alters a
-  reconciled transaction or counterpart needs `reconciled: :confirmed`.
+  reconciled transaction or counterpart needs `reconciled: :confirmed`. The payee may be given by name, as for
+  `create_transaction/1`.
   """
   def update_transaction(%Transaction{id: id}, attrs, opts \\ []) do
     Repo.transact(fn ->
-      Transaction
-      |> Repo.get!(id)
-      |> Repo.preload(:subtransactions)
-      |> Transaction.changeset(attrs)
-      |> write(&Repo.update/1, opts)
+      with {:ok, attrs} <- put_payee_by_name(attrs) do
+        Transaction
+        |> Repo.get!(id)
+        |> Repo.preload(:subtransactions)
+        |> Transaction.changeset(attrs)
+        |> write(&Repo.update/1, opts)
+      end
     end)
+  end
+
+  @doc """
+  Applies the same change to several transactions with `update_transaction/3`, all or none: the first refusal
+  stops and returns its changeset.
+  """
+  def update_transactions(transactions, attrs, opts \\ []) do
+    Repo.transact(fn -> all_or_none(transactions, &update_transaction(&1, attrs, opts)) end)
+  end
+
+  # Applies `fun` to each transaction until one is refused, inside the caller's database transaction.
+  defp all_or_none(transactions, fun) do
+    transactions
+    |> Enum.reduce_while({:ok, []}, &apply_next(&1, &2, fun))
+    |> case do
+      {:ok, done} -> {:ok, Enum.reverse(done)}
+      error -> error
+    end
+  end
+
+  defp apply_next(transaction, {:ok, done}, fun) do
+    case fun.(transaction) do
+      {:ok, transaction} -> {:cont, {:ok, [transaction | done]}}
+      error -> {:halt, error}
+    end
   end
 
   # Validates and saves inside the caller's database transaction; the accounts and counterparts involved are
@@ -458,6 +630,11 @@ defmodule Abakus.Ledger do
           {:ok, Transaction |> Repo.get!(id) |> Repo.preload(:subtransactions)}
       end
     end)
+  end
+
+  @doc "Deletes several transactions with `delete_transaction/2`, all or none: the first refusal stops."
+  def delete_transactions(transactions, opts \\ []) do
+    Repo.transact(fn -> all_or_none(transactions, &delete_transaction(&1, opts)) end)
   end
 
   defp pair_field(%Transaction{subtransactions: []}), do: :transfer_transaction_id

@@ -297,9 +297,8 @@ defmodule Abakus.YnabImport.Loader do
   defp counterpart_category(account, side, %{} = counterpart, context) do
     other = context.accounts[side["transfer_account_id"]]
 
-    if (other && Account.budget_account?(other)) and
-         not Account.budget_account?(context.accounts[account]),
-       do: context.categories[counterpart["category_id"]]
+    if other && Account.takes_category?(other, context.accounts[account]),
+      do: context.categories[counterpart["category_id"]]
   end
 
   defp counterpart_category(_account, _side, nil, _context), do: nil

@@ -2,11 +2,25 @@ defmodule AbakusWeb.Layouts do
   @moduledoc false
   use AbakusWeb, :html
 
+  alias Abakus.Names
+  alias AbakusWeb.{AccountGroups, Format}
+
   embed_templates "layouts/*"
 
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
-  attr :current, :atom, default: nil, values: [nil, :budget, :settings]
+  attr :current, :atom, default: nil, values: [nil, :budget, :accounts, :all_accounts, :settings]
+
+  attr :account_groups, :list,
+    default: [],
+    doc: "from `AbakusWeb.AccountGroups`; the sidebar lists the open ones"
+
+  attr :account_id, :integer, default: nil, doc: "the account whose register is shown"
+
+  attr :account_dialog, :map,
+    default: nil,
+    doc: "the open account form from `AbakusWeb.AccountDialog`, if any"
+
   slot :inner_block, required: true
 
   @doc """
@@ -54,7 +68,21 @@ defmodule AbakusWeb.Layouts do
       <nav class="nav flex-column gap-1" aria-label="Hauptnavigation">
         <.side_links items={main_items()} current={@current} />
       </nav>
-      <div class="flex-grow-1"></div>
+      <div class="flex-grow-1 mt-3">
+        <.side_accounts
+          groups={AccountGroups.open(@account_groups)}
+          current={@current}
+          account_id={@account_id}
+        />
+        <button
+          type="button"
+          id="side-add-account"
+          class="btn btn-sm w-100 my-2 app-side-btn app-side-text"
+          phx-click="open_account_dialog"
+        >
+          + Konto hinzufügen
+        </button>
+      </div>
       <nav class="nav flex-column pt-2 border-top" aria-label="Weitere">
         <.side_links items={more_items()} current={@current} />
       </nav>
@@ -82,10 +110,10 @@ defmodule AbakusWeb.Layouts do
       </.link>
       <nav aria-label="Hauptnavigation">
         <ul class="nav nav-pills">
-          <li :for={{key, label, _icon, path} <- main_items() ++ more_items()} class="nav-item">
+          <li :for={{key, label, _icon, path} <- phone_items() ++ more_items()} class="nav-item">
             <.link
-              class={["nav-link", @current == key && "active"]}
-              aria-current={@current == key && "page"}
+              class={["nav-link", phone_current(@current) == key && "active"]}
+              aria-current={phone_current(@current) == key && "page"}
               {nav_link(path, @current)}
             >
               {label}
@@ -102,6 +130,14 @@ defmodule AbakusWeb.Layouts do
       <.flash_group flash={@flash} />
       {render_slot(@inner_block)}
     </main>
+
+    <.live_component
+      :if={@account_dialog}
+      module={AbakusWeb.AccountDialog}
+      id="account-dialog"
+      account={@account_dialog.account}
+      balance={@account_dialog.balance}
+    />
     """
   end
 
@@ -122,7 +158,70 @@ defmodule AbakusWeb.Layouts do
     """
   end
 
-  defp main_items, do: [{:budget, "Budget", "budget", ~p"/"}]
+  attr :groups, :list, required: true
+  attr :current, :atom, required: true
+  attr :account_id, :integer, required: true
+
+  defp side_accounts(assigns) do
+    ~H"""
+    <section :for={group <- @groups} id={"side-group-#{group.key}"} aria-label={group.label}>
+      <div class="d-flex justify-content-between gap-2 mt-2 mb-1 app-side-h">
+        <span>{group.label}</span>
+        <span class={["app-q", group.balance < 0 && "app-neg"]}>{Format.amount(group.balance)}</span>
+      </div>
+      <nav class="nav flex-column">
+        <.link
+          :for={row <- group.rows}
+          id={"side-account-#{row.account.id}"}
+          class={["nav-link app-acc", row.account.id == @account_id && "active"]}
+          aria-current={row.account.id == @account_id && "page"}
+          title={"#{row.account.name} · #{Format.euros(row.balance)}"}
+          {nav_link(~p"/accounts/#{row.account}", @current)}
+        >
+          <.account_name name={row.account.name} />
+          <span
+            :if={row.unapproved > 0}
+            class="badge rounded-pill text-bg-primary"
+            title={"#{row.unapproved} zu bestätigen"}
+          >
+            {row.unapproved}
+          </span>
+          <span class={["app-bal", row.balance < 0 && "app-neg"]}>{Format.amount(row.balance)}</span>
+        </.link>
+      </nav>
+    </section>
+    """
+  end
+
+  attr :name, :string, required: true
+
+  # The leading emoji in a column of its own; the icon rail keeps only it, or the first letter of a name without.
+  defp account_name(assigns) do
+    assigns = assign(assigns, :parts, Names.split_emoji(assigns.name))
+
+    ~H"""
+    <span :if={elem(@parts, 0)} class="app-acc-e" aria-hidden="true">{elem(@parts, 0)}</span>
+    <span :if={!elem(@parts, 0)} class="app-acc-e app-acc-initial" aria-hidden="true">
+      {String.first(@name)}
+    </span>
+    <span class="app-acc-name">{elem(@parts, 1)}</span>
+    """
+  end
+
+  # Wide screens list the accounts in the sidebar and lead to all of them, as YNAB does; phones have no sidebar and
+  # lead to the account list.
+  defp main_items,
+    do: [
+      {:budget, "Budget", "budget", ~p"/"},
+      {:all_accounts, "Alle Konten", "bank", ~p"/accounts/all"}
+    ]
+
+  defp phone_items,
+    do: [{:budget, "Budget", "budget", ~p"/"}, {:accounts, "Konten", "bank", ~p"/accounts"}]
+
+  defp phone_current(:all_accounts), do: :accounts
+  defp phone_current(current), do: current
+
   defp more_items, do: [{:settings, "Einstellungen", "gear", ~p"/users/settings"}]
 
   # The settings have a live_session of their own behind the sudo plug, so links into and out

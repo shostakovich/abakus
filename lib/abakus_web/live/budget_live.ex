@@ -16,7 +16,13 @@ defmodule AbakusWeb.BudgetLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.app flash={@flash} current_scope={@current_scope} current={:budget}>
+    <Layouts.app
+      flash={@flash}
+      current_scope={@current_scope}
+      current={:budget}
+      account_groups={@account_groups}
+      account_dialog={@account_dialog}
+    >
       <h1 class="visually-hidden">Budget</h1>
       <div
         id="budget"
@@ -117,7 +123,8 @@ defmodule AbakusWeb.BudgetLive do
      socket
      |> assign(
        page_title: "Budget",
-       current: current_month(connect["today"]),
+       # The budget computes every month up to the browser's.
+       current: Date.beginning_of_month(Format.today(connect["today"])),
        fit: fit(connect["fit"]),
        groups: Categories.list_category_groups(),
        income: Categories.income_by_payee(),
@@ -257,14 +264,6 @@ defmodule AbakusWeb.BudgetLive do
 
   defp budget_path(first, :all), do: ~p"/?#{[month: Window.param(first)]}"
   defp budget_path(first, filter), do: ~p"/?#{[filter: filter, month: Window.param(first)]}"
-
-  # The browser's date, as long as it is a plausible one; the budget computes every month up to it.
-  defp current_month(today) do
-    case is_binary(today) && Date.from_iso8601(today) do
-      {:ok, %Date{year: year} = date} when year in 2000..2099 -> Date.beginning_of_month(date)
-      _ -> Date.beginning_of_month(Date.utc_today())
-    end
-  end
 
   # What fits as the hook measured it; 3 months at most, a strip of 7 to 12 months.
   defp fit(%{"months" => months, "inspector" => inspector, "span" => span})

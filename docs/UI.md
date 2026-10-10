@@ -13,14 +13,11 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 
 ## From today's YNAB
 
-- Sidebar: Konten, account groups (Budget, Tracking) with balances, add account, bank connections; account names
-  with emoji
+- Sidebar: bank connections
 - "Verteilen ▾" on Zu verteilen while money is unassigned
 - Targets: inspector with ring, "Weise noch X zu" + "Zuweisen", target editor
 - Inspector: targets this month, overspent categories, auto-assign (underfunded, as last month, spent last month,
   average, reset); "cover overspending" popover picking the source category
-- Register: balance equation (cleared + uncleared = working), banner "n neue Buchungen zu bestätigen", unapproved
-  rows marked, categories prefilled from the payee, outflow/inflow columns, cleared "C" / lock
 - Reconcile popover: latest bank balance vs. cleared balance, "Passt!" in one click, otherwise difference and
   adjustment transaction
 

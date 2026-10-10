@@ -31,6 +31,16 @@ defmodule Abakus.Ledger.Account do
   @doc "Whether the account is a budget account (its money belongs to the budget), not a tracking account."
   def budget_account?(%__MODULE__{kind: kind}), do: kind in @budget_kinds
 
+  @doc """
+  Whether a transaction in the account takes a category, `other` being the account it transfers to or from (nil
+  when it is no transfer): one in a budget account does, unless it is a transfer to another budget account.
+  """
+  def takes_category?(account, other \\ nil)
+  def takes_category?(account, nil), do: budget_account?(account)
+
+  def takes_category?(account, %__MODULE__{} = other),
+    do: budget_account?(account) and not budget_account?(other)
+
   @doc "The kinds of budget accounts."
   def budget_kinds, do: @budget_kinds
 
