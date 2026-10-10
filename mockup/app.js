@@ -1324,7 +1324,7 @@
       ${block(bank, "Letzter Banksaldo", rcManual != null ? "von dir eingegeben" : esc(a.bank.src))}
       <div class="${d ? "text-danger" : "text-success"}">${icon(d ? "i-alert" : "i-okc", "app-icon")}</div>
       ${block(cb, "Abgeglichener Saldo in Abakus")}</div>
-      ${d === 0 ? '<p class="small mt-3"><strong>Dein Konto sieht gut aus!</strong> Der abgeglichene Saldo stimmt mit dem letzten Banksaldo überein.</p><button type="button" class="btn btn-primary w-100" data-rc-ok>Passt!</button>'
+      ${d === 0 ? `<p class="small mt-3">Hat das Konto laut Bank <strong class="tabular-nums">${eur(bank)}</strong>?</p><button type="button" class="btn btn-primary w-100" data-rc-ok>Ja</button>`
         : `<p class="small mt-3 text-danger">Differenz: <strong class="tabular-nums">${signed(d)}</strong>. Fehlt eine Buchung oder ist eine nicht abgeglichen?</p><button type="button" class="btn btn-primary w-100" data-rc-adjust="${d}">Ausgleichsbuchung anlegen und abschließen</button><button type="button" class="btn btn-light w-100 mt-2" data-pop-close>Erst prüfen</button>`}
       <form class="mt-2" data-rc-form><label class="form-label small mb-1" for="rc-bank">Aktuellen Saldo eingeben</label><div class="input-group input-group-sm"><input class="form-control text-end tabular-nums" id="rc-bank" inputmode="decimal" placeholder="${num(bank)}"><button class="btn btn-outline-secondary" type="submit">Prüfen</button></div></form>`);
   }

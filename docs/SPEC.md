@@ -186,13 +186,6 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
   where that month's overspending lands. Property tests plus hand-computed, fictional fixtures in YNAB's month format; the YNAB
   import checks it against YNAB's own numbers (see acceptance v1).
 
-## Accounts and reconciling
-
-- **Reconcile** as in YNAB: a popover compares the latest bank balance (from bank sync, or the ledger balance
-  of the last file import) with the cleared balance; equal → one click marks all cleared transactions
-  reconciled. Different, or no bank balance → enter the bank balance, Abakus shows the difference and can create
-  an adjustment transaction (category "Ready to Assign", payee "Ausgleichsbuchung") before locking.
-
 ## Import
 
 All imports land as unapproved, `cleared`, with an external id. A transaction is never imported twice from the

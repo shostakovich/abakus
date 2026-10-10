@@ -132,6 +132,97 @@ defmodule Abakus.Ledger do
     )
   end
 
+  @doc "The account's newest bank balance from any source, the one reconciling offers; nil without one."
+  def latest_bank_balance(%Account{id: account_id}) do
+    Repo.one(
+      from b in BankBalance,
+        where: b.account_id == ^account_id,
+        order_by: [desc: b.date, desc: b.updated_at, desc: b.id],
+        limit: 1
+    )
+  end
+
+  @doc "What the account's cleared and reconciled register transactions dated up to `through` add up to."
+  def cleared_balance(%Account{id: account_id}, %Date{} = through) do
+    Repo.one(
+      from t in cleared_through(account_id, through),
+        select: coalesce(sum(t.amount), 0)
+    )
+  end
+
+  defp cleared_through(account_id, through),
+    do:
+      from(t in in_register(),
+        where: t.account_id == ^account_id and t.cleared != :uncleared and t.date <= ^through
+      )
+
+  @adjustment_payee "Ausgleichsbuchung"
+  @adjustment_memo "Beim Abgleichen automatisch angelegt"
+
+  @doc """
+  Reconciles the account against the bank's balance `%{amount, date, through}`: its cleared balance up to
+  `through` must differ from `amount` by `adjust` (default 0, the difference the user saw), else the difference is
+  refused as `{:error, {:difference, cents}}`. A difference is booked first as an adjustment dated `date`: payee
+  "Ausgleichsbuchung", approved, in a budget account to Ready to Assign. Then the approved cleared transactions in
+  the register dated up to `through` become reconciled, but not the ones an open match proposal waits for, and the
+  account's last reconciled at is now. Returns how many transactions were reconciled and the adjustment, if any.
+  """
+  def reconcile(
+        %Account{id: account_id},
+        %{amount: amount, date: date, through: through},
+        opts \\ []
+      ) do
+    Repo.transact(fn ->
+      account = Repo.get!(Account, account_id)
+      difference = amount - cleared_balance(account, through)
+
+      with :ok <- expect_difference(difference, Keyword.get(opts, :adjust, 0)),
+           {:ok, adjustment} <- adjust(account, difference, date) do
+        {reconciled, _} =
+          Repo.update_all(lockable(account_id, through),
+            set: [cleared: :reconciled, updated_at: DateTime.utc_now()]
+          )
+
+        Repo.update!(Changeset.change(account, last_reconciled_at: DateTime.utc_now()))
+        {:ok, %{reconciled: reconciled, adjustment: adjustment && Repo.reload!(adjustment)}}
+      end
+    end)
+  end
+
+  defp expect_difference(expected, expected), do: :ok
+  defp expect_difference(difference, _expected), do: {:error, {:difference, difference}}
+
+  # Approval and a match decision change a transaction, so they come before its lock.
+  defp lockable(account_id, through),
+    do:
+      from(t in cleared_through(account_id, through),
+        where: t.cleared == :cleared and t.approved,
+        where: t.id not in subquery(from p in proposals(), select: p.matched_transaction_id)
+      )
+
+  defp adjust(_account, 0, _date), do: {:ok, nil}
+
+  defp adjust(account, difference, date) do
+    create_transaction(%{
+      account_id: account.id,
+      date: date,
+      amount: difference,
+      payee_name: @adjustment_payee,
+      category_id: if(Account.budget_account?(account), do: ready_to_assign_id()),
+      memo: @adjustment_memo,
+      cleared: :cleared,
+      approved: true
+    })
+  end
+
+  defp ready_to_assign_id,
+    do:
+      Repo.one!(
+        from c in Category,
+          where: c.internal and c.name == ^Category.ready_to_assign_name(),
+          select: c.id
+      )
+
   def create_payee(attrs) do
     %Payee{}
     |> Payee.changeset(attrs)

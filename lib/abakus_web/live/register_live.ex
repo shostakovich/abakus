@@ -14,6 +14,9 @@ defmodule AbakusWeb.RegisterLive do
   "Alle Zuordnungen übernehmen" in the banner merges all. Approving all leaves them open, as that is a decision of
   its own.
 
+  "Abgleichen" reconciles one account (`Reconcile`): its popover asks whether the balance is right, reconcile mode
+  keeps the difference in a banner while transactions are cleared, until it is finished or cancelled.
+
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
   `account_groups`, so it is as fresh as the sidebar.
 
@@ -27,7 +30,7 @@ defmodule AbakusWeb.RegisterLive do
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
-  alias AbakusWeb.RegisterLive.{Balances, Components, Rows, TransactionEditor}
+  alias AbakusWeb.RegisterLive.{Balances, Components, Reconcile, Rows, TransactionEditor}
   alias Plug.Conn.Query
 
   import TransactionEditor, only: [confirmed: 1]
@@ -72,8 +75,10 @@ defmodule AbakusWeb.RegisterLive do
           >
             <.icon name="pencil" class="app-icon-sm" />
           </button>
+          <Reconcile.popover :if={@account && !@reconciling} state={@reconcile} />
         </div>
         <Components.meta account={@account} />
+        <Reconcile.banner :if={@reconciling} mode={@reconciling} />
         <Components.balances account={@account} balances={@balances} />
         <Components.toolbar
           account={@account}
@@ -141,7 +146,9 @@ defmodule AbakusWeb.RegisterLive do
        scope: nil,
        editor: nil,
        selected: MapSet.new(),
-       flag_menu: nil
+       flag_menu: nil,
+       reconcile: nil,
+       reconciling: nil
      )}
   end
 
@@ -186,6 +193,7 @@ defmodule AbakusWeb.RegisterLive do
   defp load(socket, :all) do
     socket
     |> assign(scope: :all, account: nil, selected: MapSet.new(), editor: nil)
+    |> assign(reconcile: nil, reconciling: nil)
     |> load_transactions()
   end
 
@@ -194,6 +202,7 @@ defmodule AbakusWeb.RegisterLive do
 
     socket
     |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
+    |> assign(reconcile: nil, reconciling: nil)
     |> load_transactions()
   end
 
@@ -427,6 +436,88 @@ defmodule AbakusWeb.RegisterLive do
     |> change(id, &Ledger.update_transaction(&1, %{flag: blank_to_nil(flag)}, confirmed(params)))
   end
 
+  def handle_event(
+        "reconcile_open",
+        _params,
+        %{assigns: %{account: %Account{} = account}} = socket
+      ),
+      do: {:noreply, assign(socket, :reconcile, ask(account, socket.assigns.today))}
+
+  def handle_event("reconcile_close", _params, socket),
+    do: {:noreply, assign(socket, :reconcile, nil)}
+
+  def handle_event("reconcile_no", _params, %{assigns: %{reconcile: %{} = state}} = socket),
+    do: {:noreply, assign(socket, :reconcile, %{state | step: :enter, error: nil})}
+
+  def handle_event(
+        "reconcile_yes",
+        _params,
+        %{assigns: %{reconcile: %{bank: bank}}} = socket
+      ),
+      do: {:noreply, reconcile(socket, bank, adjust: 0)}
+
+  def handle_event(
+        "reconcile_search",
+        _params,
+        %{assigns: %{reconcile: %{bank: bank}}} = socket
+      ),
+      do: {:noreply, start_reconciling(socket, bank)}
+
+  def handle_event(
+        "reconcile_start",
+        %{"balance" => text},
+        %{assigns: %{reconcile: %{} = state}} = socket
+      ) do
+    case Reconcile.entered(text, socket.assigns.today) do
+      {:ok, bank} -> {:noreply, start_reconciling(socket, bank)}
+      {:error, message} -> {:noreply, assign(socket, :reconcile, %{state | error: message})}
+    end
+  end
+
+  def handle_event("reconcile_cancel", _params, socket),
+    do: {:noreply, assign(socket, :reconciling, nil)}
+
+  def handle_event(
+        "reconcile_finish",
+        _params,
+        %{assigns: %{reconciling: %{bank: bank} = mode}} = socket
+      ),
+      do: {:noreply, reconcile(socket, bank, adjust: Reconcile.difference(mode))}
+
+  # Late clicks after the popover closed or the mode ended.
+  def handle_event("reconcile_" <> _event, _params, socket), do: {:noreply, socket}
+
+  # The popover's question: about the newest bank balance and the cleared balance up to its date, else about the
+  # cleared balance as it is today.
+  defp ask(account, today) do
+    bank =
+      case Ledger.latest_bank_balance(account) do
+        nil -> Reconcile.bank(Ledger.cleared_balance(account, today), today)
+        stored -> Reconcile.bank(stored)
+      end
+
+    account |> reconcile_mode(bank) |> Map.merge(%{step: :ask, error: nil})
+  end
+
+  defp start_reconciling(socket, bank) do
+    assign(socket, reconcile: nil, reconciling: reconcile_mode(socket.assigns.account, bank))
+  end
+
+  defp reconcile(socket, bank, opts) do
+    socket = assign(socket, reconcile: nil)
+
+    case Ledger.reconcile(socket.assigns.account, bank, opts) do
+      {:ok, result} ->
+        socket |> assign(:reconciling, nil) |> saved({:ok, result}, Reconcile.done_text(result))
+
+      {:error, {:difference, difference}} ->
+        socket |> put_flash(:error, Reconcile.refused_text(difference)) |> refresh()
+
+      {:error, changeset} ->
+        saved(socket, {:error, changeset})
+    end
+  end
+
   defp deleted_text(1), do: "Buchung gelöscht."
   defp deleted_text(count), do: "#{count} Buchungen gelöscht."
 
@@ -563,7 +654,15 @@ defmodule AbakusWeb.RegisterLive do
     |> assign(:account_groups, AccountGroups.load())
     |> load_transactions()
     |> assign_rows()
+    |> update(:reconciling, &follow_cleared(&1, socket.assigns.account))
   end
+
+  # Reconcile mode's cleared balance follows every change.
+  defp follow_cleared(nil, _account), do: nil
+  defp follow_cleared(%{bank: bank}, account), do: reconcile_mode(account, bank)
+
+  defp reconcile_mode(account, bank),
+    do: %{bank: bank, cleared: Ledger.cleared_balance(account, bank.through)}
 
   defp noreply(socket), do: {:noreply, socket}
 
