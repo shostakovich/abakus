@@ -10,7 +10,16 @@ defmodule Abakus.YnabImport.Loader do
 
   alias Abakus.{Categories, Ledger, Names, Repo}
   alias Abakus.Categories.{Assignment, Category, CategoryGroup, TargetSnooze, TargetVersion}
-  alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction, TransactionOrigin}
+
+  alias Abakus.Ledger.{
+    Account,
+    BankBalance,
+    Payee,
+    Subtransaction,
+    Transaction,
+    TransactionOrigin
+  }
+
   alias Abakus.YnabImport.{Plan, Targets}
 
   @kinds %{"checking" => :checking, "savings" => :savings, "cash" => :cash}
@@ -33,7 +42,7 @@ defmodule Abakus.YnabImport.Loader do
     Repo.update_all(Subtransaction, set: [transfer_transaction_id: nil])
 
     for schema <-
-          [TransactionOrigin, Subtransaction, Transaction, Payee, Account] ++
+          [TransactionOrigin, Subtransaction, Transaction, Payee, BankBalance, Account] ++
             [Assignment, TargetSnooze, TargetVersion],
         do: Repo.delete_all(schema)
 

@@ -27,6 +27,7 @@ defmodule Abakus.Ledger do
 
   alias Abakus.Ledger.{
     Account,
+    BankBalance,
     Matches,
     Payee,
     Subtransaction,
@@ -91,6 +92,44 @@ defmodule Abakus.Ledger do
     do: payee |> Payee.transfer_changeset(account) |> Repo.update()
 
   defp rename_transfer_payee(payee, _account, false = _renamed?), do: {:ok, payee}
+
+  @doc "The account a file's account (`BANKID`, nil for a card, and `ACCTID`) is linked to, if any."
+  def get_account_by_ofx(bank_id, acct_id) when is_binary(acct_id) do
+    query = from a in Account, where: a.ofx_acct_id == ^acct_id
+
+    query =
+      if bank_id,
+        do: where(query, [a], a.ofx_bank_id == ^bank_id),
+        else: where(query, [a], is_nil(a.ofx_bank_id))
+
+    Repo.one(query)
+  end
+
+  @doc """
+  Links the account to a file's account, so later files find it; an account has one link, and an account that had
+  this one loses it.
+  """
+  def link_ofx_account(%Account{} = account, bank_id, acct_id) do
+    Repo.transact(fn ->
+      with %Account{id: id} = linked when id != account.id <-
+             get_account_by_ofx(bank_id, acct_id) do
+        Repo.update!(Account.ofx_changeset(linked, nil, nil))
+      end
+
+      account |> Account.ofx_changeset(bank_id, acct_id) |> Repo.update()
+    end)
+  end
+
+  @doc "Records what the bank reports the account holds on a date; another one for that source and date replaces it."
+  def put_bank_balance(%Account{id: account_id}, attrs) do
+    %BankBalance{account_id: account_id}
+    |> BankBalance.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, [:amount, :updated_at]},
+      conflict_target: [:account_id, :source, :date],
+      returning: true
+    )
+  end
 
   def create_payee(attrs) do
     %Payee{}
@@ -721,6 +760,18 @@ defmodule Abakus.Ledger do
         |> TransactionOrigin.changeset(%{source: source, external_id: external_id})
         |> Repo.insert()
     end
+  end
+
+  @doc "Which of `external_ids` the account has from `source`, deleted transactions and proposals included."
+  def existing_external_ids(%Account{id: account_id}, source, external_ids) do
+    Repo.all(
+      from o in TransactionOrigin,
+        where:
+          o.account_id == ^account_id and o.source == ^source and
+            o.external_id in ^external_ids,
+        select: o.external_id
+    )
+    |> MapSet.new()
   end
 
   @doc "The transaction an external id was imported as or matched to, deleted ones and proposals included."

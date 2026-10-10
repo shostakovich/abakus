@@ -9,7 +9,10 @@ defmodule AbakusWeb.Layouts do
 
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
-  attr :current, :atom, default: nil, values: [nil, :budget, :accounts, :all_accounts, :settings]
+
+  attr :current, :atom,
+    default: nil,
+    values: [nil, :budget, :accounts, :all_accounts, :import, :settings]
 
   attr :account_groups, :list,
     default: [],
@@ -110,7 +113,7 @@ defmodule AbakusWeb.Layouts do
       </.link>
       <nav aria-label="Hauptnavigation">
         <ul class="nav nav-pills">
-          <li :for={{key, label, _icon, path} <- phone_items() ++ more_items()} class="nav-item">
+          <li :for={{key, label, _icon, path} <- phone_items()} class="nav-item">
             <.link
               class={["nav-link", phone_current(@current) == key && "active"]}
               aria-current={phone_current(@current) == key && "page"}
@@ -217,12 +220,20 @@ defmodule AbakusWeb.Layouts do
     ]
 
   defp phone_items,
-    do: [{:budget, "Budget", "budget", ~p"/"}, {:accounts, "Konten", "bank", ~p"/accounts"}]
+    do: [
+      {:budget, "Budget", "budget", ~p"/"},
+      {:accounts, "Konten", "bank", ~p"/accounts"},
+      import_item("Import"),
+      settings_item()
+    ]
 
   defp phone_current(:all_accounts), do: :accounts
   defp phone_current(current), do: current
 
-  defp more_items, do: [{:settings, "Einstellungen", "gear", ~p"/users/settings"}]
+  defp more_items, do: [import_item("Import & Sync"), settings_item()]
+
+  defp import_item(label), do: {:import, label, "sync", ~p"/import"}
+  defp settings_item, do: {:settings, "Einstellungen", "gear", ~p"/users/settings"}
 
   # The settings have a live_session of their own behind the sudo plug, so links into and out
   # of them load the page.

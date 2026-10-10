@@ -20,7 +20,7 @@ defmodule AbakusWeb.RegisterLive do
   use AbakusWeb, :live_view
 
   alias Abakus.Ledger
-  alias Abakus.Ledger.Transaction
+  alias Abakus.Ledger.{Account, Transaction}
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
   alias AbakusWeb.RegisterLive.{Balances, Components, Rows, TransactionEditor}
   alias Plug.Conn.Query
@@ -532,9 +532,9 @@ defmodule AbakusWeb.RegisterLive do
 
   # With no account taking manual entries there is nothing to book in.
   defp manual_entry?(nil, accounts),
-    do: Enum.any?(Map.values(accounts), &TransactionEditor.manual?/1)
+    do: Enum.any?(Map.values(accounts), &Account.takes_entries?/1)
 
-  defp manual_entry?(account, _accounts), do: TransactionEditor.manual?(account)
+  defp manual_entry?(account, _accounts), do: Account.takes_entries?(account)
 
   # The register's URL with the view, search and running balance, changed by `changes`; defaults stay out.
   defp register_path(assigns, changes) do

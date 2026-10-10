@@ -218,6 +218,15 @@ defmodule AbakusWeb.RegisterLive.Components do
       >
         <.icon name="plus" class="app-icon-sm" /> Buchung
       </button>
+      <.link
+        :if={@manual}
+        id="file-import"
+        navigate={~p"/import"}
+        class="btn btn-sm btn-link text-decoration-none d-inline-flex align-items-center gap-1"
+      >
+        <.icon name="file" class="app-icon-sm" />
+        <span class="d-md-none">Import</span><span class="d-none d-md-inline">Datei-Import</span>
+      </.link>
       <span
         :if={@account && @account.fed_by}
         id="feed-hint"
