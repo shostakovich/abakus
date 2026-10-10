@@ -38,6 +38,34 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
     end
   end
 
+  describe "target_head/1" do
+    test "a monthly target says what it sets aside or refills, without a day" do
+      assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: true}) ==
+               {"Jeden Monat weitere 50,00 € zurücklegen", nil}
+
+      assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: false}) ==
+               {"Jeden Monat auffüllen bis 50,00 €", nil}
+    end
+
+    test "a target by a date names its date, a repeating one without the year" do
+      once = %{
+        cadence: :by_date,
+        amount: 120_000,
+        due_on: ~D[2027-06-01],
+        repeats_yearly: false,
+        set_aside: true
+      }
+
+      assert Status.target_head(once) ==
+               {"1.200,00 € bis 1. Juni 2027 ansparen",
+                "Einmalig · weitere zurücklegen, verteilt auf die Monate bis dahin"}
+
+      assert Status.target_head(%{once | repeats_yearly: true, set_aside: false}) ==
+               {"1.200,00 € bis 1. Juni ansparen",
+                "Jedes Jahr · auffüllen bis, verteilt auf die Monate bis dahin"}
+    end
+  end
+
   describe "target_line/1" do
     test "overspent wins, with the exact amount" do
       assert Status.target_line(row(available: -1_250)) ==

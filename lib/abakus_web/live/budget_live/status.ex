@@ -34,7 +34,11 @@ defmodule AbakusWeb.BudgetLive.Status do
     }
   end
 
-  defp underfunded?(%CategoryMonth{} = row), do: row.underfunded > 0 and not row.snoozed
+  @doc "What the row's target still asks this month; nothing while it is snoozed."
+  def open_need(%CategoryMonth{snoozed: true}), do: 0
+  def open_need(%CategoryMonth{} = row), do: row.underfunded
+
+  defp underfunded?(row), do: open_need(row) > 0
 
   @doc """
   The target bar under the category name: its parts as `{percent, class}` and the status as its title (shown on
@@ -74,6 +78,25 @@ defmodule AbakusWeb.BudgetLive.Status do
   end
 
   defp line(title, bars), do: %{title: title, bars: bars}
+
+  @doc """
+  What a target asks for, as YNAB's target card says it: `{head, sub}`. A monthly target has no day; a repeating
+  target by a date names its day without the year.
+  """
+  def target_head(%{cadence: :monthly, amount: amount, set_aside: true}),
+    do: {"Jeden Monat weitere #{euros(amount)} zurücklegen", nil}
+
+  def target_head(%{cadence: :monthly, amount: amount, set_aside: false}),
+    do: {"Jeden Monat auffüllen bis #{euros(amount)}", nil}
+
+  def target_head(%{cadence: :by_date} = target) do
+    due = if target.repeats_yearly, do: day_month(target.due_on), else: long_date(target.due_on)
+    every = if target.repeats_yearly, do: "Jedes Jahr", else: "Einmalig"
+    mode = if target.set_aside, do: "weitere zurücklegen", else: "auffüllen bis"
+
+    {"#{euros(target.amount)} bis #{due} ansparen",
+     "#{every} · #{mode}, verteilt auf die Monate bis dahin"}
+  end
 
   @doc "Zu verteilen's class and label."
   def ready(%Month{ready_to_assign_shown: shown}) when shown < 0,

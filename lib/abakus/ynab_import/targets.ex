@@ -8,6 +8,7 @@ defmodule Abakus.YnabImport.Targets do
   get here (see `Unsupported`).
   """
 
+  alias Abakus.Categories.TargetVersion
   alias Abakus.YnabImport.Plan
 
   @doc "`{category_id, versions}` per regular category with targets; versions as `Categories.set_target/2` takes them."
@@ -105,14 +106,8 @@ defmodule Abakus.YnabImport.Targets do
   defp same_due?(%{due_on: a}, b), do: a == b
 
   # The due date may not lie before the version starts; the year after is the same yearly target.
-  defp from(%{repeats_yearly: true, due_on: due_on} = target, month) do
-    due_on =
-      due_on
-      |> Stream.iterate(&Date.shift(&1, year: 1))
-      |> Enum.find(&(not Date.before?(&1, month)))
-
-    %{target | due_on: due_on} |> Map.put(:from_month, month)
-  end
+  defp from(%{repeats_yearly: true, due_on: due_on} = target, month),
+    do: %{target | due_on: TargetVersion.next_due(due_on, month)} |> Map.put(:from_month, month)
 
   defp from(target, month), do: Map.put(target, :from_month, month)
 

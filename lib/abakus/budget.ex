@@ -50,17 +50,21 @@ defmodule Abakus.Budget do
   @doc """
   The assignments that fill the month's underfunded categories in budget order, as far as the month's Ready to
   Assign reaches without taking what later months have assigned (also in a closed month), the last one partly;
-  hidden and snoozed categories are skipped. Returns `{category_id, new_assigned}`.
+  hidden and snoozed categories are skipped, and with `only` (a category id) all others. Returns
+  `{category_id, new_assigned}`.
   """
-  def fill_underfunded(%__MODULE__{} = budget, month, current) do
+  def fill_underfunded(%__MODULE__{} = budget, month, current, only \\ nil) do
     month = Date.beginning_of_month(month)
     %Month{} = shown = budget |> months(current, month) |> Enum.find(&(&1.month == month))
     hidden = for %{id: id, hidden: true} <- budget.categories, into: MapSet.new(), do: id
-    rows = Enum.reject(shown.categories, &(&1.snoozed or MapSet.member?(hidden, &1.category_id)))
-    free = max(shown.ready_to_assign - shown.assigned_in_future, 0)
-
-    {fills, _left} = Enum.flat_map_reduce(rows, free, &fill/2)
+    rows = Enum.filter(shown.categories, &fillable?(&1, hidden, only))
+    {fills, _left} = Enum.flat_map_reduce(rows, Month.free(shown), &fill/2)
     fills
+  end
+
+  defp fillable?(row, hidden, only) do
+    not row.snoozed and not MapSet.member?(hidden, row.category_id) and
+      only in [nil, row.category_id]
   end
 
   defp fill(row, left) do

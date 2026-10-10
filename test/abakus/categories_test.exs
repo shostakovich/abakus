@@ -346,6 +346,78 @@ defmodule Abakus.CategoriesTest do
     end
   end
 
+  describe "move_assigned/4" do
+    test "moves an amount between two categories' assignments in the month" do
+      groceries = category_fixture()
+      rent = category_fixture()
+      Categories.assign(groceries, ~D[2026-10-01], 10_000)
+
+      assert {:ok, 3_000} = Categories.move_assigned(groceries, rent, ~D[2026-10-15], 3_000)
+
+      assert assigned(groceries, ~D[2026-10-01]) == 7_000
+      assert assigned(rent, ~D[2026-10-01]) == 3_000
+    end
+
+    test "takes from or gives to Zu verteilen, also beyond what is there" do
+      groceries = category_fixture()
+
+      assert {:ok, 5_000} =
+               Categories.move_assigned(:ready_to_assign, groceries, ~D[2026-10-01], 5_000)
+
+      assert {:ok, 7_000} =
+               Categories.move_assigned(groceries, :ready_to_assign, ~D[2026-10-01], 7_000)
+
+      assert assigned(groceries, ~D[2026-10-01]) == -2_000
+    end
+
+    test "changes nothing when one side is refused" do
+      groceries = category_fixture()
+      Categories.assign(groceries, ~D[2026-10-01], 1_000)
+
+      assert {:error, changeset} =
+               Categories.move_assigned(
+                 groceries,
+                 Categories.ready_to_assign!(),
+                 ~D[2026-10-01],
+                 500
+               )
+
+      assert %{category_id: ["ist intern"]} = errors_on(changeset)
+      assert assigned(groceries, ~D[2026-10-01]) == 1_000
+    end
+  end
+
+  describe "reset_assignments/2" do
+    test "resets what visible categories have assigned in the month" do
+      groceries = category_fixture()
+      rent = category_fixture()
+      hidden = category_fixture(hidden: true)
+      for c <- [groceries, rent, hidden], do: Categories.assign(c, ~D[2026-10-01], 1_000)
+      Categories.assign(groceries, ~D[2026-11-01], 1_000)
+
+      assert :ok = Categories.reset_assignments(~D[2026-10-15])
+
+      assert assigned(groceries, ~D[2026-10-01]) == 0
+      assert assigned(rent, ~D[2026-10-01]) == 0
+      assert assigned(hidden, ~D[2026-10-01]) == 1_000
+      assert assigned(groceries, ~D[2026-11-01]) == 1_000
+    end
+
+    test "resets one category" do
+      groceries = category_fixture()
+      rent = category_fixture()
+      for c <- [groceries, rent], do: Categories.assign(c, ~D[2026-10-01], 1_000)
+
+      assert :ok = Categories.reset_assignments(~D[2026-10-01], groceries)
+
+      assert assigned(groceries, ~D[2026-10-01]) == 0
+      assert assigned(rent, ~D[2026-10-01]) == 1_000
+    end
+  end
+
+  defp assigned(category, month),
+    do: Map.get(Categories.budget().assigned, {category.id, month}, 0)
+
   defp german(changeset, field) do
     for {^field, error} <- changeset.errors, do: AbakusWeb.CoreComponents.translate_error(error)
   end

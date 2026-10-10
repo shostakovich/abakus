@@ -75,5 +75,8 @@ defmodule Abakus.Budget.Month do
     }
   end
 
+  @doc "What can be assigned without taking what later months have assigned."
+  def free(%__MODULE__{} = month), do: max(month.ready_to_assign - month.assigned_in_future, 0)
+
   defp sum(rows, fun), do: rows |> Enum.map(fun) |> Enum.sum()
 end

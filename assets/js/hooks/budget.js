@@ -102,3 +102,26 @@ export const FilterChips = {
     toggle.classList.toggle("btn-light", !folded)
   },
 }
+
+// A popover below its anchor (above it when there is no room), its right edge at the anchor's, kept on screen.
+export const Popover = {
+  mounted() {
+    this.place()
+    this.el.querySelector("select, input:not([type=radio]):not([type=hidden])")?.focus()
+  },
+
+  updated() {
+    this.place()
+  },
+
+  place() {
+    const anchor = document.getElementById(this.el.dataset.anchor)
+    if (!anchor) return
+    const box = anchor.getBoundingClientRect()
+    const { offsetWidth: width, offsetHeight: height } = this.el
+    const below = box.bottom + height + 8 <= window.innerHeight
+    this.el.style.left = `${clamp(box.right - width, 8, window.innerWidth - width - 8)}px`
+    this.el.style.top = `${below ? box.bottom + 6 : Math.max(8, box.top - height - 6)}px`
+    this.el.style.visibility = "visible"
+  },
+}

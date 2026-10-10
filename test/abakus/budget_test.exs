@@ -313,6 +313,26 @@ defmodule Abakus.BudgetTest do
       assert %CategoryMonth{needed: 15_000, underfunded: 15_000} = row(months[@nov], 1)
     end
 
+    test "the bar of a target by a date shows the whole amount" do
+      targets = %{
+        1 => [
+          target(from_month: @oct, cadence: :by_date, amount: 120_000, due_on: ~D[2027-06-01])
+        ]
+      }
+
+      months = months(budget(targets: targets, assigned: %{{1, @oct} => 8_000}))
+
+      assert %CategoryMonth{saved: 8_000, underfunded: 5_334} = row(months[@oct], 1)
+      assert_in_delta row(months[@oct], 1).progress, 8_000 / 120_000, 1.0e-9
+    end
+
+    test "only a target by a date counts what is saved" do
+      months = months(budget(targets: %{1 => [target(amount: 5_000)]}))
+
+      assert %CategoryMonth{saved: nil} = row(months[@oct], 1)
+      assert %CategoryMonth{saved: nil} = row(months[@oct], 2)
+    end
+
     test "a target by a date without repeating ends after its month" do
       targets = %{
         1 => [target(from_month: @oct, cadence: :by_date, amount: 30_000, due_on: ~D[2027-03-01])]
@@ -354,7 +374,7 @@ defmodule Abakus.BudgetTest do
       assigned = Map.new([@oct, @nov, @dec], &{{1, &1}, 10_000})
       months = months(budget(targets: targets, assigned: assigned), @oct, ~D[2027-01-01])
 
-      assert %CategoryMonth{needed: 10_000} = row(months[~D[2027-01-01]], 1)
+      assert %CategoryMonth{needed: 10_000, saved: 0} = row(months[~D[2027-01-01]], 1)
     end
 
     test "a repeating target changed after its due month counts only the new cycle" do
@@ -370,7 +390,7 @@ defmodule Abakus.BudgetTest do
 
       months = months(budget(targets: targets, assigned: assigned), @oct, ~D[2027-02-01])
 
-      assert %CategoryMonth{needed: 2_000} = row(months[~D[2027-02-01]], 1)
+      assert %CategoryMonth{needed: 2_000, saved: 2_000} = row(months[~D[2027-02-01]], 1)
     end
 
     test "applies the version in effect, none before the first or after cadence none" do
@@ -406,7 +426,7 @@ defmodule Abakus.BudgetTest do
     end
   end
 
-  describe "fill_underfunded/3" do
+  describe "fill_underfunded/4" do
     test "fills in budget order as far as Ready to Assign reaches, skipping hidden categories" do
       budget =
         budget(
@@ -454,6 +474,16 @@ defmodule Abakus.BudgetTest do
         )
 
       assert Budget.fill_underfunded(budget, @sep, @oct) == []
+    end
+
+    test "fills only the category asked for" do
+      budget =
+        budget(
+          income: %{@oct => 10_000},
+          targets: %{1 => [target(amount: 4_000)], 2 => [target(amount: 3_000)]}
+        )
+
+      assert Budget.fill_underfunded(budget, @oct, @oct, 2) == [{2, 3_000}]
     end
   end
 end

@@ -75,6 +75,7 @@ defmodule Abakus.Budget.Target do
         needed: needed,
         underfunded: underfunded,
         progress: progress(target, needed, underfunded, saved + row.assigned),
+        saved: if(target.cadence == :by_date, do: saved + row.assigned),
         snoozed: snoozed
     }
   end

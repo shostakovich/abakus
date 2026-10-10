@@ -28,6 +28,13 @@ defmodule Abakus.Categories.TargetVersion do
     timestamps()
   end
 
+  @doc "A yearly due date moved on by whole years until it is not before `month`; that is the same target."
+  def next_due(due_on, month) do
+    due_on
+    |> Stream.iterate(&Date.shift(&1, year: 1))
+    |> Enum.find(&(not Date.before?(&1, month)))
+  end
+
   @doc "Changeset for a target version whose `category_id` is set; any day stands for its month."
   def changeset(version, attrs) do
     version

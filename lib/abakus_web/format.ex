@@ -59,6 +59,12 @@ defmodule AbakusWeb.Format do
   @doc ~S|"07.03.", the date without its year.|
   def day(%Date{} = date), do: Calendar.strftime(date, "%d.%m.")
 
+  @doc ~S|"1. Juni 2027"|
+  def long_date(%Date{year: year} = date), do: "#{day_month(date)} #{year}"
+
+  @doc ~S|"24. Dezember", the written-out date without its year.|
+  def day_month(%Date{day: day} = date), do: "#{day}. #{month_name(date)}"
+
   @doc "The browser's date (ISO 8601), as long as it is a plausible one; else today in UTC."
   def today(param) do
     case is_binary(param) && Date.from_iso8601(param) do
