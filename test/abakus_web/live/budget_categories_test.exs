@@ -225,7 +225,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
       view |> element("#assign-#{c.games.id}-2026-10") |> render_blur(%{"value" => "5"})
 
       refute has_element?(view, "#category-#{c.movies.id}")
-      assert has_element?(view, "#available-#{c.games.id}-2026-10", "5,00 €")
+      assert has_element?(view, "#available-#{c.games.id}-2026-10", "5,00 €")
     end
 
     test "asking again about reconciled transactions keeps the chosen category", c do

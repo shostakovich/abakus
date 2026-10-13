@@ -41,10 +41,10 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   describe "target_head/1" do
     test "a monthly target says what it sets aside or refills, without a day" do
       assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: true}) ==
-               {"Jeden Monat weitere 50,00 € zurücklegen", nil}
+               {"Jeden Monat weitere 50,00 € zurücklegen", nil}
 
       assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: false}) ==
-               {"Jeden Monat auffüllen bis 50,00 €", nil}
+               {"Jeden Monat auffüllen bis 50,00 €", nil}
     end
 
     test "a target by a date names its date, a repeating one without the year" do
@@ -57,11 +57,11 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       }
 
       assert Status.target_head(once) ==
-               {"1.200,00 € bis 1. Juni 2027 ansparen",
+               {"1.200,00 € bis 1. Juni 2027 ansparen",
                 "Einmalig · weitere zurücklegen, verteilt auf die Monate bis dahin"}
 
       assert Status.target_head(%{once | repeats_yearly: true, set_aside: false}) ==
-               {"1.200,00 € bis 1. Juni ansparen",
+               {"1.200,00 € bis 1. Juni ansparen",
                 "Jedes Jahr · auffüllen bis, verteilt auf die Monate bis dahin"}
     end
   end
@@ -69,7 +69,7 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   describe "target_line/1" do
     test "overspent wins, with the exact amount" do
       assert Status.target_line(row(available: -1_250)) ==
-               %{title: "Überzogen 12,50 €", bars: [{100, "bg-danger"}]}
+               %{title: "Überzogen 12,50 €", bars: [{100, "bg-danger"}]}
     end
 
     test "nothing without a target" do
@@ -80,14 +80,14 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       assert %{title: "Pausiert", bars: [{100, "bg-secondary"}]} =
                Status.target_line(row(target: @monthly, snoozed: true, underfunded: 10))
 
-      assert %{title: "Noch 50,00 € nötig", bars: [{93, "bg-warning"}]} =
+      assert %{title: "Noch 50,00 € nötig", bars: [{93, "bg-warning"}]} =
                Status.target_line(row(target: @monthly, underfunded: 5_000, progress: 0.9286))
 
       assert %{title: "Ausgegeben", bars: [{100, "bg-success progress-bar-striped"}]} =
                Status.target_line(row(target: @monthly, assigned: 1_000, activity: -1_000))
 
       assert %{
-               title: "Finanziert, 29,99 € von 105,55 € ausgegeben",
+               title: "Finanziert, 29,99 € von 105,55 € ausgegeben",
                bars: [{28, _spent}, {72, "bg-success"}]
              } =
                Status.target_line(
@@ -159,8 +159,8 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
     month = %Month{month: @oct, uncovered: [{@nov, 30_000}, {~D[2027-01-01], 5}]}
 
     assert Status.uncovered(month) == [
-             "November nicht gedeckt: es fehlen 300,00 €",
-             "Januar 2027 nicht gedeckt: es fehlen 0,05 €"
+             "November nicht gedeckt: es fehlen 300,00 €",
+             "Januar 2027 nicht gedeckt: es fehlen 0,05 €"
            ]
   end
 end

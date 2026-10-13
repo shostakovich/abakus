@@ -63,13 +63,13 @@ defmodule AbakusWeb.ImportLiveTest do
     assert has_element?(view, "#import-preview", "4 Buchungen · 01.09.2026–28.09.2026")
     assert has_element?(view, "#statement-0", "DE02100200300000004711")
     assert has_element?(view, "#statement-0", "BLZ 10020030")
-    assert has_element?(view, "#statement-0-balance", "2.423,23 € am 30.09.2026")
+    assert has_element?(view, "#statement-0-balance", "2.423,23 € am 30.09.2026")
     assert has_element?(view, "#statement-0-new", "4 neu")
     assert has_element?(view, "#statement-0-existing", "0 bereits vorhanden")
     assert has_element?(view, "#statement-0 tbody tr", "Bäckerei Korn")
     assert has_element?(view, "#statement-0 tbody tr", "Kartenzahlung")
-    assert has_element?(view, "#statement-0 tbody tr", "−6,40 €")
-    assert has_element?(view, "#statement-0 tbody tr", "+2.500,00 €")
+    assert has_element?(view, "#statement-0 tbody tr", "−6,40 €")
+    assert has_element?(view, "#statement-0 tbody tr", "+2.500,00 €")
 
     # The file's account is unknown, so the preview asks; fed and closed accounts are not offered.
     assert has_element?(view, "#statement-0-account option", "💶 Girokonto")
@@ -215,7 +215,7 @@ defmodule AbakusWeb.ImportLiveTest do
 
     assert has_element?(view, "#import-preview", "2 Buchungen · 02.10.2026–05.10.2026")
     assert has_element?(view, "#statement-0", "DE02100200300000005811")
-    assert has_element?(view, "#statement-0-balance", "1.180,60 € am 08.10.2026")
+    assert has_element?(view, "#statement-0-balance", "1.180,60 € am 08.10.2026")
     assert has_element?(view, "#statement-1", "DE02100200300000005822")
     refute has_element?(view, "#statement-1-balance")
 

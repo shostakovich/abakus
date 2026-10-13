@@ -41,12 +41,12 @@ defmodule AbakusWeb.BudgetLiveTest do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       {:ok, view, _html} = open(c.conn)
 
-      assert has_element?(view, "#ready-2026-10", "1.000,00 €")
+      assert has_element?(view, "#ready-2026-10", "1.000,00 €")
 
       view |> element("#assign-#{c.groceries.id}-2026-10") |> render_blur(%{"value" => "250,5"})
 
       assert assigned(c.groceries, @october) == 25_050
-      assert has_element?(view, "#available-#{c.groceries.id}-2026-10", "250,50 €")
+      assert has_element?(view, "#available-#{c.groceries.id}-2026-10", "250,50 €")
       assert has_element?(view, "#total-2026-10-assigned", "250,50")
 
       assert has_element?(
@@ -55,7 +55,7 @@ defmodule AbakusWeb.BudgetLiveTest do
                "250,50"
              )
 
-      assert has_element?(view, "#ready-2026-10", "749,50 €")
+      assert has_element?(view, "#ready-2026-10", "749,50 €")
       assert has_element?(view, ~s|#assign-#{c.groceries.id}-2026-10[value="250,50"]|)
     end
 
@@ -66,7 +66,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       view |> element("#assign-#{c.rent.id}-2026-10") |> render_blur(%{"value" => "1.050"})
 
       assert assigned(c.rent, @october) == 105_000
-      assert has_element?(view, "#ready-2026-10.text-danger", "−950,00 €")
+      assert has_element?(view, "#ready-2026-10.text-danger", "−950,00 €")
       assert has_element?(view, "#month-2026-10", "Zu viel verteilt")
     end
 
@@ -119,8 +119,8 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       {:ok, view, _html} = open(c.conn, ~p"/", months: 2, inspector: true)
 
-      assert has_element?(view, "#ready-2026-10", "100,00 €")
-      warning = "November nicht gedeckt: es fehlen 300,00 €"
+      assert has_element?(view, "#ready-2026-10", "100,00 €")
+      warning = "November nicht gedeckt: es fehlen 300,00 €"
       assert has_element?(view, "#inspector .app-uncovered", warning)
       assert has_element?(view, ~s|#month-2026-10 .app-uncovered[title="#{warning}"]|)
 
@@ -139,15 +139,15 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(
                view,
                "#month-2026-10.is-focus.is-current[aria-current=date]",
-               "400,00 €"
+               "400,00 €"
              )
 
-      assert has_element?(view, "#month-2026-11:not(.is-focus):not(.is-current)", "400,00 €")
+      assert has_element?(view, "#month-2026-11:not(.is-focus):not(.is-current)", "400,00 €")
       assert has_element?(view, "#month-2026-12:not(.is-focus)")
       refute has_element?(view, "#month-2026-10", "Verfügbare Mittel")
       assert has_element?(view, "#inspector", "Verfügbare Mittel")
       assert has_element?(view, "#inspector", "Für spätere Monate")
-      assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .app-pill", "300,00 €")
+      assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .app-pill", "300,00 €")
       assert has_element?(view, "#available-#{c.groceries.id}-2026-11 .app-q", "600,00")
       assert has_element?(view, "#strip button.is-focus", "Okt")
     end
@@ -301,8 +301,8 @@ defmodule AbakusWeb.BudgetLiveTest do
       {:ok, view, _html} = open(c.conn)
 
       assert has_element?(view, "#category-uncategorised", "Nicht kategorisiert")
-      assert has_element?(view, "#available-uncategorised-2026-10 .text-bg-danger", "−9,99 €")
-      assert has_element?(view, ~s|#category-uncategorised .app-target[title="Überzogen 9,99 €"]|)
+      assert has_element?(view, "#available-uncategorised-2026-10 .text-bg-danger", "−9,99 €")
+      assert has_element?(view, ~s|#category-uncategorised .app-target[title="Überzogen 9,99 €"]|)
       refute has_element?(view, "#assign-uncategorised-2026-10")
     end
 
@@ -319,7 +319,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       assert has_element?(
                view,
-               ~s|#category-#{c.groceries.id} .app-target[title="Noch 50,00 € nötig"]|
+               ~s|#category-#{c.groceries.id} .app-target[title="Noch 50,00 € nötig"]|
              )
 
       refute has_element?(view, "#category-#{c.groceries.id} .app-line2", "50,00")

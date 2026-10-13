@@ -39,12 +39,12 @@ defmodule AbakusWeb.BudgetInspectorTest do
 
       assert has_element?(view, "#inspector h2", "Oktober 2026")
       assert has_element?(view, "#inspector-overspent .card-header", "2 überzogen")
-      assert has_element?(view, "#overspent-#{c.fuel.id}", "−25,00 €")
+      assert has_element?(view, "#overspent-#{c.fuel.id}", "−25,00 €")
       assert has_element?(view, "#overspent-#{c.fuel.id} button", "Decken")
       assert has_element?(view, ~s|#overspent-uncategorised a[href="/accounts/all"]|, "Zuordnen")
-      assert has_element?(view, "#auto-underfunded", "500,00 €")
-      assert has_element?(view, "#auto-reset", "100,00 €")
-      assert has_element?(view, "#inspector-future", "300,00 €")
+      assert has_element?(view, "#auto-underfunded", "500,00 €")
+      assert has_element?(view, "#auto-reset", "100,00 €")
+      assert has_element?(view, "#inspector-future", "300,00 €")
       assert has_element?(view, "#inspector-future", "November 2026")
     end
 
@@ -56,14 +56,14 @@ defmodule AbakusWeb.BudgetInspectorTest do
       view |> element("#cover-#{c.fuel.id}") |> render_click()
 
       assert has_element?(view, "#popover", "Überzug decken · ⛽ Tanken")
-      assert has_element?(view, "#cover-from option[value=rta]", "Zu verteilen (1.000,00 €)")
+      assert has_element?(view, "#cover-from option[value=rta]", "Zu verteilen (1.000,00 €)")
 
       view |> form("#cover-form", %{"from" => "rta"}) |> render_submit()
 
       assert assigned(c.fuel, @october) == 2_500
       refute has_element?(view, "#popover")
       refute has_element?(view, "#inspector-overspent")
-      assert has_element?(view, "#flash-info", "25,00 € aus „Zu verteilen“ gedeckt.")
+      assert has_element?(view, "#flash-info", "25,00 € aus „Zu verteilen“ gedeckt.")
     end
 
     test "Unterfinanziert fills every target's share as far as Zu verteilen reaches", c do
@@ -127,8 +127,8 @@ defmodule AbakusWeb.BudgetInspectorTest do
       |> render_submit()
 
       assert assigned(c.rent, @october) == 25_000
-      assert has_element?(view, "#flash-info", "250,00 € an 🏠 Miete verteilt.")
-      assert has_element?(view, "#ready-2026-10", "750,00 €")
+      assert has_element?(view, "#flash-info", "250,00 € an 🏠 Miete verteilt.")
+      assert has_element?(view, "#ready-2026-10", "750,00 €")
     end
 
     test "Verteilen offers to fill the underfunded only while money is unassigned", c do
@@ -168,7 +168,7 @@ defmodule AbakusWeb.BudgetInspectorTest do
       assert has_element?(
                view,
                "#flash-info",
-               "30,00 € von 🛒 Lebensmittel nach 🏠 Miete verschoben."
+               "30,00 € von 🛒 Lebensmittel nach 🏠 Miete verschoben."
              )
 
       view |> element("#pill-#{c.rent.id}-2026-10") |> render_click()
@@ -270,9 +270,9 @@ defmodule AbakusWeb.BudgetInspectorTest do
       assert has_element?(view, "#category-#{c.groceries.id}.is-sel")
       assert has_element?(view, "#inspector-name", "🛒 Lebensmittel")
       assert has_element?(view, "#inspector", "Oktober 2026 · aktueller Monat")
-      assert has_element?(view, "#inspector-available .app-pill", "160,00 €")
+      assert has_element?(view, "#inspector-available .app-pill", "160,00 €")
       assert has_element?(view, "#inspector-available", "Überzug im Sep")
-      assert has_element?(view, "#inspector-available", "−20,00 €")
+      assert has_element?(view, "#inspector-available", "−20,00 €")
       assert has_element?(view, "#inspector-note", "Wocheneinkauf")
       assert has_element?(view, "#inspector-target", "Kein Ziel")
 
@@ -303,11 +303,11 @@ defmodule AbakusWeb.BudgetInspectorTest do
 
       view |> element("#select-#{c.rent.id}") |> render_click()
 
-      assert has_element?(view, "#inspector-target", "1.200,00 € bis 1. Juni 2027 ansparen")
+      assert has_element?(view, "#inspector-target", "1.200,00 € bis 1. Juni 2027 ansparen")
       assert has_element?(view, "#target-status .progress-bar.app-w-7")
-      assert has_element?(view, "#target-status", "Noch 53,34 € nötig")
-      assert has_element?(view, "#inspector-target", "80,00 von 1.200,00 €")
-      assert has_element?(view, "#target-rest", "Weise noch 53,34 € zu")
+      assert has_element?(view, "#target-status", "Noch 53,34 € nötig")
+      assert has_element?(view, "#inspector-target", "80,00 von 1.200,00 €")
+      assert has_element?(view, "#target-rest", "Weise noch 53,34 € zu")
 
       view |> element("#target-assign") |> render_click()
 
@@ -334,9 +334,9 @@ defmodule AbakusWeb.BudgetInspectorTest do
       assert %{cadence: :monthly, amount: 70_000, set_aside: false, from_month: @october} =
                Categories.target_for(c.groceries, @october)
 
-      assert has_element?(view, "#inspector-target", "Jeden Monat auffüllen bis 700,00 €")
+      assert has_element?(view, "#inspector-target", "Jeden Monat auffüllen bis 700,00 €")
       refute has_element?(view, "#inspector-target", "bis zum")
-      assert has_element?(view, "#target-status", "Noch 700,00 € nötig")
+      assert has_element?(view, "#target-status", "Noch 700,00 € nötig")
       assert has_element?(view, "#flash-info", "Ziel gespeichert.")
     end
 
@@ -367,7 +367,7 @@ defmodule AbakusWeb.BudgetInspectorTest do
       assert %{cadence: :by_date, amount: 45_000, due_on: ~D[2026-12-24], repeats_yearly: true} =
                Categories.target_for(c.rent, @october)
 
-      assert has_element?(view, "#inspector-target", "450,00 € bis 24. Dezember ansparen")
+      assert has_element?(view, "#inspector-target", "450,00 € bis 24. Dezember ansparen")
       assert has_element?(view, "#inspector-target", "Jedes Jahr")
 
       view |> element("#target-edit") |> render_click()
@@ -469,7 +469,7 @@ defmodule AbakusWeb.BudgetInspectorTest do
       view |> element("#target-snooze", "Fortsetzen") |> render_click()
 
       refute Categories.target_snoozed?(c.groceries, @october)
-      assert has_element?(view, "#target-status", "Noch 400,00 € nötig")
+      assert has_element?(view, "#target-status", "Noch 400,00 € nötig")
     end
 
     test "auto-assign works on the selected category alone", c do

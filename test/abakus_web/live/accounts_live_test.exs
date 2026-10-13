@@ -32,17 +32,17 @@ defmodule AbakusWeb.AccountsLiveTest do
       refute has_element?(view, ~s|aside a[href="/accounts"]|)
 
       assert has_element?(view, "#group-budget h2", "Budget")
-      assert has_element?(view, "#group-budget-balance", "2.437,51 €")
+      assert has_element?(view, "#group-budget-balance", "2.437,51 €")
       assert has_element?(view, "#group-budget #account-#{c.giro.id}", "💶 Girokonto")
       assert has_element?(view, "#account-#{c.giro.id}", "Girokonto · Gehalt")
-      assert has_element?(view, "#account-#{c.giro.id}-balance", "2.450,01 €")
-      assert has_element?(view, "#account-#{c.giro.id}-cleared", "2.500,00 €")
-      assert has_element?(view, "#account-#{c.cash.id}-balance.app-neg", "−12,50 €")
-      assert has_element?(view, "#account-#{c.cash.id}-cleared", "0,00 €")
+      assert has_element?(view, "#account-#{c.giro.id}-balance", "2.450,01 €")
+      assert has_element?(view, "#account-#{c.giro.id}-cleared", "2.500,00 €")
+      assert has_element?(view, "#account-#{c.cash.id}-balance.app-neg", "−12,50 €")
+      assert has_element?(view, "#account-#{c.cash.id}-cleared", "0,00 €")
 
       assert has_element?(view, "#group-tracking h2", "Tracking")
       assert has_element?(view, "#group-tracking #account-#{c.depot.id}", "📈 Depot")
-      assert has_element?(view, "#account-#{c.depot.id}-cleared", "10.000,00 €")
+      assert has_element?(view, "#account-#{c.depot.id}-cleared", "10.000,00 €")
 
       assert has_element?(view, "#group-closed h2", "Geschlossen")
       assert has_element?(view, "#group-closed #account-#{c.old.id}", "Altes Sparbuch")
@@ -270,7 +270,7 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       assert has_element?(
                view,
-               ~s|#close-account[data-confirm="Konto „Voll“ schließen? Es hat noch einen Saldo von 12,00 €."]|
+               ~s|#close-account[data-confirm="Konto „Voll“ schließen? Es hat noch einen Saldo von 12,00 €."]|
              )
     end
   end

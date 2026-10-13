@@ -101,9 +101,9 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#register-meta", "Gehalt")
 
       # 3.240,00 − 41,06 cleared − 312,80 reconciled; −87,43 − 200,00 uncleared
-      assert has_element?(view, "#balance-cleared", "2.886,14 €")
-      assert has_element?(view, "#balance-uncleared", "−287,43 €")
-      assert has_element?(view, "#balance-working", "2.598,71 €")
+      assert has_element?(view, "#balance-cleared", "2.886,14 €")
+      assert has_element?(view, "#balance-uncleared", "−287,43 €")
+      assert has_element?(view, "#balance-working", "2.598,71 €")
 
       ids =
         view
@@ -126,8 +126,8 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute has_element?(view, "#register-table th", "Konto")
 
       assert has_element?(view, "#tx-card-#{c.shopping.id}", "Frischmarkt")
-      assert has_element?(view, "#tx-card-#{c.shopping.id}", "−87,43 €")
-      assert has_element?(view, "#tx-card-#{c.salary.id}", "+3.240,00 €")
+      assert has_element?(view, "#tx-card-#{c.shopping.id}", "−87,43 €")
+      assert has_element?(view, "#tx-card-#{c.salary.id}", "+3.240,00 €")
       refute has_element?(view, "#register-cards", "false")
       refute has_element?(view, "#tx-#{c.gain.id}")
     end
@@ -151,7 +151,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.depot}")
 
       assert has_element?(view, "#feed-hint", "Depot-App")
-      assert has_element?(view, "#balance-working", "1.125,00 €")
+      assert has_element?(view, "#balance-working", "1.125,00 €")
       refute has_element?(view, "#balance-cleared")
 
       shared = account_fixture(name: "👫 Geteilt", fed_by: :shared_expenses)
@@ -181,7 +181,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.savings}")
 
       # The counterpart of the transfer is the only one.
-      assert has_element?(view, "#balance-working", "200,00 €")
+      assert has_element?(view, "#balance-working", "200,00 €")
 
       empty = account_fixture(name: "Leer")
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{empty}")
@@ -214,18 +214,18 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#tx-#{c.transfer.transfer_transaction_id}", "🏦")
 
       # Budget: 2.598,71 + 200,00 (savings, uncleared)
-      assert has_element?(view, "#balance-cleared", "2.886,14 €")
-      assert has_element?(view, "#balance-uncleared", "−87,43 €")
-      assert has_element?(view, "#balance-working", "2.798,71 €")
-      assert has_element?(view, "#balance-tracking", "1.125,00 €")
-      assert has_element?(view, "#balance-total", "3.923,71 €")
+      assert has_element?(view, "#balance-cleared", "2.886,14 €")
+      assert has_element?(view, "#balance-uncleared", "−87,43 €")
+      assert has_element?(view, "#balance-working", "2.798,71 €")
+      assert has_element?(view, "#balance-tracking", "1.125,00 €")
+      assert has_element?(view, "#balance-total", "3.923,71 €")
       refute has_element?(view, "#running-toggle")
     end
 
     test "the account list leads to it and shows the total", c do
       {:ok, view, _html} = live(c.conn, ~p"/accounts")
 
-      assert has_element?(view, "#accounts-total", "3.923,71 €")
+      assert has_element?(view, "#accounts-total", "3.923,71 €")
       assert has_element?(view, ~s|a[href="/accounts/all"]|, "Alle Konten")
     end
   end
@@ -319,7 +319,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       view |> element("#tx-#{c.shopping.id}-cleared") |> render_click()
       assert reload(c.shopping).cleared == :cleared
       assert has_element?(view, "#tx-#{c.shopping.id}-cleared.is-cleared")
-      assert has_element?(view, "#balance-cleared", "2.798,71 €")
+      assert has_element?(view, "#balance-cleared", "2.798,71 €")
       assert has_element?(view, "aside #side-account-#{c.giro.id}", "2.598,71")
 
       view |> element("#tx-card-#{c.shopping.id}-cleared") |> render_click()

@@ -93,7 +93,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert transaction.payee.name == "🥖 Bäckerei"
       assert transaction.category_id == c.groceries.id
       assert has_element?(view, "#tx-#{transaction.id}", "Bäckerei")
-      assert has_element?(view, "#balance-working", "−12,34 €")
+      assert has_element?(view, "#balance-working", "−12,34 €")
     end
 
     test "typing one of outflow and inflow clears the other; income goes to Ready to Assign", c do

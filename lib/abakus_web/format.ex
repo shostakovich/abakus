@@ -19,9 +19,9 @@ defmodule AbakusWeb.Format do
   def count(number) when is_integer(number) and number >= 0,
     do: Regex.replace(~r/\B(?=(\d{3})+$)/, Integer.to_string(number), ".")
 
-  def euros(cents), do: amount(cents) <> " €"
+  def euros(cents), do: amount(cents) <> " €"
 
-  @doc ~S|Euros with a plus for inflows: "+48,75 €", "−9,99 €".|
+  @doc ~S|Euros with a plus for inflows: "+48,75 €", "−9,99 €".|
   def signed_euros(cents) when cents > 0, do: "+" <> euros(cents)
   def signed_euros(cents), do: euros(cents)
 
