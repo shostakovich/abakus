@@ -22,7 +22,7 @@ defmodule AbakusWeb.ContentSecurityPolicyTest do
     assert [script] =
              html
              |> LazyHTML.from_document()
-             |> LazyHTML.query("script#theme-script[nonce]")
+             |> LazyHTML.query("head script[nonce]")
              |> Enum.to_list()
 
     assert LazyHTML.attribute(script, "nonce") == [nonce]
@@ -30,9 +30,9 @@ defmodule AbakusWeb.ContentSecurityPolicyTest do
     assert policy == %{
              "default-src" => ["'self'"],
              "script-src" => ["'self'", "'nonce-#{nonce}'"],
-             "style-src" => ["'self'", "https://felt-css.rocu.de"],
+             "style-src" => ["'self'"],
              "font-src" => ["'self'"],
-             "img-src" => ["'self'", "https://felt-css.rocu.de", "data:"],
+             "img-src" => ["'self'", "data:"],
              "connect-src" => ["'self'", "ws://localhost:4002"],
              "frame-ancestors" => ["'none'"],
              "object-src" => ["'none'"],
@@ -74,11 +74,15 @@ defmodule AbakusWeb.ContentSecurityPolicyTest do
       assert_secure(get(build_conn(), ~p"/images/icon.svg").resp_headers)
     end
 
-    test "a missing page, in German" do
+    test "a missing page, in German, with the stored theme" do
       conn = get(build_conn(), "/nope")
+      html = html_response(conn, 404)
 
-      assert html_response(conn, 404) =~ "Seite nicht gefunden"
+      assert html =~ "Seite nicht gefunden"
       assert_secure(conn.resp_headers)
+      ["'self'", "'nonce-" <> nonce] = csp(conn)["script-src"]
+      assert html =~ ~s( nonce="#{String.trim_trailing(nonce, "'")}">)
+      assert html =~ "setzkasten:theme"
     end
 
     test "an unacceptable format" do

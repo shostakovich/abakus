@@ -147,9 +147,9 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
         phx-click="edit_open"
         phx-value-edit="new_group"
       >
-        <.icon name="plus" class="app-icon-sm" />Gruppe
+        <.icon name="plus" />Gruppe
       </button>
-      <.popover :if={@edit} edit={@edit} />
+      <.editor :if={@edit} edit={@edit} />
     </div>
     """
   end
@@ -161,7 +161,7 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
     doc: "aligns the popover to the right edge of what opened it"
 
   @doc "The popover: a name to add or rename, or which category takes over a deleted one."
-  def popover(assigns) do
+  def editor(assigns) do
     ~H"""
     <div
       id="edit-pop"

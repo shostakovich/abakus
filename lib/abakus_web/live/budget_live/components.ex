@@ -7,10 +7,11 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   use AbakusWeb, :html
 
-  import AbakusWeb.Format
+  import AbakusWeb.Format, except: [amount: 1]
 
   alias Abakus.Names
   alias AbakusWeb.BudgetLive.{CategoryEditor, Status, Window}
+  alias AbakusWeb.Format
 
   attr :filter, :atom, required: true
   attr :counts, :map, required: true
@@ -30,7 +31,7 @@ defmodule AbakusWeb.BudgetLive.Components do
         phx-click="filter"
         phx-value-filter={key}
       >
-        <.icon :if={tone} name="alert" class="app-icon-sm" />{label}
+        <.icon :if={tone} name="triangle-alert" />{label}
       </button>
       <div
         id="filters-more"
@@ -99,7 +100,7 @@ defmodule AbakusWeb.BudgetLive.Components do
         phx-click="step"
         phx-value-by="-1"
       >
-        <.icon name="back" />
+        <.icon name="chevron-left" />
       </button>
       <%= for entry <- @window.strip do %>
         <span :if={entry.year} class="app-year">{entry.year}</span>
@@ -126,7 +127,7 @@ defmodule AbakusWeb.BudgetLive.Components do
         phx-click="step"
         phx-value-by="1"
       >
-        <.icon name="chevron" />
+        <.icon name="chevron-right" />
       </button>
     </div>
     """
@@ -226,7 +227,7 @@ defmodule AbakusWeb.BudgetLive.Components do
     assigns = assign(assigns, :status, Status.ready(assigns.month))
 
     ~H"""
-    <div class="app-min-w-0 mt-auto">
+    <div class="min-w-0 mt-auto">
       <div id={"ready-#{@key}"} class={["app-rta-big", elem(@status, 0)]}>
         {euros(@month.ready_to_assign_shown)}
       </div>
@@ -237,7 +238,7 @@ defmodule AbakusWeb.BudgetLive.Components do
           class="app-uncovered text-danger d-inline-flex"
           title={Enum.join(Status.uncovered(@month), "\n")}
         >
-          <.icon name="alert" class="app-icon-sm" />
+          <.icon name="triangle-alert" />
           <span class="visually-hidden">{Enum.join(Status.uncovered(@month), ", ")}</span>
         </span>
       </div>
@@ -258,7 +259,7 @@ defmodule AbakusWeb.BudgetLive.Components do
       scope="col"
     >
       <span class="app-colh">
-        {label}<b id={"total-#{@key}-#{field}"}>{amount(Map.fetch!(@month, field))}</b>
+        {label}<b id={"total-#{@key}-#{field}"}>{Format.amount(Map.fetch!(@month, field))}</b>
       </span>
     </th>
     """
@@ -296,7 +297,7 @@ defmodule AbakusWeb.BudgetLive.Components do
                 |> JS.toggle_attribute({"aria-expanded", "true", "false"})
               }
             >
-              <.icon name="down" class="app-icon-sm" />
+              <.icon name="chevron-down" />
             </button>
             <%= if @group_id do %>
               <button
@@ -321,12 +322,12 @@ defmodule AbakusWeb.BudgetLive.Components do
                 phx-value-edit="new_category"
                 phx-value-group={@group_id}
               >
-                <.icon name="plus" class="app-icon-sm" />
+                <.icon name="plus" />
               </button>
             <% else %>
               <span class="app-label">{@name}</span>
             <% end %>
-            <CategoryEditor.popover :if={@edit} edit={@edit} />
+            <CategoryEditor.editor :if={@edit} edit={@edit} />
           </div>
         </th>
         <%= for {key, totals} <- Enum.map(@months, &{Window.param(&1), Map.get(@totals, &1, %{})}) do %>
@@ -335,7 +336,7 @@ defmodule AbakusWeb.BudgetLive.Components do
             id={Map.has_key?(totals, field) && "#{@id}-#{key}-#{field}"}
             class={["app-num", field == :assigned && "app-ms", total_class(field, totals[field])]}
           >
-            {totals[field] && amount(totals[field])}
+            {totals[field] && Format.amount(totals[field])}
           </td>
         <% end %>
       </tr>
@@ -385,7 +386,7 @@ defmodule AbakusWeb.BudgetLive.Components do
         >
           <.category_name name={@name} />
         </button>
-        <.category_name :if={not @assignable} name={@name} icon="alert" />
+        <.category_name :if={not @assignable} name={@name} icon="triangle-alert" />
         <.target_line line={Status.target_line(@cells[@focus])} />
       </td>
       <%= for {month, key, cell, typed} <- columns(@months, @cells, @id, @invalid) do %>
@@ -398,7 +399,7 @@ defmodule AbakusWeb.BudgetLive.Components do
               cell.assigned == 0 && "app-zero",
               typed && "is-invalid"
             ]}
-            value={typed || amount(cell.assigned)}
+            value={typed || Format.amount(cell.assigned)}
             inputmode="decimal"
             autocomplete="off"
             aria-label={"#{@name}, zugewiesen im #{month_year(month)}"}
@@ -411,7 +412,7 @@ defmodule AbakusWeb.BudgetLive.Components do
           />
         </td>
         <td id={"activity-#{@id}-#{key}"} class={["app-num", activity_class(cell.activity)]}>
-          {amount(cell.activity)}
+          {Format.amount(cell.activity)}
         </td>
         <td id={"available-#{@id}-#{key}"} class="app-num">
           <.pill :if={month == @focus} cell={cell} id={@assignable && "pill-#{@id}-#{key}"} />
@@ -442,7 +443,7 @@ defmodule AbakusWeb.BudgetLive.Components do
     ~H"""
     <span class="app-catname">
       <span class="app-emoji" aria-hidden="true">
-        <.icon :if={@icon} name={@icon} class="app-icon-sm text-warning" />{elem(@parts, 0)}
+        <.icon :if={@icon} name={@icon} class="text-warning" />{elem(@parts, 0)}
       </span>
       <span class="app-label" title={@name}>{elem(@parts, 1)}</span>
     </span>
@@ -504,7 +505,7 @@ defmodule AbakusWeb.BudgetLive.Components do
   defp pill_class({class, _icon}), do: ["badge rounded-pill", class]
   defp pill_icon(:zero), do: nil
   defp pill_icon({_class, icon}), do: icon
-  defp pill_text(:zero, _cell), do: amount(0)
+  defp pill_text(:zero, _cell), do: Format.amount(0)
   defp pill_text(_status, cell), do: euros(cell.available)
 
   attr :cell, :any, required: true
@@ -515,7 +516,9 @@ defmodule AbakusWeb.BudgetLive.Components do
 
     ~H"""
     <span class={["app-q", @status.class]}>
-      <span :if={@status.dot} class="app-udot" title="unterfinanziert"></span>{amount(@cell.available)}
+      <span :if={@status.dot} class="app-udot" title="unterfinanziert"></span>{Format.amount(
+        @cell.available
+      )}
     </span>
     """
   end
@@ -538,7 +541,7 @@ defmodule AbakusWeb.BudgetLive.Components do
         </td>
         <%= for value <- Enum.map(@months, &Map.get(row.amounts, &1, 0)) do %>
           <td class="app-ms"></td>
-          <td class={["app-num", value == 0 && "app-zero"]}>{amount(value)}</td>
+          <td class={["app-num", value == 0 && "app-zero"]}>{Format.amount(value)}</td>
           <td></td>
         <% end %>
       </tr>

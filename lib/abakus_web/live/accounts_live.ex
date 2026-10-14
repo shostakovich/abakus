@@ -16,6 +16,7 @@ defmodule AbakusWeb.AccountsLive do
       flash={@flash}
       current_scope={@current_scope}
       current={:accounts}
+      width={:narrow}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
     >
@@ -32,11 +33,11 @@ defmodule AbakusWeb.AccountsLive do
 
   defp account_list(assigns) do
     ~H"""
-    <div class="app-narrow">
+    <div>
       <.header>
         Konten
         <:actions>
-          <.button id="add-account" type="button" size="sm" phx-click="open_account_dialog">
+          <.button id="add-account" size={:sm} icon="plus" phx-click="open_account_dialog">
             Konto hinzufügen
           </.button>
         </:actions>
@@ -61,7 +62,7 @@ defmodule AbakusWeb.AccountsLive do
             navigate={~p"/accounts/#{row.account}"}
             class="list-group-item list-group-item-action d-flex align-items-center gap-3"
           >
-            <span class="me-auto app-min-w-0">
+            <span class="me-auto min-w-0">
               <span class="d-block fw-semibold text-truncate">
                 {row.account.name}
                 <span
@@ -102,7 +103,7 @@ defmodule AbakusWeb.AccountsLive do
             {Format.euros(@total)}
           </span>
         </div>
-        <.button variant="light" class="w-100" navigate={~p"/accounts/all"}>Alle Konten</.button>
+        <.button class="w-full" navigate={~p"/accounts/all"}>Alle Konten</.button>
       </div>
     </div>
     """

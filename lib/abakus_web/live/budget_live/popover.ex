@@ -9,9 +9,10 @@ defmodule AbakusWeb.BudgetLive.Popover do
   """
   use AbakusWeb, :html
 
-  import AbakusWeb.Format
+  import AbakusWeb.Format, except: [amount: 1]
 
   alias AbakusWeb.BudgetLive.{Components, Inspector, Status}
+  alias AbakusWeb.Format
 
   @doc "Opens a popover at the anchor's element; a pill opens on \"Decken\" while its category is overspent."
   def open(:pick, anchor, _entry, inspector) do
@@ -23,7 +24,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
       kind: :pick,
       anchor: anchor,
       category_id: suggested && suggested.category.id,
-      amount: suggested && amount(pick_amount(suggested, inspector.free)),
+      amount: suggested && Format.amount(pick_amount(suggested, inspector.free)),
       error: nil
     }
   end
@@ -65,7 +66,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
   attr :inspector, Inspector, required: true
 
   @doc "The open popover."
-  def popover(assigns) do
+  def editor(assigns) do
     assigns =
       assign(assigns, :entry, Inspector.find(assigns.inspector, assigns.popover[:category_id]))
 
@@ -145,7 +146,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
       phx-click="select"
       phx-value-category={@entry.category.id}
     >
-      Details und Ziel <.icon name="chevron" class="app-icon-sm" />
+      Details und Ziel <.icon name="chevron-right" />
     </button>
     """
   end
@@ -216,7 +217,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
         <input
           id="move-amount"
           name="amount"
-          value={amount(@amount)}
+          value={Format.amount(@amount)}
           class={["form-control text-end app-q", @error && "is-invalid"]}
           inputmode="decimal"
           autocomplete="off"

@@ -93,7 +93,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <span>{AccountGroups.kind_label(@account.kind)}</span>
         <span :if={@account.closed}>Geschlossen</span>
         <span :if={@account.last_reconciled_at} class="d-inline-flex align-items-center gap-1">
-          <.icon name="lock" class="app-icon-sm" />
+          <.icon name="lock" />
           Abgeglichen am {Format.date(DateTime.to_date(@account.last_reconciled_at))}
         </span>
         <span :if={@account.note}>{@account.note}</span>
@@ -136,7 +136,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           {Format.euros(headline(@account, @balances))}
         </span>
         <span class="text-body-secondary small">{headline_label(@account)}</span>
-        <.icon name="chevron" class="app-icon-sm text-body-secondary app-sum-chev" />
+        <.icon name="chevron-right" class="text-body-secondary app-sum-chev" />
       </summary>
       <div :if={!portfolio?(@account)} class="pt-2">
         <.equation balances={if @account, do: @balances, else: @balances.budget} />
@@ -234,7 +234,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         phx-click="new"
         phx-value-layout="row"
       >
-        <.icon name="plus" class="app-icon-sm" /> Buchung
+        <.icon name="plus" /> Buchung
       </button>
       <.link
         :if={@manual}
@@ -242,7 +242,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         navigate={~p"/import"}
         class="btn btn-sm btn-link text-decoration-none d-inline-flex align-items-center gap-1"
       >
-        <.icon name="file" class="app-icon-sm" />
+        <.icon name="file-text" />
         <span class="d-md-none">Import</span><span class="d-none d-md-inline">Datei-Import</span>
       </.link>
       <span
@@ -250,7 +250,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         id="feed-hint"
         class="small text-body-secondary d-inline-flex align-items-center gap-1 px-2"
       >
-        <.icon name="info" class="app-icon-sm" />
+        <.icon name="info" />
         {feed_hint(@account)}, keine Buchungen von Hand oder per Datei
       </span>
       <span
@@ -289,7 +289,7 @@ defmodule AbakusWeb.RegisterLive.Components do
               patch={@paths.running}
               aria-pressed={to_string(@running)}
             >
-              <.icon name="check" class={["app-icon-sm", !@running && "invisible"]} /> Laufender Saldo
+              <.icon name="check" class={[!@running && "invisible"]} /> Laufender Saldo
             </.link>
           </li>
         </ul>
@@ -301,7 +301,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         phx-change="search"
         phx-submit="search"
       >
-        <span class="input-group-text"><.icon name="search" class="app-icon-sm" /></span>
+        <span class="input-group-text"><.icon name="search" /></span>
         <input
           type="search"
           name="q"
@@ -368,7 +368,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         phx-click="approve_selected"
         {confirm(@waiting)}
       >
-        <.icon name="check" class="app-icon-sm" /> Bestätigen
+        <.icon name="check" /> Bestätigen
       </button>
       <div class="dropup" phx-click-away={hide_dropdown("#categorise-menu", "#categorise-toggle")}>
         <button
@@ -547,7 +547,7 @@ defmodule AbakusWeb.RegisterLive.Components do
               />
             </th>
             <th class="app-flag-col">
-              <span class="visually-hidden">Markierung</span><.icon name="flag" class="app-icon-sm" />
+              <span class="visually-hidden">Markierung</span><.icon name="flag" />
             </th>
             <th class="app-date-col">Datum</th>
             <th :if={@columns.all}>Konto</th>
@@ -665,7 +665,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             aria-label="Teile ein- oder ausklappen"
             phx-click={JS.toggle_class("is-collapsed", to: "#tx-#{@transaction.id}-rows")}
           >
-            <.icon name="down" class="app-icon-sm" />
+            <.icon name="chevron-down" />
           </button>
           <.category transaction={@transaction} accounts={@accounts} />
         </td>
@@ -769,7 +769,7 @@ defmodule AbakusWeb.RegisterLive.Components do
     ~H"""
     <div class="d-flex flex-wrap align-items-center gap-2">
       <span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">
-        <.icon name="link" class="app-icon-sm" /> {match_text(
+        <.icon name="link" /> {match_text(
           @proposal.matched_transaction,
           @accounts
         )}
@@ -829,7 +829,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           class="list-group-item app-unapproved-item"
         >
           <div class="d-flex align-items-start gap-2">
-            <span class="app-payee-ph flex-grow-1 app-min-w-0">{payee(transaction, @accounts)}</span>
+            <span class="app-payee-ph flex-grow-1 min-w-0">{payee(transaction, @accounts)}</span>
             <.signed amount={transaction.amount} class="fw-bold" />
           </div>
           <div class="small text-body-secondary app-ph-l2">
@@ -852,10 +852,10 @@ defmodule AbakusWeb.RegisterLive.Components do
             id={"tx-card-#{transaction.id}-edit"}
             phx-click="edit"
             phx-value-id={transaction.id}
-            class="d-block flex-grow-1 app-min-w-0 text-reset text-decoration-none"
+            class="d-block flex-grow-1 min-w-0 text-reset text-decoration-none"
           >
             <div class="d-flex align-items-start gap-2">
-              <span class="app-payee-ph flex-grow-1 app-min-w-0">{payee(transaction, @accounts)}</span>
+              <span class="app-payee-ph flex-grow-1 min-w-0">{payee(transaction, @accounts)}</span>
               <.signed amount={transaction.amount} class="fw-bold" />
             </div>
             <div class="d-flex align-items-center gap-2 app-ph-l2 small">
@@ -884,7 +884,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             id={"tx-card-#{transaction.id}-edit"}
             phx-click="edit"
             phx-value-id={transaction.id}
-            class="d-block flex-grow-1 app-min-w-0 text-reset text-decoration-none"
+            class="d-block flex-grow-1 min-w-0 text-reset text-decoration-none"
           >
             <div class="app-payee-ph">{payee(transaction, @accounts)}</div>
             <div class="small text-body-secondary text-truncate">
@@ -902,7 +902,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             class={["app-flag is-set", "app-flag-#{transaction.flag}"]}
             title={"Markierung: #{flag_label(transaction.flag)}"}
           >
-            <.icon name="flag" class="app-icon-sm" />
+            <.icon name="flag" />
           </span>
           <.signed amount={transaction.amount} class="fw-semibold" />
         </div>
@@ -927,8 +927,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <span class="app-clear is-cleared">C</span> abgeglichen (bei der Bank gebucht)
       </span>
       <span class="d-inline-flex align-items-center gap-1">
-        <span class="app-clear is-reconciled"><.icon name="lock" class="app-icon-sm" /></span>
-        abgeschlossen, gesperrt
+        <span class="app-clear is-reconciled"><.icon name="lock" /></span> abgeschlossen, gesperrt
       </span>
     </div>
     """
@@ -952,7 +951,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         phx-click="flag_menu"
         phx-value-id={@transaction.id}
       >
-        <.icon name="flag" class="app-icon-sm" />
+        <.icon name="flag" />
       </button>
       <div
         :if={@open}
@@ -977,7 +976,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             phx-value-flag={flag}
             {confirm([@transaction])}
           >
-            <.icon name="flag" class={"app-icon-sm app-flag-#{flag}"} />{label}
+            <.icon name="flag" class={"app-flag-#{flag}"} />{label}
           </button>
           <button
             id="flag-menu-none"
@@ -1015,7 +1014,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       phx-value-reconciled="confirmed"
       data-confirm="Diese Buchung ist abgeschlossen. Entsperren?"
     >
-      <.icon name="lock" class="app-icon-sm" />
+      <.icon name="lock" />
     </button>
     """
   end
@@ -1054,7 +1053,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       phx-value-id={@transaction.id}
       {confirm([@transaction])}
     >
-      <.icon name="check" class="app-icon-sm" />
+      <.icon name="check" />
     </button>
     """
   end

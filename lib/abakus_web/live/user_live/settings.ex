@@ -38,8 +38,8 @@ defmodule AbakusWeb.UserLive.Settings do
               </div>
             </div>
             <.button
-              variant="outline-danger"
-              size="sm"
+              variant={:danger_outline}
+              size={:sm}
               phx-click="delete_passkey"
               phx-value-id={passkey.id}
               data-confirm={"Passkey „#{passkey.name}“ löschen?"}
@@ -82,7 +82,9 @@ defmodule AbakusWeb.UserLive.Settings do
             spellcheck="false"
             required
           />
-          <.button phx-disable-with="Wird gesendet …">E-Mail ändern</.button>
+          <.button type="submit" variant={:primary} phx-disable-with="Wird gesendet …">
+            E-Mail ändern
+          </.button>
         </.form>
       </.card>
 
@@ -115,8 +117,8 @@ defmodule AbakusWeb.UserLive.Settings do
               </div>
             </div>
             <.button
-              variant="outline-danger"
-              size="sm"
+              variant={:danger_outline}
+              size={:sm}
               phx-click="revoke_api_token"
               phx-value-id={api_token.id}
               data-confirm={"Token „#{api_token.name}“ widerrufen? Programme mit diesem Token verlieren den Zugriff sofort."}
@@ -137,7 +139,9 @@ defmodule AbakusWeb.UserLive.Settings do
             maxlength="60"
             required
           />
-          <.button phx-disable-with="Wird erstellt …">Token erstellen</.button>
+          <.button type="submit" variant={:primary} phx-disable-with="Wird erstellt …">
+            Token erstellen
+          </.button>
         </.form>
       </.card>
     </Components.page>

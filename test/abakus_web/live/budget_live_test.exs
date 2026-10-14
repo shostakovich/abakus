@@ -31,10 +31,15 @@ defmodule AbakusWeb.BudgetLiveTest do
       {:ok, view, _html} = open(conn)
 
       assert has_element?(view, "h1", "Budget")
-      assert has_element?(view, ~s|aside nav a.active[aria-current=page][href="/"]|, "Budget")
-      assert has_element?(view, ~s|aside a[href="/settings"]|, "Einstellungen")
-      assert has_element?(view, "aside #side-toggle[phx-hook=SideToggle]")
-      assert has_element?(view, ~s|aside #log-out[href="/users/log-out"][data-method=delete]|)
+      assert has_element?(view, sidebar_link("/") <> "[aria-current=page]", "Budget")
+      assert has_element?(view, sidebar_link("/settings"), "Einstellungen")
+      assert has_element?(view, ~s|aside button[aria-label="Seitenleiste einklappen"]|)
+
+      assert has_element?(
+               view,
+               ~s|aside #user-menu-sidebar a[href="/users/log-out"][data-method=delete]|,
+               "Abmelden"
+             )
     end
 
     test "assigning in a month updates available, the totals and Zu verteilen", c do

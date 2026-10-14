@@ -19,7 +19,7 @@ defmodule AbakusWeb.UserLive.Confirmation do
           phx-trigger-action={@trigger_submit}
         >
           <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
-          <.button class="w-100" phx-disable-with="Anmelden …">Anmelden</.button>
+          <.button type="submit" variant={:primary} class="w-full" phx-disable-with="Anmelden …">Anmelden</.button>
         </.form>
       </.card>
     </Layouts.auth>

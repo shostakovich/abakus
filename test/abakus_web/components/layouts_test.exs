@@ -2,14 +2,15 @@ defmodule AbakusWeb.LayoutsTest do
   use AbakusWeb.ConnCase
 
   test "the root layout links the manifest, sets theme colours and the theme before the stylesheet",
-       %{
-         conn: conn
-       } do
+       %{conn: conn} do
     html = conn |> get(~p"/users/log-in") |> html_response(200)
     document = LazyHTML.from_document(html)
 
     assert document |> LazyHTML.query("html[lang=de]") |> Enum.count() == 1
-    assert document |> LazyHTML.query("html[data-look]") |> Enum.empty?()
+
+    assert document
+           |> LazyHTML.query(~s|meta[name=viewport][content*="viewport-fit=cover"]|)
+           |> Enum.count() == 1
 
     assert document
            |> LazyHTML.query(~s|link[rel=manifest][href="/manifest.webmanifest"]|)
@@ -21,18 +22,30 @@ defmodule AbakusWeb.LayoutsTest do
       |> Enum.map(&{LazyHTML.attribute(&1, "media"), LazyHTML.attribute(&1, "content")})
 
     assert theme_colors == [
-             {["(prefers-color-scheme: light)"], ["#3f7d5a"]},
-             {["(prefers-color-scheme: dark)"], ["#212529"]}
+             {["(prefers-color-scheme: light)"], ["#ffffff"]},
+             {["(prefers-color-scheme: dark)"], ["#202328"]}
            ]
 
-    [script] = document |> LazyHTML.query("head script#theme-script") |> Enum.to_list()
-    assert LazyHTML.text(script) =~ ~s|localStorage.getItem("theme")|
-    assert LazyHTML.text(script) =~ ~s|localStorage.getItem("side")|
+    [script] = document |> LazyHTML.query("head script[nonce]") |> Enum.to_list()
+    assert LazyHTML.text(script) =~ ~s|localStorage.getItem("setzkasten:theme")|
+    assert LazyHTML.text(script) =~ ~s|localStorage.getItem("setzkasten:sidebar")|
 
-    # The stored theme has to be applied before felt.css paints the page.
-    {script_at, _} = :binary.match(html, ~s(id="theme-script"))
-    {css_at, _} = :binary.match(html, "felt-css.rocu.de/felt.css")
+    assert document
+           |> LazyHTML.query(
+             ~s|link[rel=preload][as=font][href="/setzkasten/fonts/Figtree-Variable.woff2"]|
+           )
+           |> Enum.count() == 1
+
+    # The stored theme has to be applied before the stylesheet paints the page.
+    {script_at, _} = :binary.match(html, "setzkasten:theme")
+    {css_at, _} = :binary.match(html, "/assets/css/app.css")
     assert script_at < css_at
+  end
+
+  test "the endpoint serves Setzkasten's fonts", %{conn: conn} do
+    conn = get(conn, "/setzkasten/fonts/Figtree-Variable.woff2")
+    assert response(conn, 200)
+    assert get_resp_header(conn, "content-type") == ["font/woff2"]
   end
 
   test "links on the settings pages load the page, so the sudo plug runs for Zugang & API" do

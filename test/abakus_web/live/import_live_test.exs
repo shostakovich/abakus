@@ -34,14 +34,14 @@ defmodule AbakusWeb.ImportLiveTest do
   test "the sidebar and the register lead to the import", %{conn: conn, giro: giro} do
     {:ok, view, _html} = live(conn, ~p"/accounts/#{giro}")
 
-    assert has_element?(view, ~s|aside a[href="/import"]|, "Import & Sync")
-    assert has_element?(view, ~s|header a[href="/import"]|, "Import")
+    assert has_element?(view, sidebar_link("/import"), "Import & Sync")
+    assert has_element?(view, ~s|#app-shell > nav[aria-label=Hauptnavigation] a[href="/import"]|)
     assert has_element?(view, ~s|#file-import[href="/import"]|, "Datei-Import")
 
     {:ok, view, _html} = live(conn, ~p"/import")
 
     assert has_element?(view, "h1", "Import & Sync")
-    assert has_element?(view, ~s|aside a.active[aria-current=page][href="/import"]|)
+    assert has_element?(view, sidebar_link("/import") <> "[aria-current=page]")
     assert has_element?(view, ~s|#import-form input[type=file][accept=".ofx,.qfx"]|)
     refute has_element?(view, "#import-preview")
   end

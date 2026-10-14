@@ -15,7 +15,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       assert html =~ "E-Mail ändern"
       assert html =~ "Passkey hinzufügen"
       refute html =~ "Passwort"
-      assert has_element?(lv, ~s|aside nav a.active[aria-current=page][href="/settings"]|)
+      assert has_element?(lv, sidebar_link("/settings") <> "[aria-current=page]")
     end
 
     test "redirects if user is not logged in", %{conn: conn} do
@@ -73,7 +73,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
         })
 
       assert result =~ "E-Mail ändern"
-      assert result =~ "braucht ein @ und keine Leerzeichen"
+      assert result =~ "Braucht ein @ und keine Leerzeichen"
     end
 
     test "renders errors with invalid data (phx-submit)", %{conn: conn, user: user} do
@@ -87,7 +87,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
         |> render_submit()
 
       assert result =~ "E-Mail ändern"
-      assert result =~ "ist unverändert"
+      assert result =~ "Ist unverändert"
     end
   end
 
@@ -253,7 +253,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
 
       html = lv |> form("#api-token-form", %{"api_token" => %{"name" => " "}}) |> render_submit()
 
-      assert html =~ "muss ausgefüllt werden"
+      assert html =~ "Muss ausgefüllt werden"
       assert ApiTokens.list_api_tokens() == []
     end
 

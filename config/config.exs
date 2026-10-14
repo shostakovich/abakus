@@ -52,11 +52,22 @@ config :esbuild,
     args: ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
-  ],
-  abakus_css: [
-    args: ~w(css/app.css --bundle --outdir=../priv/static/assets/css),
-    cd: Path.expand("../assets", __DIR__)
   ]
+
+config :tailwind,
+  version: "4.3.3",
+  abakus: [
+    args: ~w(
+      --input=assets/css/app.css
+      --output=priv/static/assets/css/app.css
+    ),
+    cd: Path.expand("..", __DIR__),
+    env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
+  ]
+
+config :setzkasten,
+  icons: AbakusWeb.Icons,
+  translate_error: {AbakusWeb.CoreComponents, :translate_error}
 
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",

@@ -16,6 +16,7 @@ defmodule AbakusWeb.ConnCase do
       import Plug.Conn
       import Phoenix.ConnTest
       import AbakusWeb.ConnCase
+      import Setzkasten.Test.Confirm
     end
   end
 
@@ -23,6 +24,12 @@ defmodule AbakusWeb.ConnCase do
     Abakus.DataCase.setup_sandbox(tags)
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
+
+  @doc """
+  The selector of the sidebar's link to `path`. Setzkasten's shell renders the navigation more than
+  once (sidebar, rail, its dialog, dock); this is the one in the sidebar.
+  """
+  def sidebar_link(path), do: ~s(aside nav[aria-label="Hauptnavigation"] a[href="#{path}"])
 
   @doc """
   Setup helper that creates a user and signs them in; `@tag signed_in_minutes_ago: n` backdates

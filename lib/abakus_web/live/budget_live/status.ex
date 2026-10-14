@@ -15,9 +15,14 @@ defmodule AbakusWeb.BudgetLive.Status do
 
   def pill(%CategoryMonth{} = row) do
     cond do
-      underfunded?(row) -> {"text-bg-warning", "half"}
-      row.available > 0 -> {"text-bg-success", if(row.target && not row.snoozed, do: "okc")}
-      true -> :zero
+      underfunded?(row) ->
+        {"text-bg-warning", "circle-dashed"}
+
+      row.available > 0 ->
+        {"text-bg-success", if(row.target && not row.snoozed, do: "circle-check")}
+
+      true ->
+        :zero
     end
   end
 

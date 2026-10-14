@@ -117,7 +117,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                   class="border rounded p-2 mb-2"
                 >
                   <div class="d-flex gap-2 mb-2">
-                    <div class="flex-grow-1 app-min-w-0">
+                    <div class="flex-grow-1 min-w-0">
                       <.payee_combo
                         id={"tx-sub-#{index}-payee"}
                         name={sub_name(index)}
@@ -549,7 +549,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       phx-click="add_subtransaction"
       phx-target={@target}
     >
-      <.icon name="plus" class="app-icon-sm" /> Teil hinzufügen
+      <.icon name="plus" /> Teil hinzufügen
     </button>
     """
   end

@@ -51,7 +51,7 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
     params = Map.merge(@blank, params)
     by_date = params["cadence"] == "by_date"
 
-    case amount(params["amount"]) do
+    case parse_target_amount(params["amount"]) do
       {:ok, amount} ->
         {:ok,
          %{
@@ -68,11 +68,11 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
     end
   end
 
-  defp amount(text) when is_binary(text) do
+  defp parse_target_amount(text) when is_binary(text) do
     if String.trim(text) == "", do: :error, else: Format.parse_amount(text)
   end
 
-  defp amount(_text), do: :error
+  defp parse_target_amount(_text), do: :error
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
@@ -108,7 +108,7 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
           />
           <span class="input-group-text">€</span>
         </div>
-        <.field_errors field={@form[:amount]} />
+        <.field_error id="target-amount" errors={@form[:amount].errors} />
       </div>
       <div class="btn-group btn-group-sm w-100" role="group" aria-label="Rhythmus">
         <%= for {value, label} <- [{"monthly", "Jeden Monat"}, {"by_date", "Bis zum Datum"}] do %>
@@ -133,14 +133,12 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
           class={["form-control form-control-sm", @form[:due_on].errors != [] && "is-invalid"]}
           required
         />
-        <.field_errors field={@form[:due_on]} />
+        <.field_error id="target-due-on" errors={@form[:due_on].errors} />
         <.input
           field={@form[:repeats_yearly]}
           id="target-repeats"
-          type="checkbox"
-          switch
+          type="toggle"
           label="Jährlich wiederholen"
-          wrapper_class="mt-2 mb-0"
         />
       </div>
       <div>
@@ -152,7 +150,7 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
           )}
         </select>
       </div>
-      <.field_errors field={@form[:cadence]} />
+      <.field_error id="target-cadence" errors={@form[:cadence].errors} />
       <div class="d-flex gap-2 mt-1">
         <button id="target-save" type="submit" class="btn btn-sm btn-primary flex-grow-1">
           Speichern
@@ -177,14 +175,6 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
         Ziel löschen
       </button>
     </.form>
-    """
-  end
-
-  attr :field, Phoenix.HTML.FormField, required: true
-
-  defp field_errors(assigns) do
-    ~H"""
-    <.error :for={error <- @field.errors}>{translate_error(error)}</.error>
     """
   end
 end

@@ -432,7 +432,7 @@ defmodule AbakusWeb.BudgetInspectorTest do
       })
       |> render_submit()
 
-      assert has_element?(view, "#target-form .invalid-feedback", "nicht vor dem Beginn")
+      assert has_element?(view, "#target-due-on-error-0", "Darf nicht vor dem Beginn")
       assert Categories.target_for(c.rent, @october) == nil
 
       view |> element("#target-cancel") |> render_click()

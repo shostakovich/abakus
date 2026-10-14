@@ -28,7 +28,7 @@ defmodule AbakusWeb.BudgetLive do
 
   alias AbakusWeb.Format
 
-  import AbakusWeb.Format, only: [amount: 1, euros: 1]
+  import AbakusWeb.Format, only: [euros: 1]
 
   @fit %{months: 1, inspector: false, span: 7}
 
@@ -39,6 +39,7 @@ defmodule AbakusWeb.BudgetLive do
       flash={@flash}
       current_scope={@current_scope}
       current={:budget}
+      width={:full}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
     >
@@ -49,7 +50,7 @@ defmodule AbakusWeb.BudgetLive do
         phx-hook="BudgetLayout"
         data-fit={"#{@fit.months},#{@fit.inspector},#{@fit.span}"}
       >
-        <div class="flex-grow-1 app-min-w-0">
+        <div class="flex-grow-1 min-w-0">
           <Components.filter_chips filter={@filter} counts={@rows.counts} />
           <div class="d-none d-lg-flex mb-2">
             <div class="app-strip-gap"></div>
@@ -164,7 +165,7 @@ defmodule AbakusWeb.BudgetLive do
           </div>
         </div>
       </div>
-      <Popover.popover :if={@popover} popover={@popover} inspector={@inspector} />
+      <Popover.editor :if={@popover} popover={@popover} inspector={@inspector} />
     </Layouts.app>
     """
   end
@@ -373,7 +374,7 @@ defmodule AbakusWeb.BudgetLive do
          assign(socket, :popover, %{
            popover
            | category_id: entry.category.id,
-             amount: amount(amount)
+             amount: Format.amount(amount)
          })}
 
       _other ->

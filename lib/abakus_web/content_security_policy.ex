@@ -2,14 +2,12 @@ defmodule AbakusWeb.ContentSecurityPolicy do
   @moduledoc """
   Phoenix's secure browser headers with a strict content security policy, set in the endpoint
   for every response. Scripts come from the app itself or carry the request's nonce
-  (`@csp_nonce`, for `#theme-script`); styles and their images may also come from felt-css.
+  (`@csp_nonce`, for Setzkasten's `<.theme_script>`); styles, fonts and images from the app alone.
   LiveView connects back to the endpoint's host.
   """
   @behaviour Plug
 
   import Plug.Conn
-
-  @felt "https://felt-css.rocu.de"
 
   @impl true
   def init(opts), do: opts
@@ -31,9 +29,9 @@ defmodule AbakusWeb.ContentSecurityPolicy do
       [
         "default-src 'self'",
         "script-src 'self' 'nonce-#{nonce}'",
-        "style-src 'self' #{@felt}",
+        "style-src 'self'",
         "font-src 'self'",
-        "img-src 'self' #{@felt} data:",
+        "img-src 'self' data:",
         "connect-src 'self' #{socket_origin(endpoint_url)}",
         "object-src 'none'",
         "frame-ancestors 'none'",

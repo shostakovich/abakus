@@ -31,7 +31,7 @@ defmodule AbakusWeb.SettingsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/settings")
 
       assert has_element?(view, "h1", "Einstellungen")
-      assert has_element?(view, ~s|aside nav a.active[aria-current=page][href="/settings"]|)
+      assert has_element?(view, sidebar_link("/settings") <> "[aria-current=page]")
 
       for {label, path} <- @sections do
         assert has_element?(view, ~s|#settings-nav a[href="#{path}"]:not([data-phx-link])|, label)
@@ -51,7 +51,7 @@ defmodule AbakusWeb.SettingsLiveTest do
         assert has_element?(view, "#settings-nav a.active", label)
         assert has_element?(view, ~s|#settings-back[href="/settings"]|)
         assert has_element?(view, "h1", label)
-        assert has_element?(view, ~s|aside nav a.active[href="/settings"]|)
+        assert has_element?(view, sidebar_link("/settings") <> "[aria-current=page]")
       end
     end
 
@@ -61,15 +61,15 @@ defmodule AbakusWeb.SettingsLiveTest do
       assert has_element?(access, "#passkeys")
       assert has_element?(access, "#email-form")
       assert has_element?(access, "#api-tokens")
-      refute has_element?(access, "#theme-switch")
+      refute has_element?(access, "#theme-toggle")
 
       {:ok, appearance, _html} = live(conn, ~p"/settings/appearance")
 
       assert has_element?(appearance, "#appearance", "Gilt für dieses Gerät")
-      assert has_element?(appearance, "#appearance #theme-switch[phx-hook=ThemeSwitch]")
+      assert has_element?(appearance, "#appearance #theme-toggle[phx-hook]")
 
-      for label <- ["Hell", "Dunkel", "Auto"],
-          do: assert(has_element?(appearance, "#theme-switch label", label))
+      for label <- ["System", "Hell", "Dunkel"],
+          do: assert(has_element?(appearance, "#theme-toggle label", label))
     end
   end
 

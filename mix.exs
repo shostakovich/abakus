@@ -39,6 +39,17 @@ defmodule Abakus.MixProject do
       # Swoosh's SMTP adapter.
       {:gen_smtp, "~> 1.2"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
+      {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
+      # daisyUI's plugin for Tailwind, which Setzkasten builds on; only its bundle is fetched.
+      {:daisyui,
+       github: "saadeghi/daisyui",
+       tag: "v5.5.20",
+       sparse: "packages/bundle",
+       app: false,
+       compile: false,
+       depth: 1},
+      # The UI's components, themes and icons.
+      {:setzkasten, github: "shostakovich/setzkasten"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},
       # Property tests for the budget math.
@@ -52,11 +63,13 @@ defmodule Abakus.MixProject do
       "ecto.setup": ["ecto.create", "ecto.migrate"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test"],
-      "assets.setup": ["esbuild.install --if-missing"],
-      "assets.build": ["compile", "esbuild abakus", "esbuild abakus_css"],
+      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      "assets.build": ["compile", "tailwind abakus", "esbuild abakus"],
       "assets.deploy": [
+        # The colocated hooks and CSS that app.js and app.css import are written by the compiler.
+        "compile",
+        "tailwind abakus --minify",
         "esbuild abakus --minify",
-        "esbuild abakus_css --minify",
         "phx.digest"
       ]
     ]

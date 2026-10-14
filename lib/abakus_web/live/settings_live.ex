@@ -29,7 +29,7 @@ defmodule AbakusWeb.SettingsLive do
     ~H"""
     <.card title="Aussehen" id="appearance">
       <p class="text-body-secondary">Gilt für dieses Gerät.</p>
-      <Layouts.theme_switch />
+      <.theme_toggle />
       <p class="small text-body-secondary mt-3 mb-0">
         Als App installieren: im Browser „Zum Home-Bildschirm“ wählen.
       </p>

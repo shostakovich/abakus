@@ -58,7 +58,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
     doc: "nil when closed, else `%{step: :ask | :enter, bank, cleared, error}`"
 
   @doc "The \"Abgleichen\" button with its popover."
-  def popover(assigns) do
+  def editor(assigns) do
     ~H"""
     <div class="dropdown" phx-click-away={@state && "reconcile_close"}>
       <button

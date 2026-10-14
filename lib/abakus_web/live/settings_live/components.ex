@@ -6,7 +6,7 @@ defmodule AbakusWeb.SettingsLive.Components do
   use AbakusWeb, :html
 
   @sections [
-    {:access, "Zugang & API", "key", "Passkeys, E-Mail, API-Tokens"},
+    {:access, "Zugang & API", "key-round", "Passkeys, E-Mail, API-Tokens"},
     {:appearance, "Aussehen", "palette", "Hell, Dunkel oder automatisch"},
     {:ynab, "YNAB-Import", "history", "Was aus YNAB übernommen wurde"}
   ]
@@ -26,6 +26,7 @@ defmodule AbakusWeb.SettingsLive.Components do
       flash={@flash}
       current_scope={@current_scope}
       current={:settings}
+      width={:narrow}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
     >
@@ -35,7 +36,7 @@ defmodule AbakusWeb.SettingsLive.Components do
         href={~p"/settings"}
         class="d-inline-flex d-lg-none align-items-center gap-1 small text-decoration-none mb-1"
       >
-        <.icon name="back" class="app-icon-sm" /> Einstellungen
+        <.icon name="chevron-left" /> Einstellungen
       </.link>
       <.header>
         <%= if @section do %>
@@ -63,7 +64,7 @@ defmodule AbakusWeb.SettingsLive.Components do
                 <span class="d-block fw-semibold">{label}</span>
                 <span class="small app-nav-sub">{hint}</span>
               </span>
-              <.icon name="chevron" class="app-icon-sm text-body-secondary" />
+              <.icon name="chevron-right" class="text-body-secondary" />
             </.link>
           </nav>
         </div>

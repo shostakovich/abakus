@@ -3,7 +3,7 @@ defmodule AbakusWeb.Layouts do
   use AbakusWeb, :html
 
   alias Abakus.Names
-  alias AbakusWeb.{AccountGroups, Format}
+  alias AbakusWeb.AccountGroups
 
   embed_templates "layouts/*"
 
@@ -24,118 +24,128 @@ defmodule AbakusWeb.Layouts do
     default: nil,
     doc: "the open account form from `AbakusWeb.AccountDialog`, if any"
 
+  attr :width, :atom,
+    default: :default,
+    values: [:narrow, :default, :wide, :full],
+    doc: "the page's width in the shell"
+
   slot :inner_block, required: true
+  slot :fab, doc: "the page's main action on phones, a `<.fab>`"
 
   @doc """
-  Signed-in pages: a dark sidebar as in YNAB, collapsible to an icon rail (remembered per device by `SideToggle`);
-  phones get a header instead.
+  Signed-in pages in Setzkasten's sidebar shell: Budget and all accounts, the open accounts by group with their
+  balance and how many transactions wait for approval and "Konto hinzufügen" (not in the icon rail or the dock),
+  then Import & Sync and the settings. On phones the dock's "Mehr" opens the sidebar with the accounts and the
+  settings, which the account menu also offers.
   """
   def app(assigns) do
+    assigns =
+      assign(assigns,
+        groups: AccountGroups.open(assigns.account_groups),
+        nav_key: nav_key(assigns.current, assigns.account_id, assigns.account_groups)
+      )
+
     ~H"""
-    <a class="visually-hidden-focusable btn btn-primary m-2 app-skip" href="#main">Zum Inhalt springen</a>
-
-    <aside class="app-side d-none d-lg-flex flex-column" data-bs-theme="dark">
-      <div class="dropdown pt-3 pb-2" phx-click-away={hide_dropdown("#side-menu", "#side-brand")}>
-        <button
-          type="button"
-          id="side-brand"
-          class="btn w-100 text-start d-flex align-items-center gap-2 border-0 text-reset app-side-brand"
-          aria-expanded="false"
-          aria-controls="side-menu"
-          title={"Abakus · #{@current_scope.user.email}"}
-          phx-click={toggle_dropdown("#side-menu", "#side-brand")}
+    <.app_shell layout={:sidebar} current={@nav_key} width={@width} amount_tone={:negative}>
+      <:brand>
+        <img src={~p"/images/icon.svg"} alt="" width="28" height="28" class="size-7 shrink-0" />
+        Abakus
+      </:brand>
+      <:nav
+        key={:budget}
+        id="side-budget"
+        label="Budget"
+        icon="wallet"
+        navigate={navigate(~p"/", @current)}
+        href={href(~p"/", @current)}
+      />
+      <:nav
+        key={:all_accounts}
+        id="side-all-accounts"
+        label="Alle Konten"
+        icon="landmark"
+        navigate={navigate(~p"/accounts/all", @current)}
+        href={href(~p"/accounts/all", @current)}
+      />
+      <:nav
+        :for={{group, row, first?} <- account_rows(@groups)}
+        key={{:account, row.account.id}}
+        id={"side-account-#{row.account.id}"}
+        label={label(row.account.name)}
+        glyph={glyph(row.account.name)}
+        amount={row.balance}
+        count={if row.unapproved > 0, do: row.unapproved}
+        count_label="zu bestätigen"
+        section={group.label}
+        section_amount={if first?, do: group.balance}
+        rail={false}
+        dock={false}
+        parent={:all_accounts}
+        navigate={navigate(~p"/accounts/#{row.account}", @current)}
+        href={href(~p"/accounts/#{row.account}", @current)}
+      />
+      <:nav
+        key={:add_account}
+        id="side-add-account"
+        label="Konto hinzufügen"
+        icon="plus"
+        section={List.last(@groups)[:label]}
+        on_click={JS.push("open_account_dialog")}
+      />
+      <:nav
+        key={:import}
+        id="side-import"
+        label="Import & Sync"
+        icon="refresh-cw"
+        navigate={navigate(~p"/import", @current)}
+        href={href(~p"/import", @current)}
+      />
+      <:nav
+        key={:settings}
+        id="side-settings"
+        label="Einstellungen"
+        icon="settings"
+        dock={false}
+        navigate={navigate(~p"/settings", @current)}
+        href={href(~p"/settings", @current)}
+      />
+      <:account :let={place}>
+        <.dropdown
+          id={"user-menu-#{place}"}
+          label={@current_scope.user.email}
+          align={if place == :bar, do: :end, else: :start}
+          position={if place == :sidebar, do: :top, else: :bottom}
+          variant={:ghost}
+          chevron={false}
+          class={place == :sidebar && "w-full"}
+          trigger_class={if place == :sidebar, do: "w-full justify-start", else: "btn-square"}
         >
-          <img src={~p"/images/icon.svg"} alt="" width="30" height="30" />
-          <span class="me-auto lh-sm app-side-text app-min-w-0">
-            <span class="d-block fw-bold">Abakus</span>
-            <span class="d-block small opacity-75 text-truncate">{@current_scope.user.email}</span>
-          </span>
-          <.icon name="down" class="app-icon-sm app-side-text" />
-        </button>
-        <ul id="side-menu" class="dropdown-menu" data-bs-popper="static">
-          <li>
-            <.link class="dropdown-item" {nav_link(~p"/settings", @current)}>Einstellungen</.link>
-          </li>
-          <li><hr class="dropdown-divider" /></li>
-          <li>
-            <.link
-              id="log-out"
-              class="dropdown-item"
-              href={~p"/users/log-out"}
-              method="delete"
-              title={@current_scope.user.email}
-            >
-              Abmelden
-            </.link>
-          </li>
-        </ul>
-      </div>
-      <nav class="nav flex-column gap-1" aria-label="Hauptnavigation">
-        <.side_links items={main_items()} current={@current} />
-      </nav>
-      <div class="flex-grow-1 mt-3">
-        <.side_accounts
-          groups={AccountGroups.open(@account_groups)}
-          current={@current}
-          account_id={@account_id}
-        />
-        <button
-          type="button"
-          id="side-add-account"
-          class="btn btn-sm w-100 my-2 app-side-btn app-side-text"
-          phx-click="open_account_dialog"
-        >
-          + Konto hinzufügen
-        </button>
-      </div>
-      <nav class="nav flex-column pt-2 border-top" aria-label="Weitere">
-        <.side_links items={more_items()} current={@current} />
-      </nav>
-      <div class="d-flex justify-content-end py-2">
-        <button
-          type="button"
-          id="side-toggle"
-          class="btn btn-sm app-side-toggle"
-          aria-label="Seitenleiste einklappen"
-          title="Seitenleiste einklappen"
-          phx-hook="SideToggle"
-          phx-update="ignore"
-        >
-          <.icon name="sidebar" />
-        </button>
-      </div>
-    </aside>
-
-    <header class="d-flex d-lg-none flex-wrap align-items-center gap-2 px-3 pt-3">
-      <.link
-        class="fw-bold fs-5 text-decoration-none text-body me-auto d-flex align-items-center gap-2"
-        {nav_link(~p"/", @current)}
-      >
-        <img src={~p"/images/icon.svg"} alt="" width="26" height="26" /> Abakus
-      </.link>
-      <nav aria-label="Hauptnavigation">
-        <ul class="nav nav-pills">
-          <li :for={{key, label, _icon, path} <- phone_items()} class="nav-item">
-            <.link
-              class={["nav-link", phone_current(@current) == key && "active"]}
-              aria-current={phone_current(@current) == key && "page"}
-              {nav_link(path, @current)}
-            >
-              {label}
-            </.link>
-          </li>
-        </ul>
-      </nav>
-      <.link href={~p"/users/log-out"} method="delete" class="btn btn-sm btn-outline-secondary">
-        Abmelden
-      </.link>
-    </header>
-
-    <main class="app container-fluid px-3" id="main">
-      <.flash_group flash={@flash} />
+          <:trigger>
+            <.avatar
+              initials={initial(@current_scope.user.email)}
+              size={:sm}
+              shape={:round}
+              tone={:primary}
+            />
+            <span :if={place == :sidebar} class="truncate">{@current_scope.user.email}</span>
+          </:trigger>
+          <:header :if={place != :sidebar}>{@current_scope.user.email}</:header>
+          <:item
+            navigate={navigate(~p"/settings", @current)}
+            href={href(~p"/settings", @current)}
+            icon="settings"
+          >
+            Einstellungen
+          </:item>
+          <:item href={~p"/users/log-out"} method="delete" icon="log-out">Abmelden</:item>
+        </.dropdown>
+      </:account>
+      <:fab :if={@fab != []}>{render_slot(@fab)}</:fab>
       {render_slot(@inner_block)}
-    </main>
+    </.app_shell>
 
+    <.flash_group flash={@flash} />
+    <.confirm_dialog />
     <.live_component
       :if={@account_dialog}
       module={AbakusWeb.AccountDialog}
@@ -146,101 +156,33 @@ defmodule AbakusWeb.Layouts do
     """
   end
 
-  attr :items, :list, required: true
-  attr :current, :atom, required: true
-
-  defp side_links(assigns) do
-    ~H"""
-    <.link
-      :for={{key, label, icon, path} <- @items}
-      class={["nav-link", @current == key && "active"]}
-      aria-current={@current == key && "page"}
-      title={label}
-      {nav_link(path, @current)}
-    >
-      <.icon name={icon} /><span class="app-side-text">{label}</span>
-    </.link>
-    """
+  defp account_rows(groups) do
+    for group <- groups, {row, index} <- Enum.with_index(group.rows), do: {group, row, index == 0}
   end
 
-  attr :groups, :list, required: true
-  attr :current, :atom, required: true
-  attr :account_id, :integer, required: true
+  defp glyph(name), do: name |> Names.split_emoji() |> elem(0)
 
-  defp side_accounts(assigns) do
-    ~H"""
-    <section :for={group <- @groups} id={"side-group-#{group.key}"} aria-label={group.label}>
-      <div class="d-flex justify-content-between gap-2 mt-2 mb-1 app-side-h">
-        <span>{group.label}</span>
-        <span class={["app-q", group.balance < 0 && "app-neg"]}>{Format.amount(group.balance)}</span>
-      </div>
-      <nav class="nav flex-column">
-        <.link
-          :for={row <- group.rows}
-          id={"side-account-#{row.account.id}"}
-          class={["nav-link app-acc", row.account.id == @account_id && "active"]}
-          aria-current={row.account.id == @account_id && "page"}
-          title={"#{row.account.name} · #{Format.euros(row.balance)}"}
-          {nav_link(~p"/accounts/#{row.account}", @current)}
-        >
-          <.account_name name={row.account.name} />
-          <span
-            :if={row.unapproved > 0}
-            class="badge rounded-pill text-bg-primary"
-            title={"#{row.unapproved} zu bestätigen"}
-          >
-            {row.unapproved}
-          </span>
-          <span class={["app-bal", row.balance < 0 && "app-neg"]}>{Format.amount(row.balance)}</span>
-        </.link>
-      </nav>
-    </section>
-    """
+  defp label(name), do: name |> Names.split_emoji() |> elem(1)
+
+  # The account shown, if the sidebar lists it; the account list and closed accounts belong to Alle Konten.
+  defp nav_key(:accounts, account_id, groups) do
+    listed? =
+      Enum.any?(AccountGroups.rows(AccountGroups.open(groups)), &(&1.account.id == account_id))
+
+    if account_id && listed?, do: {:account, account_id}, else: :all_accounts
   end
 
-  attr :name, :string, required: true
+  defp nav_key(current, _account_id, _groups), do: current
 
-  # The leading emoji in a column of its own; the icon rail keeps only it, or the first letter of a name without.
-  defp account_name(assigns) do
-    assigns = assign(assigns, :parts, Names.split_emoji(assigns.name))
-
-    ~H"""
-    <span :if={elem(@parts, 0)} class="app-acc-e" aria-hidden="true">{elem(@parts, 0)}</span>
-    <span :if={!elem(@parts, 0)} class="app-acc-e app-acc-initial" aria-hidden="true">
-      {String.first(@name)}
-    </span>
-    <span class="app-acc-name">{elem(@parts, 1)}</span>
-    """
-  end
-
-  # Wide screens list the accounts in the sidebar and lead to all of them, as YNAB does; phones have no sidebar and
-  # lead to the account list.
-  defp main_items,
-    do: [
-      {:budget, "Budget", "budget", ~p"/"},
-      {:all_accounts, "Alle Konten", "bank", ~p"/accounts/all"}
-    ]
-
-  defp phone_items,
-    do: [
-      {:budget, "Budget", "budget", ~p"/"},
-      {:accounts, "Konten", "bank", ~p"/accounts"},
-      import_item("Import"),
-      settings_item()
-    ]
-
-  defp phone_current(:all_accounts), do: :accounts
-  defp phone_current(current), do: current
-
-  defp more_items, do: [import_item("Import & Sync"), settings_item()]
-
-  defp import_item(label), do: {:import, label, "sync", ~p"/import"}
-  defp settings_item, do: {:settings, "Einstellungen", "gear", ~p"/settings"}
+  defp initial(email), do: String.upcase(String.first(email) || "")
 
   # Zugang & API has a live_session of its own behind the sudo plug; links on the settings pages, which lead into
   # and out of it, load the page.
-  defp nav_link(path, :settings), do: [href: path]
-  defp nav_link(path, _current), do: [navigate: path]
+  defp navigate(_path, :settings), do: nil
+  defp navigate(path, _current), do: path
+
+  defp href(path, :settings), do: path
+  defp href(_path, _current), do: nil
 
   attr :flash, :map, required: true
   slot :inner_block, required: true
@@ -248,30 +190,16 @@ defmodule AbakusWeb.Layouts do
   @doc "Sign-in pages: a narrow column without navigation."
   def auth(assigns) do
     ~H"""
-    <main class="container px-3 py-5 app-auth" id="main">
-      <h1 class="h3 fw-bold text-center mb-4">Abakus</h1>
-      <.flash_group flash={@flash} />
+    <main
+      id="main"
+      class="mx-auto flex min-h-dvh max-w-md flex-col px-4 py-12 before:grow-[35] after:grow-[65]"
+    >
+      <h1 class="mb-6 flex items-center justify-center gap-2 text-2xl font-semibold">
+        <img src={~p"/images/icon.svg"} alt="" width="32" height="32" class="size-8" /> Abakus
+      </h1>
       {render_slot(@inner_block)}
     </main>
-    """
-  end
-
-  @doc "Light, dark or the device's setting; remembered per device by the `ThemeSwitch` hook."
-  def theme_switch(assigns) do
-    ~H"""
-    <div
-      id="theme-switch"
-      class="btn-group btn-group-sm"
-      role="group"
-      aria-label="Farbschema"
-      phx-hook="ThemeSwitch"
-      phx-update="ignore"
-    >
-      <%= for {value, label} <- [{"light", "Hell"}, {"dark", "Dunkel"}, {"auto", "Auto"}] do %>
-        <input type="radio" class="btn-check" name="theme" id={"theme-#{value}"} value={value} />
-        <label class="btn btn-outline-primary" for={"theme-#{value}"}>{label}</label>
-      <% end %>
-    </div>
+    <.flash_group flash={@flash} />
     """
   end
 end

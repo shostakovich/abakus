@@ -15,8 +15,13 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   describe "pill/1" do
     test "red when overspent, half when underfunded, a check for a met target, plain at zero" do
       assert Status.pill(row(available: -100, underfunded: 50)) == {"text-bg-danger", nil}
-      assert Status.pill(row(available: 100, underfunded: 50)) == {"text-bg-warning", "half"}
-      assert Status.pill(row(available: 100, target: @monthly)) == {"text-bg-success", "okc"}
+
+      assert Status.pill(row(available: 100, underfunded: 50)) ==
+               {"text-bg-warning", "circle-dashed"}
+
+      assert Status.pill(row(available: 100, target: @monthly)) ==
+               {"text-bg-success", "circle-check"}
+
       assert Status.pill(row(available: 100)) == {"text-bg-success", nil}
       assert Status.pill(row(available: 0)) == :zero
     end

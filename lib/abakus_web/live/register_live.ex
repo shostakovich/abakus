@@ -45,6 +45,7 @@ defmodule AbakusWeb.RegisterLive do
       current_scope={@current_scope}
       current={if @account, do: :accounts, else: :all_accounts}
       account_id={@account && @account.id}
+      width={:full}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
     >
@@ -59,7 +60,7 @@ defmodule AbakusWeb.RegisterLive do
           navigate={~p"/accounts"}
           class="d-inline-flex d-lg-none align-items-center gap-1 small mb-1"
         >
-          <.icon name="back" class="app-icon-sm" /> Konten
+          <.icon name="chevron-left" /> Konten
         </.link>
         <div class="d-flex align-items-center gap-2">
           <h1 id="register-title" class="h3 mb-0 flex-grow-1 text-truncate">{@page_title}</h1>
@@ -73,9 +74,9 @@ defmodule AbakusWeb.RegisterLive do
             phx-click="open_account_dialog"
             phx-value-id={@account.id}
           >
-            <.icon name="pencil" class="app-icon-sm" />
+            <.icon name="pencil" />
           </button>
-          <Reconcile.popover :if={@account && !@reconciling} state={@reconcile} />
+          <Reconcile.editor :if={@account && !@reconciling} state={@reconcile} />
         </div>
         <Components.meta account={@account} />
         <Reconcile.banner :if={@reconciling} mode={@reconciling} />

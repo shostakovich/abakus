@@ -137,10 +137,14 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       assert has_element?(
                view,
-               ~s|aside #side-account-#{c.giro.id}.active[aria-current=page][href="/accounts/#{c.giro.id}"]|
+               sidebar_link("/accounts/#{c.giro.id}") <> "[aria-current=page]"
              )
 
-      refute has_element?(view, "aside #side-account-#{c.savings.id}.active")
+      refute has_element?(
+               view,
+               sidebar_link("/accounts/#{c.savings.id}") <> "[aria-current=page]"
+             )
+
       assert has_element?(view, ~s|#edit-account[phx-value-id="#{c.giro.id}"]|)
 
       {:ok, list, _html} = live(c.conn, ~p"/accounts")
@@ -197,14 +201,14 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       assert has_element?(
                view,
-               ~s|aside nav a.active[aria-current=page][href="/accounts/all"]|,
+               sidebar_link("/accounts/all") <> "[aria-current=page]",
                "Alle Konten"
              )
 
       assert has_element?(
                view,
-               ~s|header nav a.active[aria-current=page][href="/accounts"]|,
-               "Konten"
+               ~s|#app-shell > nav[aria-label=Hauptnavigation] a[aria-current=page][href="/accounts/all"]|,
+               "Alle Konten"
              )
 
       assert has_element?(view, "#register-table th", "Konto")
@@ -320,7 +324,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert reload(c.shopping).cleared == :cleared
       assert has_element?(view, "#tx-#{c.shopping.id}-cleared.is-cleared")
       assert has_element?(view, "#balance-cleared", "2.798,71 €")
-      assert has_element?(view, "aside #side-account-#{c.giro.id}", "2.598,71")
+      assert has_element?(view, sidebar_link("/accounts/#{c.giro.id}"), "2.598,71")
 
       view |> element("#tx-card-#{c.shopping.id}-cleared") |> render_click()
       assert reload(c.shopping).cleared == :uncleared
@@ -368,7 +372,11 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "tr#tx-#{c.waiting.id}.app-unapproved")
       refute has_element?(view, "tr#tx-#{c.shopping.id}.app-unapproved")
       assert has_element?(view, "#tx-#{c.uncategorised.id}", "Nicht kategorisiert")
-      assert has_element?(view, "aside #side-account-#{c.giro.id} .badge", "2")
+
+      assert has_element?(
+               view,
+               sidebar_link("/accounts/#{c.giro.id}") <> ~s([aria-label*="2 zu bestätigen"])
+             )
 
       view |> element("#show-unapproved") |> render_click()
       assert_patch(view, ~p"/accounts/#{c.giro}?filter=unapproved")
@@ -552,7 +560,12 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#unapproved-banner", "2 neue Buchungen zu bestätigen")
       assert has_element?(view, "#accept-all-matches", "Alle Zuordnungen übernehmen")
       assert has_element?(view, "#accept-all-matches .d-md-none", "Alle zuordnen")
-      assert has_element?(view, "aside #side-account-#{c.giro.id} .badge", "2")
+
+      assert has_element?(
+               view,
+               sidebar_link("/accounts/#{c.giro.id}") <> ~s([aria-label*="2 zu bestätigen"])
+             )
+
       assert has_element?(view, "#balance-working", "2.598,71")
 
       {:ok, view, _html} = live(c.conn, ~p"/accounts/all")

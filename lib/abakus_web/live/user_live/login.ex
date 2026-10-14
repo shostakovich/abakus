@@ -42,7 +42,7 @@ defmodule AbakusWeb.UserLive.Login do
             spellcheck="false"
             required
           />
-          <.button variant="outline-primary" class="w-100" phx-disable-with="Wird gesendet …">
+          <.button type="submit" class="w-full" phx-disable-with="Wird gesendet …">
             Anmeldelink senden
           </.button>
         </.form>

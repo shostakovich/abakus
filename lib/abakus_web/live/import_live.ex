@@ -36,7 +36,7 @@ defmodule AbakusWeb.ImportLive do
               class="app-drop d-flex flex-column align-items-center justify-content-center text-center gap-2 p-4 mb-0"
               for={@uploads.file.ref}
             >
-              <.icon name="upload" class="app-icon-lg" />
+              <.icon name="upload" class="size-8" />
               <span class="fw-semibold">QFX- oder OFX-Datei wählen</span>
               <span class="small text-body-secondary">
                 In der Banking-App die Umsätze des Kontos als OFX oder QFX exportieren
@@ -81,7 +81,7 @@ defmodule AbakusWeb.ImportLive do
     ~H"""
     <section id="import-preview" class="card" aria-labelledby="import-file">
       <div class="card-header d-flex flex-wrap align-items-center gap-2">
-        <.icon name="file" />
+        <.icon name="file-text" />
         <span id="import-file" class="fw-semibold me-auto text-break">{@preview.file_name}</span>
         <span class="small text-body-secondary">
           {transactions_text(length(@transactions))}{period(@transactions)}

@@ -9,10 +9,11 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   """
   use AbakusWeb, :html
 
-  import AbakusWeb.Format
+  import AbakusWeb.Format, except: [amount: 1]
 
   alias Abakus.Budget.{CategoryMonth, Month}
   alias AbakusWeb.BudgetLive.{CategoryEditor, Components, Status, TargetForm, Window}
+  alias AbakusWeb.Format
 
   defstruct [:month, :free, categories: [], overspent: [], future: [], assigned: 0, selected: nil]
 
@@ -101,7 +102,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
       class="btn btn-sm btn-link px-0 mb-2 text-decoration-none"
       phx-click="deselect"
     >
-      <.icon name="back" class="app-icon-sm" /> Monatsübersicht
+      <.icon name="chevron-left" /> Monatsübersicht
     </button>
     <div class="d-flex align-items-center gap-2 mb-1">
       <h2 id="inspector-name" class="app-insp-title mb-0 me-auto text-truncate">
@@ -119,9 +120,9 @@ defmodule AbakusWeb.BudgetLive.Inspector do
           phx-value-edit="category"
           phx-value-category={@entry.category.id}
         >
-          <.icon name="pencil" class="app-icon-sm" />
+          <.icon name="pencil" />
         </button>
-        <CategoryEditor.popover :if={@edit} edit={@edit} align_end />
+        <CategoryEditor.editor :if={@edit} edit={@edit} align_end />
       </div>
     </div>
     <div class="small text-body-secondary mb-2">
@@ -169,7 +170,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
         />
         <ul :if={@month.uncovered != []} class="app-uncovered list-unstyled text-danger mt-2 mb-0">
           <li :for={line <- Status.uncovered(@month)} class="d-flex align-items-start gap-1">
-            <.icon name="alert" class="app-icon-sm mt-1" /><span>{line}</span>
+            <.icon name="triangle-alert" class="mt-1" /><span>{line}</span>
           </li>
         </ul>
       </div>
@@ -207,7 +208,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     ~H"""
     <section id="inspector-overspent" class="card mb-3 border-danger">
       <div class="card-header text-danger d-flex align-items-center gap-2">
-        <.icon name="alert" class="app-icon-sm" />{length(@overspent)} überzogen
+        <.icon name="triangle-alert" />{length(@overspent)} überzogen
       </div>
       <div class="list-group list-group-flush app-overs">
         <div
@@ -215,7 +216,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
           id={"overspent-#{category_key(category)}"}
           class="list-group-item d-flex align-items-center gap-2 small"
         >
-          <span class="flex-grow-1 app-min-w-0 text-truncate">
+          <span class="flex-grow-1 min-w-0 text-truncate">
             {if category, do: category.name, else: "Nicht kategorisiert"}
           </span>
           <span class="app-overs-act">
@@ -367,7 +368,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     ~H"""
     <section id="inspector-target" class="card mb-3">
       <div class="card-header d-flex align-items-center gap-2">
-        <.icon name="target" class="app-icon-sm" />Ziel
+        <.icon name="target" />Ziel
         <span :if={@cell.target && @cell.snoozed} class="badge text-bg-secondary ms-auto">
           pausiert
         </span>
@@ -415,7 +416,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     <.line
       :if={!@cell.snoozed && @cell.saved}
       label="Angespart"
-      text={"#{amount(@cell.saved)} von #{euros(@cell.target.amount)}"}
+      text={"#{Format.amount(@cell.saved)} von #{euros(@cell.target.amount)}"}
     />
     <div
       :if={!@cell.snoozed && @cell.underfunded > 0}
