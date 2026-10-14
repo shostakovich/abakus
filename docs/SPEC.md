@@ -18,8 +18,8 @@ comes from a shared-expenses app's recurring expenses through the API.
 ## Stack
 
 - Elixir, Phoenix 1.8, LiveView, SQLite (`ecto_sqlite3`), esbuild, one amd64 container
-- felt-css (`https://felt-css.rocu.de/felt.css`), Bootstrap class names in `core_components`, clean look
-  only (no felt look)
+- Tailwind CSS 4 and daisyUI 5 with Setzkasten, the component library shared with the owner's other apps
+  (ADR 0004)
 - HTTP: `req`; mail: `swoosh`
 - New dependencies only with a reason
 - SQLite conventions: `default_transaction_mode: :immediate`, WAL, `:utc_datetime_usec`, synchronous DB tests,
@@ -51,8 +51,7 @@ The context is `Abakus.Users` (an "account" is a bank account here):
 - Cookies `HttpOnly`, `SameSite=Lax`, `secure` behind https
 - CSP with a nonce per request (for the inline theme script) on every response, error pages and static files
   included; only the LiveView socket's transport responses (`/live`) bypass the plugs. `default-src 'self'`,
-  scripts `'self'` + nonce, styles and their images also from `felt-css.rocu.de` (images also `data:`), fonts
-  `'self'`, `connect-src` `'self'` + the endpoint's `wss://` (`ws://` in development), `object-src` and
+  scripts `'self'` + nonce, styles and fonts `'self'`, images `'self'` and `data:`, `connect-src` `'self'` + the endpoint's `wss://` (`ws://` in development), `object-src` and
   `frame-ancestors 'none'`, `base-uri` and `form-action` `'self'`. No `'unsafe-inline'`: LiveView sets styles
   through the CSSOM, which CSP allows. Only the development mailbox gets a looser policy. Error pages are German
 
@@ -148,8 +147,8 @@ not whole cents.
 ## Budget rules
 
 YNAB's math as it is today. The method is YNAB's too: every euro gets assigned, and overspending is dealt with.
-The UI treats RTA > 0 and overspent categories as open tasks (green "assign" box, red "n overspent" chip, "cover
-overspending" popover that picks the source category), and RTA = 0 with nothing overspent as the resting state.
+The UI treats RTA > 0 and overspent categories as open tasks (green "assign" box, red pills on overspent categories
+whose popover covers them from a picked source category), and RTA = 0 with nothing overspent as the resting state.
 
 - **Ready to Assign (RTA)** per month m, cumulative:
   RTA(m) = income up to and including m − assigned up to and including m − overspending of the months before m
@@ -182,8 +181,8 @@ overspending" popover that picks the source category), and RTA = 0 with nothing 
     API show it, but left out of the month's total and of filling); auto-assign fills the underfunded categories
     (all, or the selected one) from RTA (in budget order, snoozed ones skipped, as far as RTA reaches without what
     later months have assigned, in a closed month too)
-  - UI copied from YNAB: progress bar under the name with its status on hover ("Finanziert", "Im Plan", "Noch
-    13,99 € nötig", "Überzogen"), pill icons
+  - UI copied from YNAB: pill icons in the table; the category dialog shows the progress bar with its status
+    ("Finanziert", "Im Plan", "Noch 13,99 € nötig", "Überzogen")
   - other goal types (`TB`, `TBD`, `MF`, `DEBT`) only if needed later
 - All of this is one pure module (`Abakus.Budget`) computed from assignments and transactions; months are not
   stored as snapshots. It computes every month from the first with data to the month after the last with data,
@@ -292,7 +291,7 @@ follows the window.
 
 ### v1 — switch from YNAB
 
-1. Skeleton: Phoenix, SQLite, felt-css `core_components`, login with magic link and passkeys, PWA manifest,
+1. Skeleton: Phoenix, SQLite, UI components, login with magic link and passkeys, PWA manifest,
    container, deploy behind a reverse proxy, CI (format, credo, tests, assets)
 2. Domain and `Abakus.Budget` incl. targets, with property tests
 3. YNAB import with the checks above
