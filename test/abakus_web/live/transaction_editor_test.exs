@@ -49,11 +49,22 @@ defmodule AbakusWeb.TransactionEditorTest do
     view
   end
 
-  defp pick(view, side, field, value) do
-    view
-    |> with_target("#tx-editor")
-    |> render_hook("pick", %{"side" => side, "field" => field, "value" => value})
+  # A choice in a combobox, as its hidden field sends it.
+  defp pick(view, side, field, value, created \\ nil) do
+    picked =
+      %{"#{field}_pick" => value}
+      |> then(&if(created, do: Map.put(&1, "payee_new", created), else: &1))
+
+    {changed, target} =
+      if side == "main",
+        do: {picked, ["#{field}_pick"]},
+        else:
+          {%{"subtransactions" => %{side => picked}}, ["subtransactions", side, "#{field}_pick"]}
+
+    change(view, changed, target)
   end
+
+  defp create_payee(view, side, text), do: pick(view, side, "payee", "", text)
 
   defp change(view, changed, target) do
     view
@@ -61,11 +72,14 @@ defmodule AbakusWeb.TransactionEditorTest do
     |> render_change(Map.put(%{"transaction" => changed}, "_target", ["transaction" | target]))
   end
 
+  defp bulk?(view), do: has_element?(view, "#bulk-status", "Buchung")
+
   defp submit(view, params \\ %{}) do
     view |> form("#tx-form", transaction: params) |> render_submit()
   end
 
-  defp category(view, id), do: has_element?(view, ~s|#tx-category-combo[data-value="#{id}"]|)
+  defp category(view, id),
+    do: has_element?(view, ~s|#tx-category-combobox input[data-value-input][value="#{id}"]|)
 
   describe "creating" do
     test "Buchung adds an empty row on top, today, and books an outflow in the register's account",
@@ -75,7 +89,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert has_element?(view, ~s|#tx-editor[data-focus="tx-date"]|)
       assert has_element?(view, ~s|#tx-date[value="2026-10-09"]|)
       refute has_element?(view, "#tx-account")
-      assert has_element?(view, "#tx-save", "Speichern")
+      assert has_element?(view, ~s|#tx-save[aria-label="Speichern"]|)
       refute has_element?(view, "#tx-delete")
 
       pick(view, "main", "payee", "p:🥖 Bäckerei")
@@ -122,11 +136,10 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert category(view, c.groceries.id)
       assert has_element?(view, ~s|#tx-category[value$="🛒 Lebensmittel"]|)
 
-      # Typed instead of picked, on leaving the field.
-      change(view, %{"payee" => "Unbekannt"}, ["payee"])
+      create_payee(view, "main", "Unbekannt")
       assert category(view, "")
 
-      change(view, %{"payee" => "frischmarkt"}, ["payee"])
+      create_payee(view, "main", "frischmarkt")
       assert category(view, c.groceries.id)
 
       pick(view, "main", "category", "#{c.saving.id}")
@@ -155,7 +168,8 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "Escape and Abbrechen leave without booking", c do
       view = open_new(c, c.giro)
-      view |> element("#tx-editor") |> render_keydown(%{"key" => "Escape"})
+      refute has_element?(view, "#tx-editor[phx-window-keydown]")
+      render_hook(view, "cancel_edit", %{})
       refute has_element?(view, "#tx-editor")
 
       view |> element("#new-transaction") |> render_click()
@@ -262,7 +276,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       view = open_new(c, c.giro)
 
       pick(view, "main", "payee", "a:#{c.depot.id}")
-      assert has_element?(view, "#tx-category-combo")
+      assert has_element?(view, "#tx-category-combobox")
       assert category(view, "")
 
       pick(view, "main", "category", "#{c.saving.id}")
@@ -285,7 +299,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       refute has_element?(view, "#tx-category")
 
       pick(view, "main", "payee", "a:#{c.giro.id}")
-      assert has_element?(view, "td.app-payee #tx-category-combo")
+      assert has_element?(view, ".app-payee #tx-category-combobox")
 
       submit(view, %{inflow: "80"})
 
@@ -327,10 +341,9 @@ defmodule AbakusWeb.TransactionEditorTest do
       view = open_new(c, c.giro)
 
       pick(view, "main", "payee", "a:#{c.savings.id}")
-      change(view, %{"payee" => "↔ 🏦 Sparkonto"}, ["payee"])
       assert has_element?(view, ~s|#tx-payee[value="↔ 🏦 Sparkonto"]|)
 
-      change(view, %{"payee" => "Sparkasse"}, ["payee"])
+      create_payee(view, "main", "Sparkasse")
       submit(view, %{outflow: "3"})
 
       assert %{payee: %{name: "Sparkasse", transfer_account_id: nil}} = newest(c.giro)
@@ -338,6 +351,32 @@ defmodule AbakusWeb.TransactionEditorTest do
   end
 
   describe "splits" do
+    test "a part has a payee field of its own only where it differs from the transaction's", c do
+      rewe = payee_fixture(name: "Rewe")
+
+      split =
+        transaction_fixture(
+          account_id: c.giro.id,
+          amount: -5_000,
+          payee_id: c.market.id,
+          subtransactions: [
+            %{amount: -3_000, category_id: c.groceries.id},
+            %{amount: -2_000, payee_id: rewe.id, category_id: c.groceries.id}
+          ]
+        )
+
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      open_edit(view, split)
+
+      refute has_element?(view, "#tx-sub-0-payee")
+      assert has_element?(view, ~s|#tx-sub-1-payee[value="Rewe"]|)
+      assert has_element?(view, "#tx-sub-0-memo.app-borderless")
+
+      view |> element("#tx-sub-0-change-payee", "Empfänger ändern") |> render_click()
+      assert has_element?(view, "#tx-sub-0-payee")
+      refute has_element?(view, "#tx-sub-0-change-payee")
+    end
+
     test "Aufteilen gives parts with payees, categories and transfers of their own", c do
       view = open_new(c, c.giro)
 
@@ -365,7 +404,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       assert has_element?(view, "#tx-remainder-out", "5,00")
       assert has_element?(view, "#tx-sub-1-category[readonly]")
-      assert has_element?(view, "#tx-sub-2-category-combo")
+      assert has_element?(view, "#tx-sub-2-category-combobox")
 
       pick(view, "2", "category", "#{c.saving.id}")
 
@@ -500,15 +539,15 @@ defmodule AbakusWeb.TransactionEditorTest do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}?filter=unapproved")
 
       view |> element("#tx-#{c.shopping.id} td.app-out") |> render_click()
-      assert has_element?(view, "tr#tx-#{c.shopping.id}.table-active")
+      assert has_element?(view, "tbody#tx-#{c.shopping.id}-rows.is-selected")
       refute has_element?(view, "#tx-editor")
 
       view |> element("#tx-#{c.shopping.id} td.app-out") |> render_click()
       assert has_element?(view, ~s|#tx-editor[data-focus="tx-outflow"]|)
       assert has_element?(view, ~s|#tx-outflow[value="87,43"]|)
       assert has_element?(view, ~s|#tx-payee[value="Frischmarkt"]|)
-      assert has_element?(view, "#tx-save", "Bestätigen")
-      refute has_element?(view, "#bulk")
+      assert has_element?(view, ~s|#tx-save[aria-label="Bestätigen"]|)
+      refute bulk?(view)
 
       submit(view, %{outflow: "90", date: "2026-10-03"})
 
@@ -517,6 +556,23 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       assert has_element?(view, "#flash-info", "Gespeichert")
       refute has_element?(view, "#tx-editor")
+    end
+
+    test "the edited row keeps one line, with Save and Cancel where approve and C stand", c do
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      assert has_element?(view, "#tx-#{c.shopping.id} td.app-ok-col #tx-#{c.shopping.id}-approve")
+
+      open_edit(view, c.shopping)
+
+      assert has_element?(view, "#tx-editor tr.app-edit-main .app-edit-buttons #tx-save")
+
+      assert has_element?(
+               view,
+               ~s|#tx-editor tr.app-edit-main #tx-cancel[aria-label="Abbrechen"]|
+             )
+
+      refute has_element?(view, "#tx-editor input[type=checkbox]")
+      refute has_element?(view, "#tx-editor tr.app-edit-notes")
     end
 
     test "only one row is edited at a time", c do
@@ -543,23 +599,25 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "the phone opens the card in a sheet", c do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
-      view |> element("#tx-card-#{c.shopping.id}-edit") |> render_click()
+      view |> element("#tx-card-#{c.shopping.id} button", "Frischmarkt") |> render_click()
 
       assert has_element?(view, "#tx-editor .app-sheet")
       assert has_element?(view, ~s|#tx-amount[value="87,43"]|)
-      assert has_element?(view, "#tx-delete[data-confirm]")
+      assert has_element?(view, "#tx-delete.btn-ghost", "Buchung löschen")
+      confirm_click(view, "#tx-delete", "Buchung löschen?")
+      assert reload(c.shopping).deleted_at
+      refute has_element?(view, "#tx-editor")
     end
 
     test "deletes from the selection bar after asking", c do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
 
       view |> element("#tx-#{c.shopping.id}-select") |> render_click()
-      assert has_element?(view, ~s|#delete-selected[data-confirm="Buchung löschen?"]|)
-      view |> element("#delete-selected") |> render_click()
+      confirm_click(view, "#delete-selected", "Buchung löschen?")
 
       assert reload(c.shopping).deleted_at
       refute has_element?(view, "#tx-#{c.shopping.id}")
-      refute has_element?(view, "#bulk")
+      refute bulk?(view)
       assert has_element?(view, "#flash-info", "gelöscht")
     end
 
@@ -580,8 +638,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
       view |> element("#tx-#{split.id}-select") |> render_click()
       view |> element("#tx-#{counterpart}-select") |> render_click()
-      assert has_element?(view, ~s|#delete-selected[data-confirm="2 Buchungen löschen?"]|)
-      view |> element("#delete-selected") |> render_click()
+      confirm_click(view, "#delete-selected", "2 Buchungen löschen?")
 
       assert reload(split).deleted_at
       assert reload(%{id: counterpart}).deleted_at
@@ -593,14 +650,23 @@ defmodule AbakusWeb.TransactionEditorTest do
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
 
       open_edit(view, old)
-      assert has_element?(view, "#tx-save[data-confirm]")
-      submit(view, %{memo: "Nachgetragen"})
+      assert asked(view, "#tx-save").text == "Der abgeglichene Saldo kann sich dadurch ändern."
+
+      confirm_click(view, "#tx-save", "Diese Buchung ist abgeschlossen. Trotzdem ändern?",
+        with: %{transaction: %{memo: "Nachgetragen"}}
+      )
+
       assert %Transaction{memo: "Nachgetragen", cleared: :reconciled} = reload(old)
 
       view |> element("#tx-#{old.id}-select") |> render_click()
       view |> element("#tx-#{old.id}-select") |> render_click()
-      assert has_element?(view, ~s|#delete-selected[data-confirm*="abgeschlossen"]|)
-      view |> element("#delete-selected") |> render_click()
+
+      confirm_click(
+        view,
+        "#delete-selected",
+        "Diese Buchung ist abgeschlossen. Trotzdem löschen?"
+      )
+
       assert reload(old).deleted_at
     end
 
@@ -620,7 +686,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
       view |> element("#tx-#{transfer.id}-select") |> render_click()
-      assert has_element?(view, ~s|#delete-selected[data-confirm*="abgeschlossen"]|)
+      assert asked(view, "#delete-selected").question =~ "abgeschlossen"
 
       # Without the confirmation nothing goes.
       render_click(view, "delete_selected", %{})

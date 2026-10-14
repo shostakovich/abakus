@@ -84,13 +84,13 @@ defmodule AbakusWeb.RegisterReconcileTest do
     enter(view, "212,00")
 
     assert has_element?(view, "#reconcile-difference", "+12,00 €")
-    assert has_element?(view, "#reconcile-finish", "Ausgleichsbuchung anlegen und abschließen")
+    assert has_element?(view, "#reconcile-finish", "Ausgleichen und abschließen")
 
     view |> element("#tx-#{missing.id}-cleared") |> render_click()
 
     assert has_element?(view, "#reconcile-banner", "Die Salden stimmen überein")
     assert has_element?(view, "#reconcile-finish", "Abschließen")
-    refute has_element?(view, "#reconcile-finish", "Ausgleichsbuchung")
+    refute has_element?(view, "#reconcile-finish", "Ausgleichen")
 
     view |> element("#reconcile-finish") |> render_click()
 
@@ -105,7 +105,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
     enter(view, "150,42")
 
     assert has_element?(view, "#reconcile-difference", "+0,42 €")
-    view |> element("#reconcile-finish") |> render_click()
+    confirm_click(view, "#reconcile-finish", "Ausgleichsbuchung über +0,42 € anlegen?")
 
     adjustment = Repo.get_by!(Transaction, amount: 42) |> Repo.preload(:payee)
 
@@ -128,6 +128,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
     view = open(c.conn, c.giro)
 
     assert has_element?(view, "#reconcile-menu", "+10,00 €")
+    refute has_element?(view, "#reconcile-question .text-error-ink")
     refute has_element?(view, "#reconcile-yes")
 
     view |> element("#reconcile-search") |> render_click()
@@ -135,7 +136,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
     assert has_element?(view, "#reconcile-banner", "08.10.2026")
     assert has_element?(view, "#reconcile-difference", "+10,00 €")
 
-    view |> element("#reconcile-finish") |> render_click()
+    confirm_click(view, "#reconcile-finish", "Ausgleichsbuchung über +10,00 € anlegen?")
 
     assert reload(early).cleared == :reconciled
     assert reload(later).cleared == :cleared

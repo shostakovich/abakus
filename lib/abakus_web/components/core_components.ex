@@ -1,9 +1,7 @@
 defmodule AbakusWeb.CoreComponents do
   @moduledoc """
-  The app's own helpers next to Setzkasten's components (`use Setzkasten` in `AbakusWeb`):
-  German error messages and the menus of budget and register that are no `<.dropdown>` yet.
+  The app's own helpers next to Setzkasten's components (`use Setzkasten` in `AbakusWeb`): German error messages.
   """
-  alias Phoenix.LiveView.JS
 
   @doc "German messages from the validation pass through; Ecto's English ones are translated."
   @spec translate_error({String.t(), keyword}) :: String.t()
@@ -92,18 +90,5 @@ defmodule AbakusWeb.CoreComponents do
       {_, value} -> to_string(value)
       nil -> fallback
     end
-  end
-
-  @doc "Opens or closes the menu `menu` below its `toggle`."
-  def toggle_dropdown(js \\ %JS{}, menu, toggle) do
-    js
-    |> JS.toggle_class("show", to: menu)
-    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: toggle)
-  end
-
-  def hide_dropdown(js \\ %JS{}, menu, toggle) do
-    js
-    |> JS.remove_class("show", to: menu)
-    |> JS.set_attribute({"aria-expanded", "false"}, to: toggle)
   end
 end

@@ -6,10 +6,10 @@ import { hooks as setzkastenHooks } from "phoenix-colocated/setzkasten"
 
 import { BudgetLayout, initialBudgetFit } from "./hooks/budget.js"
 import { PasskeyLogin, PasskeyRegister } from "./hooks/passkey.js"
-import { Combobox, EditRow } from "./hooks/register.js"
+import { EditRow } from "./hooks/register.js"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-const appHooks = { BudgetLayout, Combobox, EditRow, PasskeyLogin, PasskeyRegister }
+const appHooks = { BudgetLayout, EditRow, PasskeyLogin, PasskeyRegister }
 
 // The user's own date, so the current month turns over at their midnight.
 const today = () => {

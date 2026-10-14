@@ -1,9 +1,9 @@
 defmodule AbakusWeb.RegisterLive.Components do
   @moduledoc """
-  The parts of the register: banner, account line, balances, toolbar, selection bar, the table on desktops and the
-  compact cards on phones, both with the match proposals among the transactions. A click into a selected row (on
-  phones a card) opens the transaction editor. Actions that change a reconciled transaction carry a `data-confirm`
-  question and send `reconciled: "confirmed"`.
+  The parts of the register: what waits, account line, balances, toolbar, selection bar, the table on desktops and
+  the list on phones, both with the match proposals among the transactions. A click into a selected row (on phones
+  a list row) opens the transaction editor. Actions that change a reconciled transaction ask in the confirmation
+  dialog first and send `reconciled: "confirmed"`.
   """
   use AbakusWeb, :html
 
@@ -11,7 +11,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   alias Abakus.Names
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
   alias AbakusWeb.RegisterLive.{Rows, TransactionEditor}
-  alias Phoenix.LiveView.JS
 
   @flags [
     red: "Rot",
@@ -35,48 +34,49 @@ defmodule AbakusWeb.RegisterLive.Components do
     doc: "where \"Ansehen\" leads, false in that view already"
 
   @doc """
-  What waits: unapproved transactions and match proposals, with "Alle bestätigen" for the ones and "Alle Zuordnungen
-  übernehmen" for the others.
+  What waits, as a chip in the toolbar: unapproved transactions and match proposals, with "Alle bestätigen" for the
+  ones and "Alle Zuordnungen übernehmen" for the others.
   """
-  def banner(assigns) do
+  def waiting(assigns) do
     assigns =
       assign(assigns, :count, length(assigns.transactions) + length(assigns.proposals))
 
     ~H"""
-    <div
-      id="unapproved-banner"
-      class="alert alert-primary d-flex align-items-center gap-2 py-1 py-md-2 mb-3 app-banner"
-    >
-      <.icon name="info" />
-      <span class="me-auto text-truncate">
-        <span class="d-md-none">{@count} neu</span>
-        <span class="d-none d-md-inline">
-          {if @count == 1, do: "1 neue Buchung", else: "#{@count} neue Buchungen"} zu bestätigen oder zu kategorisieren
-        </span>
-      </span>
-      <.link :if={@show_path} id="show-unapproved" patch={@show_path} class="btn btn-sm btn-primary">
-        Ansehen
-      </.link>
-      <button
+    <div id="unapproved-banner" class="app-waiting">
+      <span class={["px-2 font-medium", @show_path && "max-md:hidden"]}>{@count} zu bestätigen</span>
+      <.button
+        :if={@show_path}
+        id="show-unapproved"
+        variant={:ghost}
+        size={:sm}
+        patch={@show_path}
+      >
+        <span class="md:hidden">{@count} zu bestätigen</span><span class="max-md:hidden">Ansehen</span>
+      </.button>
+      <.button
         :if={@transactions != []}
         id="approve-all"
-        type="button"
-        class="btn btn-sm btn-outline-primary"
+        variant={:ghost}
+        size={:sm}
+        icon="check"
+        class="max-md:btn-square"
         phx-click="approve_all"
         {confirm(@transactions)}
       >
-        <span class="d-md-none">Alle</span><span class="d-none d-md-inline">Alle bestätigen</span>
-      </button>
-      <button
+        <span class="max-md:sr-only">Alle bestätigen</span>
+      </.button>
+      <.button
         :if={@proposals != []}
         id="accept-all-matches"
-        type="button"
-        class="btn btn-sm btn-outline-primary"
+        variant={:ghost}
+        size={:sm}
+        icon="link"
+        class="max-md:btn-square"
         phx-click="accept_all_matches"
-        {asking(merge_question(@proposals))}
+        {confirm_merge(@proposals)}
       >
-        <span class="d-md-none">Alle zuordnen</span><span class="d-none d-md-inline">Alle Zuordnungen übernehmen</span>
-      </button>
+        <span class="max-md:sr-only">Alle Zuordnungen übernehmen</span>
+      </.button>
     </div>
     """
   end
@@ -85,20 +85,56 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   def meta(assigns) do
     ~H"""
+    <span id="register-meta" class="max-md:hidden">{join_meta(meta_parts(@account))}</span>
+    """
+  end
+
+  defp meta_parts(nil), do: ["Budget- und Tracking-Konten"]
+
+  defp meta_parts(account) do
+    [
+      AccountGroups.kind_label(account.kind),
+      account.closed && "Geschlossen",
+      account.last_reconciled_at &&
+        "Abgeglichen am #{Format.date(DateTime.to_date(account.last_reconciled_at))}",
+      account.note
+    ]
+    |> Enum.filter(& &1)
+  end
+
+  attr :account, Account, default: nil
+  attr :balances, :map, required: true
+
+  attr :reconciling, :boolean,
+    default: false,
+    doc: "the difference animates then, not the balance"
+
+  @doc """
+  One account: the balance equation, or for a depot only its value. All accounts: the budget accounts' equation,
+  tracking and the total. In the header beside the title from `md`; phones get `balances_compact/1`.
+  """
+  def balances(assigns) do
+    ~H"""
     <div
-      id="register-meta"
-      class="small text-body-secondary d-flex flex-wrap column-gap-3 mt-1 mb-2 app-reg-meta"
+      id="register-balances"
+      class="max-md:hidden flex flex-wrap items-center gap-x-6 gap-y-2 md:me-4"
     >
-      <%= if @account do %>
-        <span>{AccountGroups.kind_label(@account.kind)}</span>
-        <span :if={@account.closed}>Geschlossen</span>
-        <span :if={@account.last_reconciled_at} class="d-inline-flex align-items-center gap-1">
-          <.icon name="lock" />
-          Abgeglichen am {Format.date(DateTime.to_date(@account.last_reconciled_at))}
-        </span>
-        <span :if={@account.note}>{@account.note}</span>
-      <% else %>
-        <span>Budget- und Tracking-Konten</span>
+      <%= cond do %>
+        <% portfolio?(@account) -> %>
+          <.figure
+            id="balance-working"
+            value={@balances.working}
+            label="Wert laut Depot-App"
+            animate={!@reconciling}
+          />
+        <% @account -> %>
+          <.equation balances={@balances} ids animate={!@reconciling} />
+        <% true -> %>
+          <.equation balances={@balances.budget} ids label="Budgetkonten" animate />
+          <span class="self-stretch border-s border-base-content/10" aria-hidden="true"></span>
+          <.figure id="balance-tracking" value={@balances.tracking} label="Tracking" />
+          <span class="self-stretch border-s border-base-content/10" aria-hidden="true"></span>
+          <.figure id="balance-total" value={@balances.total} label="Gesamt" />
       <% end %>
     </div>
     """
@@ -107,44 +143,38 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :account, Account, default: nil
   attr :balances, :map, required: true
 
-  @doc """
-  One account: the balance equation, or for a depot only its value. All accounts: the budget accounts' equation,
-  tracking and the total. Phones get one line that opens the rest.
-  """
-  def balances(assigns) do
+  @doc "Phones: the headline balance beside the title, opening the meta line and the equation in a sheet."
+  def balances_compact(assigns) do
     ~H"""
-    <div class="d-none d-md-flex flex-wrap align-items-center gap-3 mb-3">
-      <%= cond do %>
-        <% portfolio?(@account) -> %>
-          <.figure id="balance-working" value={@balances.working} label="Wert laut Depot-App" />
-        <% @account -> %>
-          <.equation balances={@balances} ids />
-        <% true -> %>
-          <div>
-            <div class="small fw-semibold text-uppercase text-body-secondary mb-1">Budgetkonten</div>
-            <.equation balances={@balances.budget} ids />
-          </div>
-          <div class="vr"></div>
-          <.figure id="balance-tracking" value={@balances.tracking} label="Tracking" />
-          <div class="vr"></div>
-          <.figure id="balance-total" value={@balances.total} label="Gesamt" tone />
-      <% end %>
-    </div>
-    <details class="d-md-none mb-2 app-bal-compact">
-      <summary class="d-flex align-items-center gap-2">
-        <span class={["fw-semibold app-q", headline(@account, @balances) < 0 && "app-neg"]}>
-          {Format.euros(headline(@account, @balances))}
-        </span>
-        <span class="text-body-secondary small">{headline_label(@account)}</span>
-        <.icon name="chevron-right" class="text-body-secondary app-sum-chev" />
-      </summary>
-      <div :if={!portfolio?(@account)} class="pt-2">
-        <.equation balances={if @account, do: @balances, else: @balances.budget} />
-        <div :if={!@account} class="d-flex gap-3 mt-2">
-          <.figure value={@balances.tracking} label="Tracking" />
+    <div class="md:hidden">
+      <.popover
+        id="balances-compact"
+        title={headline_label(@account)}
+        variant={:ghost}
+        chevron
+        trigger_class="px-2"
+      >
+        <:trigger><.amount value={headline(@account, @balances)} tone={:negative} /></:trigger>
+        <div class="flex flex-col gap-4">
+          <p class="text-base-content/70">{join_meta(meta_parts(@account))}</p>
+          <.equation
+            :if={!portfolio?(@account)}
+            balances={if @account, do: @balances, else: @balances.budget}
+            label={!@account && "Budgetkonten"}
+          />
+          <.figure :if={!@account} value={@balances.tracking} label="Tracking" />
+          <.button
+            :if={@account}
+            id="edit-account-compact"
+            icon="pencil"
+            phx-click="open_account_dialog"
+            phx-value-id={@account.id}
+          >
+            Konto bearbeiten
+          </.button>
         </div>
-      </div>
-    </details>
+      </.popover>
+    </div>
     """
   end
 
@@ -159,28 +189,29 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   attr :balances, :map, required: true
   attr :ids, :boolean, default: false
+  attr :animate, :boolean, default: false
+
+  attr :label, :any,
+    default: nil,
+    doc: "what the working balance stands for, else \"Arbeitssaldo\""
 
   defp equation(assigns) do
     ~H"""
-    <div class="d-flex flex-column flex-sm-row flex-wrap gap-1 gap-sm-3">
-      <.figure
-        id={@ids && "balance-cleared"}
-        value={@balances.cleared}
-        label="Abgeglichen"
-        tone
-      />
+    <div class="flex flex-wrap items-start gap-x-4 gap-y-2">
+      <.figure id={@ids && "balance-cleared"} value={@balances.cleared} label="Abgeglichen" />
       <.figure
         id={@ids && "balance-uncleared"}
         op="+"
         value={@balances.uncleared}
         label="Nicht abgeglichen"
+        tone={false}
       />
       <.figure
         id={@ids && "balance-working"}
         op="="
         value={@balances.working}
-        label="Arbeitssaldo"
-        tone
+        label={@label || "Arbeitssaldo"}
+        animate={@ids && @animate}
       />
     </div>
     """
@@ -190,24 +221,22 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :op, :string, default: nil
   attr :value, :integer, required: true
   attr :label, :string, required: true
-  attr :tone, :boolean, default: false, doc: "green when positive, as the totals are"
+  attr :animate, :boolean, default: false
+  attr :tone, :any, default: :negative
 
   defp figure(assigns) do
     ~H"""
-    <div class="d-flex align-items-baseline gap-2">
-      <span :if={@op} class="fs-5 text-body-secondary" aria-hidden="true">{@op}</span>
-      <div>
-        <div
-          id={@id}
-          class={[
-            "fs-5 fw-semibold app-q text-nowrap",
-            @value < 0 && "app-neg",
-            @tone && @value >= 0 && "text-success"
-          ]}
-        >
-          {Format.euros(@value)}
-        </div>
-        <div class="small text-body-secondary">{@label}</div>
+    <div class="flex items-start gap-3">
+      <span :if={@op} class="text-lg text-base-content/70" aria-hidden="true">{@op}</span>
+      <div class="flex flex-col">
+        <.amount
+          id={@id || nil}
+          value={@value}
+          size={:lg}
+          tone={@tone}
+          animate={!!@id and @animate}
+        />
+        <span class="text-sm text-base-content/70">{@label}</span>
       </div>
     </div>
     """
@@ -222,96 +251,104 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :running, :boolean, required: true
   attr :running_shown, :boolean, required: true
   attr :paths, :map, required: true
+  slot :inner_block, doc: "what waits, after the actions"
 
   def toolbar(assigns) do
     ~H"""
-    <div class="d-flex align-items-center gap-1 border-top border-bottom py-2 mb-2 app-reg-tools">
-      <button
+    <div id="register-toolbar" class="flex flex-wrap items-center gap-2 pb-3">
+      <.button
         :if={@manual}
         id="new-transaction"
-        type="button"
-        class="btn btn-sm btn-link text-decoration-none d-none d-md-inline-flex align-items-center gap-1"
+        variant={:ghost}
+        size={:sm}
+        icon="plus"
+        class="max-md:hidden"
         phx-click="new"
         phx-value-layout="row"
       >
-        <.icon name="plus" /> Buchung
-      </button>
-      <.link
+        Buchung
+      </.button>
+      <.button
         :if={@manual}
         id="file-import"
+        variant={:ghost}
+        size={:sm}
+        icon="file-text"
+        class="max-md:hidden"
         navigate={~p"/import"}
-        class="btn btn-sm btn-link text-decoration-none d-inline-flex align-items-center gap-1"
       >
-        <.icon name="file-text" />
-        <span class="d-md-none">Import</span><span class="d-none d-md-inline">Datei-Import</span>
-      </.link>
-      <span
+        Datei-Import
+      </.button>
+      {render_slot(@inner_block)}
+      <p
         :if={@account && @account.fed_by}
         id="feed-hint"
-        class="small text-body-secondary d-inline-flex align-items-center gap-1 px-2"
+        class="flex items-center gap-1 text-sm text-base-content/70 max-md:order-last"
       >
-        <.icon name="info" />
+        <.icon name="info" class="shrink-0" />
         {feed_hint(@account)}, keine Buchungen von Hand oder per Datei
-      </span>
-      <span
+      </p>
+      <p
         :if={@account && @running && !@running_shown}
         id="running-hint"
-        class="small text-body-secondary px-2"
+        class="text-sm text-base-content/70 max-md:order-last"
       >
         Laufender Saldo nur in „Alle Buchungen“ ohne Suche
-      </span>
-      <div class="dropdown ms-auto" phx-click-away={hide_dropdown("#view-menu", "#view-toggle")}>
-        <button
-          id="view-toggle"
-          type="button"
-          class="btn btn-sm btn-link text-decoration-none dropdown-toggle"
-          aria-expanded="false"
-          aria-controls="view-menu"
-          phx-click={toggle_dropdown("#view-menu", "#view-toggle")}
+      </p>
+      <div class="ml-auto flex min-w-0 items-center gap-2 max-md:flex-1 max-md:basis-32">
+        <form
+          id="register-search"
+          class="min-w-0 grow md:w-56 md:grow-0"
+          role="search"
+          phx-change="search"
+          phx-submit="search"
         >
-          {view_label(@filter)}
-        </button>
-        <ul id="view-menu" class="dropdown-menu dropdown-menu-end" data-bs-popper="static">
-          <li :for={{filter, label} <- filter_labels()}>
-            <.link
-              class={["dropdown-item", @filter == filter && "active"]}
-              aria-current={@filter == filter && "true"}
-              patch={@paths.filters[filter]}
-            >
-              {label}
-            </.link>
-          </li>
-          <li :if={@account}><hr class="dropdown-divider" /></li>
-          <li :if={@account}>
-            <.link
-              id="running-toggle"
-              class="dropdown-item d-flex align-items-center gap-2"
-              patch={@paths.running}
-              aria-pressed={to_string(@running)}
-            >
-              <.icon name="check" class={[!@running && "invisible"]} /> Laufender Saldo
-            </.link>
-          </li>
-        </ul>
+          <.input
+            id="register-q"
+            type="search"
+            name="q"
+            value={@query}
+            label="Buchungen durchsuchen"
+            hide_label
+            icon="search"
+            placeholder="Suchen"
+            class="input-sm"
+            phx-debounce="300"
+          />
+        </form>
+        <.dropdown
+          id="view-menu"
+          align={:end}
+          variant={:ghost}
+          chevron={false}
+          trigger_class="btn-sm max-md:btn-square"
+        >
+          <:trigger>
+            <span id="view-toggle" class="max-md:sr-only">{view_label(@filter)}</span>
+            <.icon name="chevron-down" class="max-md:hidden" />
+            <.icon name="ellipsis-vertical" class="md:hidden" />
+          </:trigger>
+          <:item
+            :if={@manual}
+            id="file-import-item"
+            icon="file-text"
+            navigate={~p"/import"}
+            class="md:hidden"
+          >
+            Datei-Import
+          </:item>
+          <:item
+            :for={{filter, label} <- filter_labels()}
+            patch={@paths.filters[filter]}
+            active={@filter == filter}
+          >
+            {label}
+          </:item>
+          <:item :if={@account} id="running-toggle" patch={@paths.running} divider>
+            {if @running, do: "Laufenden Saldo ausblenden", else: "Laufenden Saldo zeigen"}
+          </:item>
+        </.dropdown>
       </div>
-      <form
-        id="register-search"
-        class="input-group input-group-sm app-reg-search"
-        role="search"
-        phx-change="search"
-        phx-submit="search"
-      >
-        <span class="input-group-text"><.icon name="search" /></span>
-        <input
-          type="search"
-          name="q"
-          value={@query}
-          class="form-control"
-          placeholder="Suchen"
-          aria-label="Buchungen durchsuchen"
-          phx-debounce="300"
-        />
-      </form>
     </div>
     """
   end
@@ -329,172 +366,123 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :categories, :list, required: true
 
   @doc """
-  The selection bar as in YNAB, floating at the bottom: how many are selected (× clears), approve when one of them
-  waits, categorise with the category picker, and under "Mehr" delete.
+  The selection bar as in YNAB: how many are selected (× clears), approve when one of them waits, categorise with
+  the category picker, and under "Mehr" delete. Always rendered; it shows while something is selected.
   """
   def bulk(assigns) do
     assigns =
       assign(assigns,
         count: length(assigns.selected),
-        waiting: Enum.reject(assigns.selected, & &1.approved)
+        waiting: Enum.reject(assigns.selected, & &1.approved),
+        options: category_options(assigns.categories)
       )
 
     ~H"""
-    <div
+    <.selection_bar
       id="bulk"
-      class="d-none d-md-flex align-items-center gap-1 app-bulk"
-      role="toolbar"
-      aria-label="Ausgewählte Buchungen"
+      count={@count}
+      label={if @count == 1, do: "1 Buchung", else: "%{count} Buchungen"}
+      on_clear="clear_selection"
     >
-      <button
-        id="clear-selection"
-        type="button"
-        class="btn btn-sm app-bulk-btn"
-        aria-label="Auswahl aufheben"
-        title="Auswahl aufheben"
-        phx-click="clear_selection"
-      >
-        ×
-      </button>
-      <span class="px-1 fw-semibold text-nowrap">
-        {if @count == 1, do: "1 Buchung", else: "#{@count} Buchungen"}
-      </span>
-      <span class="app-bulk-sep"></span>
-      <button
+      <.button
         :if={@waiting != []}
         id="approve-selected"
-        type="button"
-        class="btn btn-sm app-bulk-btn"
+        variant={:ghost}
+        size={:sm}
+        icon="check"
         phx-click="approve_selected"
         {confirm(@waiting)}
       >
-        <.icon name="check" /> Bestätigen
-      </button>
-      <div class="dropup" phx-click-away={hide_dropdown("#categorise-menu", "#categorise-toggle")}>
-        <button
-          id="categorise-toggle"
-          type="button"
-          class="btn btn-sm app-bulk-btn"
-          aria-expanded="false"
-          aria-controls="categorise-menu"
-          phx-click={
-            toggle_dropdown("#categorise-menu", "#categorise-toggle")
-            |> JS.focus(to: "#categorise-input")
+        Bestätigen
+      </.button>
+      <.popover
+        :if={@count > 0}
+        id="categorise"
+        title="Kategorisieren"
+        position={:top}
+        variant={:ghost}
+        trigger_class="btn-sm"
+        class="w-80"
+      >
+        <:trigger>Kategorisieren</:trigger>
+        <form
+          id="categorise-form"
+          class="grid gap-3"
+          phx-submit={JS.push("categorise_selected") |> hide_popover("categorise")}
+        >
+          <input
+            :if={reconciled(@selected) != []}
+            type="hidden"
+            name="reconciled"
+            value="confirmed"
+          />
+          <.combobox
+            id="categorise-category"
+            name="category_id"
+            value=""
+            label="Kategorie"
+            hide_label
+            options={@options}
+            placeholder="Kategorie suchen"
+            autofocus
+          >
+            <:option :let={option}>
+              <span class="min-w-0 flex-1 truncate">{option.name}</span>
+              <.amount value={option.available} tone />
+            </:option>
+          </.combobox>
+          <.button
+            id="categorise-submit"
+            type="submit"
+            size={:sm}
+            variant={:primary}
+            {confirm(@selected, [])}
+          >
+            Kategorisieren
+          </.button>
+        </form>
+      </.popover>
+      <.dropdown
+        id="bulk-more"
+        align={:end}
+        position={:top}
+        variant={:ghost}
+        chevron={false}
+        trigger_class="btn-sm"
+      >
+        <:trigger><.icon name="ellipsis" /> Mehr</:trigger>
+        <:item
+          id="delete-selected"
+          icon="trash-2"
+          danger
+          confirm={delete_question(@selected)}
+          on_click={
+            JS.push("delete_selected",
+              value: if(locked(@selected) != [], do: %{reconciled: "confirmed"}, else: %{})
+            )
           }
         >
-          Kategorisieren
-        </button>
-        <div id="categorise-menu" class="dropdown-menu p-2 app-bulk-menu" data-bs-popper="static">
-          <form
-            id="categorise-form"
-            phx-submit={
-              JS.push("categorise_selected")
-              |> hide_dropdown("#categorise-menu", "#categorise-toggle")
-            }
-          >
-            <input
-              :if={reconciled(@selected) != []}
-              type="hidden"
-              name="reconciled"
-              value="confirmed"
-            />
-            <div
-              id="categorise-combo"
-              class="app-combo app-combo-up"
-              phx-hook="Combobox"
-              data-options="categorise-options"
-              data-field="category"
-              data-submit="categorise-submit"
-            >
-              <input
-                id="categorise-input"
-                type="text"
-                class="form-control form-control-sm"
-                role="combobox"
-                aria-label="Kategorie"
-                aria-autocomplete="list"
-                aria-controls="categorise-list"
-                placeholder="Kategorie suchen"
-                autocomplete="off"
-              />
-              <input type="hidden" name="category_id" value="" />
-              <div id="categorise-list" class="app-combo-menu" role="listbox" phx-update="ignore">
-              </div>
-            </div>
-            <button
-              id="categorise-submit"
-              type="submit"
-              class="d-none"
-              data-confirm={question(@selected)}
-            >
-              Kategorisieren
-            </button>
-          </form>
-          <.category_template id="categorise-options" categories={@categories} />
-        </div>
-      </div>
-      <div class="dropup" phx-click-away={hide_dropdown("#bulk-more", "#bulk-more-toggle")}>
-        <button
-          id="bulk-more-toggle"
-          type="button"
-          class="btn btn-sm app-bulk-btn"
-          aria-expanded="false"
-          aria-controls="bulk-more"
-          phx-click={toggle_dropdown("#bulk-more", "#bulk-more-toggle")}
-        >
-          ⋯ Mehr
-        </button>
-        <ul id="bulk-more" class="dropdown-menu dropdown-menu-end" data-bs-popper="static">
-          <li>
-            <button
-              id="delete-selected"
-              type="button"
-              class="dropdown-item text-danger"
-              phx-click="delete_selected"
-              phx-value-reconciled={locked(@selected) != [] && "confirmed"}
-              data-confirm={delete_question(@selected)}
-            >
-              Löschen
-            </button>
-          </li>
-        </ul>
-      </div>
-    </div>
+          Löschen
+        </:item>
+      </.dropdown>
+    </.selection_bar>
     """
   end
 
-  attr :id, :string, required: true
-  attr :categories, :list, required: true
-  slot :inner_block, doc: "below the options"
-
-  @doc "The category picker's options (see the `Combobox` hook): by group, each with what it has available."
-  def category_template(assigns) do
-    ~H"""
-    <template id={@id}>
-      <div :for={group <- @categories} class="app-combo-group" role="group" aria-label={group.name}>
-        <div class="app-combo-head">{group.name}</div>
-        <div
-          :for={option <- group.options}
-          class="app-combo-opt d-flex gap-2"
-          role="option"
-          data-value={option.id}
-          data-key={option.key}
-          data-label={option.text}
-        >
-          <span class="text-truncate me-auto">{option.name}</span>
-          <span class={["app-q", available_class(option.available)]}>
-            {Format.amount(option.available)}
-          </span>
-        </div>
-      </div>
-      {render_slot(@inner_block)}
-    </template>
-    """
+  defp category_options(categories) do
+    for group <- categories do
+      {group.name,
+       for(
+         option <- group.options,
+         do: %{
+           label: option.text,
+           value: option.id,
+           name: option.name,
+           available: option.available
+         }
+       )}
+    end
   end
-
-  defp available_class(amount) when amount > 0, do: "text-success"
-  defp available_class(amount) when amount < 0, do: "app-neg"
-  defp available_class(_zero), do: "text-body-secondary"
 
   attr :rows, :list, required: true
   attr :proposals, :list, required: true, doc: "the match proposals shown among the rows"
@@ -525,13 +513,14 @@ defmodule AbakusWeb.RegisterLive.Components do
       )
 
     ~H"""
-    <div class="d-none d-md-block">
+    <div class="app-reg-wrap max-md:hidden border-y border-base-content/10">
       <table
         id="register-table"
         class={[
-          "table table-sm table-hover align-middle app-reg mb-0",
+          "table setzkasten-table-dense tabular-nums app-reg",
           @columns.all && "app-reg-all",
-          @editor && "app-reg-editing"
+          !@columns.category && "app-reg-nocat",
+          @columns.running && "app-reg-running"
         ]}
       >
         <thead>
@@ -540,25 +529,26 @@ defmodule AbakusWeb.RegisterLive.Components do
               <input
                 id="select-all"
                 type="checkbox"
-                class="form-check-input"
+                class="checkbox checkbox-sm"
                 checked={@all_selected}
                 phx-click="select_all"
                 aria-label="Alle auswählen"
               />
             </th>
             <th class="app-flag-col">
-              <span class="visually-hidden">Markierung</span><.icon name="flag" />
+              <span class="sr-only">Markierung</span><.icon name="flag" />
             </th>
             <th class="app-date-col">Datum</th>
-            <th :if={@columns.all}>Konto</th>
+            <th :if={@columns.all} class="app-konto">Konto</th>
             <th class="app-payee">Empfänger</th>
-            <th :if={@columns.category}>Kategorie</th>
+            <th :if={@columns.category} class="app-catcol">Kategorie</th>
             <th class="app-memo-col">Memo</th>
-            <th class="text-end app-amount-col">Ausgang</th>
-            <th class="text-end app-amount-col">Eingang</th>
-            <th :if={@columns.running} class="text-end">Saldo</th>
-            <th class="text-center app-c-col">
-              <span class="visually-hidden">Abgeglichen, bestätigen</span>C
+            <th class="text-end app-out">Ausgang</th>
+            <th class="text-end app-in">Eingang</th>
+            <th :if={@columns.running} class="text-end app-run">Saldo</th>
+            <th class="app-ok-col"><span class="sr-only">Bestätigen</span></th>
+            <th class="text-end app-c-col">
+              <span class="sr-only">Abgeglichen</span><span aria-hidden="true">C</span>
             </th>
           </tr>
         </thead>
@@ -582,11 +572,14 @@ defmodule AbakusWeb.RegisterLive.Components do
         <% end %>
         <tbody :if={@rows == [] and @proposals == []}>
           <tr>
-            <td colspan={@columns.count} class="text-center text-body-secondary py-4">{@empty}</td>
+            <td colspan={@columns.count}>
+              <.empty_state title={@empty} class="py-4" />
+            </td>
           </tr>
         </tbody>
       </table>
     </div>
+    <.flag_menu :if={@flag_menu} rows={@rows} id={@flag_menu} />
     """
   end
 
@@ -594,7 +587,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   def columns(account, running) do
     all = is_nil(account)
     category = all or Account.budget_account?(account)
-    count = 8 + Enum.count([all, category, running], & &1)
+    count = 9 + Enum.count([all, category, running], & &1)
     %{all: all, category: category, running: running, count: count}
   end
 
@@ -607,30 +600,23 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   defp row(assigns) do
     ~H"""
-    <tbody
-      id={"tx-#{@transaction.id}-rows"}
-      class={["app-tx", @selected && "is-selected"]}
-    >
+    <tbody id={"tx-#{@transaction.id}-rows"} class={["app-tx", @selected && "is-selected"]}>
       <tr
         id={"tx-#{@transaction.id}"}
-        class={[
-          "app-tx-main",
-          !@transaction.approved && "app-unapproved",
-          @selected && "table-active"
-        ]}
+        class={["app-tx-main", !@transaction.approved && "app-unapproved"]}
       >
         <td class="app-pick">
           <input
             id={"tx-#{@transaction.id}-select"}
             type="checkbox"
-            class="form-check-input"
+            class="checkbox checkbox-sm"
             checked={@selected}
             phx-click="select"
             phx-value-id={@transaction.id}
             aria-label="Buchung auswählen"
           />
         </td>
-        <td>
+        <td class="app-flag-col">
           <.flag transaction={@transaction} open={@flag_open} />
         </td>
         <td {cell(@transaction, "date")}>
@@ -646,15 +632,13 @@ defmodule AbakusWeb.RegisterLive.Components do
           <.account_cell account={@accounts[@transaction.account_id]} />
         </td>
         <td class="app-payee" {cell(@transaction, "payee")}>
-          <div class="text-truncate app-payee-name">
-            {payee(@transaction, @accounts)}<span
-              :if={payee(@transaction, @accounts) == ""}
-              class="text-body-secondary"
-            >Ohne Empfänger</span>
-          </div>
-          <div :if={@transaction.memo} class="small text-body-secondary text-truncate app-short">
-            {@transaction.memo}
-          </div>
+          {payee(@transaction, @accounts)}<span
+            :if={payee(@transaction, @accounts) == ""}
+            class="text-base-content/70"
+          >Ohne Empfänger</span><span
+            :if={@transaction.memo}
+            class="app-memo-inline text-base-content/70"
+          ><.meta_sep />{@transaction.memo}</span>
         </td>
         <td :if={@columns.category} class="app-catcol" {cell(@transaction, "category")}>
           <button
@@ -669,50 +653,52 @@ defmodule AbakusWeb.RegisterLive.Components do
           </button>
           <.category transaction={@transaction} accounts={@accounts} />
         </td>
-        <td class="small text-body-secondary text-truncate app-memo-col" {cell(@transaction, "memo")}>
+        <td class="text-base-content/70 app-memo-col" {cell(@transaction, "memo")}>
           {@transaction.memo}
         </td>
-        <td class="text-end app-q app-out" {cell(@transaction, "outflow")}>
+        <td class="text-end app-out" {cell(@transaction, "outflow")}>
           {outflow(@transaction.amount)}
         </td>
-        <td class="text-end app-q app-in" {cell(@transaction, "inflow")}>
+        <td class="text-end app-in" {cell(@transaction, "inflow")}>
           {inflow(@transaction.amount)}
         </td>
-        <td :if={@running} class="text-end app-q text-body-secondary app-run">
+        <td :if={@running} class="text-end text-base-content/70 app-run">
           {Format.amount(@running[@transaction.id])}
         </td>
-        <td class="text-end text-nowrap app-c-col">
+        <td class="app-ok-col">
           <.approve
             :if={!@transaction.approved}
             id={"tx-#{@transaction.id}-approve"}
             transaction={@transaction}
             accounts={@accounts}
-            class="btn btn-sm btn-primary app-approve"
           />
+        </td>
+        <td class="app-c-col">
           <.cleared id={"tx-#{@transaction.id}-cleared"} transaction={@transaction} />
         </td>
       </tr>
       <tr
         :for={{part, index} <- Enum.with_index(@transaction.subtransactions)}
         id={"tx-#{@transaction.id}-part-#{index}"}
-        class={["app-part", @selected && "table-active"]}
+        class="app-part"
       >
         <td></td>
         <td></td>
         <td {cell(@transaction, "date")}></td>
         <td :if={@columns.all} {cell(@transaction, "account")}></td>
-        <td class="app-payee text-truncate" {cell(@transaction, "payee")}>
-          {payee(part, @accounts)}
+        <td class="app-payee" {cell(@transaction, "payee")}>
+          {payee(part, @accounts)}<span :if={part.memo} class="app-memo-inline"><.meta_sep />{part.memo}</span>
         </td>
         <td :if={@columns.category} class="app-catcol" {cell(@transaction, "category")}>
           {category_text(part, @accounts)}
         </td>
-        <td class="small text-body-secondary text-truncate app-memo-col" {cell(@transaction, "memo")}>
+        <td class="app-memo-col" {cell(@transaction, "memo")}>
           {part.memo}
         </td>
-        <td class="text-end app-q app-out" {cell(@transaction, "outflow")}>{outflow(part.amount)}</td>
-        <td class="text-end app-q app-in" {cell(@transaction, "inflow")}>{inflow(part.amount)}</td>
+        <td class="text-end app-out" {cell(@transaction, "outflow")}>{outflow(part.amount)}</td>
+        <td class="text-end app-in" {cell(@transaction, "inflow")}>{inflow(part.amount)}</td>
         <td :if={@running}></td>
+        <td></td>
         <td></td>
       </tr>
     </tbody>
@@ -728,7 +714,7 @@ defmodule AbakusWeb.RegisterLive.Components do
     <tbody id={"proposal-#{@proposal.id}-rows"} class="app-tx">
       <tr id={"proposal-#{@proposal.id}"} class="app-tx-main app-unapproved">
         <td class="app-pick"></td>
-        <td></td>
+        <td class="app-flag-col"></td>
         <td>
           <span class="app-wide">{Format.date(@proposal.date)}</span>
           <span class="app-short">{Format.day(@proposal.date)}</span>
@@ -737,63 +723,51 @@ defmodule AbakusWeb.RegisterLive.Components do
           <.account_cell account={@accounts[@proposal.account_id]} />
         </td>
         <td class="app-payee">
-          <div class="text-truncate app-payee-name">
-            {payee(@proposal, @accounts)}<span
-              :if={payee(@proposal, @accounts) == ""}
-              class="text-body-secondary"
-            >Ohne Empfänger</span>
-          </div>
+          {payee(@proposal, @accounts)}<span
+            :if={payee(@proposal, @accounts) == ""}
+            class="text-base-content/70"
+          >Ohne Empfänger</span><span
+            :if={@proposal.memo}
+            class="app-memo-inline text-base-content/70"
+          ><.meta_sep />{@proposal.memo}</span>
         </td>
         <td :if={@columns.category} class="app-catcol"></td>
-        <td class="small text-body-secondary text-truncate app-memo-col">{@proposal.memo}</td>
-        <td class="text-end app-q app-out">{outflow(@proposal.amount)}</td>
-        <td class="text-end app-q app-in">{inflow(@proposal.amount)}</td>
+        <td class="text-base-content/70 app-memo-col">{@proposal.memo}</td>
+        <td class="text-end app-out">{outflow(@proposal.amount)}</td>
+        <td class="text-end app-in">{inflow(@proposal.amount)}</td>
         <td :if={@columns.running}></td>
         <td></td>
+        <td></td>
       </tr>
-      <tr id={"proposal-#{@proposal.id}-match"} class="app-actrow">
+      <tr id={"proposal-#{@proposal.id}-match"} class="app-actrow app-unapproved">
         <td colspan="2"></td>
         <td colspan={@columns.count - 2}>
-          <.match id={"proposal-#{@proposal.id}"} proposal={@proposal} accounts={@accounts} />
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="flex items-center gap-1 text-base-content/70">
+              <.icon name="link" />{match_text(@proposal.matched_transaction, @accounts)}
+            </span>
+            <.button
+              id={"proposal-#{@proposal.id}-accept"}
+              size={:sm}
+              variant={:primary}
+              phx-click="accept_match"
+              phx-value-id={@proposal.id}
+              {confirm_merge([@proposal])}
+            >
+              Zuordnen
+            </.button>
+            <.button
+              id={"proposal-#{@proposal.id}-reject"}
+              size={:sm}
+              phx-click="reject_match"
+              phx-value-id={@proposal.id}
+            >
+              Trennen
+            </.button>
+          </div>
         </td>
       </tr>
     </tbody>
-    """
-  end
-
-  attr :id, :string, required: true
-  attr :proposal, Transaction, required: true
-  attr :accounts, :map, required: true
-
-  defp match(assigns) do
-    ~H"""
-    <div class="d-flex flex-wrap align-items-center gap-2">
-      <span class="d-inline-flex align-items-center gap-1 text-info-emphasis small">
-        <.icon name="link" /> {match_text(
-          @proposal.matched_transaction,
-          @accounts
-        )}
-      </span>
-      <button
-        id={"#{@id}-accept"}
-        type="button"
-        class="btn btn-sm btn-primary app-btn-28"
-        phx-click="accept_match"
-        phx-value-id={@proposal.id}
-        {asking(merge_question([@proposal]))}
-      >
-        Zuordnen
-      </button>
-      <button
-        id={"#{@id}-reject"}
-        type="button"
-        class="btn btn-sm btn-outline-secondary app-btn-28"
-        phx-click="reject_match"
-        phx-value-id={@proposal.id}
-      >
-        Trennen
-      </button>
-    </div>
     """
   end
 
@@ -816,118 +790,123 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :empty, :string, required: true
 
   @doc """
-  Phones: one compact card per transaction, which opens the transaction sheet; one waiting for approval puts its ✓
-  at the side, a match proposal what it matches with "Zuordnen" and "Trennen".
+  Phones: one row per transaction, as on a bank statement, which opens the transaction sheet; one waiting for
+  approval has its ✓ in front, the others their C. A match proposal says what it matches, with "Zuordnen" and
+  "Trennen" in its menu.
   """
   def cards(assigns) do
     ~H"""
-    <div id="register-cards" class="list-group d-md-none">
+    <.list id="register-cards" class="md:hidden">
       <%= for transaction <- Rows.with_proposals(@rows, @proposals) do %>
-        <div
+        <.list_row
           :if={transaction.matched_transaction_id}
           id={"proposal-card-#{transaction.id}"}
-          class="list-group-item app-unapproved-item"
+          title={title(transaction, @accounts)}
+          trailing_on_phone={:title}
+          class="app-unapproved-item"
         >
-          <div class="d-flex align-items-start gap-2">
-            <span class="app-payee-ph flex-grow-1 min-w-0">{payee(transaction, @accounts)}</span>
-            <.signed amount={transaction.amount} class="fw-bold" />
-          </div>
-          <div class="small text-body-secondary app-ph-l2">
-            {Format.day(transaction.date)}<span :if={@all}> · {@accounts[transaction.account_id].name}</span>
-          </div>
-          <div class="app-ph-l2">
-            <.match
-              id={"proposal-card-#{transaction.id}"}
-              proposal={transaction}
+          <:leading><.icon name="link" class="size-5 text-base-content/70" /></:leading>
+          <:meta>
+            {join_meta([
+              Format.day(transaction.date),
+              if(@all, do: @accounts[transaction.account_id].name),
+              match_text(transaction.matched_transaction, @accounts)
+            ])}
+          </:meta>
+          <:trailing><.signed amount={transaction.amount} /></:trailing>
+          <:action
+            id={"proposal-card-#{transaction.id}-accept"}
+            label="Zuordnen"
+            icon="link"
+            on_click={decision("accept_match", transaction)}
+            confirm={merge_question([transaction])}
+            confirm_text={merge_text()}
+            confirm_label="Zuordnen"
+          />
+          <:action
+            id={"proposal-card-#{transaction.id}-reject"}
+            label="Trennen"
+            icon="x"
+            on_click={JS.push("reject_match", value: %{id: to_string(transaction.id)})}
+          />
+        </.list_row>
+        <.list_row
+          :if={!transaction.matched_transaction_id}
+          id={"tx-card-#{transaction.id}"}
+          on_click={JS.push("edit", value: %{id: to_string(transaction.id)})}
+          trailing_on_phone={:title}
+          class={!transaction.approved && "app-unapproved-item"}
+        >
+          <span class={!transaction.approved && "font-semibold"}>{title(transaction, @accounts)}</span>
+          <:leading>
+            <.approve
+              :if={!transaction.approved}
+              id={"tx-card-#{transaction.id}-approve"}
+              transaction={transaction}
               accounts={@accounts}
             />
-          </div>
-        </div>
-        <div
-          :if={!transaction.matched_transaction_id and !transaction.approved}
-          id={"tx-card-#{transaction.id}"}
-          class="list-group-item app-unapproved-item d-flex align-items-center gap-2"
-        >
-          <.link
-            id={"tx-card-#{transaction.id}-edit"}
-            phx-click="edit"
-            phx-value-id={transaction.id}
-            class="d-block flex-grow-1 min-w-0 text-reset text-decoration-none"
-          >
-            <div class="d-flex align-items-start gap-2">
-              <span class="app-payee-ph flex-grow-1 min-w-0">{payee(transaction, @accounts)}</span>
-              <.signed amount={transaction.amount} class="fw-bold" />
-            </div>
-            <div class="d-flex align-items-center gap-2 app-ph-l2 small">
-              <span class="text-body-secondary flex-shrink-0">
-                {Format.day(transaction.date)}<span :if={@all}> · {@accounts[transaction.account_id].name}</span>
-              </span>
-              <span class="text-truncate"><.category transaction={transaction} accounts={@accounts} /></span>
-            </div>
-          </.link>
-          <.approve
-            id={"tx-card-#{transaction.id}-approve"}
-            transaction={transaction}
-            accounts={@accounts}
-            class="btn btn-primary app-approve-ph"
-          />
-        </div>
-        <div
-          :if={!transaction.matched_transaction_id and transaction.approved}
-          id={"tx-card-#{transaction.id}"}
-          class="list-group-item d-flex gap-2 align-items-start"
-        >
-          <span class="pt-1">
-            <.cleared id={"tx-card-#{transaction.id}-cleared"} transaction={transaction} />
-          </span>
-          <.link
-            id={"tx-card-#{transaction.id}-edit"}
-            phx-click="edit"
-            phx-value-id={transaction.id}
-            class="d-block flex-grow-1 min-w-0 text-reset text-decoration-none"
-          >
-            <div class="app-payee-ph">{payee(transaction, @accounts)}</div>
-            <div class="small text-body-secondary text-truncate">
-              {Format.day(transaction.date)}<span :if={@all}> · {@accounts[transaction.account_id].name}</span>
-              <span :if={category_text(transaction, @accounts) != ""}>
-                · <.category transaction={transaction} accounts={@accounts} />
-              </span>
-            </div>
-            <div :if={transaction.memo} class="small text-body-secondary text-truncate">
-              {transaction.memo}
-            </div>
-          </.link>
-          <span
-            :if={transaction.flag}
-            class={["app-flag is-set", "app-flag-#{transaction.flag}"]}
-            title={"Markierung: #{flag_label(transaction.flag)}"}
-          >
-            <.icon name="flag" />
-          </span>
-          <.signed amount={transaction.amount} class="fw-semibold" />
-        </div>
+            <.cleared
+              :if={transaction.approved}
+              id={"tx-card-#{transaction.id}-cleared"}
+              transaction={transaction}
+            />
+          </:leading>
+          <:meta>
+            {join_meta([
+              Format.day(transaction.date),
+              if(@all, do: @accounts[transaction.account_id].name),
+              category_text(transaction, @accounts),
+              transaction.memo
+            ])}
+          </:meta>
+          <:trailing>
+            <span class="flex items-center gap-1">
+              <.icon
+                :if={transaction.flag}
+                name="flag"
+                class={"app-flag-mark app-flag-#{transaction.flag}"}
+              />
+              <.signed amount={transaction.amount} />
+            </span>
+          </:trailing>
+        </.list_row>
       <% end %>
-      <div
-        :if={@rows == [] and @proposals == []}
-        class="list-group-item text-center text-body-secondary py-4"
-      >
-        {@empty}
-      </div>
-    </div>
+      <li :if={@rows == [] and @proposals == []} class="px-4">
+        <.empty_state title={@empty} />
+      </li>
+    </.list>
     """
+  end
+
+  defp title(transaction, accounts) do
+    case payee(transaction, accounts) do
+      "" -> "Ohne Empfänger"
+      payee -> payee
+    end
+  end
+
+  defp decision(event, proposal) do
+    value = %{id: to_string(proposal.id)}
+
+    value =
+      if merge_question([proposal]), do: Map.put(value, :reconciled, "confirmed"), else: value
+
+    JS.push(event, value: value)
   end
 
   def legend(assigns) do
     ~H"""
-    <div class="small text-body-secondary mt-2 d-flex flex-wrap gap-3">
-      <span class="d-inline-flex align-items-center gap-1">
-        <span class="app-clear">C</span> nicht abgeglichen
+    <div class="flex flex-wrap gap-x-4 gap-y-1 pt-3 text-sm text-base-content/70">
+      <span class="inline-flex items-center gap-1">
+        <span class="app-clear" aria-hidden="true">C</span> nicht abgeglichen
       </span>
-      <span class="d-inline-flex align-items-center gap-1">
-        <span class="app-clear is-cleared">C</span> abgeglichen (bei der Bank gebucht)
+      <span class="inline-flex items-center gap-1">
+        <span class="app-clear is-cleared" aria-hidden="true">C</span>
+        abgeglichen (bei der Bank gebucht)
       </span>
-      <span class="d-inline-flex align-items-center gap-1">
-        <span class="app-clear is-reconciled"><.icon name="lock" /></span> abgeschlossen, gesperrt
+      <span class="inline-flex items-center gap-1">
+        <span class="app-clear is-reconciled" aria-hidden="true"><.icon name="lock" /></span>
+        abgeschlossen, gesperrt
       </span>
     </div>
     """
@@ -937,61 +916,74 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :open, :boolean, required: true
 
   defp flag(assigns) do
-    assigns = assign(assigns, :flags, @flags)
-
     ~H"""
-    <div class="dropdown" phx-click-away={@open && "close_flag_menu"}>
-      <button
-        id={"tx-#{@transaction.id}-flag"}
-        type="button"
-        class={["app-flag", @transaction.flag && "is-set app-flag-#{@transaction.flag}"]}
-        aria-label={"Markierung: #{flag_label(@transaction.flag)}, ändern"}
-        aria-expanded={to_string(@open)}
-        title="Markierung"
-        phx-click="flag_menu"
-        phx-value-id={@transaction.id}
-      >
-        <.icon name="flag" />
-      </button>
-      <div
-        :if={@open}
-        id="flag-menu"
-        class="dropdown-menu show p-2 app-flag-menu"
-        data-bs-popper="static"
-        phx-window-keydown="close_flag_menu"
-        phx-key="Escape"
-      >
-        <div class="fw-semibold small mb-2">Markierung</div>
-        <div class="d-flex flex-wrap gap-1">
-          <button
-            :for={{flag, label} <- @flags}
-            id={"flag-menu-#{flag}"}
-            type="button"
-            class={[
-              "btn btn-sm btn-light d-inline-flex align-items-center gap-1",
-              @transaction.flag == flag && "active"
-            ]}
-            phx-click="set_flag"
-            phx-value-id={@transaction.id}
-            phx-value-flag={flag}
-            {confirm([@transaction])}
-          >
-            <.icon name="flag" class={"app-flag-#{flag}"} />{label}
-          </button>
-          <button
-            id="flag-menu-none"
-            type="button"
-            class={["btn btn-sm btn-light", is_nil(@transaction.flag) && "active"]}
-            phx-click="set_flag"
-            phx-value-id={@transaction.id}
-            phx-value-flag=""
-            {confirm([@transaction])}
-          >
-            keine
-          </button>
-        </div>
+    <button
+      id={"tx-#{@transaction.id}-flag"}
+      type="button"
+      class={["app-flag", @transaction.flag && "is-set app-flag-#{@transaction.flag}"]}
+      aria-label={"Markierung: #{flag_label(@transaction.flag)}, ändern"}
+      aria-haspopup="dialog"
+      aria-expanded={to_string(@open)}
+      title="Markierung"
+      phx-click="flag_menu"
+      phx-value-id={@transaction.id}
+    >
+      <.icon name="flag" />
+    </button>
+    """
+  end
+
+  attr :rows, :list, required: true
+  attr :id, :integer, required: true, doc: "the transaction whose flag opened it"
+
+  @doc "The one flag picker of the register, at the flag of the row that opened it."
+  def flag_menu(assigns) do
+    case Enum.find(assigns.rows, &(&1.id == assigns.id)) do
+      nil -> ~H""
+      transaction -> assigns |> assign(transaction: transaction, flags: @flags) |> flag_picker()
+    end
+  end
+
+  defp flag_picker(assigns) do
+    ~H"""
+    <.popover
+      id="flag-menu"
+      title="Markierung"
+      anchor={"tx-#{@transaction.id}-flag"}
+      show
+      on_cancel={JS.push("close_flag_menu")}
+      class="w-72"
+    >
+      <div class="flex flex-wrap gap-1">
+        <.button
+          :for={{flag, label} <- @flags}
+          id={"flag-menu-#{flag}"}
+          size={:sm}
+          variant={if @transaction.flag == flag, do: :neutral, else: :ghost}
+          class={@transaction.flag == flag && "setzkasten-selected"}
+          aria-pressed={to_string(@transaction.flag == flag)}
+          phx-click="set_flag"
+          phx-value-id={@transaction.id}
+          phx-value-flag={flag}
+          {confirm([@transaction])}
+        >
+          <.icon name="flag" class={"app-flag-mark app-flag-#{flag}"} />{label}
+        </.button>
+        <.button
+          id="flag-menu-none"
+          size={:sm}
+          variant={if is_nil(@transaction.flag), do: :neutral, else: :ghost}
+          class={is_nil(@transaction.flag) && "setzkasten-selected"}
+          aria-pressed={to_string(is_nil(@transaction.flag))}
+          phx-click="set_flag"
+          phx-value-id={@transaction.id}
+          phx-value-flag=""
+          {confirm([@transaction])}
+        >
+          Keine
+        </.button>
       </div>
-    </div>
+    </.popover>
     """
   end
 
@@ -1009,10 +1001,19 @@ defmodule AbakusWeb.RegisterLive.Components do
       class="app-clear is-reconciled"
       title="Abgeschlossen"
       aria-label="Abgeschlossen, entsperren"
-      phx-click="toggle_cleared"
-      phx-value-id={@transaction.id}
-      phx-value-reconciled="confirmed"
-      data-confirm="Diese Buchung ist abgeschlossen. Entsperren?"
+      aria-haspopup="dialog"
+      phx-click={
+        show_confirm(
+          %JS{},
+          "confirm-delete",
+          "Diese Buchung ist abgeschlossen. Entsperren?",
+          JS.push("toggle_cleared",
+            value: %{id: to_string(@transaction.id), reconciled: "confirmed"}
+          ),
+          text: "Sie ist danach abgeglichen, aber nicht mehr gesperrt.",
+          label: "Entsperren"
+        )
+      }
     >
       <.icon name="lock" />
     </button>
@@ -1039,22 +1040,23 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :id, :string, required: true
   attr :transaction, :map, required: true
   attr :accounts, :map, required: true
-  attr :class, :string, required: true
 
   defp approve(assigns) do
     ~H"""
-    <button
-      id={@id}
-      type="button"
-      class={@class}
-      title="Bestätigen"
-      aria-label={"#{payee(@transaction, @accounts)} bestätigen"}
-      phx-click="approve"
-      phx-value-id={@transaction.id}
-      {confirm([@transaction])}
-    >
-      <.icon name="check" />
-    </button>
+    <.tooltip id={"#{@id}-tip"} text="Bestätigen" placement={:left}>
+      <.button
+        id={@id}
+        size={:sm}
+        variant={:ghost}
+        icon="check"
+        icon_only
+        label={"#{title(@transaction, @accounts)} bestätigen"}
+        class="app-approve"
+        phx-click="approve"
+        phx-value-id={@transaction.id}
+        {confirm([@transaction])}
+      />
+    </.tooltip>
     """
   end
 
@@ -1074,10 +1076,10 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   defp category(assigns) do
     ~H"""
-    <span :if={@transaction.subtransactions != []} class="text-body-secondary">
+    <span :if={@transaction.subtransactions != []} class="text-base-content/70">
       {category_text(@transaction, @accounts)}
     </span>
-    <span :if={uncategorised?(@transaction, @accounts)} class="text-warning-emphasis">
+    <span :if={uncategorised?(@transaction, @accounts)} class="app-uncategorised">
       Nicht kategorisiert
     </span>
     <span :if={@transaction.subtransactions == [] and !uncategorised?(@transaction, @accounts)}>
@@ -1087,13 +1089,10 @@ defmodule AbakusWeb.RegisterLive.Components do
   end
 
   attr :amount, :integer, required: true
-  attr :class, :string, default: nil
 
   defp signed(assigns) do
     ~H"""
-    <span class={["app-q text-nowrap", @class, @amount > 0 && "text-success"]}>
-      {Format.signed_euros(@amount)}
-    </span>
+    <.amount value={@amount} signed class={["font-semibold", @amount > 0 && "text-success-ink"]} />
     """
   end
 
@@ -1160,11 +1159,20 @@ defmodule AbakusWeb.RegisterLive.Components do
     end
   end
 
-  defp confirm(transactions), do: asking(question(transactions))
+  defp confirm(transactions, value \\ ["phx-value-reconciled": "confirmed"]),
+    do: asking(question(transactions), "Ändern", "Der abgeglichene Saldo bleibt gleich.", value)
 
-  # Attributes that make the browser ask before changing reconciled transactions, and tell the server it did.
-  defp asking(nil), do: []
-  defp asking(question), do: ["data-confirm": question, "phx-value-reconciled": "confirmed"]
+  defp confirm_merge(proposals),
+    do: asking(merge_question(proposals), "Zuordnen", merge_text())
+
+  defp merge_text, do: "Das Datum aus dem Import gilt dann auf beiden Seiten der Umbuchung."
+
+  # A `<.button>` that asks before changing reconciled transactions and tells the server it did.
+  defp asking(question, label, text, value \\ ["phx-value-reconciled": "confirmed"])
+  defp asking(nil, _label, _text, _value), do: []
+
+  defp asking(question, label, text, value),
+    do: [confirm: question, confirm_label: label, confirm_text: text] ++ value
 
   defp question([%{cleared: :reconciled}]),
     do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"

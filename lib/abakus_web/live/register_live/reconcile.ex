@@ -3,7 +3,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
   Reconciling one account in the register, as in YNAB. The popover asks whether the balance is right: with a bank
   balance it shows it with its date beside the cleared balance up to that date, without one it asks about the
   cleared balance. "Ja" reconciles. "Nein" asks for the bank's balance today; a differing bank balance offers that
-  or to search the difference. Both lead to reconcile mode, whose banner shows the difference as the cleared state
+  or to search the difference. Both lead to reconcile mode, whose bar shows the difference as the cleared state
   changes, until it is finished (with an adjustment for what is left) or cancelled.
 
   The bank's balance the account is reconciled against is kept as `Abakus.Ledger.reconcile/3` takes it, with its
@@ -60,32 +60,36 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
   @doc "The \"Abgleichen\" button with its popover."
   def editor(assigns) do
     ~H"""
-    <div class="dropdown" phx-click-away={@state && "reconcile_close"}>
-      <button
-        id="reconcile-open"
-        type="button"
-        class="btn btn-sm btn-primary"
-        aria-expanded={to_string(@state != nil)}
-        aria-controls="reconcile-menu"
-        phx-click={if @state, do: "reconcile_close", else: "reconcile_open"}
-      >
-        Abgleichen
-      </button>
-      <div
-        :if={@state}
-        id="reconcile-menu"
-        class="dropdown-menu dropdown-menu-end show p-3 app-reconcile-menu"
-        data-bs-popper="static"
-        role="dialog"
-        aria-labelledby="reconcile-title"
-        phx-window-keydown="reconcile_close"
-        phx-key="Escape"
-      >
-        <div id="reconcile-title" class="fw-semibold mb-2">Konto abgleichen</div>
-        <.ask :if={@state.step == :ask} state={@state} difference={difference(@state)} />
-        <.enter :if={@state.step == :enter} error={@state.error} />
-      </div>
-    </div>
+    <.button
+      id="reconcile-open"
+      icon="lock"
+      class="max-md:btn-square"
+      aria-haspopup="dialog"
+      aria-expanded={to_string(@state != nil)}
+      phx-click={if @state, do: "reconcile_close", else: "reconcile_open"}
+    >
+      <span class="max-md:sr-only">Abgleichen</span>
+    </.button>
+    <.question :if={@state} state={@state} />
+    """
+  end
+
+  attr :state, :map, required: true
+
+  defp question(assigns) do
+    ~H"""
+    <.popover
+      id="reconcile-menu"
+      title="Konto abgleichen"
+      anchor="reconcile-open"
+      align={:end}
+      show
+      on_cancel={JS.push("reconcile_close")}
+      class="w-80"
+    >
+      <.ask :if={@state.step == :ask} state={@state} difference={difference(@state)} />
+      <.enter :if={@state.step == :enter} error={@state.error} />
+    </.popover>
     """
   end
 
@@ -94,8 +98,8 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
 
   defp ask(%{state: %{bank: %{source: :entered}}} = assigns) do
     ~H"""
-    <p id="reconcile-question" class="mb-3">
-      Hat das Konto laut Bank <span class="app-q fw-semibold text-nowrap">{Format.euros(@state.bank.amount)}</span>?
+    <p id="reconcile-question" class="pb-4 text-sm">
+      Hat das Konto laut Bank <.amount value={@state.bank.amount} class="font-semibold" />?
     </p>
     <.answers yes />
     """
@@ -103,28 +107,29 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
 
   defp ask(assigns) do
     ~H"""
-    <div id="reconcile-bank" class="d-flex justify-content-between gap-3">
-      <span>Banksaldo am {Format.date(@state.bank.date)}</span>
-      <span class="app-q fw-semibold text-nowrap">{Format.euros(@state.bank.amount)}</span>
+    <div class="text-sm">
+      <div id="reconcile-bank" class="flex justify-between gap-3">
+        <span>Banksaldo am {Format.date(@state.bank.date)}</span>
+        <.amount value={@state.bank.amount} class="font-semibold" />
+      </div>
+      <p class="text-base-content/70">{source_label(@state.bank.source)}</p>
+      <div id="reconcile-cleared" class="flex justify-between gap-3 pt-2">
+        <span>Abgeglichener Saldo bis dahin</span>
+        <.amount value={@state.cleared} class="font-semibold" />
+      </div>
+      <%= if @difference == 0 do %>
+        <p id="reconcile-question" class="py-4">
+          Hatte das Konto am {Format.date(@state.bank.date)}
+          <.amount value={@state.bank.amount} class="font-semibold" />?
+        </p>
+      <% else %>
+        <p id="reconcile-question" class="py-4">
+          Differenz <.amount value={@difference} signed class="font-semibold" />.
+          Fehlt eine Buchung oder ist eine nicht abgeglichen?
+        </p>
+      <% end %>
     </div>
-    <div class="small text-body-secondary mb-1">{source_label(@state.bank.source)}</div>
-    <div id="reconcile-cleared" class="d-flex justify-content-between gap-3 mb-3">
-      <span>Abgeglichener Saldo bis dahin</span>
-      <span class="app-q fw-semibold text-nowrap">{Format.euros(@state.cleared)}</span>
-    </div>
-    <%= if @difference == 0 do %>
-      <p id="reconcile-question" class="mb-3">
-        Hatte das Konto am {Format.date(@state.bank.date)}
-        <span class="app-q fw-semibold text-nowrap">{Format.euros(@state.bank.amount)}</span>?
-      </p>
-      <.answers yes />
-    <% else %>
-      <p id="reconcile-question" class="mb-3 text-danger">
-        Differenz <span class="app-q fw-semibold text-nowrap">{Format.signed_euros(@difference)}</span>.
-        Fehlt eine Buchung oder ist eine nicht abgeglichen?
-      </p>
-      <.answers />
-    <% end %>
+    <.answers yes={@difference == 0} />
     """
   end
 
@@ -134,33 +139,28 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
 
   defp answers(assigns) do
     ~H"""
-    <div class="d-flex gap-2">
-      <button
+    <div class="flex gap-2 *:flex-1">
+      <.button
         :if={@yes}
         id="reconcile-yes"
-        type="button"
-        class="btn btn-sm btn-primary flex-fill"
+        size={:sm}
+        variant={:primary}
         phx-click="reconcile_yes"
       >
         Ja
-      </button>
-      <button
+      </.button>
+      <.button
         :if={!@yes}
         id="reconcile-search"
-        type="button"
-        class="btn btn-sm btn-primary flex-fill"
+        size={:sm}
+        variant={:primary}
         phx-click="reconcile_search"
       >
         Differenz suchen
-      </button>
-      <button
-        id="reconcile-no"
-        type="button"
-        class="btn btn-sm btn-light flex-fill"
-        phx-click="reconcile_no"
-      >
+      </.button>
+      <.button id="reconcile-no" size={:sm} phx-click="reconcile_no">
         {if @yes, do: "Nein", else: "Anderer Saldo"}
-      </button>
+      </.button>
     </div>
     """
   end
@@ -170,23 +170,19 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
   defp enter(assigns) do
     ~H"""
     <form id="reconcile-form" phx-submit="reconcile_start" novalidate>
-      <label for="reconcile-balance" class="form-label">Wie viel hat das Konto heute laut Bank?</label>
-      <div class="input-group input-group-sm">
-        <input
-          id="reconcile-balance"
-          name="balance"
-          type="text"
-          inputmode="decimal"
-          autocomplete="off"
-          required
-          class={["form-control text-end app-q", @error && "is-invalid"]}
-          aria-describedby={@error && "reconcile-error"}
-          phx-mounted={JS.focus()}
-        />
-        <span class="input-group-text">€</span>
-      </div>
-      <div :if={@error} id="reconcile-error" class="invalid-feedback d-block">{@error}</div>
-      <button type="submit" class="btn btn-sm btn-primary w-100 mt-2">Weiter</button>
+      <.input
+        id="reconcile-balance"
+        name="balance"
+        value=""
+        label="Wie viel hat das Konto heute laut Bank?"
+        suffix="€"
+        numeric
+        autocomplete="off"
+        required
+        errors={List.wrap(@error)}
+        phx-mounted={JS.focus()}
+      />
+      <.button type="submit" size={:sm} variant={:primary} class="mt-2 w-full">Weiter</.button>
     </form>
     """
   end
@@ -196,53 +192,61 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
 
   attr :mode, :map, required: true, doc: "`%{bank, cleared}`"
 
-  @doc "Reconcile mode: the difference to the bank's balance, which follows the cleared state, with finish and cancel."
-  def banner(assigns) do
-    difference = difference(assigns.mode)
-    assigns = assign(assigns, difference: difference, shown: Format.signed_euros(difference))
+  @doc """
+  Reconcile mode, a bar that sticks under the toolbar: the bank's balance, the cleared balance and the difference,
+  which follows the cleared state, with cancel and finish; finishing with a difference books an adjustment.
+  """
+  def bar(assigns) do
+    assigns = assign(assigns, :difference, difference(assigns.mode))
 
     ~H"""
-    <div
+    <.alert
       id="reconcile-banner"
-      class={[
-        "alert d-flex flex-wrap align-items-center gap-2 py-2 mb-3",
-        if(@difference == 0, do: "alert-success", else: "alert-warning")
-      ]}
-      role="status"
+      aria-label="Abgleichen"
+      tone={if @difference == 0, do: :success, else: :warning}
+      class="sticky top-0 z-10 mb-3 py-2"
     >
-      <div class="me-auto">
-        <div class="fw-semibold">
-          Abgleichen mit dem Banksaldo von
-          <span class="app-q text-nowrap">{Format.euros(@mode.bank.amount)}</span>
-          {as_of(@mode.bank)}
+      <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+        <div class="flex items-baseline gap-2">
+          <dt class="text-base-content/70">Bankstand {as_of(@mode.bank)}</dt>
+          <dd><.amount value={@mode.bank.amount} /></dd>
         </div>
-        <div class="small">
-          Abgeglichener Saldo{through(@mode.bank)}: <span class="app-q text-nowrap">{Format.euros(@mode.cleared)}</span>.
-          <%= if @difference == 0 do %>
-            Die Salden stimmen überein.
-          <% else %>
-            Differenz <b id="reconcile-difference" class="app-q text-nowrap">{@shown}</b>.
-            Markiere fehlende Buchungen als abgeglichen oder lege eine Ausgleichsbuchung an.
-          <% end %>
+        <div class="flex items-baseline gap-2">
+          <dt class="text-base-content/70">Abgeglichen{through(@mode.bank)}</dt>
+          <dd><.amount value={@mode.cleared} /></dd>
         </div>
-      </div>
-      <button
-        id="reconcile-cancel"
-        type="button"
-        class="btn btn-sm btn-light"
-        phx-click="reconcile_cancel"
-      >
-        Abbrechen
-      </button>
-      <button
-        id="reconcile-finish"
-        type="button"
-        class="btn btn-sm btn-primary"
-        phx-click="reconcile_finish"
-      >
-        {if @difference == 0, do: "Abschließen", else: "Ausgleichsbuchung anlegen und abschließen"}
-      </button>
-    </div>
+        <div class="flex items-baseline gap-2">
+          <dt class="text-base-content/70">Differenz</dt>
+          <dd class="flex items-baseline gap-2">
+            <.amount
+              id="reconcile-difference"
+              value={@difference}
+              signed
+              animate
+              class="text-base font-semibold"
+            />
+            <span :if={@difference == 0}>Die Salden stimmen überein</span>
+          </dd>
+        </div>
+      </dl>
+      <:actions>
+        <.button id="reconcile-cancel" size={:sm} phx-click="reconcile_cancel">Abbrechen</.button>
+        <.button
+          id="reconcile-finish"
+          size={:sm}
+          variant={:primary}
+          phx-click="reconcile_finish"
+          confirm={
+            if @difference != 0,
+              do: "Ausgleichsbuchung über #{Format.signed_euros(@difference)} anlegen?"
+          }
+          confirm_text="Sie gleicht die Differenz zur Bank aus. Danach ist das Konto abgeschlossen."
+          confirm_label="Ausgleichen und abschließen"
+        >
+          {if @difference == 0, do: "Abschließen", else: "Ausgleichen und abschließen"}
+        </.button>
+      </:actions>
+    </.alert>
     """
   end
 
