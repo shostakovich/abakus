@@ -1,34 +1,21 @@
 defmodule AbakusWeb.BudgetLive.Rows do
   @moduledoc """
   The budget table's rows for the shown months: the uncategorised row while a shown month has activity or money in
-  it, the groups with their categories and totals, and the income per payee. A filter keeps the categories in its
-  state in the focus month and the groups that have one; income shows only unfiltered. A snoozed target counts as
-  done, so its category is not underfunded.
-  `counts` are the focus month's overspent, underfunded and snoozed categories, whatever the filter.
+  it, the groups with their categories and totals, and the income per payee.
   """
 
-  alias Abakus.Budget.{CategoryMonth, Month}
+  alias Abakus.Budget.Month
 
-  defstruct uncategorised: nil, groups: [], income: [], counts: %{}
+  defstruct uncategorised: nil, groups: [], income: []
 
-  @filters [:all, :overspent, :underfunded, :overfunded, :available, :snoozed]
-
-  def filters, do: @filters
-
-  @doc "Options: `focus` (the focus month), `filter` (one of `filters/0`), `income` (per `{payee, month}`)."
+  @doc "Options: `income` (per `{payee, month}`)."
   def new(groups, months, opts) do
-    focus = opts[:focus]
-    filter = opts[:filter]
     cells = Map.new(for m <- months, row <- m.categories, do: {{row.category_id, m.month}, row})
-    uncategorised = uncategorised(months)
-    groups = Enum.map(groups, &group(&1, months, cells))
 
     %__MODULE__{
-      uncategorised:
-        if(uncategorised && matches?(uncategorised.cells[focus], filter), do: uncategorised),
-      groups: filter_groups(groups, focus, filter),
-      income: if(filter == :all, do: income(opts[:income], months), else: []),
-      counts: counts([uncategorised | Enum.flat_map(groups, & &1.categories)], focus)
+      uncategorised: uncategorised(months),
+      groups: Enum.map(groups, &group(&1, months, cells)),
+      income: income(opts[:income], months)
     }
   end
 
@@ -60,34 +47,6 @@ defmodule AbakusWeb.BudgetLive.Rows do
   defp uncategorised(months) do
     if Enum.any?(months, &(&1.uncategorised.activity != 0 or &1.uncategorised.available != 0)),
       do: %{cells: Map.new(months, &{&1.month, &1.uncategorised})}
-  end
-
-  defp filter_groups(groups, _focus, :all), do: groups
-
-  defp filter_groups(groups, focus, filter) do
-    for group <- groups,
-        categories = Enum.filter(group.categories, &matches?(&1.cells[focus], filter)),
-        categories != [],
-        do: %{group | categories: categories}
-  end
-
-  defp matches?(%CategoryMonth{}, :all), do: true
-  defp matches?(%CategoryMonth{available: available}, :overspent), do: available < 0
-  defp matches?(%CategoryMonth{} = row, :underfunded), do: row.underfunded > 0 and not row.snoozed
-  defp matches?(%CategoryMonth{available: available}, :available), do: available > 0
-  defp matches?(%CategoryMonth{snoozed: snoozed}, :snoozed), do: snoozed
-
-  defp matches?(%CategoryMonth{} = row, :overfunded),
-    do: row.target != nil and row.underfunded == 0 and row.assigned > row.needed
-
-  defp counts(rows, focus) do
-    cells = for row when row != nil <- rows, do: row.cells[focus]
-
-    %{
-      overspent: Enum.count(cells, &matches?(&1, :overspent)),
-      underfunded: Enum.count(cells, &matches?(&1, :underfunded)),
-      snoozed: Enum.count(cells, &matches?(&1, :snoozed))
-    }
   end
 
   defp income(income, months) do

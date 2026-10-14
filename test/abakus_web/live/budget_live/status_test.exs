@@ -14,29 +14,30 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
 
   describe "pill/1" do
     test "red when overspent, half when underfunded, a check for a met target, plain at zero" do
-      assert Status.pill(row(available: -100, underfunded: 50)) == {"text-bg-danger", nil}
+      assert Status.pill(row(available: -100, underfunded: 50)) ==
+               %{tone: :error, icon: nil, label: "überzogen"}
 
       assert Status.pill(row(available: 100, underfunded: 50)) ==
-               {"text-bg-warning", "circle-dashed"}
+               %{tone: :warning, icon: "circle-dashed", label: "unterfinanziert"}
 
       assert Status.pill(row(available: 100, target: @monthly)) ==
-               {"text-bg-success", "circle-check"}
+               %{tone: :success, icon: "circle-check", label: "Ziel erreicht"}
 
-      assert Status.pill(row(available: 100)) == {"text-bg-success", nil}
+      assert Status.pill(row(available: 100)) == %{tone: :success, icon: nil, label: nil}
       assert Status.pill(row(available: 0)) == :zero
     end
 
     test "a snoozed target is neither underfunded nor met" do
       assert Status.pill(row(available: 100, underfunded: 50, snoozed: true, target: @monthly)) ==
-               {"text-bg-success", nil}
+               %{tone: :success, icon: nil, label: nil}
     end
   end
 
   describe "quiet/2" do
     test "red when negative, dimmed at zero, a dot while underfunded up to now or once assigned" do
-      assert Status.quiet(row(available: -1), @oct) == %{class: "app-neg", dot: false}
-      assert Status.quiet(row(available: 0), @oct) == %{class: "app-zero", dot: false}
-      assert Status.quiet(row(available: 5, underfunded: 5), @oct) == %{class: nil, dot: true}
+      assert Status.quiet(row(available: -1), @oct) == %{tone: :error, dot: false}
+      assert Status.quiet(row(available: 0), @oct) == %{tone: :muted, dot: false}
+      assert Status.quiet(row(available: 5, underfunded: 5), @oct) == %{tone: nil, dot: true}
       assert Status.quiet(row(month: @nov, available: 5, underfunded: 5), @oct).dot == false
       assert Status.quiet(row(month: @nov, assigned: 1, underfunded: 5), @oct).dot == true
       assert Status.quiet(row(underfunded: 5, snoozed: true), @oct).dot == false
@@ -71,31 +72,29 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
     end
   end
 
-  describe "target_line/1" do
+  describe "target_status/1" do
     test "overspent wins, with the exact amount" do
-      assert Status.target_line(row(available: -1_250)) ==
-               %{title: "Überzogen 12,50 €", bars: [{100, "bg-danger"}]}
+      assert Status.target_status(row(target: @monthly, snoozed: true, available: -1_250)) ==
+               %{title: "Überzogen 12,50 €", tone: :error}
     end
 
-    test "nothing without a target" do
-      assert Status.target_line(row(available: 500, activity: -100)) == nil
+    test "nothing without a target, overspent or not" do
+      assert Status.target_status(row(available: 500, activity: -100)) == nil
+      assert Status.target_status(row(available: -1_250, activity: -1_250)) == nil
     end
 
-    test "snoozed, underfunded with the progress, spent, funded with what is spent" do
-      assert %{title: "Pausiert", bars: [{100, "bg-secondary"}]} =
-               Status.target_line(row(target: @monthly, snoozed: true, underfunded: 10))
+    test "snoozed, underfunded, funded with what is spent" do
+      assert %{title: "Pausiert", tone: :neutral} =
+               Status.target_status(row(target: @monthly, snoozed: true, underfunded: 10))
 
-      assert %{title: "Noch 50,00 € nötig", bars: [{93, "bg-warning"}]} =
-               Status.target_line(row(target: @monthly, underfunded: 5_000, progress: 0.9286))
+      assert %{title: "Noch 50,00 € nötig", tone: :warning} =
+               Status.target_status(row(target: @monthly, underfunded: 5_000))
 
-      assert %{title: "Ausgegeben", bars: [{100, "bg-success progress-bar-striped"}]} =
-               Status.target_line(row(target: @monthly, assigned: 1_000, activity: -1_000))
+      assert %{title: "Finanziert, 10,00 € von 10,00 € ausgegeben", tone: :success} =
+               Status.target_status(row(target: @monthly, assigned: 1_000, activity: -1_000))
 
-      assert %{
-               title: "Finanziert, 29,99 € von 105,55 € ausgegeben",
-               bars: [{28, _spent}, {72, "bg-success"}]
-             } =
-               Status.target_line(
+      assert %{title: "Finanziert, 29,99 € von 105,55 € ausgegeben", tone: :success} =
+               Status.target_status(
                  row(
                    target: @monthly,
                    carried: 5_555,
@@ -105,23 +104,32 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
                  )
                )
 
-      assert %{title: "Finanziert", bars: [{100, "bg-success"}]} =
-               Status.target_line(row(target: @monthly, assigned: 100, available: 100))
+      assert %{title: "Finanziert", tone: :success} =
+               Status.target_status(row(target: @monthly, assigned: 100, available: 100))
 
-      assert %{title: "Im Plan"} = Status.target_line(row(target: @by_date, available: 100))
+      assert %{title: "Im Plan"} = Status.target_status(row(target: @by_date, available: 100))
+    end
+  end
+
+  describe "target_mark/1" do
+    test "a target by a date marks where it should stand after this month, others none" do
+      by_date = %{cadence: :by_date, amount: 120_000}
+
+      assert Status.target_mark(row(target: by_date, saved: 8_000, underfunded: 5_334)) == 11
+      assert Status.target_mark(row(target: by_date, saved: 8_000, snoozed: true)) == 7
+      assert Status.target_mark(row(target: %{cadence: :monthly, amount: 5_000})) == nil
     end
   end
 
   describe "ready/1" do
     test "red when too much is assigned, as it ended in a past month, green with money, else done" do
-      assert Status.ready(%Month{ready_to_assign_shown: -1}) ==
-               {"text-danger", "Zu viel verteilt"}
+      assert Status.ready(%Month{ready_to_assign_shown: -1}) == {:error, "Zu viel verteilt"}
 
       assert Status.ready(%Month{ready_to_assign_shown: 5, closed: true}) ==
-               {"text-body-secondary", "Nicht verteilt am Monatsende"}
+               {:muted, "Nicht verteilt am Monatsende"}
 
-      assert Status.ready(%Month{ready_to_assign_shown: 5}) == {"text-success", "Zu verteilen"}
-      assert Status.ready(%Month{ready_to_assign_shown: 0}) == {nil, "Alles verteilt ✓"}
+      assert Status.ready(%Month{ready_to_assign_shown: 5}) == {:success, "Zu verteilen"}
+      assert Status.ready(%Month{ready_to_assign_shown: 0}) == {nil, "Alles verteilt"}
     end
   end
 
@@ -137,10 +145,10 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       }
 
       assert Status.calculation(october) == [
-               %{label: "Verfügbare Mittel", value: 376_126, class: nil},
-               %{label: "Überzogen im Sep", value: -1_810, class: "text-danger"},
-               %{label: "Zugewiesen", value: -313_071, class: nil},
-               %{label: "Für spätere Monate", value: -39_200, class: nil}
+               %{label: "Verfügbare Mittel", value: 376_126, tone: nil},
+               %{label: "Überzogen im Sep", value: -1_810, tone: :error},
+               %{label: "Zugewiesen", value: -313_071, tone: nil},
+               %{label: "Für spätere Monate", value: -39_200, tone: nil}
              ]
     end
 
@@ -153,8 +161,8 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       }
 
       assert [
-               %{label: "Verfügbare Mittel", value: -500, class: "text-danger"},
-               %{label: "Überzogen im Okt", value: 0, class: nil},
+               %{label: "Verfügbare Mittel", value: -500, tone: :error},
+               %{label: "Überzogen im Okt", value: 0, tone: nil},
                %{label: "Zugewiesen", value: 0}
              ] = Status.calculation(november)
     end

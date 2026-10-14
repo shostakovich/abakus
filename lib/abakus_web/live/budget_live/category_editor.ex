@@ -1,12 +1,14 @@
 defmodule AbakusWeb.BudgetLive.CategoryEditor do
   @moduledoc """
-  Adding, renaming and deleting groups and categories in small popovers, as in YNAB: "+ Gruppe" above the table,
-  "+" on a group's row, a group's name or the pencil in a category's inspector to rename or delete. Deleting a category
+  Adding, renaming and deleting groups and categories, as in YNAB: "+ Gruppe" above the table, "+" on a group's row
+  (or "Kategorie hinzufügen" in the group's popover, where there is no hover) and a group's name open small
+  popovers; a category is renamed and deleted in its dialog (its sheet on phones). Deleting a category
   asks for the category that takes over everything, and says when reconciled transactions change too; a group is
   deleted only when it is empty.
 
-  The popover's state is `%{kind, group, category, step, error, ...}`: `kind` is `:new_group`, `:new_category`,
-  `:group` or `:category`, `step` is `:name` or (for a category) `:delete`.
+  The popover's state is `%{kind, group, category, step, error, open, anchor, ...}`: `kind` is `:new_group`,
+  `:new_category`, `:group` or `:category`, `step` is `:name` or (for a category) `:delete`. A closed popover keeps
+  its state and stays rendered, so focus returns to its trigger.
   """
   use AbakusWeb, :html
 
@@ -16,12 +18,10 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   @doc "The popover the params ask for, from the listed groups; nil when what they name is not listed."
   def open(%{"edit" => "new_group"}, _groups), do: state(:new_group, nil, nil)
 
-  def open(%{"edit" => "new_category", "group" => id}, groups),
-    do:
-      with(
-        %CategoryGroup{} = group <- find_group(groups, id),
-        do: state(:new_category, group, nil)
-      )
+  def open(%{"edit" => "new_category", "group" => id} = params, groups) do
+    with %CategoryGroup{} = group <- find_group(groups, id),
+         do: %{state(:new_category, group, nil) | anchor: params["anchor"]}
+  end
 
   def open(%{"edit" => "group", "group" => id}, groups) do
     with %CategoryGroup{} = group <- find_group(groups, id),
@@ -38,7 +38,15 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   def open(_params, _groups), do: nil
 
   defp state(kind, group, category),
-    do: %{kind: kind, group: group, category: category, step: :name, error: nil}
+    do: %{
+      kind: kind,
+      group: group,
+      category: category,
+      step: :name,
+      error: nil,
+      open: true,
+      anchor: nil
+    }
 
   defp find_group(groups, id), do: Enum.find(groups, &(Integer.to_string(&1.id) == id))
 
@@ -94,7 +102,8 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
           do: {group.name, options}
 
     reconciled = Categories.reconciled_transactions?(category)
-    {:ask, Map.merge(edit, %{step: :delete, targets: targets, reconciled: reconciled, into: nil})}
+    asking = %{step: :delete, error: nil, targets: targets, reconciled: reconciled, into: nil}
+    {:ask, Map.merge(edit, asking)}
   end
 
   @doc """
@@ -138,18 +147,19 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   @doc "\"+ Gruppe\" above the table."
   def add_group(assigns) do
     ~H"""
-    <div class="dropdown">
-      <button
+    <div class="flex shrink-0">
+      <.button
         id="add-group"
-        type="button"
-        class="btn btn-sm btn-link px-0 text-decoration-none d-inline-flex align-items-center gap-1"
-        aria-expanded={to_string(@edit != nil)}
+        variant={:ghost}
+        size={:sm}
+        icon="plus"
+        aria-expanded={to_string(open?(@edit))}
         phx-click="edit_open"
         phx-value-edit="new_group"
       >
-        <.icon name="plus" />Gruppe
-      </button>
-      <.editor :if={@edit} edit={@edit} />
+        Gruppe
+      </.button>
+      <.editor :if={@edit} edit={@edit} align_end />
     </div>
     """
   end
@@ -160,118 +170,180 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
     default: false,
     doc: "aligns the popover to the right edge of what opened it"
 
-  @doc "The popover: a name to add or rename, or which category takes over a deleted one."
+  @doc "The popover of a group: a name to add or rename it, or to add a category."
   def editor(assigns) do
     ~H"""
-    <div
+    <.popover
       id="edit-pop"
-      class={["dropdown-menu show p-3 app-edit-menu", @align_end && "dropdown-menu-end"]}
-      data-bs-popper="static"
-      role="dialog"
-      aria-labelledby="edit-title"
-      phx-click-away="edit_close"
-      phx-window-keydown="edit_close"
-      phx-key="Escape"
+      title={title(@edit)}
+      anchor={anchor(@edit)}
+      align={if @align_end, do: :end, else: :start}
+      show={@edit.open}
+      on_cancel={JS.push("edit_close")}
     >
-      <div id="edit-title" class="fw-semibold mb-2 text-truncate">{title(@edit)}</div>
-      <.name_form :if={@edit.step == :name} edit={@edit} />
-      <.delete_form :if={@edit.step == :delete} edit={@edit} />
-    </div>
+      <.name_form edit={@edit} />
+    </.popover>
     """
   end
+
+  @doc "Whether the popover's state is there and open."
+  def open?(%{open: open}), do: open
+  def open?(_edit), do: false
+
+  defp anchor(%{anchor: anchor}) when is_binary(anchor), do: anchor
+  defp anchor(%{kind: :new_group}), do: "add-group"
+  defp anchor(%{kind: :new_category, group: group}), do: "add-category-#{group.id}"
+  defp anchor(%{kind: :group, group: group}), do: "edit-group-#{group.id}"
 
   defp title(%{kind: :new_group}), do: "Neue Kategoriegruppe"
   defp title(%{kind: :new_category, group: group}), do: "Neue Kategorie in #{group.name}"
   defp title(%{kind: :group}), do: "Kategoriegruppe"
-  defp title(%{kind: :category, step: :name}), do: "Kategorie"
-  defp title(%{kind: :category, category: category}), do: "„#{category.name}“ löschen"
 
   attr :edit, :map, required: true
 
   defp name_form(assigns) do
-    assigns = assign(assigns, :value, name(assigns.edit))
-
     ~H"""
     <form id="edit-form" phx-submit="edit_save" novalidate>
-      <input
+      <.input
         id="edit-name"
         name="name"
-        type="text"
-        value={@value}
+        label="Name"
+        hide_label
+        value={name(@edit)}
+        placeholder="Name"
         autocomplete="off"
         required
-        aria-label="Name"
-        placeholder="Name"
-        class={["form-control form-control-sm", @edit.error && "is-invalid"]}
-        aria-describedby={@edit.error && "edit-error"}
-        phx-mounted={JS.focus()}
+        errors={List.wrap(@edit.error)}
+        help={
+          (@edit.kind == :group and not @edit.deletable) && "Nur leere Gruppen lassen sich löschen."
+        }
+        autofocus
       />
-      <div :if={@edit.error} id="edit-error" class="invalid-feedback d-block">{@edit.error}</div>
-      <p
-        :if={@edit.kind == :group and not @edit.deletable}
-        class="small text-body-secondary mt-2 mb-0"
+      <div class="mt-3 flex justify-end gap-2">
+        <.button size={:sm} phx-click="edit_close">Abbrechen</.button>
+        <.button type="submit" variant={:primary} size={:sm}>
+          {if @edit.kind == :group, do: "Speichern", else: "Anlegen"}
+        </.button>
+      </div>
+      <div
+        :if={@edit.kind == :group}
+        class="-mx-4 mt-4 flex flex-wrap gap-2 border-t border-base-content/10 px-2 pt-2"
       >
-        Nur leere Gruppen lassen sich löschen.
-      </p>
-      <div class="d-flex gap-2 mt-3">
-        <button
-          :if={@edit.kind == :category or (@edit.kind == :group and @edit.deletable)}
-          id="edit-delete"
-          type="button"
-          class="btn btn-sm btn-outline-danger me-auto"
-          phx-click="edit_delete"
+        <.button
+          id="edit-add-category"
+          variant={:ghost}
+          size={:sm}
+          icon="plus"
+          phx-click="edit_open"
+          phx-value-edit="new_category"
+          phx-value-group={@edit.group.id}
+          phx-value-anchor={"edit-group-#{@edit.group.id}"}
         >
-          Löschen
-        </button>
-        <button type="button" class="btn btn-sm btn-light ms-auto" phx-click="edit_close">
-          Abbrechen
-        </button>
-        <button type="submit" class="btn btn-sm btn-primary">
-          {if @edit.kind in [:new_group, :new_category], do: "Anlegen", else: "Speichern"}
-        </button>
+          Kategorie hinzufügen
+        </.button>
+        <.button
+          :if={@edit.deletable}
+          id="edit-delete"
+          variant={:ghost}
+          size={:sm}
+          icon="trash-2"
+          confirm={"Gruppe „#{@edit.group.name}“ löschen?"}
+          phx-click="delete_group"
+          phx-value-group={@edit.group.id}
+        >
+          Gruppe löschen
+        </.button>
       </div>
     </form>
     """
   end
 
   defp name(%{kind: :group, group: group}), do: group.name
-  defp name(%{kind: :category, category: category}), do: category.name
   defp name(_new), do: nil
 
-  attr :edit, :map, required: true
+  attr :edit, :map, required: true, doc: "the category's state, from `open/2`"
+  attr :autofocus, :boolean, default: false
 
-  defp delete_form(assigns) do
+  @doc "A category's name in its dialog; Enter saves."
+  def category_name(assigns) do
     ~H"""
-    <form id="delete-form" phx-submit="edit_confirm_delete" novalidate>
-      <%= if @edit.targets == [] do %>
-        <p class="mb-0">Es gibt keine andere Kategorie, die alles übernehmen kann.</p>
-      <% else %>
-        <label for="delete-into" class="form-label small">
-          Buchungen, Zuweisungen und Geld gehen in
-        </label>
-        <select
-          id="delete-into"
-          name="into"
+    <section id="category-name">
+      <.section_heading level={3}>Name</.section_heading>
+      <form id="category-name-form" phx-submit="edit_save" novalidate>
+        <.input
+          id="category-name-input"
+          name="name"
+          label="Name"
+          value={@edit.category.name}
+          autocomplete="off"
           required
-          class={["form-select form-select-sm", @edit.error && "is-invalid"]}
+          errors={if @edit.step == :name, do: List.wrap(@edit.error), else: []}
+          autofocus={@autofocus}
+          inline
         >
-          <option value="">Kategorie wählen …</option>
-          {Phoenix.HTML.Form.options_for_select(@edit.targets, @edit.into)}
-        </select>
-        <div :if={@edit.error} class="invalid-feedback d-block">{@edit.error}</div>
-        <p :if={@edit.reconciled} id="delete-reconciled" class="small text-warning-emphasis mt-2 mb-0">
-          Auch abgeglichene Buchungen bekommen die neue Kategorie.
-        </p>
-      <% end %>
-      <div class="d-flex gap-2 mt-3">
-        <button type="button" class="btn btn-sm btn-light ms-auto" phx-click="edit_close">
-          Abbrechen
-        </button>
-        <button :if={@edit.targets != []} type="submit" class="btn btn-sm btn-danger">
-          Löschen
-        </button>
-      </div>
-    </form>
+          <.button type="submit" class="join-item">Speichern</.button>
+        </.input>
+      </form>
+    </section>
+    """
+  end
+
+  attr :edit, :map, required: true, doc: "the category's state, from `open/2`"
+
+  @doc "Deleting a category in its dialog: which category takes over everything, then a confirmation."
+  def category_delete(assigns) do
+    ~H"""
+    <section id="category-delete" class="border-t border-base-content/10 pt-4">
+      <.button
+        :if={@edit.step == :name}
+        id="edit-delete"
+        variant={:ghost}
+        size={:sm}
+        icon="trash-2"
+        class="-ms-3 text-error-ink"
+        phx-click="edit_delete"
+      >
+        Kategorie löschen
+      </.button>
+      <form
+        :if={@edit.step == :delete}
+        id="delete-form"
+        phx-change="edit_delete_change"
+        phx-submit="edit_confirm_delete"
+        novalidate
+      >
+        <%= if @edit.targets == [] do %>
+          <p class="text-sm">Es gibt keine andere Kategorie, die alles übernehmen kann.</p>
+        <% else %>
+          <.combobox
+            id="delete-into"
+            name="into"
+            label="Buchungen, Zuweisungen und Geld gehen in"
+            placeholder="Kategorie suchen"
+            options={@edit.targets}
+            value={@edit.into}
+            required
+            errors={List.wrap(@edit.error)}
+            help={@edit.reconciled && "Auch abgeglichene Buchungen bekommen die neue Kategorie."}
+            help_tone={if @edit.reconciled, do: :warning}
+          />
+        <% end %>
+        <div class="mt-3 flex justify-end gap-2">
+          <.button size={:sm} phx-click="edit_back">Abbrechen</.button>
+          <.button
+            :if={@edit.targets != []}
+            id="delete-submit"
+            type="submit"
+            variant={:danger}
+            size={:sm}
+            confirm={"Kategorie „#{@edit.category.name}“ löschen?"}
+            confirm_text="Buchungen, Zuweisungen und Geld gehen in die gewählte Kategorie."
+          >
+            Löschen
+          </.button>
+        </div>
+      </form>
+    </section>
     """
   end
 end

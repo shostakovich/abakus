@@ -4,12 +4,12 @@ import { LiveSocket } from "phoenix_live_view"
 import { hooks as colocatedHooks } from "phoenix-colocated/abakus"
 import { hooks as setzkastenHooks } from "phoenix-colocated/setzkasten"
 
-import { BudgetLayout, FilterChips, Popover, initialBudgetFit } from "./hooks/budget.js"
+import { BudgetLayout, initialBudgetFit } from "./hooks/budget.js"
 import { PasskeyLogin, PasskeyRegister } from "./hooks/passkey.js"
 import { Combobox, EditRow } from "./hooks/register.js"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
-const appHooks = { BudgetLayout, Combobox, EditRow, FilterChips, PasskeyLogin, PasskeyRegister, Popover }
+const appHooks = { BudgetLayout, Combobox, EditRow, PasskeyLogin, PasskeyRegister }
 
 // The user's own date, so the current month turns over at their midnight.
 const today = () => {

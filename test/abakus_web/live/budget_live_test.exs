@@ -71,8 +71,8 @@ defmodule AbakusWeb.BudgetLiveTest do
       view |> element("#assign-#{c.rent.id}-2026-10") |> render_blur(%{"value" => "1.050"})
 
       assert assigned(c.rent, @october) == 105_000
-      assert has_element?(view, "#ready-2026-10.text-danger", "−950,00 €")
-      assert has_element?(view, "#month-2026-10", "Zu viel verteilt")
+      assert has_element?(view, "#ready-2026-10", "−950,00 €")
+      assert has_element?(view, "#month-2026-10.app-mcard-error", "Zu viel verteilt")
     end
 
     test "an amount that is no number is marked and changes nothing", c do
@@ -84,13 +84,13 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       assert has_element?(
                view,
-               ~s|#assign-#{c.groceries.id}-2026-10.is-invalid[aria-invalid][value="zwölf"]|
+               ~s|#assign-#{c.groceries.id}-2026-10[aria-invalid=true][value="zwölf"]|
              )
 
       view |> element("#assign-#{c.groceries.id}-2026-10") |> render_blur(%{"value" => "12"})
 
       assert assigned(c.groceries, @october) == 1_200
-      refute has_element?(view, "#assign-#{c.groceries.id}-2026-10.is-invalid")
+      refute has_element?(view, "#assign-#{c.groceries.id}-2026-10[aria-invalid]")
     end
 
     test "an unchanged amount writes nothing", c do
@@ -115,45 +115,53 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert Categories.budget().assigned == %{}
     end
 
-    test "the inspector warns while a later month is not covered, the month card with a sign",
+    test "the month's details warn while a later month is not covered, the month card with a sign",
          c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       Categories.assign(c.groceries, @october, 40_000)
       spend(c, c.groceries, -80_000, ~D[2026-10-05])
       Categories.assign(c.rent, @november, 50_000)
 
-      {:ok, view, _html} = open(c.conn, ~p"/", months: 2, inspector: true)
+      {:ok, view, _html} = open(c.conn, ~p"/", months: 2)
 
       assert has_element?(view, "#ready-2026-10", "100,00 €")
       warning = "November nicht gedeckt: es fehlen 300,00 €"
-      assert has_element?(view, "#inspector .app-uncovered", warning)
-      assert has_element?(view, ~s|#month-2026-10 .app-uncovered[title="#{warning}"]|)
+      assert has_element?(view, "#month-details-2026-10 .app-uncovered-alert", warning)
+      assert has_element?(view, "#month-2026-10 .app-uncovered", "nicht gedeckt")
 
       view |> element("#assign-#{c.rent.id}-2026-11") |> render_blur(%{"value" => "200"})
 
       refute has_element?(view, ".app-uncovered")
+      refute has_element?(view, ".app-uncovered-alert")
     end
 
-    test "the current month is the focus month, with pills and its calculation in the inspector",
+    test "the current month is the focus month, with pills; a card's details have its calculation",
          c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       Categories.assign(c.groceries, @october, 30_000)
       Categories.assign(c.groceries, @november, 30_000)
-      {:ok, view, _html} = open(c.conn, ~p"/", months: 3, inspector: true)
+      {:ok, view, _html} = open(c.conn, ~p"/", months: 3)
 
       assert has_element?(
                view,
-               "#month-2026-10.is-focus.is-current[aria-current=date]",
+               "#month-2026-10.is-focus[aria-current=date]",
                "400,00 €"
              )
 
-      assert has_element?(view, "#month-2026-11:not(.is-focus):not(.is-current)", "400,00 €")
+      assert has_element?(view, "#month-2026-11:not(.is-focus):not([aria-current])", "400,00 €")
       assert has_element?(view, "#month-2026-12:not(.is-focus)")
-      refute has_element?(view, "#month-2026-10", "Verfügbare Mittel")
-      assert has_element?(view, "#inspector", "Verfügbare Mittel")
-      assert has_element?(view, "#inspector", "Für spätere Monate")
+      assert has_element?(view, "#month-info-2026-10[aria-haspopup=dialog]")
+      assert has_element?(view, "#month-details-2026-10[data-anchor=month-info-2026-10]")
+      assert has_element?(view, "#month-details-2026-10", "Oktober 2026")
+      assert has_element?(view, "#month-details-2026-10", "Verfügbare Mittel")
+      assert has_element?(view, "#month-details-2026-10", "Für spätere Monate")
+      assert has_element?(view, "#month-2026-10-summary", "Zusammenfassung")
+      assert has_element?(view, "#month-2026-10-need", "Monatsbedarf")
+      assert has_element?(view, "#month-2026-10-future", "November 2026")
+      assert has_element?(view, "#month-2026-10-future", "300,00")
+      assert has_element?(view, "#month-2026-11-future", "Nichts im Voraus verteilt.")
       assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .app-pill", "300,00 €")
-      assert has_element?(view, "#available-#{c.groceries.id}-2026-11 .app-q", "600,00")
+      assert has_element?(view, "#available-#{c.groceries.id}-2026-11", "600,00")
       assert has_element?(view, "#strip button.is-focus", "Okt")
     end
 
@@ -182,13 +190,17 @@ defmodule AbakusWeb.BudgetLiveTest do
     test "the current month is the browser's, unless its date is implausible", c do
       tomorrow = Date.add(Date.utc_today(), 1)
       {:ok, view, _html} = open(c.conn, ~p"/", today: Date.to_iso8601(tomorrow))
-      assert has_element?(view, "#month-#{Calendar.strftime(tomorrow, "%Y-%m")}.is-current")
+
+      assert has_element?(
+               view,
+               "#month-#{Calendar.strftime(tomorrow, "%Y-%m")}[aria-current=date]"
+             )
 
       {:ok, view, _html} = open(c.conn, ~p"/", today: "9999-12-31")
 
       assert has_element?(
                view,
-               "#month-#{Calendar.strftime(Date.utc_today(), "%Y-%m")}.is-current"
+               "#month-#{Calendar.strftime(Date.utc_today(), "%Y-%m")}[aria-current=date]"
              )
     end
 
@@ -201,36 +213,43 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, "#month-2026-10.is-focus")
     end
 
-    test "an unknown filter shows everything", c do
-      income(c, 1_000, ~D[2026-10-01], "Arbeitgeber")
-      {:ok, view, _html} = open(c.conn, ~p"/?filter=foo")
-
-      assert has_element?(view, "#filters button[aria-pressed=true]", "Alle")
-      assert has_element?(view, "#category-#{c.groceries.id}")
-      assert has_element?(view, "#group-income-rows")
-    end
-
-    test "the window width decides the number of months and the inspector", c do
+    test "the window width decides the number of months", c do
       {:ok, view, _html} = open(c.conn)
 
       assert has_element?(view, "#month-2026-10")
       refute has_element?(view, "#month-2026-11")
-      refute has_element?(view, "#inspector")
 
-      render_hook(view, "fit", %{"months" => 3, "inspector" => true, "span" => 12})
+      render_hook(view, "fit", %{"months" => 3, "span" => 12})
 
       assert has_element?(view, "#month-2026-12")
-      assert has_element?(view, "#inspector", "Oktober 2026")
 
-      render_hook(view, "fit", %{"months" => 7, "inspector" => "ja", "span" => 99})
+      render_hook(view, "fit", %{"months" => 7, "span" => 99})
 
       assert has_element?(view, "#month-2026-12")
       refute has_element?(view, "#month-2027-01")
-      refute has_element?(view, "#inspector")
 
       render_hook(view, "fit", %{"months" => "3"})
 
       refute has_element?(view, "#month-2026-11")
+    end
+
+    test "a compact budget shows its month in a bar that steps through the months", c do
+      income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
+      {:ok, view, _html} = open(c.conn, ~p"/", compact: true, months: 3)
+
+      refute has_element?(view, "#strip")
+      refute has_element?(view, "#month-2026-11")
+      assert has_element?(view, "#month-bar", "Oktober 2026")
+      assert has_element?(view, "#month-bar #ready-2026-10", "1.000,00 €")
+      assert has_element?(view, "#month-bar #distribute-2026-10")
+      assert has_element?(view, "#month-bar #month-details-2026-10", "Zusammenfassung")
+      assert has_element?(view, ".app-add-end #add-group")
+      refute has_element?(view, "thead #add-group")
+
+      view |> element(~s|#month-bar button[aria-label="Später"]|) |> render_click()
+
+      assert_patch(view, ~p"/?month=2026-11")
+      assert has_element?(view, "#month-bar", "November 2026")
     end
 
     test "the month strip moves the months and keeps the first one in the URL", c do
@@ -246,26 +265,6 @@ defmodule AbakusWeb.BudgetLiveTest do
       view |> element("#strip button", "Feb") |> render_click()
       assert_patch(view, ~p"/?month=2027-02")
       assert has_element?(view, "#month-2027-02.is-focus")
-    end
-
-    test "filter chips show only the categories in that state, counted in the focus month", c do
-      Categories.assign(c.groceries, @october, 10_000)
-      spend(c, c.rent, -5_000, ~D[2026-10-02])
-      {:ok, view, _html} = open(c.conn)
-
-      assert has_element?(view, "#filters button.btn-outline-danger", "1 überzogen")
-      assert has_element?(view, "#category-#{c.groceries.id}")
-
-      view |> element("#filters > button", "überzogen") |> render_click()
-
-      assert_patch(view, ~p"/?filter=overspent&month=2026-10")
-      assert has_element?(view, "#category-#{c.rent.id}")
-      refute has_element?(view, "#category-#{c.groceries.id}")
-
-      view |> element("#filters > button", "Geld verfügbar") |> render_click()
-
-      assert has_element?(view, "#category-#{c.groceries.id}")
-      refute has_element?(view, "#category-#{c.rent.id}")
     end
 
     test "groups show their totals; categories and groups hidden in YNAB are shown", c do
@@ -306,12 +305,14 @@ defmodule AbakusWeb.BudgetLiveTest do
       {:ok, view, _html} = open(c.conn)
 
       assert has_element?(view, "#category-uncategorised", "Nicht kategorisiert")
-      assert has_element?(view, "#available-uncategorised-2026-10 .text-bg-danger", "−9,99 €")
-      assert has_element?(view, ~s|#category-uncategorised .app-target[title="Überzogen 9,99 €"]|)
+      assert has_element?(view, "#available-uncategorised-2026-10 .app-pill", "−9,99 €")
+      assert has_element?(view, "#available-uncategorised-2026-10 .app-pill", "überzogen")
+      assert has_element?(view, ~s|#category-uncategorised a[href="/accounts/all"]|)
+
       refute has_element?(view, "#assign-uncategorised-2026-10")
     end
 
-    test "a target shows its bar under the name, the status on hover", c do
+    test "a target shows its state on the pill, not on the row", c do
       Categories.set_target(c.groceries, %{
         from_month: @october,
         cadence: :monthly,
@@ -322,21 +323,73 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       {:ok, view, _html} = open(c.conn)
 
+      refute has_element?(view, "#category-#{c.groceries.id}", "Unterfinanziert")
+
       assert has_element?(
                view,
-               ~s|#category-#{c.groceries.id} .app-target[title="Noch 50,00 € nötig"]|
+               ~s|#pill-#{c.groceries.id}-2026-10[aria-label*="unterfinanziert"]|
              )
+    end
+  end
 
-      refute has_element?(view, "#category-#{c.groceries.id} .app-line2", "50,00")
-      assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .text-bg-warning")
+  describe "the target status" do
+    setup :register_and_log_in_user
+
+    setup do
+      checking = account_fixture(kind: :checking)
+      group = category_group_fixture(name: "🛒 Alltag")
+      category = category_fixture(name: "🧴 Drogerie", category_group_id: group.id)
+
+      {:ok, _} =
+        Categories.set_target(category, %{from_month: @october, cadence: :monthly, amount: 1_000})
+
+      Categories.assign(category, @october, 1_000)
+      %{checking: checking, category: category}
+    end
+
+    test "stays funded when everything assigned is spent", c do
+      transaction_fixture(account_id: c.checking.id, category_id: c.category.id, amount: -1_000)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#select-#{c.category.id}") |> render_click()
+
+      assert has_element?(view, "#target-status", "Finanziert, 10,00 € von 10,00 € ausgegeben")
+      assert has_element?(view, ~s|#target-status progress[value="100"]|)
+      refute has_element?(view, "#target-rest")
+    end
+
+    test "turns red once more is spent than assigned", c do
+      transaction_fixture(account_id: c.checking.id, category_id: c.category.id, amount: -1_200)
+      {:ok, view, _html} = open(c.conn)
+
+      assert has_element?(view, "#available-#{c.category.id}-2026-10 .app-pill-error")
+
+      view |> element("#select-#{c.category.id}") |> render_click()
+
+      assert has_element?(view, "#target-status", "Überzogen 2,00 €")
+      assert has_element?(view, "#target-status .progress-error")
+    end
+  end
+
+  describe "without categories" do
+    setup :register_and_log_in_user
+
+    test "the budget says how to start", c do
+      {:ok, view, _html} = open(c.conn)
+
+      assert has_element?(view, "#budget-table #budget-empty", "Noch keine Kategorien")
+
+      view |> element("#budget-empty button", "Gruppe anlegen") |> render_click()
+
+      assert has_element?(view, "#edit-pop", "Neue Kategoriegruppe")
     end
   end
 
   defp open(conn, path \\ ~p"/", opts \\ []) do
     fit = %{
       "months" => Keyword.get(opts, :months, 1),
-      "inspector" => Keyword.get(opts, :inspector, false),
-      "span" => 12
+      "span" => 12,
+      "compact" => Keyword.get(opts, :compact, false)
     }
 
     conn
