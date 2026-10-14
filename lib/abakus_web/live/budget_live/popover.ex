@@ -2,16 +2,17 @@ defmodule AbakusWeb.BudgetLive.Popover do
   @moduledoc """
   The popovers of the budget, in the focus month: the available pill's, with "Decken" (while overspent) and
   "Verschieben"; covering a category from the overspent list; and "In eine Kategorie …" from Verteilen, which
-  assigns Zu verteilen to a category. The `Popover` hook places it at its anchor (`assets/js/hooks/budget.js`).
+  assigns Zu verteilen to a category. One shared Setzkasten `popover`, anchored to what opened it.
 
-  The state is `%{kind: :pill | :cover | :pick, anchor, category_id, mode: :cover | :move, error}`; a pick also
-  has the category and amount it suggests.
+  The state is `%{kind: :pill | :cover | :pick, anchor, category_id, mode: :cover | :move, from, error, open}`
+  (`from`: the chosen source to cover from); a pick also has the category and amount it suggests. A closed popover stays rendered, so focus returns to its anchor.
   """
   use AbakusWeb, :html
 
-  import AbakusWeb.Format
+  import AbakusWeb.Format, except: [amount: 1]
 
   alias AbakusWeb.BudgetLive.{Components, Inspector, Status}
+  alias AbakusWeb.Format
 
   @doc "Opens a popover at the anchor's element; a pill opens on \"Decken\" while its category is overspent."
   def open(:pick, anchor, _entry, inspector) do
@@ -23,14 +24,24 @@ defmodule AbakusWeb.BudgetLive.Popover do
       kind: :pick,
       anchor: anchor,
       category_id: suggested && suggested.category.id,
-      amount: suggested && amount(pick_amount(suggested, inspector.free)),
-      error: nil
+      amount: suggested && Format.amount(pick_amount(suggested, inspector.free)),
+      error: nil,
+      open: true
     }
   end
 
   def open(kind, anchor, entry, _inspector) do
     mode = if kind == :cover or entry.cell.available < 0, do: :cover, else: :move
-    %{kind: kind, anchor: anchor, category_id: entry.category.id, mode: mode, error: nil}
+
+    %{
+      kind: kind,
+      anchor: anchor,
+      category_id: entry.category.id,
+      mode: mode,
+      from: nil,
+      error: nil,
+      open: true
+    }
   end
 
   @doc "What a pick suggests for a category: what its target still asks, as far as Zu verteilen reaches."
@@ -64,72 +75,71 @@ defmodule AbakusWeb.BudgetLive.Popover do
   attr :popover, :map, required: true
   attr :inspector, Inspector, required: true
 
-  @doc "The open popover."
-  def popover(assigns) do
+  @doc "The popover."
+  def editor(assigns) do
+    entry = Inspector.find(assigns.inspector, assigns.popover[:category_id])
+
     assigns =
-      assign(assigns, :entry, Inspector.find(assigns.inspector, assigns.popover[:category_id]))
+      assign(assigns, entry: entry, title: title(assigns.popover, entry, assigns.inspector))
 
     ~H"""
-    <div
+    <.popover
+      :if={@title}
       id="popover"
-      class="card shadow-lg app-pop"
-      role="dialog"
-      aria-labelledby="popover-title"
-      data-anchor={@popover.anchor}
-      phx-hook="Popover"
-      phx-mounted={JS.ignore_attributes(["style"])}
-      phx-click-away={JS.push("close_popover", value: %{anchor: @popover.anchor})}
-      phx-window-keydown="close_popover"
-      phx-key="Escape"
+      title={@title}
+      anchor={@popover.anchor}
+      align={:end}
+      show={@popover.open}
+      on_cancel={JS.push("close_popover", value: %{anchor: @popover.anchor})}
     >
-      <div class="card-body">
-        <.pill_content
-          :if={@popover.kind == :pill}
-          popover={@popover}
-          entry={@entry}
-          inspector={@inspector}
-        />
-        <.cover_content
-          :if={@popover.kind == :cover}
-          popover={@popover}
-          entry={@entry}
-          inspector={@inspector}
-        />
-        <.pick_content :if={@popover.kind == :pick} popover={@popover} inspector={@inspector} />
-      </div>
-    </div>
+      <.pill_content
+        :if={@popover.kind == :pill}
+        popover={@popover}
+        entry={@entry}
+        inspector={@inspector}
+      />
+      <.cover_form
+        :if={@popover.kind == :cover}
+        entry={@entry}
+        inspector={@inspector}
+        from={@popover.from}
+        error={@popover.error}
+      />
+      <.pick_content :if={@popover.kind == :pick} popover={@popover} inspector={@inspector} />
+    </.popover>
     """
   end
 
+  defp title(%{kind: :pick}, _entry, inspector),
+    do: "In eine Kategorie verteilen · #{month_name(inspector.month.month)}"
+
+  defp title(_popover, nil, _inspector), do: nil
+  defp title(%{kind: :pill}, entry, _inspector), do: entry.category.name
+  defp title(%{kind: :cover}, entry, _inspector), do: "Überzug decken · #{entry.category.name}"
+
   defp pill_content(assigns) do
     ~H"""
-    <div class="d-flex align-items-center gap-2 mb-1">
-      <span id="popover-title" class="fw-semibold me-auto text-truncate">{@entry.category.name}</span>
+    <div class="flex items-center justify-between gap-2">
+      <p class="text-sm text-base-content/70">{month_year(@entry.cell.month)}</p>
       <Components.pill cell={@entry.cell} />
     </div>
-    <div class="small text-body-secondary mb-2">{month_year(@entry.cell.month)}</div>
-    <div
+    <.segmented
       :if={@entry.cell.available < 0}
-      class="btn-group btn-group-sm w-100 mb-2"
-      role="group"
-      aria-label="Aktion"
-    >
-      <button
-        :for={{mode, label} <- [cover: "Decken", move: "Verschieben"]}
-        id={"popover-#{mode}"}
-        type="button"
-        class={["btn btn-outline-secondary", @popover.mode == mode && "active"]}
-        aria-pressed={to_string(@popover.mode == mode)}
-        phx-click="popover_mode"
-        phx-value-mode={mode}
-      >
-        {label}
-      </button>
-    </div>
+      id="popover-mode"
+      mode={:button}
+      label="Aktion"
+      size={:sm}
+      block
+      class="mt-3"
+      value={@popover.mode}
+      options={[{"Decken", "cover"}, {"Verschieben", "move"}]}
+      phx-click="popover_mode"
+    />
     <.cover_form
       :if={@popover.mode == :cover}
       entry={@entry}
       inspector={@inspector}
+      from={@popover.from}
       error={@popover.error}
     />
     <.move_form
@@ -138,57 +148,69 @@ defmodule AbakusWeb.BudgetLive.Popover do
       inspector={@inspector}
       error={@popover.error}
     />
-    <button
+    <.button
       id="popover-details"
-      type="button"
-      class="btn btn-sm btn-link px-0 mt-2 text-decoration-none"
-      phx-click="select"
-      phx-value-category={@entry.category.id}
+      variant={:link}
+      size={:sm}
+      class="mt-2 px-0"
+      phx-click={
+        JS.focus(to: "##{@popover.anchor}")
+        |> JS.push("select", value: %{category: to_string(@entry.category.id)})
+      }
     >
-      Details und Ziel <.icon name="chevron" class="app-icon-sm" />
-    </button>
-    """
-  end
-
-  defp cover_content(assigns) do
-    ~H"""
-    <div id="popover-title" class="fw-semibold mb-2 text-truncate">
-      Überzug decken · {@entry.category.name}
-    </div>
-    <.cover_form entry={@entry} inspector={@inspector} error={@popover.error} />
+      Kategorie bearbeiten <.icon name="chevron-right" />
+    </.button>
     """
   end
 
   attr :entry, :map, required: true
   attr :inspector, Inspector, required: true
+  attr :from, :string, default: nil, doc: "the chosen source; the first one when nil"
   attr :error, :string, default: nil
 
   defp cover_form(assigns) do
-    assigns = assign(assigns, :sources, sources(assigns.inspector, assigns.entry.category.id))
+    sources = sources(assigns.inspector, assigns.entry.category.id)
+    source = Enum.find(sources, List.first(sources), &(elem(&1, 0) == assigns.from))
+    assigns = assign(assigns, sources: sources, source: source)
 
     ~H"""
-    <form id="cover-form" class="d-flex flex-column gap-2" phx-submit="cover">
+    <form id="cover-form" class="mt-2" phx-change="cover_change" phx-submit="cover">
       <input type="hidden" name="category" value={@entry.category.id} />
       <%= if @sources == [] do %>
-        <p class="small mb-0">Kein Geld in „Zu verteilen“ oder anderen Kategorien.</p>
+        <p class="text-sm">Kein Geld in „Zu verteilen“ oder anderen Kategorien.</p>
       <% else %>
-        <label class="small" for="cover-from">
-          Decke <strong class="text-nowrap">{euros(-@entry.cell.available)}</strong> aus:
-        </label>
-        <select id="cover-from" name="from" class="form-select form-select-sm">
-          <option :for={{value, label, available} <- @sources} value={value}>
-            {label} ({euros(available)})
-          </option>
-        </select>
-        <.popover_error error={@error} />
-        <div class="d-flex justify-content-end gap-2">
-          <button type="button" class="btn btn-sm" phx-click="close_popover">Abbrechen</button>
-          <button id="cover-submit" type="submit" class="btn btn-sm btn-primary">Decken</button>
-        </div>
+        <.combobox
+          id="cover-from"
+          name="from"
+          label={"Decke #{euros(-@entry.cell.available)} aus"}
+          value={elem(@source, 0)}
+          placeholder="Kategorie suchen"
+          options={
+            for {value, label, available} <- @sources,
+                do: %{label: label, value: value, available: available}
+          }
+          errors={List.wrap(@error)}
+        >
+          <:option :let={option}>
+            <span class="min-w-0 flex-1 truncate">{option.label}</span>
+            <.amount value={option.available} class="shrink-0" />
+          </:option>
+        </.combobox>
+        <p id="cover-after" class="mt-2 flex justify-between gap-2 text-sm">
+          <span class="text-base-content/70">{after_label(@source)}</span>
+          <.amount value={after_cover(@entry, @source)} />
+        </p>
+        <.popover_actions submit_id="cover-submit" submit="Decken" autofocus />
       <% end %>
     </form>
     """
   end
+
+  defp after_label({"rta", _label, _available}), do: "Zu verteilen danach"
+  defp after_label({_id, label, _available}), do: "#{label} danach"
+
+  defp after_cover(entry, {_id, _label, available}),
+    do: available - cover_amount(entry, available)
 
   attr :entry, :map, required: true
   attr :inspector, Inspector, required: true
@@ -210,47 +232,40 @@ defmodule AbakusWeb.BudgetLive.Popover do
       )
 
     ~H"""
-    <form id="move-form" class="d-flex flex-column gap-2" phx-submit="move">
+    <form id="move-form" class="mt-2" phx-submit="move">
       <input type="hidden" name="category" value={@entry.category.id} />
-      <div class="input-group input-group-sm">
-        <input
-          id="move-amount"
-          name="amount"
-          value={amount(@amount)}
-          class={["form-control text-end app-q", @error && "is-invalid"]}
-          inputmode="decimal"
-          autocomplete="off"
-          aria-label="Betrag"
-        />
-        <span class="input-group-text">€</span>
-      </div>
-      <div class="btn-group btn-group-sm w-100" role="group" aria-label="Richtung">
-        <%= for {value, label} <- [{"to", "Abgeben an"}, {"from", "Holen aus"}] do %>
-          <input
-            type="radio"
-            class="btn-check"
-            name="direction"
-            id={"move-#{value}"}
-            value={value}
-            checked={value == "to" == @give}
-          />
-          <label class="btn btn-outline-secondary" for={"move-#{value}"}>{label}</label>
-        <% end %>
-      </div>
-      <select
+      <.input
+        id="move-amount"
+        autofocus
+        name="amount"
+        label="Betrag"
+        value={Format.amount(@amount)}
+        suffix="€"
+        numeric
+        autocomplete="off"
+        errors={List.wrap(@error)}
+      />
+      <.segmented
+        id="move-direction"
+        mode={:radio}
+        name="direction"
+        label="Richtung"
+        size={:sm}
+        block
+        class="mt-2"
+        value={if @give, do: "to", else: "from"}
+        options={[{"Abgeben an", "to"}, {"Holen aus", "from"}]}
+      />
+      <.combobox
         id="move-other"
         name="other"
-        class="form-select form-select-sm"
-        aria-label="Andere Kategorie"
-      >
-        <option value="rta">📥 Zu verteilen</option>
-        <.category_options inspector={@inspector} skip={@entry.category.id} />
-      </select>
-      <.popover_error error={@error} />
-      <div class="d-flex justify-content-end gap-2">
-        <button type="button" class="btn btn-sm" phx-click="close_popover">Abbrechen</button>
-        <button id="move-submit" type="submit" class="btn btn-sm btn-primary">Verschieben</button>
-      </div>
+        label="Andere Kategorie"
+        hide_label
+        value="rta"
+        placeholder="Kategorie suchen"
+        options={[{"📥 Zu verteilen", "rta"} | category_options(@inspector, @entry.category.id)]}
+      />
+      <.popover_actions submit_id="move-submit" submit="Verschieben" />
     </form>
     """
   end
@@ -260,72 +275,59 @@ defmodule AbakusWeb.BudgetLive.Popover do
 
   defp pick_content(assigns) do
     ~H"""
-    <div id="popover-title" class="fw-semibold mb-2">
-      In eine Kategorie verteilen · {month_name(@inspector.month.month)}
-    </div>
-    <form id="pick-form" class="d-flex flex-column gap-2" phx-change="pick_change" phx-submit="pick">
-      <select
+    <form id="pick-form" phx-change="pick_change" phx-submit="pick">
+      <.combobox
         id="pick-category"
         name="category"
-        class="form-select form-select-sm"
-        aria-label="Kategorie"
-      >
-        <.category_options inspector={@inspector} selected={@popover.category_id} />
-      </select>
-      <div class="input-group input-group-sm">
-        <input
-          id="pick-amount"
-          name="amount"
-          value={@popover.amount}
-          class={["form-control text-end app-q", @popover.error && "is-invalid"]}
-          inputmode="decimal"
-          autocomplete="off"
-          aria-label="Betrag"
-        />
-        <span class="input-group-text">€</span>
-      </div>
-      <div class="form-text mt-0">Frei zu verteilen: {euros(@inspector.free)}</div>
-      <.popover_error error={@popover.error} />
-      <div class="d-flex justify-content-end gap-2">
-        <button type="button" class="btn btn-sm" phx-click="close_popover">Abbrechen</button>
-        <button id="pick-submit" type="submit" class="btn btn-sm btn-primary">Zuweisen</button>
-      </div>
+        label="Kategorie"
+        value={@popover.category_id}
+        placeholder="Kategorie suchen"
+        options={category_options(@inspector, nil)}
+      />
+      <.input
+        id="pick-amount"
+        autofocus
+        name="amount"
+        label="Betrag"
+        value={@popover.amount}
+        suffix="€"
+        numeric
+        autocomplete="off"
+        help={"Frei zu verteilen: #{euros(@inspector.free)}"}
+        errors={List.wrap(@popover.error)}
+      />
+      <.popover_actions submit_id="pick-submit" submit="Zuweisen" />
     </form>
     """
   end
 
-  attr :inspector, Inspector, required: true
-  attr :skip, :any, default: nil
-  attr :selected, :any, default: nil
+  attr :submit_id, :string, required: true
+  attr :submit, :string, required: true
+  attr :autofocus, :boolean, default: false
 
-  defp category_options(assigns) do
-    assigns =
-      assign(
-        assigns,
-        :groups,
-        assigns.inspector.categories
-        |> Enum.reject(&(&1.category.id == assigns.skip))
-        |> Enum.chunk_by(& &1.group.id)
-      )
-
+  defp popover_actions(assigns) do
     ~H"""
-    <optgroup :for={[first | _] = entries <- @groups} label={first.group.name}>
-      <option
-        :for={%{category: category} <- entries}
-        value={category.id}
-        selected={category.id == @selected}
+    <div class="mt-3 flex justify-end gap-2">
+      <.button size={:sm} phx-click="close_popover">Abbrechen</.button>
+      <.button
+        id={@submit_id}
+        type="submit"
+        variant={:primary}
+        size={:sm}
+        autofocus={@autofocus}
       >
-        {category.name}
-      </option>
-    </optgroup>
+        {@submit}
+      </.button>
+    </div>
     """
   end
 
-  attr :error, :string, default: nil
-
-  defp popover_error(assigns) do
-    ~H"""
-    <div :if={@error} class="invalid-feedback d-block mt-0">{@error}</div>
-    """
+  defp category_options(inspector, skip) do
+    inspector.categories
+    |> Enum.reject(&(&1.category.id == skip))
+    |> Enum.chunk_by(& &1.group.id)
+    |> Enum.map(fn [first | _] = entries ->
+      {first.group.name, Enum.map(entries, &{&1.category.name, &1.category.id})}
+    end)
   end
 end

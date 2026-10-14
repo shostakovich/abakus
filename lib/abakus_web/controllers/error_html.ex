@@ -1,5 +1,5 @@
 defmodule AbakusWeb.ErrorHTML do
-  @moduledoc "Error pages in German, without the app's layout and scripts."
+  @moduledoc "Error pages in German, without the app's layout and scripts but with the stored theme."
   use AbakusWeb, :html
 
   @messages %{
@@ -12,23 +12,29 @@ defmodule AbakusWeb.ErrorHTML do
     "500" => "Interner Fehler"
   }
 
-  def render(template, _assigns) do
+  def render(template, assigns) do
     [status | _format] = String.split(template, ".")
-    assigns = %{message: Map.get(@messages, status, "Fehler #{status}")}
+
+    assigns = %{
+      message: Map.get(@messages, status, "Fehler #{status}"),
+      csp_nonce: assigns[:csp_nonce]
+    }
 
     ~H"""
     <!DOCTYPE html>
     <html lang="de">
       <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <.theme_meta />
+        <.theme_script nonce={@csp_nonce} />
         <title>{@message} · Abakus</title>
-        <link rel="stylesheet" href="https://felt-css.rocu.de/felt.css" />
+        <link rel="stylesheet" href={~p"/assets/css/app.css"} />
       </head>
-      <body>
-        <main class="container py-5">
-          <h1>{@message}</h1>
-          <p><a href="/">Zur Startseite</a></p>
+      <body class="bg-base-100 text-base-content">
+        <main class="mx-auto max-w-md px-4 py-12">
+          <h1 class="text-2xl font-semibold">{@message}</h1>
+          <p class="mt-4"><a href="/" class="link link-primary">Zur Startseite</a></p>
         </main>
       </body>
     </html>

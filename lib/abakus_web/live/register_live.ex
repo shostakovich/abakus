@@ -11,18 +11,18 @@ defmodule AbakusWeb.RegisterLive do
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
   the transaction they match: "Zuordnen" merges them, "Trennen" keeps the import as a transaction of its own, and
-  "Alle Zuordnungen übernehmen" in the banner merges all. Approving all leaves them open, as that is a decision of
+  "Alle Zuordnungen übernehmen" in the toolbar merges all. Approving all leaves them open, as that is a decision of
   its own.
 
   "Abgleichen" reconciles one account (`Reconcile`): its popover asks whether the balance is right, reconcile mode
-  keeps the difference in a banner while transactions are cleared, until it is finished or cancelled.
+  keeps the difference in a bar while transactions are cleared, until it is finished or cancelled.
 
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
   `account_groups`, so it is as fresh as the sidebar.
 
   Transactions are edited as in YNAB, without a URL (`TransactionEditor`): a click selects a row, a click into a
   cell of a selected row opens the row for editing, "Buchung" adds an empty row on top; one row at a time. Phones
-  open a sheet from a card or the "+ Buchung" button instead. The counterpart of a split's transfer opens its
+  open a sheet from a list row or the "+" button instead. The counterpart of a split's transfer opens its
   split. The selection bar approves, categorises and deletes the selected transactions.
   """
   use AbakusWeb, :live_view
@@ -45,41 +45,46 @@ defmodule AbakusWeb.RegisterLive do
       current_scope={@current_scope}
       current={if @account, do: :accounts, else: :all_accounts}
       account_id={@account && @account.id}
+      width={:full}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
     >
+      <:fab :if={@manual && !@editor}>
+        <.fab id="new-transaction-fab" label="Buchung" phx-click="new" phx-value-layout="sheet" />
+      </:fab>
       <div id="register">
-        <Components.banner
-          :if={@unapproved != [] or @proposals != []}
-          transactions={@unapproved}
-          proposals={@proposals}
-          show_path={@filter != :unapproved && @paths.filters.unapproved}
-        />
-        <.link
-          navigate={~p"/accounts"}
-          class="d-inline-flex d-lg-none align-items-center gap-1 small mb-1"
-        >
-          <.icon name="back" class="app-icon-sm" /> Konten
-        </.link>
-        <div class="d-flex align-items-center gap-2">
-          <h1 id="register-title" class="h3 mb-0 flex-grow-1 text-truncate">{@page_title}</h1>
-          <button
-            :if={@account}
-            id="edit-account"
-            type="button"
-            class="btn btn-sm btn-light"
-            aria-label="Konto bearbeiten"
-            title="Konto bearbeiten"
-            phx-click="open_account_dialog"
-            phx-value-id={@account.id}
+        <div class="flex items-start md:block">
+          <.link
+            id="register-back"
+            navigate={~p"/accounts"}
+            class="btn btn-ghost btn-sm -ms-3 max-md:btn-square max-md:-ms-2"
           >
-            <.icon name="pencil" class="app-icon-sm" />
-          </button>
-          <Reconcile.popover :if={@account && !@reconciling} state={@reconcile} />
+            <.icon name="chevron-left" /><span class="max-md:sr-only">Konten</span>
+          </.link>
+          <.header class="min-w-0 grow pb-4 max-md:pb-3">
+            <span id="register-title">{@page_title}</span>
+            <:badge><Components.balances_compact account={@account} balances={@balances} /></:badge>
+            <:subtitle><Components.meta account={@account} /></:subtitle>
+            <:actions>
+              <Components.balances
+                account={@account}
+                balances={@balances}
+                reconciling={!!@reconciling}
+              />
+              <.button
+                :if={@account}
+                id="edit-account"
+                icon="pencil"
+                icon_only
+                label="Konto bearbeiten"
+                class="max-md:hidden"
+                phx-click="open_account_dialog"
+                phx-value-id={@account.id}
+              />
+              <Reconcile.editor :if={@account && !@reconciling} state={@reconcile} />
+            </:actions>
+          </.header>
         </div>
-        <Components.meta account={@account} />
-        <Reconcile.banner :if={@reconciling} mode={@reconciling} />
-        <Components.balances account={@account} balances={@balances} />
         <Components.toolbar
           account={@account}
           manual={@manual}
@@ -88,12 +93,15 @@ defmodule AbakusWeb.RegisterLive do
           running={@running}
           running_shown={@running_balances != nil}
           paths={@paths}
-        />
-        <Components.bulk
-          :if={MapSet.size(@selected) > 0 and !@editor}
-          selected={Enum.filter(@rows, &(&1.id in @selected))}
-          categories={@categories}
-        />
+        >
+          <Components.waiting
+            :if={@unapproved != [] or @proposals != []}
+            transactions={@unapproved}
+            proposals={@proposals}
+            show_path={@filter != :unapproved && @paths.filters.unapproved}
+          />
+        </Components.toolbar>
+        <Reconcile.bar :if={@reconciling} mode={@reconciling} />
         <Components.table
           rows={@rows}
           proposals={@shown_proposals}
@@ -113,16 +121,10 @@ defmodule AbakusWeb.RegisterLive do
           empty={empty_text(@transactions, @proposals)}
         />
         <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
-        <button
-          :if={@manual && !@editor}
-          id="new-transaction-fab"
-          type="button"
-          class="btn btn-primary btn-lg rounded-pill shadow-lg d-inline-flex d-md-none align-items-center gap-1 app-fab"
-          phx-click="new"
-          phx-value-layout="sheet"
-        >
-          <.icon name="plus" /> Buchung
-        </button>
+        <Components.bulk
+          selected={if @editor, do: [], else: Enum.filter(@rows, &(&1.id in @selected))}
+          categories={@categories}
+        />
       </div>
       <.live_component
         :if={@editor && @editor.layout == :sheet}
@@ -133,8 +135,8 @@ defmodule AbakusWeb.RegisterLive do
     """
   end
 
-  defp empty_text([], []), do: "Noch keine Buchungen."
-  defp empty_text(_transactions, _proposals), do: "Keine Buchungen in dieser Ansicht."
+  defp empty_text([], []), do: "Noch keine Buchungen"
+  defp empty_text(_transactions, _proposals), do: "Keine Buchungen in dieser Ansicht"
 
   @impl true
   def mount(_params, _session, socket) do
@@ -435,6 +437,8 @@ defmodule AbakusWeb.RegisterLive do
     |> assign(:flag_menu, nil)
     |> change(id, &Ledger.update_transaction(&1, %{flag: blank_to_nil(flag)}, confirmed(params)))
   end
+
+  def handle_event("set_flag", _params, socket), do: {:noreply, socket}
 
   def handle_event(
         "reconcile_open",

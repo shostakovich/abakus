@@ -15,6 +15,12 @@ defmodule AbakusWeb.ImportLive do
 
   @max_file_size 5_000_000
 
+  @upload_errors %{
+    too_large: "Die Datei ist größer als 5 MB.",
+    too_many_files: "Bitte nur eine Datei wählen.",
+    not_accepted: "Die Datei ist keine OFX- oder QFX-Datei."
+  }
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -25,39 +31,31 @@ defmodule AbakusWeb.ImportLive do
       account_groups={@account_groups}
       account_dialog={@account_dialog}
     >
-      <h1 class="h2 mb-0">Import &amp; Sync</h1>
-      <p class="small text-body-secondary mb-3">
-        Umsätze aus dem Bank-Export (OFX oder QFX). Konten, die eine andere App füllt, nehmen keinen Datei-Import.
-      </p>
-      <div class="row g-4">
-        <div class="col-lg-4 d-flex flex-column gap-3">
-          <form id="import-form" phx-change="validate" phx-submit="validate">
-            <label
-              class="app-drop d-flex flex-column align-items-center justify-content-center text-center gap-2 p-4 mb-0"
-              for={@uploads.file.ref}
-            >
-              <.icon name="upload" class="app-icon-lg" />
-              <span class="fw-semibold">QFX- oder OFX-Datei wählen</span>
-              <span class="small text-body-secondary">
-                In der Banking-App die Umsätze des Kontos als OFX oder QFX exportieren
-              </span>
-              <.live_file_input
-                upload={@uploads.file}
-                accept=".ofx,.qfx"
-                class="form-control form-control-sm mt-2"
-              />
-            </label>
-          </form>
-          <p :for={error <- upload_problems(@uploads.file)} class="small text-danger mb-0">
-            {upload_error(error)}
-          </p>
-          <p class="small text-body-secondary mb-0">
+      <.header>
+        Import &amp; Sync
+        <:subtitle>
+          Umsätze aus dem Bank-Export (OFX oder QFX). Konten, die eine andere App füllt, nehmen keinen
+          Datei-Import.
+        </:subtitle>
+      </.header>
+      <div class="flex flex-col gap-6">
+        <form id="import-form" phx-change="validate" phx-submit="validate">
+          <p id="import-steps" class="max-w-prose pb-2 text-sm text-base-content/70">
+            In der Banking-App die Umsätze des Kontos als OFX oder QFX exportieren und die Datei hier ablegen.
             Buchungen, die schon da sind, erkennt Abakus an der FITID der Bank.
           </p>
-        </div>
-        <div :if={@preview} class="col-lg-8">
-          <.preview preview={@preview} accounts={@accounts} transfer_accounts={@transfer_accounts} />
-        </div>
+          <.file_drop
+            upload={@uploads.file}
+            label="OFX- oder QFX-Datei"
+            error_labels={upload_errors()}
+          />
+        </form>
+        <.preview
+          :if={@preview}
+          preview={@preview}
+          accounts={@accounts}
+          transfer_accounts={@transfer_accounts}
+        />
       </div>
     </Layouts.app>
     """
@@ -79,39 +77,35 @@ defmodule AbakusWeb.ImportLive do
       )
 
     ~H"""
-    <section id="import-preview" class="card" aria-labelledby="import-file">
-      <div class="card-header d-flex flex-wrap align-items-center gap-2">
-        <.icon name="file" />
-        <span id="import-file" class="fw-semibold me-auto text-break">{@preview.file_name}</span>
-        <span class="small text-body-secondary">
-          {transactions_text(length(@transactions))}{period(@transactions)}
-        </span>
-      </div>
-      <.statement
-        :for={{item, index} <- Enum.with_index(@preview.statements)}
-        item={item}
-        index={index}
-        accounts={@accounts}
-        transfer_accounts={@transfer_accounts}
-      />
-      <div class="card-footer d-flex flex-wrap align-items-center gap-2">
-        <span class="small text-body-secondary me-auto">
-          Neue Buchungen landen unbestätigt im Konto, Zuordnungsvorschläge warten auf Zuordnen oder Trennen.
-        </span>
-        <button id="import-discard" type="button" class="btn btn-sm" phx-click="discard">
-          Verwerfen
-        </button>
-        <button
-          id="import-submit"
-          type="button"
-          class="btn btn-sm btn-primary"
-          phx-click="import"
-          disabled={!@ready}
-        >
-          {import_label(@incoming)}
-        </button>
-      </div>
-    </section>
+    <.card
+      id="import-preview"
+      bleed={:phone}
+      title={@preview.file_name}
+      subtitle={join_meta([transactions_text(length(@transactions)), period(@transactions)])}
+    >
+      <:leading><.icon name="file-text" class="size-5 text-base-content/70" /></:leading>
+      <:list>
+        <.statement
+          :for={{item, index} <- Enum.with_index(@preview.statements)}
+          item={item}
+          index={index}
+          accounts={@accounts}
+          transfer_accounts={@transfer_accounts}
+        />
+        <div class="px-6 pt-4 pb-6">
+          <p class="max-w-prose text-sm text-base-content/70">
+            Neue Buchungen landen unbestätigt im Konto, Zuordnungsvorschläge warten auf Zuordnen oder
+            Trennen.
+          </p>
+          <.action_bar class="mt-4">
+            <.button id="import-discard" phx-click="discard">Verwerfen</.button>
+            <.button id="import-submit" variant={:primary} phx-click="import" disabled={!@ready}>
+              {import_label(@incoming)}
+            </.button>
+          </.action_bar>
+        </div>
+      </:list>
+    </.card>
     """
   end
 
@@ -122,123 +116,111 @@ defmodule AbakusWeb.ImportLive do
 
   defp statement(assigns) do
     ~H"""
-    <div id={"statement-#{@index}"} class="border-bottom">
-      <div class="card-body d-flex flex-column gap-3">
-        <div class="d-flex flex-wrap gap-2">
-          <span id={"statement-#{@index}-new"} class="badge text-bg-success">
-            {@item.preview.new} neu
-          </span>
-          <span
-            :if={@item.preview.matched > 0}
-            id={"statement-#{@index}-matched"}
-            class="badge text-bg-info"
+    <div id={"statement-#{@index}"} class="border-t border-base-content/10 first:border-t-0">
+      <div class="grid gap-4 px-6 py-4 sm:grid-cols-2 sm:items-start">
+        <div class="text-sm">
+          <p class="text-base-content/70">Konto in der Datei</p>
+          <p class="font-medium wrap-anywhere">{@item.statement.acct_id}</p>
+          <p :if={@item.statement.bank_id} class="text-base-content/70">
+            BLZ {@item.statement.bank_id}
+          </p>
+          <p
+            :if={@item.statement.ledger_balance}
+            id={"statement-#{@index}-balance"}
+            class="text-base-content/70"
           >
-            {matched_label(@item.preview.matched)}
-          </span>
-          <span id={"statement-#{@index}-existing"} class="badge text-bg-secondary">
-            {@item.preview.existing} bereits vorhanden
-          </span>
-          <span
-            :if={@item.preview.reconciled > 0}
-            id={"statement-#{@index}-reconciled"}
-            class="badge text-bg-secondary"
-          >
-            {@item.preview.reconciled} vor dem letzten Abgleich
-          </span>
+            Banksaldo laut Datei: <.amount value={@item.statement.ledger_balance.amount} />
+            am {Format.date(@item.statement.ledger_balance.date)}
+          </p>
         </div>
-        <div class="row g-2 align-items-center">
-          <div class="col-sm-6 small">
-            Konto in der Datei
-            <div class="fw-semibold text-break">{@item.statement.acct_id}</div>
-            <div :if={@item.statement.bank_id} class="text-body-secondary">
-              BLZ {@item.statement.bank_id}
-            </div>
-            <div
-              :if={@item.statement.ledger_balance}
-              id={"statement-#{@index}-balance"}
-              class="text-body-secondary"
-            >
-              Banksaldo laut Datei:
-              <span class="tabular-nums text-nowrap">
-                {Format.euros(@item.statement.ledger_balance.amount)}
-              </span>
-              am {Format.date(@item.statement.ledger_balance.date)}
-            </div>
-          </div>
-          <div class="col-sm-6">
-            <form id={"statement-#{@index}-form"} phx-change="choose_account">
-              <input type="hidden" name="index" value={@index} />
-              <label class="form-label small mb-1" for={"statement-#{@index}-account"}>
-                Abakus-Konto
-              </label>
-              <select
-                id={"statement-#{@index}-account"}
-                name="account_id"
-                class="form-select form-select-sm"
-              >
-                <option :if={!@item.account} value="">Konto wählen …</option>
-                <option
-                  :for={account <- @accounts}
-                  value={account.id}
-                  selected={@item.account && @item.account.id == account.id}
-                >
-                  {account.name}
-                </option>
-              </select>
-            </form>
-          </div>
-        </div>
+        <form id={"statement-#{@index}-form"} phx-change="choose_account">
+          <input type="hidden" name="index" value={@index} />
+          <.input
+            type="select"
+            id={"statement-#{@index}-account"}
+            name="account_id"
+            label="Abakus-Konto"
+            options={Enum.map(@accounts, &{&1.name, &1.id})}
+            prompt={!@item.account && "Konto wählen …"}
+            value={@item.account && @item.account.id}
+          />
+        </form>
       </div>
-      <div :if={@item.preview.rows != []} class="table-responsive">
-        <table class="table table-sm align-middle mb-0 tabular-nums">
-          <thead>
-            <tr>
-              <th scope="col">Datum</th>
-              <th scope="col">Empfänger</th>
-              <th scope="col" class="text-end">Betrag</th>
-              <th scope="col">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              :for={%{transaction: transaction, status: status} = row <- @item.preview.rows}
-              class={status in [:existing, :reconciled] && "text-body-secondary"}
-            >
-              <td class="text-nowrap">{Format.date(transaction.date)}</td>
-              <td>
-                {transaction.name}
-                <div :if={transaction.memo} class="small text-body-secondary">{transaction.memo}</div>
-                <div :if={row.match} class="small text-info-emphasis">
-                  {Components.match_text(row.match, @transfer_accounts)}
-                </div>
-              </td>
-              <td class={["text-end text-nowrap", transaction.amount > 0 && "text-success"]}>
-                {Format.signed_euros(transaction.amount)}
-              </td>
-              <td>
-                <span :if={status == :new} class="badge text-bg-success">neu</span>
-                <span :if={status == :matched} class="badge text-bg-info">Zuordnungsvorschlag</span>
-                <span :if={status == :existing} class="badge text-bg-secondary">vorhanden</span>
-                <span :if={status == :reconciled} class="badge text-bg-secondary">vor Abgleich</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="flex flex-wrap gap-2 px-6 pb-4">
+        <.badge id={"statement-#{@index}-new"} tone={:success}>{@item.preview.new} neu</.badge>
+        <.badge :if={@item.preview.matched > 0} id={"statement-#{@index}-matched"} tone={:info}>
+          {matched_label(@item.preview.matched)}
+        </.badge>
+        <.badge id={"statement-#{@index}-existing"}>
+          {@item.preview.existing} bereits vorhanden
+        </.badge>
+        <.badge :if={@item.preview.reconciled > 0} id={"statement-#{@index}-reconciled"}>
+          {@item.preview.reconciled} vor dem letzten Abgleich
+        </.badge>
       </div>
+      <.table
+        :if={@item.preview.rows != []}
+        id={"statement-#{@index}-rows"}
+        rows={@item.preview.rows}
+        size={:sm}
+        flush
+        row_attrs={&row_attrs/1}
+      >
+        <:col :let={row} label="Datum" show_from={:sm} class="whitespace-nowrap">
+          {Format.date(row.transaction.date)}
+        </:col>
+        <:col :let={row} label="Empfänger">
+          {row.transaction.name}
+          <.cell_sub hide_from={:sm}>
+            {join_meta([Format.date(row.transaction.date), status_label(row.status)])}
+          </.cell_sub>
+          <.cell_sub :if={row.transaction.memo}>{row.transaction.memo}</.cell_sub>
+          <.cell_sub :if={row.match}>
+            {Components.match_text(row.match, @transfer_accounts)}
+          </.cell_sub>
+        </:col>
+        <:col :let={row} label="Betrag" align={:end}>
+          <.amount
+            value={row.transaction.amount}
+            signed
+            class={row.transaction.amount > 0 && "text-success-ink"}
+          />
+        </:col>
+        <:col :let={row} label="Status" show_from={:sm}>
+          <.badge tone={status_tone(row.status)}>{status_label(row.status)}</.badge>
+        </:col>
+      </.table>
     </div>
     """
   end
 
+  defp row_attrs(%{status: status}),
+    do: %{
+      "data-status": status,
+      class: status in [:existing, :reconciled] && "text-base-content/70"
+    }
+
+  defp status_label(:new), do: "neu"
+  defp status_label(:matched), do: "Zuordnungsvorschlag"
+  defp status_label(:existing), do: "vorhanden"
+  defp status_label(:reconciled), do: "vor Abgleich"
+
+  defp status_tone(:new), do: :success
+  defp status_tone(:matched), do: :info
+  defp status_tone(_status), do: :neutral
+
+  defp upload_errors, do: @upload_errors
+
   defp transactions_text(1), do: "1 Buchung"
   defp transactions_text(count), do: "#{count} Buchungen"
 
-  defp period([]), do: ""
+  defp period([]), do: nil
 
   defp period(transactions) do
     {first, last} =
       transactions |> Enum.map(& &1.date) |> Enum.min_max_by(&Date.to_gregorian_days/1)
 
-    " · #{Format.date(first)}–#{Format.date(last)}"
+    "#{Format.date(first)}–#{Format.date(last)}"
   end
 
   defp matched_label(1), do: "1 Zuordnungsvorschlag"
@@ -247,13 +229,6 @@ defmodule AbakusWeb.ImportLive do
   defp import_label(0), do: "Importieren"
   defp import_label(1), do: "1 Buchung importieren"
   defp import_label(count), do: "#{count} Buchungen importieren"
-
-  defp upload_problems(upload),
-    do: upload_errors(upload) ++ Enum.flat_map(upload.entries, &upload_errors(upload, &1))
-
-  defp upload_error(:too_large), do: "Die Datei ist größer als 5 MB."
-  defp upload_error(:too_many_files), do: "Bitte nur eine Datei wählen."
-  defp upload_error(_error), do: "Die Datei ließ sich nicht hochladen."
 
   @impl true
   def mount(_params, _session, socket) do
@@ -266,7 +241,7 @@ defmodule AbakusWeb.ImportLive do
        transfer_accounts: %{}
      )
      |> allow_upload(:file,
-       accept: :any,
+       accept: ~w(.ofx .qfx),
        max_entries: 1,
        max_file_size: @max_file_size,
        auto_upload: true,

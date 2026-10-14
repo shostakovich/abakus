@@ -2,7 +2,6 @@ defmodule AbakusWeb.CoreComponentsTest do
   use ExUnit.Case, async: true
 
   import Ecto.Changeset
-  import Phoenix.LiveViewTest, only: [render_component: 2]
 
   alias AbakusWeb.CoreComponents
 
@@ -22,37 +21,6 @@ defmodule AbakusWeb.CoreComponentsTest do
 
     schema "items" do
       belongs_to :owner, AbakusWeb.CoreComponentsTest.Owner
-    end
-  end
-
-  test "icon/1 uses a symbol of the icon sprite, hidden from screen readers" do
-    icon =
-      render_component(&CoreComponents.icon/1, name: "budget", class: "app-icon-sm")
-      |> LazyHTML.from_fragment()
-
-    assert LazyHTML.attribute(LazyHTML.query(icon, "svg"), "class") == ["app-icon app-icon-sm"]
-    assert LazyHTML.attribute(LazyHTML.query(icon, "svg"), "aria-hidden") == ["true"]
-    assert LazyHTML.attribute(LazyHTML.query(icon, "use"), "href") == ["/images/icons.svg#budget"]
-  end
-
-  describe "flash_group/1" do
-    # felt.css hides [hidden] with !important, so JS.show alone never reveals the alerts.
-    for id <- ["client-error", "server-error"] do
-      test "#{id} drops the hidden attribute on disconnect and sets it again on connect" do
-        alert =
-          render_component(&CoreComponents.flash_group/1, flash: %{})
-          |> LazyHTML.from_fragment()
-          |> LazyHTML.query("##{unquote(id)}")
-
-        assert LazyHTML.attribute(alert, "hidden") == [""]
-        # Only for its own kind of error; the other alert stays hidden.
-        assert [
-                 "remove_attr",
-                 %{"attr" => "hidden", "to" => ".phx-#{unquote(id)} ##{unquote(id)}"}
-               ] in js_ops(alert, "phx-disconnected")
-
-        assert ["set_attr", %{"attr" => ["hidden", ""]}] in js_ops(alert, "phx-connected")
-      end
     end
   end
 
@@ -140,11 +108,6 @@ defmodule AbakusWeb.CoreComponentsTest do
       error = {"has already been taken", validation: :unsafe_unique, fields: [:name]}
       assert CoreComponents.translate_error(error) == "ist bereits vergeben"
     end
-  end
-
-  defp js_ops(element, attribute) do
-    [encoded] = LazyHTML.attribute(element, attribute)
-    JSON.decode!(encoded)
   end
 
   # The error the repo adds when the database reports the constraint (Ecto.Repo.Schema).

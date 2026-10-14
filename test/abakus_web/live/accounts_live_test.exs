@@ -24,62 +24,109 @@ defmodule AbakusWeb.AccountsLiveTest do
       %{giro: giro, cash: cash, depot: depot, old: old}
     end
 
+    test "says how many transactions of an account wait for approval", c do
+      transaction_fixture(account_id: c.cash.id, amount: -100, approved: false)
+      {:ok, view, _html} = live(c.conn, ~p"/accounts")
+
+      assert has_element?(view, "#account-#{c.cash.id} .badge", "1 zu bestätigen")
+      refute has_element?(view, "#account-#{c.giro.id} .badge")
+    end
+
     test "groups the accounts into budget and tracking with working and cleared balance", c do
       {:ok, view, _html} = live(c.conn, ~p"/accounts")
 
       assert has_element?(view, "h1", "Konten")
-      assert has_element?(view, ~s|header nav a.active[aria-current=page][href="/accounts"]|)
+      assert has_element?(view, ~s|nav a[aria-current=page][href="/accounts/all"]|)
       refute has_element?(view, ~s|aside a[href="/accounts"]|)
 
       assert has_element?(view, "#group-budget h2", "Budget")
-      assert has_element?(view, "#group-budget-balance", "2.437,51 €")
-      assert has_element?(view, "#group-budget #account-#{c.giro.id}", "💶 Girokonto")
-      assert has_element?(view, "#account-#{c.giro.id}", "Girokonto · Gehalt")
-      assert has_element?(view, "#account-#{c.giro.id}-balance", "2.450,01 €")
-      assert has_element?(view, "#account-#{c.giro.id}-cleared", "2.500,00 €")
-      assert has_element?(view, "#account-#{c.cash.id}-balance.app-neg", "−12,50 €")
-      assert has_element?(view, "#account-#{c.cash.id}-cleared", "0,00 €")
-
+      assert has_element?(view, "#group-budget-balance", "2.437,51 €")
+      assert has_element?(view, "#account-#{c.giro.id}", "💶 Girokonto")
+      assert has_element?(view, "#account-#{c.giro.id}", "Girokonto\u2060\u00A0· Gehalt")
+      assert has_element?(view, "#account-#{c.giro.id}-balance", "2.450,01 €")
+      assert has_element?(view, "#account-#{c.giro.id}-cleared", "2.500,00 €")
+      assert has_element?(view, "#account-#{c.cash.id}-balance.text-error-ink", "−12,50 €")
+      assert has_element?(view, "#account-#{c.cash.id}-cleared", "0,00 €")
       assert has_element?(view, "#group-tracking h2", "Tracking")
-      assert has_element?(view, "#group-tracking #account-#{c.depot.id}", "📈 Depot")
-      assert has_element?(view, "#account-#{c.depot.id}-cleared", "10.000,00 €")
-
+      assert has_element?(view, "#account-#{c.depot.id}-cleared", "10.000,00 €")
       assert has_element?(view, "#group-closed h2", "Geschlossen")
-      assert has_element?(view, "#group-closed #account-#{c.old.id}", "Altes Sparbuch")
+      assert has_element?(view, "#accounts-total", "12.440,51 €")
+
+      assert view
+             |> render()
+             |> LazyHTML.from_document()
+             |> LazyHTML.query("#accounts > li[id]")
+             |> LazyHTML.attribute("id") == [
+               "group-budget",
+               "account-#{c.giro.id}",
+               "account-#{c.cash.id}",
+               "group-tracking",
+               "account-#{c.depot.id}",
+               "group-closed",
+               "account-#{c.old.id}"
+             ]
 
       assert has_element?(
                view,
-               ~s|#account-#{c.giro.id}[href="/accounts/#{c.giro.id}"]|
+               ~s|#account-#{c.giro.id} a[href="/accounts/#{c.giro.id}"]|
              )
     end
 
     test "the sidebar lists the open accounts with their working balance", c do
       {:ok, view, _html} = live(c.conn, ~p"/")
 
-      assert has_element?(view, "aside #side-group-budget", "2.437,51")
-      assert has_element?(view, "aside #side-group-tracking", "10.000,00")
-      refute has_element?(view, "aside #side-group-closed")
-      assert has_element?(view, "aside #side-account-#{c.giro.id}", "Girokonto")
-      assert has_element?(view, "aside #side-account-#{c.giro.id}", "2.450,01")
-      assert has_element?(view, "aside #side-account-#{c.cash.id} .app-neg", "−12,50")
-      assert has_element?(view, "aside #side-account-#{c.depot.id}", "10.000,00")
-      refute has_element?(view, "aside #side-account-#{c.old.id}")
-      assert has_element?(view, "aside #side-add-account", "Konto hinzufügen")
+      assert has_element?(view, "aside li.menu-title", ~r/Budget\s*2\.437,51\s€/u)
+      assert has_element?(view, "aside li.menu-title", ~r/Tracking\s*10\.000,00\s€/u)
+      refute has_element?(view, "aside li.menu-title", "Geschlossen")
+      assert has_element?(view, "#side-account-#{c.giro.id}-sidebar", "Girokonto")
+      assert has_element?(view, "#side-account-#{c.giro.id}-sidebar", "💶")
+      assert has_element?(view, "#side-account-#{c.giro.id}-sidebar", "2.450,01 €")
+
+      assert has_element?(
+               view,
+               "#side-account-#{c.cash.id}-sidebar .text-sidebar-negative",
+               "−12,50"
+             )
+
+      assert has_element?(view, "#side-account-#{c.depot.id}-sidebar", "10.000,00 €")
+      refute has_element?(view, "#side-account-#{c.old.id}-sidebar")
+      refute has_element?(view, "#side-account-#{c.giro.id}-rail")
+      refute has_element?(view, "#side-account-#{c.giro.id}-dock")
+      assert has_element?(view, "button#side-add-account-sidebar", "Konto hinzufügen")
+      refute has_element?(view, "#side-add-account-dock")
+
+      for entry <- ~w(budget all-accounts import),
+          do: assert(has_element?(view, "#side-#{entry}-dock"))
+
+      refute has_element?(view, "#side-settings-dock")
+      assert has_element?(view, ~s|nav.dock button[aria-haspopup=dialog]|, "Mehr")
+
+      assert has_element?(
+               view,
+               "aside li.menu-title:has(+ li #side-account-#{c.depot.id}-sidebar) ~ li #side-add-account-sidebar"
+             )
 
       {:ok, settings, _html} = live(c.conn, ~p"/settings/access")
 
-      assert has_element?(
-               settings,
-               ~s|aside a[href="/accounts/#{c.giro.id}"]:not([data-phx-link])|
-             )
+      assert has_element?(settings, "#side-account-#{c.giro.id}-sidebar:not([data-phx-link])")
+    end
+
+    test "on an account's register dock and rail mark Alle Konten", c do
+      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+
+      assert has_element?(view, ~s|#side-account-#{c.giro.id}-sidebar[aria-current="page"]|)
+      assert has_element?(view, ~s|#side-all-accounts-dock[aria-current="true"]|)
+      assert has_element?(view, ~s|#side-all-accounts-rail[aria-current="true"]|)
+      refute has_element?(view, "nav.dock button.dock-active", "Mehr")
     end
   end
 
   test "without accounts the list says so", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/accounts")
 
-    assert has_element?(view, "p", "Noch keine Konten")
+    assert has_element?(view, "main p", "Noch keine Konten")
     assert has_element?(view, "main #add-account", "Konto hinzufügen")
+    refute has_element?(view, "#accounts")
   end
 
   defp submit(view, params), do: view |> form("#account-form", account: params) |> render_submit()
@@ -98,7 +145,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       view |> element("#add-account") |> render_click()
 
       assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
-      assert has_element?(view, "#account-dialog .app-sheet #account_name")
+      assert has_element?(view, "#account-dialog dialog #account_name")
       refute has_element?(view, "#close-account")
       refute has_element?(view, "#reopen-account")
 
@@ -117,7 +164,7 @@ defmodule AbakusWeb.AccountsLiveTest do
     test "opens from the sidebar over any page", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/")
 
-      view |> element("aside #side-add-account") |> render_click()
+      view |> element("#side-add-account-sidebar") |> render_click()
       assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
 
       submit(view, %{name: "Giro", kind: "checking"})
@@ -126,7 +173,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       assert {^path, _flash} = assert_redirect(view)
 
       {:ok, settings, _html} = live(conn, ~p"/settings/access")
-      settings |> element("aside #side-add-account") |> render_click()
+      settings |> element("#side-add-account-sidebar") |> render_click()
       assert has_element?(settings, "#account-dialog h2", "Konto hinzufügen")
     end
 
@@ -134,7 +181,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/accounts")
       view |> element("#add-account") |> render_click()
 
-      assert submit(view, %{name: " "}) =~ "muss ausgefüllt werden"
+      assert submit(view, %{name: " "}) =~ "Muss ausgefüllt werden"
       assert has_element?(view, "#account-dialog")
       assert Ledger.list_accounts() == []
     end
@@ -186,7 +233,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       assert has_element?(view, "#flash-info", "Konto gespeichert")
       assert has_element?(view, "#register-title", "Gemeinschaftskonto")
       assert has_element?(view, "#register-meta", "Für beide")
-      assert has_element?(view, "aside #side-account-#{account.id}", "Gemeinschaftskonto")
+      assert has_element?(view, "#side-account-#{account.id}-sidebar", "Gemeinschaftskonto")
     end
 
     test "keeps the register's view", %{conn: conn} do
@@ -217,9 +264,9 @@ defmodule AbakusWeb.AccountsLiveTest do
       view = open_edit(conn, account)
 
       assert view |> form("#account-form", account: %{name: ""}) |> render_change() =~
-               "muss ausgefüllt werden"
+               "Muss ausgefüllt werden"
 
-      assert submit(view, %{name: ""}) =~ "muss ausgefüllt werden"
+      assert submit(view, %{name: ""}) =~ "Muss ausgefüllt werden"
       assert has_element?(view, "#account-dialog")
       assert Ledger.get_account!(account.id).name == "Giro"
     end
@@ -239,14 +286,14 @@ defmodule AbakusWeb.AccountsLiveTest do
       view = open_edit(conn, account)
 
       refute has_element?(view, "#reopen-account")
-      view |> element("#close-account") |> render_click()
+      confirm_click(view, "#close-account")
 
       assert Ledger.get_account!(account.id).closed
       assert_patch(view, ~p"/accounts/#{account}")
       refute has_element?(view, "#account-dialog")
       assert has_element?(view, "#flash-info", "Konto geschlossen")
       assert has_element?(view, "#register-meta", "Geschlossen")
-      refute has_element?(view, "aside #side-account-#{account.id}")
+      refute has_element?(view, "#side-account-#{account.id}-sidebar")
 
       view |> element("#edit-account") |> render_click()
       assert has_element?(view, "#account-closed", "geschlossen")
@@ -255,7 +302,7 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       refute Ledger.get_account!(account.id).closed
       assert has_element?(view, "#flash-info", "Konto wieder geöffnet")
-      assert has_element?(view, "aside #side-account-#{account.id}")
+      assert has_element?(view, "#side-account-#{account.id}-sidebar")
     end
 
     test "asks first and names a balance that is left", %{conn: conn} do
@@ -264,14 +311,19 @@ defmodule AbakusWeb.AccountsLiveTest do
       transaction_fixture(account_id: full.id, amount: 1_200)
 
       view = open_edit(conn, empty)
-      assert has_element?(view, ~s|#close-account[data-confirm="Konto „Leer“ schließen?"]|)
+
+      assert %{
+               question: "Konto „Leer“ schließen?",
+               text: "Du kannst es später wieder öffnen.",
+               label: "Schließen"
+             } = asked(view, "#close-account")
 
       view = open_edit(conn, full)
 
-      assert has_element?(
-               view,
-               ~s|#close-account[data-confirm="Konto „Voll“ schließen? Es hat noch einen Saldo von 12,00 €."]|
-             )
+      assert %{
+               question: "Konto „Voll“ schließen?",
+               text: "Es hat noch einen Saldo von 12,00 €."
+             } = asked(view, "#close-account")
     end
   end
 end

@@ -34,14 +34,14 @@ defmodule AbakusWeb.ImportLiveTest do
   test "the sidebar and the register lead to the import", %{conn: conn, giro: giro} do
     {:ok, view, _html} = live(conn, ~p"/accounts/#{giro}")
 
-    assert has_element?(view, ~s|aside a[href="/import"]|, "Import & Sync")
-    assert has_element?(view, ~s|header a[href="/import"]|, "Import")
+    assert has_element?(view, "#side-import-sidebar", "Import & Sync")
+    assert has_element?(view, ~s|#app-shell > nav[aria-label=Hauptnavigation] a[href="/import"]|)
     assert has_element?(view, ~s|#file-import[href="/import"]|, "Datei-Import")
 
     {:ok, view, _html} = live(conn, ~p"/import")
 
     assert has_element?(view, "h1", "Import & Sync")
-    assert has_element?(view, ~s|aside a.active[aria-current=page][href="/import"]|)
+    assert has_element?(view, "#side-import-sidebar[aria-current=page]")
     assert has_element?(view, ~s|#import-form input[type=file][accept=".ofx,.qfx"]|)
     refute has_element?(view, "#import-preview")
   end
@@ -60,16 +60,16 @@ defmodule AbakusWeb.ImportLiveTest do
     upload(view, "girokonto_2026-09.ofx")
 
     assert has_element?(view, "#import-preview", "girokonto_2026-09.ofx")
-    assert has_element?(view, "#import-preview", "4 Buchungen · 01.09.2026–28.09.2026")
+    assert has_element?(view, "#import-preview", "4 Buchungen\u2060\u00A0· 01.09.2026–28.09.2026")
     assert has_element?(view, "#statement-0", "DE02100200300000004711")
     assert has_element?(view, "#statement-0", "BLZ 10020030")
-    assert has_element?(view, "#statement-0-balance", "2.423,23 € am 30.09.2026")
+    assert has_element?(view, "#statement-0-balance", "2.423,23 € am 30.09.2026")
     assert has_element?(view, "#statement-0-new", "4 neu")
     assert has_element?(view, "#statement-0-existing", "0 bereits vorhanden")
     assert has_element?(view, "#statement-0 tbody tr", "Bäckerei Korn")
     assert has_element?(view, "#statement-0 tbody tr", "Kartenzahlung")
-    assert has_element?(view, "#statement-0 tbody tr", "−6,40 €")
-    assert has_element?(view, "#statement-0 tbody tr", "+2.500,00 €")
+    assert has_element?(view, "#statement-0 tbody tr", "−6,40 €")
+    assert has_element?(view, "#statement-0 tbody tr", "+2.500,00 €")
 
     # The file's account is unknown, so the preview asks; fed and closed accounts are not offered.
     assert has_element?(view, "#statement-0-account option", "💶 Girokonto")
@@ -104,7 +104,7 @@ defmodule AbakusWeb.ImportLiveTest do
     refute has_element?(view, "#statement-0-account option", "Konto wählen")
     assert has_element?(view, "#statement-0-new", "2 neu")
     assert has_element?(view, "#statement-0-existing", "2 bereits vorhanden")
-    assert has_element?(view, "#statement-0 tbody tr.text-body-secondary", "Stadtbibliothek")
+    assert has_element?(view, "#statement-0 tbody tr[data-status=existing]", "Stadtbibliothek")
     assert has_element?(view, "#statement-0 tbody tr", "Stadtwerke & Co")
 
     {:ok, _register, _html} = import_file(view, conn)
@@ -165,7 +165,7 @@ defmodule AbakusWeb.ImportLiveTest do
     assert has_element?(view, "#statement-0-matched", "1 Zuordnungsvorschlag")
     assert has_element?(view, "#statement-0-reconciled", "1 vor dem letzten Abgleich")
     assert has_element?(view, "#statement-0 tbody tr", "passt zu Buchung vom 05.09.2026 · Bäcker")
-    assert has_element?(view, "#statement-0 tbody tr.text-body-secondary", "vor Abgleich")
+    assert has_element?(view, "#statement-0 tbody tr[data-status=reconciled]", "vor Abgleich")
     assert has_element?(view, "#import-submit", "3 Buchungen importieren")
 
     {:ok, register, _html} = import_file(view, conn)
@@ -213,9 +213,9 @@ defmodule AbakusWeb.ImportLiveTest do
     {:ok, view, _html} = live(conn, ~p"/import")
     upload(view, "zwei_konten.ofx")
 
-    assert has_element?(view, "#import-preview", "2 Buchungen · 02.10.2026–05.10.2026")
+    assert has_element?(view, "#import-preview", "2 Buchungen\u2060\u00A0· 02.10.2026–05.10.2026")
     assert has_element?(view, "#statement-0", "DE02100200300000005811")
-    assert has_element?(view, "#statement-0-balance", "1.180,60 € am 08.10.2026")
+    assert has_element?(view, "#statement-0-balance", "1.180,60 € am 08.10.2026")
     assert has_element?(view, "#statement-1", "DE02100200300000005822")
     refute has_element?(view, "#statement-1-balance")
 

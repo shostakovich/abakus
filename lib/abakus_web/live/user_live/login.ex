@@ -12,24 +12,25 @@ defmodule AbakusWeb.UserLive.Login do
     ~H"""
     <Layouts.auth flash={@flash}>
       <.card title="Anmelden">
-        <p :if={@current_scope} class="text-body-secondary">
+        <p :if={@current_scope} class="text-sm text-base-content/70">
           Für Änderungen an deiner Anmeldung meldest du dich bitte noch einmal an.
         </p>
 
-        <button
-          type="button"
+        <.button
           id="passkey-login"
-          class="btn btn-primary w-100"
+          variant={:primary}
+          icon="key-round"
+          class="mt-2 w-full"
           phx-hook="PasskeyLogin"
           data-form="passkey-form"
         >
           Mit Passkey anmelden
-        </button>
+        </.button>
         <.form for={%{}} as={:passkey} id="passkey-form" action={~p"/users/log-in"}></.form>
 
-        <hr class="my-4" />
+        <div class="divider my-4 text-sm text-base-content/70">oder</div>
 
-        <p class="small text-body-secondary">
+        <p class="text-sm text-base-content/70">
           Neues Gerät oder kein Passkey zur Hand? Wir schicken dir einen Anmeldelink.
         </p>
         <.form for={@form} id="login-form" phx-submit="send_link">
@@ -42,13 +43,13 @@ defmodule AbakusWeb.UserLive.Login do
             spellcheck="false"
             required
           />
-          <.button variant="outline-primary" class="w-100" phx-disable-with="Wird gesendet …">
+          <.button type="submit" class="mt-2 w-full" phx-disable-with="Wird gesendet …">
             Anmeldelink senden
           </.button>
         </.form>
 
-        <p :if={local_mail_adapter?()} class="small text-body-secondary mt-3 mb-0">
-          Entwicklung: Mails landen im <.link href="/dev/mailbox">Postfach</.link>.
+        <p :if={local_mail_adapter?()} class="mt-4 text-sm text-base-content/70">
+          Entwicklung: Mails landen im <.link href="/dev/mailbox" class="link">Postfach</.link>.
         </p>
       </.card>
     </Layouts.auth>

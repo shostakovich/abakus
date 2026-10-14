@@ -12,14 +12,16 @@ defmodule AbakusWeb.ErrorHTMLTest do
         {"503", "Fehler 503"}
       ] do
     test "renders #{status}.html in German" do
-      html = render_to_string(AbakusWeb.ErrorHTML, unquote(status), "html", [])
+      html = render_to_string(AbakusWeb.ErrorHTML, unquote(status), "html", csp_nonce: "n0nce")
 
       assert html =~ ~s(lang="de")
       assert html =~ "<title>#{unquote(message)} · Abakus</title>"
-      assert html =~ "<h1>#{unquote(message)}</h1>"
-      assert html =~ ~s(<a href="/">Zur Startseite</a>)
+      assert html =~ ~r{<h1[^>]*>#{unquote(message)}</h1>}
+      assert html =~ ~r{<a href="/"[^>]*>Zur Startseite</a>}
+      assert html =~ ~s(<link rel="stylesheet" href="/assets/css/app.css")
       refute html =~ "style="
-      refute html =~ "<script"
+      assert [_theme] = Regex.scan(~r/<script/, html)
+      assert html =~ ~r/<script[^>]* nonce="n0nce"/
     end
   end
 end

@@ -24,6 +24,8 @@ defmodule AbakusWeb.Endpoint do
     websocket: [connect_info: [session: @session_options]],
     longpoll: [connect_info: [session: @session_options]]
 
+  @fonts Plug.Static.init(at: "/setzkasten", from: {:setzkasten, "priv/static"}, only: ~w(fonts))
+
   @static Plug.Static.init(
             at: "/",
             from: :abakus,
@@ -32,6 +34,7 @@ defmodule AbakusWeb.Endpoint do
             raise_on_missing_only: code_reloading?
           )
 
+  plug :serve_fonts
   plug :serve_static
 
   if code_reloading? do
@@ -71,6 +74,7 @@ defmodule AbakusWeb.Endpoint do
 
   # Errors of these plugs are wrapped like the router's, so the error page keeps the headers set
   # above.
+  defp serve_fonts(conn, _opts), do: keep_headers_on_error(conn, Plug.Static, @fonts)
   defp serve_static(conn, _opts), do: keep_headers_on_error(conn, Plug.Static, @static)
   defp parse_body(conn, _opts), do: keep_headers_on_error(conn, Plug.Parsers, @parsers)
 

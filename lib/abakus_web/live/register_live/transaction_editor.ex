@@ -1,13 +1,14 @@
 defmodule AbakusWeb.RegisterLive.TransactionEditor do
   @moduledoc """
   Edits a transaction as YNAB does, for a new one and an existing one alike. On desktops (`layout: :row`) it
-  replaces the transaction's rows in the register: inputs in every column, a split's subtransactions as rows
-  below, Cancel and Save (Approve for one waiting for approval) underneath; its root is a `<tbody>` and its inputs
-  belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet from the bottom with the
-  amount first. The form's state is `AbakusWeb.TransactionForm` params.
+  replaces the transaction's rows in the register on one line: inputs in every column, Cancel and Save (Approve for
+  one waiting for approval) where approve and C stand, Enter saves and Escape cancels; a split's subtransactions as
+  rows below, each with a payee field only where it differs from the transaction's. Its root is a `<tbody>`, the
+  inputs outside the first row belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet
+  from the bottom with the amount first. The form's state is `AbakusWeb.TransactionForm` params.
 
-  Payee and category are comboboxes (the `Combobox` hook) whose options come once from a `<template>`; a pick
-  arrives as the event `pick`. Transfers are picked as payees, the other open accounts above the payees, in a
+  Payee and category are Setzkasten comboboxes; a choice arrives as a change of `payee_pick` (with `payee_new` for
+  a payee typed anew) or `category_pick`, "Aufteilen" among the categories splits the transaction. Transfers are picked as payees, the other open accounts above the payees, in a
   split's subtransactions too. A payee suggests its last category, and a suggestion goes again when the payee
   changes; a chosen category stays. A transfer between a budget and a tracking account takes a category and
   suggests the one last used between the two. Changing or deleting a reconciled transaction, or one whose
@@ -21,7 +22,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   alias Abakus.{Categories, Ledger, Names}
   alias Abakus.Ledger.{Account, Transaction}
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format, TransactionForm}
-  alias AbakusWeb.RegisterLive.Components
 
   @main "main"
 
@@ -42,184 +42,188 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @impl true
   def render(%{layout: :sheet} = assigns) do
-    assigns = assign(assigns, :subtransactions, TransactionForm.subtransactions(assigns.params))
+    assigns =
+      assigns
+      |> assign(:subtransactions, TransactionForm.subtransactions(assigns.params))
+      |> assign_options()
 
     ~H"""
     <div id={@id}>
-      <div class="modal-backdrop show"></div>
-      <div
-        class="modal d-block app-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="tx-title"
-        phx-window-keydown="cancel_edit"
-        phx-key="Escape"
+      <.modal
+        id="tx-sheet"
+        show
+        title={if @transaction, do: "Buchung bearbeiten", else: "Neue Buchung"}
+        on_cancel={JS.push("cancel_edit")}
+        class="app-sheet"
       >
-        <div class="modal-dialog modal-dialog-scrollable app-sheet">
-          <.form
-            for={%{}}
-            id="tx-form"
-            class="modal-content"
-            phx-change="change"
-            phx-submit="save"
-            phx-target={@myself}
-            phx-mounted={is_nil(@transaction) && JS.focus(to: "#tx-amount")}
-          >
-            <div class="modal-header">
-              <h2 class="modal-title h5" id="tx-title">
-                {if @transaction, do: "Buchung bearbeiten", else: "Neue Buchung"}
-              </h2>
-              <button type="button" class="btn-close" aria-label="Schließen" phx-click="cancel_edit"></button>
-            </div>
-            <div class="modal-body">
-              <.notes
-                split_of={@split_of}
-                transaction={@transaction}
-                accounts={@accounts}
-                error={@error}
-              />
-              <div class="mb-3">
-                <label class="form-label" for="tx-amount">Betrag</label>
-                <div class="input-group">
-                  <button
-                    id="tx-sign"
-                    type="button"
-                    class={["btn btn-outline-secondary app-sign", sign_class(@params["sign"])]}
-                    aria-label={sign_label(@params["sign"])}
-                    title={sign_label(@params["sign"])}
-                    phx-click="toggle_sign"
-                    phx-target={@myself}
-                  >
-                    {if @params["sign"] == "+", do: "+", else: "−"}
-                  </button>
-                  <.directed_amount
-                    id="tx-amount"
-                    name="transaction"
-                    side={@params}
-                    sign={@params["sign"]}
-                    class="form-control text-end app-q app-tx-amount-input"
-                  />
-                  <span class="input-group-text">€</span>
-                </div>
-              </div>
-              <div class="mb-3">
-                <label class="form-label" for="tx-payee">Empfänger</label>
-                <.payee_combo id="tx-payee" name="transaction" side={@main} {combo_assigns(assigns)} />
-              </div>
-              <div class="mb-3">
-                <label class="form-label" for="tx-category">Kategorie</label>
-                <.category_cell id="tx-category" side={@main} {combo_assigns(assigns)} />
-              </div>
-              <div :if={@params["split"] == "true"} class="mb-3">
-                <div
-                  :for={{index, sub} <- @subtransactions}
-                  id={"tx-sub-#{index}"}
-                  class="border rounded p-2 mb-2"
-                >
-                  <div class="d-flex gap-2 mb-2">
-                    <div class="flex-grow-1 app-min-w-0">
-                      <.payee_combo
-                        id={"tx-sub-#{index}-payee"}
-                        name={sub_name(index)}
-                        side={index}
-                        {combo_assigns(assigns)}
-                      />
-                    </div>
-                    <.remove_button index={index} target={@myself} />
-                  </div>
-                  <div class="mb-2">
-                    <.category_cell
-                      id={"tx-sub-#{index}-category"}
-                      side={index}
-                      {combo_assigns(assigns)}
-                    />
-                  </div>
-                  <div class="d-flex gap-2">
-                    <input
-                      id={"tx-sub-#{index}-memo"}
-                      name={sub_name(index, "memo")}
-                      value={sub["memo"]}
-                      class="form-control form-control-sm"
-                      placeholder="Memo"
-                      autocomplete="off"
-                      phx-debounce="300"
-                    />
-                    <div class="input-group input-group-sm app-tx-sub-amount">
-                      <.directed_amount
-                        id={"tx-sub-#{index}-amount"}
-                        name={sub_name(index)}
-                        side={sub}
-                        sign={@params["sign"]}
-                        class="form-control text-end app-q"
-                      />
-                      <span class="input-group-text">€</span>
-                    </div>
-                  </div>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                  <.add_button target={@myself} />
-                  <span id="tx-remainder" class="small ms-auto app-q">
-                    <.remainder amount={directed_remainder(@params)} />
-                  </span>
-                </div>
-              </div>
-              <div class="row g-3">
-                <div class="col-6">
-                  <label class="form-label" for="tx-date">Datum</label>
-                  <.date_input value={@params["date"]} />
-                </div>
-                <div :if={@columns.all} class="col-6">
-                  <label class="form-label" for="tx-account">Konto</label>
-                  <.account_select options={account_options(assigns)} value={@params["account_id"]} />
-                </div>
-                <div class="col-12">
-                  <label class="form-label" for="tx-memo">
-                    Memo <span class="text-body-secondary">(optional)</span>
-                  </label>
-                  <input
-                    id="tx-memo"
-                    name="transaction[memo]"
-                    value={@params["memo"]}
-                    class="form-control"
-                    autocomplete="off"
-                    phx-debounce="300"
-                  />
-                </div>
-              </div>
-              <.templates {combo_assigns(assigns)} />
-            </div>
-            <div class="modal-footer">
-              <button
-                :if={@transaction}
-                id="tx-delete"
-                type="button"
-                class="btn btn-outline-danger me-auto"
-                phx-click="delete"
+        <.form
+          for={%{}}
+          id="tx-form"
+          class="flex flex-col gap-1 pt-2"
+          phx-change="change"
+          phx-submit="save"
+          phx-target={@myself}
+          phx-mounted={is_nil(@transaction) && JS.focus(to: "#tx-amount")}
+        >
+          <.notes
+            split_of={@split_of}
+            transaction={@transaction}
+            accounts={@accounts}
+            error={@error}
+            sheet
+          />
+          <fieldset class="fieldset min-w-0">
+            <label class="fieldset-legend" for="tx-amount">Betrag</label>
+            <div class="join w-full">
+              <.button
+                id="tx-sign"
+                class={["join-item app-sign", sign_class(@params["sign"])]}
+                aria-label={sign_label(@params["sign"])}
+                title={sign_label(@params["sign"])}
+                phx-click="toggle_sign"
                 phx-target={@myself}
-                phx-value-reconciled={@locked && "confirmed"}
-                data-confirm={
-                  if @locked,
-                    do: "Diese Buchung ist abgeschlossen. Trotzdem löschen?",
-                    else: "Buchung löschen?"
-                }
               >
-                Löschen
-              </button>
-              <.save_buttons transaction={@transaction} locked={@locked} sheet />
+                {if @params["sign"] == "+", do: "+", else: "−"}
+              </.button>
+              <label class="input join-item w-full">
+                <.directed_amount
+                  id="tx-amount"
+                  name="transaction"
+                  side={@params}
+                  sign={@params["sign"]}
+                  class="text-end tabular-nums app-tx-amount-input"
+                />
+                <span class="label">€</span>
+              </label>
             </div>
-          </.form>
-        </div>
-      </div>
+          </fieldset>
+          <.payee_combo id="tx-payee" side={@main} label {combo_assigns(assigns)} />
+          <.category_cell id="tx-category" side={@main} label {combo_assigns(assigns)} />
+          <div :if={@params["split"] == "true"} class="flex flex-col gap-2 py-2">
+            <div
+              :for={{index, sub} <- @subtransactions}
+              id={"tx-sub-#{index}"}
+              class="flex flex-col gap-2 rounded-box border border-base-content/10 p-3"
+            >
+              <div class="flex items-center gap-2">
+                <div class="min-w-0 grow">
+                  <.payee_combo
+                    :if={own_payee?(@params, index, @payee_shown)}
+                    id={"tx-sub-#{index}-payee"}
+                    side={index}
+                    small
+                    {combo_assigns(assigns)}
+                  />
+                  <.change_payee
+                    :if={!own_payee?(@params, index, @payee_shown)}
+                    index={index}
+                    target={@myself}
+                  />
+                </div>
+                <.remove_button index={index} target={@myself} />
+              </div>
+              <.category_cell id={"tx-sub-#{index}-category"} side={index} {combo_assigns(assigns)} />
+              <div class="flex gap-2">
+                <input
+                  id={"tx-sub-#{index}-memo"}
+                  form="tx-form"
+                  name={sub_name(index, "memo")}
+                  value={sub["memo"]}
+                  class="input min-w-0 grow"
+                  placeholder="Memo"
+                  aria-label="Memo"
+                  autocomplete="off"
+                  phx-debounce="300"
+                />
+                <label class="input w-36 shrink-0">
+                  <.directed_amount
+                    id={"tx-sub-#{index}-amount"}
+                    name={sub_name(index)}
+                    side={sub}
+                    sign={@params["sign"]}
+                    class="text-end tabular-nums"
+                  />
+                  <span class="label">€</span>
+                </label>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <.add_button target={@myself} />
+              <span id="tx-remainder" class="ml-auto text-sm tabular-nums">
+                <.remainder amount={directed_remainder(@params)} />
+              </span>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-x-4">
+            <.input
+              id="tx-date"
+              type="date"
+              form="tx-form"
+              name="transaction[date]"
+              value={@params["date"]}
+              label="Datum"
+              required
+            />
+            <.input
+              :if={@columns.all}
+              id="tx-account"
+              type="select"
+              form="tx-form"
+              name="transaction[account_id]"
+              value={@params["account_id"]}
+              options={account_options(assigns)}
+              label="Konto"
+            />
+          </div>
+          <.input
+            id="tx-memo"
+            form="tx-form"
+            name="transaction[memo]"
+            value={@params["memo"]}
+            label="Memo (optional)"
+            autocomplete="off"
+            phx-debounce="300"
+          />
+          <div :if={@transaction} class="mt-3 border-t border-base-content/10 pt-3">
+            <.button
+              id="tx-delete"
+              variant={:ghost}
+              icon="trash-2"
+              class="-ms-4 text-error-ink"
+              confirm={
+                if @locked,
+                  do: "Diese Buchung ist abgeschlossen. Trotzdem löschen?",
+                  else: "Buchung löschen?"
+              }
+              phx-click="delete"
+              phx-target={@myself}
+              {if @locked, do: ["phx-value-reconciled": "confirmed"], else: []}
+            >
+              Buchung löschen
+            </.button>
+          </div>
+          <.option_lists payee_options={@payee_options} category_options={@category_options} />
+          <.action_bar sticky>
+            <.save_buttons
+              transaction={@transaction}
+              locked={@locked}
+              cancel={hide_modal("tx-sheet")}
+            />
+          </.action_bar>
+        </.form>
+      </.modal>
     </div>
     """
   end
 
   def render(assigns) do
     assigns =
-      assign(assigns,
+      assigns
+      |> assign(
         subtransactions: TransactionForm.subtransactions(assigns.params),
         remainder: TransactionForm.remainder(assigns.params)
       )
+      |> assign_options()
 
     ~H"""
     <tbody
@@ -227,150 +231,140 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       class="app-edit"
       phx-hook="EditRow"
       data-focus={@focus}
-      phx-window-keydown="cancel_edit"
-      phx-key="Escape"
     >
-      <tr class="app-edit-main">
-        <td class="app-pick">
-          <input type="checkbox" class="form-check-input" checked={!!@transaction} disabled />
-        </td>
-        <td class="app-flag-col"></td>
-        <td class="app-edit-date"><.date_input value={@params["date"]} small /></td>
-        <td :if={@columns.all} class="app-konto">
-          <.account_select options={account_options(assigns)} value={@params["account_id"]} small />
-        </td>
-        <td class="app-payee">
-          <.payee_combo id="tx-payee" name="transaction" side={@main} small {combo_assigns(assigns)} />
-          <.category_below id="tx-category" side={@main} columns={@columns} {combo_assigns(assigns)} />
-        </td>
-        <td :if={@columns.category} class="app-catcol">
-          <.category_cell id="tx-category" side={@main} small {combo_assigns(assigns)} />
-        </td>
-        <td class="app-memo-col">
-          <input
-            id="tx-memo"
-            form="tx-form"
-            name="transaction[memo]"
-            value={@params["memo"]}
-            class="form-control form-control-sm"
-            placeholder="Memo"
-            autocomplete="off"
-            size="1"
-            phx-debounce="300"
-          />
-        </td>
-        <td class="app-out">
-          <.amount_input
-            id="tx-outflow"
-            name="transaction[outflow]"
-            value={@params["outflow"]}
-            placeholder="Ausgang"
-          />
-        </td>
-        <td class="app-in">
-          <.amount_input
-            id="tx-inflow"
-            name="transaction[inflow]"
-            value={@params["inflow"]}
-            placeholder="Eingang"
-          />
-        </td>
-        <td :if={@columns.running}></td>
-        <td class="app-c-col"></td>
-      </tr>
-      <tr :for={{index, sub} <- @subtransactions} id={"tx-sub-#{index}"} class="app-edit-sub">
-        <td></td>
-        <td></td>
-        <td class="text-end">
-          <.remove_button index={index} target={@myself} />
-        </td>
-        <td :if={@columns.all}></td>
-        <td class="app-payee">
-          <.payee_combo
-            id={"tx-sub-#{index}-payee"}
-            name={sub_name(index)}
-            side={index}
-            small
-            {combo_assigns(assigns)}
-          />
-          <.category_below
-            id={"tx-sub-#{index}-category"}
-            side={index}
-            columns={@columns}
-            {combo_assigns(assigns)}
-          />
-        </td>
-        <td :if={@columns.category} class="app-catcol">
-          <.category_cell id={"tx-sub-#{index}-category"} side={index} small {combo_assigns(assigns)} />
-        </td>
-        <td class="app-memo-col">
-          <input
-            id={"tx-sub-#{index}-memo"}
-            form="tx-form"
-            name={sub_name(index, "memo")}
-            value={sub["memo"]}
-            class="form-control form-control-sm"
-            placeholder="Memo"
-            autocomplete="off"
-            size="1"
-            phx-debounce="300"
-          />
-        </td>
-        <td class="app-out">
-          <.amount_input
-            id={"tx-sub-#{index}-outflow"}
-            name={sub_name(index, "outflow")}
-            value={sub["outflow"]}
-            placeholder="Ausgang"
-          />
-        </td>
-        <td class="app-in">
-          <.amount_input
-            id={"tx-sub-#{index}-inflow"}
-            name={sub_name(index, "inflow")}
-            value={sub["inflow"]}
-            placeholder="Eingang"
-          />
-        </td>
-        <td :if={@columns.running}></td>
-        <td></td>
-      </tr>
-      <tr :if={@params["split"] == "true"} class="app-edit-rest">
-        <td colspan={3 + if(@columns.all, do: 1, else: 0)}></td>
-        <td><.add_button target={@myself} /></td>
-        <td :if={@columns.category}></td>
-        <td class="text-end small text-body-secondary">Noch aufzuteilen</td>
-        <td
-          id="tx-remainder-out"
-          class={["text-end app-q", remainder_class(@remainder && -@remainder)]}
-        >
-          {@remainder && Format.amount(max(-@remainder, 0))}
-        </td>
-        <td id="tx-remainder-in" class={["text-end app-q", remainder_class(@remainder)]}>
-          {@remainder && Format.amount(max(@remainder, 0))}
-        </td>
-        <td :if={@columns.running}></td>
-        <td></td>
-      </tr>
-      <tr class="app-edit-actions">
+      <tr class="app-edit-main" aria-current="true">
         <td colspan={@columns.count}>
           <.form
             for={%{}}
             id="tx-form"
-            class="d-flex flex-wrap align-items-center justify-content-end gap-2"
+            class="app-edit-grid"
             phx-change="change"
             phx-submit="save"
             phx-target={@myself}
           >
-            <.notes
-              split_of={@split_of}
-              transaction={@transaction}
-              accounts={@accounts}
-              error={@error}
-            />
-            <.templates {combo_assigns(assigns)} />
-            <.save_buttons transaction={@transaction} locked={@locked} small />
+            <div class="app-edit-date"><.date_input value={@params["date"]} /></div>
+            <div :if={@columns.all} class="app-konto">
+              <.account_select options={account_options(assigns)} value={@params["account_id"]} />
+            </div>
+            <div class="app-payee">
+              <.payee_combo id="tx-payee" side={@main} small {combo_assigns(assigns)} />
+              <.category_below
+                id="tx-category"
+                side={@main}
+                columns={@columns}
+                {combo_assigns(assigns)}
+              />
+            </div>
+            <div :if={@columns.category} class="app-catcol">
+              <.category_cell id="tx-category" side={@main} small {combo_assigns(assigns)} />
+            </div>
+            <div class="app-memo-col">
+              <.memo_input id="tx-memo" name="transaction[memo]" value={@params["memo"]} />
+            </div>
+            <div class="app-out">
+              <.amount_input
+                id="tx-outflow"
+                name="transaction[outflow]"
+                value={@params["outflow"]}
+                placeholder="Ausgang"
+              />
+            </div>
+            <div class="app-in">
+              <.amount_input
+                id="tx-inflow"
+                name="transaction[inflow]"
+                value={@params["inflow"]}
+                placeholder="Eingang"
+              />
+            </div>
+            <div class="app-edit-buttons">
+              <.save_buttons transaction={@transaction} locked={@locked} cancel="cancel_edit" small />
+            </div>
+            <.option_lists payee_options={@payee_options} category_options={@category_options} />
           </.form>
+        </td>
+      </tr>
+      <tr :for={{index, sub} <- @subtransactions} id={"tx-sub-#{index}"}>
+        <td colspan={@columns.count}>
+          <div class="app-edit-grid">
+            <div class="app-edit-date text-end">
+              <.remove_button index={index} target={@myself} />
+            </div>
+            <div class="app-payee">
+              <.payee_combo
+                :if={own_payee?(@params, index, @payee_shown)}
+                id={"tx-sub-#{index}-payee"}
+                side={index}
+                small
+                {combo_assigns(assigns)}
+              />
+              <.change_payee
+                :if={!own_payee?(@params, index, @payee_shown)}
+                index={index}
+                target={@myself}
+              />
+              <.category_below
+                id={"tx-sub-#{index}-category"}
+                side={index}
+                columns={@columns}
+                {combo_assigns(assigns)}
+              />
+            </div>
+            <div :if={@columns.category} class="app-catcol">
+              <.category_cell
+                id={"tx-sub-#{index}-category"}
+                side={index}
+                small
+                {combo_assigns(assigns)}
+              />
+            </div>
+            <div class="app-memo-col">
+              <.memo_input
+                id={"tx-sub-#{index}-memo"}
+                name={sub_name(index, "memo")}
+                value={sub["memo"]}
+                class="app-borderless"
+              />
+            </div>
+            <div class="app-out">
+              <.amount_input
+                id={"tx-sub-#{index}-outflow"}
+                name={sub_name(index, "outflow")}
+                value={sub["outflow"]}
+                placeholder="Ausgang"
+              />
+            </div>
+            <div class="app-in">
+              <.amount_input
+                id={"tx-sub-#{index}-inflow"}
+                name={sub_name(index, "inflow")}
+                value={sub["inflow"]}
+                placeholder="Eingang"
+              />
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr :if={@params["split"] == "true"}>
+        <td colspan={@columns.count}>
+          <div class="app-edit-grid">
+            <div class="app-payee"><.add_button target={@myself} /></div>
+            <div class="app-edit-remainder-label text-end text-base-content/70">Noch aufzuteilen</div>
+            <div
+              id="tx-remainder-out"
+              class={["app-out text-end", remainder_class(@remainder && -@remainder)]}
+            >
+              {@remainder && Format.amount(max(-@remainder, 0))}
+            </div>
+            <div id="tx-remainder-in" class={["app-in text-end", remainder_class(@remainder)]}>
+              {@remainder && Format.amount(max(@remainder, 0))}
+            </div>
+          </div>
+        </td>
+      </tr>
+      <tr :if={@split_of || @error} class="app-edit-notes">
+        <td colspan={@columns.count}>
+          <.notes split_of={@split_of} transaction={@transaction} accounts={@accounts} error={@error} />
         </td>
       </tr>
     </tbody>
@@ -381,56 +375,85 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :transaction, :any, required: true
   attr :accounts, :map, required: true
   attr :error, :string, default: nil
+  attr :sheet, :boolean, default: false
 
   defp notes(assigns) do
     ~H"""
-    <div :if={@split_of} id="tx-split-of" class="small text-body-secondary me-auto">
+    <p :if={@split_of} id="tx-split-of" class="mr-auto text-sm text-base-content/70">
       Teil einer Aufteilung in {@accounts[@transaction.account_id].name}; hier steht die ganze Aufteilung.
-    </div>
-    <div
-      :if={@error}
+    </p>
+    <.alert :if={@error && @sheet} id="tx-error" tone={:error}>{@error}</.alert>
+    <p
+      :if={@error && !@sheet}
       id="tx-error"
-      class="alert alert-danger py-1 px-2 mb-0 small me-auto"
+      class="mr-auto flex items-center gap-1 text-sm text-error-ink"
       role="alert"
     >
-      {@error}
-    </div>
+      <.icon name="circle-alert" class="shrink-0" />{@error}
+    </p>
     """
   end
 
   attr :transaction, :any, required: true
   attr :locked, :boolean, required: true
+  attr :cancel, :any, required: true, doc: "what Abbrechen does"
   attr :small, :boolean, default: false
 
-  attr :sheet, :boolean,
-    default: false,
-    doc: "phones close the sheet with the ×, three buttons do not fit"
+  defp save_buttons(%{small: true} = assigns) do
+    assigns = assign(assigns, :save_label, save_label(assigns.transaction))
+
+    ~H"""
+    <input :if={@locked} type="hidden" name="reconciled" value="confirmed" />
+    <.tooltip id="tx-cancel-tip" text="Abbrechen (Esc)" placement={:left}>
+      <.button
+        id="tx-cancel"
+        variant={:ghost}
+        size={:sm}
+        icon="x"
+        icon_only
+        label="Abbrechen"
+        phx-click={@cancel}
+      />
+    </.tooltip>
+    <.tooltip id="tx-save-tip" text={"#{@save_label} (Enter)"} placement={:left}>
+      <.button
+        id="tx-save"
+        type="submit"
+        variant={:primary}
+        size={:sm}
+        icon="check"
+        icon_only
+        label={@save_label}
+        confirm={if @locked, do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"}
+        confirm_text="Der abgeglichene Saldo kann sich dadurch ändern."
+        confirm_label="Ändern"
+      />
+    </.tooltip>
+    """
+  end
 
   defp save_buttons(assigns) do
     ~H"""
     <input :if={@locked} type="hidden" name="reconciled" value="confirmed" />
-    <button
-      id="tx-cancel"
-      type="button"
-      class={["btn btn-light", @small && "btn-sm", @sheet && "d-none d-sm-inline-block"]}
-      phx-click="cancel_edit"
-    >
-      Abbrechen
-    </button>
-    <button
+    <.button id="tx-cancel" phx-click={@cancel}>Abbrechen</.button>
+    <.button
       id="tx-save"
       type="submit"
-      class={["btn btn-primary", @small && "btn-sm"]}
+      variant={:primary}
       phx-disable-with="Speichern …"
-      data-confirm={@locked && "Diese Buchung ist abgeschlossen. Trotzdem ändern?"}
+      confirm={if @locked, do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"}
+      confirm_text="Der abgeglichene Saldo kann sich dadurch ändern."
+      confirm_label="Ändern"
     >
-      {if @transaction && !@transaction.approved, do: "Bestätigen", else: "Speichern"}
-    </button>
+      {save_label(@transaction)}
+    </.button>
     """
   end
 
+  defp save_label(%Transaction{approved: false}), do: "Bestätigen"
+  defp save_label(_transaction), do: "Speichern"
+
   attr :value, :string, required: true
-  attr :small, :boolean, default: false
 
   defp date_input(assigns) do
     ~H"""
@@ -440,16 +463,37 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       form="tx-form"
       name="transaction[date]"
       value={@value}
-      class={["form-control", @small && "form-control-sm"]}
+      class="input input-sm"
       aria-label="Datum"
       required
     />
     """
   end
 
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :value, :string, required: true
+  attr :class, :string, default: nil
+
+  defp memo_input(assigns) do
+    ~H"""
+    <input
+      id={@id}
+      form="tx-form"
+      name={@name}
+      value={@value}
+      class={["input input-sm", @class]}
+      placeholder="Memo"
+      aria-label="Memo"
+      autocomplete="off"
+      size="1"
+      phx-debounce="300"
+    />
+    """
+  end
+
   attr :options, :list, required: true
   attr :value, :string, required: true
-  attr :small, :boolean, default: false
 
   defp account_select(assigns) do
     ~H"""
@@ -457,7 +501,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       id="tx-account"
       form="tx-form"
       name="transaction[account_id]"
-      class={["form-select", @small && "form-select-sm"]}
+      class="select select-sm"
       aria-label="Konto"
     >
       {Phoenix.HTML.Form.options_for_select(@options, @value)}
@@ -477,7 +521,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       form="tx-form"
       name={@name}
       value={@value}
-      class="form-control form-control-sm text-end app-q"
+      class="input input-sm text-end tabular-nums"
       inputmode="decimal"
       placeholder={@placeholder}
       aria-label={@placeholder}
@@ -523,34 +567,62 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   defp remove_button(assigns) do
     ~H"""
-    <button
+    <.button
       id={"tx-sub-#{@index}-remove"}
-      type="button"
-      class="btn btn-sm btn-link text-body-secondary p-0 app-sub-remove"
-      aria-label="Teil entfernen"
+      variant={:ghost}
+      size={:sm}
+      icon="x"
+      icon_only
+      label="Teil entfernen"
       title="Teil entfernen"
       phx-click="remove_subtransaction"
       phx-value-index={@index}
       phx-target={@target}
-    >
-      −
-    </button>
+    />
     """
+  end
+
+  attr :index, :string, required: true
+  attr :target, :any, required: true
+
+  defp change_payee(assigns) do
+    ~H"""
+    <.button
+      id={"tx-sub-#{@index}-change-payee"}
+      variant={:ghost}
+      size={:sm}
+      class="font-normal text-base-content/70"
+      phx-click="show_sub_payee"
+      phx-value-index={@index}
+      phx-target={@target}
+    >
+      Empfänger ändern
+    </.button>
+    """
+  end
+
+  # A part has a payee field of its own only where it differs from the transaction's, or once asked for.
+  defp own_payee?(params, index, shown) do
+    part = TransactionForm.side(params, index)
+
+    index in shown or TransactionForm.transfer?(part) or
+      part["payee"] not in [nil, "", params["payee"]]
   end
 
   attr :target, :any, required: true
 
   defp add_button(assigns) do
     ~H"""
-    <button
+    <.button
       id="tx-add-sub"
-      type="button"
-      class="btn btn-sm btn-link text-decoration-none text-start p-0 d-inline-flex align-items-center gap-1"
+      variant={:ghost}
+      size={:sm}
+      icon="plus"
       phx-click="add_subtransaction"
       phx-target={@target}
     >
-      <.icon name="plus" class="app-icon-sm" /> Teil hinzufügen
-    </button>
+      Teil hinzufügen
+    </.button>
     """
   end
 
@@ -561,68 +633,104 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     <%= cond do %>
       <% is_nil(@amount) -> %>
       <% @amount == 0 -> %>
-        <span class="text-success">Aufteilung stimmt</span>
+        <span class="text-success-ink">Aufteilung stimmt</span>
       <% true -> %>
-        Noch aufzuteilen: <strong class={@amount < 0 && "app-neg"}>{Format.euros(@amount)}</strong>
+        Noch aufzuteilen:
+        <.amount value={@amount} class={["font-semibold", @amount < 0 && "text-error-ink"]} />
     <% end %>
     """
   end
 
-  # What the comboboxes of a side need.
   defp combo_assigns(assigns) do
-    Map.take(assigns, [:params, :accounts, :categories, :payees, :myself])
+    Map.take(assigns, [:params, :accounts, :categories, :payee_options, :category_options])
+  end
+
+  # The comboboxes' options, the same for every side: transfers to the other open accounts above the payees.
+  defp assign_options(assigns) do
+    transfers =
+      for account <- transfer_options(assigns.params, assigns.accounts),
+          do: %{label: TransactionForm.transfer_label(account), value: "a:#{account.id}"}
+
+    payees = for payee <- assigns.payees, do: %{label: payee.name, value: "p:#{payee.name}"}
+
+    categories =
+      for group <- assigns.categories do
+        {group.name,
+         for(
+           option <- group.options,
+           do: %{
+             label: option.text,
+             value: option.id,
+             name: option.name,
+             available: option.available
+           }
+         )}
+      end
+
+    assign(assigns,
+      payee_options:
+        if(transfers == [], do: [], else: [{"Umbuchungen", transfers}]) ++
+          [{"Empfänger", payees}],
+      category_options: categories
+    )
   end
 
   attr :id, :string, required: true
-  attr :name, :string, required: true
   attr :side, :string, required: true
   attr :params, :map, required: true
   attr :accounts, :map, required: true
+  attr :payee_options, :list, required: true
+  attr :label, :boolean, default: false
   attr :small, :boolean, default: false
 
   defp payee_combo(assigns) do
     side = TransactionForm.side(assigns.params, assigns.side)
-    transfer = assigns.accounts[TransactionForm.to_id(side["transfer_account_id"])]
+    prefix = side_name(assigns.side)
+
+    {value, created} =
+      cond do
+        TransactionForm.transfer?(side) ->
+          {"a:#{side["transfer_account_id"]}", ""}
+
+        Enum.any?(assigns.payee_options, fn {_group, options} ->
+          Enum.any?(options, &(&1.value == "p:#{side["payee"]}"))
+        end) ->
+          {"p:#{side["payee"]}", ""}
+
+        true ->
+          {"", side["payee"] || ""}
+      end
 
     assigns =
       assign(assigns,
-        values: side,
-        text: if(transfer, do: TransactionForm.transfer_label(transfer), else: side["payee"])
+        name: "#{prefix}[payee_pick]",
+        value: value,
+        created: %Phoenix.HTML.FormField{
+          id: "#{assigns.id}-new",
+          name: "#{prefix}[payee_new]",
+          value: created,
+          errors: [],
+          field: :payee_new,
+          form: nil
+        }
       )
 
     ~H"""
-    <div
-      id={"#{@id}-combo"}
-      class="app-combo"
-      phx-hook="Combobox"
-      data-options="tx-payee-options"
-      data-side={@side}
-      data-field="payee"
-      data-value={
-        if @values["transfer_account_id"] != "",
-          do: "a:#{@values["transfer_account_id"]}",
-          else: "p:#{@text}"
-      }
-      data-label={@text}
-    >
-      <input
-        id={@id}
-        form="tx-form"
-        type="text"
-        name={"#{@name}[payee]"}
-        value={@text}
-        class={["form-control", @small && "form-control-sm"]}
-        role="combobox"
-        aria-label="Empfänger"
-        aria-autocomplete="list"
-        aria-controls={"#{@id}-list"}
-        placeholder="Empfänger"
-        autocomplete="off"
-        size="1"
-        phx-debounce="blur"
-      />
-      <div id={"#{@id}-list"} class="app-combo-menu" role="listbox" phx-update="ignore"></div>
-    </div>
+    <.combobox
+      id={@id}
+      name={@name}
+      value={@value}
+      label="Empfänger"
+      hide_label={!@label}
+      options={@payee_options}
+      options_from="tx-payee-list"
+      placeholder="Empfänger"
+      allow_create
+      create_label="Empfänger „%{text}“ anlegen"
+      create_field={@created}
+      class={@small && "input-sm"}
+      form="tx-form"
+    />
     """
   end
 
@@ -630,34 +738,38 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :side, :string, required: true
   attr :params, :map, required: true
   attr :accounts, :map, required: true
-  attr :categories, :list, required: true
-  attr :myself, :any, required: true
+  attr :category_options, :list, required: true
+  attr :label, :boolean, default: false
   attr :small, :boolean, default: false
 
-  # The category of a side: a combobox where it takes one, else what stands there instead.
+  # The category of a side: a combobox where it takes one, else what stands there instead. "Aufteilen" is offered
+  # for the transaction's own category only.
   defp category_cell(assigns) do
     side = TransactionForm.side(assigns.params, assigns.side)
-    option = CategoryOptions.find(assigns.categories, TransactionForm.to_id(side["category_id"]))
+    main? = assigns.side == "main"
 
     assigns =
       assign(assigns,
         values: side,
-        option: option,
         category?: TransactionForm.category?(assigns.params, assigns.side, assigns.accounts),
-        split?: assigns.side == "main" and assigns.params["split"] == "true"
+        split?: main? and assigns.params["split"] == "true",
+        splittable?: main? and !TransactionForm.transfer?(side)
       )
 
     ~H"""
     <%= cond do %>
       <% @split? -> %>
-        <span id={@id} class="d-block small text-body-secondary text-truncate">
+        <span id={@id} class="block truncate text-base-content/70">
           Aufgeteilt (mehrere Kategorien)
         </span>
       <% !@category? -> %>
         <input
           id={@id}
           type="text"
-          class={["form-control app-combo-none", @small && "form-control-sm"]}
+          class={[
+            "input w-full border-transparent bg-transparent shadow-none",
+            @small && "input-sm"
+          ]}
           placeholder={none_placeholder(@values)}
           aria-label="Kategorie"
           size="1"
@@ -665,34 +777,47 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
           tabindex="-1"
         />
       <% true -> %>
-        <div
-          id={"#{@id}-combo"}
-          class="app-combo"
-          phx-hook="Combobox"
-          data-options="tx-category-options"
-          data-side={@side}
-          data-field="category"
-          data-value={@values["category_id"]}
-          data-label={@option && @option.text}
-          data-save="tx-save"
-          data-split={@side == "main" and !TransactionForm.transfer?(@values) and "true"}
-        >
-          <input
-            id={@id}
-            type="text"
-            value={@option && @option.text}
-            class={["form-control", @small && "form-control-sm"]}
-            role="combobox"
-            aria-label="Kategorie"
-            aria-autocomplete="list"
-            aria-controls={"#{@id}-list"}
-            placeholder="Kategorie"
-            autocomplete="off"
-            size="1"
-          />
-          <div id={"#{@id}-list"} class="app-combo-menu" role="listbox" phx-update="ignore"></div>
-        </div>
+        <.combobox
+          id={@id}
+          name={"#{side_name(@side)}[category_pick]"}
+          value={@values["category_id"]}
+          label="Kategorie"
+          hide_label={!@label}
+          options={@category_options}
+          options_from={if @splittable?, do: "tx-category-split-list", else: "tx-category-list"}
+          placeholder="Kategorie"
+          class={@small && "input-sm"}
+          form="tx-form"
+        />
     <% end %>
+    """
+  end
+
+  attr :payee_options, :list, required: true
+  attr :category_options, :list, required: true
+
+  # The option lists every side's comboboxes copy in; "Aufteilen" only for the transaction's own category.
+  defp option_lists(assigns) do
+    ~H"""
+    <.combobox_options id="tx-payee-list" options={@payee_options} />
+    <.combobox_options
+      :for={
+        {id, options} <- [
+          {"tx-category-list", @category_options},
+          {"tx-category-split-list", @category_options ++ [%{label: "Aufteilen", value: "split"}]}
+        ]
+      }
+      id={id}
+      options={options}
+    >
+      <:option :let={option}>
+        <span :if={option.value == "split"} class="flex flex-1 items-center gap-2 text-primary">
+          <.icon name="plus" class="size-4" />Aufteilen
+        </span>
+        <span :if={option.value != "split"} class="min-w-0 flex-1 truncate">{option.name}</span>
+        <.amount :if={option.value != "split"} value={option.available} tone />
+      </:option>
+    </.combobox_options>
     """
   end
 
@@ -702,8 +827,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :params, :map, required: true
   attr :accounts, :map, required: true
   attr :categories, :list, required: true
-  attr :payees, :list, required: true
-  attr :myself, :any, required: true
+  attr :payee_options, :list, required: true
+  attr :category_options, :list, required: true
 
   # A tracking account's register has no category column, so a side that takes one there (a transfer to a budget
   # account, or a part of a split opened from its counterpart) has it below the payee.
@@ -719,8 +844,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         small
         params={@params}
         accounts={@accounts}
-        categories={@categories}
-        myself={@myself}
+        category_options={@category_options}
       />
     </div>
     """
@@ -730,66 +854,11 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     if TransactionForm.transfer?(side), do: "Keine Kategorie nötig", else: ""
   end
 
-  attr :params, :map, required: true
-  attr :accounts, :map, required: true
-  attr :categories, :list, required: true
-  attr :payees, :list, required: true
-  attr :myself, :any, required: true
+  defp remainder_class(left) when is_integer(left) and left > 0, do: "text-error-ink"
+  defp remainder_class(_none), do: "text-base-content/70"
 
-  # The options of the comboboxes, once for all sides; "Aufteilen" shows for the transaction's own category only.
-  defp templates(assigns) do
-    assigns = assign(assigns, :transfers, transfer_options(assigns.params, assigns.accounts))
-
-    ~H"""
-    <template id="tx-payee-options">
-      <div class="app-combo-opt app-combo-create" role="option" data-create>
-        Empfänger „<span></span>“ anlegen
-      </div>
-      <div :if={@transfers != []} class="app-combo-group" role="group" aria-label="Umbuchungen">
-        <div class="app-combo-head">Umbuchungen</div>
-        <div
-          :for={account <- @transfers}
-          class="app-combo-opt"
-          role="option"
-          data-value={"a:#{account.id}"}
-          data-key={Names.lookup_key(account.name)}
-          data-label={TransactionForm.transfer_label(account)}
-        >
-          {TransactionForm.transfer_label(account)}
-        </div>
-      </div>
-      <div class="app-combo-group" role="group" aria-label="Empfänger">
-        <div class="app-combo-head">Empfänger</div>
-        <div
-          :for={payee <- @payees}
-          class="app-combo-opt"
-          role="option"
-          data-value={"p:#{payee.name}"}
-          data-key={payee.lookup_key}
-          data-label={payee.name}
-        >
-          {payee.name}
-        </div>
-      </div>
-    </template>
-    <Components.category_template id="tx-category-options" categories={@categories}>
-      <div class="app-combo-foot" data-split-only>
-        <button
-          id="tx-split"
-          type="button"
-          class="btn btn-sm btn-light w-100"
-          phx-click="split"
-          phx-target={@myself}
-        >
-          Aufteilen
-        </button>
-      </div>
-    </Components.category_template>
-    """
-  end
-
-  defp remainder_class(left) when is_integer(left) and left > 0, do: "app-neg"
-  defp remainder_class(_none), do: "text-body-secondary"
+  defp side_name(@main), do: "transaction"
+  defp side_name(index), do: sub_name(index)
 
   defp sub_name(index), do: "transaction[subtransactions][#{index}]"
   defp sub_name(index, field), do: "#{sub_name(index)}[#{field}]"
@@ -813,6 +882,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       main: @main,
       params: initial_params(socket.assigns),
       suggested: MapSet.new(),
+      payee_shown: MapSet.new(),
       error: nil,
       payees: payees,
       payees_by_key: Map.new(payees, &{&1.lookup_key, &1}),
@@ -868,37 +938,16 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @impl true
   def handle_event("change", %{"transaction" => changed} = event, socket) do
+    {picks, changed} = picks(changed)
     params = TransactionForm.change(socket.assigns.params, changed, socket.assigns.accounts)
-    {:noreply, socket |> after_change(params, event["_target"]) |> assign(:error, nil)}
-  end
 
-  def handle_event("pick", %{"side" => side, "field" => "payee", "value" => value}, socket) do
-    %{params: params, accounts: accounts} = socket.assigns
+    socket =
+      case pick_target(event["_target"]) do
+        {side, field} -> socket |> assign(:params, params) |> pick(side, field, picks[side])
+        nil -> after_change(socket, params, event["_target"])
+      end
 
-    case value do
-      "a:" <> id ->
-        params = TransactionForm.pick_payee(params, side, {:transfer, id})
-        category_id = params |> transfer_category(side, accounts) |> suggest_offered(socket)
-        {:noreply, suggest(socket, params, side, category_id)}
-
-      "p:" <> name ->
-        params = TransactionForm.pick_payee(params, side, {:payee, String.trim(name)})
-        {:noreply, suggest(socket, params, side, payee_category(socket, name))}
-
-      _other ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_event("pick", %{"side" => side, "field" => "category", "value" => id}, socket) do
-    if TransactionForm.to_id(id) in CategoryOptions.ids(socket.assigns.categories) do
-      params = TransactionForm.put_side(socket.assigns.params, side, %{"category_id" => id})
-
-      {:noreply,
-       assign(socket, params: params, suggested: MapSet.delete(socket.assigns.suggested, side))}
-    else
-      {:noreply, socket}
-    end
+    {:noreply, assign(socket, :error, nil)}
   end
 
   def handle_event("split", _params, socket),
@@ -909,6 +958,9 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     {:noreply, directed(socket, params)}
   end
 
+  def handle_event("show_sub_payee", %{"index" => index}, socket),
+    do: {:noreply, update(socket, :payee_shown, &MapSet.put(&1, index))}
+
   def handle_event("add_subtransaction", _params, socket),
     do: {:noreply, update(socket, :params, &TransactionForm.add_subtransaction/1)}
 
@@ -917,7 +969,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   def handle_event("save", event, socket) do
     %{accounts: accounts, transaction: original} = socket.assigns
-    params = TransactionForm.change(socket.assigns.params, event["transaction"] || %{}, accounts)
+    {_picks, changed} = picks(event["transaction"] || %{})
+    params = TransactionForm.change(socket.assigns.params, changed, accounts)
 
     with {:ok, attrs} <- TransactionForm.to_attrs(params, accounts, original),
          {:ok, _transaction} <- write(original, attrs, confirmed(event)) do
@@ -934,12 +987,85 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     end
   end
 
-  # A typed payee suggests its last category; one typed over a transfer is no transfer any more.
-  defp after_change(socket, params, ["transaction", "payee"]),
-    do: payee_typed(socket, params, @main)
+  @picks ~w(payee_pick payee_new category_pick)
 
-  defp after_change(socket, params, ["transaction", "subtransactions", index, "payee"]),
-    do: payee_typed(socket, params, index)
+  # What the comboboxes chose, by side, apart from what was typed.
+  defp picks(changed) do
+    subs = changed["subtransactions"] || %{}
+
+    picks =
+      Map.new(subs, fn {index, sub} -> {index, Map.take(sub, @picks)} end)
+      |> Map.put(@main, Map.take(changed, @picks))
+
+    subs = Map.new(subs, fn {index, sub} -> {index, Map.drop(sub, @picks)} end)
+
+    changed =
+      changed
+      |> Map.drop(@picks)
+      |> then(&if(&1["subtransactions"], do: Map.put(&1, "subtransactions", subs), else: &1))
+
+    {picks, changed}
+  end
+
+  defp pick_target(["transaction", field]) when field in ["payee_pick", "category_pick"],
+    do: {@main, field}
+
+  defp pick_target(["transaction", "subtransactions", index, field])
+       when field in ["payee_pick", "category_pick"],
+       do: {index, field}
+
+  defp pick_target(_target), do: nil
+
+  defp pick(socket, side, "payee_pick", picked) do
+    %{params: params, accounts: accounts} = socket.assigns
+
+    case picked || %{} do
+      %{"payee_pick" => "a:" <> id} ->
+        params = TransactionForm.pick_payee(params, side, {:transfer, id})
+
+        suggest(
+          socket,
+          params,
+          side,
+          params |> transfer_category(side, accounts) |> suggest_offered(socket)
+        )
+
+      %{"payee_pick" => "p:" <> name} ->
+        payee(socket, params, side, name)
+
+      picked ->
+        payee(socket, params, side, picked["payee_new"] || "")
+    end
+  end
+
+  defp pick(socket, side, "category_pick", %{"category_pick" => "split"}) when side == @main,
+    do: update(socket, :params, &TransactionForm.split/1)
+
+  defp pick(socket, side, "category_pick", %{"category_pick" => id}) do
+    cond do
+      id == "" ->
+        put_category(socket, side, "")
+
+      TransactionForm.to_id(id) in CategoryOptions.ids(socket.assigns.categories) ->
+        put_category(socket, side, id)
+
+      true ->
+        socket
+    end
+  end
+
+  defp pick(socket, _side, _field, _picked), do: socket
+
+  defp payee(socket, params, side, name) do
+    name = String.trim(name)
+    params = TransactionForm.pick_payee(params, side, {:payee, name})
+    suggest(socket, params, side, payee_category(socket, name))
+  end
+
+  defp put_category(socket, side, id) do
+    params = TransactionForm.put_side(socket.assigns.params, side, %{"category_id" => id})
+    assign(socket, params: params, suggested: MapSet.delete(socket.assigns.suggested, side))
+  end
 
   defp after_change(socket, params, ["transaction", column]) when column in ["outflow", "inflow"],
     do: directed(socket, TransactionForm.keep_column(params, @main, column))
@@ -958,15 +1084,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       if params["category_id"] == "", do: MapSet.delete(suggested, @main), else: suggested
 
     assign(socket, params: params, suggested: suggested)
-  end
-
-  defp payee_typed(socket, params, side) do
-    old = TransactionForm.side(socket.assigns.params, side)
-    new = TransactionForm.side(params, side)
-
-    if {old["payee"], old["transfer_account_id"]} == {new["payee"], new["transfer_account_id"]},
-      do: assign(socket, :params, params),
-      else: suggest(socket, params, side, payee_category(socket, new["payee"] || ""))
   end
 
   defp suggest(socket, params, side, category_id) do
@@ -1077,8 +1194,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     end
   end
 
-  defp sign_class("+"), do: "text-success"
-  defp sign_class(_sign), do: "text-danger"
+  defp sign_class("+"), do: "text-success-ink"
+  defp sign_class(_sign), do: "text-error-ink"
 
   defp sign_label("+"), do: "Eingang, umschalten auf Ausgang"
   defp sign_label(_sign), do: "Ausgang, umschalten auf Eingang"

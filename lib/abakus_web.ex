@@ -59,6 +59,7 @@ defmodule AbakusWeb do
   defp html_helpers do
     quote do
       import Phoenix.HTML
+      use Setzkasten
       import AbakusWeb.CoreComponents
 
       alias AbakusWeb.Layouts

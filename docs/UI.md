@@ -1,8 +1,8 @@
 # UI direction
 
 Abakus should feel familiar to someone coming from YNAB 4, today's YNAB and Actual Budget: same structure, same
-vocabulary, same interaction patterns. The visual language is felt-css in its clean look only (no felt look;
-dense money tables don't suit it), not a new design. Take the best of each app.
+vocabulary, same interaction patterns. The visual language is Setzkasten's (flat pages, one
+accent, hairlines, tabular numbers), not a new design. Take the best of each app.
 
 References are public: Actual's demo (https://demo.actualbudget.org/budget), screenshots of YNAB 4 and today's
 YNAB from the web and YNAB's help center. No screenshots of real budgets in this repo.
@@ -17,8 +17,21 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 
 ## Decisions after review round 1
 
-- On phones Zu verteilen lives in a sticky month header; the inspector shows the selected category or the month
-  summary
+- On phones Zu verteilen lives in a sticky month header; tapping a category opens its sheet (assignment, target,
+  auto-assign, rename)
+
+## Budget without inspector (as Actual)
+
+- No inspector column and no filters: overspent categories show as red pills, whose popover covers them
+- A category row shows a pencil on hover and focus; it and the name open the category's dialog: name, target and
+  deleting (the phone sheet shows the same parts after Verfügbar and auto-assign)
+- A target shows in the Verfügbar pill (an icon while underfunded or funded) and, with its state from the funding,
+  in the category's dialog: funded, underfunded, overspent (available below zero), paused; spending a funded target
+  leaves it funded
+- A month card shows only Zu verteilen and Verteilen (fill underfunded, into one category, reset the month); a
+  click on it opens a popover with the calculation, summary, need and later months
+- Months follow the budget's width: two from 760 px (a window of about 1100 px with the sidebar), three from
+  1110 px (about 1450 px); the category column takes 22 % (224–320 px), the months the rest
 
 ## Method
 
@@ -27,9 +40,9 @@ Every euro gets assigned and overspending is dealt with: RTA > 0 and overspent c
 
 ## Review
 
-Two art-director subagents rate every screen 1–10 with concrete feedback, per theme (clean light, clean dark), desktop (3, 2, 1 months) and phone (390 px):
+Two art-director subagents rate every screen 1–10 with concrete feedback, per theme (light, dark), desktop (3, 2, 1 months) and phone (390 px):
 
-- AD A, material/craft: felt-css fit (clean look), typography, spacing, numbers, details
+- AD A, material/craft: Setzkasten fit, typography, spacing, numbers, details
 - AD B, UI/product: hierarchy, familiarity for YNAB/Actual users, task flow, mobile, dark contrast
 
 Both get the reference screenshots and the brief "steal the best from all three".

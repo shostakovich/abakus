@@ -1,6 +1,6 @@
 defmodule AbakusWeb.BudgetLive.TargetForm do
   @moduledoc """
-  The target editor in the inspector's target card, as in YNAB: the amount, monthly or by a date (with the date and
+  The target editor in a category's dialog (its sheet on phones), as in YNAB: the amount, monthly or by a date (with the date and
   "Jährlich wiederholen"), "Weitere zurücklegen" or "Auffüllen bis"; save, delete and cancel. The form holds what
   was typed; saving sets the target from the focus month on (`Abakus.Categories.set_target/2`).
   """
@@ -51,7 +51,7 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
     params = Map.merge(@blank, params)
     by_date = params["cadence"] == "by_date"
 
-    case amount(params["amount"]) do
+    case parse_target_amount(params["amount"]) do
       {:ok, amount} ->
         {:ok,
          %{
@@ -68,11 +68,11 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
     end
   end
 
-  defp amount(text) when is_binary(text) do
+  defp parse_target_amount(text) when is_binary(text) do
     if String.trim(text) == "", do: :error, else: Format.parse_amount(text)
   end
 
-  defp amount(_text), do: :error
+  defp parse_target_amount(_text), do: :error
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
@@ -85,106 +85,65 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
     assigns = assign(assigns, :by_date, assigns.form[:cadence].value == "by_date")
 
     ~H"""
-    <.form
-      for={@form}
-      id="target-form"
-      class="d-flex flex-column gap-2"
-      phx-change="target_change"
-      phx-submit="save_target"
-    >
-      <div class="fw-semibold">Für Ausgaben benötigt</div>
-      <div>
-        <label class="form-label mb-1" for="target-amount">Ich brauche</label>
-        <div class="input-group input-group-sm has-validation">
-          <input
-            id="target-amount"
-            name={@form[:amount].name}
-            value={@form[:amount].value}
-            class={["form-control text-end app-q", @form[:amount].errors != [] && "is-invalid"]}
-            inputmode="decimal"
-            autocomplete="off"
-            required
-            phx-mounted={JS.focus()}
-          />
-          <span class="input-group-text">€</span>
-        </div>
-        <.field_errors field={@form[:amount]} />
-      </div>
-      <div class="btn-group btn-group-sm w-100" role="group" aria-label="Rhythmus">
-        <%= for {value, label} <- [{"monthly", "Jeden Monat"}, {"by_date", "Bis zum Datum"}] do %>
-          <input
-            type="radio"
-            class="btn-check"
-            name={@form[:cadence].name}
-            id={"target-cadence-#{value}"}
-            value={value}
-            checked={@form[:cadence].value == value}
-          />
-          <label class="btn btn-outline-secondary" for={"target-cadence-#{value}"}>{label}</label>
-        <% end %>
-      </div>
+    <.form for={@form} id="target-form" phx-change="target_change" phx-submit="save_target">
+      <p class="text-sm font-medium">Für Ausgaben benötigt</p>
+      <.input
+        field={@form[:amount]}
+        id="target-amount"
+        label="Ich brauche"
+        suffix="€"
+        numeric
+        autocomplete="off"
+        required
+        phx-mounted={JS.focus()}
+      />
+      <.segmented
+        id="target-cadence"
+        mode={:radio}
+        field={@form[:cadence]}
+        label="Rhythmus"
+        size={:sm}
+        block
+        class="mt-2"
+        options={[{"Jeden Monat", "monthly"}, {"Bis zum Datum", "by_date"}]}
+      />
       <div :if={@by_date} id="target-due">
-        <label class="form-label mb-1" for="target-due-on">Fällig am</label>
-        <input
-          type="date"
-          id="target-due-on"
-          name={@form[:due_on].name}
-          value={@form[:due_on].value}
-          class={["form-control form-control-sm", @form[:due_on].errors != [] && "is-invalid"]}
-          required
-        />
-        <.field_errors field={@form[:due_on]} />
+        <.input field={@form[:due_on]} id="target-due-on" type="date" label="Fällig am" required />
         <.input
           field={@form[:repeats_yearly]}
           id="target-repeats"
-          type="checkbox"
-          switch
+          type="toggle"
           label="Jährlich wiederholen"
-          wrapper_class="mt-2 mb-0"
         />
       </div>
-      <div>
-        <label class="form-label mb-1" for="target-set-aside">Nächsten Monat möchte ich:</label>
-        <select id="target-set-aside" name={@form[:set_aside].name} class="form-select form-select-sm">
-          {Phoenix.HTML.Form.options_for_select(
-            [{"Weitere zurücklegen", "true"}, {"Auffüllen bis", "false"}],
-            @form[:set_aside].value
-          )}
-        </select>
-      </div>
-      <.field_errors field={@form[:cadence]} />
-      <div class="d-flex gap-2 mt-1">
-        <button id="target-save" type="submit" class="btn btn-sm btn-primary flex-grow-1">
-          Speichern
-        </button>
-        <button
-          id="target-cancel"
-          type="button"
-          class="btn btn-sm btn-light"
-          phx-click="cancel_target"
+      <.input
+        field={@form[:set_aside]}
+        id="target-set-aside"
+        type="select"
+        label="Nächsten Monat möchte ich:"
+        options={[{"Weitere zurücklegen", "true"}, {"Auffüllen bis", "false"}]}
+      />
+      <fieldset :if={@form[:cadence].errors != []} class="fieldset">
+        <.field_error id="target-cadence" errors={@form[:cadence].errors} />
+      </fieldset>
+      <div class="mt-3 flex flex-wrap justify-between gap-2">
+        <div class="flex gap-2">
+          <.button id="target-save" type="submit" variant={:primary} size={:sm}>Speichern</.button>
+          <.button id="target-cancel" size={:sm} phx-click="cancel_target">Abbrechen</.button>
+        </div>
+        <.button
+          :if={@target}
+          id="target-delete"
+          variant={:danger_outline}
+          size={:sm}
+          confirm="Ziel löschen?"
+          confirm_text="Die Kategorie hat ab diesem Monat kein Ziel mehr."
+          phx-click="delete_target"
         >
-          Abbrechen
-        </button>
+          Ziel löschen
+        </.button>
       </div>
-      <button
-        :if={@target}
-        id="target-delete"
-        type="button"
-        class="btn btn-sm btn-link text-danger px-0 align-self-start"
-        phx-click="delete_target"
-        data-confirm="Ziel löschen? Die Kategorie hat ab diesem Monat kein Ziel mehr."
-      >
-        Ziel löschen
-      </button>
     </.form>
-    """
-  end
-
-  attr :field, Phoenix.HTML.FormField, required: true
-
-  defp field_errors(assigns) do
-    ~H"""
-    <.error :for={error <- @field.errors}>{translate_error(error)}</.error>
     """
   end
 end

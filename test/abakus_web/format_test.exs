@@ -10,13 +10,13 @@ defmodule AbakusWeb.FormatTest do
       assert Format.amount(123_456) == "1.234,56"
       assert Format.amount(-105_000) == "−1.050,00"
       assert Format.amount(100_000_000_000) == "1.000.000.000,00"
-      assert Format.euros(-999) == "−9,99 €"
+      assert Format.euros(-999) == "−9,99 €"
     end
 
     test "signed_euros/1 marks inflows with a plus" do
-      assert Format.signed_euros(4_875) == "+48,75 €"
-      assert Format.signed_euros(-4_875) == "−48,75 €"
-      assert Format.signed_euros(0) == "0,00 €"
+      assert Format.signed_euros(4_875) == "+48,75 €"
+      assert Format.signed_euros(-4_875) == "−48,75 €"
+      assert Format.signed_euros(0) == "0,00 €"
     end
   end
 
@@ -36,6 +36,7 @@ defmodule AbakusWeb.FormatTest do
             {"12.5", 1_250},
             {"12.50", 1_250},
             {" 12 € ", 1_200},
+            {"12 €", 1_200},
             {"−5", -500},
             {"-0,99", -99},
             {"+3", 300},

@@ -13,7 +13,7 @@ config :abakus, AbakusWeb.Endpoint,
   secret_key_base: "UeYsBtUprMR6zARAIiVfvjGO5SMgIO5k2gHGRZj8XLkwugdQrGRdoUXXkxgRHXCX",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:abakus, ~w(--sourcemap=inline --watch)]},
-    esbuild_css: {Esbuild, :install_and_run, [:abakus_css, ~w(--sourcemap=inline --watch)]}
+    tailwind: {Tailwind, :install_and_run, [:abakus, ~w(--watch)]}
   ]
 
 config :abakus, dev_routes: true

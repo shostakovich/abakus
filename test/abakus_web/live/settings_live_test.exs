@@ -31,14 +31,14 @@ defmodule AbakusWeb.SettingsLiveTest do
       {:ok, view, _html} = live(conn, ~p"/settings")
 
       assert has_element?(view, "h1", "Einstellungen")
-      assert has_element?(view, ~s|aside nav a.active[aria-current=page][href="/settings"]|)
+      assert has_element?(view, "#side-settings-sidebar[aria-current=page]")
 
       for {label, path} <- @sections do
         assert has_element?(view, ~s|#settings-nav a[href="#{path}"]:not([data-phx-link])|, label)
       end
 
-      refute has_element?(view, "#settings-nav a.active")
-      refute has_element?(view, "#settings-back")
+      refute has_element?(view, "#settings-nav a[aria-current]")
+      refute has_element?(view, ~s|main header a[href="/settings"]|)
     end
 
     test "every section marks itself in the navigation and leads back to the overview", %{
@@ -47,11 +47,11 @@ defmodule AbakusWeb.SettingsLiveTest do
       for {label, path} <- @sections do
         {:ok, view, _html} = live(conn, path)
 
-        assert has_element?(view, ~s|#settings-nav a.active[aria-current=page][href="#{path}"]|)
-        assert has_element?(view, "#settings-nav a.active", label)
-        assert has_element?(view, ~s|#settings-back[href="/settings"]|)
+        assert has_element?(view, ~s|#settings-nav a[aria-current=page][href="#{path}"]|, label)
+        refute has_element?(view, ~s|#settings-nav a[aria-current]:not([href="#{path}"])|)
+        assert has_element?(view, ~s|main header a[href="/settings"]|, "Einstellungen")
         assert has_element?(view, "h1", label)
-        assert has_element?(view, ~s|aside nav a.active[href="/settings"]|)
+        assert has_element?(view, "#side-settings-sidebar[aria-current=page]")
       end
     end
 
@@ -61,15 +61,15 @@ defmodule AbakusWeb.SettingsLiveTest do
       assert has_element?(access, "#passkeys")
       assert has_element?(access, "#email-form")
       assert has_element?(access, "#api-tokens")
-      refute has_element?(access, "#theme-switch")
+      refute has_element?(access, "#theme-toggle")
 
       {:ok, appearance, _html} = live(conn, ~p"/settings/appearance")
 
       assert has_element?(appearance, "#appearance", "Gilt für dieses Gerät")
-      assert has_element?(appearance, "#appearance #theme-switch[phx-hook=ThemeSwitch]")
+      assert has_element?(appearance, "#appearance #theme-toggle[phx-hook]")
 
-      for label <- ["Hell", "Dunkel", "Auto"],
-          do: assert(has_element?(appearance, "#theme-switch label", label))
+      for label <- ["System", "Hell", "Dunkel"],
+          do: assert(has_element?(appearance, "#theme-toggle label", label))
     end
   end
 

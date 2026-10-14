@@ -1,0 +1,143 @@
+/* Register: the transaction grid, its edit row, flags and the phone sheet. */
+
+/* Fixed columns, so an opened row keeps every column where it is: the edit row lays its inputs on the same tracks
+   as a grid. Narrow registers move the memo behind the payee, the narrowest also shorten dates. */
+.app-reg-wrap { container: register / inline-size; }
+.app-reg {
+  table-layout: fixed;
+  --reg-pick: 2.5rem;
+  --reg-flag: 2rem;
+  --reg-date: 8rem;
+  --reg-konto: 0px;
+  --reg-cat: 20%;
+  --reg-memo: 16%;
+  --reg-amount: 6.5rem;
+  --reg-run: 0px;
+  --reg-ok: 2rem;
+  --reg-c: 3rem;
+}
+@media (pointer: coarse) { .app-reg { --reg-ok: 2.75rem; --reg-c: 3.5rem; } }
+.app-reg-all { --reg-konto: 9rem; }
+.app-reg-running { --reg-run: 7rem; }
+.app-reg-nocat { --reg-cat: 0px; }
+.app-reg th.app-pick { width: var(--reg-pick); }
+.app-reg th.app-flag-col { width: var(--reg-flag); }
+.app-reg th.app-date-col { width: var(--reg-date); }
+.app-reg th.app-konto { width: var(--reg-konto); }
+.app-reg th.app-catcol { width: var(--reg-cat); }
+.app-reg th.app-memo-col { width: var(--reg-memo); }
+.app-reg th:is(.app-out, .app-in) { width: var(--reg-amount); }
+.app-reg th.app-run { width: var(--reg-run); }
+.app-reg th.app-ok-col { width: var(--reg-ok); }
+.app-reg th.app-c-col { width: var(--reg-c); }
+.app-reg .app-memo-inline, .app-reg .app-short { display: none; }
+@container register (width < 78rem) {
+  .app-reg-all { --reg-memo: 0px; }
+  .app-reg-all :is(th, td).app-memo-col { display: none; }
+  .app-reg-all .app-memo-inline { display: inline; }
+}
+@container register (width < 64rem) {
+  .app-reg { --reg-memo: 0px; }
+  .app-reg :is(th, td).app-memo-col { display: none; }
+  .app-reg .app-memo-inline { display: inline; }
+}
+@container register (width < 56rem) {
+  .app-reg { --reg-date: 4rem; --reg-amount: 6rem; }
+  .app-reg-all { --reg-konto: 6.5rem; }
+  .app-reg .app-wide { display: none; }
+  .app-reg .app-short { display: inline; }
+}
+
+/* Text in a cell ends in an ellipsis. */
+.app-reg :where(th, td) { padding-inline: .5rem; white-space: nowrap; }
+.app-reg :where(th, td):first-child { padding-inline-start: .75rem; }
+.app-reg :where(th, td):last-child { padding-inline-end: .75rem; }
+.app-reg :is(th, td).app-ok-col { padding-inline: 0; text-align: center; }
+.app-reg td:is(.app-payee, .app-catcol, .app-memo-col, .app-konto) { overflow: hidden; text-overflow: ellipsis; }
+.app-reg .lucide { flex-shrink: 0; }
+.app-reg > tbody > tr > * { border-bottom: 0; }
+.app-reg > :is(thead, tbody) > tr:last-child > * { border-bottom: var(--border) solid color-mix(in oklab, var(--color-base-content) 10%, transparent); }
+.app-reg > tbody:last-child > tr:last-child > * { border-bottom: 0; }
+.app-reg .app-uncategorised { color: var(--color-error-ink); }
+.app-reg .app-tx-main:hover > * { background: var(--color-base-200); }
+.app-reg .app-tx.is-selected > tr > * { background: var(--color-row-selected); }
+.app-reg .app-tx.is-selected > tr > :first-child { box-shadow: inset 3px 0 0 var(--color-selected); }
+
+/* Waiting for approval: a primary bar and payee and amount in 600; the row-selected fill stays for selection. */
+.app-reg .app-unapproved > :first-child { box-shadow: inset 3px 0 0 var(--color-primary); }
+.app-reg .app-unapproved > :is(.app-payee, .app-out, .app-in) { font-weight: 600; }
+.app-reg .app-unapproved .app-memo-inline { font-weight: 400; }
+.app-reg .app-actrow > td { height: auto; padding-bottom: .5rem; }
+.app-unapproved-item { border-radius: 0; box-shadow: inset 3px 0 0 var(--color-primary); }
+.app-waiting { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .25rem; padding: .125rem; border-radius: var(--radius-field); background: color-mix(in oklab, var(--color-primary) 8%, var(--color-base-100)); font-size: var(--text-sm); }
+@media (width < 48rem) { .app-waiting { padding: 0; gap: 0; } }
+.app-approve { color: var(--color-primary); }
+
+/* Cleared: a quiet ring, a C in success ink, a lock once reconciled. */
+.app-clear { position: relative; width: 1.25rem; height: 1.25rem; padding: 0; border-radius: 9999px; font-size: .75rem; line-height: 1; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid color-mix(in oklab, var(--color-base-content) 50%, transparent); background: transparent; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); cursor: pointer; }
+.app-clear.is-cleared { border: 1.5px solid var(--color-success-ink); color: var(--color-success-ink); }
+.app-clear.is-reconciled { border-color: transparent; color: var(--color-success-ink); }
+.app-clear .lucide { width: 1rem; height: 1rem; }
+.app-clear:focus-visible, .app-flag:focus-visible, .app-parts-toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+@media (pointer: coarse) { .app-clear::after, .app-flag::after { content: ""; position: absolute; inset: -.75rem; } }
+
+/* Flags on the chart tokens; an unset flag shows only on the row under the pointer, in focus or selected. */
+.app-flag { position: relative; display: inline-flex; border: 0; background: none; padding: 0; color: color-mix(in oklab, var(--color-base-content) 50%, transparent); cursor: pointer; }
+.app-flag .lucide, .app-flag-mark { fill: currentColor; }
+.app-flag:not(.is-set) .lucide { fill: none; }
+.app-reg .app-flag:not(.is-set) { opacity: 0; }
+.app-reg tr:is(:hover, :focus-within) .app-flag:not(.is-set), .app-reg .is-selected .app-flag:not(.is-set), .app-reg .app-flag:focus-visible { opacity: 1; }
+.app-flag-red { color: var(--color-chart-4); }
+.app-flag-orange { color: var(--color-chart-7); }
+.app-flag-yellow { color: var(--color-chart-2); }
+.app-flag-green { color: var(--color-chart-3); }
+.app-flag-blue { color: var(--color-chart-1); }
+.app-flag-purple { color: var(--color-chart-5); }
+
+/* Each transaction is a tbody: a split's parts below it, collapsible. */
+.app-reg .app-part > * { height: 1.75rem; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
+.app-reg .app-tx.is-collapsed .app-part { display: none; }
+.app-parts-toggle { display: inline-flex; vertical-align: middle; border: 0; background: none; padding: 0; margin-inline-end: .25rem; color: inherit; cursor: pointer; }
+.app-parts-toggle .lucide { transition: transform var(--setzkasten-duration) var(--setzkasten-ease-out); }
+.app-tx.is-collapsed .app-parts-toggle .lucide { transform: rotate(-90deg); }
+
+/* The edited row, as in YNAB: inputs in the columns on a well, Cancel and Save in the approve and C columns. */
+.app-reg .app-edit > tr > td { height: auto; padding: 0; background: var(--color-base-300); box-shadow: inset 3px 0 0 var(--color-selected); }
+.app-reg .app-edit-notes > td { padding: .25rem .75rem .5rem; }
+.app-edit-grid {
+  display: grid;
+  align-items: center;
+  grid-template-columns:
+    [pick] var(--reg-pick) [flag] var(--reg-flag) [date] var(--reg-date) [konto] var(--reg-konto)
+    [payee] minmax(0, 1fr) [cat] var(--reg-cat) [memo] var(--reg-memo) [out] var(--reg-amount)
+    [in] var(--reg-amount) [run] var(--reg-run) [ok] var(--reg-ok) [c] var(--reg-c) [end];
+  padding-block: .125rem;
+}
+.app-edit-grid > * { grid-row: 1; min-width: 0; padding-inline: .5rem; white-space: nowrap; }
+.app-edit-grid > .app-edit-date { grid-column: date; padding-inline: 0; }
+.app-edit-grid > .app-konto { grid-column: konto; }
+.app-edit-grid > .app-payee { grid-column: payee; }
+.app-edit-grid > .app-catcol { grid-column: cat; }
+.app-edit-grid > .app-memo-col { grid-column: memo; }
+.app-edit-grid > .app-out { grid-column: out; }
+.app-edit-grid > .app-in { grid-column: in; }
+.app-edit-grid > .app-edit-buttons { grid-column: ok / end; display: flex; justify-content: flex-end; gap: .25rem; padding-inline-end: .75rem; }
+.app-edit-grid > .app-edit-remainder-label { grid-column: cat / out; }
+.app-edit-grid :is(.input, .select) { width: 100%; min-width: 0; font-size: var(--text-sm); }
+.app-edit-grid :is(.app-out, .app-in) .input { padding-inline: .5rem; text-align: end; }
+.app-edit-grid .app-edit-date .input { padding-inline: .5rem; }
+.app-edit-grid .app-borderless:not(:hover, :focus) { border-color: transparent; background: transparent; }
+@container register (width < 78rem) {
+  .app-reg-all .app-edit-grid > .app-memo-col { grid-row: 2; grid-column: payee / memo; padding-block: .25rem; }
+}
+@container register (width < 64rem) {
+  .app-edit-grid > .app-memo-col { grid-row: 2; grid-column: payee / memo; padding-block: .25rem; }
+}
+@container register (width < 56rem) {
+  .app-edit-grid > .app-edit-date { grid-column: pick / konto; padding-inline: .75rem .5rem; }
+}
+
+/* The phone's transaction sheet. */
+.app-sign { min-width: 3rem; font-size: 1.25rem; font-weight: 700; }
+.app-tx-amount-input { font-size: 1.25rem; font-weight: 600; }
+#register-cards :is(.app-clear, .app-approve) { position: relative; z-index: 10; }

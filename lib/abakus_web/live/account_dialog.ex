@@ -74,105 +74,78 @@ defmodule AbakusWeb.AccountDialog do
 
     ~H"""
     <div id={@id}>
-      <div class="modal-backdrop show"></div>
-      <div
-        class="modal d-block app-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="account-dialog-title"
-        phx-window-keydown="close_account_dialog"
-        phx-key="Escape"
+      <.modal
+        id="account-dialog-modal"
+        show
+        title={if @account.id, do: "Konto bearbeiten", else: "Konto hinzufügen"}
+        on_cancel={JS.push("close_account_dialog")}
       >
-        <div class="modal-dialog modal-dialog-scrollable app-sheet">
-          <.form
-            for={@form}
-            id="account-form"
-            class="modal-content"
-            phx-change="validate"
-            phx-submit="save"
-            phx-target={@myself}
-            phx-mounted={JS.focus(to: "#account_name")}
-          >
-            <div class="modal-header">
-              <h2 class="modal-title h5" id="account-dialog-title">
-                {if @account.id, do: "Konto bearbeiten", else: "Konto hinzufügen"}
-              </h2>
-              <button
-                id="account-dialog-x"
-                type="button"
-                class="btn-close"
-                aria-label="Schließen"
-                phx-click="close_account_dialog"
-              ></button>
-            </div>
-            <div class="modal-body">
-              <div :if={@account.closed} id="account-closed" class="alert alert-secondary small py-2">
-                Dieses Konto ist geschlossen.
-              </div>
-              <.input
-                field={@form[:name]}
-                label="Name"
-                placeholder="z. B. 💶 Girokonto"
-                autocomplete="off"
-                required
-              />
-              <.input
-                :if={length(@kinds) > 1}
-                field={@form[:kind]}
-                type="select"
-                label="Art"
-                options={@kinds}
-                required
-                wrapper_class={if(@account.id, do: "mb-3", else: "mb-1")}
-              />
-              <p :if={is_nil(@account.id)} class="form-text mt-0 mb-3">
-                Tracking-Konten wie ein Depot zählen nicht zum Budget. Das lässt sich später nicht ändern.
-              </p>
-              <.input field={@form[:note]} type="textarea" label="Notiz" rows="2" wrapper_class="" />
-            </div>
-            <div class="modal-footer">
-              <button
-                :if={@account.id && !@account.closed}
+        <.form
+          for={@form}
+          id="account-form"
+          phx-change="validate"
+          phx-submit="save"
+          phx-target={@myself}
+        >
+          <.alert :if={@account.closed} id="account-closed" tone={:neutral}>
+            Dieses Konto ist geschlossen.
+          </.alert>
+          <.input
+            field={@form[:name]}
+            label="Name"
+            placeholder="z. B. 💶 Girokonto"
+            autocomplete="off"
+            required
+          />
+          <.input
+            :if={length(@kinds) > 1}
+            field={@form[:kind]}
+            type="select"
+            label="Art"
+            options={@kinds}
+            help={
+              if is_nil(@account.id),
+                do:
+                  "Tracking-Konten wie ein Depot zählen nicht zum Budget. Das lässt sich später nicht ändern."
+            }
+            required
+          />
+          <.input field={@form[:note]} type="textarea" label="Notiz" rows="2" />
+          <.action_bar>
+            <:secondary :if={@account.id}>
+              <.button
+                :if={!@account.closed}
                 id="close-account"
-                type="button"
-                class="btn btn-outline-danger me-auto"
+                variant={:danger_outline}
                 phx-click="close"
                 phx-target={@myself}
-                data-confirm={close_question(@account, @balance)}
+                confirm={"Konto „#{@account.name}“ schließen?"}
+                confirm_text={close_text(@balance)}
+                confirm_label="Schließen"
               >
                 Konto schließen
-              </button>
-              <button
-                :if={@account.id && @account.closed}
+              </.button>
+              <.button
+                :if={@account.closed}
                 id="reopen-account"
-                type="button"
-                class="btn btn-outline-primary me-auto"
                 phx-click="reopen"
                 phx-target={@myself}
               >
                 Wieder öffnen
-              </button>
-              <%!-- Phones close the sheet with the ×; three buttons do not fit side by side there. --%>
-              <button
-                id="account-cancel"
-                type="button"
-                class="btn d-none d-sm-inline-block"
-                phx-click="close_account_dialog"
-              >
-                Abbrechen
-              </button>
-              <button
-                id="account-save"
-                type="submit"
-                class="btn btn-primary"
-                phx-disable-with="Speichern …"
-              >
-                Speichern
-              </button>
-            </div>
-          </.form>
-        </div>
-      </div>
+              </.button>
+            </:secondary>
+            <.button id="account-cancel" phx-click="close_account_dialog">Abbrechen</.button>
+            <.button
+              id="account-save"
+              type="submit"
+              variant={:primary}
+              phx-disable-with="Speichern …"
+            >
+              Speichern
+            </.button>
+          </.action_bar>
+        </.form>
+      </.modal>
     </div>
     """
   end
@@ -225,7 +198,7 @@ defmodule AbakusWeb.AccountDialog do
     socket
   end
 
-  # The form edits only these; closing has its own buttons, position and feeds are not the user's to set here.
+  # Closing has its own buttons; position and feeds are not the user's to set here.
   defp editable(params), do: Map.take(params, @editable)
 
   defp kind_options(%Account{id: nil}), do: options(AccountGroups.kinds())
@@ -240,8 +213,6 @@ defmodule AbakusWeb.AccountDialog do
 
   defp options(kinds), do: Enum.map(kinds, fn {kind, label} -> {label, kind} end)
 
-  defp close_question(account, 0), do: "Konto „#{account.name}“ schließen?"
-
-  defp close_question(account, balance),
-    do: "#{close_question(account, 0)} Es hat noch einen Saldo von #{Format.euros(balance)}."
+  defp close_text(0), do: "Du kannst es später wieder öffnen."
+  defp close_text(balance), do: "Es hat noch einen Saldo von #{Format.euros(balance)}."
 end

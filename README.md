@@ -7,13 +7,12 @@ meant to replace YNAB for my own use. **The user interface is German.**
 ## Status
 
 Sign-in with magic link and passkeys, the budget math, the YNAB import, the budget view on desktop with its
-inspector (targets, auto-assign, covering and moving money), the account list, the register, where transactions are
-edited in place as in YNAB, reconciling, the OFX/QFX file import with match proposals, the YNAB-compatible API with
-its tokens and the settings. What remains of v1 is switching the existing YNAB API clients over to Abakus; bank
-sync and MCP follow in v2.
+category dialog and month details (targets, auto-assign, covering and moving money), the account list, the
+register, where transactions are edited in place as in YNAB, reconciling, the OFX/QFX file import with match
+proposals, the YNAB-compatible API with its tokens and the settings. What remains of v1 is switching the existing
+YNAB API clients over to Abakus; bank sync and MCP follow in v2.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, API, phases
-- `mockup/`: click dummy with example data, built with [felt-css](https://felt-css.rocu.de/)
 
 ## Development
 
@@ -36,12 +35,6 @@ iex> Abakus.Users.invite_user("you@example.com", &AbakusWeb.UserAuth.magic_link_
 
 `mix abakus.invite you@example.com` works as well and prints the sign-in link, since its mail does not reach
 the server's mailbox. After signing in, add a passkey under Einstellungen.
-
-Click dummy:
-
-```sh
-python3 -m http.server 8078 --directory mockup
-```
 
 ## Deploy
 
@@ -79,7 +72,8 @@ With several plans in YNAB it lists them; pass the id as `import_ynab("…")`. L
 
 ## Stack
 
-Elixir, Phoenix LiveView, SQLite, felt-css; one container behind a reverse proxy.
+Elixir, Phoenix LiveView, SQLite, Tailwind CSS and daisyUI with [Setzkasten](https://github.com/shostakovich/setzkasten);
+one container behind a reverse proxy.
 
 ## License
 
