@@ -13,7 +13,6 @@ its tokens and the settings. What remains of v1 is switching the existing YNAB A
 sync and MCP follow in v2.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, API, phases
-- `mockup/`: click dummy with example data, built with [felt-css](https://felt-css.rocu.de/)
 
 ## Development
 
@@ -36,12 +35,6 @@ iex> Abakus.Users.invite_user("you@example.com", &AbakusWeb.UserAuth.magic_link_
 
 `mix abakus.invite you@example.com` works as well and prints the sign-in link, since its mail does not reach
 the server's mailbox. After signing in, add a passkey under Einstellungen.
-
-Click dummy:
-
-```sh
-python3 -m http.server 8078 --directory mockup
-```
 
 ## Deploy
 

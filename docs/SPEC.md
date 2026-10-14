@@ -4,8 +4,6 @@ Self-hosted envelope budgeting for one household. Replaces YNAB (and Actual Budg
 owner uses: YNAB's budgeting rules, Actual's multi-month view, reconciling, file import, bank sync, a
 YNAB-compatible API and MCP. Open source, benevolent dictator: no PRs, forks welcome.
 
-The click dummy in `mockup/` shows the intended screens (example data only).
-
 ## Scope
 
 - one budget, 1–2 users, EUR only
