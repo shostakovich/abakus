@@ -27,13 +27,14 @@ defmodule AbakusWeb.SettingsLive do
 
   defp appearance(assigns) do
     ~H"""
-    <.card title="Aussehen" id="appearance">
-      <p class="text-body-secondary">Gilt für dieses Gerät.</p>
+    <section id="appearance" aria-labelledby="appearance-title">
+      <.section_heading id="appearance-title">Aussehen</.section_heading>
+      <p class="mb-3 text-sm text-base-content/70">Gilt für dieses Gerät.</p>
       <.theme_toggle />
-      <p class="small text-body-secondary mt-3 mb-0">
+      <p class="mt-6 max-w-prose text-sm text-base-content/70">
         Als App installieren: im Browser „Zum Home-Bildschirm“ wählen.
       </p>
-    </.card>
+    </section>
     """
   end
 
@@ -41,21 +42,21 @@ defmodule AbakusWeb.SettingsLive do
 
   defp ynab_import(assigns) do
     ~H"""
-    <.card title="YNAB-Import" id="ynab-import">
-      <p :if={!@status} class="fst-italic">Noch nichts aus YNAB übernommen.</p>
-      <%= if @status do %>
-        <div class="d-flex align-items-center gap-2 mb-2">
-          <span class="badge text-bg-success">abgeschlossen</span>
-          <span class="small text-body-secondary">
-            übernommen am {Format.date(DateTime.to_date(@status.imported_at))}
-          </span>
-        </div>
-        <p id="ynab-import-summary">Aus YNAB übernommen: {summary(@status)}.</p>
-      <% end %>
-      <p class="small text-body-secondary mb-0">
+    <section id="ynab-import" class="flex flex-col gap-3">
+      <p class="max-w-prose text-sm text-base-content/70">
         Ein neuer Import ersetzt das ganze Budget. Sobald Abakus eigene Buchungen hat, läuft er nicht mehr.
       </p>
-    </.card>
+      <.empty_state :if={!@status} icon="history">Noch nichts aus YNAB übernommen.</.empty_state>
+      <div :if={@status} class="flex flex-wrap items-center gap-2">
+        <.badge tone={:success}>abgeschlossen</.badge>
+        <span class="text-sm text-base-content/70">
+          übernommen am {Format.date(DateTime.to_date(@status.imported_at))}
+        </span>
+      </div>
+      <p :if={@status} id="ynab-import-summary" class="max-w-prose">
+        Aus YNAB übernommen: {summary(@status)}.
+      </p>
+    </section>
     """
   end
 

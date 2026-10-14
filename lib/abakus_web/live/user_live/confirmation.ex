@@ -9,7 +9,7 @@ defmodule AbakusWeb.UserLive.Confirmation do
     ~H"""
     <Layouts.auth flash={@flash}>
       <.card title="Anmelden">
-        <p class="text-body-secondary">{@user.email}</p>
+        <p class="mb-4 text-sm text-base-content/70 wrap-anywhere">{@user.email}</p>
         <.form
           for={@form}
           id="login-form"
@@ -19,7 +19,9 @@ defmodule AbakusWeb.UserLive.Confirmation do
           phx-trigger-action={@trigger_submit}
         >
           <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
-          <.button type="submit" variant={:primary} class="w-full" phx-disable-with="Anmelden …">Anmelden</.button>
+          <.button type="submit" variant={:primary} class="w-full" phx-disable-with="Anmelden …">
+            Anmelden
+          </.button>
         </.form>
       </.card>
     </Layouts.auth>

@@ -119,7 +119,9 @@ defmodule AbakusWeb.AccountDialog do
                 variant={:danger_outline}
                 phx-click="close"
                 phx-target={@myself}
-                data-confirm={close_question(@account, @balance)}
+                confirm={"Konto „#{@account.name}“ schließen?"}
+                confirm_text={close_text(@balance)}
+                confirm_label="Schließen"
               >
                 Konto schließen
               </.button>
@@ -196,7 +198,7 @@ defmodule AbakusWeb.AccountDialog do
     socket
   end
 
-  # The form edits only these; closing has its own buttons, position and feeds are not the user's to set here.
+  # Closing has its own buttons; position and feeds are not the user's to set here.
   defp editable(params), do: Map.take(params, @editable)
 
   defp kind_options(%Account{id: nil}), do: options(AccountGroups.kinds())
@@ -211,8 +213,6 @@ defmodule AbakusWeb.AccountDialog do
 
   defp options(kinds), do: Enum.map(kinds, fn {kind, label} -> {label, kind} end)
 
-  defp close_question(account, 0), do: "Konto „#{account.name}“ schließen?"
-
-  defp close_question(account, balance),
-    do: "#{close_question(account, 0)} Es hat noch einen Saldo von #{Format.euros(balance)}."
+  defp close_text(0), do: "Du kannst es später wieder öffnen."
+  defp close_text(balance), do: "Es hat noch einen Saldo von #{Format.euros(balance)}."
 end

@@ -17,133 +17,157 @@ defmodule AbakusWeb.UserLive.Settings do
       account_groups={@account_groups}
       account_dialog={@account_dialog}
     >
-      <.card title="Passkeys" id="passkeys">
-        <p class="text-body-secondary">
-          Mit einem Passkey meldest du dich per Face ID, Fingerabdruck oder Geräte-PIN an.
-        </p>
-        <p :if={@passkeys == []} class="fst-italic">Noch kein Passkey hinterlegt.</p>
-        <ul :if={@passkeys != []} class="list-group mb-3">
-          <li
-            :for={passkey <- @passkeys}
-            id={"passkey-#{passkey.id}"}
-            class="list-group-item d-flex align-items-center gap-2"
-          >
-            <div class="me-auto">
-              <div class="fw-semibold">{passkey.name}</div>
-              <div class="small text-body-secondary">
-                angelegt {Format.date(DateTime.to_date(passkey.inserted_at))}
-                <span :if={passkey.last_used_at}>
-                  · zuletzt genutzt {Format.date(DateTime.to_date(passkey.last_used_at))}
-                </span>
-              </div>
-            </div>
-            <.button
-              variant={:danger_outline}
-              size={:sm}
-              phx-click="delete_passkey"
-              phx-value-id={passkey.id}
-              data-confirm={"Passkey „#{passkey.name}“ löschen?"}
+      <div class="flex flex-col gap-8">
+        <section id="passkeys" aria-labelledby="passkeys-title">
+          <.section_heading id="passkeys-title" count={if @passkeys != [], do: length(@passkeys)}>
+            Passkeys
+          </.section_heading>
+          <p class="mb-3 max-w-prose text-sm text-base-content/70">
+            Mit einem Passkey meldest du dich per Face ID, Fingerabdruck oder Geräte-PIN an.
+          </p>
+          <.empty_state :if={@passkeys == []} icon="key-round">
+            Noch kein Passkey hinterlegt.
+          </.empty_state>
+          <.list :if={@passkeys != []}>
+            <.list_row
+              :for={passkey <- @passkeys}
+              id={"passkey-#{passkey.id}"}
+              title={passkey.name}
             >
-              Löschen
-            </.button>
-          </li>
-        </ul>
-        <%!-- The hook owns this form; ignored on re-render, so an error keeps the typed name. --%>
-        <form id="passkey-register" phx-hook="PasskeyRegister" phx-update="ignore">
-          <label class="form-label" for="passkey-name">Name des neuen Passkeys</label>
-          <div class="d-flex flex-column flex-sm-row gap-2">
-            <input
+              <:leading><.icon name="key-round" class="size-5 text-base-content/70" /></:leading>
+              <:meta>
+                angelegt {Format.date(DateTime.to_date(passkey.inserted_at))}<span :if={
+                  passkey.last_used_at
+                }><.meta_sep />zuletzt genutzt {Format.date(DateTime.to_date(passkey.last_used_at))}</span>
+              </:meta>
+              <:action
+                id={"passkey-#{passkey.id}-delete"}
+                label="Löschen"
+                icon="trash-2"
+                danger
+                confirm={"Passkey „#{passkey.name}“ löschen?"}
+                on_click={JS.push("delete_passkey", value: %{id: passkey.id})}
+              />
+            </.list_row>
+          </.list>
+          <%!-- The hook owns this form; ignored on re-render, so an error keeps the typed name. --%>
+          <form id="passkey-register" class="mt-4" phx-hook="PasskeyRegister" phx-update="ignore">
+            <.input
               id="passkey-name"
               name="name"
-              class="form-control"
-              placeholder="z. B. iPhone"
+              label="Name des neuen Passkeys"
+              placeholder="Name, z. B. iPhone"
               maxlength="60"
+              inline
               required
-            />
-            <button class="btn btn-primary text-nowrap" type="submit">
-              Passkey hinzufügen
-            </button>
-          </div>
-        </form>
-      </.card>
-
-      <.card title="E-Mail-Adresse">
-        <.form
-          for={@email_form}
-          id="email-form"
-          phx-submit="update_email"
-          phx-change="validate_email"
-        >
-          <.input
-            field={@email_form[:email]}
-            type="email"
-            label="E-Mail"
-            autocomplete="username"
-            spellcheck="false"
-            required
-          />
-          <.button type="submit" variant={:primary} phx-disable-with="Wird gesendet …">
-            E-Mail ändern
-          </.button>
-        </.form>
-      </.card>
-
-      <.card title="API-Tokens" id="api-tokens">
-        <p class="text-body-secondary">
-          YNAB-kompatible API, z. B. für eine Ausgaben-App: dieselben Pfade wie bei YNAB
-          (<code>/plans/{"{plan_id}"}/transactions</code>) unter dieser Basis-URL.
-        </p>
-        <.input
-          id="api-base-url"
-          name="api-base-url"
-          label="Basis-URL"
-          value={url(~p"/api/v1")}
-          class="font-monospace"
-          readonly
-        />
-        <p :if={@api_tokens == []} class="fst-italic">Noch kein Token angelegt.</p>
-        <ul :if={@api_tokens != []} class="list-group mb-3">
-          <li
-            :for={api_token <- @api_tokens}
-            id={"api-token-#{api_token.id}"}
-            class="list-group-item d-flex align-items-center gap-2"
-          >
-            <div class="me-auto">
-              <div class="fw-semibold">{api_token.name}</div>
-              <div class="small text-body-secondary">
-                erstellt {Format.date(DateTime.to_date(api_token.inserted_at))} · {last_used(
-                  api_token
-                )}
-              </div>
-            </div>
-            <.button
-              variant={:danger_outline}
-              size={:sm}
-              phx-click="revoke_api_token"
-              phx-value-id={api_token.id}
-              data-confirm={"Token „#{api_token.name}“ widerrufen? Programme mit diesem Token verlieren den Zugriff sofort."}
             >
-              Widerrufen
-            </.button>
-          </li>
-        </ul>
-        <div :if={@new_api_token} id="new-api-token" class="alert alert-success" role="status">
-          Neues Token, wird nur jetzt angezeigt:<br />
-          <code class="user-select-all text-break">{@new_api_token}</code>
-        </div>
-        <.form for={@api_token_form} id="api-token-form" phx-submit="create_api_token">
+              <.button type="submit" variant={:primary} icon="plus" class="join-item">
+                Passkey hinzufügen
+              </.button>
+            </.input>
+          </form>
+        </section>
+
+        <section id="email" aria-labelledby="email-title">
+          <.section_heading id="email-title">E-Mail-Adresse</.section_heading>
+          <.form
+            for={@email_form}
+            id="email-form"
+            phx-submit="update_email"
+            phx-change="validate_email"
+          >
+            <.input
+              field={@email_form[:email]}
+              type="email"
+              label="E-Mail"
+              autocomplete="username"
+              spellcheck="false"
+              inline
+              required
+            >
+              <.button type="submit" class="join-item" phx-disable-with="Wird gesendet …">
+                E-Mail ändern
+              </.button>
+            </.input>
+          </.form>
+        </section>
+
+        <section id="api-tokens" aria-labelledby="api-tokens-title">
+          <.section_heading
+            id="api-tokens-title"
+            count={if @api_tokens != [], do: length(@api_tokens)}
+          >
+            API-Tokens
+          </.section_heading>
+          <p class="max-w-prose text-sm text-base-content/70">
+            YNAB-kompatible API, z. B. für eine Ausgaben-App: dieselben Pfade wie bei YNAB
+            (<code>/plans/{"{plan_id}"}/transactions</code>) unter dieser Basis-URL.
+          </p>
           <.input
-            field={@api_token_form[:name]}
-            label="Name des neuen Tokens"
-            placeholder="z. B. Zipfelkasse"
-            maxlength="60"
-            required
+            id="api-base-url"
+            name="api-base-url"
+            label="Basis-URL"
+            value={url(~p"/api/v1")}
+            class="font-mono"
+            readonly
           />
-          <.button type="submit" variant={:primary} phx-disable-with="Wird erstellt …">
-            Token erstellen
-          </.button>
-        </.form>
-      </.card>
+          <.empty_state :if={@api_tokens == []} icon="key-round">
+            Noch kein Token angelegt.
+          </.empty_state>
+          <.list :if={@api_tokens != []} class="mt-4">
+            <.list_row
+              :for={api_token <- @api_tokens}
+              id={"api-token-#{api_token.id}"}
+              title={api_token.name}
+            >
+              <:meta>
+                {join_meta([
+                  "erstellt #{Format.date(DateTime.to_date(api_token.inserted_at))}",
+                  last_used(api_token)
+                ])}
+              </:meta>
+              <:action
+                id={"api-token-#{api_token.id}-revoke"}
+                label="Widerrufen"
+                icon="trash-2"
+                danger
+                confirm={"Token „#{api_token.name}“ widerrufen?"}
+                confirm_text="Programme mit diesem Token verlieren den Zugriff sofort."
+                confirm_label="Widerrufen"
+                on_click={JS.push("revoke_api_token", value: %{id: api_token.id})}
+              />
+            </.list_row>
+          </.list>
+          <.alert
+            :if={@new_api_token}
+            id="new-api-token"
+            tone={:success}
+            title="Neues Token, wird nur jetzt angezeigt"
+            class="mt-4"
+          >
+            <code class="select-all wrap-anywhere">{@new_api_token}</code>
+          </.alert>
+          <.form for={@api_token_form} id="api-token-form" class="mt-4" phx-submit="create_api_token">
+            <.input
+              field={@api_token_form[:name]}
+              label="Name des neuen Tokens"
+              placeholder="Name, z. B. Zipfelkasse"
+              maxlength="60"
+              inline
+              required
+            >
+              <.button
+                type="submit"
+                icon="plus"
+                class="join-item"
+                phx-disable-with="Wird erstellt …"
+              >
+                Token erstellen
+              </.button>
+            </.input>
+          </.form>
+        </section>
+      </div>
     </Components.page>
     """
   end

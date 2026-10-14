@@ -6,7 +6,7 @@ defmodule AbakusWeb.AccountsLive do
   """
   use AbakusWeb, :live_view
 
-  alias AbakusWeb.{AccountGroups, Format}
+  alias AbakusWeb.AccountGroups
   alias AbakusWeb.RegisterLive.Balances
 
   @impl true
@@ -33,90 +33,84 @@ defmodule AbakusWeb.AccountsLive do
 
   defp account_list(assigns) do
     ~H"""
-    <div>
-      <.header>
-        Konten
-        <:actions>
-          <.button id="add-account" size={:sm} icon="plus" phx-click="open_account_dialog">
-            Konto hinzufügen
-          </.button>
-        </:actions>
-      </.header>
+    <.header>
+      Konten
+      <:actions :if={@groups != []}>
+        <.button navigate={~p"/accounts/all"} icon="landmark">Alle Konten</.button>
+        <.button id="add-account" variant={:primary} icon="plus" phx-click="open_account_dialog">
+          Konto hinzufügen
+        </.button>
+      </:actions>
+    </.header>
 
-      <p :if={@groups == []} class="text-body-secondary">Noch keine Konten.</p>
+    <.empty_state :if={@groups == []} icon="landmark" title="Noch keine Konten">
+      Lege ein Konto an, um Buchungen zu erfassen oder zu importieren.
+      <:action>
+        <.button id="add-account" variant={:primary} icon="plus" phx-click="open_account_dialog">
+          Konto hinzufügen
+        </.button>
+      </:action>
+    </.empty_state>
 
-      <section :for={group <- @groups} id={"group-#{group.key}"} class="mb-4">
-        <div class="d-flex justify-content-between align-items-baseline gap-2 mb-2">
-          <h2 class="small text-uppercase fw-bold text-body-secondary mb-0">{group.label}</h2>
-          <span
+    <.list :if={@groups != []} id="accounts">
+      <%= for group <- @groups do %>
+        <.list_heading id={"group-#{group.key}"} class="flex items-baseline justify-between gap-4">
+          <h2 class="text-sm">{group.label}</h2>
+          <.amount
             id={"group-#{group.key}-balance"}
-            class={["small fw-bold app-q", group.balance < 0 && "app-neg"]}
-          >
-            {Format.euros(group.balance)}
-          </span>
-        </div>
-        <div class="list-group">
-          <.link
-            :for={row <- group.rows}
-            id={"account-#{row.account.id}"}
-            navigate={~p"/accounts/#{row.account}"}
-            class="list-group-item list-group-item-action d-flex align-items-center gap-3"
-          >
-            <span class="me-auto min-w-0">
-              <span class="d-block fw-semibold text-truncate">
-                {row.account.name}
-                <span
-                  :if={row.unapproved > 0}
-                  class="badge rounded-pill text-bg-primary"
-                  title={"#{row.unapproved} zu bestätigen"}
-                >
-                  {row.unapproved}
-                </span>
-              </span>
-              <span class="d-block small text-body-secondary text-truncate">
-                {details(row.account)}
-              </span>
-            </span>
-            <span class="text-end text-nowrap">
-              <span
-                id={"account-#{row.account.id}-balance"}
-                class={["d-block fw-bold app-q", row.balance < 0 && "app-neg"]}
+            value={group.balance}
+            tone={:negative}
+            class="text-sm"
+          />
+        </.list_heading>
+        <.list_row
+          :for={row <- group.rows}
+          id={"account-#{row.account.id}"}
+          navigate={~p"/accounts/#{row.account}"}
+          trailing_on_phone={:title}
+        >
+          {row.account.name}
+          <.badge :if={row.unapproved > 0} tone={:primary} class="ms-1.5 align-text-bottom">
+            {row.unapproved} zu bestätigen
+          </.badge>
+          <:meta>{details(row.account)}</:meta>
+          <:trailing :let={place}>
+            <div class="flex flex-col items-end">
+              <.amount
+                id={balance_id(row, place, "balance")}
+                value={row.balance}
+                tone={:negative}
+                class="font-medium"
                 title="Arbeitssaldo"
-              >
-                {Format.euros(row.balance)}
+              />
+              <span class="text-sm text-base-content/70">
+                Abgeglichen <.amount id={balance_id(row, place, "cleared")} value={row.cleared} />
               </span>
-              <span class="d-block small text-body-secondary">
-                Abgeglichen
-                <span id={"account-#{row.account.id}-cleared"} class="app-q">
-                  {Format.euros(row.cleared)}
-                </span>
-              </span>
-            </span>
-          </.link>
-        </div>
-      </section>
+            </div>
+          </:trailing>
+        </.list_row>
+      <% end %>
+    </.list>
 
-      <div :if={@groups != []}>
-        <div class="d-flex justify-content-between small text-uppercase fw-bold mb-3">
-          <span>Gesamt</span>
-          <span id="accounts-total" class={["app-q", @total < 0 && "app-neg"]}>
-            {Format.euros(@total)}
-          </span>
-        </div>
-        <.button class="w-full" navigate={~p"/accounts/all"}>Alle Konten</.button>
-      </div>
-    </div>
+    <.description_list :if={@groups != []} class="mt-6">
+      <:item label="Gesamt" total>
+        <.amount id="accounts-total" value={@total} tone={:negative} />
+      </:item>
+    </.description_list>
     """
   end
+
+  # The trailing balances render twice on phones (end of the title line) and from md (column).
+  defp balance_id(row, :column, part), do: "account-#{row.account.id}-#{part}"
+  defp balance_id(row, place, part), do: "account-#{row.account.id}-#{part}-#{place}"
 
   @impl true
   def mount(_params, _session, socket), do: {:ok, assign(socket, :page_title, "Konten")}
 
   defp details(account),
     do:
-      [AccountGroups.kind_label(account.kind), account.note]
-      |> Enum.reject(&blank?/1)
-      |> Enum.join(" · ")
-
-  defp blank?(text), do: is_nil(text) or String.trim(text) == ""
+      join_meta([
+        AccountGroups.kind_label(account.kind),
+        account.note && String.trim(account.note)
+      ])
 end

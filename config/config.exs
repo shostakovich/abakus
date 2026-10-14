@@ -13,6 +13,12 @@ config :abakus, :scopes,
     test_setup_helper: :register_and_log_in_user
   ]
 
+# The file import accepts bank exports by extension.
+config :mime, :types, %{
+  "application/x-ofx" => ["ofx"],
+  "application/vnd.intu.qfx" => ["qfx"]
+}
+
 config :abakus,
   ecto_repos: [Abakus.Repo],
   generators: [timestamp_type: :utc_datetime_usec]

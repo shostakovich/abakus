@@ -15,7 +15,10 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       assert html =~ "E-Mail ändern"
       assert html =~ "Passkey hinzufügen"
       refute html =~ "Passwort"
-      assert has_element?(lv, sidebar_link("/settings") <> "[aria-current=page]")
+      assert has_element?(lv, "#passkey-register .btn-primary", "Passkey hinzufügen")
+      refute has_element?(lv, "#email-form .btn-primary")
+      refute has_element?(lv, "#api-token-form .btn-primary")
+      assert has_element?(lv, "#side-settings-sidebar[aria-current=page]")
     end
 
     test "redirects if user is not logged in", %{conn: conn} do
@@ -197,7 +200,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       assert html =~ "Passkey hinzugefügt."
       assert has_element?(lv, "#passkey-#{passkey.id}", "Testgerät")
 
-      lv |> element("#passkey-#{passkey.id} button", "Löschen") |> render_click()
+      confirm_click(lv, "#passkey-#{passkey.id}-delete", "Passkey „Testgerät“ löschen?")
       refute has_element?(lv, "#passkey-#{passkey.id}")
       assert Abakus.Users.list_passkeys(user) == []
     end
@@ -262,11 +265,15 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       {:ok, _} = ApiTokens.authenticate(token)
       {:ok, lv, _html} = live(conn, ~p"/settings/access")
 
-      button = element(lv, "#api-token-#{api_token.id} button", "Widerrufen")
-      assert render(button) =~ "data-confirm"
       assert render(lv) =~ "zuletzt genutzt"
 
-      render_click(button)
+      assert %{
+               question: "Token „Zipfelkasse“ widerrufen?",
+               text: "Programme mit diesem Token verlieren den Zugriff sofort.",
+               label: "Widerrufen"
+             } = asked(lv, "#api-token-#{api_token.id}-revoke")
+
+      confirm_click(lv, "#api-token-#{api_token.id}-revoke")
 
       assert ApiTokens.authenticate(token) == :error
       refute has_element?(lv, "#api-token-#{api_token.id}")
@@ -283,7 +290,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       assert [api_token] = ApiTokens.list_api_tokens()
       assert has_element?(lv, "#new-api-token")
 
-      lv |> element("#api-token-#{api_token.id} button", "Widerrufen") |> render_click()
+      confirm_click(lv, "#api-token-#{api_token.id}-revoke")
 
       refute has_element?(lv, "#new-api-token")
     end
@@ -322,7 +329,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       assert redirected_to(conn) == ~p"/settings/access"
 
       {:ok, lv, _html} = live(recycle(conn), ~p"/settings/access")
-      lv |> element("#passkey-#{passkey.id} button", "Löschen") |> render_click()
+      confirm_click(lv, "#passkey-#{passkey.id}-delete")
       assert Users.list_passkeys(user) == []
     end
 

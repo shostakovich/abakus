@@ -150,7 +150,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, ~s|#edit-account[phx-value-id="#{c.giro.id}"]|)
 
       {:ok, list, _html} = live(c.conn, ~p"/accounts")
-      assert has_element?(list, ~s|#account-#{c.giro.id}[href="/accounts/#{c.giro.id}"]|)
+      assert has_element?(list, ~s|#account-#{c.giro.id} a[href="/accounts/#{c.giro.id}"]|)
     end
 
     test "an account fed by another app offers no manual entry", c do
