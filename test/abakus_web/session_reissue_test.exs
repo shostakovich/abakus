@@ -18,14 +18,14 @@ defmodule AbakusWeb.SessionReissueTest do
     login = post(build_conn(), ~p"/users/log-in", %{"user" => %{"token" => link_token}})
     offset_user_token(get_session(login, :user_token), -8, :day)
 
-    first = get(browser([login]), ~p"/")
+    first = get(browser([login]), ~p"/budget")
     assert first.status == 200
     assert first.resp_cookies["_abakus_web_user_remember_me"]
 
-    second = get(browser([login]), ~p"/")
+    second = get(browser([login]), ~p"/budget")
     assert second.status == 200
 
-    third = get(browser([login, first, second]), ~p"/")
+    third = get(browser([login, first, second]), ~p"/budget")
     assert third.status == 200
   end
 end

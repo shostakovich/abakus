@@ -4,10 +4,10 @@ defmodule AbakusWeb.AccountDialog do
   note. Closing or reopening sits bottom left; accounts are never deleted. The kind stays on its side of the budget,
   so editing offers only that side's kinds, and none to pick for a tracking account.
 
-  Every signed-in page has it through `on_mount(:attach, …)`: the event `open_account_dialog` opens it, with
-  `id` to edit that account, without to add one; `close_account_dialog` closes it. `Layouts.app` renders it from
-  `account_dialog`. A new account opens its register; after an edit or closing, the page stays as it is and runs
-  its URL's params again, so it shows the account as it is now.
+  Every signed-in page of the budget owner has it through `on_mount(:attach, …)`: the event `open_account_dialog`
+  opens it, with `id` to edit that account, without to add one; `close_account_dialog` closes it. `Layouts.app`
+  renders it from `account_dialog`. A new account opens its register; after an edit or closing, the page stays as it
+  is and runs its URL's params again, so it shows the account as it is now.
   """
   use AbakusWeb, :live_component
 
@@ -18,14 +18,19 @@ defmodule AbakusWeb.AccountDialog do
   @editable ~w(name kind note)
 
   def on_mount(:attach, _params, _session, socket) do
-    {:cont,
-     socket
-     |> assign(account_dialog: nil, account_dialog_path: nil)
-     |> attach_hook(:account_dialog_path, :handle_params, fn _params, uri, socket ->
-       {:cont, assign(socket, :account_dialog_path, path(URI.parse(uri)))}
-     end)
-     |> attach_hook(:account_dialog, :handle_event, &handle_page_event/3)
-     |> attach_hook(:account_dialog_done, :handle_info, &handle_page_info/2)}
+    if AbakusWeb.Areas.allowed?(socket.assigns.current_scope, :budget),
+      do: {:cont, attach(socket)},
+      else: {:cont, assign(socket, account_dialog: nil)}
+  end
+
+  defp attach(socket) do
+    socket
+    |> assign(account_dialog: nil, account_dialog_path: nil)
+    |> attach_hook(:account_dialog_path, :handle_params, fn _params, uri, socket ->
+      {:cont, assign(socket, :account_dialog_path, path(URI.parse(uri)))}
+    end)
+    |> attach_hook(:account_dialog, :handle_event, &handle_page_event/3)
+    |> attach_hook(:account_dialog_done, :handle_info, &handle_page_info/2)
   end
 
   defp handle_page_event("open_account_dialog", params, socket),
@@ -58,7 +63,7 @@ defmodule AbakusWeb.AccountDialog do
   defp opened(_params, _groups), do: %{account: %Account{kind: :checking}, balance: 0}
 
   defp after_done(socket, {:created, account}),
-    do: push_navigate(socket, to: ~p"/accounts/#{account}")
+    do: push_navigate(socket, to: ~p"/budget/accounts/#{account}")
 
   defp after_done(%{assigns: %{account_dialog_path: nil}} = socket, :changed), do: socket
 

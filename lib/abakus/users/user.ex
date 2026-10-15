@@ -9,6 +9,7 @@ defmodule Abakus.Users.User do
     # The WebAuthn user handle: random, so passkeys reveal nothing about the user.
     field :passkey_handle, :binary, redact: true
     field :confirmed_at, :utc_datetime_usec
+    field :budget_owner, :boolean, default: false
     field :authenticated_at, :utc_datetime_usec, virtual: true
 
     has_many :passkeys, Abakus.Users.Passkey
@@ -16,10 +17,12 @@ defmodule Abakus.Users.User do
     timestamps()
   end
 
-  def create_changeset(user, attrs) do
+  def create_changeset(user, attrs, budget_owner? \\ false) do
     user
     |> email_changeset(attrs)
     |> put_change(:passkey_handle, :crypto.strong_rand_bytes(16))
+    |> put_change(:budget_owner, budget_owner?)
+    |> unique_constraint(:budget_owner, message: "hat schon jemand")
   end
 
   @doc """

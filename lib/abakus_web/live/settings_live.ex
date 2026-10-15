@@ -1,12 +1,12 @@
 defmodule AbakusWeb.SettingsLive do
   @moduledoc """
   The settings' overview and the sections that need no recent sign-in: Aussehen (the theme, per device) and the
-  YNAB import's status, read from the data. Zugang & API is `AbakusWeb.UserLive.Settings`, behind the sudo plug.
+  YNAB import's status, read from the data. Zugang is `AbakusWeb.UserLive.Settings`, behind the sudo plug.
   """
   use AbakusWeb, :live_view
 
   alias Abakus.YnabImport
-  alias AbakusWeb.Format
+  alias AbakusWeb.{Areas, Format}
   alias AbakusWeb.SettingsLive.Components
 
   @impl true
@@ -16,6 +16,8 @@ defmodule AbakusWeb.SettingsLive do
       section={@section}
       flash={@flash}
       current_scope={@current_scope}
+      areas={@areas}
+      area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
     >
@@ -82,6 +84,7 @@ defmodule AbakusWeb.SettingsLive do
   @impl true
   def handle_params(_params, _url, socket) do
     section = section(socket.assigns.live_action)
+    if section == :ynab, do: ensure_budget!(socket.assigns.current_scope)
 
     {:noreply,
      socket
@@ -89,6 +92,9 @@ defmodule AbakusWeb.SettingsLive do
      |> assign(:page_title, if(section, do: Components.label(section), else: "Einstellungen"))
      |> assign(:ynab_status, if(section == :ynab, do: YnabImport.status()))}
   end
+
+  defp ensure_budget!(scope),
+    do: Areas.allowed?(scope, :budget) || raise(Areas.NotFoundError)
 
   defp section(:index), do: nil
   defp section(section), do: section

@@ -57,7 +57,7 @@ defmodule Abakus.BudgetFixturesTest do
   defp target(attrs) do
     %{
       from_month: month(attrs["from_month"]),
-      cadence: String.to_existing_atom(attrs["cadence"]),
+      cadence: String.to_atom(attrs["cadence"]),
       amount: cents(attrs["amount"]),
       due_on: attrs["due_on"] && Date.from_iso8601!(attrs["due_on"]),
       repeats_yearly: attrs["repeats_yearly"],

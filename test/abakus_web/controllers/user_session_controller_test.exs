@@ -21,7 +21,7 @@ defmodule AbakusWeb.UserSessionControllerTest do
       assert conn.resp_cookies["_abakus_web_user_remember_me"]
       assert redirected_to(conn) == ~p"/"
 
-      conn = get(recycle(conn), ~p"/")
+      conn = get(recycle(conn), ~p"/budget")
       assert html_response(conn, 200) =~ "Budget"
     end
 

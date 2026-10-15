@@ -1,7 +1,8 @@
 defmodule Abakus.Users do
   @moduledoc """
   Users sign in with a passkey or, as a fallback, a magic link by email. There are no passwords
-  and no sign-up: users are invited by `mix abakus.invite` or `Abakus.Release.invite/1`.
+  and no sign-up: users are invited by `mix abakus.invite` or `Abakus.Release.invite/1`. The first
+  user owns the budget (ADR 0007).
   """
 
   import Ecto.Query, warn: false
@@ -28,10 +29,13 @@ defmodule Abakus.Users do
 
   def get_user!(id), do: Repo.get!(User, id)
 
+  @doc "Creates a user, who owns the budget when there is no other user yet."
   def create_user(attrs) do
-    %User{}
-    |> User.create_changeset(attrs)
-    |> Repo.insert()
+    Repo.transact(fn ->
+      %User{}
+      |> User.create_changeset(attrs, not Repo.exists?(User))
+      |> Repo.insert()
+    end)
   end
 
   @doc """

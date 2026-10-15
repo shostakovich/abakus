@@ -275,7 +275,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         size={:sm}
         icon="file-text"
         class="max-md:hidden"
-        navigate={~p"/import"}
+        navigate={~p"/budget/import"}
       >
         Datei-Import
       </.button>
@@ -332,7 +332,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             :if={@manual}
             id="file-import-item"
             icon="file-text"
-            navigate={~p"/import"}
+            navigate={~p"/budget/import"}
             class="md:hidden"
           >
             Datei-Import

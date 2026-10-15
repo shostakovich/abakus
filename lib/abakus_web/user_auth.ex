@@ -29,7 +29,7 @@ defmodule AbakusWeb.UserAuth do
   def magic_link_url(token), do: url(~p"/users/log-in/#{token}")
 
   @doc """
-  Signs the user in and redirects to the page they wanted, or to the budget. When another user
+  Signs the user in and redirects to the page they wanted, or home. When another user
   signs in over the session, the session token it replaces stops working and its sockets are
   disconnected; the same user signing in again (sudo mode) keeps it, so open tabs keep working.
   The user's expired tokens are cleaned up on the way.

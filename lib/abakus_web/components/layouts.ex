@@ -5,6 +5,8 @@ defmodule AbakusWeb.Layouts do
   alias Abakus.Names
   alias AbakusWeb.AccountGroups
 
+  @budget_pages [:budget, :accounts, :all_accounts, :import]
+
   embed_templates "layouts/*"
 
   attr :flash, :map, required: true
@@ -13,6 +15,9 @@ defmodule AbakusWeb.Layouts do
   attr :current, :atom,
     default: nil,
     values: [nil, :budget, :accounts, :all_accounts, :import, :settings]
+
+  attr :areas, :list, required: true, doc: "the areas the user may use, from `AbakusWeb.Areas`"
+  attr :area, :atom, required: true, doc: "the current area's key; its entries go into the dock"
 
   attr :account_groups, :list,
     default: [],
@@ -33,39 +38,54 @@ defmodule AbakusWeb.Layouts do
   slot :fab, doc: "the page's main action on phones, a `<.fab>`"
 
   @doc """
-  Signed-in pages in Setzkasten's sidebar shell: Budget and all accounts, the open accounts by group with their
-  balance and how many transactions wait for approval and "Konto hinzufügen" (not in the icon rail or the dock),
-  then Import & Sync and the settings. On phones the dock's "Mehr" opens the sidebar with the accounts and the
-  settings, which the account menu also offers.
+  Signed-in pages in Setzkasten's sidebar shell, grouped into the areas the user may use, then the settings.
+
+  The Budget: Budget and all accounts, the open accounts by group with their balance and how many transactions
+  wait for approval and "Konto hinzufügen" (not in the icon rail or the dock), then Import & Sync.
+
+  With one area the brand is its name; with more, each area's entries start with its name as section title, and
+  in the top bar the brand is a menu that switches the area. On phones the dock holds the current area's entries;
+  its "Mehr" opens the sidebar with everything else, and the account menu offers the settings too.
   """
   def app(assigns) do
     assigns =
       assign(assigns,
+        budget?: Enum.any?(assigns.areas, &(&1.key == :budget)),
         groups: AccountGroups.open(assigns.account_groups),
-        nav_key: nav_key(assigns.current, assigns.account_id, assigns.account_groups)
+        nav_key: nav_key(assigns.current, assigns.account_id, assigns.account_groups),
+        other_areas: Enum.reject(assigns.areas, &(&1.key == :budget)),
+        in_budget_dock?: assigns.area == :budget
       )
 
     ~H"""
     <.app_shell layout={:sidebar} current={@nav_key} width={@width} amount_tone={:negative}>
-      <:brand>
+      <:brand :let={place}>
         <img src={~p"/images/icon.svg"} alt="" width="28" height="28" class="size-7 shrink-0" />
-        Abakus
+        <.area_switcher :if={place == :bar and length(@areas) > 1} areas={@areas} area={@area} />
+        <span :if={place != :bar or length(@areas) < 2} class="truncate">
+          {brand_name(@areas)}
+        </span>
       </:brand>
       <:nav
+        :if={@budget?}
         key={:budget}
         id="side-budget"
         label="Budget"
         icon="wallet"
-        navigate={navigate(~p"/", @current)}
-        href={href(~p"/", @current)}
+        section={section(@areas, "Budget")}
+        dock={@in_budget_dock?}
+        navigate={navigate(~p"/budget", @current)}
+        href={href(~p"/budget", @current)}
       />
       <:nav
+        :if={@budget?}
         key={:all_accounts}
         id="side-all-accounts"
         label="Alle Konten"
         icon="landmark"
-        navigate={navigate(~p"/accounts/all", @current)}
-        href={href(~p"/accounts/all", @current)}
+        dock={@in_budget_dock?}
+        navigate={navigate(~p"/budget/accounts/all", @current)}
+        href={href(~p"/budget/accounts/all", @current)}
       />
       <:nav
         :for={{group, row, first?} <- account_rows(@groups)}
@@ -81,10 +101,11 @@ defmodule AbakusWeb.Layouts do
         rail={false}
         dock={false}
         parent={:all_accounts}
-        navigate={navigate(~p"/accounts/#{row.account}", @current)}
-        href={href(~p"/accounts/#{row.account}", @current)}
+        navigate={navigate(~p"/budget/accounts/#{row.account}", @current)}
+        href={href(~p"/budget/accounts/#{row.account}", @current)}
       />
       <:nav
+        :if={@budget?}
         key={:add_account}
         id="side-add-account"
         label="Konto hinzufügen"
@@ -93,12 +114,24 @@ defmodule AbakusWeb.Layouts do
         on_click={JS.push("open_account_dialog")}
       />
       <:nav
+        :if={@budget?}
         key={:import}
         id="side-import"
         label="Import & Sync"
         icon="refresh-cw"
-        navigate={navigate(~p"/import", @current)}
-        href={href(~p"/import", @current)}
+        dock={@in_budget_dock?}
+        navigate={navigate(~p"/budget/import", @current)}
+        href={href(~p"/budget/import", @current)}
+      />
+      <:nav
+        :for={area <- @other_areas}
+        key={{:area, area.key}}
+        id={"side-area-#{area.key}"}
+        label={area.label}
+        icon={area.icon}
+        section={section(@areas, area.label)}
+        dock={area.key == @area}
+        href={area.path}
       />
       <:nav
         key={:settings}
@@ -106,8 +139,7 @@ defmodule AbakusWeb.Layouts do
         label="Einstellungen"
         icon="settings"
         dock={false}
-        navigate={navigate(~p"/settings", @current)}
-        href={href(~p"/settings", @current)}
+        href={~p"/settings"}
       />
       <:account :let={place}>
         <.dropdown
@@ -130,11 +162,7 @@ defmodule AbakusWeb.Layouts do
             <span :if={place == :sidebar} class="truncate">{@current_scope.user.email}</span>
           </:trigger>
           <:header :if={place != :sidebar}>{@current_scope.user.email}</:header>
-          <:item
-            navigate={navigate(~p"/settings", @current)}
-            href={href(~p"/settings", @current)}
-            icon="settings"
-          >
+          <:item href={~p"/settings"} icon="settings">
             Einstellungen
           </:item>
           <:item href={~p"/users/log-out"} method="delete" icon="log-out">Abmelden</:item>
@@ -176,13 +204,49 @@ defmodule AbakusWeb.Layouts do
 
   defp initial(email), do: String.upcase(String.first(email) || "")
 
-  # Zugang & API has a live_session of its own behind the sudo plug; links on the settings pages, which lead into
-  # and out of it, load the page.
-  defp navigate(_path, :settings), do: nil
-  defp navigate(path, _current), do: path
+  # Each area and the settings have live_sessions of their own (Zugang a further one behind the sudo plug), so
+  # only links within the Budget navigate; the others load the page.
+  defp navigate(path, current) when current in @budget_pages, do: path
+  defp navigate(_path, _current), do: nil
 
-  defp href(path, :settings), do: path
-  defp href(_path, _current), do: nil
+  defp href(_path, current) when current in @budget_pages, do: nil
+  defp href(path, _current), do: path
+
+  defp brand_name([area]), do: area.label
+  defp brand_name(_areas), do: "Abakus"
+
+  # With more than one area, each area's first entry carries its name.
+  defp section([_one], _label), do: nil
+  defp section(_areas, label), do: label
+
+  attr :areas, :list, required: true
+  attr :area, :atom, required: true
+
+  defp area_switcher(assigns) do
+    assigns = assign(assigns, :current, Enum.find(assigns.areas, &(&1.key == assigns.area)))
+
+    ~H"""
+    <.dropdown
+      id="area-switcher"
+      label="Bereich wechseln"
+      variant={:ghost}
+      class="min-w-0"
+      trigger_class="min-w-0 px-2 text-base font-semibold"
+    >
+      <:trigger>
+        <span class="truncate">{if @current, do: @current.label, else: "Abakus"}</span>
+      </:trigger>
+      <:item
+        :for={area <- @areas}
+        href={area.path}
+        icon={area.icon}
+        active={area.key == @area}
+      >
+        {area.label}
+      </:item>
+    </.dropdown>
+    """
+  end
 
   attr :flash, :map, required: true
   slot :inner_block, required: true

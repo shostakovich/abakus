@@ -14,7 +14,7 @@ defmodule AbakusWeb.BudgetLive.Components do
   alias AbakusWeb.Format
 
   @doc "The budget's path for the first month shown."
-  def budget_path(first), do: ~p"/?#{[month: Window.param(first)]}"
+  def budget_path(first), do: ~p"/budget?#{[month: Window.param(first)]}"
 
   attr :window, Window, required: true
 
@@ -440,7 +440,7 @@ defmodule AbakusWeb.BudgetLive.Components do
           </button>
           <.link
             :if={not @assignable}
-            navigate={~p"/accounts/all"}
+            navigate={~p"/budget/accounts/all"}
             class="app-catbtn"
             title="In allen Konten zuordnen"
           >

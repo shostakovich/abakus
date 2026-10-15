@@ -10,7 +10,7 @@ defmodule AbakusWeb.BudgetLiveTest do
   @november ~D[2026-11-01]
 
   test "anonymous visitors are sent to the sign-in page", %{conn: conn} do
-    assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(conn, ~p"/")
+    assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(conn, ~p"/budget")
   end
 
   describe "signed in" do
@@ -31,7 +31,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       {:ok, view, _html} = open(conn)
 
       assert has_element?(view, "h1", "Budget")
-      assert has_element?(view, sidebar_link("/") <> "[aria-current=page]", "Budget")
+      assert has_element?(view, sidebar_link("/budget") <> "[aria-current=page]", "Budget")
       assert has_element?(view, sidebar_link("/settings"), "Einstellungen")
       assert has_element?(view, ~s|aside button[aria-label="Seitenleiste einklappen"]|)
 
@@ -122,7 +122,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       spend(c, c.groceries, -80_000, ~D[2026-10-05])
       Categories.assign(c.rent, @november, 50_000)
 
-      {:ok, view, _html} = open(c.conn, ~p"/", months: 2)
+      {:ok, view, _html} = open(c.conn, ~p"/budget", months: 2)
 
       assert has_element?(view, "#ready-2026-10", "100,00 €")
       warning = "November nicht gedeckt: es fehlen 300,00 €"
@@ -140,7 +140,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       Categories.assign(c.groceries, @october, 30_000)
       Categories.assign(c.groceries, @november, 30_000)
-      {:ok, view, _html} = open(c.conn, ~p"/", months: 3)
+      {:ok, view, _html} = open(c.conn, ~p"/budget", months: 3)
 
       assert has_element?(
                view,
@@ -166,7 +166,7 @@ defmodule AbakusWeb.BudgetLiveTest do
     end
 
     test "clicking a month card or working in a month makes it the focus month", c do
-      {:ok, view, _html} = open(c.conn, ~p"/", months: 3)
+      {:ok, view, _html} = open(c.conn, ~p"/budget", months: 3)
 
       view |> element("#month-2026-11") |> render_click()
 
@@ -180,7 +180,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
     test "the first month comes from the URL; without the current month the first is the focus",
          c do
-      {:ok, view, _html} = open(c.conn, ~p"/?month=2026-12", months: 2)
+      {:ok, view, _html} = open(c.conn, ~p"/budget?month=2026-12", months: 2)
 
       assert has_element?(view, "#month-2026-12.is-focus")
       assert has_element?(view, "#month-2027-01:not(.is-focus)")
@@ -189,14 +189,14 @@ defmodule AbakusWeb.BudgetLiveTest do
 
     test "the current month is the browser's, unless its date is implausible", c do
       tomorrow = Date.add(Date.utc_today(), 1)
-      {:ok, view, _html} = open(c.conn, ~p"/", today: Date.to_iso8601(tomorrow))
+      {:ok, view, _html} = open(c.conn, ~p"/budget", today: Date.to_iso8601(tomorrow))
 
       assert has_element?(
                view,
                "#month-#{Calendar.strftime(tomorrow, "%Y-%m")}[aria-current=date]"
              )
 
-      {:ok, view, _html} = open(c.conn, ~p"/", today: "9999-12-31")
+      {:ok, view, _html} = open(c.conn, ~p"/budget", today: "9999-12-31")
 
       assert has_element?(
                view,
@@ -235,7 +235,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
     test "a compact budget shows its month in a bar that steps through the months", c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
-      {:ok, view, _html} = open(c.conn, ~p"/", compact: true, months: 3)
+      {:ok, view, _html} = open(c.conn, ~p"/budget", compact: true, months: 3)
 
       refute has_element?(view, "#strip")
       refute has_element?(view, "#month-2026-11")
@@ -248,22 +248,22 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       view |> element(~s|#month-bar button[aria-label="Später"]|) |> render_click()
 
-      assert_patch(view, ~p"/?month=2026-11")
+      assert_patch(view, ~p"/budget?month=2026-11")
       assert has_element?(view, "#month-bar", "November 2026")
     end
 
     test "the month strip moves the months and keeps the first one in the URL", c do
-      {:ok, view, _html} = open(c.conn, ~p"/", months: 2)
+      {:ok, view, _html} = open(c.conn, ~p"/budget", months: 2)
 
       view |> element(~s|#strip button[aria-label="Später"]|) |> render_click()
-      assert_patch(view, ~p"/?month=2026-11")
+      assert_patch(view, ~p"/budget?month=2026-11")
       assert has_element?(view, "#month-2026-11.is-focus")
 
       view |> element("#strip button", "Dez") |> render_click()
       assert has_element?(view, "#month-2026-12.is-focus")
 
       view |> element("#strip button", "Feb") |> render_click()
-      assert_patch(view, ~p"/?month=2027-02")
+      assert_patch(view, ~p"/budget?month=2027-02")
       assert has_element?(view, "#month-2027-02.is-focus")
     end
 
@@ -307,7 +307,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, "#category-uncategorised", "Nicht kategorisiert")
       assert has_element?(view, "#available-uncategorised-2026-10 .app-pill", "−9,99 €")
       assert has_element?(view, "#available-uncategorised-2026-10 .app-pill", "überzogen")
-      assert has_element?(view, ~s|#category-uncategorised a[href="/accounts/all"]|)
+      assert has_element?(view, ~s|#category-uncategorised a[href="/budget/accounts/all"]|)
 
       refute has_element?(view, "#assign-uncategorised-2026-10")
     end
@@ -385,7 +385,7 @@ defmodule AbakusWeb.BudgetLiveTest do
     end
   end
 
-  defp open(conn, path \\ ~p"/", opts \\ []) do
+  defp open(conn, path \\ ~p"/budget", opts \\ []) do
     fit = %{
       "months" => Keyword.get(opts, :months, 1),
       "span" => 12,

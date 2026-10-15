@@ -15,6 +15,8 @@ defmodule AbakusWeb.AccountsLive do
     <Layouts.app
       flash={@flash}
       current_scope={@current_scope}
+      areas={@areas}
+      area={@area}
       current={:accounts}
       width={:narrow}
       account_groups={@account_groups}
@@ -36,7 +38,7 @@ defmodule AbakusWeb.AccountsLive do
     <.header>
       Konten
       <:actions :if={@groups != []}>
-        <.button navigate={~p"/accounts/all"} icon="landmark">Alle Konten</.button>
+        <.button navigate={~p"/budget/accounts/all"} icon="landmark">Alle Konten</.button>
         <.button id="add-account" variant={:primary} icon="plus" phx-click="open_account_dialog">
           Konto hinzufügen
         </.button>
@@ -66,7 +68,7 @@ defmodule AbakusWeb.AccountsLive do
         <.list_row
           :for={row <- group.rows}
           id={"account-#{row.account.id}"}
-          navigate={~p"/accounts/#{row.account}"}
+          navigate={~p"/budget/accounts/#{row.account}"}
           trailing_on_phone={:title}
         >
           {row.account.name}

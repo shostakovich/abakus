@@ -47,6 +47,8 @@ defmodule AbakusWeb.BudgetLive do
     <Layouts.app
       flash={@flash}
       current_scope={@current_scope}
+      areas={@areas}
+      area={@area}
       current={:budget}
       width={:full}
       account_groups={@account_groups}

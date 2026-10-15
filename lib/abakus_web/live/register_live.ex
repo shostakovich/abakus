@@ -43,6 +43,8 @@ defmodule AbakusWeb.RegisterLive do
     <Layouts.app
       flash={@flash}
       current_scope={@current_scope}
+      areas={@areas}
+      area={@area}
       current={if @account, do: :accounts, else: :all_accounts}
       account_id={@account && @account.id}
       width={:full}
@@ -56,7 +58,7 @@ defmodule AbakusWeb.RegisterLive do
         <div class="flex items-start md:block">
           <.link
             id="register-back"
-            navigate={~p"/accounts"}
+            navigate={~p"/budget/accounts"}
             class="btn btn-ghost btn-sm -ms-3 max-md:btn-square max-md:-ms-2"
           >
             <.icon name="chevron-left" /><span class="max-md:sr-only">Konten</span>
@@ -703,7 +705,11 @@ defmodule AbakusWeb.RegisterLive do
       ]
       |> Enum.filter(fn {_key, value} -> value end)
 
-    base = if assigns.account, do: ~p"/accounts/#{assigns.account}", else: ~p"/accounts/all"
+    base =
+      if assigns.account,
+        do: ~p"/budget/accounts/#{assigns.account}",
+        else: ~p"/budget/accounts/all"
+
     if params == [], do: base, else: base <> "?" <> Query.encode(params)
   end
 end

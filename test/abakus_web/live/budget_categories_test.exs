@@ -22,7 +22,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
   defp open(conn) do
     conn
     |> put_connect_params(%{"today" => "2026-10-10"})
-    |> live(~p"/")
+    |> live(~p"/budget")
     |> then(fn {:ok, view, _html} -> view end)
   end
 
@@ -128,7 +128,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
         "today" => "2026-10-10",
         "fit" => %{"months" => 1, "span" => 7, "compact" => true}
       })
-      |> live(~p"/")
+      |> live(~p"/budget")
 
     refute has_element?(view, "#edit-category-#{c.movies.id}")
 
