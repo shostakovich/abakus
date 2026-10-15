@@ -29,10 +29,11 @@ defmodule AbakusWeb.Router do
     plug :require_area, :kasse
   end
 
-  # Public without a session: the health check here and later `/mcp/<secret>` with its own pipeline. Everything
+  # Public without a session: the health check and `/mcp/<secret>`, which checks its callers itself. Everything
   # else requires a signed-in user.
   scope "/", AbakusWeb do
     get "/up", HealthController, :show
+    forward "/mcp", MCPPlug, [], log: false
   end
 
   scope "/", AbakusWeb do
@@ -81,6 +82,7 @@ defmodule AbakusWeb.Router do
       live "/settings/recurring", RecurringLive
       live "/settings/recurring/new", RecurringNewLive
       live "/settings/rates", RatesLive
+      live "/settings/ynab", YnabLive
       live "/export", ExportLive
     end
 

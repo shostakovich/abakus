@@ -8,7 +8,9 @@ defmodule AbakusWeb.RouterTest do
     {:get, "/users/log-in/:token"},
     {:post, "/users/log-in"},
     {:post, "/users/passkeys/options"},
-    {:delete, "/users/log-out"}
+    {:delete, "/users/log-out"},
+    # The MCP checks its callers itself: secret path, allowed addresses, no browsers.
+    {:*, "/mcp"}
   ]
 
   defp public?(%{verb: verb, path: path}) do

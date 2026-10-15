@@ -32,6 +32,7 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
              {"/kasse/settings/categories", "Kategorien"},
              {"/kasse/settings/recurring", "Wiederkehrende Ausgaben"},
              {"/kasse/settings/rates", "Wechselkurse"},
+             {"/kasse/settings/ynab", "YNAB"},
              {"/kasse/export", "Export"}
            ]
 

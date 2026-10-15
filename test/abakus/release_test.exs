@@ -87,6 +87,25 @@ defmodule Abakus.ReleaseTest do
     assert_raise Mix.Error, ~r/usage/, fn -> AddParticipant.run(["dora@example.com"]) end
   end
 
+  @tag :tmp_dir
+  test "import_kasse/2 imports the old app's file and names the users", %{tmp_dir: dir} do
+    path = Abakus.KasseFixtures.old_app_file!(dir)
+
+    emails = %{
+      "Anna" => "anna@example.com",
+      "Ben" => "ben@example.com",
+      "Cleo" => "cleo@example.com"
+    }
+
+    output = capture_io(fn -> Abakus.Release.import_kasse(path, emails) end)
+
+    assert output =~ "Imported the Kasse: "
+    assert output =~ "5 expenses"
+    assert output =~ "Users matched: none."
+    assert output =~ "sign-in page: anna@example.com, ben@example.com, cleo@example.com."
+    assert Participants.get_participant!(5).name == "Cleo"
+  end
+
   describe "the YNAB import" do
     setup do
       FakeYnab.start(%{"plan-test" => @plan})

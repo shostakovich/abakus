@@ -62,6 +62,17 @@ defmodule Abakus.KasseFixtures do
     })
   end
 
+  @old_app Path.expand("fixtures/kasse/old_app.sql", __DIR__)
+
+  @doc "The former shared-expenses app's database file with data in every table, written into `dir`."
+  def old_app_file!(dir) do
+    path = Path.join(dir, "old.sqlite3")
+    {:ok, db} = Exqlite.Sqlite3.open(path)
+    :ok = Exqlite.Sqlite3.execute(db, File.read!(@old_app))
+    :ok = Exqlite.Sqlite3.close(db)
+    path
+  end
+
   def create!(attrs, actor_id \\ nil) do
     {:ok, expense} = Expenses.create_expense(actor_id, attrs)
     expense

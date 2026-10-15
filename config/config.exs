@@ -25,6 +25,7 @@ config :abakus,
   jobs: true
 
 config :abakus, Abakus.Kasse.Fx.Ecb, base_url: "https://www.ecb.europa.eu/stats/eurofxref/"
+config :abakus, Abakus.Kasse.Ynab.Client, base_url: "https://api.ynab.com/v1"
 
 config :abakus, Abakus.Repo,
   journal_mode: :wal,
@@ -84,6 +85,7 @@ config :logger, :default_formatter,
   metadata: [:request_id]
 
 config :phoenix, :json_library, JSON
+config :phoenix, :filter_parameters, ["password", "token", "secret"]
 config :ecto_sqlite3, json_library: JSON
 
 import_config "#{config_env()}.exs"

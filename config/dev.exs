@@ -9,6 +9,10 @@ config :abakus, Abakus.Repo,
 
 config :abakus, :backup_dir, Path.join(Path.dirname(database), "backups")
 
+# Imported Kasse data holds real YNAB tokens: the sync only reaches YNAB when YNAB_BASE_URL says so.
+config :abakus, Abakus.Kasse.Ynab.Client,
+  base_url: System.get_env("YNAB_BASE_URL", "http://127.0.0.1:9")
+
 config :abakus, AbakusWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}],
   check_origin: false,

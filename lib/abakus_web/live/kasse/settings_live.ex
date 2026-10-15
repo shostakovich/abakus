@@ -1,7 +1,7 @@
 defmodule AbakusWeb.Kasse.SettingsLive do
   @moduledoc """
   "Gruppe", the Kasse's settings: the group's name and the way to its people, categories, recurring expenses,
-  exchange rates and export.
+  exchange rates, YNAB and export.
   """
   use AbakusWeb, :kasse_live_view
 
@@ -12,6 +12,7 @@ defmodule AbakusWeb.Kasse.SettingsLive do
     {"categories", "Kategorien", "tag", "/kasse/settings/categories"},
     {"recurring", "Wiederkehrende Ausgaben", "repeat", "/kasse/settings/recurring"},
     {"rates", "Wechselkurse", "banknote", "/kasse/settings/rates"},
+    {"ynab", "YNAB", "wallet", "/kasse/settings/ynab"},
     {"export", "Export", "archive", "/kasse/export"}
   ]
 
