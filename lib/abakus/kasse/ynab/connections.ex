@@ -157,6 +157,25 @@ defmodule Abakus.Kasse.Ynab.Connections do
     old
   end
 
+  @doc """
+  Removes a person's connection with its mapping and the state of each synced share, inside the caller's database
+  transaction; what is in YNAB stays. Returns `{:ok, connection}`, nil when there was none.
+  """
+  def remove(participant_id) do
+    case get(participant_id) do
+      nil ->
+        {:ok, nil}
+
+      connection ->
+        for schema <- [Transaction, CategoryMapping, Connection],
+            do: Repo.delete_all(where(schema, participant_id: ^participant_id))
+
+        with {:ok, _activity} <-
+               Activities.log_settings(participant_id, "YNAB-Verbindung entfernt"),
+             do: {:ok, connection}
+    end
+  end
+
   @doc "Since when plan and account are chosen; set to `now` for an older connection without it."
   def ensure_connected_at(participant_id, now \\ DateTime.utc_now()) do
     {:ok, connected_at} =

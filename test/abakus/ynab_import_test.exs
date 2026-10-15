@@ -192,9 +192,9 @@ defmodule Abakus.YnabImportTest do
     end
 
     test "refuses once the Kasse is linked to the budget" do
-      account_fixture(%{fed_by: :shared_expenses, kind: :cash})
+      account = account_fixture(%{kind: :cash})
       %{anna: anna} = KasseFixtures.household()
-      {:ok, _linked} = BudgetLink.switch_on(Participants.get_participant!(anna))
+      {:ok, _linked} = BudgetLink.switch_on(Participants.get_participant!(anna), account.id)
 
       assert YnabImport.import_plan(@plan) == {:error, :own_data}
     end

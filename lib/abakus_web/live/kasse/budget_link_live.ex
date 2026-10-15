@@ -1,13 +1,15 @@
 defmodule AbakusWeb.Kasse.BudgetLinkLive do
   @moduledoc """
-  "Budget", the budget owner's link between the Kasse and the budget: where their shares are booked and which
-  budget category each Kasse category's shares land in. Anyone else gets 404.
+  "Budget", the budget owner's link between the Kasse and the budget: switching it on ("Mit Budget verknüpfen"),
+  where their shares are booked and which budget category each Kasse category's shares land in. Anyone else gets
+  404.
   """
   use AbakusWeb, :kasse_live_view
 
   alias Abakus.Categories
-  alias Abakus.Kasse.BudgetLink
+  alias Abakus.Kasse.{BudgetLink, Dates}
   alias Abakus.Kasse.Categories, as: KasseCategories
+  alias Abakus.Kasse.Ynab.Connections
 
   @impl true
   def mount(_params, _session, socket) do
@@ -15,13 +17,27 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
 
     {:ok,
      socket
-     |> assign(
-       page_title: "Budget",
-       account: BudgetLink.account(socket.assigns.current_participant),
-       budget_groups: budget_groups()
-     )
+     |> assign(page_title: "Budget", budget_groups: budget_groups())
+     |> load_link()
      |> load()}
   end
+
+  defp load_link(socket) do
+    participant = socket.assigns.current_participant
+    account = BudgetLink.account(participant)
+    choices = if account, do: [], else: BudgetLink.account_choices()
+    fed = Enum.find(choices, &(&1.fed_by == :shared_expenses))
+
+    assign(socket,
+      account: account,
+      account_options: Enum.map(choices, &{&1.name, &1.id}),
+      start_date: if(!account, do: start_date(Connections.get(participant.id))),
+      link_form: to_form(%{"account_id" => fed && fed.id}, as: :link)
+    )
+  end
+
+  defp start_date(%{start_date: %Date{} = date}), do: Dates.format(date)
+  defp start_date(_connection), do: nil
 
   defp budget_groups do
     for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(),
@@ -43,6 +59,18 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
   end
 
   @impl true
+  def handle_event("switch_on", params, socket) do
+    account_id = get_in(params, ["link", "account_id"])
+
+    case BudgetLink.switch_on(socket.assigns.current_participant, account_id) do
+      {:ok, counts} ->
+        {:noreply, socket |> put_flash(:info, switched_on(counts)) |> load_link()}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, refused(reason))}
+    end
+  end
+
   def handle_event("map_categories", params, socket) do
     case BudgetLink.put_category_mapping(Map.get(params, "mapping", %{})) do
       {:ok, _mapping} ->
@@ -52,6 +80,36 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
         {:noreply, put_flash(socket, :error, message)}
     end
   end
+
+  defp switched_on(counts) do
+    linked =
+      "Mit dem Budget verknüpft: #{bookings(counts.adopted)} übernommen, " <>
+        "#{bookings(counts.created)} neu angelegt."
+
+    case unlinked(counts) do
+      [] -> linked
+      unlinked -> linked <> " Unverknüpft geblieben: " <> Enum.join(unlinked, "; ") <> "."
+    end
+  end
+
+  defp unlinked(%{unadoptable: unadoptable, left: left}) do
+    [
+      unadoptable > 0 &&
+        "#{bookings(unadoptable)} mit Kasse-Kennung, die sich nicht übernehmen " <>
+          "#{if unadoptable == 1, do: "ließ", else: "ließen"} (Aufteilung, Umbuchung oder doppelt) – " <>
+          "bitte von Hand prüfen",
+      left > 0 && "#{bookings(left)} mit Kasse-Kennung ohne passende Ausgabe"
+    ]
+    |> Enum.filter(& &1)
+  end
+
+  defp bookings(1), do: "1 Buchung"
+  defp bookings(count), do: "#{count} Buchungen"
+
+  defp refused(:no_account), do: "Bitte ein offenes Budget-Konto wählen."
+  defp refused(:linked), do: "Die Kasse ist schon mit dem Budget verknüpft."
+  defp refused(message) when is_binary(message), do: message
+  defp refused(_reason), do: "Die Verknüpfung ließ sich nicht einschalten."
 
   @impl true
   def render(assigns) do
@@ -82,15 +140,57 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
             </.link>; ihr Saldo ist dein Saldo in der Kasse. Kategorie, Memo, Markierung und Bestätigung
             kannst du dort ändern. Die Kategorie setzt die Kasse neu, sobald sich die Kategorie der Ausgabe ändert.
           </p>
-          <p :if={!@account} id="budget-link-state">
-            Noch nicht mit dem Budget verknüpft.
-          </p>
+          <div :if={!@account} class="flex flex-col gap-3">
+            <p id="budget-link-state">
+              Noch nicht mit dem Budget verknüpft. Danach ist dein Anteil an jeder Ausgabe eine Buchung im
+              gewählten Konto, in der Kategorie, die du unten zuordnest.
+            </p>
+            <p :if={@start_date} id="budget-link-ynab">
+              Führe vorher den letzten YNAB-Import aus und ordne erst danach die Kategorien zu. Buchungen mit
+              Kasse-Kennung in diesem Konto werden verknüpft und behalten Kategorie, Status und Bestätigung;
+              jede Ausgabe seit dem {@start_date} ohne Buchung bekommt eine. Deine YNAB-Verbindung wird entfernt.
+            </p>
+            <p :if={!@start_date} id="budget-link-ynab">
+              Jede bisherige Ausgabe bekommt eine Buchung.
+            </p>
+            <.form for={@link_form} id="budget-link-form" phx-submit="switch_on">
+              <.input
+                field={@link_form[:account_id]}
+                type="select"
+                label="Konto für geteilte Ausgaben"
+                prompt="– Konto wählen –"
+                options={@account_options}
+                required
+              />
+              <.action_bar>
+                <.button
+                  id="budget-link-submit"
+                  type="submit"
+                  variant={:primary}
+                  icon="link"
+                  confirm="Mit Budget verknüpfen?"
+                  confirm_text="Das lässt sich nicht rückgängig machen."
+                  confirm_label="Verknüpfen"
+                >
+                  Mit Budget verknüpfen
+                </.button>
+              </.action_bar>
+            </.form>
+          </div>
         </section>
 
         <section aria-labelledby="budget-categories">
           <.section_heading id="budget-categories">Kategorien</.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
             In welcher Kategorie des Budgets landet dein Anteil? Ohne Zuordnung bleibt er unkategorisiert.
+          </p>
+          <p
+            :if={@start_date}
+            id="budget-mapping-ynab"
+            class="mb-3 max-w-prose text-sm text-base-content/70"
+          >
+            Erst nach dem letzten YNAB-Import zuordnen: Er ersetzt die Kategorien des Budgets und läuft nicht,
+            solange eine Zuordnung besteht.
           </p>
           <.form for={@mapping_form} id="budget-mapping-form" phx-submit="map_categories">
             <.table id="budget-mapping" rows={@rows} row_id={&"budget-mapping-#{&1.id}"} size={:dense}>

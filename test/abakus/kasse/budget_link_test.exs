@@ -30,7 +30,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
         kasse_household.id => household_goods.id
       })
 
-    {:ok, _anna} = BudgetLink.switch_on(Participants.get_participant!(h.anna))
+    {:ok, _counts} = BudgetLink.switch_on(Participants.get_participant!(h.anna), account.id)
 
     %{
       h: h,
@@ -246,18 +246,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     assert groceries == context.groceries
   end
 
-  describe "switching on" do
-    test "links only the budget owner's participant", %{h: h} do
-      assert BudgetLink.switch_on(Participants.get_participant!(h.ben)) ==
-               {:error, :not_budget_owner}
-    end
-
-    test "needs an open account fed by shared expenses", %{h: h} = context do
-      {:ok, _closed} = Ledger.update_account(context.account, %{closed: true})
-
-      assert BudgetLink.switch_on(Participants.get_participant!(h.anna)) == {:error, :no_account}
-    end
-
+  describe "unlinked" do
     test "nothing is booked for a participant who is not linked", %{h: h} = context do
       Repo.delete_all(Link)
 

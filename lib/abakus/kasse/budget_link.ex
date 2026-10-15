@@ -4,7 +4,8 @@ defmodule Abakus.Kasse.BudgetLink do
   share of every expense as a transaction in the account fed by `shared_expenses`, written through the Ledger in
   the expense's database transaction: minus the share, dated as the expense, the title as payee, the budget category
   the Kasse category is mapped to, a memo describing the expense, created cleared and unapproved. Reimbursements and
-  expenses without a share of theirs give none.
+  expenses without a share of theirs give none. An expense dated before the link's start date gets none unless its
+  marked transaction was adopted, it is entered after the switch or it is moved to a later date.
 
   The Kasse leads on what it changes: amount, date and payee follow every change of the expense. The register may
   change category, memo, flag, cleared state and approval; a later Kasse change keeps a category or memo the
@@ -21,6 +22,7 @@ defmodule Abakus.Kasse.BudgetLink do
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Money
   alias Abakus.Kasse.Participants.Participant
+  alias Abakus.Kasse.Ynab.{Connections, Posting, Scheduler}
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.Repo
@@ -31,35 +33,156 @@ defmodule Abakus.Kasse.BudgetLink do
   @doc "The fields of a linked transaction the register may change."
   def register_fields, do: @register_fields
 
-  @doc "The open account fed by `shared_expenses` that linked shares go to, the first in order; nil without one."
-  def shared_expenses_account do
-    Repo.one(
+  @doc "The accounts a participant can be linked to: open budget accounts not fed by another app, in order."
+  def account_choices do
+    Repo.all(
       from a in Account,
-        where: a.fed_by == :shared_expenses and not a.closed,
-        order_by: [a.position, a.id],
-        limit: 1
+        where:
+          a.kind in ^Account.budget_kinds() and not a.closed and
+            (is_nil(a.fed_by) or a.fed_by == :shared_expenses),
+        order_by: [a.position, a.id]
     )
   end
 
   @doc """
-  Links the participant to the budget: from now on their shares are booked in the shared-expenses account. Only the
-  budget owner's participant can be linked; `{:error, :no_account}` without a shared-expenses account.
+  Links the budget owner's participant to the budget, in one step after the final YNAB import: the account
+  `account_id` (one of `account_choices/0`) becomes the one fed by shared expenses; its transactions whose memo ends
+  with the YNAB sync's marker become their expenses' linked transactions, whatever their date; every expense since
+  the start date of the participant's YNAB connection without one gets one; and the YNAB connection is removed.
+  Returns `{:ok, %{adopted:, created:, unadoptable:, left:}}`, `unadoptable` the marked transactions of an expense
+  that could not be adopted (a split, a transfer or a second one for the expense), `left` those without an expense
+  that wants a booking; or `{:error, reason}`: `:not_budget_owner`, `:linked`, `:no_account` or a message in German.
   """
-  def switch_on(%Participant{} = participant) do
+  def switch_on(%Participant{} = participant, account_id) do
     participant = Repo.preload(participant, :user)
 
+    Scheduler.change_connection(fn -> Repo.transact(fn -> link(participant, account_id) end) end)
+  end
+
+  defp link(participant, account_id) do
+    with :ok <- check_linkable(participant),
+         {:ok, account} <- feed(account_id),
+         {:ok, connection} <- Connections.remove(participant.id) do
+      %Link{
+        participant_id: participant.id,
+        account_id: account.id,
+        start_date: connection && connection.start_date
+      }
+      |> Repo.insert!()
+      |> take_over()
+    end
+  end
+
+  defp check_linkable(participant) do
     cond do
-      not participant.user.budget_owner ->
-        {:error, :not_budget_owner}
+      not participant.user.budget_owner -> {:error, :not_budget_owner}
+      Repo.exists?(where(Link, participant_id: ^participant.id)) -> {:error, :linked}
+      true -> :ok
+    end
+  end
 
-      account = shared_expenses_account() ->
-        Repo.insert(%Link{participant_id: participant.id, account_id: account.id},
-          on_conflict: {:replace, [:account_id, :updated_at]},
-          conflict_target: :participant_id
-        )
+  defp feed(account_id) do
+    with {:ok, id} <- Abakus.Schema.cast_id(account_id),
+         %Account{} = account <- Enum.find(account_choices(), &(&1.id == id)) do
+      Repo.update_all(
+        from(a in Account, where: a.fed_by == :shared_expenses and a.id != ^id),
+        set: [fed_by: nil]
+      )
 
-      true ->
-        {:error, :no_account}
+      Ledger.update_account(account, %{fed_by: :shared_expenses})
+    else
+      _none -> {:error, :no_account}
+    end
+  end
+
+  defp take_over(link) do
+    marked = marked_transactions(link)
+    by_expense = Enum.group_by(marked, &Posting.marker_id(&1.memo))
+    none = %{adopted: 0, created: 0, unadoptable: 0}
+
+    link.start_date
+    |> expenses_to_take_over(Map.keys(by_expense))
+    |> Enum.reduce_while({:ok, none}, fn expense, {:ok, counts} ->
+      case take_over_expense(link, expense, Map.get(by_expense, expense.id, [])) do
+        {:ok, done} -> {:cont, {:ok, Map.merge(counts, done, fn _key, a, b -> a + b end)}}
+        {:error, %Changeset{} = changeset} -> {:halt, {:error, refused(changeset)}}
+      end
+    end)
+    |> case do
+      {:ok, counts} ->
+        {:ok, Map.put(counts, :left, length(marked) - counts.adopted - counts.unadoptable)}
+
+      error ->
+        error
+    end
+  end
+
+  # The first plain marked transaction is adopted; the others are left to the owner, and so is an expense whose
+  # marked transactions are all splits or transfers, rather than booking its share twice.
+  defp take_over_expense(link, expense, marked) do
+    wanted = if !linked_transaction(expense.id, link.participant_id), do: wanted(expense, link)
+
+    case {wanted, Enum.find(marked, &plain?/1)} do
+      {nil, _plain} ->
+        {:ok, %{}}
+
+      {wanted, nil} when marked == [] ->
+        with :ok <- create(link, expense.id, wanted), do: {:ok, %{created: 1}}
+
+      {_wanted, nil} ->
+        {:ok, %{unadoptable: length(marked)}}
+
+      {wanted, plain} ->
+        with :ok <- adopt(link, expense.id, plain, wanted),
+             do: {:ok, %{adopted: 1, unadoptable: length(marked) - 1}}
+    end
+  end
+
+  # The marked transactions in the account, whatever their date, the first for each expense first.
+  defp marked_transactions(link) do
+    from(t in Transaction,
+      where:
+        t.account_id == ^link.account_id and is_nil(t.deleted_at) and
+          is_nil(t.matched_transaction_id) and like(t.memo, "%zipfelkasse #%"),
+      order_by: t.id,
+      preload: :subtransactions
+    )
+    |> Repo.all()
+    |> Enum.filter(&Posting.marker_id(&1.memo))
+  end
+
+  # A split or a transfer cannot follow the expense's amount and category.
+  defp plain?(transaction),
+    do: transaction.subtransactions == [] and is_nil(transaction.transfer_transaction_id)
+
+  # The expenses since the start date, and older ones with a marked transaction.
+  defp expenses_to_take_over(start_date, marked_ids) do
+    ids = for id <- marked_ids, {:ok, id} <- [Abakus.Schema.cast_id(id)], do: id
+
+    from(e in Expense,
+      where: is_nil(e.deleted_at) and not e.reimbursement,
+      order_by: [e.date, e.id],
+      preload: [:paid_by, :shares]
+    )
+    |> since_or_marked(start_date, ids)
+    |> Repo.all()
+  end
+
+  defp since_or_marked(query, nil, _ids), do: query
+  defp since_or_marked(query, date, ids), do: where(query, [e], e.date >= ^date or e.id in ^ids)
+
+  # The transaction keeps its category, cleared state, approval and flag; the rest follows the expense.
+  defp adopt(link, expense_id, transaction, wanted) do
+    attrs = %{
+      amount: wanted.amount,
+      date: wanted.date,
+      payee_name: wanted.payee,
+      memo: wanted.memo
+    }
+
+    with {:ok, transaction} <-
+           Ledger.update_transaction(transaction, attrs, reconciled: :confirmed) do
+      insert_linked(link, expense_id, transaction)
     end
   end
 
@@ -92,12 +215,22 @@ defmodule Abakus.Kasse.BudgetLink do
     expense_id = (new || old).id
 
     case {linked_transaction(expense_id, link.participant_id), wanted(new, link)} do
-      {nil, nil} -> :ok
-      {nil, wanted} -> create(link, expense_id, wanted)
-      {linked, nil} -> remove(linked)
-      {linked, wanted} -> change(linked, wanted(old, link), wanted)
+      {nil, nil} ->
+        :ok
+
+      {nil, wanted} ->
+        if is_nil(old) or started?(link, wanted), do: create(link, expense_id, wanted), else: :ok
+
+      {linked, nil} ->
+        remove(linked)
+
+      {linked, wanted} ->
+        change(linked, wanted(old, link), wanted)
     end
   end
+
+  defp started?(%Link{start_date: nil}, _wanted), do: true
+  defp started?(%Link{start_date: start}, wanted), do: not Date.before?(wanted.date, start)
 
   # A transaction deleted beside the Kasse is booked anew.
   defp linked_transaction(expense_id, participant_id) do
@@ -159,16 +292,20 @@ defmodule Abakus.Kasse.BudgetLink do
     }
 
     with {:ok, transaction} <- Ledger.create_transaction(attrs) do
-      Repo.insert!(%LinkedTransaction{
-        expense_id: expense_id,
-        participant_id: link.participant_id,
-        transaction_id: transaction.id,
-        written_category_id: transaction.category_id,
-        written_memo: transaction.memo
-      })
-
-      :ok
+      insert_linked(link, expense_id, transaction)
     end
+  end
+
+  defp insert_linked(link, expense_id, transaction) do
+    Repo.insert!(%LinkedTransaction{
+      expense_id: expense_id,
+      participant_id: link.participant_id,
+      transaction_id: transaction.id,
+      written_category_id: transaction.category_id,
+      written_memo: transaction.memo
+    })
+
+    :ok
   end
 
   defp remove(linked) do

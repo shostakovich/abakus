@@ -2,14 +2,17 @@ defmodule AbakusWeb.Kasse.YnabLive do
   @moduledoc """
   The reader's YNAB connection: how it works, the token, plan, account and start date, the
   category mapping and the state of the sync. Asking YNAB may take seconds, so the page loads
-  its lists and runs every change in the background; `?refresh=1` bypasses YNAB's cached lists.
+  its lists and runs every change in the background; `?refresh=1` bypasses YNAB's cached lists. A participant
+  linked to the budget gets 404: the link replaced their sync.
   """
   use AbakusWeb, :kasse_live_view
 
-  alias Abakus.Kasse.Ynab
+  alias Abakus.Kasse.{BudgetLink, Ynab}
 
   @impl true
   def mount(_params, _session, socket) do
+    if BudgetLink.account(socket.assigns.current_participant), do: raise(AbakusWeb.NotFoundError)
+
     {:ok,
      assign(socket,
        page_title: "YNAB",

@@ -1,11 +1,11 @@
 defmodule AbakusWeb.Kasse.SettingsLive do
   @moduledoc """
   "Gruppe", the Kasse's settings: the group's name and the way to its people, categories, recurring expenses,
-  exchange rates, the budget (for its owner only), YNAB and export.
+  exchange rates, the budget (for its owner only), YNAB (until the participant is linked to the budget) and export.
   """
   use AbakusWeb, :kasse_live_view
 
-  alias Abakus.Kasse.Settings
+  alias Abakus.Kasse.{BudgetLink, Settings}
 
   @links [
     {"participants", "Teilnehmer", "users", "/kasse/settings/participants"},
@@ -21,7 +21,7 @@ defmodule AbakusWeb.Kasse.SettingsLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(page_title: "Gruppe", links: links(socket.assigns.current_scope.user))
+     |> assign(page_title: "Gruppe", links: links(socket.assigns))
      |> assign_form(Settings.change_settings(Settings.get_settings()))}
   end
 
@@ -45,8 +45,14 @@ defmodule AbakusWeb.Kasse.SettingsLive do
     end
   end
 
-  defp links(%{budget_owner: true}), do: @links
-  defp links(_user), do: Enum.reject(@links, &(elem(&1, 0) == "budget"))
+  defp links(%{current_scope: scope, current_participant: participant}) do
+    hidden = [
+      !scope.user.budget_owner && "budget",
+      BudgetLink.account(participant) && "ynab"
+    ]
+
+    Enum.reject(@links, &(elem(&1, 0) in hidden))
+  end
 
   defp assign_form(socket, changeset), do: assign(socket, form: to_form(changeset, as: :settings))
 
