@@ -1,7 +1,7 @@
 defmodule Abakus.YnabImport do
   @moduledoc """
   The import from YNAB (docs/SPEC.md, "YNAB import"): fetches a plan's export with a personal access token,
-  replaces the whole budget with it (docs/adr/0002-ynab-reimport-replaces.md) and checks Abakus's numbers against
+  replaces the whole budget with it (DECISIONS.md, ADR 0002) and checks Abakus's numbers against
   YNAB's. Data Abakus cannot represent stops it before anything is written (`Unsupported`); so does any
   transaction that did not come from YNAB, as the budget then holds data of its own.
   """

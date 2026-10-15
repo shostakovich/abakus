@@ -72,7 +72,7 @@ tables have no user: all users see everything.
   name>" as in YNAB, created and renamed with the account. Other payees are unique by lookup key.
 - **Category group** and **category**: name, hidden (from YNAB, for the import and its check; the budget ignores
   it), position (new ones go to the end), note, internal. A category is deleted only into another, which takes over
-  everything it has; a group only when it is empty ([ADR 0003](adr/0003-categories-deleted-with-a-transfer.md)).
+  everything it has; a group only when it is empty ([ADR 0003](../DECISIONS.md)).
   Lookup keys of categories are not unique (an old "Urlaub" next to "🏖️ Urlaub"); groups have none. A migration
   creates YNAB's internal group "Internal Master Category" with "Inflow: Ready to Assign" (UI "Zu verteilen");
   internal ones are not listed, not editable and take no assignments or targets. Ready to Assign's lookup key is
@@ -128,7 +128,7 @@ tables have no user: all users see everything.
   unapproved; a deleted proposal proposes nothing.
 - **Transaction origin**: transaction, account, source, external id; unique per account, source and external id
   (FITID, provider or YNAB id). A transaction matched to an import keeps the import's origin, so re-imports
-  dedupe ([ADR 0001](adr/0001-transaction-origins.md)); origins move with their transaction to another account.
+  dedupe ([ADR 0001](../DECISIONS.md)); origins move with their transaction to another account.
   Moving a transaction, or a counterpart, into an account that has one of its external ids from the same source
   already is refused.
 - References are restricted: nothing that history points to can be deleted, except a category moved into another
@@ -266,7 +266,7 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   categories with targets (`goal_*` fields), assignments per month, all transactions with splits and transfers,
   cleared and reconciled state, flags; all from one request for the plan's export (`/plans/{plan_id}`)
 - Repeatable until the switch: a re-import replaces the whole budget
-  ([ADR 0002](adr/0002-ynab-reimport-replaces.md)); the run reports what differs from YNAB's numbers
+  ([ADR 0002](../DECISIONS.md)); the run reports what differs from YNAB's numbers
 - The API keeps no target history: months before a target's creation month show it too but ask nothing, so a
   target starts in its creation month; payees with the same lookup key are merged; data Abakus cannot represent
   (credit cards, loans, targets other than monthly, yearly or by a date without repeat, amounts that are not

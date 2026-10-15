@@ -2,7 +2,7 @@ defmodule Abakus.Ledger.TransactionOrigin do
   @moduledoc """
   Where a transaction was imported from: the external id per account and source (FITID, the bank's or YNAB's
   id). A transaction that an import was matched to keeps the import's origin, so a re-import still finds it
-  (see docs/adr/0001-transaction-origins.md).
+  (see DECISIONS.md, ADR 0001).
   """
 
   use Abakus.Schema
