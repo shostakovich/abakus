@@ -99,9 +99,9 @@ An account whose value is only tracked, outside the budget, e.g. a securities de
 _Avoid_: Off-budget account, investment account
 
 **Fed account**:
-An account another app keeps up to date (`portfolio`: its value comes from a portfolio app; `shared_expenses`: its
-transactions come from a shared-expenses app), so the UI offers no manual entry or file import for it; the Ledger
-still accepts both.
+An account another app or area keeps up to date (`portfolio`: its value comes from a portfolio app;
+`shared_expenses`: its transactions are the budget owner's shares of Kasse expenses), so the UI offers no manual
+entry or file import for it; the Ledger still accepts both.
 _Avoid_: Synced account, linked account (that is bank sync)
 
 **Reconcile**:
@@ -160,7 +160,7 @@ abgeglichen", "Abgeglichen", "Abgeschlossen".
 _Avoid_: Status, booked; "bestätigt" (that is approval)
 
 **Approval**:
-A person has looked at an imported or API-created transaction and accepted it; manual entries are approved. UI
+A person has looked at an imported or Kasse-created transaction and accepted it; manual entries are approved. UI
 "Bestätigt", the action "Bestätigen".
 _Avoid_: Confirmed, reviewed; "abgeglichen" (that is the cleared state)
 
@@ -171,7 +171,7 @@ _Avoid_: Tag, label
 ### Import
 
 **Source**:
-Where a transaction came from: manual, YNAB, file, bank or API.
+Where a transaction came from: manual, YNAB, file, bank, API or the Kasse.
 _Avoid_: Channel, provider
 
 **Origin**:
@@ -208,5 +208,102 @@ _Avoid_: Slug, normalized name
 ### People
 
 **User**:
-A person who signs in; all users see and change the same budget.
+A person who signs in; sees the areas they may use.
 _Avoid_: Account (that is where money is kept), member
+
+**Budget owner**:
+The one user who owns the budget, the first one invited; only they see the Budget area.
+_Avoid_: Admin, budget user
+
+**Area**:
+A part of the app with its own pages under its path, its sidebar section and its dock: Budget and Kasse. `/` opens
+the area used last. UI "Bereich".
+_Avoid_: Module, app, section (that is the sidebar's)
+
+## Kasse
+
+The shared expenses of one household: who paid what for whom, the balances that follow and how to settle them.
+Code lives in `Abakus.Kasse` and `AbakusWeb.Kasse`, tables start with `kasse_`. Terms that the budget uses too
+(category, activity, balance, split) mean the Kasse's here and are qualified in code (`Abakus.Kasse.Categories`).
+
+**Kasse**:
+The area of the shared expenses; only participants see it. UI "Kasse".
+_Avoid_: Splitwise, shared budget
+
+**Group**:
+Everybody who shares expenses; there is one, with a name. UI "Gruppe".
+_Avoid_: Household (that is the budget's), team
+
+**Participant**:
+A person of the group, who is a user; a user is at most one participant. Archived, never deleted, and without the
+Kasse while archived. UI "Person", the list "Teilnehmer".
+_Avoid_: Member, user (that is who signs in)
+
+**Expense**:
+What one participant paid for some of the group, split into shares; deleted ones stay in the activity log. UI
+"Ausgabe".
+_Avoid_: Transaction (that is the budget's), bill
+
+**Reimbursement**:
+A payment from one participant to another that settles a balance: an expense with a single share, the recipient's.
+UI "Rückzahlung".
+_Avoid_: Transfer (that is the budget's), settlement
+
+**Share**:
+What a participant bears of an expense, in cents; the shares add up to the expense exactly. UI "Anteil".
+_Avoid_: Portion, part
+
+**Split mode**:
+How an expense is divided: equally, by shares, by percent or by amounts. UI "Aufteilung".
+_Avoid_: Split (that is the budget's divided transaction)
+
+**Kasse balance**:
+What a participant paid minus their shares, reimbursements included; positive means the others owe them. UI "Saldo".
+_Avoid_: Available, debt
+
+**Settlement**:
+The reimbursements that bring every Kasse balance to zero, the largest debtor paying the largest creditor first.
+UI "Vorgeschlagene Rückzahlungen".
+_Avoid_: Netting
+
+**Kasse category**:
+A freely named, ordered kind of expense, e.g. "Lebensmittel"; archived, never deleted. UI "Kategorie".
+_Avoid_: Unqualified Category in code (that is the budget's)
+
+**Recurring expense**:
+A rule that creates the same expense weekly, monthly or yearly, catching up on missed dates. UI "Wiederkehrende
+Ausgabe".
+_Avoid_: Scheduled transaction, template (that is the rule's copy of the expense)
+
+**Activity entry**:
+Who created, changed or deleted what in the Kasse, with the changes as old and new values. UI "Aktivität".
+_Avoid_: Unqualified Activity in code (that is a budget category's sum), audit log
+
+**Exchange rate**:
+Euros per unit of a foreign currency for an expense: the ECB reference rate of its date, or one entered by hand.
+UI "Wechselkurs", "EZB-Kurs".
+_Avoid_: FX rate in UI text
+
+**Budget link**:
+The budget owner's participant linked to the budget: their share of every expense is a linked transaction in the
+account fed by `shared_expenses`, so its balance is their Kasse balance; each Kasse category maps to a budget
+category for it. Switching it on, after the final YNAB import, makes the chosen account the one fed by
+`shared_expenses`, links its transactions whose memo ends with the YNAB sync's marker to their expenses, whatever
+their date (keeping category, cleared state, approval and flag), books every other expense since the start date of
+the owner's YNAB connection and removes the YNAB connection. A split, a transfer or a second marked transaction of
+an expense stays unlinked for the owner to check, and its expense gets no booking. Any other expense dated before
+that start date gets a linked transaction only when entered later or moved past it. UI "Mit Budget verknüpfen", the
+settings page "Budget".
+_Avoid_: Sync, budget export
+
+**Linked transaction**:
+The transaction a linked participant's share of an expense is, written with the expense: minus the share, its date,
+its title as payee, the mapped category, a memo describing the expense, unapproved. Amount, date and payee follow
+the expense; the register keeps the category, memo, flag and approval it set, until the expense's Kasse category
+changes, which writes the mapped category again.
+_Avoid_: Synced transaction, mirror
+
+**YNAB sync**:
+Until the switch to Abakus, each participant's share of every expense written into an account of their own YNAB plan,
+in the YNAB category mapped to the Kasse category; reimbursements stay out. UI "YNAB".
+_Avoid_: YNAB import (that brings the budget over), YNAB export

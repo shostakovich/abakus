@@ -93,9 +93,12 @@ Accepted, 2026-10-15
   sync would only copy data the app already holds.
 - **Decision:** The budget owner's share of each expense is a transaction in the account fed by `shared_expenses`,
   written with the expense through the Ledger. The Kasse leads: a change there overwrites the fields it changed,
-  while the register's own category, memo, flag and approval stay until the Kasse changes the same field.
+  while the register's own category, memo, flag and approval stay; only a change of the expense's Kasse category
+  writes the category again.
 - **Consequences:** That account's balance is the owner's Kasse balance by construction, so it is never reconciled;
-  amount, date and payee of linked transactions cannot be edited in the register.
+  amount, date and payee of linked transactions cannot be edited in the register, and they are deleted only with
+  their expense. The link keeps the category and memo the Kasse wrote last; where the transaction differs from them,
+  the register overrode the field, whichever register action did it (#48).
 
 ## 0007. The budget has one owner
 
@@ -114,3 +117,60 @@ Accepted, 2026-10-15. Replaces Zipfelkasse's "no login, the person is kept in a 
 - **Decision:** Every participant is a user, with magic link and passkeys; adding a participant invites a user, and
   the "who are you" picker is gone.
 - **Consequences:** Every participant needs an email address and a passkey; there are no participants without a sign-in.
+
+## 0009. Kasse money is cents, split by largest remainder rotated by expense id
+
+Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
+
+- **Context:** Shares must add up to the expense exactly and Kasse balances to zero, and the cent that does not
+  divide evenly must not always fall on the same participant.
+- **Decision:** Money is integer euro cents; a foreign amount is stored in its currency's minor units and
+  converted with rounding half away from zero. Shares are allocated by largest remainder over the participants
+  ordered by id; ties take turns by the expense id.
+- **Consequences:** No floating-point drift and reproducible splits: the same expense always splits the same way,
+  and the form previews the split with the next id. Changing the allocation would change stored shares, so it
+  stays fixed.
+
+## 0010. Case-folded columns instead of a custom SQL function
+
+Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
+
+- **Context:** The Kasse's search, duplicate checks, recurring skips and statistics by title must ignore case the
+  Unicode way ("ß" as "ss", umlauts); SQLite's `lower()` and `LIKE` fold only ASCII. Exqlite cannot register
+  custom SQL functions, and one would exist neither in an SQL sandbox nor in the `sqlite3` shell.
+- **Decision:** `kasse_expenses.title_folded` and `notes_folded` hold `:string.casefold/1` of title and notes,
+  written by the changeset on every insert and update; queries compare them with a folded term.
+- **Consequences:** Plain SQL works everywhere. Every write must go through the changeset (or set the columns
+  itself), and the texts are stored twice.
+
+## 0011. The Kasse's YNAB sync keeps the Kasse as the source of truth
+
+Accepted, 2026-10-15. From Zipfelkasse, where it was decided first; it lasts until the switch to Abakus (ADR 0006).
+
+- **Context:** Each participant can mirror their share of every expense into their own YNAB account. Expenses change
+  and disappear after they were synced, and requests can fail with an unknown outcome.
+- **Decision:** The Kasse creates, updates and deletes its transactions in YNAB and never takes changes back. No
+  `import_id` (YNAB would merge the imports with reimbursement transfers of the same amount); every memo ends with
+  the marker `zipfelkasse #<expense id>`, which finds transactions after an unclear outcome or a change of account.
+  A fingerprint (`v1\0date\0milliunits\0payee\0memo\0category`, the first 16 bytes of SHA-256 as hex) per
+  share decides whether an update is needed.
+- **Consequences:** Date, amount, payee or memo edited in YNAB are overwritten when the expense changes. The
+  fingerprint and memo format must stay byte-identical, also across the move into Abakus, or every transaction looks
+  changed; the marker keeps the old app's name for that reason, and the import keeps expense ids. The tokens are
+  stored in the database, so backups are private, and a copy of the database in development reaches YNAB only when
+  `YNAB_BASE_URL` points there.
+
+## 0012. A stateless MCP server behind a secret path and an address filter
+
+Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
+
+- **Context:** AI assistants should analyse the shared expenses and enter new ones, but they cannot sign in with a
+  passkey, and the data is private.
+- **Decision:** Only MCP protocol version 2026-07-28, stateless (no handshake, session or SSE). The one endpoint is
+  `/mcp/<MCP_SECRET>`, compared in constant time, for client addresses in `MCP_ALLOWED_CIDRS` only, and refuses
+  browsers (any `Origin`). Tools only read, except two that add Kasse entries. `sql_query` runs on an in-memory copy
+  of the Kasse's tables (`kasse_…` without the YNAB ones), read-only, without ATTACH or pragmas, cancelled after 2
+  seconds.
+- **Consequences:** No server state to lose and no older protocol versions to support; clients that do not speak
+  2026-07-28 cannot connect. A query can never change or lock the real database or see the YNAB tokens, users or the
+  budget, at the cost of copying the data per query. The budget's tools join the same endpoint and its rules.

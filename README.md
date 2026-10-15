@@ -1,7 +1,7 @@
 # Abakus
 
 Self-hosted envelope budgeting for one household: YNAB's budgeting rules, a multi-month budget view like
-[Actual Budget](https://actualbudget.org/), reconciling, OFX/QFX import, bank sync and a YNAB-compatible API. It is
+[Actual Budget](https://actualbudget.org/), reconciling, OFX/QFX import and bank sync. It is
 meant to replace YNAB for my own use. **The user interface is German.**
 
 ## Status
@@ -9,10 +9,14 @@ meant to replace YNAB for my own use. **The user interface is German.**
 Sign-in with magic link and passkeys, the budget math, the YNAB import, the budget view on desktop with its
 category dialog and month details (targets, auto-assign, covering and moving money), the account list, the
 register, where transactions are edited in place as in YNAB, reconciling, the OFX/QFX file import with match
-proposals, the YNAB-compatible API with its tokens and the settings. What remains of v1 is switching the existing
-YNAB API clients over to Abakus; bank sync and MCP follow in v2.
+proposals and the settings, and the Kasse: the household's shared expenses, moved in from Zipfelkasse with its
+expenses, balances, activity log, recurring expenses, categories, exchange rates, CSV/JSON export, its sync to YNAB,
+its MCP server for AI assistants and the link that books the budget owner's shares in the budget, switched on in one
+step in place of the YNAB sync. What remains of v1 is removing the sync code after the switch; bank sync and the
+budget's MCP tools follow in v2.
 
-- [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, API, phases
+- [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, phases
+- [docs/MCP.md](docs/MCP.md): the MCP server, its access rules and tools
 
 ## Development
 
@@ -34,7 +38,17 @@ iex> Abakus.Users.invite_user("you@example.com", &AbakusWeb.UserAuth.magic_link_
 ```
 
 `mix abakus.invite you@example.com` works as well and prints the sign-in link, since its mail does not reach
-the server's mailbox. After signing in, add a passkey under Einstellungen.
+the server's mailbox. The first user owns the budget. After signing in, add a passkey under Einstellungen.
+
+The Kasse is for its participants only, so add yourself as the first one; more can then be added under
+Kasse → Gruppe → Teilnehmer, which invites them by mail:
+
+```sh
+mix abakus.add_participant you@example.com "Your name"
+```
+
+In development the Kasse's YNAB sync talks to YNAB only with `YNAB_BASE_URL=https://api.ynab.com/v1`, so imported
+data with real tokens stays away from it.
 
 ## Deploy
 
@@ -46,6 +60,12 @@ the server's mailbox. After signing in, add a passkey under Einstellungen.
 - A reverse proxy must terminate HTTPS and send `X-Forwarded-Proto: https`. Plain HTTP still serves pages, but
   the live UI only connects from `https://$PHX_HOST`.
 - `/up` answers 200 while the app and its database are up, for health checks.
+- Every night at 03:00 a copy of the database goes to `data/backups` (mode 0600); the newest seven are kept.
+- `TZ` (default `Europe/Berlin`) is the local time of the Kasse's dates and its jobs: ECB rates at 17:00,
+  recurring expenses hourly, the backup. The Kasse's YNAB sync runs shortly after each change and hourly.
+- MCP ([docs/MCP.md](docs/MCP.md)): `MCP_SECRET` (empty turns it off; the endpoint is `/mcp/<MCP_SECRET>`),
+  `MCP_ALLOWED_CIDRS` (who may call it, default `160.79.104.0/21`) and `TRUSTED_PROXIES` (proxies whose
+  `X-Forwarded-For` counts).
 
 Invite the first user with
 
@@ -53,7 +73,12 @@ Invite the first user with
 docker compose exec abakus bin/abakus eval 'Abakus.Release.invite("you@example.com")'
 ```
 
-They get a sign-in link by mail (valid 15 minutes) and add a passkey under Einstellungen.
+They get a sign-in link by mail (valid 15 minutes), own the budget and add a passkey under Einstellungen. The
+first participant of the Kasse, who invites the others from there:
+
+```sh
+docker compose exec abakus bin/abakus eval 'Abakus.Release.add_participant("you@example.com", "Your name")'
+```
 
 Import the budget from YNAB with a personal access token (YNAB: Account Settings → Developer Settings), passed to
 this one command only. It replaces the whole budget, so it refuses once Abakus holds transactions of its own, and
@@ -64,6 +89,17 @@ docker compose exec -e YNAB_TOKEN=… abakus bin/abakus eval 'Abakus.Release.imp
 ```
 
 With several plans in YNAB it lists them; pass the id as `import_ynab("…")`. Locally: `mix abakus.ynab_import`.
+
+Bring the Kasse over from Zipfelkasse once, instead of adding its first participant: stop Zipfelkasse, copy its
+database file into `data/` and import it with every person's email address. Ids, shares, recurring expenses, the
+activity log and the YNAB connections stay as they were; each person becomes the user with that address, and users
+missing in Abakus are created without mail and ask for a sign-in link on the sign-in page. It refuses once the Kasse
+holds people or expenses.
+
+```sh
+docker compose exec abakus bin/abakus eval \
+  'Abakus.Release.import_kasse("/app/data/zipfelkasse.sqlite3", %{"Anna" => "anna@example.com"})'
+```
 
 ## Before you use this
 
@@ -77,4 +113,6 @@ one container behind a reverse proxy.
 
 ## License
 
-Public domain ([The Unlicense](LICENSE)). Bank sync follows Actual Budget's Enable Banking integration (MIT).
+Public domain ([The Unlicense](LICENSE)). Bank sync follows Actual Budget's Enable Banking integration (MIT). The
+Lucide icons in `assets/vendor/lucide` are under the ISC License (some derive from Feather, MIT), both in its
+`LICENSE`; the plush images in `priv/static/images/plush` were made for Zipfelkasse.
