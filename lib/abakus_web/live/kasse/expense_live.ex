@@ -1,7 +1,8 @@
 defmodule AbakusWeb.Kasse.ExpenseLive do
   @moduledoc """
   The form of an expense or reimbursement: new (`:new`, prefilled for a suggested reimbursement)
-  or saved (`:edit`, read-only once deleted, with its history). Every change goes through
+  or saved (`:edit`, read-only once deleted, with its history and, for the budget owner, the
+  transaction it is linked to in the budget). Every change goes through
   `Abakus.Kasse.Expenses.Form`, which keeps the text as typed and fills in what an edit implies;
   the split shows live, and a foreign rate is looked up in the background.
 
@@ -9,7 +10,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   """
   use AbakusWeb, :kasse_live_view
 
-  alias Abakus.Kasse.{Activities, Categories, Expenses, Participants, Split}
+  alias Abakus.Kasse.{Activities, BudgetLink, Categories, Expenses, Participants, Split}
   alias Abakus.Kasse.Expenses.{Expense, Form}
   alias Abakus.LocalTime
   alias Ecto.Changeset
@@ -64,7 +65,8 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
       expense: nil,
       deleted?: false,
       data: data,
-      history: []
+      history: [],
+      booking: nil
     )
   end
 
@@ -76,12 +78,17 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
         expense: expense,
         deleted?: Expense.deleted?(expense),
         data: Expenses.edit_form(expense),
-        history: Activities.list_activities(expense_id: expense.id)
+        history: Activities.list_activities(expense_id: expense.id),
+        booking: booking(socket.assigns.current_scope.user, expense)
       )
     else
       _missing -> raise AbakusWeb.NotFoundError
     end
   end
+
+  # The budget is its owner's alone (ADR 0007).
+  defp booking(%{budget_owner: true}, expense), do: BudgetLink.transaction_for(expense.id)
+  defp booking(_user, _expense), do: nil
 
   @impl true
   def handle_event("change", %{"expense" => params}, socket) do
@@ -160,6 +167,9 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
          socket
          |> put_flash(:error, "Ausgabe nicht gefunden oder schon gelöscht.")
          |> push_navigate(to: ~p"/kasse")}
+
+      {:error, %Changeset{} = changeset} ->
+        {:noreply, put_flash(socket, :error, error_text(changeset))}
     end
   end
 
@@ -518,6 +528,26 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
         </.action_bar>
       </.form>
 
+      <section :if={@booking} aria-labelledby="expense-budget" class="mt-8">
+        <.section_heading id="expense-budget">Im Budget</.section_heading>
+        <.description_list id="expense-budget-facts">
+          <:item label="Dein Anteil"><.amount value={-@booking.amount} /></:item>
+          <:item label="Kategorie">
+            {if @booking.category, do: @booking.category.name, else: "Nicht kategorisiert"}
+          </:item>
+        </.description_list>
+        <.button
+          id="expense-register"
+          navigate={~p"/budget/accounts/#{@booking.account_id}"}
+          variant={:ghost}
+          size={:sm}
+          icon="wallet"
+          class="-ms-3 mt-2"
+        >
+          Im Register ansehen
+        </.button>
+      </section>
+
       <section :if={@expense} aria-labelledby="expense-history" class="mt-8">
         <.section_heading id="expense-history">Verlauf</.section_heading>
         <p :if={!@deleted? && @expense.recurring_expense_id} class="mb-2 text-sm">
@@ -563,6 +593,9 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   end
 
   defp local(utc), do: utc |> LocalTime.from_utc() |> Format.datetime()
+
+  defp error_text(changeset),
+    do: Enum.map_join(changeset.errors, " ", fn {_field, {message, _opts}} -> message end)
 
   defp error_title([_one]), do: "1 Feld ist noch nicht richtig"
   defp error_title(errors), do: "#{length(errors)} Felder sind noch nicht richtig"

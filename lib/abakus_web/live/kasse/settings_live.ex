@@ -1,7 +1,7 @@
 defmodule AbakusWeb.Kasse.SettingsLive do
   @moduledoc """
   "Gruppe", the Kasse's settings: the group's name and the way to its people, categories, recurring expenses,
-  exchange rates, YNAB and export.
+  exchange rates, the budget (for its owner only), YNAB and export.
   """
   use AbakusWeb, :kasse_live_view
 
@@ -12,6 +12,7 @@ defmodule AbakusWeb.Kasse.SettingsLive do
     {"categories", "Kategorien", "tag", "/kasse/settings/categories"},
     {"recurring", "Wiederkehrende Ausgaben", "repeat", "/kasse/settings/recurring"},
     {"rates", "Wechselkurse", "banknote", "/kasse/settings/rates"},
+    {"budget", "Budget", "scale", "/kasse/settings/budget"},
     {"ynab", "YNAB", "wallet", "/kasse/settings/ynab"},
     {"export", "Export", "archive", "/kasse/export"}
   ]
@@ -20,7 +21,7 @@ defmodule AbakusWeb.Kasse.SettingsLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(page_title: "Gruppe", links: @links)
+     |> assign(page_title: "Gruppe", links: links(socket.assigns.current_scope.user))
      |> assign_form(Settings.change_settings(Settings.get_settings()))}
   end
 
@@ -43,6 +44,9 @@ defmodule AbakusWeb.Kasse.SettingsLive do
         {:noreply, assign_form(socket, changeset)}
     end
   end
+
+  defp links(%{budget_owner: true}), do: @links
+  defp links(_user), do: Enum.reject(@links, &(elem(&1, 0) == "budget"))
 
   defp assign_form(socket, changeset), do: assign(socket, form: to_form(changeset, as: :settings))
 

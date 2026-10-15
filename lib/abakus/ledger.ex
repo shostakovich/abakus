@@ -567,8 +567,8 @@ defmodule Abakus.Ledger do
   @doc """
   Creates a transaction, with subtransactions for a split. Checks the references and the rules for the accounts
   involved (`Transaction.validate_accounts/4`) and keeps the counterparts of transfers (`Abakus.Ledger.Transfers`).
-  Approval defaults by source: manual entries are approved, imports are not. Categories are remembered as their
-  payees' last categories.
+  Approval defaults by source: manual entries are approved, imports and the Kasse's are not. Categories are
+  remembered as their payees' last categories.
 
   Instead of `payee_id`, `payee_name` names the payee, also in a subtransaction: the regular payee with that lookup
   key, else a new one; a blank name means none. A refused write creates no payee.

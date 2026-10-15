@@ -18,26 +18,35 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
   defp renames,
     do: for(a <- Activities.list_activities(), a.details.text =~ "Gruppe", do: a.details.text)
 
-  test "links the other settings with their plush", %{conn: conn} do
+  defp links(view) do
+    for link <-
+          view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#settings-links a") do
+      {link |> LazyHTML.attribute("href") |> hd(), link |> LazyHTML.text() |> String.trim()}
+    end
+  end
+
+  test "links the other settings with their plush, the budget for its owner", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/kasse/settings")
 
-    links =
-      for link <-
-            view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#settings-links a") do
-        {link |> LazyHTML.attribute("href") |> hd(), link |> LazyHTML.text() |> String.trim()}
-      end
-
-    assert links == [
+    assert links(view) == [
              {"/kasse/settings/participants", "Teilnehmer"},
              {"/kasse/settings/categories", "Kategorien"},
              {"/kasse/settings/recurring", "Wiederkehrende Ausgaben"},
              {"/kasse/settings/rates", "Wechselkurse"},
+             {"/kasse/settings/budget", "Budget"},
              {"/kasse/settings/ynab", "YNAB"},
              {"/kasse/export", "Export"}
            ]
 
-    for plush <- ~w(users tag repeat banknote archive),
+    for plush <- ~w(users tag repeat banknote scale wallet archive),
         do: assert(has_element?(view, ~s(#settings-links img[src^="/images/plush/#{plush}"])))
+  end
+
+  test "links no budget for anyone else", %{conn: conn, anna: anna} do
+    ben = person!("Ben", anna.id)
+    {:ok, view, _html} = live(log_in_participant(conn, ben.id), ~p"/kasse/settings")
+
+    refute {"/kasse/settings/budget", "Budget"} in links(view)
   end
 
   test "renames the group, logged only when the name changes", %{conn: conn, anna: anna} do

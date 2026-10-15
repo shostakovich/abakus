@@ -49,6 +49,9 @@ defmodule Abakus.Ledger.Account do
   def takes_entries?(%__MODULE__{closed: closed, fed_by: fed_by}),
     do: not closed and is_nil(fed_by)
 
+  @doc "Whether the UI offers reconciling: not for an account fed by shared expenses, whose balance is the Kasse's."
+  def reconcilable?(%__MODULE__{fed_by: fed_by}), do: fed_by != :shared_expenses
+
   @doc "The kinds of budget accounts."
   def budget_kinds, do: @budget_kinds
 

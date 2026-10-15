@@ -162,7 +162,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       shared = account_fixture(name: "👫 Geteilt", fed_by: :shared_expenses)
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{shared}")
-      assert has_element?(view, "#feed-hint", "Ausgaben-App")
+      assert has_element?(view, "#feed-hint", "aus der Kasse")
       assert has_element?(view, "#balance-cleared")
 
       refute has_element?(view, "#new-transaction")

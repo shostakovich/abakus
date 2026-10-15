@@ -3,8 +3,9 @@ defmodule Abakus.YnabImportTest do
 
   import Abakus.DomainFixtures
 
-  alias Abakus.{Categories, FakeYnab, Ledger, YnabImport}
+  alias Abakus.{Categories, FakeYnab, KasseFixtures, Ledger, YnabImport}
   alias Abakus.Categories.{Assignment, Category, CategoryGroup, TargetSnooze, TargetVersion}
+  alias Abakus.Kasse.{BudgetLink, Participants}
   alias Abakus.Ledger.{Account, BankBalance, Payee, Transaction}
   alias Abakus.YnabImport.Report
 
@@ -188,6 +189,23 @@ defmodule Abakus.YnabImportTest do
 
       assert YnabImport.import_plan(@plan) == {:error, :own_data}
       assert [%Account{}] = Ledger.list_accounts()
+    end
+
+    test "refuses once the Kasse is linked to the budget" do
+      account_fixture(%{fed_by: :shared_expenses, kind: :cash})
+      %{anna: anna} = KasseFixtures.household()
+      {:ok, _linked} = BudgetLink.switch_on(Participants.get_participant!(anna))
+
+      assert YnabImport.import_plan(@plan) == {:error, :own_data}
+    end
+
+    test "refuses once a Kasse category is mapped to the budget, which it would drop" do
+      {:ok, _report} = YnabImport.import_plan(@plan)
+      %{food: food} = KasseFixtures.household()
+      {:ok, _mapping} = BudgetLink.put_category_mapping(%{food => category("🛒 Lebensmittel").id})
+
+      assert YnabImport.import_plan(@plan) == {:error, :own_data}
+      assert BudgetLink.category_mapping() != %{}
     end
 
     test "lists every case Abakus cannot represent and writes nothing" do

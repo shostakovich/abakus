@@ -9,7 +9,7 @@ defmodule Abakus.Kasse.Expenses do
 
   import Ecto.Query
 
-  alias Abakus.Kasse.{Activities, Dates, Fx, Money, Participants, Suggestions}
+  alias Abakus.Kasse.{Activities, BudgetLink, Dates, Fx, Money, Participants, Suggestions}
   alias Abakus.Kasse.Activities.Changes
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Kasse.Expenses.{Expense, ExpenseShare, Form}
@@ -149,6 +149,7 @@ defmodule Abakus.Kasse.Expenses do
            {:ok, expense} <- Repo.insert(changeset),
            {:ok, shares} <- Expense.shares(expense, expense.id),
            :ok <- insert_shares(expense.id, shares),
+           :ok <- link_budget(changeset, nil, reload(expense)),
            {:ok, _activity} <-
              Activities.log(actor_id, :expense_created, expense.id, %{
                title: expense.title,
@@ -190,10 +191,11 @@ defmodule Abakus.Kasse.Expenses do
 
   defp update(_actor_id, old, _changeset, _shares, []), do: {:ok, {old, false}}
 
-  defp update(actor_id, _old, changeset, shares, changes) do
+  defp update(actor_id, old, changeset, shares, changes) do
     with {:ok, expense} <- Repo.update(changeset, force: true),
          {_deleted, _} <- Repo.delete_all(where(ExpenseShare, expense_id: ^expense.id)),
          :ok <- insert_shares(expense.id, shares),
+         :ok <- link_budget(changeset, old, reload(expense)),
          {:ok, _activity} <-
            Activities.log(actor_id, :expense_updated, expense.id, %{
              title: expense.title,
@@ -208,8 +210,9 @@ defmodule Abakus.Kasse.Expenses do
   def delete_expense(actor_id, %Expense{id: id}) do
     Repo.transact(fn ->
       with {:ok, old} <- fetch_live(id),
-           {:ok, expense} <-
-             old |> Changeset.change(deleted_at: DateTime.utc_now()) |> Repo.update(),
+           changeset = Changeset.change(old, deleted_at: DateTime.utc_now()),
+           {:ok, expense} <- Repo.update(changeset),
+           :ok <- link_budget(changeset, old, nil),
            {:ok, _activity} <-
              Activities.log(actor_id, :expense_deleted, id, %{
                title: old.title,
@@ -221,6 +224,15 @@ defmodule Abakus.Kasse.Expenses do
     |> case do
       {:error, :deleted} -> {:error, :not_found}
       result -> committed(result)
+    end
+  end
+
+  defp reload(expense), do: Repo.preload(expense, [:paid_by, :shares], force: true)
+
+  defp link_budget(changeset, old, new) do
+    case BudgetLink.expense_written(old, new) do
+      :ok -> :ok
+      {:error, message} -> {:error, Changeset.add_error(changeset, :budget, message)}
     end
   end
 

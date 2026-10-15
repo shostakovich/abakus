@@ -23,7 +23,7 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   @feeds %{
     portfolio: "Wert kommt aus der Depot-App",
-    shared_expenses: "Buchungen kommen aus der Ausgaben-App"
+    shared_expenses: "Buchungen kommen aus der Kasse"
   }
 
   attr :transactions, :list, required: true, doc: "the unapproved ones in the register"
