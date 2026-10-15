@@ -1,7 +1,8 @@
 defmodule AbakusWeb.Areas do
   @moduledoc """
   The app's areas, each with its own pages under its path, its section in the sidebar and its dock on phones. A
-  user sees only the areas they may use: the Budget is its owner's (ADR 0007); anyone else gets 404 on its pages.
+  user sees only the areas they may use: the Budget is its owner's (ADR 0007), the Kasse its people's (ADR 0008);
+  anyone else gets 404 on their pages.
   The area used last is kept in the session, so `/` opens it.
   """
   use AbakusWeb, :verified_routes
@@ -9,18 +10,21 @@ defmodule AbakusWeb.Areas do
   import Plug.Conn
 
   alias Abakus.Users.Scope
-
-  defmodule NotFoundError do
-    defexception message: "no such page", plug_status: 404
-  end
+  alias AbakusWeb.NotFoundError
 
   @doc "The areas the scope's user may use, in sidebar order."
-  def for_scope(%Scope{user: user}), do: Enum.filter(all(), &may_use?(user, &1.key))
+  def for_scope(%Scope{} = scope), do: Enum.filter(all(), &may_use?(scope, &1.key))
   def for_scope(nil), do: []
 
-  defp all, do: [%{key: :budget, label: "Budget", icon: "wallet", path: ~p"/budget"}]
+  defp all do
+    [
+      %{key: :budget, label: "Budget", icon: "wallet", path: ~p"/budget"},
+      %{key: :kasse, label: "Kasse", icon: "receipt", path: ~p"/kasse"}
+    ]
+  end
 
-  defp may_use?(user, :budget), do: user.budget_owner
+  defp may_use?(scope, :budget), do: scope.user.budget_owner
+  defp may_use?(scope, :kasse), do: scope.participant != nil
 
   @doc "Where `/` leads: the area used last if the user may still use it, else their first one, else the settings."
   def home_path(scope, last_area) do

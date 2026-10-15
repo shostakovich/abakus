@@ -15,9 +15,13 @@ if config_env() == :prod do
     System.get_env(name) || raise "environment variable #{name} is missing, e.g. #{example}"
   end
 
+  database = env!.("DATABASE_PATH", "/app/data/abakus.sqlite3")
+
   config :abakus, Abakus.Repo,
-    database: env!.("DATABASE_PATH", "/app/data/abakus.sqlite3"),
+    database: database,
     pool_size: String.to_integer(System.get_env("POOL_SIZE", "5"))
+
+  config :abakus, :backup_dir, Path.join(Path.dirname(database), "backups")
 
   host = env!.("PHX_HOST", "abakus.example.org")
 

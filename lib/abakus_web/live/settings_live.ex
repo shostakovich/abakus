@@ -94,7 +94,7 @@ defmodule AbakusWeb.SettingsLive do
   end
 
   defp ensure_budget!(scope),
-    do: Areas.allowed?(scope, :budget) || raise(Areas.NotFoundError)
+    do: Areas.allowed?(scope, :budget) || raise(AbakusWeb.NotFoundError)
 
   defp section(:index), do: nil
   defp section(section), do: section

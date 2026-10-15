@@ -21,7 +21,10 @@ config :mime, :types, %{
 
 config :abakus,
   ecto_repos: [Abakus.Repo],
-  generators: [timestamp_type: :utc_datetime_usec]
+  generators: [timestamp_type: :utc_datetime_usec],
+  jobs: true
+
+config :abakus, Abakus.Kasse.Fx.Ecb, base_url: "https://www.ecb.europa.eu/stats/eurofxref/"
 
 config :abakus, Abakus.Repo,
   journal_mode: :wal,
@@ -73,6 +76,7 @@ config :tailwind,
 
 config :setzkasten,
   icons: AbakusWeb.Icons,
+  plush: AbakusWeb.Plush,
   translate_error: {AbakusWeb.CoreComponents, :translate_error}
 
 config :logger, :default_formatter,

@@ -28,7 +28,7 @@ defmodule Abakus.Users.UserNotifier do
     deliver(user.email, "Abakus: Einladung", """
     Hallo,
 
-    du bist zu Abakus eingeladen, unserem Haushaltsbudget. Mit diesem Link meldest du dich an.
+    du bist zu Abakus eingeladen, unserer App fürs Geld im Haushalt. Mit diesem Link meldest du dich an.
     Er gilt 15 Minuten und nur einmal:
 
     #{url}

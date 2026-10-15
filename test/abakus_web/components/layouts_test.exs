@@ -136,7 +136,7 @@ defmodule AbakusWeb.LayoutsTest do
         |> Enum.flat_map(&LazyHTML.attribute(&1, "href"))
       end
 
-      assert dock.(:kasse) == ["/kasse"]
+      assert dock.(:kasse) == ["/kasse", "/kasse/balances", "/kasse/activity", "/kasse/settings"]
       assert "/budget" in dock.(:budget)
       refute "/kasse" in dock.(:budget)
     end

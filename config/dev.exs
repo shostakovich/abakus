@@ -1,9 +1,13 @@
 import Config
 
+database = Path.expand("../storage/development.sqlite3", __DIR__)
+
 config :abakus, Abakus.Repo,
-  database: Path.expand("../storage/development.sqlite3", __DIR__),
+  database: database,
   stacktrace: true,
   show_sensitive_data_on_connection_error: true
+
+config :abakus, :backup_dir, Path.join(Path.dirname(database), "backups")
 
 config :abakus, AbakusWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}],

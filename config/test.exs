@@ -1,10 +1,17 @@
 import Config
 
+database = Path.expand("../tmp/test#{System.get_env("MIX_TEST_PARTITION")}.sqlite3", __DIR__)
+
 # One connection: the sandbox opens a deferred BEGIN, and a second one flakes with "database busy".
 config :abakus, Abakus.Repo,
-  database: Path.expand("../tmp/test#{System.get_env("MIX_TEST_PARTITION")}.sqlite3", __DIR__),
+  database: database,
   pool: Ecto.Adapters.SQL.Sandbox,
   pool_size: 1
+
+config :abakus, :backup_dir, Path.join(Path.dirname(database), "backups")
+
+config :abakus, jobs: false
+config :abakus, Abakus.Kasse.Fx.Ecb, base_url: nil
 
 config :abakus, AbakusWeb.Endpoint,
   url: [host: "localhost", port: 4002],

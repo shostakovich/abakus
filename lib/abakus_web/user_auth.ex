@@ -76,7 +76,7 @@ defmodule AbakusWeb.UserAuth do
     case user_from_session(conn) || user_from_cookie(conn) do
       {conn, user, token_inserted_at} ->
         conn
-        |> assign(:current_scope, Scope.for_user(user))
+        |> assign(:current_scope, Scope.load(user))
         |> maybe_reissue_user_session_token(user, token_inserted_at)
 
       nil ->
@@ -155,6 +155,14 @@ defmodule AbakusWeb.UserAuth do
     |> put_session(:live_socket_id, user_session_topic(token))
   end
 
+  @doc "Disconnects the open pages of every session of the user with `user_id`; they mount anew."
+  def disconnect_user_sessions(user_id) do
+    for token <- Users.list_user_session_tokens(user_id),
+        do: AbakusWeb.Endpoint.broadcast(user_session_topic(token), "disconnect", %{})
+
+    :ok
+  end
+
   defp user_session_topic(token), do: "users_sessions:#{Base.url_encode64(token)}"
 
   @doc """
@@ -197,7 +205,7 @@ defmodule AbakusWeb.UserAuth do
     Phoenix.Component.assign_new(socket, :current_scope, fn ->
       with token when is_binary(token) <- session["user_token"],
            {user, _token_inserted_at} <- Users.get_user_by_session_token(token) do
-        Scope.for_user(user)
+        Scope.load(user)
       end
     end)
   end

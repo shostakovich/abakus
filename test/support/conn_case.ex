@@ -5,6 +5,7 @@ defmodule AbakusWeb.ConnCase do
 
   use ExUnit.CaseTemplate
 
+  alias Abakus.Kasse.Participants
   alias Abakus.Users.Scope
 
   using do
@@ -58,6 +59,12 @@ defmodule AbakusWeb.ConnCase do
     conn
     |> Phoenix.ConnTest.init_test_session(%{})
     |> Plug.Conn.put_session(:user_token, token)
+  end
+
+  @doc "Signs in the user of the Kasse's person with `participant_id`."
+  def log_in_participant(conn, participant_id) do
+    participant = participant_id |> Participants.get_participant!() |> Abakus.Repo.preload(:user)
+    log_in_user(conn, participant.user)
   end
 
   @doc "Waits until the tasks started under `Abakus.TaskSupervisor` (e.g. sign-in mails) are done."

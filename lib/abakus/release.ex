@@ -1,8 +1,10 @@
 defmodule Abakus.Release do
   @moduledoc "Tasks run from the release, where Mix is not available."
 
+  alias Abakus.Kasse.Participants
   alias Abakus.YnabImport
   alias Abakus.YnabImport.Report
+  alias AbakusWeb.UserAuth
 
   @app :abakus
 
@@ -43,6 +45,35 @@ defmodule Abakus.Release do
   end
 
   @doc """
+  Adds a person to the Kasse as the user with this email address, inviting a new user by mail:
+  `bin/abakus eval 'Abakus.Release.add_participant("name@example.com", "Name")'`.
+  """
+  def add_participant(email, name) do
+    start_without_server()
+
+    case Participants.invite_participant(
+           nil,
+           %{email: email, name: name},
+           &UserAuth.magic_link_url/1
+         ) do
+      {:ok, participant} ->
+        IO.puts("Added #{participant.name} (#{participant.user.email}) to the Kasse.")
+
+      {:error, :mail_not_delivered, participant} ->
+        IO.puts(
+          :stderr,
+          "Added #{participant.name}, but the invitation failed; see the log above."
+        )
+
+        System.halt(1)
+
+      {:error, changeset} ->
+        IO.puts(:stderr, "Could not add #{name}: #{inspect(changeset.errors)}")
+        System.halt(1)
+    end
+  end
+
+  @doc """
   Replaces the budget with a YNAB plan and checks the numbers (`Abakus.YnabImport`), with the token passed to
   this command only: `docker compose exec -e YNAB_TOKEN=… abakus bin/abakus eval 'Abakus.Release.import_ynab()'`;
   with several plans, pass the plan's id. Exits with 1 when it did not run or the numbers differ.
@@ -63,9 +94,11 @@ defmodule Abakus.Release do
     end
   end
 
-  # The endpoint's URL is needed (links in mails), but the container's server already holds the port.
+  # The endpoint's URL is needed (links in mails), but the container's server already holds the port and runs the
+  # background jobs.
   defp start_without_server do
     Application.load(@app)
+    Application.put_env(@app, :jobs, false)
 
     endpoint = Application.get_env(@app, AbakusWeb.Endpoint, [])
     Application.put_env(@app, AbakusWeb.Endpoint, Keyword.put(endpoint, :server, false))

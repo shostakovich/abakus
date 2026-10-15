@@ -25,6 +25,10 @@ defmodule AbakusWeb.Router do
     plug :require_area, :budget
   end
 
+  pipeline :kasse do
+    plug :require_area, :kasse
+  end
+
   # Public without a session: the health check here and later `/mcp/<secret>` with its own pipeline. Everything
   # else requires a signed-in user.
   scope "/", AbakusWeb do
@@ -53,6 +57,35 @@ defmodule AbakusWeb.Router do
       live "/accounts/:id", RegisterLive, :show
       live "/import", ImportLive
     end
+  end
+
+  scope "/kasse", AbakusWeb.Kasse do
+    pipe_through [:browser, :require_authenticated_user, :kasse]
+
+    live_session :kasse,
+      on_mount: [
+        {AbakusWeb.UserAuth, :require_authenticated},
+        {AbakusWeb.Areas, {:require, :kasse}},
+        {AbakusWeb.AccountGroups, :assign},
+        {AbakusWeb.AccountDialog, :attach},
+        AbakusWeb.Kasse.CurrentParticipant
+      ] do
+      live "/", ExpensesLive
+      live "/expenses/new", ExpenseLive, :new
+      live "/expenses/:id", ExpenseLive, :edit
+      live "/balances", BalancesLive
+      live "/activity", ActivityLive
+      live "/settings", SettingsLive
+      live "/settings/participants", ParticipantsLive
+      live "/settings/categories", CategoriesLive
+      live "/settings/recurring", RecurringLive
+      live "/settings/recurring/new", RecurringNewLive
+      live "/settings/rates", RatesLive
+      live "/export", ExportLive
+    end
+
+    get "/export/expenses.csv", ExportController, :expenses_csv
+    get "/export/expenses.json", ExportController, :expenses_json
   end
 
   scope "/", AbakusWeb do

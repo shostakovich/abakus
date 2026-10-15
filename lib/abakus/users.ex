@@ -1,8 +1,8 @@
 defmodule Abakus.Users do
   @moduledoc """
   Users sign in with a passkey or, as a fallback, a magic link by email. There are no passwords
-  and no sign-up: users are invited by `mix abakus.invite` or `Abakus.Release.invite/1`. The first
-  user owns the budget (ADR 0007).
+  and no sign-up: users are invited by `mix abakus.invite` or `Abakus.Release.invite/1`, or as people of the
+  Kasse (`Abakus.Kasse.Participants`). The first user owns the budget (ADR 0007).
   """
 
   import Ecto.Query, warn: false
@@ -45,11 +45,17 @@ defmodule Abakus.Users do
   def invite_user(email, magic_link_url_fun)
       when is_binary(email) and is_function(magic_link_url_fun, 1) do
     with {:ok, user} <- create_user(%{email: email}) do
-      case UserNotifier.deliver_invite(user, magic_link_url(user, magic_link_url_fun)) do
+      case deliver_invite(user, magic_link_url_fun) do
         {:ok, _email} -> {:ok, user}
         {:error, _reason} -> {:error, :mail_not_delivered, user}
       end
     end
+  end
+
+  @doc "Mails a user the invitation with a sign-in link."
+  def deliver_invite(%User{} = user, magic_link_url_fun)
+      when is_function(magic_link_url_fun, 1) do
+    UserNotifier.deliver_invite(user, magic_link_url(user, magic_link_url_fun))
   end
 
   @sudo_mode_minutes 10
@@ -115,6 +121,15 @@ defmodule Abakus.Users do
   def delete_expired_user_tokens(%User{} = user) do
     Repo.delete_all(UserToken.expired_tokens_query(user.id))
     :ok
+  end
+
+  @doc "The session tokens of the user with `user_id`."
+  def list_user_session_tokens(user_id) do
+    Repo.all(
+      from t in UserToken,
+        where: t.user_id == ^user_id and t.context == "session",
+        select: t.token
+    )
   end
 
   def delete_user_session_token(token) do

@@ -6,6 +6,7 @@ defmodule AbakusWeb.Layouts do
   alias AbakusWeb.AccountGroups
 
   @budget_pages [:budget, :accounts, :all_accounts, :import]
+  @kasse_pages [:kasse_expenses, :kasse_balances, :kasse_activity, :kasse_settings]
 
   embed_templates "layouts/*"
 
@@ -14,7 +15,7 @@ defmodule AbakusWeb.Layouts do
 
   attr :current, :atom,
     default: nil,
-    values: [nil, :budget, :accounts, :all_accounts, :import, :settings]
+    values: [nil, :budget, :accounts, :all_accounts, :import, :settings] ++ @kasse_pages
 
   attr :areas, :list, required: true, doc: "the areas the user may use, from `AbakusWeb.Areas`"
   attr :area, :atom, required: true, doc: "the current area's key; its entries go into the dock"
@@ -41,7 +42,8 @@ defmodule AbakusWeb.Layouts do
   Signed-in pages in Setzkasten's sidebar shell, grouped into the areas the user may use, then the settings.
 
   The Budget: Budget and all accounts, the open accounts by group with their balance and how many transactions
-  wait for approval and "Konto hinzufügen" (not in the icon rail or the dock), then Import & Sync.
+  wait for approval and "Konto hinzufügen" (not in the icon rail or the dock), then Import & Sync. The Kasse:
+  Ausgaben, Salden, Aktivität and Gruppe (its settings).
 
   With one area the brand is its name; with more, each area's entries start with its name as section title, and
   in the top bar the brand is a menu that switches the area. On phones the dock holds the current area's entries;
@@ -53,8 +55,9 @@ defmodule AbakusWeb.Layouts do
         budget?: Enum.any?(assigns.areas, &(&1.key == :budget)),
         groups: AccountGroups.open(assigns.account_groups),
         nav_key: nav_key(assigns.current, assigns.account_id, assigns.account_groups),
-        other_areas: Enum.reject(assigns.areas, &(&1.key == :budget)),
-        in_budget_dock?: assigns.area == :budget
+        kasse?: Enum.any?(assigns.areas, &(&1.key == :kasse)),
+        in_budget_dock?: assigns.area == :budget,
+        in_kasse_dock?: assigns.area == :kasse
       )
 
     ~H"""
@@ -96,7 +99,7 @@ defmodule AbakusWeb.Layouts do
         amount={row.balance}
         count={if row.unapproved > 0, do: row.unapproved}
         count_label="zu bestätigen"
-        section={group.label}
+        section={account_section(@areas, group)}
         section_amount={if first?, do: group.balance}
         rail={false}
         dock={false}
@@ -124,14 +127,49 @@ defmodule AbakusWeb.Layouts do
         href={href(~p"/budget/import", @current)}
       />
       <:nav
-        :for={area <- @other_areas}
-        key={{:area, area.key}}
-        id={"side-area-#{area.key}"}
-        label={area.label}
-        icon={area.icon}
-        section={section(@areas, area.label)}
-        dock={area.key == @area}
-        href={area.path}
+        :if={@kasse?}
+        key={:kasse_expenses}
+        id="side-kasse-expenses"
+        label="Ausgaben"
+        plush="receipt"
+        icon="receipt"
+        section={section(@areas, "Kasse")}
+        dock={@in_kasse_dock?}
+        navigate={navigate(~p"/kasse", @current)}
+        href={href(~p"/kasse", @current)}
+      />
+      <:nav
+        :if={@kasse?}
+        key={:kasse_balances}
+        id="side-kasse-balances"
+        label="Salden"
+        plush="scale"
+        icon="scale"
+        dock={@in_kasse_dock?}
+        navigate={navigate(~p"/kasse/balances", @current)}
+        href={href(~p"/kasse/balances", @current)}
+      />
+      <:nav
+        :if={@kasse?}
+        key={:kasse_activity}
+        id="side-kasse-activity"
+        label="Aktivität"
+        plush="activity"
+        icon="activity"
+        dock={@in_kasse_dock?}
+        navigate={navigate(~p"/kasse/activity", @current)}
+        href={href(~p"/kasse/activity", @current)}
+      />
+      <:nav
+        :if={@kasse?}
+        key={:kasse_settings}
+        id="side-kasse-settings"
+        label="Gruppe"
+        plush="users"
+        icon="users"
+        dock={@in_kasse_dock?}
+        navigate={navigate(~p"/kasse/settings", @current)}
+        href={href(~p"/kasse/settings", @current)}
       />
       <:nav
         key={:settings}
@@ -205,12 +243,22 @@ defmodule AbakusWeb.Layouts do
   defp initial(email), do: String.upcase(String.first(email) || "")
 
   # Each area and the settings have live_sessions of their own (Zugang a further one behind the sudo plug), so
-  # only links within the Budget navigate; the others load the page.
-  defp navigate(path, current) when current in @budget_pages, do: path
-  defp navigate(_path, _current), do: nil
+  # only links within an area navigate; the others load the page.
+  defp navigate(path, current) do
+    if same_area?(path, current), do: path
+  end
 
-  defp href(_path, current) when current in @budget_pages, do: nil
-  defp href(path, _current), do: path
+  defp href(path, current) do
+    if !same_area?(path, current), do: path
+  end
+
+  defp same_area?("/budget" <> _, current), do: current in @budget_pages
+  defp same_area?("/kasse" <> _, current), do: current in @kasse_pages
+
+  # With more than one area, "Budget" heads the area, so its account groups say what they hold.
+  defp account_section([_one], group), do: group.label
+  defp account_section(_areas, %{key: :budget}), do: "Budgetkonten"
+  defp account_section(_areas, %{key: :tracking}), do: "Trackingkonten"
 
   defp brand_name([area]), do: area.label
   defp brand_name(_areas), do: "Abakus"
@@ -245,6 +293,37 @@ defmodule AbakusWeb.Layouts do
         {area.label}
       </:item>
     </.dropdown>
+    """
+  end
+
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :areas, :list, required: true
+  attr :area, :atom, required: true
+  attr :account_groups, :list, required: true
+  attr :account_dialog, :map, required: true
+  attr :current, :atom, required: true, values: [:expenses, :balances, :activity, :settings]
+  attr :fab, :boolean, default: true, doc: "false on forms, whose action bar is the main action"
+  slot :inner_block, required: true
+
+  @doc "The Kasse's pages: narrow, with „Ausgabe hinzufügen“ as the phone's floating button (not on forms)."
+  def kasse(assigns) do
+    ~H"""
+    <.app
+      flash={@flash}
+      current_scope={@current_scope}
+      areas={@areas}
+      area={@area}
+      account_groups={@account_groups}
+      account_dialog={@account_dialog}
+      current={:"kasse_#{@current}"}
+      width={:narrow}
+    >
+      <:fab :if={@fab}>
+        <.fab navigate={~p"/kasse/expenses/new"} label="Ausgabe hinzufügen" />
+      </:fab>
+      {render_slot(@inner_block)}
+    </.app>
     """
   end
 

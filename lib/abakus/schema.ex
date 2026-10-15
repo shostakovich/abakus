@@ -9,6 +9,10 @@ defmodule Abakus.Schema do
     end
   end
 
+  @doc "A moment with the microsecond precision of `:utc_datetime_usec` fields."
+  def usec(%DateTime{microsecond: {microsecond, _precision}} = moment),
+    do: %{moment | microsecond: {microsecond, 6}}
+
   @max_id 9_223_372_036_854_775_807
 
   @doc """
