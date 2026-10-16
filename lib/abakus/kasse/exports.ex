@@ -7,11 +7,12 @@ defmodule Abakus.Kasse.Exports do
   local date of the file name).
   """
 
-  alias Abakus.LocalTime
+  alias Abakus.{Format, LocalTime}
 
-  alias Abakus.Kasse.{Dates, Expenses, Money}
+  alias Abakus.Kasse.{Dates, Expenses}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.{OrderedJSON, Participants, Settings, Split}
+  alias Abakus.Money
 
   @bom "﻿"
   @csv_header ~w(ID Datum Titel Kategorie) ++
@@ -55,7 +56,7 @@ defmodule Abakus.Kasse.Exports do
       for expense <- expenses do
         [
           Integer.to_string(expense.id),
-          Dates.format(expense.date),
+          Format.date(expense.date),
           cell(expense.title),
           cell(if(expense.category, do: expense.category.name, else: "")),
           cell(expense.paid_by.name),

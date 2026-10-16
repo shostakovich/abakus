@@ -13,7 +13,8 @@ defmodule AbakusWeb.AccountDialog do
 
   alias Abakus.Ledger
   alias Abakus.Ledger.Account
-  alias AbakusWeb.{AccountGroups, Format}
+  alias Abakus.Money
+  alias AbakusWeb.AccountGroups
 
   @editable ~w(name kind note)
 
@@ -219,5 +220,5 @@ defmodule AbakusWeb.AccountDialog do
   defp options(kinds), do: Enum.map(kinds, fn {kind, label} -> {label, kind} end)
 
   defp close_text(0), do: "Du kannst es später wieder öffnen."
-  defp close_text(balance), do: "Es hat noch einen Saldo von #{Format.euros(balance)}."
+  defp close_text(balance), do: "Es hat noch einen Saldo von #{Money.euros(balance)}."
 end

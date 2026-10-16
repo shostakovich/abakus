@@ -7,9 +7,11 @@ defmodule AbakusWeb.RegisterLive.Components do
   """
   use AbakusWeb, :html
 
+  alias Abakus.Format
   alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
+  alias Abakus.Money
   alias Abakus.Names
-  alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
+  alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.RegisterLive.{Rows, TransactionEditor}
 
   @flags [
@@ -96,7 +98,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       AccountGroups.kind_label(account.kind),
       account.closed && "Geschlossen",
       account.last_reconciled_at &&
-        "Abgeglichen am #{Format.date(DateTime.to_date(account.last_reconciled_at))}",
+        "Abgeglichen am #{Format.date(account.last_reconciled_at)}",
       account.note
     ]
     |> Enum.filter(& &1)
@@ -621,7 +623,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         </td>
         <td {cell(@transaction, "date")}>
           <span class="app-wide">{Format.date(@transaction.date)}</span>
-          <span class="app-short">{Format.day(@transaction.date)}</span>
+          <span class="app-short">{Format.date(@transaction.date, year: false)}</span>
         </td>
         <td
           :if={@columns.all}
@@ -663,7 +665,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           {inflow(@transaction.amount)}
         </td>
         <td :if={@running} class="text-end text-base-content/70 app-run">
-          {Format.amount(@running[@transaction.id])}
+          {Money.amount(@running[@transaction.id])}
         </td>
         <td class="app-ok-col">
           <.approve
@@ -717,7 +719,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td class="app-flag-col"></td>
         <td>
           <span class="app-wide">{Format.date(@proposal.date)}</span>
-          <span class="app-short">{Format.day(@proposal.date)}</span>
+          <span class="app-short">{Format.date(@proposal.date, year: false)}</span>
         </td>
         <td :if={@columns.all} class="app-konto" title={@accounts[@proposal.account_id].name}>
           <.account_cell account={@accounts[@proposal.account_id]} />
@@ -808,7 +810,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           <:leading><.icon name="link" class="size-5 text-base-content/70" /></:leading>
           <:meta>
             {join_meta([
-              Format.day(transaction.date),
+              Format.date(transaction.date, year: false),
               if(@all, do: @accounts[transaction.account_id].name),
               match_text(transaction.matched_transaction, @accounts)
             ])}
@@ -853,7 +855,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           </:leading>
           <:meta>
             {join_meta([
-              Format.day(transaction.date),
+              Format.date(transaction.date, year: false),
               if(@all, do: @accounts[transaction.account_id].name),
               category_text(transaction, @accounts),
               transaction.memo
@@ -1123,10 +1125,10 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp payee(%{payee: %Payee{name: name}}, _accounts), do: name
   defp payee(_transaction, _accounts), do: ""
 
-  defp outflow(amount) when amount < 0, do: Format.amount(-amount)
+  defp outflow(amount) when amount < 0, do: Money.amount(-amount)
   defp outflow(_amount), do: ""
 
-  defp inflow(amount) when amount > 0, do: Format.amount(amount)
+  defp inflow(amount) when amount > 0, do: Money.amount(amount)
   defp inflow(_amount), do: ""
 
   defp reconciled(transactions), do: Enum.filter(transactions, &(&1.cleared == :reconciled))

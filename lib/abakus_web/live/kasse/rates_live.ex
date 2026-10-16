@@ -6,8 +6,8 @@ defmodule AbakusWeb.Kasse.RatesLive do
   """
   use AbakusWeb, :kasse_live_view
 
-  alias Abakus.{ExchangeRates, LocalTime}
-  alias Abakus.Kasse.{Dates, Expenses, Money, Rates}
+  alias Abakus.{ExchangeRates, LocalTime, Money}
+  alias Abakus.Kasse.{Dates, Expenses, Rates}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -233,7 +233,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
           <.section_heading id="rates-ecb">EZB-Referenzkurse</.section_heading>
           <p id="rates-stats" class="max-w-prose text-sm text-base-content/70">
             <%= if @stats.count > 0 do %>
-              Gespeichert: {@stats.count} Kurse für {@stats.currencies} Währungen vom {Format.date(
+              Gespeichert: {Format.number(@stats.count)} Kurse für {@stats.currencies} Währungen vom {Format.date(
                 @stats.from
               )} bis {Format.date(@stats.to)}.
             <% else %>

@@ -12,6 +12,7 @@ defmodule Abakus.Depot.Receipts.Matching do
   """
 
   alias Abakus.Depot.Receipts.Fields
+  alias Abakus.Format
 
   @values [:date, :isin, :shares, :price, :fees, :taxes, :amount, :depot_number, :bank_reference]
   @numbers [:shares, :price, :fees, :taxes, :amount]
@@ -107,25 +108,7 @@ defmodule Abakus.Depot.Receipts.Matching do
       "#{@shares_word}\\s*\\K#{digit}#{@right_bound}|#{@left_bound}#{digit}(?=\\s*#{@shares_word})"
 
   @doc "A number in German notation with `places` decimal places, e.g. `1.125,00`."
-  def german(%Decimal{} = number, places) do
-    [whole | fraction] =
-      number
-      |> Decimal.abs()
-      |> Decimal.round(places)
-      |> Decimal.to_string(:normal)
-      |> String.split(".")
-
-    thousands(whole) <> Enum.map_join(fraction, &("," <> &1))
-  end
-
-  defp thousands(digits) do
-    digits
-    |> String.reverse()
-    |> String.graphemes()
-    |> Enum.chunk_every(3)
-    |> Enum.map_join(".", &Enum.join/1)
-    |> String.reverse()
-  end
+  def german(%Decimal{} = number, places), do: number |> Decimal.abs() |> Format.number(places)
 
   defp notations(number) do
     normalized = Decimal.normalize(number)

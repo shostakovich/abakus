@@ -4,8 +4,8 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
   import Ecto.Changeset, only: [change: 1]
 
   alias Abakus.Depot.{MarketData, Securities, Settings}
-  alias Abakus.ExchangeRates
-  alias AbakusWeb.Depot.Format
+  alias Abakus.{ExchangeRates, Format}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   @feeds [{"Yahoo", "yahoo"}, {"Portfolio Performance", "manual"}]
 
@@ -156,7 +156,7 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
           </div>
           <div class="shrink-0 text-end">
             <p class="tabular-nums whitespace-nowrap">
-              {Format.price(@security.latest_close, @security.currency)}
+              {DepotFormat.price(@security.latest_close, @security.currency)}
             </p>
             <p class="text-sm text-base-content/70 whitespace-nowrap">{quote_time(@security)}</p>
           </div>

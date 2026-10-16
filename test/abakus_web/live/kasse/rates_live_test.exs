@@ -108,6 +108,16 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
     refute has_element?(view, "#manual-rates")
   end
 
+  test "the ECB rates are counted with a dot between thousands", %{conn: conn} do
+    ExchangeRates.store(
+      for day <- 0..1_233, do: {"USD", Date.add(~D[2023-01-01], day), Decimal.new("1.1")}
+    )
+
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
+
+    assert texts(view, "#rates-stats") |> hd() =~ "Gespeichert: 1.234 Kurse für 1 Währungen"
+  end
+
   test "the ECB rates, their newest day and the rates of recent expenses", %{conn: conn, h: h} do
     ExchangeRates.store([
       {"USD", ~D[2026-09-30], Decimal.new("1.0912")},

@@ -12,7 +12,7 @@ defmodule AbakusWeb.Depot.Benchmark do
 
   import Setzkasten.Components.Actions, only: [button: 1]
 
-  alias AbakusWeb.Depot.Format
+  alias Abakus.Format
 
   def on_mount(:default, _params, _session, socket) do
     shown = connected?(socket) and get_connect_params(socket)["benchmark"] == "shown"

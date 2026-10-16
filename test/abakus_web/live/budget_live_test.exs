@@ -93,6 +93,29 @@ defmodule AbakusWeb.BudgetLiveTest do
       refute has_element?(view, "#assign-#{c.groceries.id}-2026-10[aria-invalid]")
     end
 
+    test "a blank amount assigns zero", c do
+      for value <- ["", "  "] do
+        Categories.assign(c.groceries, @october, 1_200)
+        {:ok, view, _html} = open(c.conn)
+
+        view |> element("#assign-#{c.groceries.id}-2026-10") |> render_blur(%{"value" => value})
+
+        assert assigned(c.groceries, @october) == 0
+        refute has_element?(view, "#assign-#{c.groceries.id}-2026-10[aria-invalid]")
+      end
+    end
+
+    test "an amount that is no text changes nothing", c do
+      {:ok, view, _html} = open(c.conn)
+      id = "#{c.groceries.id}"
+
+      for value <- [%{"0" => "12"}, ["12"]] do
+        render_hook(view, "assign", %{"category" => id, "month" => "2026-10", "value" => value})
+      end
+
+      assert Categories.budget().assigned == %{}
+    end
+
     test "an unchanged amount writes nothing", c do
       {:ok, view, _html} = open(c.conn)
 

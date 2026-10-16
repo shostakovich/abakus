@@ -4,8 +4,8 @@ defmodule AbakusWeb.Depot.DividendsLive do
   import AbakusWeb.Depot.DividendComponents
 
   alias Abakus.Depot.Portfolios
-  alias Abakus.LocalTime
-  alias AbakusWeb.Depot.Format
+  alias Abakus.{Format, LocalTime, Money}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   # The first is the default and stays out of the URL.
   @tabs [
@@ -191,7 +191,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
                 id={"calendar-#{Calendar.strftime(first, "%Y-%m")}"}
                 class="flex flex-wrap items-baseline justify-between gap-x-3"
               >
-                <span>{Format.month_name(first)} {first.year}</span>
+                <span>{Format.month_year(first)}</span>
                 <span class="tabular-nums">
                   <.partly_gross :if={partly_gross?(dividends, @amount)} class="font-normal" />
                   {expected_total(dividends, @amount, 2)}
@@ -209,7 +209,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
                 <span class="whitespace-nowrap">Zahltag <.pay_date date={dividend.pay_date} /></span><span
                   :if={dividend.ex_date}
                   class="whitespace-nowrap"
-                ><.meta_sep />Ex‑Tag <.pay_date date={dividend.ex_date} /></span><.meta_sep /><span class="whitespace-nowrap">{Format.shares(
+                ><.meta_sep />Ex‑Tag <.pay_date date={dividend.ex_date} /></span><.meta_sep /><span class="whitespace-nowrap">{DepotFormat.shares(
                   dividend.shares
                 )}&nbsp;Stück × {per_share(dividend)}</span>
               </:meta>
@@ -374,13 +374,10 @@ defmodule AbakusWeb.Depot.DividendsLive do
           <.cell_sub hide_from={:lg} class="tabular-nums">
             <span class="sm:hidden"><.pay_date date={entry.date} /><.meta_sep /></span><span class="whitespace-nowrap">{shares(
               entry.shares
-            )}</span><.meta_sep /><span class="whitespace-nowrap">Steuern {Format.euros(
-              entry.taxes,
-              2
-            )}</span><span
+            )}</span><.meta_sep /><span class="whitespace-nowrap">Steuern {Money.euros(entry.taxes)}</span><span
               :if={entry.fees != 0}
               class="whitespace-nowrap"
-            ><.meta_sep />Gebühren {Format.euros(entry.fees, 2)}</span>
+            ><.meta_sep />Gebühren {Money.euros(entry.fees)}</span>
           </.cell_sub>
           <.cell_sub show_from={:lg} hide_from={:xl} class="tabular-nums">
             {shares(entry.shares)}
@@ -452,7 +449,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
 
   defp pay_date(assigns) do
     ~H"""
-    <time datetime={Date.to_iso8601(@date)}>{Format.short_date(@date)}</time>
+    <time datetime={Date.to_iso8601(@date)}>{Format.date(@date, year: false)}</time>
     """
   end
 
@@ -470,7 +467,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
   defp swatch(colour), do: Map.fetch!(@swatches, colour)
 
   defp deduction(0), do: "–"
-  defp deduction(cents), do: Format.euros(cents, 2)
+  defp deduction(cents), do: Money.euros(cents)
 
   defp any?(%{dividends: dividends}), do: dividends.received != [] or dividends.upcoming != []
 
@@ -478,7 +475,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
   defp subtitle(_tab), do: "Gebucht, zum EZB\u2011Kurs des Zahltags"
 
   defp per_share(dividend),
-    do: Format.price(dividend.per_share, dividend.currency)
+    do: DepotFormat.price(dividend.per_share, dividend.currency)
 
   defp yield(_cents, 0), do: "–"
   defp yield(cents, whole), do: cents |> Format.percent_of(whole) |> Format.percent()
@@ -492,7 +489,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
     "Erwartete Dividenden " <>
       Enum.map_join(months, ", ", fn month ->
         cents = month.announced[amount] + month.forecast[amount]
-        "#{Format.month_name(month.month)} #{month.month.year} #{Format.euros(cents)}"
+        "#{Format.month_year(month.month)} #{Money.euros(cents, decimals: 0)}"
       end)
   end
 
@@ -500,10 +497,10 @@ defmodule AbakusWeb.Depot.DividendsLive do
   defp amount_label(:gross), do: "brutto"
 
   defp shares(0), do: "–"
-  defp shares(shares), do: "#{Format.shares(shares)}\u00A0Stück"
+  defp shares(shares), do: "#{DepotFormat.shares(shares)}\u00A0Stück"
 
   defp share_count(0), do: "–"
-  defp share_count(shares), do: Format.shares(shares)
+  defp share_count(shares), do: DepotFormat.shares(shares)
 
   defp chart_years(years), do: years |> Enum.take(length(@year_colours)) |> Enum.reverse()
 
@@ -596,7 +593,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
             %{
               label: Format.month_abbr(month.month),
               year: if(month.month.month == 1, do: month.month.year),
-              title: "#{Format.month_name(month.month)} #{month.month.year}",
+              title: Format.month_year(month.month),
               announced: month.announced[assigns.amount],
               forecast: month.forecast[assigns.amount]
             }

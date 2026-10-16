@@ -7,8 +7,9 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
 
   alias Abakus.LocalTime
 
-  alias Abakus.Kasse.{Balances, Categories, Expenses, Money, Participants, Periods}
+  alias Abakus.Kasse.{Balances, Categories, Expenses, Participants, Periods}
   alias Abakus.Kasse.Expenses.Expense
+  alias Abakus.Money
   alias AbakusWeb.Kasse.{CategoryIcon, PeriodHeadings}
 
   @page_size 100

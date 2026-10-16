@@ -5,8 +5,9 @@ defmodule AbakusWeb.Kasse.RecurringLive do
   """
   use AbakusWeb, :kasse_live_view
 
-  alias Abakus.Kasse.{Categories, Money, Participants, Recurring}
+  alias Abakus.Kasse.{Categories, Participants, Recurring}
   alias Abakus.Kasse.Recurring.RecurringExpense
+  alias Abakus.Money
   alias AbakusWeb.Kasse.CategoryIcon
 
   @impl true

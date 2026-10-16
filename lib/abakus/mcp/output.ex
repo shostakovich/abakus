@@ -6,9 +6,9 @@ defmodule Abakus.MCP.Output do
   """
 
   alias Abakus.Kasse.Expenses.Expense
-  alias Abakus.Kasse.Money
   alias Abakus.LocalTime
   alias Abakus.MCP.Directory
+  alias Abakus.Money
 
   @doc ~s(Euro cents as "1234.56".)
   def eur(cents), do: Money.format_minor(cents, 2, separator: ".")

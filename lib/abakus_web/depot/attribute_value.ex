@@ -6,7 +6,8 @@ defmodule AbakusWeb.Depot.AttributeValue do
   """
 
   alias Abakus.Depot.Securities.AttributeType
-  alias AbakusWeb.Depot.Format
+  alias Abakus.{Format, Money}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   @converters "name.abuchen.portfolio.model.AttributeType$"
   @epoch ~D[1970-01-01]
@@ -28,13 +29,13 @@ defmodule AbakusWeb.Depot.AttributeValue do
   # Amounts in cents, without a currency.
   defp converted(amount, value, _currency)
        when amount in ["AmountConverter", "AmountPlainConverter"] and is_integer(value),
-       do: {:text, Format.amount(value)}
+       do: {:text, Money.amount(value)}
 
   defp converted("QuoteConverter", value, currency) when is_integer(value),
-    do: {:text, Format.price(value, currency)}
+    do: {:text, DepotFormat.price(value, currency)}
 
   defp converted("ShareConverter", value, _currency) when is_integer(value),
-    do: {:text, Format.shares(value)}
+    do: {:text, DepotFormat.shares(value)}
 
   defp converted("DateConverter", value, _currency) when is_integer(value),
     do: {:text, @epoch |> Date.add(value) |> Format.date()}
@@ -53,7 +54,8 @@ defmodule AbakusWeb.Depot.AttributeValue do
   defp limit_price(value, currency) do
     case Regex.run(~r/^\s*(<=?|>=?)\s*(\d+)\s*$/, value) do
       [_, operator, price] ->
-        {:text, "#{@operators[operator]} #{Format.price(String.to_integer(price), currency)}"}
+        {:text,
+         "#{@operators[operator]} #{DepotFormat.price(String.to_integer(price), currency)}"}
 
       nil ->
         plain(value)

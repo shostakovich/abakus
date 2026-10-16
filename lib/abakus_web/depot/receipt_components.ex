@@ -9,7 +9,9 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
 
   alias Abakus.Depot.Portfolios.Receipt
   alias Abakus.Depot.Receipts.{Check, Checks, Correction, Fields}
-  alias AbakusWeb.Depot.{Format, ReceiptText, TransactionDialog}
+  alias Abakus.{Format, Money}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
+  alias AbakusWeb.Depot.{ReceiptText, TransactionDialog}
 
   @kinds %{purchase: "Kauf", sale: "Verkauf", dividend: "Dividende"}
 
@@ -172,14 +174,17 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
   defp figures(fields) do
     [
       date(fields),
-      fields.shares && "#{Format.rate(fields.shares)} Stück",
-      fields.amount && "#{Format.decimal(fields.amount, 2)} €"
+      fields.shares && "#{Format.decimal(fields.shares)} Stück",
+      fields.amount && euros(fields.amount)
     ]
   end
 
   defp warning(receipt), do: receipt.checks |> problems() |> hd() |> check_text(receipt.fields)
 
   defp date(%Fields{date: date}), do: date && Format.date(date)
+
+  defp euros(decimal),
+    do: decimal |> Decimal.mult(100) |> Decimal.round(0) |> Decimal.to_integer() |> Money.euros()
 
   @doc "What the dialog says the receipt is: its Paperless document or file, kind and date."
   def receipt_subtitle(%Receipt{fields: fields} = receipt) do
@@ -273,7 +278,7 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
   @doc "What the price field says when the receipt's amount does not add up, nil otherwise."
   def price_warning(%Receipt{checks: checks, fields: fields}) do
     if Enum.any?(checks, &match?(%Check{name: :amount, result: :failed}, &1)),
-      do: "Summe laut Beleg: #{Format.decimal(fields.amount, 2)}\u00A0€"
+      do: "Summe laut Beleg: #{euros(fields.amount)}"
   end
 
   def price_warning(nil), do: nil
@@ -281,7 +286,7 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
   @doc "What the portfolio field says when the receipt's depot number names none, nil otherwise."
   def depot_number_warning(%Receipt{checks: checks, fields: fields}) do
     case Enum.find(checks, &(&1.name == :depot)) do
-      %Check{result: :failed} -> "Laut Beleg Depot #{Format.masked(fields.depot_number)}"
+      %Check{result: :failed} -> "Laut Beleg Depot #{DepotFormat.masked(fields.depot_number)}"
       %Check{result: :missing} -> "Der Beleg nennt keine Depotnummer."
       _passed_or_none -> nil
     end
@@ -304,12 +309,12 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
   defp check_result(_check), do: "nicht bestanden"
 
   defp check_text(%Check{name: :amount, result: :passed} = check, fields),
-    do: "#{Checks.formula(fields)} = #{Format.decimal(check.computed, 2)} €"
+    do: "#{Checks.formula(fields)} = #{euros(check.computed)}"
 
   defp check_text(%Check{name: :amount, result: :failed} = check, fields) do
     text =
-      "#{Checks.formula(fields)} ergibt #{Format.decimal(check.computed, 2)} €, " <>
-        "der Beleg nennt #{Format.decimal(fields.amount, 2)} €."
+      "#{Checks.formula(fields)} ergibt #{euros(check.computed)}, " <>
+        "der Beleg nennt #{euros(fields.amount)}."
 
     text <> " Bitte Kurs prüfen."
   end
@@ -337,11 +342,11 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
 
   defp check_text(%Check{name: :depot, result: :passed} = check, fields),
     do:
-      "Depot #{Format.masked(fields.depot_number)} gehört zu „#{Format.portfolio_name(check.portfolio_name)}“"
+      "Depot #{DepotFormat.masked(fields.depot_number)} gehört zu „#{DepotFormat.portfolio_name(check.portfolio_name)}“"
 
   defp check_text(%Check{name: :depot, result: :failed}, fields),
     do:
-      "Depot #{Format.masked(fields.depot_number)} gehört zu keinem deiner Depots. " <>
+      "Depot #{DepotFormat.masked(fields.depot_number)} gehört zu keinem deiner Depots. " <>
         "Bitte Depot wählen."
 
   defp check_text(%Check{name: :depot, result: :missing}, _fields),

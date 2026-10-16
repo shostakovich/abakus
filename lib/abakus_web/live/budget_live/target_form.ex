@@ -7,7 +7,7 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
   use AbakusWeb, :html
 
   alias Abakus.Categories.TargetVersion
-  alias AbakusWeb.Format
+  alias Abakus.Money
 
   @blank %{
     "amount" => "",
@@ -25,7 +25,7 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
 
   def params(target, month) do
     %{
-      "amount" => Format.amount(target.amount),
+      "amount" => Money.amount(target.amount),
       "cadence" => Atom.to_string(target.cadence),
       "due_on" => due_on(target, month),
       "repeats_yearly" => to_string(target.repeats_yearly),
@@ -51,7 +51,7 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
     params = Map.merge(@blank, params)
     by_date = params["cadence"] == "by_date"
 
-    case parse_target_amount(params["amount"]) do
+    case Money.parse(params["amount"] || "", 2) do
       {:ok, amount} ->
         {:ok,
          %{
@@ -63,16 +63,10 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
            set_aside: params["set_aside"] != "false"
          }}
 
-      :error ->
-        {:error, [amount: {"Betrag ist ungültig, etwa 1.234,56", []}]}
+      {:error, message} ->
+        {:error, [amount: {message, []}]}
     end
   end
-
-  defp parse_target_amount(text) when is_binary(text) do
-    if String.trim(text) == "", do: :error, else: Format.parse_amount(text)
-  end
-
-  defp parse_target_amount(_text), do: :error
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value

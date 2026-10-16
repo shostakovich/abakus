@@ -14,8 +14,10 @@ defmodule Abakus.Kasse.Expenses.Form do
 
   import Ecto.Changeset
 
-  alias Abakus.Kasse.{Dates, Money, Split, Suggestions}
+  alias Abakus.Format
+  alias Abakus.Kasse.{Dates, Split, Suggestions}
   alias Abakus.Kasse.Expenses.Expense
+  alias Abakus.Money
 
   # Offered in the form; other ISO codes go in currency_other.
   @common_currencies ~w(EUR USD GBP CHF DKK SEK NOK PLN CZK HUF TRY JPY CAD AUD)
@@ -108,7 +110,7 @@ defmodule Abakus.Kasse.Expenses.Form do
   end
 
   defp prefilled_amount(cents) when is_integer(cents) and cents > 0,
-    do: Money.format_cents_input(cents)
+    do: Money.amount(cents)
 
   defp prefilled_amount(_cents), do: ""
 
@@ -145,12 +147,12 @@ defmodule Abakus.Kasse.Expenses.Form do
 
     if Expense.foreign?(expense) do
       Map.merge(fields, %{
-        amount: Money.format_minor_input(expense.original_amount, currency),
+        amount: Money.amount(expense.original_amount, currency),
         rate: Money.format_rate(expense.fx_rate),
         rate_source: expense.fx_source
       })
     else
-      Map.put(fields, :amount, Money.format_cents_input(expense.amount_cents))
+      Map.put(fields, :amount, Money.amount(expense.amount_cents))
     end
   end
 
@@ -172,7 +174,7 @@ defmodule Abakus.Kasse.Expenses.Form do
   defp weight_text(%Expense{split_mode: :percent}, share), do: format_percent(share.weight)
 
   defp weight_text(%Expense{split_mode: :amount} = expense, share),
-    do: Money.format_minor_input(share.weight, expense.original_currency)
+    do: Money.amount(share.weight, expense.original_currency)
 
   @doc """
   Applies the form's params and what they imply. Option `:suggestions` (see
@@ -329,11 +331,11 @@ defmodule Abakus.Kasse.Expenses.Form do
         10_000 |> Split.allocate(ones, 0) |> Enum.map(&format_percent/1)
 
       :amount ->
-        decimals = changeset |> currency_code() |> Money.decimals()
+        currency = currency_code(changeset)
 
-        case Money.parse(get_field(changeset, :amount), decimals) do
+        case Money.parse(get_field(changeset, :amount), Money.decimals(currency)) do
           {:ok, total} when total > 0 ->
-            total |> Split.allocate(ones, 0) |> Enum.map(&Money.format_minor(&1, decimals))
+            total |> Split.allocate(ones, 0) |> Enum.map(&Money.amount(&1, currency))
 
           _none ->
             List.duplicate("", count)
@@ -357,7 +359,7 @@ defmodule Abakus.Kasse.Expenses.Form do
     change(form,
       rate: Money.format_rate(rate.rate),
       rate_source: rate.source,
-      rate_hint: "#{hint} vom #{Dates.format(rate.date)}."
+      rate_hint: "#{hint} vom #{Format.date(rate.date)}."
     )
   end
 
@@ -463,19 +465,17 @@ defmodule Abakus.Kasse.Expenses.Form do
 
   defp preview_sum(form, :amount, currency, decimals, weights, total, rotation) do
     target = if currency == "EUR", do: total, else: ok_or_nil(Money.parse(form.amount, decimals))
-    unit = if currency == "EUR", do: " €", else: " " <> currency
     sum = Enum.sum(weights)
 
     cond do
       sum == target ->
-        {{:ok, "Passt: #{Money.format_minor(sum, decimals)}#{unit}."},
-         allocate(total, weights, rotation)}
+        {{:ok, "Passt: #{Money.money(sum, currency)}."}, allocate(total, weights, rotation)}
 
       target > sum ->
-        {{:error, "Noch #{Money.format_minor(target - sum, decimals)}#{unit} offen."}, nil}
+        {{:error, "Noch #{Money.money(target - sum, currency)} offen."}, nil}
 
       true ->
-        {{:error, "#{Money.format_minor(sum - target, decimals)}#{unit} zu viel."}, nil}
+        {{:error, "#{Money.money(sum - target, currency)} zu viel."}, nil}
     end
   end
 

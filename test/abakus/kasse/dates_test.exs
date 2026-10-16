@@ -1,8 +1,6 @@
 defmodule Abakus.Kasse.DatesTest do
   use ExUnit.Case, async: true
 
-  alias Abakus.LocalTime
-
   alias Abakus.Kasse.Dates
 
   describe "next_occurrence/3" do
@@ -115,17 +113,5 @@ defmodule Abakus.Kasse.DatesTest do
                  {:error, "Das Datum „#{unquote(text)}“ liegt nicht zwischen 2000 und 2100."}
       end
     end
-  end
-
-  test "writes a date the German way" do
-    assert Dates.format(~D[2026-10-02]) == "02.10.2026"
-    assert Dates.format(~D[0026-10-02]) == "02.10.0026"
-  end
-
-  test "writes a moment in local time" do
-    assert Dates.format_time(~N[2026-10-02 09:05:59]) == "02.10.2026, 09:05"
-
-    utc = ~U[2026-10-01 23:30:00.000000Z]
-    assert Dates.format_time(utc) == Dates.format_time(LocalTime.from_utc(utc))
   end
 end

@@ -2,8 +2,9 @@ defmodule AbakusWeb.Depot.PerformanceLive do
   use AbakusWeb, :depot_live_view
 
   alias Abakus.Depot.Portfolios
-  alias Abakus.LocalTime
-  alias AbakusWeb.Depot.{Benchmark, Format, Periods}
+  alias Abakus.{Format, LocalTime}
+  alias AbakusWeb.Depot.{Benchmark, Periods}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   on_mount Benchmark
 
@@ -20,7 +21,7 @@ defmodule AbakusWeb.Depot.PerformanceLive do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, periods: @periods, per_year: "p. a.")
+    assigns = assign(assigns, periods: @periods, per_year: "p.\u00A0a.")
 
     ~H"""
     <Layouts.depot
@@ -257,14 +258,14 @@ defmodule AbakusWeb.Depot.PerformanceLive do
   end
 
   # The days after the reference day.
-  defp days(interval), do: Format.days(Date.add(interval.first, 1), interval.last)
+  defp days(interval), do: Format.long_date_span(Date.add(interval.first, 1), interval.last)
 
   defp portfolio_name(nil), do: "alle Depots und Konten"
 
   defp portfolio_name(%{reference_account_id: nil} = portfolio),
-    do: Format.portfolio_name(portfolio)
+    do: DepotFormat.portfolio_name(portfolio)
 
-  defp portfolio_name(portfolio), do: "#{Format.portfolio_name(portfolio)} mit Referenzkonto"
+  defp portfolio_name(portfolio), do: "#{DepotFormat.portfolio_name(portfolio)} mit Referenzkonto"
 
   attr :max, :float, required: true
   attr :from, Date, required: true
@@ -276,7 +277,7 @@ defmodule AbakusWeb.Depot.PerformanceLive do
   defp drawdown_days(assigns) do
     ~H"""
     <span class="text-nowrap" title={Format.date_span(@from, @to)}>
-      {Format.date_span(@from, @to, @from.year != @year or @to.year != @year)}
+      {Format.date_span(@from, @to, year: @from.year != @year or @to.year != @year)}
     </span><.meta_sep /><span class="text-nowrap">{days_count(Date.diff(@to, @from))}</span>
     """
   end

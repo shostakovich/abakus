@@ -233,7 +233,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       view = open_new(c, c.giro)
 
       submit(view, %{outflow: "12,345"})
-      assert has_element?(view, "#tx-error", "Betrag ist ungültig")
+      assert has_element?(view, "#tx-error", "Höchstens 2 Nachkommastellen erlaubt.")
 
       view |> with_target("#tx-editor") |> render_click("split", %{})
       submit(view, %{outflow: "1", subtransactions: %{"0" => %{outflow: "1"}}})

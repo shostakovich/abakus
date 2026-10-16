@@ -7,9 +7,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
 
   alias Abakus.Depot.FakeSymbolSource
   alias Abakus.Depot.Portfolios.TransactionUnit
-  alias Abakus.{ExchangeRates, LocalTime}
-  alias Abakus.Repo
-  alias AbakusWeb.Depot.Format
+  alias Abakus.{ExchangeRates, Format, LocalTime, Repo}
 
   setup :register_and_log_in_user
 

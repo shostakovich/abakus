@@ -8,9 +8,10 @@ defmodule Abakus.Kasse.Ynab.Sync do
 
   require Logger
 
+  alias Abakus.Format
   alias Abakus.Kasse.{Expenses, Ynab}
   alias Abakus.Kasse.Ynab.{Connection, Connections, Error, Result, Run, Want}
-  alias Abakus.{LocalTime, Schema}
+  alias Abakus.Schema
 
   @retry_delay 5 * 60
   @max_backoff 60 * 60
@@ -159,7 +160,7 @@ defmodule Abakus.Kasse.Ynab.Sync do
       :rate_limited ->
         backoff = (status.backoff_seconds * 2) |> max(@retry_delay) |> min(@max_backoff)
         retry_at = DateTime.add(now, max(backoff, error.retry_after), :second)
-        at = retry_at |> LocalTime.from_utc() |> Calendar.strftime("%H:%M")
+        at = Format.time(retry_at)
 
         %{
           status

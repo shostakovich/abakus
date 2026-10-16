@@ -1,9 +1,9 @@
 defmodule Abakus.MCPTest do
   use ExUnit.Case, async: true
 
-  alias Abakus.Kasse.Money
   alias Abakus.MCP
   alias Abakus.MCP.Output
+  alias Abakus.Money
 
   @meta ~s("_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"})
   @headers [{"mcp-protocol-version", "2026-07-28"}, {"mcp-method", "tools/list"}]

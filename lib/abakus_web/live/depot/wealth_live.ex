@@ -10,9 +10,11 @@ defmodule AbakusWeb.Depot.WealthLive do
   import AbakusWeb.Depot.DividendComponents
 
   alias Abakus.Depot.{AccountRoles, Period, Portfolios}
-  alias Abakus.{Ledger, LocalTime}
+  alias Abakus.{Format, Ledger, LocalTime}
+  alias Abakus.Money
   alias AbakusWeb.Areas
-  alias AbakusWeb.Depot.{Benchmark, Format, Periods}
+  alias AbakusWeb.Depot.{Benchmark, Periods}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   on_mount Benchmark
 
@@ -140,7 +142,7 @@ defmodule AbakusWeb.Depot.WealthLive do
             <.list_row
               :for={entry <- @overview.portfolios}
               id={"portfolio-#{entry.portfolio.id}"}
-              title={Format.portfolio_name(entry.portfolio)}
+              title={DepotFormat.portfolio_name(entry.portfolio)}
               navigate={depots_path(:holdings, entry.portfolio.id)}
               trailing_on_phone={:title}
             >
@@ -224,7 +226,7 @@ defmodule AbakusWeb.Depot.WealthLive do
 
   defp change_note(assigns) do
     ~H"""
-    <span class={tone(Format.signed_euros(@change))}>
+    <span class={amount_tone(@change, 0)}>
       <.amount value={@change} signed decimals={0} /> heute{percent_note(@percent)}
     </span>
     """
@@ -263,7 +265,7 @@ defmodule AbakusWeb.Depot.WealthLive do
 
   # Each part stays on one line.
   defp portfolio_note(%{securities: count, cash: cash}),
-    do: join_meta([securities(count), cash && "Cash\u00A0#{Format.euros(cash, 2)}"])
+    do: join_meta([securities(count), cash && "Cash\u00A0#{Money.euros(cash)}"])
 
   defp without_role_title([_account]), do: "Ein Verrechnungskonto ohne Rolle"
   defp without_role_title(accounts), do: "#{length(accounts)} Verrechnungskonten ohne Rolle"

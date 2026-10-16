@@ -5,8 +5,8 @@ defmodule AbakusWeb.SettingsLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.YnabImport
-  alias AbakusWeb.{Areas, Format}
+  alias Abakus.{Format, YnabImport}
+  alias AbakusWeb.Areas
 
   @titles %{appearance: "Aussehen", ynab_import: "YNAB-Import"}
 
@@ -54,7 +54,7 @@ defmodule AbakusWeb.SettingsLive do
       <div :if={@status} class="flex flex-wrap items-center gap-2">
         <.badge tone={:success}>abgeschlossen</.badge>
         <span class="text-sm text-base-content/70">
-          übernommen am {Format.date(DateTime.to_date(@status.imported_at))}
+          übernommen am {Format.date(@status.imported_at)}
         </span>
       </div>
       <p :if={@status} id="ynab-import-summary" class="max-w-prose">
@@ -78,7 +78,7 @@ defmodule AbakusWeb.SettingsLive do
   end
 
   defp counted(1, one, _many), do: "1 #{one}"
-  defp counted(number, _one, many), do: "#{Format.count(number)} #{many}"
+  defp counted(number, _one, many), do: "#{Format.number(number)} #{many}"
 
   @impl true
   def mount(_params, _session, socket), do: {:ok, socket}

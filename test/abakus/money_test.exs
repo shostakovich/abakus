@@ -1,59 +1,49 @@
-defmodule Abakus.Kasse.MoneyTest do
+defmodule Abakus.MoneyTest do
   use ExUnit.Case, async: true
 
-  alias Abakus.Kasse.Money
+  alias Abakus.{Format, Money}
 
-  describe "format_cents/1" do
-    for {cents, text} <- [
-          {0, "0,00 €"},
-          {1, "0,01 €"},
-          {99, "0,99 €"},
-          {1234, "12,34 €"},
-          {100_000, "1.000,00 €"},
-          {123_456_789, "1.234.567,89 €"},
-          {-1234, "−12,34 €"},
-          {-5, "−0,05 €"},
-          {9_223_372_036_854_775_807, "92.233.720.368.547.758,07 €"}
-        ] do
-      test "writes #{cents} cents as #{text}" do
-        assert Money.format_cents(unquote(cents)) == unquote(text)
-      end
-    end
-  end
-
-  describe "format_cents_input/1" do
-    for {cents, text} <- [{0, "0,00"}, {1234, "12,34"}, {123_456, "1234,56"}, {-50, "-0,50"}] do
-      test "writes #{cents} cents for an input field as #{text}" do
-        assert Money.format_cents_input(unquote(cents)) == unquote(text)
-      end
-    end
-  end
+  @blank "Bitte einen Betrag eingeben."
+  @places "Höchstens 2 Nachkommastellen erlaubt."
 
   describe "parse/2 with two decimals" do
     for {text, cents} <- [
+          {"12", 1200},
+          {"12,5", 1250},
+          {"12.5", 1250},
           {"12,34", 1234},
           {"12.34", 1234},
-          {"12", 1200},
-          {"12,3", 1230},
-          {"12.5", 1250},
-          {",50", 50},
-          {".5", 50},
-          {"0", 0},
-          {"-0", 0},
+          {"12,50 €", 1250},
           {" 12,34 € ", 1234},
           {"12,34€", 1234},
+          {"1.234", 123_400},
+          {"1.050", 105_000},
           {"1.234,56", 123_456},
           {"1,234.56", 123_456},
+          {"1234.56", 123_456},
           {"1,234,567.8", 123_456_780},
-          {"1.234", 123_400},
           {"1.234.567", 123_456_700},
           {"1.234.567,89", 123_456_789},
-          {"0.50", 50},
-          {"-12,34", -1234},
-          {"+3", 300},
+          {"12,500", 1250},
           {"1.0000", 100},
-          {"1 000", 100_000},
-          {"\t1,5 ", 150}
+          {"12,", 1200},
+          {"12.", 1200},
+          {"0,", 0},
+          {"1.234,", 123_400},
+          {"−5", -500},
+          {"−0,99", -99},
+          {"-5", -500},
+          {"-12,34", -1234},
+          {"+5", 500},
+          {"0", 0},
+          {"-0", 0},
+          {"1 234,56", 123_456},
+          {"1 234,56", 123_456},
+          {"\t1,5 ", 150},
+          {"1.5", 150},
+          {"0.50", 50},
+          {",5", 50},
+          {".5", 50}
         ] do
       test "reads #{inspect(text)} as #{cents} cents" do
         assert Money.parse(unquote(text), 2) == {:ok, unquote(cents)}
@@ -61,10 +51,18 @@ defmodule Abakus.Kasse.MoneyTest do
     end
 
     for {text, message} <- [
-          {"", "Bitte einen Betrag eingeben."},
-          {" € ", "Bitte einen Betrag eingeben."},
-          {"   ", "Bitte einen Betrag eingeben."},
+          {"", @blank},
+          {"   ", @blank},
+          {" € ", @blank},
+          {"0.856", @places},
+          {"12,345", @places},
+          {"1,234", @places},
+          {"0.123", @places},
+          {"000.123", @places},
+          {"12.3456", @places},
+          {"1.23.4", "Ungültiger Betrag „1.23.4“."},
           {"abc", "Ungültiger Betrag „abc“."},
+          {"zwölf", "Ungültiger Betrag „zwölf“."},
           {"1 2,3x", "Ungültiger Betrag „12,3x“."},
           {"1,2,3", "Ungültiger Betrag „1,2,3“."},
           {"12.34.5", "Ungültiger Betrag „12.34.5“."},
@@ -72,21 +70,19 @@ defmodule Abakus.Kasse.MoneyTest do
           {"1.234.5", "Ungültiger Betrag „1.234.5“."},
           {"1.2.3,4", "Ungültiger Betrag „1.2.3,4“."},
           {"1..2", "Ungültiger Betrag „1..2“."},
-          {"12,", "Ungültiger Betrag „12,“."},
-          {"0,", "Ungültiger Betrag „0,“."},
+          {",", "Ungültiger Betrag „,“."},
+          {".", "Ungültiger Betrag „.“."},
           {"-", "Ungültiger Betrag „-“."},
+          {"−", "Ungültiger Betrag „−“."},
           {"+", "Ungültiger Betrag „+“."},
           {"+-1", "Ungültiger Betrag „+-1“."},
           {"--1", "Ungültiger Betrag „--1“."},
+          {"−−1", "Ungültiger Betrag „−−1“."},
+          {"1-", "Ungültiger Betrag „1-“."},
           {"€12", "Ungültiger Betrag „€12“."},
           {"12 €€", "Ungültiger Betrag „12€“."},
           {"1 000", "Ungültiger Betrag „1 000“."},
           {"١٢", "Ungültiger Betrag „١٢“."},
-          {"12,345", "Höchstens 2 Nachkommastellen erlaubt."},
-          {"1,234", "Höchstens 2 Nachkommastellen erlaubt."},
-          {"0.123", "Höchstens 2 Nachkommastellen erlaubt."},
-          {"000.123", "Höchstens 2 Nachkommastellen erlaubt."},
-          {"12.3456", "Höchstens 2 Nachkommastellen erlaubt."},
           {String.duplicate("1", 16), "Der Betrag ist zu groß."},
           {"99999999999999999999", "Der Betrag ist zu groß."}
         ] do
@@ -100,11 +96,15 @@ defmodule Abakus.Kasse.MoneyTest do
     for {text, decimals, minor} <- [
           {"1500", 0, 1500},
           {"1.500", 0, 1500},
-          {"1,234", 3, 1234},
-          {"1.5", 3, 1500},
-          {"0.123", 3, 123},
+          {"123.456", 0, 123_456},
           {"1200,00", 0, 1200},
           {"1.200,00", 0, 1200},
+          {"12,", 0, 12},
+          {"1,234", 3, 1234},
+          {"1.234,560", 3, 1_234_560},
+          {"1.5", 3, 1500},
+          {"0.123", 3, 123},
+          {"1.234", 3, 1234},
           {"12,340", 2, 1234}
         ] do
       test "reads #{inspect(text)} with #{decimals} decimals as #{minor}" do
@@ -116,6 +116,159 @@ defmodule Abakus.Kasse.MoneyTest do
       test "rejects #{inspect(text)} in a currency without decimals" do
         assert Money.parse(unquote(text), 0) ==
                  {:error, "Dieser Betrag darf keine Nachkommastellen haben."}
+      end
+    end
+
+    test "rejects long text in linear time" do
+      text = String.duplicate("1", 20_000) <> "x"
+      {micros, {:error, _message}} = :timer.tc(fn -> Money.parse(text, 2) end)
+      assert micros < 20_000
+    end
+  end
+
+  describe "parse_number/1" do
+    for {text, number} <- [
+          {"1.500", "1500"},
+          {"0.125", "0.125"},
+          {"1.234", "1234"},
+          {"1.234.567", "1234567"},
+          {"1.234,56", "1234.56"},
+          {"1.234,5678", "1234.5678"},
+          {"1,234.56", "1234.56"},
+          {"1234.56", "1234.56"},
+          {" 12,5 ", "12.5"},
+          {"12.5", "12.5"},
+          {"1.5", "1.5"},
+          {"0.123", "0.123"},
+          {"12.3456", "12.3456"},
+          {"12,50 €", "12.50"},
+          {"1 234,56", "1234.56"},
+          {"12,", "12"},
+          {"−5", "-5"},
+          {"+5", "5"}
+        ] do
+      test "reads #{inspect(text)} as #{number}" do
+        assert {:ok, number} = Money.parse_number(unquote(text))
+        assert Decimal.to_string(number, :normal) == unquote(number)
+      end
+    end
+
+    for {text, message} <- [
+          {"", @blank},
+          {"abc", "Ungültiger Betrag „abc“."},
+          {"1.23.4", "Ungültiger Betrag „1.23.4“."},
+          {",", "Ungültiger Betrag „,“."},
+          {String.duplicate("1", 16), "Der Betrag ist zu groß."},
+          {"1e5", "Ungültiger Betrag „1e5“."},
+          {"12,3456789012345678901234567890123456",
+           "Ungültiger Betrag „12,3456789012345678901234567890123456“."}
+        ] do
+      test "rejects #{inspect(text)}" do
+        assert Money.parse_number(unquote(text)) == {:error, unquote(message)}
+      end
+    end
+  end
+
+  describe "euros/2" do
+    for {cents, opts, text} <- [
+          {0, [], "0,00 €"},
+          {1, [], "0,01 €"},
+          {123_456, [], "1.234,56 €"},
+          {-999, [], "−9,99 €"},
+          {-5, [], "−0,05 €"},
+          {9_223_372_036_854_775_807, [], "92.233.720.368.547.758,07 €"},
+          {4875, [signed: true], "+48,75 €"},
+          {-4875, [signed: true], "−48,75 €"},
+          {0, [signed: true], "0,00 €"},
+          {14_911_750, [decimals: 0], "149.118 €"},
+          {14_911_749, [decimals: 0], "149.117 €"},
+          {-123_456, [decimals: 0], "−1.235 €"},
+          {56_200, [signed: true, decimals: 0], "+562 €"},
+          {-40, [signed: true, decimals: 0], "0 €"}
+        ] do
+      test "writes #{cents} cents with #{inspect(opts)} as #{text}" do
+        assert Money.euros(unquote(cents), unquote(opts)) ==
+                 String.replace(unquote(text), " ", " ")
+      end
+    end
+  end
+
+  describe "money/2" do
+    for {minor, currency, text} <- [
+          {1234, "EUR", "12,34 €"},
+          {1234, "", "12,34 €"},
+          {1234, "USD", "12,34 USD"},
+          {123_456, "JPY", "123.456 JPY"},
+          {1234, "kwd", "1,234 KWD"},
+          {-123_456_789, " usd ", "−1.234.567,89 USD"}
+        ] do
+      test "writes #{minor} in #{inspect(currency)} as #{text}" do
+        assert Money.money(unquote(minor), unquote(currency)) ==
+                 String.replace(unquote(text), " ", " ")
+      end
+    end
+  end
+
+  describe "plain/2" do
+    for {minor, currency, text} <- [
+          {123_456, "EUR", "1.234,56 €"},
+          {-999, "", "−9,99 €"},
+          {10_000, " usd ", "100,00 USD"},
+          {123_456, "JPY", "123.456 JPY"},
+          {-1_234_560, "KWD", "−1.234,560 KWD"}
+        ] do
+      test "writes #{minor} in #{inspect(currency)} as #{text} with a plain space" do
+        assert Money.plain(unquote(minor), unquote(currency)) == unquote(text)
+      end
+    end
+  end
+
+  describe "amount/2" do
+    for {minor, currency, text} <- [
+          {0, "EUR", "0,00"},
+          {5, "EUR", "0,05"},
+          {123_456, "EUR", "1.234,56"},
+          {-999, "EUR", "−9,99"},
+          {100_000_000_000, "EUR", "1.000.000.000,00"},
+          {123_456, "USD", "1.234,56"},
+          {123_456, "JPY", "123.456"},
+          {1_234_560, "KWD", "1.234,560"},
+          {123_456, "KWD", "123,456"}
+        ] do
+      test "writes #{minor} in #{currency} as #{text}" do
+        assert Money.amount(unquote(minor), unquote(currency)) == unquote(text)
+      end
+    end
+
+    test "is in euros unless a currency is given" do
+      assert Money.amount(-105_000) == "−1.050,00"
+    end
+  end
+
+  describe "a field value reads back as written" do
+    values =
+      [0, 1, 5, 99, 100, 999, 1000, 1001, 123_456, 1_000_000, 1_234_567, 100_000_000] ++
+        [123_456_789, 987_654_321_012, 1_000_000_000_000, 10_000_000_000_000]
+
+    for currency <- ["EUR", "USD", "JPY", "KWD"],
+        minor <- values,
+        sign <- [1, -1],
+        minor != 0 or sign == 1 do
+      test "#{sign * minor} in #{currency}" do
+        minor = unquote(sign * minor)
+        currency = unquote(currency)
+
+        assert Money.parse(Money.amount(minor, currency), Money.decimals(currency)) ==
+                 {:ok, minor}
+      end
+    end
+
+    for number <- ~w(0 0.125 1.5 12.50 1500 1234.5678 0.00000001 123456789.12345678 -9.99),
+        places <- [0, 2] do
+      test "#{number} with at least #{places} places" do
+        number = Decimal.new(unquote(number))
+        assert {:ok, read} = Money.parse_number(Format.decimal(number, unquote(places)))
+        assert Decimal.equal?(read, number)
       end
     end
   end
@@ -144,21 +297,6 @@ defmodule Abakus.Kasse.MoneyTest do
     test "writes basis points as a percentage" do
       assert Money.format_basis_points(3333) == "33,33 %"
       assert Money.format_basis_points(10_000) == "100,00 %"
-    end
-  end
-
-  describe "format_money/2" do
-    for {minor, currency, text} <- [
-          {1234, "EUR", "12,34 €"},
-          {1234, "", "12,34 €"},
-          {1234, "USD", "12,34 USD"},
-          {123_456, "JPY", "123.456 JPY"},
-          {1234, "kwd", "1,234 KWD"},
-          {-123_456_789, " usd ", "−1.234.567,89 USD"}
-        ] do
-      test "writes #{minor} in #{inspect(currency)} as #{text}" do
-        assert Money.format_money(unquote(minor), unquote(currency)) == unquote(text)
-      end
     end
   end
 
@@ -242,6 +380,7 @@ defmodule Abakus.Kasse.MoneyTest do
           {" 0,8653 ", 0.8653},
           {"162,45", 162.45},
           {"1,5", 1.5},
+          {"1,", 1.0},
           {"1 000,5", 1000.5},
           {"123456789012,5", 123_456_789_012.5},
           {"0,000000000001", 1.0e-12},
@@ -266,7 +405,6 @@ defmodule Abakus.Kasse.MoneyTest do
           "1e5",
           "NaN",
           "Inf",
-          "1,",
           ",5x",
           "0.000",
           "1234567890123",
@@ -328,23 +466,6 @@ defmodule Abakus.Kasse.MoneyTest do
                  separator: unquote(separator)
                ) ==
                  unquote(text)
-      end
-    end
-
-    test "groups thousands with dots" do
-      assert Money.format_minor(-123_456_789, 2, group: true) == "-1.234.567,89"
-    end
-  end
-
-  describe "format_minor_input/2" do
-    for {currency, text} <- [
-          {"USD", "1234,56"},
-          {"JPY", "123456"},
-          {"KWD", "123,456"},
-          {"EUR", "1234,56"}
-        ] do
-      test "writes 123456 minor units of #{currency} as #{text}" do
-        assert Money.format_minor_input(123_456, unquote(currency)) == unquote(text)
       end
     end
   end

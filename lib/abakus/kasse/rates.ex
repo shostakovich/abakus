@@ -4,8 +4,8 @@ defmodule Abakus.Kasse.Rates do
   manual rates is logged.
   """
 
-  alias Abakus.{ExchangeRates, LocalTime, Repo}
-  alias Abakus.Kasse.{Activities, Dates, Money}
+  alias Abakus.{ExchangeRates, Format, LocalTime, Money, Repo}
+  alias Abakus.Kasse.Activities
 
   @lookback_days 10
 
@@ -58,7 +58,7 @@ defmodule Abakus.Kasse.Rates do
            {:ok, _activity} <-
              Activities.log_settings(
                actor_id,
-               "Manueller Kurs für #{rate.currency} ab #{Dates.format(rate.date)} gespeichert: " <>
+               "Manueller Kurs für #{rate.currency} ab #{Format.date(rate.date)} gespeichert: " <>
                  "1 € = #{Money.format_rate(Decimal.to_float(rate.rate))} #{rate.currency}"
              ) do
         {:ok, rate}
@@ -74,7 +74,7 @@ defmodule Abakus.Kasse.Rates do
       with :ok <- ExchangeRates.delete_manual_rate(currency, date) do
         Activities.log_settings(
           actor_id,
-          "Manueller Kurs für #{currency} ab #{Dates.format(date)} gelöscht"
+          "Manueller Kurs für #{currency} ab #{Format.date(date)} gelöscht"
         )
       end
     end)

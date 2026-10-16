@@ -15,7 +15,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
   alias Abakus.Depot.DecimalInput
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.Receipts.Fields
-  alias Abakus.LocalTime
+  alias Abakus.{Format, LocalTime}
 
   @kinds [:purchase, :sale, :dividend, :deposit, :removal]
 
@@ -167,7 +167,6 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
        else: put_change(changeset, :expected_amount, nil)
   end
 
-  # The exact amount the other fields give, nil while one of them is missing.
   defp computed_amount(changeset) do
     fees_and_taxes = Decimal.add(get_field(changeset, :fees), get_field(changeset, :taxes))
 
@@ -222,7 +221,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
            ),
          true <- shares(fetch!(changeset, :shares)) > held do
       add_error(changeset, :shares, "übersteigt den Bestand von %{held} Stück",
-        held: format_shares(held)
+        held: Format.shares(held)
       )
     else
       _fine -> changeset
@@ -231,18 +230,10 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
 
   defp fetch!(changeset, field), do: fetch_field!(changeset, field)
 
-  defp format_shares(shares) do
-    shares
-    |> Decimal.div(100_000_000)
-    |> Decimal.normalize()
-    |> Decimal.to_string(:normal)
-    |> String.replace(".", ",")
-  end
-
   @doc """
-  The params that show `transaction`, one `Transaction.editable?/1`, in the form, in German
-  notation. The price comes from gross value and shares; the amount counts as overwritten when
-  that price, rounded to four places, gives another one.
+  The params that show `transaction`, one `Transaction.editable?/1`, in the form, as
+  `Abakus.Format.decimal/2` writes them. The price comes from gross value and shares; the amount
+  counts as overwritten when that price, rounded to four places, gives another one.
   """
   def params_of(%Transaction{} = transaction) do
     kind = kind_of(transaction.type)
@@ -282,7 +273,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
       "shares" => typed(fields.shares),
       "fees" => typed(fees, 2),
       "taxes" => typed(taxes, 2),
-      "amount" => fields.amount && fields.amount |> typed(2) |> group_thousands(),
+      "amount" => typed(fields.amount, 2),
       "amount_set" => to_string(fields.amount != nil)
     }
     |> Map.merge(recognised_values(fields, fees, taxes))
@@ -291,23 +282,14 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
   defp recognised_values(%Fields{kind: :dividend, amount: nil} = fields, _fees, _taxes),
     do: %{
       "gross" =>
-        fields.shares && fields.price && typed(Decimal.mult(fields.shares, fields.price), 2)
+        fields.shares && fields.price &&
+          fields.shares |> Decimal.mult(fields.price) |> round_cents() |> typed(2)
     }
 
   defp recognised_values(%Fields{kind: :dividend} = fields, fees, taxes),
     do: %{"gross" => fields.amount |> Decimal.add(fees) |> Decimal.add(taxes) |> typed(2)}
 
   defp recognised_values(fields, _fees, _taxes), do: %{"price" => typed(fields.price, 2)}
-
-  # As the form shows a computed amount, e.g. `1.231,15`.
-  defp group_thousands(typed) do
-    [whole, fraction] = String.split(typed, ",")
-
-    grouped =
-      whole |> String.reverse() |> String.replace(~r/(\d{3})(?=\d)/, "\\1.") |> String.reverse()
-
-    grouped <> "," <> fraction
-  end
 
   defp kind_of(type) when type in [:buy, :inbound_delivery], do: :purchase
   defp kind_of(type) when type in [:sell, :outbound_delivery], do: :sale
@@ -345,18 +327,9 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
   defp id_param(nil), do: ""
   defp id_param(id), do: to_string(id)
 
-  # In German notation, with at least `places` decimal places.
   defp typed(decimal, places \\ 0)
   defp typed(nil, _places), do: ""
-
-  defp typed(decimal, places) do
-    normalized = Decimal.normalize(decimal)
-
-    normalized
-    |> Decimal.round(max(-normalized.exp, places))
-    |> Decimal.to_string(:normal)
-    |> String.replace(".", ",")
-  end
+  defp typed(decimal, places), do: Format.decimal(decimal, places)
 
   @doc """
   The attributes of the transactions a valid form books, without user and receipt: one, or for

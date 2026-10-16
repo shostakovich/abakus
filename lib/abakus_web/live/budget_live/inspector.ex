@@ -8,11 +8,11 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   """
   use AbakusWeb, :html
 
-  import AbakusWeb.Format, except: [amount: 1]
+  import Abakus.Format, only: [month_name: 1, month_abbr: 1, month_year: 1]
 
   alias Abakus.Budget.{CategoryMonth, Month}
+  alias Abakus.Money
   alias AbakusWeb.BudgetLive.{CategoryEditor, Components, Status, TargetForm, Window}
-  alias AbakusWeb.Format
 
   defstruct [:month, :free, categories: [], selected: nil]
 
@@ -192,7 +192,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
         <:item label="Übrig aus Vormonat"><.amount value={@cell.carried} /></:item>
         <:item
           :if={@previous && @previous.available < 0}
-          label={"Überzug im #{month_short(@previous.month)}"}
+          label={"Überzug im #{month_abbr(@previous.month)}"}
         >
           <.amount value={@previous.available} class="text-error-ink" />
         </:item>
@@ -229,7 +229,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     ~H"""
     <.alert id="inspector-cover" tone={:error} title="Überzogen">
       {month_name(@entry.cell.month)} ist um
-      <strong class="whitespace-nowrap">{euros(-@entry.cell.available)}</strong>
+      <strong class="whitespace-nowrap">{Money.euros(-@entry.cell.available)}</strong>
       überzogen. Decke es aus „Zu verteilen“ oder einer anderen Kategorie.
       <:actions>
         <.button
@@ -301,7 +301,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
       tone={:warning}
       class="mt-3"
     >
-      Weise noch <strong class="whitespace-nowrap">{euros(@cell.underfunded)}</strong>
+      Weise noch <strong class="whitespace-nowrap">{Money.euros(@cell.underfunded)}</strong>
       zu, um dein Ziel zu erreichen.
       <:actions>
         <.button id="target-assign" size={:sm} phx-click="assign_rest">Zuweisen</.button>
@@ -310,7 +310,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     <.description_list :if={!@cell.snoozed} class="mt-3">
       <:item :if={@cell.saved} label="Angespart">
         <span class="whitespace-nowrap">
-          {Format.amount(@cell.saved)} von {euros(@cell.target.amount)}
+          {Money.amount(@cell.saved)} von {Money.euros(@cell.target.amount)}
         </span>
       </:item>
       <:item label="Ziel diesen Monat"><.amount value={@cell.needed} /></:item>

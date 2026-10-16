@@ -7,7 +7,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
   use AbakusWeb, :kasse_live_view
 
   alias Abakus.Categories
-  alias Abakus.Kasse.{BudgetLink, Dates}
+  alias Abakus.Kasse.BudgetLink
   alias Abakus.Kasse.Categories, as: KasseCategories
   alias Abakus.Kasse.Ynab.Connections
 
@@ -36,7 +36,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
     )
   end
 
-  defp start_date(%{start_date: %Date{} = date}), do: Dates.format(date)
+  defp start_date(%{start_date: %Date{} = date}), do: Format.date(date)
   defp start_date(_connection), do: nil
 
   defp budget_groups do

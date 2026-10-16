@@ -18,7 +18,7 @@ defmodule AbakusWeb.TransactionForm do
   """
 
   alias Abakus.Ledger.{Account, Payee, Transaction}
-  alias AbakusWeb.Format
+  alias Abakus.Money
 
   @main "main"
 
@@ -68,8 +68,8 @@ defmodule AbakusWeb.TransactionForm do
       "payee" => if(transfer, do: "", else: payee_name(side.payee)),
       "transfer_account_id" => to_param(transfer),
       "category_id" => to_param(category_id(side)),
-      "outflow" => if(side.amount < 0, do: Format.amount(-side.amount), else: ""),
-      "inflow" => if(side.amount > 0, do: Format.amount(side.amount), else: "")
+      "outflow" => if(side.amount < 0, do: Money.amount(-side.amount), else: ""),
+      "inflow" => if(side.amount > 0, do: Money.amount(side.amount), else: "")
     }
   end
 
@@ -176,7 +176,7 @@ defmodule AbakusWeb.TransactionForm do
   def keep_column(params, side, column) when column in ["outflow", "inflow"] do
     other = if column == "outflow", do: "inflow", else: "outflow"
 
-    if String.trim(side(params, side)[column] || "") == "",
+    if blank?(side(params, side)[column]),
       do: params,
       else: put_side(params, side, %{other => ""})
   end
@@ -215,7 +215,7 @@ defmodule AbakusWeb.TransactionForm do
 
     cond do
       blank?(side[other]) -> side[column] || ""
-      match?({:ok, _}, amount(side)) -> Format.amount(direction(sign) * elem(amount(side), 1))
+      match?({:ok, _}, amount(side)) -> Money.amount(direction(sign) * elem(amount(side), 1))
       true -> side[other]
     end
   end
@@ -285,11 +285,13 @@ defmodule AbakusWeb.TransactionForm do
 
   @doc "A side's amount: inflow − outflow, blanks as zero."
   def amount(side) do
-    with {:ok, outflow} <- Format.parse_amount(side["outflow"] || ""),
-         {:ok, inflow} <- Format.parse_amount(side["inflow"] || "") do
+    with {:ok, outflow} <- cents(side["outflow"]),
+         {:ok, inflow} <- cents(side["inflow"]) do
       {:ok, inflow - outflow}
     end
   end
+
+  defp cents(text), do: if(blank?(text), do: {:ok, 0}, else: Money.parse(text, 2))
 
   @doc """
   Whether the side takes a category: a split does not, a transfer only between a budget and a tracking account,
@@ -464,7 +466,7 @@ defmodule AbakusWeb.TransactionForm do
   defp parse_amount(side, prefix) do
     case amount(side) do
       {:ok, cents} -> {:ok, cents}
-      :error -> {:error, "#{prefix}Betrag ist ungültig"}
+      {:error, message} -> {:error, prefix <> message}
     end
   end
 
@@ -479,7 +481,8 @@ defmodule AbakusWeb.TransactionForm do
 
   defp blank_subtransaction, do: Map.merge(blank_side(), %{"id" => "", "memo" => ""})
 
-  defp blank?(text), do: String.trim(text || "") == ""
+  defp blank?(text) when is_binary(text), do: String.trim(text) == ""
+  defp blank?(other), do: is_nil(other)
 
   defp blank_to_nil(text) do
     case String.trim(text || "") do

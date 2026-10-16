@@ -12,7 +12,9 @@ defmodule AbakusWeb.Depot.Components do
   import Setzkasten.Components.Layout, only: [header: 1]
   import Setzkasten.Components.Navigation, only: [dropdown: 1, tabs: 1]
 
-  alias AbakusWeb.Depot.{Format, TransactionDialog}
+  alias Abakus.Format
+  alias AbakusWeb.Depot.Format, as: DepotFormat
+  alias AbakusWeb.Depot.TransactionDialog
 
   @tabs [
     holdings: "Bestand",
@@ -41,7 +43,7 @@ defmodule AbakusWeb.Depot.Components do
   def depots_header(assigns) do
     ~H"""
     <.header>
-      {if @portfolio, do: Format.portfolio_name(@portfolio), else: "Depots"}
+      {if @portfolio, do: DepotFormat.portfolio_name(@portfolio), else: "Depots"}
       <:subtitle :if={@subtitle != []}>{render_slot(@subtitle)}</:subtitle>
       <:actions>
         {render_slot(@actions)}
@@ -113,7 +115,7 @@ defmodule AbakusWeb.Depot.Components do
     <.dropdown id="portfolio-menu" label="Depot" align={:end} trigger_class="btn-sm">
       <:trigger>
         <.icon name="briefcase" />{if @portfolio,
-          do: Format.portfolio_name(@portfolio),
+          do: DepotFormat.portfolio_name(@portfolio),
           else: "Gesamt"}
       </:trigger>
       <:item patch={@path.(nil)} active={!@portfolio}>Gesamt</:item>
@@ -123,7 +125,7 @@ defmodule AbakusWeb.Depot.Components do
         active={@portfolio && @portfolio.id == portfolio.id}
         divider={index == 0}
       >
-        {Format.portfolio_name(portfolio)}
+        {DepotFormat.portfolio_name(portfolio)}
       </:item>
     </.dropdown>
     """
@@ -134,16 +136,23 @@ defmodule AbakusWeb.Depot.Components do
   def muted(_amount), do: nil
 
   @doc """
-  The colour of a signed figure as `AbakusWeb.Depot.Format` shows it: green with a plus, red with
+  The colour of a signed figure as `Abakus.Format` and `AbakusWeb.Depot.Format` show it: green with a plus, red with
   a minus, muted for one that rounds to zero.
   """
-  def tone(figure) do
-    case sign(figure) do
-      :success -> "text-success-ink"
-      :error -> "text-error-ink"
-      nil -> "text-base-content/70"
+  def tone(figure), do: figure |> sign() |> tone_class()
+
+  @doc "The colour of euro cents as `<.amount signed>` shows them with `decimals` places, as `tone/1`."
+  def amount_tone(cents, decimals \\ 2) do
+    case Setzkasten.Format.shown_sign(cents, decimals) do
+      1 -> tone_class(:success)
+      -1 -> tone_class(:error)
+      0 -> tone_class(nil)
     end
   end
+
+  defp tone_class(:success), do: "text-success-ink"
+  defp tone_class(:error), do: "text-error-ink"
+  defp tone_class(nil), do: "text-base-content/70"
 
   attr :gain, :integer, required: true
   attr :purchase_value, :integer, default: 0, doc: "gives the gain in percent when positive"
@@ -152,7 +161,7 @@ defmodule AbakusWeb.Depot.Components do
   def gain(assigns) do
     ~H"""
     <.amount value={@gain} signed tone />
-    <div :if={@purchase_value > 0} class={["text-sm", tone(Format.signed_euros(@gain, 2))]}>
+    <div :if={@purchase_value > 0} class={["text-sm", amount_tone(@gain)]}>
       {@gain |> Format.percent_of(@purchase_value) |> Format.signed_percent(1)}
     </div>
     """

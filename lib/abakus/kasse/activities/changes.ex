@@ -5,7 +5,9 @@ defmodule Abakus.Kasse.Activities.Changes do
   are not changes, so an expense saved unchanged has none.
   """
 
-  alias Abakus.Kasse.{Dates, Money, Split}
+  alias Abakus.Format
+  alias Abakus.Kasse.Split
+  alias Abakus.Money
 
   @type change :: %{field: String.t(), old: String.t(), new: String.t()}
 
@@ -23,9 +25,9 @@ defmodule Abakus.Kasse.Activities.Changes do
     [
       {"Art", kind(old), kind(new)},
       {"Titel", old.title, new.title},
-      {"Betrag", Money.format_cents(old.amount_cents), Money.format_cents(new.amount_cents)},
+      {"Betrag", Money.plain(old.amount_cents), Money.plain(new.amount_cents)},
       {"Originalbetrag", original(old), original(new)},
-      {"Datum", Dates.format(old.date), Dates.format(new.date)}
+      {"Datum", Format.date(old.date), Format.date(new.date)}
     ]
     |> Kernel.++(category(old, new, categories))
     |> Kernel.++([
@@ -43,7 +45,7 @@ defmodule Abakus.Kasse.Activities.Changes do
   defp kind(_expense), do: "Ausgabe"
 
   defp original(expense),
-    do: Money.format_money(expense.original_amount, expense.original_currency)
+    do: Money.plain(expense.original_amount, expense.original_currency)
 
   defp category(%{category_id: same}, %{category_id: same}, _categories), do: []
 
@@ -70,7 +72,7 @@ defmodule Abakus.Kasse.Activities.Changes do
 
   defp split_summary(expense, names) do
     Split.label(expense.split_mode) <>
-      ": " <> summarize(expense.shares, names, &Money.format_cents(&1.amount_cents))
+      ": " <> summarize(expense.shares, names, &Money.plain(&1.amount_cents))
   end
 
   # Same cents, but other weights: shares 1:1 became 2:2.
@@ -94,7 +96,7 @@ defmodule Abakus.Kasse.Activities.Changes do
     summarize(expense.shares, names, fn share ->
       case expense.split_mode do
         :percent -> Money.format_basis_points(share.weight)
-        :amount -> Money.format_money(share.weight, expense.original_currency)
+        :amount -> Money.plain(share.weight, expense.original_currency)
         _equal_or_shares -> Integer.to_string(share.weight)
       end
     end)

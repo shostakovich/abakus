@@ -4,7 +4,8 @@ defmodule Abakus.Depot.Receipts.Correction do
   and how the screen names a recognised value: in German, numbers in German notation.
   """
 
-  alias Abakus.Depot.Receipts.{Check, Checks, Fields, Matching}
+  alias Abakus.Depot.Receipts.{Check, Checks, Fields}
+  alias Abakus.Format
 
   @labels %{
     date: "Datum",
@@ -74,20 +75,17 @@ defmodule Abakus.Depot.Receipts.Correction do
 
   # A recognised value with its name, e.g. „Kurs 145,76 €“.
   defp value(:price, %Fields{kind: :dividend, price: price}), do: "Dividende #{money(price)}"
-  defp value(:date, %Fields{date: date}), do: "Datum #{Calendar.strftime(date, "%d.%m.%Y")}"
+  defp value(:date, %Fields{date: date}), do: "Datum #{Format.date(date)}"
 
   defp value(field, fields) when field in @money,
     do: "#{@labels[field]} #{money(Map.fetch!(fields, field))}"
 
-  defp value(:shares, %Fields{shares: shares}) do
-    normalized = Decimal.normalize(shares)
-    "Stück #{Matching.german(normalized, max(-normalized.exp, 0))}"
-  end
+  defp value(:shares, %Fields{shares: shares}), do: "Stück #{Format.decimal(shares)}"
 
   defp value(field, fields), do: "#{@labels[field]} #{Map.fetch!(fields, field)}"
 
   defp money(number) do
     normalized = Decimal.normalize(number)
-    Matching.german(normalized, max(-normalized.exp, 2)) <> " €"
+    Format.number(normalized, max(-normalized.exp, 2)) <> "\u00A0€"
   end
 end

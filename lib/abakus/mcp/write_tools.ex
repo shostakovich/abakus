@@ -7,9 +7,10 @@ defmodule Abakus.MCP.WriteTools do
 
   require Logger
 
-  alias Abakus.Kasse.{Expenses, Money, Rates, Split}
+  alias Abakus.Kasse.{Expenses, Rates, Split}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.MCP.{Directory, Output, ReadTools, ToolError}
+  alias Abakus.Money
 
   @doc "Creates an expense."
   def create_expense(args, opts) do

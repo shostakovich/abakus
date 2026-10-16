@@ -6,7 +6,8 @@ defmodule Abakus.Kasse.Ynab.Connections do
 
   import Ecto.Query
 
-  alias Abakus.Kasse.{Activities, Categories, Dates}
+  alias Abakus.Format
+  alias Abakus.Kasse.{Activities, Categories}
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Kasse.Ynab.{CategoryMapping, Connection, Transaction}
   alias Abakus.{Repo, Schema}
@@ -109,10 +110,10 @@ defmodule Abakus.Kasse.Ynab.Connections do
     cond do
       {target.plan_id, target.account_id} != {old.plan_id, old.account_id} ->
         "YNAB: Konto „#{target.account_name || target.account_id}“ im Plan " <>
-          "„#{target.plan_name || target.plan_id}“ gewählt, Startdatum #{Dates.format(target.start)}"
+          "„#{target.plan_name || target.plan_id}“ gewählt, Startdatum #{Format.date(target.start)}"
 
       target.start != old.start_date ->
-        "YNAB: Startdatum #{format(old.start_date)} → #{Dates.format(target.start)}"
+        "YNAB: Startdatum #{Format.date(old.start_date)} → #{Format.date(target.start)}"
 
       true ->
         nil
@@ -124,9 +125,6 @@ defmodule Abakus.Kasse.Ynab.Connections do
   defp log_target(participant_id, text) do
     with {:ok, _activity} <- Activities.log_settings(participant_id, text), do: {:ok, :changed}
   end
-
-  defp format(nil), do: "–"
-  defp format(date), do: Dates.format(date)
 
   defp set_target(participant_id, plan_id, account_id, start, now) do
     old = Repo.get!(Connection, participant_id)

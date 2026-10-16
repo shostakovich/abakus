@@ -6,9 +6,8 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
 
   alias Abakus.Depot.Portfolios.TransactionUnit
   alias Abakus.Depot.Securities.Security
-  alias Abakus.{DomainFixtures, LocalTime, Repo}
+  alias Abakus.{DomainFixtures, LocalTime, Money, Repo}
   alias Abakus.Users.{Scope, User}
-  alias AbakusWeb.Depot.Format
 
   setup :register_and_log_in_user_without_budget
 
@@ -271,7 +270,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
             reduce: 0,
             do: (sum -> sum + gross)
 
-      expected = Regex.escape(Format.euros(money(30 + rest)))
+      expected = Regex.escape(Money.euros(money(30 + rest), decimals: 0))
       assert has_element?(lv, "#dividends .stat-desc", ~r/erwartet\s+#{expected} im Jahr/u)
     end
 

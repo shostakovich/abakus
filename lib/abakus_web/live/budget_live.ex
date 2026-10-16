@@ -14,7 +14,7 @@ defmodule AbakusWeb.BudgetLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{Budget, Categories, LocalTime}
+  alias Abakus.{Budget, Categories, Format, LocalTime, Money}
 
   alias AbakusWeb.BudgetLive.{
     CategoryEditor,
@@ -27,10 +27,6 @@ defmodule AbakusWeb.BudgetLive do
     TargetForm,
     Window
   }
-
-  alias AbakusWeb.Format
-
-  import AbakusWeb.Format, only: [euros: 1]
 
   @fit %{months: 1, span: 7, compact: false}
 
@@ -219,7 +215,7 @@ defmodule AbakusWeb.BudgetLive do
        do: %{value: typed, invalid: true}
 
   defp panel_assign(_invalid, %Inspector{selected: %{cell: cell}}),
-    do: %{value: Format.amount(cell.assigned), invalid: false}
+    do: %{value: Money.amount(cell.assigned), invalid: false}
 
   defp panel_assign(_invalid, _inspector), do: nil
 
@@ -381,7 +377,7 @@ defmodule AbakusWeb.BudgetLive do
         source,
         entry.category,
         amount,
-        "#{euros(amount)} aus #{name(source)} gedeckt."
+        "#{Money.euros(amount)} aus #{name(source)} gedeckt."
       )
     else
       _ -> {:noreply, popover_error(socket, "Daraus lässt sich nichts decken.")}
@@ -402,7 +398,7 @@ defmodule AbakusWeb.BudgetLive do
         from,
         to,
         amount,
-        "#{euros(amount)} von #{name(from)} nach #{name(to)} verschoben."
+        "#{Money.euros(amount)} von #{name(from)} nach #{name(to)} verschoben."
       )
     else
       {:error, message} -> {:noreply, popover_error(socket, message)}
@@ -419,7 +415,7 @@ defmodule AbakusWeb.BudgetLive do
          assign(socket, :popover, %{
            popover
            | category_id: entry.category.id,
-             amount: Format.amount(amount)
+             amount: Money.amount(amount)
          })}
 
       _other ->
@@ -447,7 +443,7 @@ defmodule AbakusWeb.BudgetLive do
         :ready_to_assign,
         entry.category,
         amount,
-        "#{euros(amount)} an #{entry.category.name} verteilt."
+        "#{Money.euros(amount)} an #{entry.category.name} verteilt."
       )
     else
       {:error, message} -> {:noreply, popover_error(socket, message)}
@@ -473,7 +469,7 @@ defmodule AbakusWeb.BudgetLive do
           :ready_to_assign,
           entry.category,
           underfunded,
-          "#{euros(underfunded)} zugewiesen."
+          "#{Money.euros(underfunded)} zugewiesen."
         )
 
       _other ->
@@ -674,9 +670,10 @@ defmodule AbakusWeb.BudgetLive do
   end
 
   defp positive_amount(text) when is_binary(text) do
-    case Format.parse_amount(text) do
+    case Money.parse(text, 2) do
       {:ok, amount} when amount > 0 -> {:ok, amount}
-      _ -> {:error, "Bitte einen Betrag über null angeben, etwa 12,50."}
+      {:ok, _not_positive} -> {:error, "Bitte einen Betrag über null angeben, etwa 12,50."}
+      {:error, message} -> {:error, message}
     end
   end
 
@@ -783,13 +780,18 @@ defmodule AbakusWeb.BudgetLive do
   defp edit_for(%{kind: :new_category, group: %{id: id}} = editing, :group, id), do: editing
   defp edit_for(_editing, _kind, _id), do: nil
 
+  defp assign_amount(socket, _category, _month, value) when not is_binary(value), do: socket
+
   # An amount that is no number keeps what was typed, marked, so it can be corrected.
   defp assign_amount(socket, category, month, value) do
-    case Format.parse_amount(value) do
+    case cell_amount(value) do
       {:ok, amount} -> store_amount(socket, category, month, amount, value)
-      :error -> mark_invalid(socket, category, month, value)
+      {:error, _message} -> mark_invalid(socket, category, month, value)
     end
   end
+
+  defp cell_amount(value),
+    do: if(String.trim(value) == "", do: {:ok, 0}, else: Money.parse(value, 2))
 
   defp store_amount(socket, category, month, amount, value) do
     if Map.get(socket.assigns.budget.assigned, {category.id, month}, 0) == amount do

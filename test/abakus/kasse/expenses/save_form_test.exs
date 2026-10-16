@@ -58,7 +58,7 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
              "Die Prozente müssen zusammen 100 % ergeben."
 
     assert error(with_weights.(:amount, ["10", "", ""])) ==
-             "Die Beträge müssen zusammen 30,00 € ergeben (aktuell 10,00 €)."
+             "Die Beträge müssen zusammen 30,00\u00A0€ ergeben (aktuell 10,00\u00A0€)."
 
     assert error(with_weights.(:shares, ["0", "0", "0"])) ==
              "Die Summe der Anteile muss größer als 0 sein."

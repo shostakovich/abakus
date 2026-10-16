@@ -8,8 +8,8 @@ defmodule AbakusWeb.RegisterLive.Rows do
 
   alias Abakus.Categories.Category
   alias Abakus.Ledger.{Account, Payee}
+  alias Abakus.Money
   alias Abakus.Names
-  alias AbakusWeb.Format
 
   @filters [:all, :unapproved, :uncleared]
 
@@ -35,7 +35,7 @@ defmodule AbakusWeb.RegisterLive.Rows do
     sides = [transaction | transaction.subtransactions]
 
     texts =
-      [Format.amount(abs(transaction.amount)) | Enum.flat_map(sides, &texts/1)]
+      [Money.amount(abs(transaction.amount)) | Enum.flat_map(sides, &texts/1)]
       |> Enum.reject(&is_nil/1)
 
     Enum.any?(texts, &String.contains?(&1, key))

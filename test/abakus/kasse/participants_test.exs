@@ -181,7 +181,7 @@ defmodule Abakus.Kasse.ParticipantsTest do
 
     assert errors_on(changeset) == %{
              archived_at: [
-               "Ben hat noch einen Saldo von −5,00 €. Bitte erst ausgleichen, dann archivieren."
+               "Ben hat noch einen Saldo von −5,00\u00A0€. Bitte erst ausgleichen, dann archivieren."
              ]
            }
 

@@ -9,12 +9,14 @@ defmodule Abakus.Kasse.Expenses do
 
   import Ecto.Query
 
-  alias Abakus.Kasse.{Activities, BudgetLink, Dates, Money, Participants, Rates, Suggestions}
+  alias Abakus.Format
+  alias Abakus.Kasse.{Activities, BudgetLink, Dates, Participants, Rates, Suggestions}
   alias Abakus.Kasse.Activities.Changes
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Kasse.Expenses.{Expense, ExpenseShare, Form}
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Kasse.Recurring.RecurringExpense
+  alias Abakus.Money
   alias Abakus.Repo
   alias Ecto.Changeset
   alias Phoenix.PubSub
@@ -381,7 +383,7 @@ defmodule Abakus.Kasse.Expenses do
           |> Form.put_rate(error)
           |> Changeset.add_error(
             :rate,
-            "Für #{currency} ist am #{Dates.format(date)} kein Wechselkurs verfügbar. " <>
+            "Für #{currency} ist am #{Format.date(date)} kein Wechselkurs verfügbar. " <>
               "Kurs bitte von Hand eintragen."
           )
 
