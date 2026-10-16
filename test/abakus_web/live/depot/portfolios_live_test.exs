@@ -40,6 +40,72 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
     assert has_element?(lv, "#portfolio-menu a", "Ohne Namen")
   end
 
+  describe "the roles of the Verrechnungskonten" do
+    setup %{scope: scope} do
+      giro = Abakus.DomainFixtures.account_fixture(name: "Giro", kind: :checking)
+      portfolio = portfolio_fixture(scope, %{name: "Broker"})
+      account = account_fixture(scope, %{name: "Giro-Verrechnung"})
+      %{giro: giro, portfolio: portfolio, account: account}
+    end
+
+    test "sets a role in place", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
+      row = "#clearing-account-#{ctx.account.id}"
+      assert has_element?(lv, row, "Rolle fehlt")
+
+      lv |> element("#{row} button", "Festlegen") |> render_click()
+
+      assert has_element?(
+               lv,
+               ~s|#account-role-form option[value="budget_account:#{ctx.giro.id}"]|
+             )
+
+      lv
+      |> form("#account-role-form", role: %{role: "budget_account:#{ctx.giro.id}"})
+      |> render_submit()
+
+      assert render(lv) =~ "Rolle von „Giro-Verrechnung“ gespeichert."
+      assert has_element?(lv, row, "ist Budgetkonto „Giro“")
+      refute has_element?(lv, row, "Rolle fehlt")
+
+      lv |> element("#{row} button", "Ändern") |> render_click()
+
+      lv
+      |> form("#account-role-form", role: %{role: "portfolio_cash:#{ctx.portfolio.id}"})
+      |> render_submit()
+
+      assert has_element?(lv, row, "Cash von Depot „Broker“")
+    end
+
+    test "offers a Verrechnungskonto in another currency no budget account", ctx do
+      usd = account_fixture(ctx.scope, %{name: "USD-Cash", currency: "USD"})
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
+
+      lv |> element("#clearing-account-#{usd.id} button", "Festlegen") |> render_click()
+
+      refute has_element?(lv, ~s|#account-role-form option[value^="budget_account:"]|)
+
+      assert has_element?(
+               lv,
+               ~s|#account-role-form option[value="portfolio_cash:#{ctx.portfolio.id}"]|
+             )
+
+      assert has_element?(lv, ~s|#account-role-form option[value="none"]|)
+    end
+
+    test "shows why a role was refused", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
+      lv |> element("#clearing-account-#{ctx.account.id} button", "Festlegen") |> render_click()
+      Repo.update!(Ecto.Changeset.change(ctx.giro, closed: true))
+
+      lv
+      |> form("#account-role-form", role: %{role: "budget_account:#{ctx.giro.id}"})
+      |> render_submit()
+
+      assert has_element?(lv, "#account-role-form", "Das ist kein offenes Budgetkonto.")
+    end
+  end
+
   describe "a new portfolio" do
     test "comes with its Verrechnungskonto", %{conn: conn, scope: scope} do
       {:ok, lv, _html} = live(conn, ~p"/settings/depot/portfolios")

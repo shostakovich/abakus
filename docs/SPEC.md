@@ -231,11 +231,15 @@ area, the way YNAB tools post market values:
   accounts several portfolios fed before
 - Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus
 - Every day after the price job, the Depot area books the difference between the account's balance and the value
-  of its portfolio as one transaction through the Ledger, payee "Wertänderung", approved and cleared, none without
+  of its portfolio, its cash included, as one transaction through the Ledger, payee "Wertänderung", approved and cleared, none without
   a difference, so a new account starts at the portfolio's value; another run that day amends that transaction
   instead of booking a second one. Nothing else changes the account (`Abakus.Depot.BudgetFeed` is its only
   writer), and it cannot be reconciled
-- Verrechnungskonten count toward no account
+- Each Verrechnungskonto has a role, set under Einstellungen › Depots: "ist Budgetkonto X" (the same bank account
+  as a budget account; EUR only, the budget owner's only, at most one per budget account), counting toward nothing
+  else; "Cash von Depot Y" (cash at the broker of one of the user's portfolios), counting toward that portfolio's
+  value and account and shown in its Bestand as „davon Cash“; or none. One without a role shows as a warning on
+  Vermögen, linking to its setting
 - A tracking account nothing feeds keeps its values from YNAB and can be adjusted by hand
 
 ## MCP
@@ -286,7 +290,7 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget owner's only: switching the link on, its account and
   which budget category each Kasse category's shares land in), Export (CSV/JSON) and YNAB (each participant's own
   sync to YNAB, until they are linked). Depot, for everyone, so anyone may start one: Depots (the user's
-  portfolios and Verrechnungskonten) and Belegeingang
+  portfolios and Verrechnungskonten with their roles) and Belegeingang
   (Paperless-ngx and the receipt recognition; users with a portfolio). Categories and groups are edited in the
   budget
 

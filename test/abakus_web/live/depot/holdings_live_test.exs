@@ -509,6 +509,35 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     end
   end
 
+  describe "a portfolio's cash" do
+    setup %{scope: scope} do
+      giro = account_fixture(scope, %{name: "Giro-Verrechnung", no_role: true})
+      portfolio = portfolio_fixture(scope, %{name: "Broker", reference_account_id: giro.id})
+      cash = account_fixture(scope, %{name: "Broker-Cash", cash_of_portfolio_id: portfolio.id})
+      deposit(scope, cash, 100)
+      deposit(scope, giro, 2_000)
+      deliver(scope, portfolio, security(90), 10, 900)
+      %{portfolio: portfolio, cash: cash, giro: giro}
+    end
+
+    test "shows in the portfolio's Bestand as „davon Cash“, its reference account with another role not",
+         ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?portfolio=#{ctx.portfolio.id}")
+
+      assert has_element?(lv, "header", "davon Cash\u00A0100,00\u00A0€")
+      assert lv |> element("#account-#{ctx.cash.id}") |> render() =~ "Cash"
+      refute has_element?(lv, "#account-#{ctx.giro.id}")
+      assert has_element?(lv, "tfoot:has(#holdings-total)", "1.000,00\u00A0€")
+    end
+
+    test "appears under its portfolio while all are shown", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
+
+      assert has_element?(lv, "#holdings-portfolio-#{ctx.portfolio.id} #account-#{ctx.cash.id}")
+      assert has_element?(lv, "#holdings-accounts #account-#{ctx.giro.id}")
+    end
+  end
+
   test "groups the accounts of no portfolio as „Konten“", ctx do
     savings = account_fixture(ctx.scope, %{name: "Tagesgeld"})
     deposit(ctx.scope, savings, 1_000)

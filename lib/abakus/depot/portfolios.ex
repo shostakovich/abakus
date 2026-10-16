@@ -9,6 +9,7 @@ defmodule Abakus.Depot.Portfolios do
   import Ecto.Query, warn: false
 
   alias Abakus.Depot.{
+    AccountRoles,
     Allocation,
     BudgetFeed,
     Costs,
@@ -54,7 +55,8 @@ defmodule Abakus.Depot.Portfolios do
 
   @doc """
   Creates a portfolio of the user with a new account in euros as its Verrechnungskonto, which its
-  purchases, sales and dividends settle against, and for the budget owner its tracking account.
+  purchases, sales and dividends settle against and which is its cash, and for the budget owner its
+  tracking account.
   """
   def create_portfolio(%Scope{} = scope, attrs) do
     with {:ok, form} <- Ecto.Changeset.apply_action(change_new_portfolio(attrs), :insert) do
@@ -62,9 +64,15 @@ defmodule Abakus.Depot.Portfolios do
         account =
           Repo.insert!(%Account{user_id: scope.user.id, name: form.account_name, currency: "EUR"})
 
-        %Portfolio{user_id: scope.user.id, name: form.name, reference_account_id: account.id}
-        |> Repo.insert!()
-        |> BudgetFeed.open_account(scope.user)
+        portfolio =
+          Repo.insert!(%Portfolio{
+            user_id: scope.user.id,
+            name: form.name,
+            reference_account_id: account.id
+          })
+
+        account |> Account.role_changeset({:portfolio_cash, portfolio.id}) |> Repo.update!()
+        BudgetFeed.open_account(portfolio, scope.user)
       end)
     end
   end
@@ -168,12 +176,9 @@ defmodule Abakus.Depot.Portfolios do
     `Performance.benchmark_ttwror/3`; nil when they picked none
   - `dividends`: this year's up to `today`, before taxes and fees
   - `portfolios`: the portfolios by name, retired ones only while they hold shares, each with
-    `account`, its reference account as in the sidebar (nil when another portfolio owns it, see
-    below, or once it is retired and empty), its `balance` in euros, the number of `securities`
-    held, the `value` of the securities (as in the sidebar) and their `ttwror` since 1 January, as PP
-    figures a portfolio without its reference account. An account several portfolios settle
-    against belongs to the first active one by name, to a retired one only when no active one
-    settles against it.
+    `cash`, the balance in euros of its accounts as the holdings screen groups them for all
+    portfolios (nil without any), the number of `securities` held, the `value` of the securities
+    and their `ttwror` since 1 January, as PP figures a portfolio without its reference account.
   """
   def overview(%Scope{} = scope, period, today) do
     transactions = list_transactions(scope)
@@ -306,12 +311,10 @@ defmodule Abakus.Depot.Portfolios do
       # reference account count for them.
       filter = Filter.new([portfolio], [], transactions)
       index = Performance.index(transactions, accounts, market, filter, year)
-      account_row = List.first(group.accounts)
 
       %{
         portfolio: portfolio,
-        account: account_row && account_row.account,
-        balance: account_row && account_row.value,
+        cash: if(group.accounts != [], do: Enum.sum_by(group.accounts, & &1.value)),
         securities: length(group.holdings),
         value: List.last(index.days).value,
         ttwror: Performance.ttwror(index)
@@ -329,10 +332,29 @@ defmodule Abakus.Depot.Portfolios do
     Enum.filter(list_portfolios(scope), &(not &1.retired or MapSet.member?(held, &1.id)))
   end
 
-  # The portfolio each reference account of `portfolios` belongs to, as `%{account_id =>
-  # portfolio_id}`: an account several of them settle against belongs to the first active one, to
-  # a retired one only when no active one settles against it. The screens list the portfolios by
-  # name, so it is the first by name, as in the sidebar.
+  # The portfolio of `portfolios` each of `accounts` belongs to, as `%{account_id => portfolio_id}`: the one it is
+  # the cash of, or while it has no role set the one it is the reference account of.
+  defp account_owners(portfolios, accounts) do
+    shown = MapSet.new(portfolios, & &1.id)
+    references = reference_account_owners(portfolios)
+
+    for account <- accounts,
+        owner = account_owner(account, shown, references),
+        into: %{},
+        do: {account.id, owner}
+  end
+
+  defp account_owner(account, shown, references) do
+    case Account.role(account) do
+      {:portfolio_cash, id} -> MapSet.member?(shown, id) && id
+      nil -> references[account.id]
+      _other -> nil
+    end
+  end
+
+  # An account several portfolios settle against belongs to the first active one, to a retired one
+  # only when no active one settles against it. The screens list the portfolios by name, so it is
+  # the first by name.
   defp reference_account_owners(portfolios) do
     for %{reference_account_id: account_id, id: id} <-
           portfolios |> Enum.sort_by(& &1.retired) |> Enum.reverse(),
@@ -347,10 +369,12 @@ defmodule Abakus.Depot.Portfolios do
 
   - `portfolios`: the portfolios to choose from by name, retired ones only while they hold shares
   - `portfolio`: the chosen one of them, nil for all
-  - `groups`: each portfolio shown with its `holdings` by value and its reference account in
-    `accounts`. For all portfolios, an account several settle against appears under the first
-    active one (as in the overview and the sidebar), and the accounts of no portfolio follow in a group without portfolio.
-    Each group has the `value` of its rows and the `purchase_value` and `gain` of its holdings.
+  - `groups`: each portfolio shown with its `holdings` by value and in `accounts` its cash, or
+    while an account has no role set the reference account it settles against; for all
+    portfolios, an account several settle against appears under the first active one (as in the
+    overview), and the accounts of no portfolio follow in a group without portfolio. Each group
+    has the `value` of its rows, the `purchase_value` and `gain` of its holdings and the `cash`
+    of its accounts.
   - `total`: `value`, `purchase_value` and `gain` of the groups shown, the `dividends` of their
     holdings and the `securities_value` they make up
   - `net_worth`: the value of all holdings and accounts, of which each row shows its share
@@ -361,7 +385,7 @@ defmodule Abakus.Depot.Portfolios do
 
   A holding has its `security`, `shares`, `price`, `value`, `purchase_value`, `gain` and the gross
   `dividends` of the next 12 months, its part of those of its security (see `Dividends.upcoming/4`)
-  by shares; an account has its `value`. Retired accounts are left out once they are empty.
+  by shares; an account has its `value`. Retired accounts are left out once they are empty, budget accounts always.
   """
   def holdings(%Scope{} = scope, portfolio_id, today) do
     transactions = list_transactions(scope)
@@ -602,23 +626,32 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   @doc """
-  What the sidebar shows on `today`: the active portfolios by name, each with the `value` of its
-  securities in euro cents, valued as the holdings screen values all portfolios; nothing retired,
-  whatever it still holds.
+  What the sidebar shows on `today`: the active portfolios by name, each with its `value` in euro
+  cents, its securities valued as the holdings screen values all portfolios plus its cash; nothing
+  retired, whatever it still holds.
   """
   def sidebar(%Scope{} = scope, today) do
     transactions = list_transactions(scope)
-    market = load_market(transactions, list_accounts(scope), today, :since_date)
+    accounts = list_accounts(scope)
+    market = load_market(transactions, accounts, today, :since_date)
     holdings = Valuation.holdings(transactions, today)
+    balances = Valuation.balances(transactions, today)
 
     portfolios =
       for portfolio <- list_portfolios(scope), not portfolio.retired do
-        value =
+        securities =
           holdings
           |> Enum.filter(&(&1.portfolio_id == portfolio.id))
           |> Enum.sum_by(&Valuation.value(&1, market, today))
 
-        %{portfolio: portfolio, value: value}
+        cash =
+          accounts
+          |> Enum.filter(&(Account.role(&1) == {:portfolio_cash, portfolio.id}))
+          |> Enum.sum_by(
+            &Market.to_euros(market, Map.get(balances, &1.id, 0), &1.currency, today)
+          )
+
+        %{portfolio: portfolio, value: securities + cash}
       end
 
     %{portfolios: portfolios}
@@ -651,19 +684,20 @@ defmodule Abakus.Depot.Portfolios do
 
   defp account_rows(accounts, balances, market, today) do
     for account <- accounts,
+        not match?({:budget_account, _id}, Account.role(account)),
         balance = Map.get(balances, account.id, 0),
         not account.retired or balance != 0,
         do: %{account: account, value: Market.to_euros(market, balance, account.currency, today)}
   end
 
-  # Each portfolio with its holdings and its reference account, then the accounts of no portfolio
-  # in a group without portfolio; or the one `portfolio` with its reference account, even if an
-  # earlier one settles against it too. Each group has the `value` of its rows.
+  # Each portfolio with its holdings and its accounts (see `account_owners/2`), then the accounts of
+  # no portfolio in a group without portfolio; or the one `portfolio` with its accounts, even if an
+  # earlier one settles against its reference account too. Each group has the `value` of its rows.
   defp holding_groups(_portfolios, %Portfolio{} = portfolio, rows),
-    do: [holding_group(portfolio, rows, &(&1.id == portfolio.reference_account_id))]
+    do: [holding_group(portfolio, rows, &portfolio_account?(&1, portfolio))]
 
   defp holding_groups(portfolios, nil, rows) do
-    owners = reference_account_owners(portfolios)
+    owners = account_owners(portfolios, Enum.map(rows.accounts, & &1.account))
 
     groups =
       Enum.map(portfolios, fn portfolio ->
@@ -673,6 +707,14 @@ defmodule Abakus.Depot.Portfolios do
     case Enum.reject(rows.accounts, &Map.has_key?(owners, &1.account.id)) do
       [] -> groups
       accounts -> groups ++ [group(nil, [], accounts)]
+    end
+  end
+
+  defp portfolio_account?(account, portfolio) do
+    case Account.role(account) do
+      {:portfolio_cash, id} -> id == portfolio.id
+      nil -> account.id == portfolio.reference_account_id
+      _other -> false
     end
   end
 
@@ -696,6 +738,7 @@ defmodule Abakus.Depot.Portfolios do
   # The holdings by value, and the purchase value and gain of the group.
   defp with_gains(%{holdings: holdings} = group) do
     Map.merge(group, %{
+      cash: Enum.sum_by(group.accounts, & &1.value),
       holdings: Enum.sort_by(holdings, &{-&1.value, &1.security.name}),
       purchase_value: Enum.sum_by(holdings, & &1.purchase_value),
       gain: Enum.sum_by(holdings, & &1.gain)
@@ -787,7 +830,7 @@ defmodule Abakus.Depot.Portfolios do
   @doc """
   The user's transactions grouped by month, newest first, as `{first day of month, transactions}`;
   `filter` is nil for all, `:trades`, `:earnings` or `:account`; `portfolio` nil for all
-  portfolios, or one of them for its transactions and its reference account's.
+  portfolios, or one of them for its transactions and those of its cash and its reference account.
   """
   def transactions_by_month(%Scope{} = scope, filter \\ nil, portfolio \\ nil) do
     from(t in Transaction,
@@ -809,7 +852,12 @@ defmodule Abakus.Depot.Portfolios do
     do: of_portfolio(transactions, portfolio, list_transactions(scope))
 
   defp of_portfolio(transactions, %Portfolio{} = portfolio, all) do
-    filter = Filter.new([portfolio], List.wrap(portfolio.reference_account_id), all)
+    accounts =
+      Enum.uniq(
+        AccountRoles.cash_account_ids(portfolio) ++ List.wrap(portfolio.reference_account_id)
+      )
+
+    filter = Filter.new([portfolio], accounts, all)
     Enum.filter(transactions, &Filter.concerns?(filter, &1))
   end
 

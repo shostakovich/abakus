@@ -686,5 +686,28 @@ defmodule Abakus.Depot.BookingTest do
       assert ids.(:account) == [deposit.id]
       assert Portfolios.transactions_by_month(user_scope_fixture()) == []
     end
+
+    test "gives a portfolio's transactions with those of its cash and its reference account",
+         ctx do
+      cash = account_fixture(ctx.scope, name: "Cash", cash_of_portfolio_id: ctx.portfolio.id)
+      other = account_fixture(ctx.scope, name: "Andere")
+
+      [on_reference, on_cash, _other] =
+        for account <- [ctx.account, cash, other],
+            do:
+              transaction_fixture(ctx.scope, @day,
+                type: :deposit,
+                account_id: account.id,
+                amount: 100
+              )
+
+      ids =
+        for {_month, transactions} <-
+              Portfolios.transactions_by_month(ctx.scope, nil, ctx.portfolio),
+            transaction <- transactions,
+            do: transaction.id
+
+      assert Enum.sort(ids) == Enum.sort([on_reference.id, on_cash.id])
+    end
   end
 end

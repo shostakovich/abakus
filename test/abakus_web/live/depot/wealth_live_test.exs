@@ -34,6 +34,29 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
     security
   end
 
+  test "warns of a Verrechnungskonto without a role and links to setting it", ctx do
+    portfolio_fixture(ctx.scope)
+    account = account_fixture(ctx.scope, %{name: "Giro-Verrechnung"})
+    account_fixture(ctx.scope, %{name: "Cash", no_role: true})
+
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+
+    assert has_element?(lv, "#accounts-without-role", "Ein Verrechnungskonto ohne Rolle")
+    assert has_element?(lv, "#accounts-without-role", "„Giro-Verrechnung“")
+    refute has_element?(lv, "#accounts-without-role", "„Cash“")
+
+    assert has_element?(
+             lv,
+             ~s|#accounts-without-role a[href="/settings/depot/portfolios#clearing-accounts"]|,
+             "Rolle festlegen"
+           )
+
+    Repo.update!(Ecto.Changeset.change(account, no_role: true))
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+
+    refute has_element?(lv, "#accounts-without-role")
+  end
+
   test "shows net worth and its change since yesterday", %{conn: conn, scope: scope} do
     holding_fixture(scope, 10)
 
@@ -355,7 +378,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       row = lv |> element("#portfolio-#{ctx.portfolio.id}") |> render()
 
       assert row =~ "Langfristig"
-      assert row =~ "1\u00A0Wertpapier\u2060\u00A0· Konto\u00A0240,00\u00A0€"
+      assert row =~ "1\u00A0Wertpapier\u2060\u00A0· Cash\u00A0240,00\u00A0€"
       assert row =~ "1.020,00\u00A0€"
 
       assert lv

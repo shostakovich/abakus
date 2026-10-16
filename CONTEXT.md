@@ -360,6 +360,21 @@ purchases, sales and dividends settle against by default is its reference accoun
 Code: `Abakus.Depot.Portfolios.Account`. UI "Verrechnungskonto", the reference account "Referenzkonto" where it is one.
 _Avoid_: Account unqualified in code (that is the budget's), cash account
 
+**Role** (of a Verrechnungskonto):
+What a Verrechnungskonto is in Finanzen, set under Einstellungen › Depots (ADR 0017): a budget account, the cash of a
+portfolio, or none; without a role set it shows as a warning on Vermögen. A portfolio's new Verrechnungskonto starts
+as its cash. Code: `Abakus.Depot.AccountRoles`, `Account.role/1`. UI "Rolle", "Rolle fehlt".
+
+**Budget account role**:
+The role of a Verrechnungskonto that is the same bank account as a budget account: in euros, the budget owner's only,
+at most one per budget account; it counts toward nothing else. UI "ist Budgetkonto „X“".
+
+**Portfolio cash**:
+The role of a Verrechnungskonto that is cash held at the broker of one of the user's portfolios, in any currency: its
+balance counts toward that portfolio's value, in the sidebar and its value change, and shows in its Bestand. UI
+"Cash von Depot „Y“", in the Bestand "davon Cash".
+_Avoid_: Cash account (that is any Verrechnungskonto)
+
 **Holding**:
 The shares of one security in one portfolio on a date, with their value and purchase value. UI "Position"; the
 holdings screen is "Bestand".
@@ -400,8 +415,8 @@ One business event, such as a purchase, a dividend or a transfer, with a portfol
 _Avoid_: Transaction unqualified in code (that is the budget's), entry
 
 **Value change**:
-The daily transaction, after the price job, in a portfolio's account (fed by `portfolio`): the portfolio's value
-minus the account's balance, approved and cleared; none without a difference, so a new account starts at the
+The daily transaction, after the price job, in a portfolio's account (fed by `portfolio`): the portfolio's value,
+its cash included, minus the account's balance, approved and cleared; none without a difference, so a new account starts at the
 portfolio's value. One per day: another run that day amends it, and deletes it once nothing differs. Nothing else
 writes to the account, and it cannot be reconciled. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its
 payee).

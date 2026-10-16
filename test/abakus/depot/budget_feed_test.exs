@@ -5,7 +5,7 @@ defmodule Abakus.Depot.BudgetFeedTest do
   import Abakus.UsersFixtures
   import ExUnit.CaptureLog
 
-  alias Abakus.Depot.{BudgetFeed, FakePriceFeed, Portfolios}
+  alias Abakus.Depot.{AccountRoles, BudgetFeed, FakePriceFeed, Portfolios}
   alias Abakus.Depot.MarketData.Job
   alias Abakus.Depot.Portfolios.Portfolio
   alias Abakus.{DomainFixtures, Ledger, LocalTime}
@@ -97,11 +97,14 @@ defmodule Abakus.Depot.BudgetFeedTest do
       end
     end
 
-    test "opens the account of a portfolio of the budget owner as it is created", c do
+    test "opens the account of a portfolio of the budget owner as it is created, its new Verrechnungskonto its cash",
+         c do
       {:ok, portfolio} =
         Portfolios.create_portfolio(c.owner, %{name: "Neu", account_name: "Neu-Verrechnung"})
 
       assert %Account{name: "Neu", kind: :tracking, fed_by: :portfolio} = account_of(portfolio)
+      assert [cash_id] = AccountRoles.cash_account_ids(portfolio)
+      assert cash_id == portfolio.reference_account_id
 
       member = user_scope_fixture()
       {:ok, theirs} = Portfolios.create_portfolio(member, %{name: "Ihr", account_name: "Konto"})
@@ -175,6 +178,24 @@ defmodule Abakus.Depot.BudgetFeedTest do
   end
 
   describe "the daily value change" do
+    test "counts the balance of the portfolio's cash, and of no other Verrechnungskonto", c do
+      holdings_fixture(c, manual_security(400))
+      {:ok, _cash} = AccountRoles.set_role(c.owner, c.cash, "portfolio_cash:#{c.portfolio.id}")
+      giro = account_fixture(c.owner, %{name: "Giro-Verrechnung"})
+
+      transaction_fixture(c.owner, ~D[2026-10-01],
+        type: :deposit,
+        account_id: giro.id,
+        amount: 50_000
+      )
+
+      {:ok, _giro} = AccountRoles.set_role(c.owner, giro, "none")
+
+      :ok = BudgetFeed.book_value_changes(@day)
+
+      assert [%Transaction{amount: 5_081_234}] = value_changes(account_of(c.portfolio))
+    end
+
     test "after the daily price fetch books the difference to the account's balance", c do
       security = security_fixture(%{symbol: "VGWL.DE"})
       holdings_fixture(c, security)

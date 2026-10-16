@@ -4,6 +4,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   import AbakusWeb.Depot.AllocationComponents
 
   alias Abakus.Depot.{MarketData, Portfolios}
+  alias Abakus.Depot.Portfolios.Account
   alias Abakus.LocalTime
   alias AbakusWeb.Depot.Format
 
@@ -383,10 +384,10 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   end
 
   defp subtitle(%{groups: [group]}) do
-    join_meta(
-      [count(length(group.holdings), "Wertpapier", "Wertpapiere")] ++
-        Enum.map(group.accounts, & &1.account.name)
-    )
+    join_meta([
+      count(length(group.holdings), "Wertpapier", "Wertpapiere"),
+      group.accounts != [] && "davon Cash\u00A0#{Format.euros(group.cash, 2)}"
+    ])
   end
 
   defp count(0, _one, many), do: "keine\u00A0#{many}"
@@ -394,7 +395,13 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp count(count, _one, many), do: "#{count}\u00A0#{many}"
 
   defp account_note(%{portfolio: nil}, account), do: account.currency
-  defp account_note(_portfolio_group, account), do: join_meta(["Referenzkonto", account.currency])
+
+  defp account_note(_portfolio_group, account) do
+    case Account.role(account) do
+      {:portfolio_cash, _portfolio_id} -> join_meta(["Cash", account.currency])
+      _none -> join_meta(["Referenzkonto", account.currency])
+    end
+  end
 
   defp price(%{price: price, security: security}), do: Format.price(price, security.currency)
 
