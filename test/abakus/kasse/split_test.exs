@@ -102,7 +102,7 @@ defmodule Abakus.Kasse.SplitTest do
           {"percent not 100", :percent, 100, [{1, 5000}, {2, 4000}],
            "Die Prozente müssen zusammen 100 % ergeben (aktuell 90,00 %)."},
           {"amounts sum wrong", :amount, 1000, [{1, 500}, {2, 400}],
-           "Die Beträge müssen zusammen 10,00 € ergeben (aktuell 9,00 €)."}
+           "Die Beträge müssen zusammen 10,00\u00A0€ ergeben (aktuell 9,00\u00A0€)."}
         ] do
       test name do
         assert Split.split(unquote(mode), unquote(total), parts(unquote(pairs))) ==
@@ -112,7 +112,8 @@ defmodule Abakus.Kasse.SplitTest do
 
     test "names the sum of amounts in the currency" do
       assert Split.split(:amount, 909, parts([{1, 1}]), original: 1000, currency: "jpy") ==
-               {:error, "Die Beträge müssen zusammen 1.000 JPY ergeben (aktuell 1 JPY)."}
+               {:error,
+                "Die Beträge müssen zusammen 1.000\u00A0JPY ergeben (aktuell 1\u00A0JPY)."}
     end
   end
 
@@ -179,9 +180,9 @@ defmodule Abakus.Kasse.SplitTest do
 
     for {name, pairs, message} <- [
           {"weights that fall short of the amount", [{1, 600}, {2, 300}],
-           "Die Beträge müssen zusammen 10,00 USD ergeben (aktuell 9,00 USD)."},
+           "Die Beträge müssen zusammen 10,00\u00A0USD ergeben (aktuell 9,00\u00A0USD)."},
           {"a single weight that falls short", [{1, 909}],
-           "Die Beträge müssen zusammen 10,00 USD ergeben (aktuell 9,09 USD)."},
+           "Die Beträge müssen zusammen 10,00\u00A0USD ergeben (aktuell 9,09\u00A0USD)."},
           {"a negative weight", [{1, -1}, {2, 1001}], "Anteile dürfen nicht negativ sein."},
           {"weights whose sum overflows 64 bits", [{1, 2 ** 62}, {2, 2 ** 62}, {3, 2 ** 62}],
            "Der Betrag ist zu groß."}

@@ -6,6 +6,7 @@ defmodule Abakus.Depot.BookingTest do
 
   alias Abakus.Depot.{Portfolios, PPImport, Valuation}
   alias Abakus.Depot.Portfolios.{Receipt, Transaction, TransactionForm}
+  alias Abakus.Depot.Receipts.Fields
   alias Abakus.Depot.Valuation.Market
   alias Abakus.LocalTime
 
@@ -108,6 +109,32 @@ defmodule Abakus.Depot.BookingTest do
         Portfolios.change_transaction_form(ctx.scope, ctx.choices, form(ctx, "purchase", attrs))
 
       assert get_field(changeset, :expected_amount) == nil
+    end
+
+    test "a price with more digits than a decimal holds is invalid", ctx do
+      attrs = %{"shares" => "1", "price" => "12,3456789012345678901234567890123456"}
+
+      changeset =
+        Portfolios.change_transaction_form(ctx.scope, ctx.choices, form(ctx, "purchase", attrs))
+
+      assert "is invalid" in errors_on(changeset).price
+    end
+
+    test "a receipt's dividend reads back with its gross value in cents", ctx do
+      fields = %Fields{
+        kind: :dividend,
+        shares: Decimal.new("8.12345678"),
+        price: Decimal.new("1.1234567890123456789012345678901")
+      }
+
+      params = Map.merge(TransactionForm.params_of_receipt(fields), form(ctx, "dividend", %{}))
+
+      assert params["gross"] == "9,13"
+
+      changeset = Portfolios.change_transaction_form(ctx.scope, ctx.choices, params)
+
+      assert Decimal.equal?(get_field(changeset, :gross), "9.13")
+      assert changeset.valid?
     end
   end
 
@@ -318,7 +345,7 @@ defmodule Abakus.Depot.BookingTest do
     end
 
     test "no absurdly large numbers", ctx do
-      huge = "1e30"
+      huge = "1.000.000.000.000"
 
       assert {:error, purchase} =
                book(ctx, "purchase", %{"shares" => huge, "price" => huge, "fees" => huge})

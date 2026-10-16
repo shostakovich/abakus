@@ -6,12 +6,12 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   use AbakusWeb, :html
 
-  import AbakusWeb.Format, except: [amount: 1]
+  import AbakusWeb.Format
 
   alias Abakus.Budget.Month
+  alias Abakus.Money
   alias Abakus.Names
   alias AbakusWeb.BudgetLive.{CategoryEditor, MonthDetails, Status, Window}
-  alias AbakusWeb.Format
 
   @doc "The budget's path for the first month shown."
   def budget_path(first), do: ~p"/budget?#{[month: Window.param(first)]}"
@@ -283,7 +283,7 @@ defmodule AbakusWeb.BudgetLive.Components do
     >
       <span class="app-colh">{label}</span>
       <span id={"total-#{@key}-#{field}"} class="app-colsum">
-        {Format.amount(Map.fetch!(@month, field))}
+        {Money.amount(Map.fetch!(@month, field))}
       </span>
     </th>
     """
@@ -367,9 +367,9 @@ defmodule AbakusWeb.BudgetLive.Components do
               total_class(field, totals[field])
             ]}
           >
-            {totals[field] && Format.amount(totals[field])}
+            {totals[field] && Money.amount(totals[field])}
             <span :if={field == :available and only_activity?(totals)} class="app-alt">
-              {Format.amount(totals.activity)}
+              {Money.amount(totals.activity)}
             </span>
           </td>
         <% end %>
@@ -472,7 +472,7 @@ defmodule AbakusWeb.BudgetLive.Components do
             :if={@assignable}
             id={"assign-#{@id}-#{key}"}
             class={["app-assign", cell.assigned == 0 && "app-zero"]}
-            value={typed || Format.amount(cell.assigned)}
+            value={typed || Money.amount(cell.assigned)}
             inputmode="decimal"
             autocomplete="off"
             aria-label={"#{@name}, zugewiesen im #{month_year(month)}"}
@@ -491,7 +491,7 @@ defmodule AbakusWeb.BudgetLive.Components do
             if(cell.activity == 0, do: "app-zero", else: "app-quiet")
           ]}
         >
-          {Format.amount(cell.activity)}
+          {Money.amount(cell.activity)}
         </td>
         <td id={"available-#{@id}-#{key}"} class="app-num">
           <.pill
@@ -544,11 +544,11 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :status, :any, required: true
   attr :cell, :any, required: true
 
-  defp pill_content(%{status: :zero} = assigns), do: ~H"{Format.amount(0)}"
+  defp pill_content(%{status: :zero} = assigns), do: ~H"{Money.amount(0)}"
 
   defp pill_content(assigns) do
     ~H"""
-    <.icon :if={@status.icon} name={@status.icon} />{euros(@cell.available)}
+    <.icon :if={@status.icon} name={@status.icon} />{Money.euros(@cell.available)}
     """
   end
 
@@ -557,7 +557,7 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   defp pill_label(status, cell) do
     state = if status != :zero && status.label, do: ", #{status.label}"
-    "Verfügbar #{euros(cell.available)}#{state}, Geld verschieben"
+    "Verfügbar #{Money.euros(cell.available)}#{state}, Geld verschieben"
   end
 
   attr :cell, :any, required: true
@@ -570,7 +570,7 @@ defmodule AbakusWeb.BudgetLive.Components do
     <span class={quiet_class(@status.tone)}>
       <span :if={@status.dot} class="app-udot" title="unterfinanziert">
         <span class="sr-only">unterfinanziert</span>
-      </span>{Format.amount(
+      </span>{Money.amount(
         @cell.available
       )}
     </span>
@@ -602,10 +602,10 @@ defmodule AbakusWeb.BudgetLive.Components do
         <%= for value <- Enum.map(@months, &Map.get(row.amounts, &1, 0)) do %>
           <td class="app-ms"></td>
           <td class={["app-num", if(value == 0, do: "app-zero", else: "app-quiet")]}>
-            {Format.amount(value)}
+            {Money.amount(value)}
           </td>
           <td class="app-num app-quiet">
-            <span class="app-alt">{Format.amount(value)}</span>
+            <span class="app-alt">{Money.amount(value)}</span>
           </td>
         <% end %>
       </tr>

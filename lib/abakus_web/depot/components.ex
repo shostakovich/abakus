@@ -12,6 +12,7 @@ defmodule AbakusWeb.Depot.Components do
   import Setzkasten.Components.Layout, only: [header: 1]
   import Setzkasten.Components.Navigation, only: [dropdown: 1, tabs: 1]
 
+  alias Abakus.Money
   alias AbakusWeb.Depot.{Format, TransactionDialog}
 
   @tabs [
@@ -152,7 +153,7 @@ defmodule AbakusWeb.Depot.Components do
   def gain(assigns) do
     ~H"""
     <.amount value={@gain} signed tone />
-    <div :if={@purchase_value > 0} class={["text-sm", tone(Format.signed_euros(@gain, 2))]}>
+    <div :if={@purchase_value > 0} class={["text-sm", tone(Money.euros(@gain, signed: true))]}>
       {@gain |> Format.percent_of(@purchase_value) |> Format.signed_percent(1)}
     </div>
     """

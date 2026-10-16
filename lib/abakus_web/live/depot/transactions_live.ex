@@ -9,6 +9,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
   alias Abakus.Depot.{Portfolios, Valuation}
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.LocalTime
+  alias Abakus.Money
   alias AbakusWeb.Depot.{Format, TransactionDialog}
 
   @filters [
@@ -259,7 +260,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
     do: transaction.units |> Enum.filter(&(&1.type == type)) |> Enum.sum_by(& &1.amount)
 
   defp money(cents, transaction),
-    do: Format.amount(cents) <> "\u00A0" <> Format.currency(transaction.currency)
+    do: Money.amount(cents) <> "\u00A0" <> Format.currency(transaction.currency)
 
   defp month_name(month), do: "#{Format.month_name(month)} #{month.year}"
 

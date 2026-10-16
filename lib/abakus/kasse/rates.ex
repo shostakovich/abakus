@@ -4,8 +4,8 @@ defmodule Abakus.Kasse.Rates do
   manual rates is logged.
   """
 
-  alias Abakus.{ExchangeRates, LocalTime, Repo}
-  alias Abakus.Kasse.{Activities, Dates, Money}
+  alias Abakus.{ExchangeRates, LocalTime, Money, Repo}
+  alias Abakus.Kasse.{Activities, Dates}
 
   @lookback_days 10
 

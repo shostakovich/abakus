@@ -5,6 +5,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
 
   alias Abakus.Depot.Portfolios
   alias Abakus.LocalTime
+  alias Abakus.Money
   alias AbakusWeb.Depot.Format
 
   # The first is the default and stays out of the URL.
@@ -374,13 +375,10 @@ defmodule AbakusWeb.Depot.DividendsLive do
           <.cell_sub hide_from={:lg} class="tabular-nums">
             <span class="sm:hidden"><.pay_date date={entry.date} /><.meta_sep /></span><span class="whitespace-nowrap">{shares(
               entry.shares
-            )}</span><.meta_sep /><span class="whitespace-nowrap">Steuern {Format.euros(
-              entry.taxes,
-              2
-            )}</span><span
+            )}</span><.meta_sep /><span class="whitespace-nowrap">Steuern {Money.euros(entry.taxes)}</span><span
               :if={entry.fees != 0}
               class="whitespace-nowrap"
-            ><.meta_sep />Gebühren {Format.euros(entry.fees, 2)}</span>
+            ><.meta_sep />Gebühren {Money.euros(entry.fees)}</span>
           </.cell_sub>
           <.cell_sub show_from={:lg} hide_from={:xl} class="tabular-nums">
             {shares(entry.shares)}
@@ -470,7 +468,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
   defp swatch(colour), do: Map.fetch!(@swatches, colour)
 
   defp deduction(0), do: "–"
-  defp deduction(cents), do: Format.euros(cents, 2)
+  defp deduction(cents), do: Money.euros(cents)
 
   defp any?(%{dividends: dividends}), do: dividends.received != [] or dividends.upcoming != []
 
@@ -492,7 +490,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
     "Erwartete Dividenden " <>
       Enum.map_join(months, ", ", fn month ->
         cents = month.announced[amount] + month.forecast[amount]
-        "#{Format.month_name(month.month)} #{month.month.year} #{Format.euros(cents)}"
+        "#{Format.month_name(month.month)} #{month.month.year} #{Money.euros(cents, decimals: 0)}"
       end)
   end
 

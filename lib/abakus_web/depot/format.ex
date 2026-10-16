@@ -1,5 +1,8 @@
 defmodule AbakusWeb.Depot.Format do
-  @moduledoc "German formats for amounts, dates and times; times in the host's local time."
+  @moduledoc """
+  German formats for prices, shares, percentages, dates and times; times in the host's local
+  time. Amounts in euros are `Abakus.Money`'s.
+  """
 
   alias Abakus.Depot.Portfolios.Portfolio
   alias Abakus.LocalTime
@@ -62,19 +65,6 @@ defmodule AbakusWeb.Depot.Format do
       shown -> "−" <> shown
     end
   end
-
-  @doc """
-  Cents as whole euros, e.g. `149.118 €`, or with `places` decimal places; the € never wraps onto
-  a line of its own.
-  """
-  def euros(cents, places \\ 0), do: number(Decimal.div(cents, 100), places, "") <> "\u00A0€"
-
-  @doc "Cents as euros with two decimal places and without the € sign, e.g. `146.617,58`."
-  def amount(cents), do: number(Decimal.div(cents, 100), 2, "")
-
-  @doc "A change in cents as whole euros with its sign, e.g. `+562 €`, or with `places`."
-  def signed_euros(cents, places \\ 0),
-    do: number(Decimal.div(cents, 100), places, "+") <> "\u00A0€"
 
   @doc "Shares × 10⁸ with as many decimal places as they have, e.g. `6.200` or `93,207`."
   def shares(shares) do

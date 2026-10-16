@@ -9,10 +9,10 @@ defmodule AbakusWeb.BudgetLive.Popover do
   """
   use AbakusWeb, :html
 
-  import AbakusWeb.Format, except: [amount: 1]
+  import AbakusWeb.Format
 
+  alias Abakus.Money
   alias AbakusWeb.BudgetLive.{Components, Inspector, Status}
-  alias AbakusWeb.Format
 
   @doc "Opens a popover at the anchor's element; a pill opens on \"Decken\" while its category is overspent."
   def open(:pick, anchor, _entry, inspector) do
@@ -24,7 +24,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
       kind: :pick,
       anchor: anchor,
       category_id: suggested && suggested.category.id,
-      amount: suggested && Format.amount(pick_amount(suggested, inspector.free)),
+      amount: suggested && Money.amount(pick_amount(suggested, inspector.free)),
       error: nil,
       open: true
     }
@@ -182,7 +182,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
         <.combobox
           id="cover-from"
           name="from"
-          label={"Decke #{euros(-@entry.cell.available)} aus"}
+          label={"Decke #{Money.euros(-@entry.cell.available)} aus"}
           value={elem(@source, 0)}
           placeholder="Kategorie suchen"
           options={
@@ -239,7 +239,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
         autofocus
         name="amount"
         label="Betrag"
-        value={Format.amount(@amount)}
+        value={Money.amount(@amount)}
         suffix="€"
         numeric
         autocomplete="off"
@@ -293,7 +293,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
         suffix="€"
         numeric
         autocomplete="off"
-        help={"Frei zu verteilen: #{euros(@inspector.free)}"}
+        help={"Frei zu verteilen: #{Money.euros(@inspector.free)}"}
         errors={List.wrap(@popover.error)}
       />
       <.popover_actions submit_id="pick-submit" submit="Zuweisen" />

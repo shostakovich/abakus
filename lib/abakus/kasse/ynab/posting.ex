@@ -6,7 +6,7 @@ defmodule Abakus.Kasse.Ynab.Posting do
   """
 
   alias Abakus.Kasse.Expenses.Expense
-  alias Abakus.Kasse.Money
+  alias Abakus.Money
 
   @max_payee 200
   @max_memo 500
@@ -45,15 +45,14 @@ defmodule Abakus.Kasse.Ynab.Posting do
 
   @doc """
   The memo, at most 500 characters: "Gesamt 12,34 € (… USD) · bezahlt von X · zipfelkasse #7".
+  Its bytes stay as they are, with plain spaces (ADR 0011).
   """
   def memo(%Expense{} = expense) do
-    total = "Gesamt " <> Money.format_cents(expense.amount_cents)
+    total = "Gesamt " <> Money.plain(expense.amount_cents)
 
     total =
       if Expense.foreign?(expense),
-        do:
-          total <>
-            " (#{Money.format_money(expense.original_amount, expense.original_currency)})",
+        do: total <> " (#{Money.plain(expense.original_amount, expense.original_currency)})",
         else: total
 
     suffix = " · " <> marker(expense.id)

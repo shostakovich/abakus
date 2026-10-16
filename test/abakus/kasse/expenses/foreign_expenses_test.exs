@@ -139,7 +139,9 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
                })
 
       assert errors_on(changeset) == %{
-               parts: ["Die Beträge müssen zusammen 10,00 USD ergeben (aktuell 9,67 USD)."]
+               parts: [
+                 "Die Beträge müssen zusammen 10,00\u00A0USD ergeben (aktuell 9,67\u00A0USD)."
+               ]
              }
     end
 

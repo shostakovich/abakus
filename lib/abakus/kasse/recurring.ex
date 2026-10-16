@@ -17,11 +17,12 @@ defmodule Abakus.Kasse.Recurring do
 
   require Logger
 
-  alias Abakus.Kasse.{Activities, Dates, Expenses, Money, Names, Rates}
+  alias Abakus.Kasse.{Activities, Dates, Expenses, Names, Rates}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Recurring.RecurringExpense
   alias Abakus.Kasse.Recurring.RecurringExpense.Template
   alias Abakus.{LocalTime, Repo}
+  alias Abakus.Money
   alias Ecto.Changeset
 
   @frequencies [:weekly, :monthly, :yearly]

@@ -4,7 +4,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
   import AbakusWeb.Depot.{AllocationComponents, DividendComponents}
 
   alias Abakus.Depot.{MarketData, Portfolios, Securities}
-  alias Abakus.{ExchangeRates, LocalTime}
+  alias Abakus.{ExchangeRates, LocalTime, Money}
   alias AbakusWeb.Depot.{AttributeValue, Format, Periods}
 
   # URL parameter, period, button label and its accessible name; the first is the default.
@@ -258,7 +258,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
         Ausschüttungen je Anteil
         <:actions :if={@distributions != []}>
           <span id="distributions-total" class="text-sm whitespace-nowrap text-base-content/70">
-            bisher gesamt <span class="tabular-nums">{Format.euros(@total, 2)}</span>
+            bisher gesamt <span class="tabular-nums">{Money.euros(@total)}</span>
           </span>
         </:actions>
       </.section_heading>
@@ -379,7 +379,9 @@ defmodule AbakusWeb.Depot.SecurityLive do
   end
 
   defp ter(ter, nil), do: Format.ter(ter)
-  defp ter(ter, per_year), do: join_meta([Format.ter(ter), "#{Format.euros(per_year)} im Jahr"])
+
+  defp ter(ter, per_year),
+    do: join_meta([Format.ter(ter), "#{Money.euros(per_year, decimals: 0)} im Jahr"])
 
   # PP names its built-in attributes in the language the file was created in; its English
   # default for the vendor reads in German here. A name the user chose stays.

@@ -1,14 +1,21 @@
-defmodule Abakus.Kasse.Money do
+defmodule Abakus.Money do
   @moduledoc """
   Amounts as integers in the smallest unit of their currency (euro cents for euros), read from
-  German or English input and written the German way: `"1.234,56 €"`.
+  German or English input and written the German way, the same in every area: `"1.234,56 €"`.
 
   Input takes a comma or a dot as decimal separator and the other one as thousands separator.
   A single dot before exactly three digits groups thousands (`"1.234"` is 1234), unless the
-  currency has three decimals or only zeros precede it (`"0.856"`).
+  currency has three decimals or only zeros precede it (`"0.856"`). A separator at the end
+  (`"12,"`) means whole units; `-` and `−` are minus, spaces and a trailing `€` are ignored.
+
+  A field holds an amount as `amount/2` writes it, without unit, and reads it back unchanged.
+  Shown amounts (`euros/2`, `money/2`) go through `Setzkasten.Format.money/2`: a no-break space
+  before the unit and a real minus. Stored text (`plain/2`) keeps a plain space.
   """
 
   @max_cents 1_000_000_000_000
+  @blank "Bitte einen Betrag eingeben."
+  @not_text "Ungültiger Betrag."
   @zero_decimals ~w(JPY KRW ISK HUF CLP VND XAF XOF PYG UGX IDR)
   @three_decimals ~w(KWD BHD OMR JOD TND LYD IQD)
   @int64_bound :math.pow(2, 63)
@@ -16,22 +23,37 @@ defmodule Abakus.Kasse.Money do
   @doc "The largest amount in cents, 10 billion euros, so that splitting cannot overflow."
   def max_cents, do: @max_cents
 
-  @doc "Reads an amount with `decimals` decimal places into minor units."
-  @spec parse(String.t(), 0..3) :: {:ok, integer()} | {:error, String.t()}
-  def parse(text, decimals) do
-    text = text |> String.trim() |> String.replace_suffix("€", "") |> String.trim()
-
-    if text == "",
-      do: {:error, "Bitte einen Betrag eingeben."},
-      else: parse_fixed(text, decimals)
+  @doc "Reads an amount with `decimals` decimal places into minor units; empty or no text is an error."
+  @spec parse(term(), 0..3) :: {:ok, integer()} | {:error, String.t()}
+  def parse(text, decimals) when is_binary(text) do
+    case amount_text(text) do
+      "" -> {:error, @blank}
+      text -> parse_fixed(text, decimals)
+    end
   end
+
+  def parse(_not_text, _decimals), do: {:error, @not_text}
+
+  @doc """
+  Reads a number with any number of decimal places, as the Depot takes shares and prices: a
+  dot before exactly three digits groups thousands (`"1.500"` is 1500, `"0.125"` stays).
+  """
+  @spec parse_number(term()) :: {:ok, Decimal.t()} | {:error, String.t()}
+  def parse_number(text) when is_binary(text) do
+    case amount_text(text) do
+      "" -> {:error, @blank}
+      text -> parse_decimal_places(text)
+    end
+  end
+
+  def parse_number(_not_text), do: {:error, @not_text}
 
   @doc ~s(Reads a percentage into basis points: `"12,5 %"` is 1250.)
   @spec parse_basis_points(String.t()) :: {:ok, integer()} | {:error, String.t()}
   def parse_basis_points(text) do
     text = text |> String.trim() |> String.replace_suffix("%", "") |> String.trim()
 
-    with {:error, _} <- parse_fixed(text, 2),
+    with {:error, _} <- parse_fixed(strip_spaces(text), 2),
          do: {:error, "Ungültige Prozentangabe „#{text}“."}
   end
 
@@ -70,22 +92,35 @@ defmodule Abakus.Kasse.Money do
        else: :error
   end
 
-  defp parse_fixed(text, decimals) do
-    text = strip_spaces(text)
+  defp amount_text(text),
+    do: text |> String.trim() |> String.replace_suffix("€", "") |> strip_spaces()
 
-    with {:text, true} <- {:text, text != ""},
-         {:ok, {negative?, int, frac}} <- split_number(text, decimals < 3),
+  defp parse_fixed(text, decimals) do
+    with {:ok, {negative?, int, frac}} <- split_number(text, decimals < 3),
          frac = trim_zeros(frac, decimals),
          :ok <- check_places(frac, decimals),
          :ok <- check_size(int) do
       value = String.to_integer(int <> String.pad_trailing(frac, decimals, "0"))
       {:ok, if(negative?, do: -value, else: value)}
     else
-      {:text, false} -> {:error, "Bitte einen Betrag eingeben."}
-      :error -> {:error, "Ungültiger Betrag „#{text}“."}
+      :error -> {:error, invalid(text)}
       {:error, _message} = error -> error
     end
   end
+
+  defp parse_decimal_places(text) do
+    with {:ok, {negative?, int, frac}} <- split_number(text, true),
+         :ok <- check_size(int),
+         # Decimal.new/1 would raise beyond 34 digits.
+         {decimal, ""} <- Decimal.parse(if(negative?, do: "-", else: "") <> int <> "." <> frac) do
+      {:ok, decimal}
+    else
+      {:error, _message} = error -> error
+      _invalid -> {:error, invalid(text)}
+    end
+  end
+
+  defp invalid(text), do: "Ungültiger Betrag „#{text}“."
 
   # Only space and no-break space: U+202F and other spaces are not part of a number.
   defp strip_spaces(text), do: String.replace(text, [" ", " "], "")
@@ -110,11 +145,12 @@ defmodule Abakus.Kasse.Money do
     {negative?, digits} =
       case text do
         "-" <> rest -> {true, rest}
+        "−" <> rest -> {true, rest}
         "+" <> rest -> {false, rest}
         _unsigned -> {false, text}
       end
 
-    with true <- digits =~ ~r/\A[0-9.,]+\z/,
+    with true <- digits =~ ~r/\A[0-9.,]+\z/ and digits =~ ~r/[0-9]/,
          {:ok, int, frac, thousands} <- separate(digits, dot_thousands?),
          false <- String.contains?(frac, [".", ","]),
          {:ok, int} <- ungroup(int, thousands) do
@@ -149,17 +185,10 @@ defmodule Abakus.Kasse.Money do
   defp separate_one(digits, dot_thousands?) do
     {int, separator, frac} = split_at_last(digits, [".", ","])
 
-    cond do
-      separator == "." and byte_size(frac) == 3 and dot_thousands? and
-          String.trim(int, "0") != "" ->
-        {:ok, digits, "", "."}
-
-      frac == "" ->
-        :error
-
-      true ->
-        {:ok, int, frac, nil}
-    end
+    if separator == "." and byte_size(frac) == 3 and dot_thousands? and
+         String.trim(int, "0") != "",
+       do: {:ok, digits, "", "."},
+       else: {:ok, int, frac, nil}
   end
 
   defp split_at_last(digits, separators) do
@@ -181,45 +210,67 @@ defmodule Abakus.Kasse.Money do
 
   defp count(text, char), do: length(:binary.matches(text, char))
 
-  @doc ~s(Euro cents as shown: `"1.234,56 €"`, negative with a real minus sign: `"−9,99 €"`.)
-  @spec format_cents(integer()) :: String.t()
-  def format_cents(cents), do: shown(cents, 2) <> " €"
+  @doc """
+  Euro cents as shown: `"1.234,56 €"`, `"−9,99 €"`. Options: `signed: true` puts a plus before
+  an inflow (`"+48,75 €"`), `decimals: 0` shows whole euros (`"1.235 €"`).
+  """
+  @spec euros(integer(), keyword()) :: String.t()
+  def euros(cents, opts \\ []) when is_integer(cents),
+    do: Setzkasten.Format.money(cents, Keyword.take(opts, [:signed, :decimals]))
 
-  @doc ~s(Euro cents for an input field: `"1234,56"`.)
-  @spec format_cents_input(integer()) :: String.t()
-  def format_cents_input(cents), do: format_minor(cents, 2)
-
-  @doc ~s(An amount in minor units of `currency`: `"1.234,56 USD"`, euros as `format_cents/1`.)
-  @spec format_money(integer(), String.t()) :: String.t()
-  def format_money(minor, currency) do
+  @doc ~s(Minor units of `currency` as shown: `"1.234,56 USD"`, `"123.456 JPY"`; euros as `euros/2`.)
+  @spec money(integer(), String.t()) :: String.t()
+  def money(minor, currency) when is_integer(minor) do
     if eur?(currency) do
-      format_cents(minor)
+      euros(minor)
     else
       code = normalize_currency(currency)
-      shown(minor, decimals(code)) <> " " <> code
+
+      Setzkasten.Format.money(minor,
+        currency: code,
+        currency_display: :code,
+        minor_digits: decimals(code)
+      )
     end
   end
 
-  defp shown(value, decimals) when value < 0, do: "−" <> shown(-value, decimals)
-  defp shown(value, decimals), do: format_minor(value, decimals, group: true)
+  @doc """
+  Minor units of `currency` as stored text holds them, with a plain space before the unit:
+  `"1.234,56 €"`, `"−9,99 €"`, `"100,00 USD"`.
+  """
+  @spec plain(integer(), String.t()) :: String.t()
+  def plain(minor, currency \\ "EUR") when is_integer(minor) do
+    unit = if eur?(currency), do: "€", else: normalize_currency(currency)
+    amount(minor, currency) <> " " <> unit
+  end
 
-  @doc ~s(Minor units of `currency` for an input field: `"1234,56"`, yen `"123456"`.)
-  @spec format_minor_input(integer(), String.t()) :: String.t()
-  def format_minor_input(minor, currency), do: format_minor(minor, decimals(currency))
+  @doc """
+  Minor units of `currency` without unit, as shown in a column and as a field holds them:
+  `"1.234,56"`, `"−9,99"`, yen `"123.456"`, dinar `"1.234,560"`.
+  """
+  @spec amount(integer(), String.t()) :: String.t()
+  def amount(minor, currency \\ "EUR") when is_integer(minor),
+    do: Setzkasten.Format.number(minor, minor_units: true, minor_digits: decimals(currency))
+
+  @doc ~s(A number with the places it has, at least `places`, as a Depot field holds it: `"1.234,5678"`.)
+  @spec number(Decimal.t(), non_neg_integer()) :: String.t()
+  def number(%Decimal{} = number, places \\ 0) do
+    normalized = Decimal.normalize(number)
+    Setzkasten.Format.number(normalized, decimals: max(-normalized.exp, places))
+  end
 
   @doc ~s(Basis points as a percentage: `"33,33 %"`.)
   @spec format_basis_points(integer()) :: String.t()
   def format_basis_points(points), do: format_minor(points, 2) <> " %"
 
   @doc """
-  `value` in units of 10^-decimals. Options: `:separator` (default `","`) and `:group` (dots
-  between thousands).
+  `value` in units of 10^-decimals without grouping, as MCP output and CSV exports write it.
+  Option `:separator` (default `","`).
   """
   @spec format_minor(integer(), non_neg_integer(), keyword()) :: String.t()
   def format_minor(value, decimals, opts \\ []) do
     scale = Integer.pow(10, decimals)
     whole = Integer.to_string(div(abs(value), scale))
-    whole = if opts[:group], do: group(whole), else: whole
 
     text =
       if decimals > 0 do
@@ -232,15 +283,6 @@ defmodule Abakus.Kasse.Money do
       end
 
     if value < 0, do: "-" <> text, else: text
-  end
-
-  defp group(digits) do
-    digits
-    |> String.reverse()
-    |> String.to_charlist()
-    |> Enum.chunk_every(3)
-    |> Enum.join(".")
-    |> String.reverse()
   end
 
   @doc "A rate in the shortest digits that read back as it, with a comma and never an exponent."

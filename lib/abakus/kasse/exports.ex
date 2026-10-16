@@ -9,9 +9,10 @@ defmodule Abakus.Kasse.Exports do
 
   alias Abakus.LocalTime
 
-  alias Abakus.Kasse.{Dates, Expenses, Money}
+  alias Abakus.Kasse.{Dates, Expenses}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.{OrderedJSON, Participants, Settings, Split}
+  alias Abakus.Money
 
   @bom "﻿"
   @csv_header ~w(ID Datum Titel Kategorie) ++

@@ -51,6 +51,40 @@ defmodule Abakus.Kasse.Ynab.PostingTest do
       assert posting.memo == "Gesamt 80,00 € (90,00 USD) · bezahlt von Anna · zipfelkasse #3"
     end
 
+    test "keeps the memo's bytes: plain spaces, grouped thousands" do
+      posting =
+        Posting.from_expense(
+          expense(4,
+            original_currency: "JPY",
+            original_amount: 1_234_567,
+            fx_rate: 160.0,
+            amount_cents: 771_604
+          ),
+          1
+        )
+
+      assert posting.memo ==
+               "Gesamt 7.716,04 € (1.234.567 JPY) · bezahlt von Anna · zipfelkasse #4"
+
+      assert :binary.match(posting.memo, " ") == :nomatch
+    end
+
+    test "keeps the memo's bytes for a negative amount in a currency with three decimals" do
+      posting =
+        Posting.from_expense(
+          expense(5,
+            original_currency: "KWD",
+            original_amount: -13_580_250,
+            fx_rate: 0.33,
+            amount_cents: -4_115_227
+          ),
+          1
+        )
+
+      assert posting.memo ==
+               "Gesamt −41.152,27 € (−13.580,250 KWD) · bezahlt von Anna · zipfelkasse #5"
+    end
+
     test "cuts a long title to the length YNAB accepts" do
       payee = Posting.from_expense(expense(7, title: String.duplicate("x", 250)), 1).payee
       assert length(String.codepoints(payee)) == 200

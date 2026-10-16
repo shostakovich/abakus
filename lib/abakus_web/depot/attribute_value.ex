@@ -6,6 +6,7 @@ defmodule AbakusWeb.Depot.AttributeValue do
   """
 
   alias Abakus.Depot.Securities.AttributeType
+  alias Abakus.Money
   alias AbakusWeb.Depot.Format
 
   @converters "name.abuchen.portfolio.model.AttributeType$"
@@ -28,7 +29,7 @@ defmodule AbakusWeb.Depot.AttributeValue do
   # Amounts in cents, without a currency.
   defp converted(amount, value, _currency)
        when amount in ["AmountConverter", "AmountPlainConverter"] and is_integer(value),
-       do: {:text, Format.amount(value)}
+       do: {:text, Money.amount(value)}
 
   defp converted("QuoteConverter", value, currency) when is_integer(value),
     do: {:text, Format.price(value, currency)}

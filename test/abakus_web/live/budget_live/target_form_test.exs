@@ -87,7 +87,7 @@ defmodule AbakusWeb.BudgetLive.TargetFormTest do
     end
 
     test "an amount that is no number is an error on the amount" do
-      for amount <- ["", "zwölf"] do
+      for amount <- ["", "zwölf", %{"0" => "12"}, ["12"]] do
         assert {:error, [amount: {message, []}]} =
                  TargetForm.attrs(%{TargetForm.params(nil, @oct) | "amount" => amount}, @oct)
 

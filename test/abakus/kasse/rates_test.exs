@@ -6,7 +6,8 @@ defmodule Abakus.Kasse.RatesTest do
 
   alias Abakus.ExchangeRates
   alias Abakus.ExchangeRates.ExchangeRate
-  alias Abakus.Kasse.{Expenses, Money, Rates}
+  alias Abakus.Kasse.{Expenses, Rates}
+  alias Abakus.Money
 
   @today ~D[2026-10-02]
 

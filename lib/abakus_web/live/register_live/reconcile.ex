@@ -13,6 +13,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
 
   alias Abakus.Amount
   alias Abakus.Ledger.BankBalance
+  alias Abakus.Money
   alias AbakusWeb.Format
 
   @doc "The bank's balance to reconcile against, from a stored bank balance."
@@ -25,13 +26,10 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
 
   @doc "Reads the balance typed into the popover."
   def entered(text, today) when is_binary(text) do
-    with false <- String.trim(text) == "",
-         {:ok, amount} <- Format.parse_amount(text) do
+    with {:ok, amount} <- Money.parse(text, 2) do
       if Amount.valid?(amount),
         do: {:ok, bank(amount, today)},
         else: {:error, "Betrag " <> Amount.out_of_range_message()}
-    else
-      _blank_or_error -> {:error, "Betrag ist ungültig, etwa 1.234,56"}
     end
   end
 
@@ -44,10 +42,11 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
 
   def done_text(%{reconciled: count, adjustment: adjustment}),
     do:
-      "Ausgleichsbuchung über #{Format.signed_euros(adjustment.amount)} angelegt#{locked_text(count)}."
+      "Ausgleichsbuchung über #{Money.euros(adjustment.amount, signed: true)} angelegt#{locked_text(count)}."
 
   def refused_text(difference),
-    do: "Nicht abgeglichen: Der Saldo weicht inzwischen um #{Format.signed_euros(difference)} ab."
+    do:
+      "Nicht abgeglichen: Der Saldo weicht inzwischen um #{Money.euros(difference, signed: true)} ab."
 
   defp locked_text(0), do: ""
   defp locked_text(1), do: ", 1 Buchung abgeschlossen"
@@ -238,7 +237,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
           phx-click="reconcile_finish"
           confirm={
             if @difference != 0,
-              do: "Ausgleichsbuchung über #{Format.signed_euros(@difference)} anlegen?"
+              do: "Ausgleichsbuchung über #{Money.euros(@difference, signed: true)} anlegen?"
           }
           confirm_text="Sie gleicht die Differenz zur Bank aus. Danach ist das Konto abgeschlossen."
           confirm_label="Ausgleichen und abschließen"

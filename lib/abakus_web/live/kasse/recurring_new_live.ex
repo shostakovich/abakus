@@ -5,8 +5,9 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
   """
   use AbakusWeb, :kasse_live_view
 
-  alias Abakus.Kasse.{Expenses, Money, Recurring, Split}
+  alias Abakus.Kasse.{Expenses, Recurring, Split}
   alias Abakus.Kasse.Expenses.Expense
+  alias Abakus.Money
 
   @frequencies Map.new(Recurring.frequencies(), &{Atom.to_string(&1), &1})
 

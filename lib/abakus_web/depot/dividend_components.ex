@@ -6,7 +6,7 @@ defmodule AbakusWeb.Depot.DividendComponents do
 
   import Setzkasten.Components.Feedback, only: [badge: 1]
 
-  alias AbakusWeb.Depot.Format
+  alias Abakus.Money
 
   attr :kind, :atom, required: true, values: [:announced, :forecast]
   attr :class, :any, default: nil
@@ -28,13 +28,13 @@ defmodule AbakusWeb.Depot.DividendComponents do
 
   @doc "The `amount` (`:gross` or `:net`) of `dividend` in euros, with „~“ for a forecast."
   def expected(%{kind: :forecast} = dividend, amount, places),
-    do: "~" <> Format.euros(dividend[amount], places)
+    do: "~" <> Money.euros(dividend[amount], decimals: places)
 
-  def expected(dividend, amount, places), do: Format.euros(dividend[amount], places)
+  def expected(dividend, amount, places), do: Money.euros(dividend[amount], decimals: places)
 
   @doc "The total `amount` of `dividends` in euros, with „~“ as soon as a forecast counts."
   def expected_total(dividends, amount, places) do
-    total = dividends |> Enum.sum_by(& &1[amount]) |> Format.euros(places)
+    total = dividends |> Enum.sum_by(& &1[amount]) |> Money.euros(decimals: places)
     if Enum.any?(dividends, &(&1.kind == :forecast)), do: "~" <> total, else: total
   end
 

@@ -11,6 +11,7 @@ defmodule AbakusWeb.Depot.WealthLive do
 
   alias Abakus.Depot.{AccountRoles, Period, Portfolios}
   alias Abakus.{Ledger, LocalTime}
+  alias Abakus.Money
   alias AbakusWeb.Areas
   alias AbakusWeb.Depot.{Benchmark, Format, Periods}
 
@@ -224,7 +225,7 @@ defmodule AbakusWeb.Depot.WealthLive do
 
   defp change_note(assigns) do
     ~H"""
-    <span class={tone(Format.signed_euros(@change))}>
+    <span class={tone(Money.euros(@change, signed: true, decimals: 0))}>
       <.amount value={@change} signed decimals={0} /> heute{percent_note(@percent)}
     </span>
     """
@@ -263,7 +264,7 @@ defmodule AbakusWeb.Depot.WealthLive do
 
   # Each part stays on one line.
   defp portfolio_note(%{securities: count, cash: cash}),
-    do: join_meta([securities(count), cash && "Cash\u00A0#{Format.euros(cash, 2)}"])
+    do: join_meta([securities(count), cash && "Cash\u00A0#{Money.euros(cash)}"])
 
   defp without_role_title([_account]), do: "Ein Verrechnungskonto ohne Rolle"
   defp without_role_title(accounts), do: "#{length(accounts)} Verrechnungskonten ohne Rolle"

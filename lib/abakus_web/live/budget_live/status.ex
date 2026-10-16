@@ -9,6 +9,7 @@ defmodule AbakusWeb.BudgetLive.Status do
   import AbakusWeb.Format
 
   alias Abakus.Budget.{CategoryMonth, Month}
+  alias Abakus.Money
 
   @doc """
   The available pill: `%{tone, icon, label}` (`label` names the state for screen readers), or `:zero`.
@@ -58,7 +59,7 @@ defmodule AbakusWeb.BudgetLive.Status do
   def target_status(%CategoryMonth{target: nil}), do: nil
 
   def target_status(%CategoryMonth{available: available}) when available < 0,
-    do: %{title: "Überzogen #{euros(-available)}", tone: :error}
+    do: %{title: "Überzogen #{Money.euros(-available)}", tone: :error}
 
   def target_status(%CategoryMonth{} = row) do
     spent = -row.activity
@@ -70,10 +71,13 @@ defmodule AbakusWeb.BudgetLive.Status do
         %{title: "Pausiert", tone: :neutral}
 
       row.underfunded > 0 ->
-        %{title: "Noch #{euros(row.underfunded)} nötig", tone: :warning}
+        %{title: "Noch #{Money.euros(row.underfunded)} nötig", tone: :warning}
 
       spent > 0 ->
-        %{title: "#{funded}, #{euros(spent)} von #{euros(budgeted)} ausgegeben", tone: :success}
+        %{
+          title: "#{funded}, #{Money.euros(spent)} von #{Money.euros(budgeted)} ausgegeben",
+          tone: :success
+        }
 
       true ->
         %{title: funded, tone: :success}
@@ -85,17 +89,17 @@ defmodule AbakusWeb.BudgetLive.Status do
   target by a date names its day without the year.
   """
   def target_head(%{cadence: :monthly, amount: amount, set_aside: true}),
-    do: {"Jeden Monat weitere #{euros(amount)} zurücklegen", nil}
+    do: {"Jeden Monat weitere #{Money.euros(amount)} zurücklegen", nil}
 
   def target_head(%{cadence: :monthly, amount: amount, set_aside: false}),
-    do: {"Jeden Monat auffüllen bis #{euros(amount)}", nil}
+    do: {"Jeden Monat auffüllen bis #{Money.euros(amount)}", nil}
 
   def target_head(%{cadence: :by_date} = target) do
     due = if target.repeats_yearly, do: day_month(target.due_on), else: long_date(target.due_on)
     every = if target.repeats_yearly, do: "Jedes Jahr", else: "Einmalig"
     mode = if target.set_aside, do: "weitere zurücklegen", else: "auffüllen bis"
 
-    {"#{euros(target.amount)} bis #{due} ansparen",
+    {"#{Money.euros(target.amount)} bis #{due} ansparen",
      "#{every} · #{mode}, verteilt auf die Monate bis dahin"}
   end
 
@@ -150,7 +154,7 @@ defmodule AbakusWeb.BudgetLive.Status do
   def uncovered(%Month{month: month, uncovered: uncovered}) do
     for {later, shortfall} <- uncovered do
       name = if later.year == month.year, do: month_name(later), else: month_year(later)
-      "#{name} nicht gedeckt: es fehlen #{euros(shortfall)}"
+      "#{name} nicht gedeckt: es fehlen #{Money.euros(shortfall)}"
     end
   end
 end

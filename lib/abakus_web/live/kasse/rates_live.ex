@@ -6,8 +6,8 @@ defmodule AbakusWeb.Kasse.RatesLive do
   """
   use AbakusWeb, :kasse_live_view
 
-  alias Abakus.{ExchangeRates, LocalTime}
-  alias Abakus.Kasse.{Dates, Expenses, Money, Rates}
+  alias Abakus.{ExchangeRates, LocalTime, Money}
+  alias Abakus.Kasse.{Dates, Expenses, Rates}
 
   @impl true
   def mount(_params, _session, socket) do

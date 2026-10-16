@@ -8,7 +8,7 @@ defmodule Abakus.Kasse.Split do
   so the extra cent does not always land on the same person.
   """
 
-  alias Abakus.Kasse.Money
+  alias Abakus.Money
 
   @modes [:equal, :shares, :percent, :amount]
   @max_shares 1_000_000
@@ -137,8 +137,8 @@ defmodule Abakus.Kasse.Split do
 
       sum != original ->
         {:error,
-         "Die Beträge müssen zusammen #{Money.format_money(original, currency)} ergeben " <>
-           "(aktuell #{Money.format_money(sum, currency)})."}
+         "Die Beträge müssen zusammen #{Money.money(original, currency)} ergeben " <>
+           "(aktuell #{Money.money(sum, currency)})."}
 
       true ->
         {:ok, parts}

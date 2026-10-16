@@ -9,12 +9,13 @@ defmodule Abakus.Kasse.Expenses do
 
   import Ecto.Query
 
-  alias Abakus.Kasse.{Activities, BudgetLink, Dates, Money, Participants, Rates, Suggestions}
+  alias Abakus.Kasse.{Activities, BudgetLink, Dates, Participants, Rates, Suggestions}
   alias Abakus.Kasse.Activities.Changes
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Kasse.Expenses.{Expense, ExpenseShare, Form}
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Kasse.Recurring.RecurringExpense
+  alias Abakus.Money
   alias Abakus.Repo
   alias Ecto.Changeset
   alias Phoenix.PubSub

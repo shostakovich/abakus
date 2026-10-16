@@ -22,9 +22,9 @@ defmodule AbakusWeb.RegisterLive.ReconcileTest do
   end
 
   test "a blank or unreadable balance is refused" do
-    assert {:error, "Betrag ist ungültig" <> _} = Reconcile.entered("  ", @today)
-    assert {:error, _} = Reconcile.entered("zwölf", @today)
-    assert {:error, _} = Reconcile.entered("1,234", @today)
+    assert Reconcile.entered("  ", @today) == {:error, "Bitte einen Betrag eingeben."}
+    assert Reconcile.entered("zwölf", @today) == {:error, "Ungültiger Betrag „zwölf“."}
+    assert Reconcile.entered("1,234", @today) == {:error, "Höchstens 2 Nachkommastellen erlaubt."}
     assert {:error, _} = Reconcile.entered(%{"a" => "1"}, @today)
     assert {:error, _} = Reconcile.entered(["1"], @today)
   end

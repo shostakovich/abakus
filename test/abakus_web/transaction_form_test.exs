@@ -78,6 +78,15 @@ defmodule AbakusWeb.TransactionFormTest do
                TransactionForm.to_attrs(form(c, %{"outflow" => "−12"}), c.accounts)
 
       assert {:ok, %{amount: 0}} = TransactionForm.to_attrs(form(c, %{}), c.accounts)
+
+      for amount <- [%{"0" => "12"}, ["12"]] do
+        assert {:error, "Ungültiger Betrag."} =
+                 TransactionForm.to_attrs(form(c, %{"outflow" => amount}), c.accounts)
+
+        assert TransactionForm.keep_column(form(c, %{"outflow" => amount}), "main", "outflow")[
+                 "inflow"
+               ] == ""
+      end
     end
 
     test "a tracking account takes no category", c do
@@ -199,7 +208,7 @@ defmodule AbakusWeb.TransactionFormTest do
 
     test "unreadable amounts and dates are refused", c do
       assert TransactionForm.to_attrs(form(c, %{"outflow" => "12,345"}), c.accounts) ==
-               {:error, "Betrag ist ungültig"}
+               {:error, "Höchstens 2 Nachkommastellen erlaubt."}
 
       assert TransactionForm.to_attrs(form(c, %{"date" => "2026-02-30"}), c.accounts) ==
                {:error, "Datum ist ungültig"}
@@ -207,7 +216,7 @@ defmodule AbakusWeb.TransactionFormTest do
       params = split(c, %{}, %{"0" => sub(%{"inflow" => "x"})})
 
       assert TransactionForm.to_attrs(params, c.accounts) ==
-               {:error, "Teil 1: Betrag ist ungültig"}
+               {:error, "Teil 1: Ungültiger Betrag „x“."}
 
       one_subtransaction = split(c, %{}, %{"0" => sub(%{"outflow" => "5"})})
 

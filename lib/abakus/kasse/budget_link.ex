@@ -20,11 +20,11 @@ defmodule Abakus.Kasse.BudgetLink do
   alias Abakus.Kasse.BudgetLink.{CategoryMapping, Link, LinkedTransaction}
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Kasse.Expenses.Expense
-  alias Abakus.Kasse.Money
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Kasse.Ynab.{Connections, Posting, Scheduler}
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
+  alias Abakus.Money
   alias Abakus.Repo
   alias Ecto.Changeset
 
@@ -268,12 +268,11 @@ defmodule Abakus.Kasse.BudgetLink do
 
   @doc ~S|The memo of a linked transaction: "Gesamt 12,34 € (… USD) · bezahlt von X".|
   def memo(%Expense{} = expense) do
-    total = "Gesamt " <> Money.format_cents(expense.amount_cents)
+    total = "Gesamt " <> Money.plain(expense.amount_cents)
 
     total =
       if Expense.foreign?(expense),
-        do:
-          total <> " (#{Money.format_money(expense.original_amount, expense.original_currency)})",
+        do: total <> " (#{Money.plain(expense.original_amount, expense.original_currency)})",
         else: total
 
     total <> " · bezahlt von " <> expense.paid_by.name

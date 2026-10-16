@@ -25,7 +25,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   alias Abakus.Depot.BudgetLink, as: DepotLink
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.{Account, Transaction}
-  alias AbakusWeb.{AccountGroups, CategoryOptions, Format, TransactionForm}
+  alias Abakus.Money
+  alias AbakusWeb.{AccountGroups, CategoryOptions, TransactionForm}
 
   @main "main"
 
@@ -382,10 +383,10 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
               id="tx-remainder-out"
               class={["app-out text-end", remainder_class(@remainder && -@remainder)]}
             >
-              {@remainder && Format.amount(max(-@remainder, 0))}
+              {@remainder && Money.amount(max(-@remainder, 0))}
             </div>
             <div id="tx-remainder-in" class={["app-in text-end", remainder_class(@remainder)]}>
-              {@remainder && Format.amount(max(@remainder, 0))}
+              {@remainder && Money.amount(max(@remainder, 0))}
             </div>
           </div>
         </td>

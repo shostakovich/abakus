@@ -51,36 +51,6 @@ defmodule AbakusWeb.Depot.FormatTest do
     assert Format.signed_price(5_000, "EUR") == "+0,0001\u00A0€"
   end
 
-  test "euros are whole, with German separators, a real minus and a € that never wraps" do
-    assert Format.euros(14_911_750) == "149.118\u00A0€"
-    assert Format.euros(14_911_749) == "149.117\u00A0€"
-    assert Format.euros(-123_456) == "−1.235\u00A0€"
-    assert Format.euros(0) == "0\u00A0€"
-  end
-
-  test "euros can have cents" do
-    assert Format.euros(14_661_758, 2) == "146.617,58\u00A0€"
-    assert Format.euros(-5, 2) == "−0,05\u00A0€"
-  end
-
-  test "amounts have cents and no € sign, as the sidebar lists them" do
-    assert Format.amount(14_661_758) == "146.617,58"
-    assert Format.amount(-1_230) == "−12,30"
-    assert Format.amount(0) == "0,00"
-  end
-
-  test "changes in euros carry their sign" do
-    assert Format.signed_euros(56_200) == "+562\u00A0€"
-    assert Format.signed_euros(-123_450) == "−1.235\u00A0€"
-    assert Format.signed_euros(-40) == "0\u00A0€"
-  end
-
-  test "changes in euros can have cents" do
-    assert Format.signed_euros(3_850_280, 2) == "+38.502,80\u00A0€"
-    assert Format.signed_euros(-2_000, 2) == "−20,00\u00A0€"
-    assert Format.signed_euros(0, 2) == "0,00\u00A0€"
-  end
-
   test "shares have German separators and only the decimal places they need" do
     assert Format.shares(52_000_000_000) == "520"
     assert Format.shares(620_000_000_000) == "6.200"

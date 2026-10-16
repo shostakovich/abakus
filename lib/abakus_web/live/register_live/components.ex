@@ -8,6 +8,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   use AbakusWeb, :html
 
   alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
+  alias Abakus.Money
   alias Abakus.Names
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
   alias AbakusWeb.RegisterLive.{Rows, TransactionEditor}
@@ -663,7 +664,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           {inflow(@transaction.amount)}
         </td>
         <td :if={@running} class="text-end text-base-content/70 app-run">
-          {Format.amount(@running[@transaction.id])}
+          {Money.amount(@running[@transaction.id])}
         </td>
         <td class="app-ok-col">
           <.approve
@@ -1123,10 +1124,10 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp payee(%{payee: %Payee{name: name}}, _accounts), do: name
   defp payee(_transaction, _accounts), do: ""
 
-  defp outflow(amount) when amount < 0, do: Format.amount(-amount)
+  defp outflow(amount) when amount < 0, do: Money.amount(-amount)
   defp outflow(_amount), do: ""
 
-  defp inflow(amount) when amount > 0, do: Format.amount(amount)
+  defp inflow(amount) when amount > 0, do: Money.amount(amount)
   defp inflow(_amount), do: ""
 
   defp reconciled(transactions), do: Enum.filter(transactions, &(&1.cleared == :reconciled))

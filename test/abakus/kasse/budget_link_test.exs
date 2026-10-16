@@ -96,7 +96,8 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       expense =
         create!(foreign(h, "Hotel", 10_000, "USD", 1.25, "2026-10-01", h.anna, [h.anna, h.ben]))
 
-      assert transaction(expense).memo == "Gesamt 80,00 € (100,00 USD) · bezahlt von Anna"
+      assert transaction(expense).memo ==
+               "Gesamt 80,00 € (100,00 USD) · bezahlt von Anna"
     end
 
     test "has no category in the budget when its Kasse category is not mapped", %{h: h} do

@@ -6,8 +6,9 @@ defmodule Abakus.Kasse.Participants do
 
   import Ecto.Query
 
-  alias Abakus.Kasse.{Activities, Balances, Money}
+  alias Abakus.Kasse.{Activities, Balances}
   alias Abakus.Kasse.Participants.Participant
+  alias Abakus.Money
   alias Abakus.Repo
   alias Abakus.Users
   alias Abakus.Users.User
@@ -141,7 +142,7 @@ defmodule Abakus.Kasse.Participants do
           |> Changeset.change()
           |> Changeset.add_error(
             :archived_at,
-            "#{participant.name} hat noch einen Saldo von #{Money.format_cents(balance)}. " <>
+            "#{participant.name} hat noch einen Saldo von #{Money.euros(balance)}. " <>
               "Bitte erst ausgleichen, dann archivieren."
           )
           |> Changeset.apply_action(:update)

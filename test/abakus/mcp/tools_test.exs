@@ -190,7 +190,7 @@ defmodule Abakus.MCP.ToolsTest do
           {~s({#{x},"split":"percent","weights":{"Anna":60,"Ben":"30"}}),
            "The app refused the entry (message in German): Die Prozente müssen zusammen 100 % ergeben (aktuell 90,00 %)."},
           {~s({#{x},"split":"amount","weights":{"Anna":"5","Ben":"4"}}),
-           "The app refused the entry (message in German): Die Beträge müssen zusammen 10,00 € ergeben (aktuell 9,00 €)."},
+           "The app refused the entry (message in German): Die Beträge müssen zusammen 10,00\u00A0€ ergeben (aktuell 9,00\u00A0€)."},
           {~s|{"title":"#{String.duplicate("t", 201)}","amount":"1","paid_by":"Anna"}|,
            "The app refused the entry (message in German): Der Titel ist zu lang (höchstens 200 Zeichen)."},
           {~s({"amount":"x","paid_by":"Zoe","date":"x"}), "Parameter title is missing."},

@@ -14,9 +14,10 @@ defmodule Abakus.Kasse.Expenses.Expense do
 
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Kasse.Expenses.ExpenseShare
-  alias Abakus.Kasse.{Money, Names, Split}
+  alias Abakus.Kasse.{Names, Split}
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Kasse.Recurring.RecurringExpense
+  alias Abakus.Money
 
   @reimbursement_title "Rückzahlung"
   # As maxlength in the expense form.

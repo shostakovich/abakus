@@ -22,6 +22,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   alias Abakus.Depot.Receipts.{Checks, Fields}
   alias Abakus.Depot.Securities.ISIN
   alias Abakus.LocalTime
+  alias Abakus.Money
   alias AbakusWeb.Depot.{Format, ReceiptComponents}
 
   @id "transaction-dialog"
@@ -449,7 +450,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
         value: amount_value(form),
         help:
           expected &&
-            "#{expected_text(assigns.kind, form)} ergibt #{Format.amount(cents(expected))}\u00A0€."
+            "#{expected_text(assigns.kind, form)} ergibt #{Money.euros(cents(expected))}."
       )
 
     ~H"""
@@ -479,7 +480,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   defp amount_value(form) do
     case {form[:amount_set].value, form[:amount].value} do
       {true, _amount} -> typed(form[:amount])
-      {_computed, %Decimal{} = amount} -> Format.amount(cents(amount))
+      {_computed, %Decimal{} = amount} -> Money.amount(cents(amount))
       {_computed, _none} -> nil
     end
   end

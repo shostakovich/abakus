@@ -266,9 +266,23 @@ defmodule AbakusWeb.BudgetDetailsTest do
       |> form("#move-form", %{"amount" => "viel", "direction" => "to"})
       |> render_submit()
 
-      assert has_element?(view, "#popover #move-amount-error-0", "Betrag")
+      assert has_element?(view, "#popover #move-amount-error-0", "Ungültiger Betrag „viel“.")
       assert has_element?(view, "#move-amount[aria-invalid=true]")
       assert assigned(c.groceries, @october) == 10_000
+
+      view
+      |> form("#move-form", %{"amount" => "1,234", "direction" => "to"})
+      |> render_submit()
+
+      assert has_element?(
+               view,
+               "#popover #move-amount-error-0",
+               "Höchstens 2 Nachkommastellen erlaubt."
+             )
+
+      view |> form("#move-form", %{"amount" => "0", "direction" => "to"}) |> render_submit()
+
+      assert has_element?(view, "#popover #move-amount-error-0", "über null")
     end
 
     test "covers overspending from another category, as far as it has", c do

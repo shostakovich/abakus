@@ -132,7 +132,7 @@ defmodule Abakus.Kasse.Expenses.FormTest do
           @people
         )
 
-      assert hd(amount.rows).weight == "1500"
+      assert hd(amount.rows).weight == "1.500"
 
       percent =
         Form.from_expense(
@@ -366,10 +366,10 @@ defmodule Abakus.Kasse.Expenses.FormTest do
     end
 
     for {currency, weights, sum} <- [
-          {"EUR", ["5", "5", ""], {:ok, "Passt: 10,00 €."}},
-          {"EUR", ["5", "", ""], {:error, "Noch 5,00 € offen."}},
-          {"EUR", ["5", "6", ""], {:error, "1,00 € zu viel."}},
-          {"JPY", ["600", "400", ""], {:ok, "Passt: 1000 JPY."}}
+          {"EUR", ["5", "5", ""], {:ok, "Passt: 10,00\u00A0€."}},
+          {"EUR", ["5", "", ""], {:error, "Noch 5,00\u00A0€ offen."}},
+          {"EUR", ["5", "6", ""], {:error, "1,00\u00A0€ zu viel."}},
+          {"JPY", ["600", "400", ""], {:ok, "Passt: 1.000\u00A0JPY."}}
         ] do
       test "sums amounts #{inspect(weights)} in #{currency}" do
         form = %{blank() | amount: "10", split_mode: :amount, rate: "160"}

@@ -6,6 +6,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   alias Abakus.Depot.{MarketData, Portfolios}
   alias Abakus.Depot.Portfolios.Account
   alias Abakus.LocalTime
+  alias Abakus.Money
   alias AbakusWeb.Depot.Format
 
   # Allocation tab, also its URL parameter, and label; the first is the default. A taxonomy's tab
@@ -372,7 +373,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp subtitle(%{groups: [group]}) do
     join_meta([
       count(length(group.holdings), "Wertpapier", "Wertpapiere"),
-      group.accounts != [] && "davon Cash\u00A0#{Format.euros(group.cash, 2)}"
+      group.accounts != [] && "davon Cash\u00A0#{Money.euros(group.cash)}"
     ])
   end
 
@@ -397,10 +398,10 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp deviation_label(:above), do: "über Ziel"
   defp deviation_label(:below), do: "unter Ziel"
 
-  defp unassigned(%{value: value, share: nil}), do: Format.euros(value, 2)
+  defp unassigned(%{value: value, share: nil}), do: Money.euros(value)
 
   defp unassigned(%{value: value, share: share}),
-    do: "#{Format.euros(value, 2)} (#{in_percent(share)} des Werts)"
+    do: "#{Money.euros(value)} (#{in_percent(share)} des Werts)"
 
   defp source(nil), do: @source <> "."
 
