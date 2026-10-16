@@ -53,10 +53,13 @@ defmodule Abakus.Depot.AccountRoles do
     }
   end
 
-  defp budget_account_choices(
-         %Scope{user: %{budget_owner: true}},
-         %Account{currency: "EUR"} = account
-       ) do
+  defp budget_account_choices(%Scope{} = scope, %Account{currency: "EUR"} = account) do
+    if Scope.budget_owner?(scope), do: open_budget_accounts(account), else: []
+  end
+
+  defp budget_account_choices(_scope, _account), do: []
+
+  defp open_budget_accounts(account) do
     taken =
       from a in Account,
         where: a.id != ^account.id and not is_nil(a.budget_account_id),
@@ -70,8 +73,6 @@ defmodule Abakus.Depot.AccountRoles do
         order_by: [a.position, a.id]
     )
   end
-
-  defp budget_account_choices(_scope, _account), do: []
 
   defp portfolio_choices(scope, account) do
     Repo.all(
@@ -122,22 +123,10 @@ defmodule Abakus.Depot.AccountRoles do
     end
   end
 
-  defp check(%Scope{user: %{budget_owner: false}}, _account, {:budget_account, _id}),
-    do: {:error, "Nur wer das Budget führt, kann ein Budgetkonto wählen."}
-
-  defp check(_scope, %Account{currency: currency}, {:budget_account, _id}) when currency != "EUR",
-    do: {:error, "Ein Konto in #{currency} kann kein Budgetkonto sein, das Budget ist in Euro."}
-
-  defp check(_scope, _account, {:budget_account, id}) do
-    case Ledger.get_account(id) do
-      %Ledger.Account{closed: false, fed_by: nil} = budget_account ->
-        if Ledger.Account.budget_account?(budget_account),
-          do: :ok,
-          else: {:error, "Das ist kein offenes Budgetkonto."}
-
-      _other ->
-        {:error, "Das ist kein offenes Budgetkonto."}
-    end
+  defp check(scope, account, {:budget_account, id}) do
+    if Scope.budget_owner?(scope),
+      do: check_budget_account(account, id),
+      else: {:error, "Nur wer das Budget führt, kann ein Budgetkonto wählen."}
   end
 
   defp check(scope, account, {:portfolio_cash, id}) do
@@ -152,6 +141,21 @@ defmodule Abakus.Depot.AccountRoles do
   end
 
   defp check(_scope, _account, :none), do: :ok
+
+  defp check_budget_account(%Account{currency: currency}, _id) when currency != "EUR",
+    do: {:error, "Ein Konto in #{currency} kann kein Budgetkonto sein, das Budget ist in Euro."}
+
+  defp check_budget_account(_account, id) do
+    case Ledger.get_account(id) do
+      %Ledger.Account{closed: false, fed_by: nil} = budget_account ->
+        if Ledger.Account.budget_account?(budget_account),
+          do: :ok,
+          else: {:error, "Das ist kein offenes Budgetkonto."}
+
+      _other ->
+        {:error, "Das ist kein offenes Budgetkonto."}
+    end
+  end
 
   defp first_error(%Ecto.Changeset{errors: [{_field, {message, _opts}} | _rest]}), do: message
 end

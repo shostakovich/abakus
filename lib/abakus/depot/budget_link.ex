@@ -48,11 +48,11 @@ defmodule Abakus.Depot.BudgetLink do
   since then. Returns `{:ok, link}`, `{:error, changeset}`, `{:error, :not_budget_owner}`, `{:error, :linked}` or
   `{:error, message}` when a linked transaction cannot be written.
   """
-  def switch_on(%Scope{user: %User{budget_owner: true} = user}, attrs) do
-    Repo.transact(fn -> link(user, attrs) end)
+  def switch_on(%Scope{} = scope, attrs) do
+    if Scope.budget_owner?(scope),
+      do: Repo.transact(fn -> link(scope.user, attrs) end),
+      else: {:error, :not_budget_owner}
   end
-
-  def switch_on(%Scope{}, _attrs), do: {:error, :not_budget_owner}
 
   defp link(user, attrs) do
     with :ok <- if(Repo.get(Link, user.id), do: {:error, :linked}, else: :ok),

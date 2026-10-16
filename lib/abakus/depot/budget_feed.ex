@@ -33,7 +33,13 @@ defmodule Abakus.Depot.BudgetFeed do
   Opens the tracking account of a portfolio of the budget owner, named after it, and returns the portfolio with
   its `budget_account_id`; another user's portfolio stays without one.
   """
-  def open_account(%Portfolio{budget_account_id: nil} = portfolio, %User{budget_owner: true}) do
+  def open_account(%Scope{} = scope, %Portfolio{budget_account_id: nil} = portfolio) do
+    if Scope.budget_owner?(scope), do: open_tracking_account(portfolio), else: {:ok, portfolio}
+  end
+
+  def open_account(%Scope{}, %Portfolio{} = portfolio), do: {:ok, portfolio}
+
+  defp open_tracking_account(portfolio) do
     Repo.transact(fn ->
       with {:ok, account} <-
              Ledger.create_account(%{name: portfolio.name, kind: :tracking, fed_by: :portfolio}) do
@@ -41,8 +47,6 @@ defmodule Abakus.Depot.BudgetFeed do
       end
     end)
   end
-
-  def open_account(%Portfolio{} = portfolio, %User{}), do: {:ok, portfolio}
 
   @doc """
   Opens the account of every active portfolio of the budget owner without one, names each account after its
@@ -55,8 +59,10 @@ defmodule Abakus.Depot.BudgetFeed do
     rename_accounts()
 
     with %User{} = owner <- budget_owner() do
+      scope = Scope.for_user(owner)
+
       for portfolio <- Repo.all(untied_portfolios(owner)),
-          do: {:ok, _portfolio} = open_account(portfolio, owner)
+          do: {:ok, _portfolio} = open_account(scope, portfolio)
     end
 
     :ok

@@ -26,6 +26,7 @@ defmodule Abakus.Kasse.BudgetLink do
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.Money
   alias Abakus.Repo
+  alias Abakus.Users.Scope
   alias Ecto.Changeset
 
   @register_fields [:category_id, :memo, :flag, :cleared, :approved]
@@ -75,7 +76,7 @@ defmodule Abakus.Kasse.BudgetLink do
 
   defp check_linkable(participant) do
     cond do
-      not participant.user.budget_owner -> {:error, :not_budget_owner}
+      not Scope.budget_owner?(Scope.for_user(participant.user)) -> {:error, :not_budget_owner}
       Repo.exists?(where(Link, participant_id: ^participant.id)) -> {:error, :linked}
       true -> :ok
     end

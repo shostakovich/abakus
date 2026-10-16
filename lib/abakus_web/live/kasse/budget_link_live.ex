@@ -10,10 +10,11 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Kasse.Categories, as: KasseCategories
   alias Abakus.Kasse.Ynab.Connections
+  alias Abakus.Users.Scope
 
   @impl true
   def mount(_params, _session, socket) do
-    if !socket.assigns.current_scope.user.budget_owner, do: raise(AbakusWeb.NotFoundError)
+    if !Scope.budget_owner?(socket.assigns.current_scope), do: raise(AbakusWeb.NotFoundError)
 
     {:ok,
      socket

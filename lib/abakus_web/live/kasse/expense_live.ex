@@ -13,6 +13,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   alias Abakus.Kasse.{Activities, BudgetLink, Categories, Expenses, Participants, Split}
   alias Abakus.Kasse.Expenses.{Expense, Form}
   alias Abakus.LocalTime
+  alias Abakus.Users.Scope
   alias Ecto.Changeset
   alias Phoenix.HTML.FormData
 
@@ -78,16 +79,16 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
         deleted?: Expense.deleted?(expense),
         data: Expenses.edit_form(expense),
         history: Activities.list_activities(expense_id: expense.id),
-        booking: booking(socket.assigns.current_scope.user, expense)
+        booking: booking(socket.assigns.current_scope, expense)
       )
     else
       _missing -> raise AbakusWeb.NotFoundError
     end
   end
 
-  # The budget is its owner's alone (ADR 0007).
-  defp booking(%{budget_owner: true}, expense), do: BudgetLink.transaction_for(expense.id)
-  defp booking(_user, _expense), do: nil
+  defp booking(scope, expense) do
+    if Scope.budget_owner?(scope), do: BudgetLink.transaction_for(expense.id)
+  end
 
   @impl true
   def handle_event("change", %{"expense" => params}, socket) do

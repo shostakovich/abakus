@@ -11,6 +11,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   alias Abakus.Depot.{AccountRoles, BudgetLink, Portfolios, Receipts}
   alias Abakus.Depot.Portfolios.Account
   alias Abakus.Format
+  alias Abakus.Users.Scope
   alias AbakusWeb.{Areas, SettingsNav}
   alias AbakusWeb.Depot.Format, as: DepotFormat
 
@@ -62,7 +63,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
         </section>
 
         <section
-          :if={@current_scope.user.budget_owner}
+          :if={Scope.budget_owner?(@current_scope)}
           id="budget-link"
           aria-labelledby="budget-link-title"
         >
@@ -472,7 +473,11 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   defp link_refused(:linked), do: "Das Depot ist schon mit dem Budget verknüpft."
   defp link_refused(message) when is_binary(message), do: message
 
-  defp load_link(%{assigns: %{current_scope: %{user: %{budget_owner: true}} = scope}} = socket) do
+  defp load_link(%{assigns: %{current_scope: scope}} = socket) do
+    if Scope.budget_owner?(scope), do: load_owned_link(socket, scope), else: no_link(socket)
+  end
+
+  defp load_owned_link(socket, scope) do
     link = BudgetLink.get(scope)
 
     assign(socket,
@@ -485,7 +490,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     )
   end
 
-  defp load_link(socket), do: assign(socket, link: nil, link_form: nil, category_options: [])
+  defp no_link(socket), do: assign(socket, link: nil, link_form: nil, category_options: [])
 
   defp save_role(socket, account, params) do
     case AccountRoles.set_role(socket.assigns.current_scope, account, params["role"]) do

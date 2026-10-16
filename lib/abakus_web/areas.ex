@@ -39,10 +39,10 @@ defmodule AbakusWeb.Areas do
   budget or a portfolio, which opens the Depot's pages).
   """
   def allowed?(nil, _part), do: false
-  def allowed?(%Scope{} = scope, :budget), do: scope.user.budget_owner
+  def allowed?(%Scope{} = scope, :budget), do: Scope.budget_owner?(scope)
   def allowed?(%Scope{} = scope, :kasse), do: scope.participant != nil
   def allowed?(%Scope{} = scope, :depot), do: scope.depot
-  def allowed?(%Scope{} = scope, :finanzen), do: scope.user.budget_owner or scope.depot
+  def allowed?(%Scope{} = scope, :finanzen), do: Scope.budget_owner?(scope) or scope.depot
 
   @doc "Where `/` leads: the area used last if the user may still use it, else their first one, else the settings."
   def home_path(scope, last_area) do

@@ -73,7 +73,7 @@ defmodule Abakus.Depot.Portfolios do
           })
 
         account |> Account.role_changeset({:portfolio_cash, portfolio.id}) |> Repo.update!()
-        BudgetFeed.open_account(portfolio, scope.user)
+        BudgetFeed.open_account(scope, portfolio)
       end)
     end
   end
