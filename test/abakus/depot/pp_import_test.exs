@@ -17,6 +17,7 @@ defmodule Abakus.Depot.PPImportTest do
   }
 
   alias Abakus.Depot.Portfolios.Transaction
+  alias Abakus.Depot.PortfoliosFixtures
   alias Abakus.Depot.PPImport.Reader
   alias Abakus.Depot.Securities.{Price, Security}
   alias Abakus.{DomainFixtures, Ledger}
@@ -491,6 +492,16 @@ defmodule Abakus.Depot.PPImportTest do
     assert summary.portfolios.deleted == 2
     assert Enum.all?(accounts, &Repo.reload!(&1).closed)
     refute BudgetFeed.in_use?(budget_scope())
+  end
+
+  test "only the budget owner's import brings their portfolios' accounts in line", %{scope: scope} do
+    untied = PortfoliosFixtures.portfolio_fixture(scope, %{name: "Ohne Konto"})
+
+    {:ok, _} = PPImport.run(user_scope_fixture(), @sample)
+    assert Repo.reload!(untied).budget_account_id == nil
+
+    {:ok, _} = PPImport.run(scope, @sample)
+    assert Repo.reload!(untied).budget_account_id
   end
 
   test "keeps a security PP recreated under a new UUID", %{scope: scope, client: client} do
