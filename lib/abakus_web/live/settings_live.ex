@@ -1,36 +1,36 @@
 defmodule AbakusWeb.SettingsLive do
   @moduledoc """
-  The settings' overview and the sections that need no recent sign-in: Aussehen (the theme, per device) and the
-  YNAB import's status, read from the data. Zugang is `AbakusWeb.UserLive.Settings`, behind the sudo plug.
+  The settings' sections of their own: Aussehen (the theme, per device) and, for the budget owner, the YNAB import's
+  status, read from the data. Zugang is `AbakusWeb.UserLive.Settings`, behind the sudo plug.
   """
   use AbakusWeb, :live_view
 
   alias Abakus.YnabImport
   alias AbakusWeb.{Areas, Format}
-  alias AbakusWeb.SettingsLive.Components
+
+  @titles %{appearance: "Aussehen", ynab_import: "YNAB-Import"}
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Components.page
-      section={@section}
+    <Layouts.settings
+      current={@section}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
+      groups={@settings_groups}
     >
+      <.header>{@page_title}</.header>
       <.appearance :if={@section == :appearance} />
-      <.ynab_import :if={@section == :ynab} status={@ynab_status} />
-    </Components.page>
+      <.ynab_import :if={@section == :ynab_import} status={@ynab_status} />
+    </Layouts.settings>
     """
   end
 
   defp appearance(assigns) do
     ~H"""
-    <section id="appearance" aria-labelledby="appearance-title">
-      <.section_heading id="appearance-title">Aussehen</.section_heading>
+    <section id="appearance">
       <p class="mb-3 text-sm text-base-content/70">Gilt für dieses Gerät.</p>
       <.theme_toggle />
       <p class="mt-6 max-w-prose text-sm text-base-content/70">
@@ -83,19 +83,16 @@ defmodule AbakusWeb.SettingsLive do
 
   @impl true
   def handle_params(_params, _url, socket) do
-    section = section(socket.assigns.live_action)
-    if section == :ynab, do: ensure_budget!(socket.assigns.current_scope)
+    section = socket.assigns.live_action
+    if section == :ynab_import, do: ensure_budget!(socket.assigns.current_scope)
 
     {:noreply,
      socket
      |> assign(:section, section)
-     |> assign(:page_title, if(section, do: Components.label(section), else: "Einstellungen"))
-     |> assign(:ynab_status, if(section == :ynab, do: YnabImport.status()))}
+     |> assign(:page_title, @titles[section])
+     |> assign(:ynab_status, if(section == :ynab_import, do: YnabImport.status()))}
   end
 
   defp ensure_budget!(scope),
     do: Areas.allowed?(scope, :budget) || raise(AbakusWeb.NotFoundError)
-
-  defp section(:index), do: nil
-  defp section(section), do: section
 end

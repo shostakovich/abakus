@@ -17,7 +17,7 @@ defmodule AbakusWeb.Kasse.YnabLiveTest do
     %{h: h, fake: FakeYnab.start(), conn: log_in_participant(conn, h.anna)}
   end
 
-  defp open(conn, path \\ ~p"/kasse/settings/ynab") do
+  defp open(conn, path \\ ~p"/settings/kasse/ynab") do
     {:ok, view, _html} = live(conn, path)
     render_async(view)
     view
@@ -45,7 +45,7 @@ defmodule AbakusWeb.Kasse.YnabLiveTest do
   end
 
   test "loads YNAB in the background, explaining how it works", %{conn: conn} do
-    assert conn |> get(~p"/kasse/settings/ynab") |> html_response(200) =~ ~s(id="ynab-loading")
+    assert conn |> get(~p"/settings/kasse/ynab") |> html_response(200) =~ ~s(id="ynab-loading")
 
     view = open(conn)
 
@@ -157,7 +157,7 @@ defmodule AbakusWeb.Kasse.YnabLiveTest do
     connect(h)
     FakeYnab.fail(fake, [503, 503])
 
-    view = open(conn, ~p"/kasse/settings/ynab?refresh=1")
+    view = open(conn, ~p"/settings/kasse/ynab?refresh=1")
 
     assert texts(view, "#ynab-api-error") ==
              ["YNAB ist gerade nicht erreichbar: YNAB-Fehler 503: Error 503 with •••"]

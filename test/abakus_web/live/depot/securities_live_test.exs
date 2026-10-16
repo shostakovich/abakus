@@ -62,16 +62,17 @@ defmodule AbakusWeb.Depot.SecuritiesLiveTest do
     assert lv |> element("#retired") |> render() =~ "iShares Dividend"
   end
 
-  test "is in the Depot's navigation", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/depot")
+  test "is a tab of all Depots", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/depot/holdings")
 
     assert {:ok, lv, _html} =
              lv
-             |> element(sidebar_link("/depot/securities"), "Wertpapiere")
+             |> element(~s(#depots-tabs a[href="/depot/securities"]), "Wertpapiere")
              |> render_click()
              |> follow_redirect(conn)
 
-    assert has_element?(lv, sidebar_link("/depot/securities") <> "[aria-current=page]")
+    assert has_element?(lv, ~s(#depots-tabs a[href="/depot/securities"][aria-current=page]))
+    assert has_element?(lv, sidebar_link("/depot/holdings") <> "[aria-current=page]")
   end
 
   test "shows until when exchange rates are stored and the last error", %{conn: conn} do

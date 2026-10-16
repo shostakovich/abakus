@@ -333,11 +333,12 @@ defmodule AbakusWeb.Depot.DividendsLiveTest do
     end
   end
 
-  test "marks the dividends in the sidebar and the dock", %{conn: conn, scope: scope} do
+  test "marks its tab, and the Depots in the sidebar and the dock", %{conn: conn, scope: scope} do
     portfolio_fixture(scope)
     {:ok, lv, _html} = live(conn, ~p"/depot/dividends")
 
-    assert has_element?(lv, sidebar_link("/depot/dividends") <> "[aria-current=page]")
-    assert has_element?(lv, ~s(nav.dock a[href="/depot/dividends"][aria-current=page]))
+    assert has_element?(lv, ~s(#depots-tabs a[href="/depot/dividends"][aria-current=page]))
+    assert has_element?(lv, sidebar_link("/depot/holdings") <> "[aria-current=page]")
+    assert has_element?(lv, ~s(nav.dock a[href="/depot/holdings"][aria-current=page]))
   end
 end

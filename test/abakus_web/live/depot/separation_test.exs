@@ -47,7 +47,6 @@ defmodule AbakusWeb.Depot.SeparationTest do
       ~p"/depot",
       ~p"/depot/holdings",
       ~p"/depot/holdings?#{[portfolio: ctx.portfolio.id]}",
-      ~p"/depot/holdings?#{[account: ctx.account.id]}",
       ~p"/depot/dividends",
       ~p"/depot/transactions",
       ~p"/depot/performance",
@@ -69,7 +68,7 @@ defmodule AbakusWeb.Depot.SeparationTest do
 
   test "the transaction form offers only the user's own portfolios and accounts", ctx do
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
-    lv |> element("#transactions-book") |> render_click()
+    lv |> element("#depots-book") |> render_click()
 
     assert has_element?(lv, "#transaction_portfolio_id option", "Eigenes Depot")
     refute has_element?(lv, "#transaction_portfolio_id option", "Fremdes Depot")
@@ -107,12 +106,15 @@ defmodule AbakusWeb.Depot.SeparationTest do
         {pdf_file("fremd-gebucht.pdf"), "fremd-gebucht.pdf"}
       )
 
-    {:ok, lv, html} = live(ctx.conn, ~p"/depot/transactions")
+    {:ok, transactions, html} = live(ctx.conn, ~p"/depot/transactions")
+    refute html =~ "fremd-gebucht.pdf"
+
+    {:ok, lv, html} = live(ctx.conn, ~p"/depot/receipts")
 
     refute has_element?(lv, "#inbox")
-    refute has_element?(lv, sidebar_link("/depot/transactions") <> " .tabular-nums")
+    refute has_element?(lv, "#inbox-count")
+    refute has_element?(transactions, sidebar_link("/budget/import") <> " .badge")
     refute html =~ "fremd-eingang.pdf"
-    refute html =~ "fremd-gebucht.pdf"
 
     lv
     |> with_target("#transaction-dialog")

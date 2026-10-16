@@ -99,10 +99,10 @@ An account whose value is only tracked, outside the budget, e.g. a securities de
 _Avoid_: Off-budget account, investment account
 
 **Fed account**:
-An account another area keeps up to date (`portfolio`: a tracking account whose value comes from the budget
-owner's portfolios and Verrechnungskonten in the Depot, see value change; `shared_expenses`: its transactions are
-the budget owner's shares of Kasse expenses), so the UI offers no manual entry, file import or reconciling for it,
-as its balance is the other area's; the Ledger still accepts entries.
+An account another area keeps up to date (`portfolio`: the tracking account that one of the budget owner's
+portfolios is, opened with the portfolio and closed once it is gone, its value kept by the value change;
+`shared_expenses`: its transactions are the budget owner's shares of Kasse expenses), so the UI offers no manual
+entry, file import or reconciling for it, as its balance is the other area's; the Ledger still accepts entries.
 _Avoid_: Synced account, linked account (that is bank sync)
 
 **Reconcile**:
@@ -213,13 +213,31 @@ A person who signs in; sees the areas they may use.
 _Avoid_: Account (that is where money is kept), member
 
 **Budget owner**:
-The one user who owns the budget, the first one invited; only they see the Budget area.
+The one user who owns the budget, the first one invited; only they see the budget's pages in Finanzen.
 _Avoid_: Admin, budget user
 
 **Area**:
-A part of the app with its own pages under its path, its sidebar section and its dock: Budget, Kasse and Depot. `/`
-opens the area used last. UI "Bereich".
+A part of the app with its own sidebar and dock: Finanzen and Kasse (ADR 0017). A user with both switches between
+them at the top of the sidebar; `/` opens the area used last. Code areas such as `Abakus.Depot` are not areas of the
+UI. UI "Bereich".
 _Avoid_: Module, app, section (that is the sidebar's)
+
+**Finanzen**:
+The area of the budget and the portfolios: the budget's pages for the budget owner, Vermögen, Depots and Import &
+Sync for everyone with the budget or a portfolio. Code: `:finanzen`. UI "Finanzen".
+_Avoid_: Budget area, Depot area, finances
+
+**Import & Sync**:
+Finanzen's page for what comes in from outside, in tabs: Bankdateien (the budget owner's file import), Belege (the
+inbox, for users with a portfolio) and Portfolio Performance (the PP import). UI "Import & Sync".
+_Avoid_: Settings (it is a task, not a setting)
+
+**Settings hub**:
+The sidebar's settings mode: a way back to the area used last, then the sections grouped by area, Allgemein for
+everyone, Budget, Kasse and Depot for the users of that area; Depot for everyone, so anyone may start a Depot, with
+Belegeingang once they have a portfolio. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI
+"Einstellungen".
+_Avoid_: Settings page, Mehr (that is the dock's button)
 
 ## Kasse
 
@@ -294,14 +312,15 @@ their date (keeping category, cleared state, approval and flag), books every oth
 the owner's YNAB connection and removes the YNAB connection. A split, a transfer or a second marked transaction of
 an expense stays unlinked for the owner to check, and its expense gets no booking. Any other expense dated before
 that start date gets a linked transaction only when entered later or moved past it. UI "Mit Budget verknüpfen", the
-settings page "Budget".
+settings page "Budget-Verknüpfung".
 _Avoid_: Sync, budget export
 
 **Linked transaction**:
-The transaction a linked participant's share of an expense is, written with the expense: minus the share, its date,
-its title as payee, the mapped category, a memo describing the expense, unapproved. Amount, date and payee follow
-the expense; the register keeps the category, memo, flag and approval it set, until the expense's Kasse category
-changes, which writes the mapped category again.
+A transaction another area writes into the budget and leads: amount, date and payee follow it, the register keeps
+the category, memo, flag and approval it set, and it is deleted only with what it is linked to. In the Kasse, a
+linked participant's share of an expense, written with the expense: minus the share, its date, its title as payee,
+the mapped category, a memo describing the expense, unapproved; a change of the expense's Kasse category writes the
+mapped category again. In the Depot, see Depot link.
 _Avoid_: Synced transaction, mirror
 
 **YNAB sync**:
@@ -318,9 +337,9 @@ transaction, assignment, category) mean the Depot's here and are qualified in co
 belong to one user, who alone sees them; securities, prices, exchange rates and compositions are shared by all.
 
 **Depot**:
-The area of the portfolios; a user sees it once they have a portfolio, created or imported under Einstellungen. UI
-"Depot".
-_Avoid_: Portfolio app, investments
+The code area of the portfolios (`Abakus.Depot`, `/depot`), shown in Finanzen as Vermögen and Depots; a user without
+the budget gets Finanzen once they have a portfolio, created under Einstellungen › Depots or imported from a PP file. No UI area of its own.
+_Avoid_: Portfolio app, investments, Depot area
 
 **Security**:
 A tradable instrument (ETF, fund, share) identified by its ISIN, with its own price history from Yahoo or the PP
@@ -330,7 +349,7 @@ _Avoid_: Asset, instrument, position
 
 **Portfolio**:
 A securities account at a bank; it holds shares of securities. UI "Depot".
-_Avoid_: Securities account; Depot in code (that is the area)
+_Avoid_: Securities account; Depot in code (that is the code area)
 
 **Depot number**:
 The number the bank gives a portfolio, as its documents print it; only its digits count when comparing. UI
@@ -341,6 +360,22 @@ A cash account of the Depot in one currency; it exists on its own, not as part o
 purchases, sales and dividends settle against by default is its reference account; several portfolios may share one.
 Code: `Abakus.Depot.Portfolios.Account`. UI "Verrechnungskonto", the reference account "Referenzkonto" where it is one.
 _Avoid_: Account unqualified in code (that is the budget's), cash account
+
+**Role** (of a Verrechnungskonto):
+What a Verrechnungskonto is in Finanzen, set under Einstellungen › Depots (ADR 0017): a budget account, the cash of a
+portfolio, or none; without a role set it shows as a warning on Vermögen. A portfolio's new Verrechnungskonto starts
+as its cash. Code: `Abakus.Depot.AccountRoles`, `Account.role/1`. UI "Rolle", "Rolle fehlt".
+
+**Budget account role**:
+The role of a Verrechnungskonto that is the same bank account as a budget account: in euros, the budget owner's only,
+at most one per budget account; it counts toward nothing else, and once the Depot link is on its flows with the
+user's portfolios are linked transactions in that budget account. UI "ist Budgetkonto „X“".
+
+**Portfolio cash**:
+The role of a Verrechnungskonto that is cash held at the broker of one of the user's portfolios, in any currency: its
+balance counts toward that portfolio's value, in the sidebar and its value change, and shows in its Bestand. UI
+"Cash von Depot „Y“", in the Bestand "davon Cash".
+_Avoid_: Cash account (that is any Verrechnungskonto)
 
 **Holding**:
 The shares of one security in one portfolio on a date, with their value and purchase value. UI "Position"; the
@@ -382,13 +417,22 @@ One business event, such as a purchase, a dividend or a transfer, with a portfol
 _Avoid_: Transaction unqualified in code (that is the budget's), entry
 
 **Value change**:
-The daily transaction, after the price job, in a tracking account fed by `portfolio`: the difference between what
-the portfolios and Verrechnungskonten feeding it are worth and its balance, approved and cleared; none without a
-difference. One per day: another run that day amends it, and deletes it once nothing differs. Nothing else writes
-to the account, and it cannot be reconciled. Each of the budget owner's portfolios and Verrechnungskonten feeds at
-most one account, picked under Einstellungen › Depots. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its
-payee).
+The daily transaction, after the price job, in a portfolio's account (fed by `portfolio`): the portfolio's value,
+its cash included, minus the account's balance, approved and cleared; none without a difference, so a new account starts at the
+portfolio's value. One per day: another run that day amends it, and deletes it once nothing differs. Besides it, only
+the transfers of the Depot link write to the account, so the value change keeps the market movement and the income
+inside the portfolio; it cannot be reconciled. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its payee).
 _Avoid_: Revaluation, market value adjustment
+
+**Depot link**:
+The budget owner's Depot linked to the budget (ADR 0018), switched on under Einstellungen › Depots with a start date
+and the category for purchases. Every euro Depot transaction since the start date between one of their portfolios
+and a Verrechnungskonto with the budget account role is a linked transaction in that budget account, written in the
+Depot change's database transaction, PP imports included: a purchase or a cash transfer into a portfolio's cash is
+an outflow in that category, a sale or a cash transfer back an inflow to Ready to Assign, each a transfer to the
+portfolio's account, unapproved; a dividend is an inflow to Ready to Assign with the security as payee. Flows inside
+a portfolio's own cash stay out. Code: `Abakus.Depot.BudgetLink`. UI "Mit Budget verknüpfen".
+_Avoid_: Budget link (that is the Kasse's), sync
 
 **Receipt**:
 A bank's PDF for a Depot transaction, such as a purchase confirmation or a dividend statement, uploaded or taken from
@@ -398,7 +442,7 @@ _Avoid_: Document, statement
 
 **Inbox**:
 A user's receipts waiting for them to confirm, correct or discard what a language model recognised in them (ADR
-0015); nothing is booked without confirmation. Code: `Abakus.Depot.Receipts`. UI "Eingang", on "Buchungen".
+0015); nothing is booked without confirmation. Code: `Abakus.Depot.Receipts`. UI "Eingang", Import & Sync's tab "Belege".
 
 **Receipt intake**:
 Where a user's receipts come from besides uploads: their own Paperless-ngx, polled every 15 minutes for documents
@@ -407,7 +451,7 @@ with their tag (ADR 0016), kept in their Depot settings. UI "Belegeingang".
 **PP import**:
 Reads a Portfolio Performance file into the user's Depot, again and again: objects are matched by their PP UUID,
 those missing from the file go, what was entered in the Depot stays. Open before the first portfolio, so a file can
-start the Depot. Code: `Abakus.Depot.PPImport`. UI "PP-Import".
+start the Depot. Code: `Abakus.Depot.PPImport`. UI "Portfolio Performance", Import & Sync's tab.
 
 **Savings plan**:
 A recurring purchase, deposit, removal or interest payment with a start, an interval and an amount, as Portfolio

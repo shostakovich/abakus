@@ -1,14 +1,15 @@
 defmodule AbakusWeb.Depot.Sidebar do
   @moduledoc """
-  The portfolios and accounts with their values that the sidebar lists on the Depot's pages. An
-  `on_mount` hook assigns them as `@depot_sidebar` and loads them again when new prices arrive.
+  The portfolios with their values that the sidebar lists in Finanzen. An `on_mount` hook assigns
+  them as `@depot_sidebar` and loads them again when new prices arrive or a booking was saved, the budget's
+  accounts in `@account_groups` too.
 
-  The hook subscribes the page to the market data and refreshes stale quotes, so a LiveView that
-  shows prices itself only handles `:market_data_updated`, which reaches it after the sidebar.
+  The hook subscribes the page to the market data and refreshes stale quotes. On the Depot's pages
+  (`:default`) `:market_data_updated` reaches the LiveView after the sidebar, so one that shows
+  prices itself only handles it; on the budget's pages (`:budget`) it stops at the sidebar.
 
-  It counts the recognised receipts in the inbox for the badge on „Buchungen“, as
-  `@depot_sidebar.inbox`; a page that shows the inbox itself, i.e. assigns `:inbox`, also gets
-  `:receipts_updated`.
+  It counts the recognised receipts in the inbox for Import & Sync, as `@depot_sidebar.inbox`; a page that shows
+  the inbox itself, i.e. assigns `:inbox`, also gets `:receipts_updated`.
   """
   use AbakusWeb, :verified_routes
 
@@ -17,43 +18,46 @@ defmodule AbakusWeb.Depot.Sidebar do
 
   alias Abakus.Depot.{MarketData, Portfolios, Receipts}
   alias Abakus.LocalTime
+  alias AbakusWeb.{AccountGroups, Areas}
 
-  def on_mount(:default, _params, _session, socket) do
+  def on_mount(:default, _params, _session, socket), do: {:cont, attach(socket, :cont)}
+  def on_mount(:budget, _params, _session, socket), do: {:cont, attach(socket, :halt)}
+
+  defp attach(socket, prices) do
     if connected?(socket) do
       MarketData.subscribe()
       MarketData.refresh_stale_quotes()
       Receipts.subscribe(socket.assigns.current_scope)
     end
 
-    {:cont, socket |> load() |> attach_hook(:depot_sidebar, :handle_info, &reload/2)}
+    socket
+    |> load()
+    |> attach_hook(:depot_sidebar, :handle_info, &reload(&1, &2, prices))
   end
 
-  defp reload(:market_data_updated, socket), do: {:cont, load(socket)}
+  defp reload(:market_data_updated, socket, prices),
+    do: {prices, socket |> load() |> reload_account_groups()}
 
-  defp reload(:receipts_updated, socket) do
+  defp reload(:receipts_updated, socket, _prices) do
     sidebar = %{socket.assigns.depot_sidebar | inbox: inbox_count(socket)}
     socket = assign(socket, :depot_sidebar, sidebar)
     if Map.has_key?(socket.assigns, :inbox), do: {:cont, socket}, else: {:halt, socket}
   end
 
-  defp reload(_message, socket), do: {:cont, socket}
+  defp reload(_message, socket, _prices), do: {:cont, socket}
 
   defp load(socket) do
     sidebar = Portfolios.sidebar(socket.assigns.current_scope, LocalTime.today())
     assign(socket, :depot_sidebar, Map.put(sidebar, :inbox, inbox_count(socket)))
   end
 
+  defp reload_account_groups(%{assigns: %{account_groups: _groups}} = socket) do
+    if Areas.allowed?(socket.assigns.current_scope, :budget),
+      do: assign(socket, :account_groups, AccountGroups.load()),
+      else: socket
+  end
+
+  defp reload_account_groups(socket), do: socket
+
   defp inbox_count(socket), do: Receipts.inbox_count(socket.assigns.current_scope)
-
-  @doc "A portfolio opens its holdings."
-  def portfolio_path(portfolio), do: ~p"/depot/holdings?#{[portfolio: portfolio.id]}"
-
-  @doc """
-  An account opens the holdings of the portfolio it belongs to with its row marked, an account of
-  no portfolio all holdings.
-  """
-  def account_path(nil, account), do: ~p"/depot/holdings?#{[account: account.id]}"
-
-  def account_path(portfolio, account),
-    do: ~p"/depot/holdings?#{[portfolio: portfolio.id, account: account.id]}"
 end

@@ -60,8 +60,6 @@ defmodule AbakusWeb.Kasse.BalancesLive do
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
       current={:balances}
     >
       <.header>Salden</.header>

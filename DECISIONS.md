@@ -76,7 +76,7 @@ Accepted, 2026-10-13. Replaces felt-css with Bootstrap class names.
 
 ## 0005. Budget, shared expenses and portfolios are one app
 
-Accepted, 2026-10-15
+Accepted, 2026-10-15; partly superseded by 0017, 2026-10-16
 
 - **Context:** The household ran three apps (Abakus, Zipfelkasse, zipfelfolio) with three addresses, sign-ins and
   copies of the same stack; shared expenses and portfolio values only reached the budget through sync APIs.
@@ -221,3 +221,31 @@ Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
 - **Consequences:** Ownership is clear without guessing from depot numbers, and nothing needs a redeploy. The token
   lives in the database, so a database backup grants access to Paperless. Any user with a portfolio can make the
   server call the URL they enter, which is acceptable for a self-hosted app with invited users only.
+
+## 0017. A portfolio is a kind of account, not an area
+
+Accepted, 2026-10-16. Changes the three areas of 0005 into two (#56).
+
+- **Context:** With Budget and Depot as separate areas, one portfolio appeared as a Depot page, as part of a tracking
+  account fed by `portfolio` and through its Verrechnungskonto, which is often the same bank account as a budget
+  account.
+- **Decision:** The UI areas are Finanzen (budget and portfolios) and Kasse. Each of the budget owner's portfolios is
+  exactly one tracking account, and each Verrechnungskonto is a budget account, the cash of one portfolio, or neither.
+  Users with portfolios and no budget see Finanzen without the budget; the budget keeps one owner (0007).
+- **Consequences:** A portfolio shows once, as an account with its holdings, and Vermögen is the total of all
+  accounts. Several portfolios can no longer feed one tracking account, the accounts fed that way today are closed
+  at the switch, and the Depot code and tables keep their name although "Depot" is no longer an area.
+
+## 0018. Depot cash flows are linked transactions in the budget
+
+Accepted, 2026-10-16 (#56).
+
+- **Context:** Money moved into a portfolio left a budget account uncategorised, and the daily value change of the
+  portfolio's account booked it again, mixed with the market movement.
+- **Decision:** Flows between a portfolio and a Verrechnungskonto that is a budget account are linked transactions
+  in that account, as 0006 does for the Kasse: the Depot transaction leads amount, date and payee, purchases get the
+  category chosen when linking, inflows go to Ready to Assign, and nothing before the link's start date is booked.
+  Flows inside a portfolio's own cash stay out of the budget.
+- **Consequences:** Investing becomes budget spending, so every savings plan run is a transaction to approve, and
+  the value change shrinks to market movement and income inside the portfolio. Every Depot write, including PP
+  re-imports, must keep its linked transactions in the same database transaction.

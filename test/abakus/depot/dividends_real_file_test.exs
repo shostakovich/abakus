@@ -31,7 +31,7 @@ defmodule Abakus.Depot.DividendsRealFileTest do
     assert {:ok, rates} = ECB.rates(Date.new!(first_year - 1, 12, 1))
     ExchangeRates.store(rates)
 
-    years = Portfolios.dividends(scope, LocalTime.today()).years
+    years = Portfolios.dividends(scope, nil, LocalTime.today()).years
     actual = Map.new(years, &{&1.year, &1[amount]})
 
     for {year, cents} <- Enum.sort(expected) do

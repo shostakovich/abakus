@@ -12,10 +12,11 @@ register, where transactions are edited in place as in YNAB, reconciling, the OF
 proposals and the settings, and the Kasse: the household's shared expenses, moved in from Zipfelkasse with its
 expenses, balances, activity log, recurring expenses, categories, exchange rates, CSV/JSON export, its sync to YNAB,
 its MCP server for AI assistants and the link that books the budget owner's shares in the budget, switched on in one
-step in place of the YNAB sync; and the Depot, moved in from zipfelfolio: each user's portfolios with overview,
-holdings, dividends, transactions, performance and securities, whose prices come from Yahoo every evening, a
-receipt inbox that reads bank PDFs, uploaded or taken from Paperless-ngx, the Portfolio Performance import and the
-daily value change booked into the budget owner's tracking accounts. What remains of v1 is removing the sync code
+step in place of the YNAB sync; and the Depot, moved in from zipfelfolio and part of the area Finanzen with the
+budget: each user's Vermögen and portfolios with holdings, dividends, transactions, performance and securities,
+whose prices come from Yahoo every evening, a receipt inbox that reads bank PDFs, uploaded or taken from
+Paperless-ngx, the Portfolio Performance import, each of the budget owner's portfolios as a tracking account with
+its daily value change, and its cash flows linked to the budget. What remains of v1 is removing the sync code
 after the switch; bank sync and the budget's MCP tools follow in v2.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, phases
@@ -44,13 +45,13 @@ iex> Abakus.Users.invite_user("you@example.com", &AbakusWeb.UserAuth.magic_link_
 the server's mailbox. The first user owns the budget. After signing in, add a passkey under Einstellungen.
 
 The Kasse is for its participants only, so add yourself as the first one; more can then be added under
-Kasse → Gruppe → Teilnehmer, which invites them by mail:
+Einstellungen › Kasse › Teilnehmer, which invites them by mail:
 
 ```sh
 mix abakus.add_participant you@example.com "Your name"
 ```
 
-Each user's Depot opens once they create a portfolio under Einstellungen → Depots.
+Each user's Depot opens once they create a portfolio under Einstellungen › Depot › Depots.
 
 In development the Kasse's YNAB sync talks to YNAB only with `YNAB_BASE_URL=https://api.ynab.com/v1`, so imported
 data with real tokens stays away from it.

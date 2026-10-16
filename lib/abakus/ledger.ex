@@ -428,6 +428,48 @@ defmodule Abakus.Ledger do
   end
 
   @doc """
+  Net worth at the end of each day of `range`, as `[{date, cents}]`: the balance of all accounts, budget and
+  tracking, but those closed with money left in them.
+  """
+  def net_worth(%Date.Range{first: first, last: last} = range) do
+    open = counted_in_net_worth()
+
+    opening =
+      Repo.one(from t in open, where: t.date < ^first, select: coalesce(sum(t.amount), 0))
+
+    by_day =
+      Repo.all(
+        from t in open,
+          where: t.date >= ^first and t.date <= ^last,
+          group_by: t.date,
+          select: {t.date, sum(t.amount)}
+      )
+      |> Map.new()
+
+    range
+    |> Enum.map_reduce(opening, fn date, total ->
+      total = total + Map.get(by_day, date, 0)
+      {{date, total}, total}
+    end)
+    |> elem(0)
+  end
+
+  @doc "The date of the first transaction that counts toward net worth, nil without any."
+  def first_open_date, do: Repo.one(from t in counted_in_net_worth(), select: min(t.date))
+
+  defp counted_in_net_worth do
+    left_with_money =
+      from t in in_register(),
+        join: a in assoc(t, :account),
+        where: a.closed,
+        group_by: t.account_id,
+        having: sum(t.amount) != 0,
+        select: t.account_id
+
+    from t in in_register(), where: t.account_id not in subquery(left_with_money)
+  end
+
+  @doc """
   Each account's register as `%{balance, cleared, uncleared, unapproved}` by account id; cleared counts reconciled
   transactions too, unapproved is how many wait for approval, match proposals included. Accounts without
   transactions are missing.

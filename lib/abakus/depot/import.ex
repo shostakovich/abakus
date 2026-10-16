@@ -91,8 +91,13 @@ defmodule Abakus.Depot.Import do
     end
   end
 
-  # Exchange rates get new ids, as the Depot may have fetched some of them already.
+  # Exchange rates get new ids, as the Depot may have fetched some already; the old app lacks the budget's columns.
   defp columns("exchange_rates"), do: table_columns("exchange_rates") -- ["id"]
+  defp columns("portfolios"), do: table_columns("portfolios") -- ["budget_account_id"]
+
+  defp columns("accounts"),
+    do: table_columns("accounts") -- ["budget_account_id", "cash_of_portfolio_id", "no_role"]
+
   defp columns(table), do: table_columns(table)
 
   defp table_columns(table) do

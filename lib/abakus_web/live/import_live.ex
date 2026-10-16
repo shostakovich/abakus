@@ -1,6 +1,6 @@
 defmodule AbakusWeb.ImportLive do
   @moduledoc """
-  Import & Sync, for now the file import: a chosen OFX/QFX file is read at once and previewed per statement, with
+  Import & Sync's Bankdateien, the file import: a chosen OFX/QFX file is read at once and previewed per statement, with
   the file's account, the bank balance it reports, the account it goes into and its transactions: new, there
   already, a match proposal for a transaction in the register, or before the last reconcile (skipped). A file
   account seen before has its linked account chosen; an unknown one asks for the account. The import remembers the
@@ -10,7 +10,7 @@ defmodule AbakusWeb.ImportLive do
   use AbakusWeb, :live_view
 
   alias Abakus.{FileImport, Ledger}
-  alias AbakusWeb.Format
+  alias AbakusWeb.{Format, ImportSync}
   alias AbakusWeb.RegisterLive.{Components, TransactionEditor}
 
   @max_file_size 5_000_000
@@ -31,15 +31,19 @@ defmodule AbakusWeb.ImportLive do
       area={@area}
       current={:import}
       account_groups={@account_groups}
+      depot_sidebar={@depot_sidebar}
       account_dialog={@account_dialog}
     >
-      <.header>
-        Import &amp; Sync
+      <ImportSync.import_header
+        tab={:files}
+        current_scope={@current_scope}
+        inbox={@depot_sidebar.inbox}
+      >
         <:subtitle>
           Umsätze aus dem Bank-Export (OFX oder QFX). Konten, die eine andere App füllt, nehmen keinen
           Datei-Import.
         </:subtitle>
-      </.header>
+      </ImportSync.import_header>
       <div class="flex flex-col gap-6">
         <form id="import-form" phx-change="validate" phx-submit="validate">
           <p id="import-steps" class="max-w-prose pb-2 text-sm text-base-content/70">

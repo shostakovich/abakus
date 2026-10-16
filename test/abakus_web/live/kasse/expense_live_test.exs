@@ -143,7 +143,7 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
 
     assert has_element?(
              view,
-             ~s(a[href="/kasse/settings/recurring/new?expense_id=#{expense.id}"]),
+             ~s(a[href="/settings/kasse/recurring/new?expense_id=#{expense.id}"]),
              "Als wiederkehrend einrichten"
            )
 

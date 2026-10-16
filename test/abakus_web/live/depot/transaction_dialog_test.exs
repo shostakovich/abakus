@@ -16,8 +16,8 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
   end
 
   defp open_dialog(conn) do
-    {:ok, lv, _html} = live(conn, ~p"/depot")
-    lv |> element("#side-depot-book-sidebar") |> render_click()
+    {:ok, lv, _html} = live(conn, ~p"/depot/holdings")
+    lv |> element("#depots-book") |> render_click()
     lv
   end
 
@@ -27,8 +27,9 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
     |> render_change(%{"_target" => ["transaction", target]})
   end
 
-  test "opens from the sidebar and on the phone with the portfolio's reference account", ctx do
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+  test "opens from the Depots pages and on the phone with the portfolio's reference account",
+       ctx do
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
     refute has_element?(lv, "#transaction-modal")
 
     lv |> element("#fab-book") |> render_click()
@@ -140,11 +141,14 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
   end
 
   test "updates the sidebar once booked", ctx do
+    security = security_fixture(quote_feed: :manual)
+    price_fixture(security, Date.add(LocalTime.today(), -1), price(123), :pp)
     lv = open_dialog(ctx.conn)
-    change(lv, %{kind: "deposit", amount: "1.234,00"}, "amount")
+    params = %{security_id: security.id, shares: "10", price: "100", account_id: ""}
+    change(lv, params, "account_id")
     lv |> form("#transaction-form") |> render_submit()
 
-    path = ~p"/depot/holdings?#{[portfolio: ctx.portfolio.id, account: ctx.account.id]}"
-    assert lv |> element(sidebar_link(path)) |> render() =~ "1.234,00"
+    path = ~p"/depot/holdings?#{[portfolio: ctx.portfolio.id]}"
+    assert lv |> element(sidebar_link(path)) |> render() =~ "1.230,00"
   end
 end

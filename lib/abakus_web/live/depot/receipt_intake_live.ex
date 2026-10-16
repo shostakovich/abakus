@@ -1,6 +1,6 @@
 defmodule AbakusWeb.Depot.ReceiptIntakeLive do
   @moduledoc """
-  „Belegeingang“ in the settings, for users with the Depot: the user's Paperless-ngx, whose documents with their
+  „Belegeingang“ in the settings, for users with a portfolio: the user's Paperless-ngx, whose documents with their
   tag land in the inbox every 15 minutes (ADR 0016), and whether a model recognises receipts (ADR 0015).
   """
   use AbakusWeb, :depot_live_view
@@ -10,24 +10,22 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLive do
   alias Abakus.Depot.Settings.Setting
   alias AbakusWeb.{Areas, NotFoundError}
   alias AbakusWeb.Depot.Format
-  alias AbakusWeb.SettingsLive.Components
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Components.page
-      section={:receipt_intake}
+    <Layouts.settings
+      current={:receipt_intake}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
+      groups={@settings_groups}
     >
-      <section id="receipt-intake" aria-labelledby="receipt-intake-title">
-        <.section_heading id="receipt-intake-title">Belegeingang</.section_heading>
+      <.header>Belegeingang</.header>
+      <section id="receipt-intake">
         <p class="mb-3 max-w-prose text-sm text-base-content/70">
-          Holt alle 15 Minuten die Dokumente mit deinem Tag aus Paperless-ngx in den Eingang unter Buchungen.
+          Holt alle 15 Minuten die Dokumente mit deinem Tag aus Paperless-ngx in den Eingang unter Import &amp; Sync.
         </p>
         <ul class="mb-4 flex flex-col gap-3">
           <.intake_row
@@ -100,7 +98,7 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLive do
           </.action_bar>
         </.form>
       </section>
-    </Components.page>
+    </Layouts.settings>
     """
   end
 
@@ -153,7 +151,7 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLive do
 
     {:ok,
      socket
-     |> assign(:page_title, Components.label(:receipt_intake))
+     |> assign(:page_title, "Belegeingang")
      |> assign(:model_name, Receipts.model_name())
      |> assign_settings(Settings.get_settings(scope))}
   end

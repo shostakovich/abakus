@@ -48,6 +48,12 @@ defmodule AbakusWeb.ConnCase do
     %{conn: log_in_user(conn, user, opts), user: user, scope: Scope.for_user(user)}
   end
 
+  @doc "Like `register_and_log_in_user/1`, but someone else registered first and owns the budget."
+  def register_and_log_in_user_without_budget(context) do
+    Abakus.UsersFixtures.user_fixture()
+    register_and_log_in_user(context)
+  end
+
   @doc "Puts a fresh session token for `user` into the conn's session."
   def log_in_user(conn, user, opts \\ []) do
     token = Abakus.Users.generate_user_session_token(user)

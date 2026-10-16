@@ -41,7 +41,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
 
   describe "the budget page" do
     test "maps the Kasse categories to the budget's", c do
-      {:ok, view, _html} = live(c.conn, ~p"/kasse/settings/budget")
+      {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
 
       assert has_element?(view, "#budget-link-state", "Noch nicht")
 
@@ -60,7 +60,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
 
     test "links to the register once linked", c do
       link!(c)
-      {:ok, view, _html} = live(c.conn, ~p"/kasse/settings/budget")
+      {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
 
       assert has_element?(
                view,
@@ -71,7 +71,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
 
     test "is the budget owner's alone", c do
       conn = log_in_participant(c.conn, c.h.ben)
-      assert_error_sent 404, fn -> get(conn, ~p"/kasse/settings/budget") end
+      assert_error_sent 404, fn -> get(conn, ~p"/settings/kasse/budget") end
     end
   end
 
@@ -109,13 +109,15 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
           source: :ynab
         })
 
-      {:ok, view, _html} = live(c.conn, ~p"/kasse/settings/budget")
+      {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
 
       assert has_element?(view, "#budget-link-ynab", "seit dem 01.03.2026")
       assert has_element?(view, "#budget-mapping-ynab", "Erst nach dem letzten YNAB-Import")
       assert has_element?(view, ~s|#link_account_id option[selected][value="#{c.account.id}"]|)
+      assert has_element?(view, "#settings-kasse-ynab-sidebar")
 
       Confirm.confirm_click(view, "#budget-link-submit", "Mit Budget verknüpfen?")
+      refute has_element?(view, "#settings-kasse-ynab-sidebar")
 
       assert has_element?(
                view,
@@ -161,7 +163,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       end
 
       {:ok, _deleted} = Expenses.delete_expense(c.h.ben, gone)
-      {:ok, view, _html} = live(c.conn, ~p"/kasse/settings/budget")
+      {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
 
       Confirm.confirm_click(view, "#budget-link-submit", "Mit Budget verknüpfen?")
 
@@ -173,7 +175,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
     end
 
     test "asks for an account", c do
-      {:ok, view, _html} = live(c.conn, ~p"/kasse/settings/budget")
+      {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
 
       Confirm.confirm_click(view, "#budget-link-submit", nil,
         with: %{"link" => %{"account_id" => ""}}
@@ -186,11 +188,11 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
     test "offers YNAB no longer once linked", c do
       link!(c)
 
-      {:ok, view, _html} = live(c.conn, ~p"/kasse/settings")
-      assert has_element?(view, "#settings-link-budget")
-      refute has_element?(view, "#settings-link-ynab")
+      {:ok, view, _html} = live(c.conn, ~p"/settings/kasse")
+      assert has_element?(view, "#settings-kasse-budget-sidebar")
+      refute has_element?(view, "#settings-kasse-ynab-sidebar")
 
-      assert_raise AbakusWeb.NotFoundError, fn -> live(c.conn, ~p"/kasse/settings/ynab") end
+      assert_raise AbakusWeb.NotFoundError, fn -> live(c.conn, ~p"/settings/kasse/ynab") end
     end
   end
 

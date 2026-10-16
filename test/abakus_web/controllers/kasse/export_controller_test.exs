@@ -36,7 +36,7 @@ defmodule AbakusWeb.Kasse.ExportControllerTest do
 
     assert download(
              conn,
-             "/kasse/export/expenses.csv" <> period,
+             "/settings/kasse/export/expenses.csv" <> period,
              "text/csv; charset=utf-8",
              "kasse-ausgaben-#{suffix}.csv"
            ) =~
@@ -44,7 +44,7 @@ defmodule AbakusWeb.Kasse.ExportControllerTest do
 
     assert download(
              conn,
-             "/kasse/export/expenses.json" <> period,
+             "/settings/kasse/export/expenses.json" <> period,
              "application/json; charset=utf-8",
              "kasse-ausgaben-#{suffix}.json"
            )
@@ -53,12 +53,14 @@ defmodule AbakusWeb.Kasse.ExportControllerTest do
   end
 
   test "sends an invalid period back to the export page", %{conn: conn} do
-    for path <- ~w(/kasse/export/expenses.csv /kasse/export/expenses.json) do
+    for path <- ~w(/settings/kasse/export/expenses.csv /settings/kasse/export/expenses.json) do
       conn = get(conn, path <> "?from=2026-09-30&to=2026-09-01")
 
-      assert redirected_to(conn, 303) == "/kasse/export?from=2026-09-30&to=2026-09-01"
+      assert redirected_to(conn, 303) == "/settings/kasse/export?from=2026-09-30&to=2026-09-01"
       assert get_resp_header(conn, "content-disposition") == []
-      assert redirected_to(get(conn, path <> "?from=broken"), 303) == "/kasse/export?from=broken"
+
+      assert redirected_to(get(conn, path <> "?from=broken"), 303) ==
+               "/settings/kasse/export?from=broken"
     end
   end
 end

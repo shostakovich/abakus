@@ -12,7 +12,7 @@ source, benevolent dictator: no PRs, forks welcome.
 - online only; offline entry comes in v3, not a sync protocol like Actual's CRDTs
 
 Not in scope for now: reports beyond the budget view, payee rename rules, multiple budgets, other currencies.
-Investment tracking is the Depot area (#44), each user's own portfolios. No scheduled transactions: the only
+Investment tracking is the Depot (#44), part of Finanzen, each user's own portfolios. No scheduled transactions: the only
 recurring one (rent) comes from the shared expenses' recurring expenses (#43).
 
 ## Stack
@@ -33,12 +33,15 @@ The context is `Abakus.Users` (an "account" is a bank account here):
   mails a sign-in link at once: `mix abakus.invite EMAIL`, in the container
   `bin/abakus eval 'Abakus.Release.invite("EMAIL")'`. The first user invited owns the budget
   ([ADR 0007](../DECISIONS.md))
-- Areas: each has its pages under its path (the Budget under `/budget`, the Kasse under `/kasse`, the Depot under
-  `/depot`), its section in the sidebar and its dock on phones; a user sees only the areas they may use (the
-  Budget: its owner; the Kasse: its active participants, [ADR 0008](../DECISIONS.md); the Depot: every user with a
-  portfolio of their own, created or imported under Einstellungen), and anyone else gets 404 on their pages. With
-  one area the brand is its name; with more, the title in the top bar switches the area. `/` opens the area used
-  last, kept in the session
+- Areas ([ADR 0017](../DECISIONS.md)): Finanzen (the budget under `/budget`, the Depot under `/depot`) and the
+  Kasse (`/kasse`), each with its own sidebar and dock on phones; a user sees only the areas they may use (the
+  budget's pages: its owner; the Depot's: the budget owner and every user with a portfolio of their own, created or
+  imported from a PP file; the Kasse: its active participants, [ADR 0008](../DECISIONS.md)), and anyone else
+  gets 404 on their pages. Finanzen lists Budget, Vermögen, Alle Konten, Import & Sync, the open accounts, then
+  Depots with the active portfolios; without the budget only Vermögen, Import & Sync and Depots. The Kasse lists
+  Ausgaben, Salden and Aktivität. With one area the brand is its name; with more, a segmented switch tops
+  the sidebar and the title in the top bar switches the area; switching opens the area's first page. `/` opens
+  the area used last, kept in the session
 - Passkeys implemented in-house with `:crypto`, `:public_key`, `JSON`; attestation `none`; discoverable
   credentials; relying party id = the configured host (`PHX_HOST`); challenges are valid 5 minutes, one open
   per session, dropped from the session on any attempt. A sign-in challenge travels in the signed session, so
@@ -219,17 +222,30 @@ same source; across sources (and against manual entries) a match is proposed, ne
 
 ## Tracking accounts
 
-Only used for the portfolios (securities accounts and their cash accounts). Their value is booked by the Depot
-area, the way YNAB tools post market values:
+Only used for the portfolios (securities accounts and their cash accounts). Their value is booked by the Depot,
+the way YNAB tools post market values:
 
-- The budget owner picks under Einstellungen › Depots which tracking account each of their portfolios and
-  Verrechnungskonten feeds; an account fed by one is fed by `portfolio`
-- Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus
-- Every day after the price job, the Depot area books the difference between the account's balance and the value
-  of what feeds it as one transaction through the Ledger, payee "Wertänderung", approved and cleared, none without
-  a difference; another run that day amends that transaction instead of booking a second one. Nothing else changes
-  the account (`Abakus.Depot.BudgetFeed` is its only writer), and it cannot be reconciled
-- Accounts that no aggregator reaches (e.g. a broker's settlement account) are covered this way too
+- Each of the budget owner's portfolios is one tracking account fed by `portfolio`, opened with the portfolio
+  (ADR 0017) and named after it; its register is the portfolio's tab Register, and the sidebar lists it only
+  under Depots. An account fed by `portfolio` whose portfolio is gone is closed with its history, a last value
+  change taking it to 0
+- Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus: once the
+  budget owner links the Depot to the budget under Einstellungen › Depots (start date, category for purchases;
+  ADR 0018), each flow between a portfolio and a Verrechnungskonto that is a budget account is a linked transaction
+  there, led by the Depot (`Abakus.Depot.BudgetLink`): purchases and cash moved into a portfolio's cash are outflows
+  in that category, sales and cash moved back inflows to Ready to Assign, all transfers to the portfolio's account;
+  dividends are inflows to Ready to Assign from the security. Depot transactions before the start date stay in the
+  Depot only
+- Every day after the price job, the Depot books the difference between the account's balance and the value of
+  its portfolio, its cash included, as one transaction through the Ledger, payee "Wertänderung", approved and
+  cleared, none without a difference, so a new account starts at the portfolio's value; another run that day
+  amends that transaction instead of booking a second one. Only it (`Abakus.Depot.BudgetFeed`) and the linked
+  transfers change the account, so the value change keeps the market movement, and it cannot be reconciled
+- Each Verrechnungskonto has a role, set under Einstellungen › Depots: "ist Budgetkonto X" (the same bank account
+  as a budget account; EUR only, the budget owner's only, at most one per budget account), counting toward nothing
+  else; "Cash von Depot Y" (cash at the broker of one of the user's portfolios), counting toward that portfolio's
+  value and account and shown in its Bestand as „davon Cash“; or none. One without a role shows as a warning on
+  Vermögen, linking to its setting
 - A tracking account nothing feeds keeps its values from YNAB and can be adjusted by hand
 
 ## MCP
@@ -263,21 +279,27 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 - **Budget**: multi-month view
 - **Konten**: account list, register, reconcile
 - **Buchung**: transaction form (FAB on phones)
-- **Import & Sync**: file import with preview, bank connections with consent expiry
-- **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement, Aktivität, and Gruppe: the
-  group's name, Teilnehmer (adding one invites their user), Kategorien, wiederkehrende Ausgaben, Wechselkurse,
-  Budget (the budget owner's only: switching the link on, its account and which budget category each Kasse
-  category's shares land in), YNAB (each participant's own sync to YNAB, until they are linked) and the CSV/JSON
-  export
-- **Depot**: Übersicht (net worth, optionally against the benchmark), Bestand (holdings per portfolio and
-  Verrechnungskonto), Dividenden, Buchungen (the transactions, the receipt inbox and the booking form, also opened
-  by „Buchung erfassen“ in the sidebar), Performance, Wertpapiere (prices, quote feeds, the benchmark, exchange
-  rates) and a page per security
-- **Mehr**: the settings in six sections: Zugang (passkeys, email), Aussehen (theme, per device), Depots (the
-  user's portfolios and Verrechnungskonten, for the budget owner also the tracking account each feeds), PP-Import
-  (a Portfolio Performance file into the Depot), Belegeingang (Paperless-ngx and the receipt recognition; Depot
-  users only) and YNAB-Import (what the import brought over; the budget owner's only). Categories and groups are
-  edited in the budget
+- **Import & Sync**: tabs Bankdateien (file import with preview; the budget owner's), Belege (the receipt
+  inbox and the PDF upload, its count on the tab and the sidebar entry; users with a portfolio) and Portfolio
+  Performance (a PP file into the Depot; open before the first portfolio); later bank connections with consent
+  expiry
+- **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement and Aktivität
+- **Vermögen and Depots** (Finanzen): Vermögen (net worth: for the budget owner all budget and tracking accounts
+  but those closed with money left in them, for anyone else their portfolios and Verrechnungskonten, optionally
+  against the benchmark) and Depots, for all portfolios or one, with „Buchung erfassen“ and the tabs Bestand
+  (holdings and Verrechnungskonten), for one portfolio of the budget owner Register (its account's register),
+  Buchungen, Dividenden, Performance and, for all portfolios, Wertpapiere (prices, quote feeds, the benchmark,
+  exchange rates); a page per security
+- **Einstellungen**: a mode of the sidebar under `/settings/…`, with the way back to the area used last and the
+  sections grouped by area; each group shows only to users of its area, whose settings answer 404 to others.
+  Allgemein: Zugang (passkeys, email), Aussehen (theme, per device). Budget: YNAB-Import (what the import brought
+  over). Kasse: Gruppe (the group's name), Teilnehmer (adding one invites their user), Kategorien, Wiederkehrende
+  Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget owner's only: switching the link on, its account and
+  which budget category each Kasse category's shares land in), Export (CSV/JSON) and YNAB (each participant's own
+  sync to YNAB, until they are linked). Depot, for everyone, so anyone may start one: Depots (the user's
+  portfolios and Verrechnungskonten with their roles, and for the budget owner the link to the budget) and Belegeingang
+  (Paperless-ngx and the receipt recognition; users with a portfolio). Categories and groups are edited in the
+  budget
 
 State that should survive a reload (screen, month, account, filters) lives in the URL; the number of months
 follows the window.

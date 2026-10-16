@@ -7,15 +7,17 @@ defmodule AbakusWeb.Kasse.ExportLive do
 
   alias Abakus.Kasse.Exports
 
-  @downloads [
-    {"expenses-csv", "CSV (Excel, Numbers)", "/kasse/export/expenses.csv"},
-    {"expenses-json", "JSON", "/kasse/export/expenses.json"}
-  ]
+  defp downloads do
+    [
+      {"expenses-csv", "CSV (Excel, Numbers)", ~p"/settings/kasse/export/expenses.csv"},
+      {"expenses-json", "JSON", ~p"/settings/kasse/export/expenses.json"}
+    ]
+  end
 
   @impl true
   def mount(params, _session, socket) do
     period = for key <- ~w(from to), into: %{}, do: {key, text(params[key])}
-    {:ok, socket |> assign(page_title: "Export", downloads: @downloads) |> assign_period(period)}
+    {:ok, socket |> assign(page_title: "Export", downloads: downloads()) |> assign_period(period)}
   end
 
   defp text(value) when is_binary(value), do: value
@@ -47,16 +49,15 @@ defmodule AbakusWeb.Kasse.ExportLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.kasse
+    <Layouts.settings
+      current={:kasse_export}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
-      current={:settings}
+      groups={@settings_groups}
     >
-      <.header back={~p"/kasse/settings"} back_label="Gruppe">
+      <.header>
         Export
         <:subtitle>Ausgaben herunterladen – alles oder nur einen Zeitraum.</:subtitle>
       </.header>
@@ -78,7 +79,7 @@ defmodule AbakusWeb.Kasse.ExportLive do
           <.download_buttons links={@downloads} query={@query} primary="expenses-csv" />
         </section>
       </div>
-    </Layouts.kasse>
+    </Layouts.settings>
     """
   end
 

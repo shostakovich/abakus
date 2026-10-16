@@ -1,11 +1,18 @@
-defmodule AbakusWeb.Depot.OverviewLive do
+defmodule AbakusWeb.Depot.WealthLive do
+  @moduledoc """
+  „Vermögen“: net worth with its curve, the Depot's returns and dividends, and the portfolios. For
+  the budget owner net worth is the Ledger's, all open budget and tracking accounts; for anyone
+  else the value of their portfolios and Verrechnungskonten. A Verrechnungskonto without a role
+  set shows as a warning.
+  """
   use AbakusWeb, :depot_live_view
 
   import AbakusWeb.Depot.DividendComponents
 
-  alias Abakus.Depot.Portfolios
-  alias Abakus.LocalTime
-  alias AbakusWeb.Depot.{Benchmark, Format, Periods, Sidebar}
+  alias Abakus.Depot.{AccountRoles, Period, Portfolios}
+  alias Abakus.{Ledger, LocalTime}
+  alias AbakusWeb.Areas
+  alias AbakusWeb.Depot.{Benchmark, Format, Periods}
 
   on_mount Benchmark
 
@@ -32,12 +39,12 @@ defmodule AbakusWeb.Depot.OverviewLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={:overview}
+      current={:wealth}
     >
       <.header>
-        Übersicht
+        Vermögen
         <:actions>
-          <Benchmark.toggle_button :if={@overview.benchmark} shown={@benchmark_shown} />
+          <Benchmark.toggle_button :if={@benchmark} shown={@benchmark_shown} />
           <.segmented
             id="period"
             label="Zeitraum"
@@ -49,9 +56,24 @@ defmodule AbakusWeb.Depot.OverviewLive do
         </:actions>
       </.header>
 
+      <.alert
+        :if={@without_role != []}
+        id="accounts-without-role"
+        tone={:warning}
+        title={without_role_title(@without_role)}
+        class="mb-4 md:mb-6"
+      >
+        {without_role_text(@without_role)}
+        <:actions>
+          <.button navigate={~p"/settings/depot/portfolios#clearing-accounts"} size={:sm}>
+            Rolle festlegen
+          </.button>
+        </:actions>
+      </.alert>
+
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <.stat id="net-worth" label="Vermögen" size={:sm}>
-          <.amount value={@overview.net_worth} decimals={0} />
+          <.amount value={@net_worth} decimals={0} />
           <:note><.change_note change={@change} percent={@change_percent} /></:note>
         </.stat>
         <.stat
@@ -62,11 +84,8 @@ defmodule AbakusWeb.Depot.OverviewLive do
           size={:sm}
         >
           <:note>
-            <Benchmark.note
-              :if={@benchmark_shown and @overview.benchmark}
-              benchmark={@overview.benchmark}
-            />
-            <span :if={!(@benchmark_shown and @overview.benchmark)}>zeitgewichtet</span>
+            <Benchmark.note :if={@benchmark_shown and @benchmark} benchmark={@benchmark} />
+            <span :if={!(@benchmark_shown and @benchmark)}>zeitgewichtet</span>
           </:note>
         </.stat>
         <.stat
@@ -94,11 +113,14 @@ defmodule AbakusWeb.Depot.OverviewLive do
         title="Wertentwicklung"
         hook="NetWorthChart"
         height={:lg}
-        summary={chart_label(@period, @benchmark_shown && @overview.benchmark)}
+        summary={chart_label(@period, @budget?, @benchmark_shown && @benchmark)}
         class="mt-4 md:mt-6"
       >
         <:legend>
-          <.legend id="history-legend" items={legend_items(@benchmark_shown && @overview.benchmark)} />
+          <.legend
+            id="history-legend"
+            items={legend_items(@budget?, @benchmark_shown && @benchmark)}
+          />
         </:legend>
       </.chart_card>
 
@@ -119,7 +141,7 @@ defmodule AbakusWeb.Depot.OverviewLive do
               :for={entry <- @overview.portfolios}
               id={"portfolio-#{entry.portfolio.id}"}
               title={Format.portfolio_name(entry.portfolio)}
-              navigate={Sidebar.portfolio_path(entry.portfolio)}
+              navigate={depots_path(:holdings, entry.portfolio.id)}
               trailing_on_phone={:title}
             >
               <:leading><.avatar icon="briefcase" /></:leading>
@@ -211,7 +233,10 @@ defmodule AbakusWeb.Depot.OverviewLive do
   defp percent_note(nil), do: nil
   defp percent_note(percent), do: " (#{Format.signed_percent(percent)})"
 
-  defp legend_items(benchmark) do
+  defp legend_items(true = _budget?, _benchmark),
+    do: [%{label: "Vermögen", color: 1, marker: :line}]
+
+  defp legend_items(false = _budget?, benchmark) do
     [
       %{label: "Vermögen", color: 1, marker: :line},
       %{label: "Investiert", color: 8, marker: :dashed}
@@ -224,18 +249,31 @@ defmodule AbakusWeb.Depot.OverviewLive do
   defp period_text(:one_year), do: "des letzten Jahres"
   defp period_text(:max), do: "seit der ersten Buchung"
 
-  defp chart_label(period, %{security: security}),
+  defp chart_label(period, true = _budget?, _benchmark),
+    do: "Vermögen aller offenen Konten #{period_text(period)}"
+
+  defp chart_label(period, false = _budget?, %{security: security}),
     do:
       "Vermögen, investiertes Kapital und Schattendepot in #{security.name} #{period_text(period)}"
 
-  defp chart_label(period, _hidden),
+  defp chart_label(period, false = _budget?, _hidden),
     do: "Vermögen und investiertes Kapital #{period_text(period)}"
 
   defp period_label(period), do: Periods.label(@periods, period)
 
   # Each part stays on one line.
-  defp portfolio_note(%{securities: count, account: account, balance: balance}),
-    do: join_meta([securities(count), account && "Konto\u00A0#{Format.euros(balance, 2)}"])
+  defp portfolio_note(%{securities: count, cash: cash}),
+    do: join_meta([securities(count), cash && "Cash\u00A0#{Format.euros(cash, 2)}"])
+
+  defp without_role_title([_account]), do: "Ein Verrechnungskonto ohne Rolle"
+  defp without_role_title(accounts), do: "#{length(accounts)} Verrechnungskonten ohne Rolle"
+
+  defp without_role_text(accounts) do
+    names = Enum.map_join(accounts, ", ", &"„#{&1.name}“")
+    each = if match?([_account], accounts), do: "", else: " für jedes"
+
+    "#{names}: Lege#{each} fest, ob es ein Budgetkonto ist, das Cash eines Depots oder keins von beiden."
+  end
 
   defp securities(0), do: "keine\u00A0Wertpapiere"
   defp securities(1), do: "1\u00A0Wertpapier"
@@ -243,7 +281,9 @@ defmodule AbakusWeb.Depot.OverviewLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, page_title: "Übersicht")}
+    budget? = Areas.allowed?(socket.assigns.current_scope, :budget)
+    without_role = AccountRoles.without_role(socket.assigns.current_scope)
+    {:ok, assign(socket, page_title: "Vermögen", budget?: budget?, without_role: without_role)}
   end
 
   @impl true
@@ -263,18 +303,38 @@ defmodule AbakusWeb.Depot.OverviewLive do
 
   defp load_overview(socket) do
     today = LocalTime.today()
-    scope = socket.assigns.current_scope
-    overview = Portfolios.overview(scope, socket.assigns.period, today)
-    change = overview.net_worth - overview.net_worth_yesterday
+    %{current_scope: scope, period: period, budget?: budget?} = socket.assigns
+    overview = Portfolios.overview(scope, period, today)
+    wealth = wealth(budget?, overview, period, today)
+    change = wealth.net_worth - wealth.net_worth_yesterday
 
     socket
     |> assign(
       today: today,
       overview: overview,
+      benchmark: if(!budget?, do: overview.benchmark),
+      net_worth: wealth.net_worth,
       change: change,
-      change_percent: change_percent(change, overview.net_worth_yesterday)
+      change_percent: change_percent(change, wealth.net_worth_yesterday)
     )
-    |> push_chart(overview.chart)
+    |> push_chart(wealth.chart)
+  end
+
+  defp wealth(false = _budget?, overview, _period, _today), do: overview
+
+  defp wealth(true = _budget?, _overview, period, today) do
+    range = Period.range(period, today, Ledger.first_open_date())
+    yesterday = Date.add(today, -1)
+    days = Ledger.net_worth(Date.range(Enum.min([range.first, yesterday], Date), today))
+    [{_yesterday, net_worth_yesterday}, {_today, net_worth}] = Enum.take(days, -2)
+    chart_days = range |> Period.chart_days() |> MapSet.new()
+
+    chart =
+      for {date, cents} <- days,
+          MapSet.member?(chart_days, date),
+          do: %{date: date, net_worth: cents, invested_capital: nil, benchmark: nil}
+
+    %{net_worth: net_worth, net_worth_yesterday: net_worth_yesterday, chart: chart}
   end
 
   defp load_upcoming_once(%{assigns: %{upcoming_dividends: _}} = socket), do: socket
@@ -291,13 +351,15 @@ defmodule AbakusWeb.Depot.OverviewLive do
 
   # The hook draws the chart once connected; amounts in cents.
   defp push_chart(socket, chart) do
+    %{benchmark: benchmark, budget?: budget?} = socket.assigns
+
     if connected?(socket) do
       push_event(socket, "net-worth-chart", %{
         dates: Enum.map(chart, & &1.date),
         net_worth: Enum.map(chart, & &1.net_worth),
-        invested_capital: Enum.map(chart, & &1.invested_capital),
-        benchmark: socket.assigns.overview.benchmark && Enum.map(chart, & &1.benchmark),
-        benchmark_name: benchmark_name(socket.assigns.overview.benchmark),
+        invested_capital: if(!budget?, do: Enum.map(chart, & &1.invested_capital)),
+        benchmark: benchmark && Enum.map(chart, & &1.benchmark),
+        benchmark_name: benchmark_name(benchmark),
         benchmark_shown: socket.assigns.benchmark_shown
       })
     else

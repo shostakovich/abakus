@@ -75,8 +75,8 @@ defmodule AbakusWeb.AccountsLiveTest do
     test "the sidebar lists the open accounts with their working balance", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget")
 
-      assert has_element?(view, "aside li.menu-title", ~r/Budget\s*2\.437,51\s€/u)
-      assert has_element?(view, "aside li.menu-title", ~r/Tracking\s*10\.000,00\s€/u)
+      assert has_element?(view, "aside li.menu-title", ~r/Budgetkonten\s*2\.437,51\s€/u)
+      assert has_element?(view, "aside li.menu-title", ~r/Trackingkonten\s*10\.000,00\s€/u)
       refute has_element?(view, "aside li.menu-title", "Geschlossen")
       assert has_element?(view, "#side-account-#{c.giro.id}-sidebar", "Girokonto")
       assert has_element?(view, "#side-account-#{c.giro.id}-sidebar", "💶")
@@ -92,23 +92,19 @@ defmodule AbakusWeb.AccountsLiveTest do
       refute has_element?(view, "#side-account-#{c.old.id}-sidebar")
       refute has_element?(view, "#side-account-#{c.giro.id}-rail")
       refute has_element?(view, "#side-account-#{c.giro.id}-dock")
-      assert has_element?(view, "button#side-add-account-sidebar", "Konto hinzufügen")
-      refute has_element?(view, "#side-add-account-dock")
+      refute has_element?(view, "#side-add-account-sidebar")
 
-      for entry <- ~w(budget all-accounts import),
+      for entry <- ~w(budget depot-wealth all-accounts),
           do: assert(has_element?(view, "#side-#{entry}-dock"))
+
+      refute has_element?(view, "#side-import-dock")
 
       refute has_element?(view, "#side-settings-dock")
       assert has_element?(view, ~s|nav.dock button[aria-haspopup=dialog]|, "Mehr")
 
-      assert has_element?(
-               view,
-               "aside li.menu-title:has(+ li #side-account-#{c.depot.id}-sidebar) ~ li #side-add-account-sidebar"
-             )
-
       {:ok, settings, _html} = live(c.conn, ~p"/settings/access")
 
-      assert has_element?(settings, "#side-account-#{c.giro.id}-sidebar:not([data-phx-link])")
+      refute has_element?(settings, "#side-account-#{c.giro.id}-sidebar")
     end
 
     test "on an account's register dock and rail mark Alle Konten", c do
@@ -161,20 +157,16 @@ defmodule AbakusWeb.AccountsLiveTest do
       assert {^path, %{"info" => "Konto angelegt."}} = assert_redirect(view)
     end
 
-    test "opens from the sidebar over any page", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/budget")
+    test "opens from Alle Konten", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
 
-      view |> element("#side-add-account-sidebar") |> render_click()
+      view |> element("#add-account") |> render_click()
       assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
 
       submit(view, %{name: "Giro", kind: "checking"})
       assert [account] = Ledger.list_accounts()
       path = ~p"/budget/accounts/#{account}"
       assert {^path, _flash} = assert_redirect(view)
-
-      {:ok, settings, _html} = live(conn, ~p"/settings/access")
-      settings |> element("#side-add-account-sidebar") |> render_click()
-      assert has_element?(settings, "#account-dialog h2", "Konto hinzufügen")
     end
 
     test "shows what is missing", %{conn: conn} do

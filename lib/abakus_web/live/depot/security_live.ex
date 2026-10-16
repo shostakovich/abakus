@@ -5,7 +5,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
 
   alias Abakus.Depot.{ExchangeRates, MarketData, Portfolios, Securities}
   alias Abakus.LocalTime
-  alias AbakusWeb.Depot.{AttributeValue, Format, Periods, Sidebar}
+  alias AbakusWeb.Depot.{AttributeValue, Format, Periods}
 
   # URL parameter, period, button label and its accessible name; the first is the default.
   @periods [
@@ -20,8 +20,8 @@ defmodule AbakusWeb.Depot.SecurityLive do
   # The distributions shown until all are asked for.
   @recent_distributions 8
 
-  # The sidebar marks „Bestand“, which the page belongs to.
-  @current {:holdings, nil, nil}
+  # The sidebar marks „Depots“, which the page belongs to.
+  @current {:depots, nil}
 
   @impl true
   def render(%{security: nil} = assigns) do
@@ -161,7 +161,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
           :for={entry <- @holdings}
           id={"holding-#{entry.portfolio.id}"}
           title={Format.portfolio_name(entry.portfolio)}
-          navigate={Sidebar.portfolio_path(entry.portfolio)}
+          navigate={depots_path(:holdings, entry.portfolio.id)}
           trailing_on_phone={:title}
         >
           <:leading><.icon name="briefcase" class="size-5 text-base-content/70" /></:leading>

@@ -32,7 +32,7 @@ defmodule AbakusWeb.Kasse.CategoriesLiveTest do
        %{conn: conn, h: h} do
     create!(equal(h, "Brot", 300, "2026-10-01", h.anna, [h.anna]))
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/categories")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/categories")
 
     assert page_title(view) == "Kategorien · Abakus"
     assert names(view) == @defaults
@@ -50,7 +50,7 @@ defmodule AbakusWeb.Kasse.CategoriesLiveTest do
   end
 
   test "adds a category before Sonstiges", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/categories")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/categories")
 
     view |> form("#category-form", category: %{name: " Haus  tiere "}) |> render_submit()
 
@@ -63,7 +63,7 @@ defmodule AbakusWeb.Kasse.CategoriesLiveTest do
   end
 
   test "moves up and down without a message", %{conn: conn, h: h} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/categories")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/categories")
 
     view |> element("#category-#{h.restaurant}-up") |> render_click()
     assert view |> names() |> Enum.take(2) == ["Restaurant", "Lebensmittel"]
@@ -76,7 +76,7 @@ defmodule AbakusWeb.Kasse.CategoriesLiveTest do
   end
 
   test "renames, archives and brings back", %{conn: conn, h: h} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/categories")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/categories")
 
     view |> element("#category-#{h.food}-rename-menu-item") |> render_click()
     view |> form("#rename-form", rename: %{name: "restaurant"}) |> render_submit()

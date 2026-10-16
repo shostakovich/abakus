@@ -279,8 +279,6 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
       current={:expenses}
       fab={false}
     >
@@ -552,13 +550,13 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
         <.section_heading id="expense-history">Verlauf</.section_heading>
         <p :if={!@deleted? && @expense.recurring_expense_id} class="mb-2 text-sm">
           Diese Ausgabe wird automatisch wiederholt.
-          <.link navigate={~p"/kasse/settings/recurring"} class="link link-primary">
+          <.link href={~p"/settings/kasse/recurring"} class="link link-primary">
             Wiederkehrende Ausgaben verwalten
           </.link>
         </p>
         <div :if={!@deleted? && !@expense.recurring_expense_id} class="mb-2">
           <.button
-            navigate={~p"/kasse/settings/recurring/new?#{[expense_id: @expense.id]}"}
+            href={~p"/settings/kasse/recurring/new?#{[expense_id: @expense.id]}"}
             variant={:ghost}
             size={:sm}
             icon="repeat"

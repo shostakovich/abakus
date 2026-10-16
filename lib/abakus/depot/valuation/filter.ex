@@ -70,6 +70,16 @@ defmodule Abakus.Depot.Valuation.Filter do
   defp held?(%__MODULE__{security_ids: ids}, security_id), do: included?(ids, security_id)
 
   @doc """
+  Whether a transaction belongs to the portfolios and accounts: it moves shares of the portfolios,
+  or money of the accounts without a security or for one the portfolios held.
+  """
+  def concerns?(%__MODULE__{} = filter, %Transaction{} = t) do
+    portfolio?(filter, t.portfolio_id) or portfolio?(filter, t.other_portfolio_id) or
+      ((account?(filter, t.account_id) or account?(filter, t.other_account_id)) and
+         (t.security_id == nil or held?(filter, t.security_id)))
+  end
+
+  @doc """
   The money a transaction brings in or takes out, as `{kind, amount, currency}`: `:inbound` for a
   deposit or an inbound delivery, `:outbound` for a removal or an outbound delivery, and
   `:transfer_out` and `:transfer_in` for both sides of a transfer inside.

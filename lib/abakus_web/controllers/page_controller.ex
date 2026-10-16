@@ -7,4 +7,7 @@ defmodule AbakusWeb.PageController do
   def home(conn, _params) do
     redirect(conn, to: Areas.home_path(conn.assigns.current_scope, get_session(conn, :area)))
   end
+
+  @doc "Opens the settings at their first section that needs no recent sign-in."
+  def settings(conn, _params), do: redirect(conn, to: ~p"/settings/appearance")
 end

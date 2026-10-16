@@ -335,10 +335,12 @@ defmodule Abakus.Depot.DividendsTest do
       received = Dividends.received(transactions, @market)
       stored = [stored(~D[2026-10-30], ~D[2026-11-10], 1)]
 
-      assert Dividends.upcoming(transactions, stored, @market, @today, received) ==
+      assert Dividends.upcoming(transactions, stored, @market, @today, received: received) ==
                upcoming(transactions, stored)
 
-      assert [%{net: net}] = Dividends.upcoming(transactions, stored, @market, @today, [])
+      assert [%{net: net}] =
+               Dividends.upcoming(transactions, stored, @market, @today, received: [])
+
       assert net == money(100)
     end
 

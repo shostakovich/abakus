@@ -2,7 +2,7 @@ defmodule AbakusWeb.Router do
   use AbakusWeb, :router
 
   import AbakusWeb.UserAuth
-  import AbakusWeb.Areas, only: [require_area: 2]
+  import AbakusWeb.Areas, only: [require_area: 2, require_part: 2, remember_area: 2]
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -30,7 +30,15 @@ defmodule AbakusWeb.Router do
   end
 
   pipeline :depot do
-    plug :require_area, :depot
+    plug :require_area, :finanzen
+  end
+
+  pipeline :depot_import do
+    plug :remember_area, :finanzen
+  end
+
+  pipeline :kasse_settings do
+    plug :require_part, :kasse
   end
 
   # Public without a session: the health check and `/mcp/<secret>`, which checks its callers itself. Everything
@@ -44,6 +52,7 @@ defmodule AbakusWeb.Router do
     pipe_through [:browser, :require_authenticated_user]
 
     get "/", PageController, :home
+    get "/settings", PageController, :settings
   end
 
   scope "/budget", AbakusWeb do
@@ -54,7 +63,8 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.UserAuth, :require_authenticated},
         {AbakusWeb.Areas, {:require, :budget}},
         {AbakusWeb.AccountGroups, :assign},
-        {AbakusWeb.AccountDialog, :attach}
+        {AbakusWeb.AccountDialog, :attach},
+        {AbakusWeb.Depot.Sidebar, :budget}
       ] do
       live "/", BudgetLive
       live "/accounts", AccountsLive
@@ -71,8 +81,6 @@ defmodule AbakusWeb.Router do
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
         {AbakusWeb.Areas, {:require, :kasse}},
-        {AbakusWeb.AccountGroups, :assign},
-        {AbakusWeb.AccountDialog, :attach},
         AbakusWeb.Kasse.CurrentParticipant
       ] do
       live "/", ExpensesLive
@@ -80,19 +88,7 @@ defmodule AbakusWeb.Router do
       live "/expenses/:id", ExpenseLive, :edit
       live "/balances", BalancesLive
       live "/activity", ActivityLive
-      live "/settings", SettingsLive
-      live "/settings/participants", ParticipantsLive
-      live "/settings/categories", CategoriesLive
-      live "/settings/recurring", RecurringLive
-      live "/settings/recurring/new", RecurringNewLive
-      live "/settings/rates", RatesLive
-      live "/settings/ynab", YnabLive
-      live "/settings/budget", BudgetLinkLive
-      live "/export", ExportLive
     end
-
-    get "/export/expenses.csv", ExportController, :expenses_csv
-    get "/export/expenses.json", ExportController, :expenses_json
   end
 
   scope "/depot", AbakusWeb.Depot do
@@ -101,55 +97,80 @@ defmodule AbakusWeb.Router do
     live_session :depot,
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
-        {AbakusWeb.Areas, {:require, :depot}},
+        {AbakusWeb.Areas, {:require, :finanzen}},
         {AbakusWeb.AccountGroups, :assign},
         {AbakusWeb.AccountDialog, :attach},
         AbakusWeb.Depot.Sidebar,
         AbakusWeb.Depot.TransactionDialog
       ] do
-      live "/", OverviewLive
+      live "/", WealthLive
       live "/holdings", HoldingsLive
       live "/dividends", DividendsLive
       live "/transactions", TransactionsLive
       live "/performance", PerformanceLive
       live "/securities", SecuritiesLive
       live "/securities/:id", SecurityLive
+      live "/receipts", ReceiptsLive
     end
 
     get "/receipts/:id", ReceiptController, :show
   end
 
-  # The Depot's settings: creating the first portfolio, or importing a PP file, opens the Depot.
+  # Import & Sync's PP import is open before the first portfolio, so a file can start the Depot and Finanzen.
   scope "/depot", AbakusWeb.Depot do
-    pipe_through [:browser, :require_authenticated_user]
+    pipe_through [:browser, :require_authenticated_user, :depot_import]
 
-    live_session :depot_settings,
+    live_session :depot_import,
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
         {AbakusWeb.Areas, :assign},
         {AbakusWeb.AccountGroups, :assign},
-        {AbakusWeb.AccountDialog, :attach}
+        {AbakusWeb.AccountDialog, :attach},
+        {AbakusWeb.Depot.Sidebar, :budget}
       ] do
-      live "/portfolios", PortfoliosLive
       live "/import", ImportLive
-      live "/receipt-intake", ReceiptIntakeLive
     end
   end
 
-  scope "/", AbakusWeb do
+  scope "/settings", AbakusWeb do
     pipe_through [:browser, :require_authenticated_user]
 
     live_session :settings,
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
         {AbakusWeb.Areas, :assign},
-        {AbakusWeb.AccountGroups, :assign},
-        {AbakusWeb.AccountDialog, :attach}
+        AbakusWeb.SettingsNav
       ] do
-      live "/settings", SettingsLive, :index
-      live "/settings/appearance", SettingsLive, :appearance
-      live "/settings/ynab", SettingsLive, :ynab
+      live "/appearance", SettingsLive, :appearance
+      live "/budget/ynab", SettingsLive, :ynab_import
+      live "/depot/portfolios", Depot.PortfoliosLive
+      live "/depot/receipt-intake", Depot.ReceiptIntakeLive
     end
+  end
+
+  scope "/settings/kasse", AbakusWeb.Kasse do
+    pipe_through [:browser, :require_authenticated_user, :kasse_settings]
+
+    live_session :kasse_settings,
+      on_mount: [
+        {AbakusWeb.UserAuth, :require_authenticated},
+        {AbakusWeb.Areas, {:assign, :kasse}},
+        AbakusWeb.SettingsNav,
+        AbakusWeb.Kasse.CurrentParticipant
+      ] do
+      live "/", SettingsLive
+      live "/participants", ParticipantsLive
+      live "/categories", CategoriesLive
+      live "/recurring", RecurringLive
+      live "/recurring/new", RecurringNewLive
+      live "/rates", RatesLive
+      live "/budget", BudgetLinkLive
+      live "/ynab", YnabLive
+      live "/export", ExportLive
+    end
+
+    get "/export/expenses.csv", ExportController, :expenses_csv
+    get "/export/expenses.json", ExportController, :expenses_json
   end
 
   # A live_session of its own, so every visit goes through the plug and can return here.
@@ -160,8 +181,7 @@ defmodule AbakusWeb.Router do
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
         {AbakusWeb.Areas, :assign},
-        {AbakusWeb.AccountGroups, :assign},
-        {AbakusWeb.AccountDialog, :attach}
+        AbakusWeb.SettingsNav
       ] do
       live "/settings/access", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email

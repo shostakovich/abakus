@@ -135,16 +135,15 @@ defmodule AbakusWeb.Kasse.YnabLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.kasse
+    <Layouts.settings
+      current={:kasse_ynab}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
-      current={:settings}
+      groups={@settings_groups}
     >
-      <.header back={~p"/kasse/settings"} back_label="Gruppe">
+      <.header>
         YNAB
         <:subtitle>
           Deine Anteile an geteilten Ausgaben automatisch in dein eigenes YNAB übertragen.
@@ -184,7 +183,7 @@ defmodule AbakusWeb.Kasse.YnabLive do
         <.alert :if={@failed} id="ynab-failed" tone={:error}>
           Die YNAB-Einstellungen konnten nicht geladen werden.
           <:actions>
-            <.button id="ynab-retry" patch={~p"/kasse/settings/ynab"} size={:sm}>Erneut versuchen</.button>
+            <.button id="ynab-retry" patch={~p"/settings/kasse/ynab"} size={:sm}>Erneut versuchen</.button>
           </:actions>
         </.alert>
 
@@ -279,7 +278,7 @@ defmodule AbakusWeb.Kasse.YnabLive do
               <.action_bar>
                 <:secondary>
                   <.button
-                    patch={~p"/kasse/settings/ynab?refresh=1"}
+                    patch={~p"/settings/kasse/ynab?refresh=1"}
                     variant={:ghost}
                     icon="refresh-cw"
                   >
@@ -300,7 +299,7 @@ defmodule AbakusWeb.Kasse.YnabLive do
             </.form>
             <p :if={@overview.plans == [] && !@overview.api_error} class="max-w-prose text-sm">
               In deinem YNAB gibt es kein offenes Konto im Budget. Lege zuerst das Konto „Geteilt“ an und lade die <.link
-                patch={~p"/kasse/settings/ynab?refresh=1"}
+                patch={~p"/settings/kasse/ynab?refresh=1"}
                 class="link link-primary"
               >Liste neu</.link>.
             </p>
@@ -428,7 +427,7 @@ defmodule AbakusWeb.Kasse.YnabLive do
           </section>
         <% end %>
       </div>
-    </Layouts.kasse>
+    </Layouts.settings>
     """
   end
 end

@@ -1,8 +1,8 @@
 defmodule AbakusWeb.Kasse.BudgetLinkLive do
   @moduledoc """
-  "Budget", the budget owner's link between the Kasse and the budget: switching it on ("Mit Budget verknüpfen"),
-  where their shares are booked and which budget category each Kasse category's shares land in. Anyone else gets
-  404.
+  "Budget-Verknüpfung", the budget owner's link between the Kasse and the budget: switching it on ("Mit Budget
+  verknüpfen"), where their shares are booked and which budget category each Kasse category's shares land in.
+  Anyone else gets 404.
   """
   use AbakusWeb, :kasse_live_view
 
@@ -17,7 +17,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
 
     {:ok,
      socket
-     |> assign(page_title: "Budget", budget_groups: budget_groups())
+     |> assign(page_title: "Budget-Verknüpfung", budget_groups: budget_groups())
      |> load_link()
      |> load()}
   end
@@ -64,7 +64,11 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
 
     case BudgetLink.switch_on(socket.assigns.current_participant, account_id) do
       {:ok, counts} ->
-        {:noreply, socket |> put_flash(:info, switched_on(counts)) |> load_link()}
+        {:noreply,
+         socket
+         |> put_flash(:info, switched_on(counts))
+         |> load_link()
+         |> AbakusWeb.SettingsNav.assign_groups()}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, refused(reason))}
@@ -114,17 +118,16 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.kasse
+    <Layouts.settings
+      current={:kasse_budget}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
-      current={:settings}
+      groups={@settings_groups}
     >
-      <.header back={~p"/kasse/settings"} back_label="Gruppe">
-        Budget
+      <.header>
+        Budget-Verknüpfung
         <:subtitle>Deine Anteile an geteilten Ausgaben in deinem Budget.</:subtitle>
       </.header>
 
@@ -133,7 +136,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
           <.section_heading id="budget-link">Verknüpfung</.section_heading>
           <p :if={@account} id="budget-link-state">
             Dein Anteil an jeder Ausgabe ist eine Buchung im Konto <.link
-              navigate={~p"/budget/accounts/#{@account}"}
+              href={~p"/budget/accounts/#{@account}"}
               class="link link-primary"
             >
               {@account.name}
@@ -217,7 +220,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
           </.form>
         </section>
       </div>
-    </Layouts.kasse>
+    </Layouts.settings>
     """
   end
 end

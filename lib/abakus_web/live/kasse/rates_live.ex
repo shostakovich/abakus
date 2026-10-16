@@ -124,16 +124,15 @@ defmodule AbakusWeb.Kasse.RatesLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.kasse
+    <Layouts.settings
+      current={:kasse_rates}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
-      current={:settings}
+      groups={@settings_groups}
     >
-      <.header back={~p"/kasse/settings"} back_label="Gruppe">
+      <.header>
         Wechselkurse
         <:subtitle>
           Kurse gelten wie bei der EZB als Einheiten der Fremdwährung pro 1 €. Für ein Ausgabedatum gilt der jüngste manuelle Kurs mit „gültig ab“ am oder vor diesem Datum – er hat Vorrang vor dem EZB-Kurs, bis ein neuerer manueller Kurs eingetragen oder er gelöscht wird. Ohne manuellen Kurs gilt der EZB-Referenzkurs vom Ausgabedatum bzw. vom letzten Bankarbeitstag davor.
@@ -291,7 +290,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
           </.table>
         </section>
       </div>
-    </Layouts.kasse>
+    </Layouts.settings>
     """
   end
 end

@@ -39,6 +39,14 @@ defmodule AbakusWeb.AccountGroups do
   @doc "The groups without the closed accounts."
   def open(groups), do: Enum.reject(groups, &(&1.key == :closed))
 
+  @doc "The open groups as the sidebar lists them: without the portfolios' accounts, which it lists under Depots."
+  def sidebar(groups) do
+    for group <- open(groups),
+        rows = Enum.reject(group.rows, &(&1.account.fed_by == :portfolio)),
+        rows != [],
+        do: group(group.key, group.label, rows)
+  end
+
   @doc "Every account's row, the closed ones included."
   def rows(groups), do: Enum.flat_map(groups, & &1.rows)
 

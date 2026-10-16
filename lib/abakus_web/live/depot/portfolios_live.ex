@@ -1,28 +1,30 @@
 defmodule AbakusWeb.Depot.PortfoliosLive do
   @moduledoc """
   „Depots“ in the settings: the user's active portfolios with their depot numbers, which find a receipt's
-  portfolio, each edited in place, and a new portfolio with its Verrechnungskonto. The first one opens the Depot
-  area. The budget owner also picks the tracking account each portfolio and Verrechnungskonto feeds.
+  portfolio, their Verrechnungskonten with their roles (`Abakus.Depot.AccountRoles`), each edited in place, and a
+  new portfolio with its Verrechnungskonto. The first one opens Finanzen. A portfolio of the budget owner is also a
+  tracking account (`Abakus.Depot.BudgetFeed`), and the budget owner links the Depot's cash flows to the budget here
+  (`Abakus.Depot.BudgetLink`).
   """
   use AbakusWeb, :depot_live_view
 
-  alias Abakus.Depot.{BudgetFeed, Portfolios, Receipts}
-  alias AbakusWeb.Areas
+  alias Abakus.Depot.{AccountRoles, BudgetLink, Portfolios, Receipts}
+  alias Abakus.Depot.Portfolios.Account
+  alias AbakusWeb.{Areas, SettingsNav}
   alias AbakusWeb.Depot.Format
-  alias AbakusWeb.SettingsLive.Components
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Components.page
-      section={:depots}
+    <Layouts.settings
+      current={:depots}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
+      groups={@settings_groups}
     >
+      <.header>Depots</.header>
       <div class="flex flex-col gap-8">
         <section :if={@active_portfolios != []} id="depot-numbers" aria-labelledby="depots-title">
           <.section_heading id="depots-title" count={length(@active_portfolios)}>
@@ -40,32 +42,89 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           </.list>
         </section>
 
-        <section :if={@feed_rows != []} id="budget-feeds" aria-labelledby="budget-feeds-title">
-          <.section_heading id="budget-feeds-title">Im Budget</.section_heading>
+        <section :if={@accounts != []} id="clearing-accounts" aria-labelledby="accounts-title">
+          <.section_heading id="accounts-title" count={length(@accounts)}>
+            Verrechnungskonten
+          </.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
-            Jeden Tag nach der Kursabfrage um 18 Uhr bucht das Depot den Wert der Depots und Verrechnungskonten
-            als „Wertänderung“ in ihr Tracking-Konto, das dann niemand sonst mehr bucht.
+            Jedes Verrechnungskonto ist ein Budgetkonto, wenn es dasselbe Bankkonto ist, oder das Cash
+            eines Depots, das zu dessen Wert zählt, oder keins von beiden.
           </p>
-          <p :if={@feed_options == []} id="budget-feeds-none" class="max-w-prose">
-            Dafür braucht das Budget ein offenes Tracking-Konto.
+          <.list>
+            <.account_role_row
+              :for={account <- @accounts}
+              account={account}
+              form={@editing_role == account.id && @role_form}
+              options={@editing_role == account.id && @role_options}
+            />
+          </.list>
+        </section>
+
+        <section
+          :if={@current_scope.user.budget_owner}
+          id="budget-link"
+          aria-labelledby="budget-link-title"
+        >
+          <.section_heading id="budget-link-title">Budget</.section_heading>
+          <p :if={@link} id="budget-link-state" class="mb-3 max-w-prose text-sm text-base-content/70">
+            Seit dem {Format.date(@link.start_date)} ist jeder Kauf, Verkauf und jede Dividende über ein
+            Verrechnungskonto, das ein Budgetkonto ist, eine Buchung in diesem Budgetkonto, ebenso Geld,
+            das von dort ins Cash eines Depots geht oder zurück. Betrag, Datum und Empfänger folgen dem
+            Depot; Kategorie, Memo und Bestätigung änderst du im Budget.
+          </p>
+          <p :if={!@link} id="budget-link-state" class="mb-3 max-w-prose text-sm text-base-content/70">
+            Noch nicht mit dem Budget verknüpft. Danach ist jeder Kauf, Verkauf und jede Dividende über ein
+            Verrechnungskonto, das ein Budgetkonto ist, eine Buchung in diesem Budgetkonto: Käufe als Ausgabe
+            in der gewählten Kategorie, Einnahmen unter „Zu verteilen“. Buchungen vor dem Startdatum bleiben
+            nur im Depot.
           </p>
           <.form
-            :if={@feed_options != []}
-            for={@feed_form}
-            id="budget-feeds-form"
+            :if={!@link}
+            for={@link_form}
+            id="budget-link-form"
             class="max-w-md"
-            phx-submit="save_feeds"
+            phx-change="validate_link"
+            phx-submit="switch_on"
           >
+            <.input field={@link_form[:start_date]} type="date" label="Ab" required />
             <.input
-              :for={{key, label} <- @feed_rows}
-              field={@feed_form[key]}
+              field={@link_form[:category_id]}
               type="select"
-              label={label}
-              prompt="– nicht im Budget –"
-              options={@feed_options}
+              label="Kategorie für Käufe"
+              prompt="Kategorie wählen"
+              options={@category_options}
+              required
             />
             <.action_bar class="mt-4">
-              <.button type="submit" variant={:primary} icon="save" phx-disable-with="Speichert …">
+              <.button
+                id="budget-link-submit"
+                type="submit"
+                variant={:primary}
+                icon="link"
+                confirm="Mit Budget verknüpfen?"
+                confirm_text="Das lässt sich nicht rückgängig machen."
+                confirm_label="Verknüpfen"
+              >
+                Mit Budget verknüpfen
+              </.button>
+            </.action_bar>
+          </.form>
+          <.form
+            :if={@link}
+            for={@link_form}
+            id="budget-category-form"
+            class="max-w-md"
+            phx-submit="save_category"
+          >
+            <.input
+              field={@link_form[:category_id]}
+              type="select"
+              label="Kategorie für neue Käufe"
+              options={@category_options}
+              required
+            />
+            <.action_bar class="mt-4">
+              <.button type="submit" variant={:primary} phx-disable-with="Speichert …">
                 Speichern
               </.button>
             </.action_bar>
@@ -76,7 +135,11 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           <.section_heading id="new-portfolio-title">Depot anlegen</.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
             Nur du siehst deine Depots. Käufe, Verkäufe und Dividenden laufen über ein
-            Verrechnungskonto, das mit dem Depot angelegt wird.
+            Verrechnungskonto, das mit dem Depot angelegt wird. Oder <.link
+              id="new-portfolio-import"
+              href={~p"/depot/import"}
+              class="link"
+            >importiere eine Datei aus Portfolio Performance</.link>.
           </p>
           <.form
             for={@new_form}
@@ -95,7 +158,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           </.form>
         </section>
       </div>
-    </Components.page>
+    </Layouts.settings>
     """
   end
 
@@ -171,6 +234,109 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     """
   end
 
+  attr :account, Account, required: true
+  attr :form, :any, required: true, doc: "the role's form while it is edited, else false"
+  attr :options, :any, required: true, doc: "the roles to choose from while it is edited"
+
+  defp account_role_row(%{form: false} = assigns) do
+    ~H"""
+    <.list_row id={"clearing-account-#{@account.id}"} title={@account.name}>
+      <:leading><.icon name="wallet" class="size-5 text-base-content/70" /></:leading>
+      <:meta>
+        <span class="whitespace-nowrap">{@account.currency}</span><.meta_sep /><span
+          :if={Account.role(@account)}
+          class="whitespace-nowrap"
+        >{role_label(@account)}</span><.badge :if={!Account.role(@account)} tone={:warning}>
+          Rolle fehlt
+        </.badge>
+      </:meta>
+      <:trailing>
+        <.button
+          size={:sm}
+          phx-click="edit_role"
+          phx-value-id={@account.id}
+          aria-label={"#{role_action(@account)}: Rolle von „#{@account.name}“"}
+        >
+          {role_action(@account)}
+        </.button>
+      </:trailing>
+    </.list_row>
+    """
+  end
+
+  defp account_role_row(assigns) do
+    ~H"""
+    <li id={"clearing-account-#{@account.id}"} class="list-row items-start">
+      <.icon name="wallet" class="mt-0.5 size-5 text-base-content/70" />
+      <.form
+        for={@form}
+        id="account-role-form"
+        class="list-col-grow min-w-0"
+        phx-submit="save_role"
+        phx-window-keydown="cancel_role"
+        phx-key="Escape"
+      >
+        <p class="font-medium wrap-anywhere">{@account.name}</p>
+        <div class="flex flex-col sm:flex-row sm:items-start sm:gap-2">
+          <div class="sm:max-w-md sm:flex-1">
+            <.input
+              field={@form[:role]}
+              type="select"
+              label={"Rolle von „#{@account.name}“"}
+              prompt="Rolle wählen"
+              options={@options}
+              phx-mounted={JS.focus()}
+            />
+          </div>
+          <div class="flex gap-2 sm:mt-1">
+            <.button type="submit" variant={:primary} phx-disable-with="Speichert …">
+              Speichern
+            </.button>
+            <.button variant={:ghost} phx-click="cancel_role">Abbrechen</.button>
+          </div>
+        </div>
+      </.form>
+    </li>
+    """
+  end
+
+  defp role_label(%Account{} = account) do
+    case Account.role(account) do
+      {:budget_account, _id} ->
+        "ist Budgetkonto „#{account.budget_account.name}“"
+
+      {:portfolio_cash, _id} ->
+        "Cash von Depot „#{Format.portfolio_name(account.cash_of_portfolio)}“"
+
+      :none ->
+        "keine Rolle"
+    end
+  end
+
+  defp role_action(account), do: if(Account.role(account), do: "Ändern", else: "Festlegen")
+
+  defp role_options(scope, account) do
+    %{budget_accounts: budget_accounts, portfolios: portfolios} =
+      AccountRoles.choices(scope, account)
+
+    [
+      {"Budgetkonto",
+       for(
+         a <- budget_accounts,
+         do: {"ist Budgetkonto „#{a.name}“", AccountRoles.param({:budget_account, a.id})}
+       )},
+      {"Cash",
+       for(
+         p <- portfolios,
+         do:
+           {"Cash von Depot „#{Format.portfolio_name(p)}“",
+            AccountRoles.param({:portfolio_cash, p.id})}
+       )},
+      {"Keine", [{"keine Rolle", AccountRoles.param(:none)}]}
+    ]
+    |> Enum.reject(fn {_group, options} -> options == [] end)
+  end
+
   defp depot_number_details(portfolio) do
     Enum.reject(
       [
@@ -192,9 +358,11 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     {:ok,
      socket
      |> assign(page_title: "Depots", editing: nil, depot_number_form: nil)
+     |> assign(editing_role: nil, role_form: nil, role_options: nil)
+     |> load_link()
+     |> load_accounts()
      |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
-     |> load_active_portfolios()
-     |> load_feeds()}
+     |> load_active_portfolios()}
   end
 
   @impl true
@@ -213,8 +381,9 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
          |> put_flash(:info, "Depot „#{Format.portfolio_name(portfolio)}“ angelegt.")
          |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
          |> Areas.open_depot()
+         |> SettingsNav.assign_groups()
          |> load_active_portfolios()
-         |> load_feeds()}
+         |> load_accounts()}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :new_form, to_form(changeset, as: :portfolio, action: :insert))}
@@ -245,23 +414,103 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   def handle_event("cancel_depot_number", _params, socket),
     do: {:noreply, assign(socket, editing: nil, depot_number_form: nil)}
 
-  def handle_event("save_feeds", params, socket) do
-    feeds = params |> Map.get("feeds", %{}) |> Enum.flat_map(&feed/1) |> Map.new()
+  def handle_event("edit_role", %{"id" => id}, socket) do
+    case find_account(socket, id) do
+      nil ->
+        {:noreply, socket}
 
-    case BudgetFeed.put_feeds(socket.assigns.current_scope, feeds) do
-      {:ok, _feeds} ->
+      account ->
         {:noreply,
-         socket |> put_flash(:info, "Zuordnung zum Budget gespeichert.") |> load_feeds()}
-
-      {:error, _reason} ->
-        {:noreply,
-         put_flash(socket, :error, "Unbekanntes Depot oder Konto. Bitte die Seite neu laden.")}
+         assign(socket,
+           editing_role: account.id,
+           role_form: role_form(%{"role" => AccountRoles.param(Account.role(account))}),
+           role_options: role_options(socket.assigns.current_scope, account)
+         )}
     end
   end
 
-  defp feed({"portfolio-" <> id, account_id}), do: [{{:portfolio, id}, account_id}]
-  defp feed({"account-" <> id, account_id}), do: [{{:account, id}, account_id}]
-  defp feed(_param), do: []
+  def handle_event("save_role", %{"role" => params}, socket) do
+    case find_account(socket, socket.assigns.editing_role) do
+      nil -> {:noreply, socket}
+      account -> save_role(socket, account, params)
+    end
+  end
+
+  def handle_event("cancel_role", _params, socket), do: {:noreply, close_role(socket)}
+
+  def handle_event("validate_link", %{"link" => params}, socket),
+    do: {:noreply, assign(socket, :link_form, to_form(BudgetLink.change_link(params), as: :link))}
+
+  def handle_event("switch_on", %{"link" => params}, socket) do
+    case BudgetLink.switch_on(socket.assigns.current_scope, params) do
+      {:ok, _link} ->
+        {:noreply, socket |> put_flash(:info, "Mit dem Budget verknüpft.") |> load_link()}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :link_form, to_form(changeset, as: :link, action: :insert))}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, link_refused(reason))}
+    end
+  end
+
+  def handle_event("save_category", %{"link" => %{"category_id" => id}}, socket) do
+    case socket.assigns.link && BudgetLink.change_category(socket.assigns.link, id) do
+      {:ok, _link} ->
+        {:noreply, socket |> put_flash(:info, "Kategorie für Käufe gespeichert.") |> load_link()}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :link_form, to_form(changeset, as: :link, action: :update))}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  defp link_refused(:not_budget_owner), do: "Nur wer das Budget führt, kann es verknüpfen."
+  defp link_refused(:linked), do: "Das Depot ist schon mit dem Budget verknüpft."
+  defp link_refused(message) when is_binary(message), do: message
+
+  defp load_link(%{assigns: %{current_scope: %{user: %{budget_owner: true}} = scope}} = socket) do
+    link = BudgetLink.get(scope)
+
+    assign(socket,
+      link: link,
+      link_form:
+        to_form(if(link, do: Ecto.Changeset.change(link), else: BudgetLink.change_link()),
+          as: :link
+        ),
+      category_options: BudgetLink.category_options()
+    )
+  end
+
+  defp load_link(socket), do: assign(socket, link: nil, link_form: nil, category_options: [])
+
+  defp save_role(socket, account, params) do
+    case AccountRoles.set_role(socket.assigns.current_scope, account, params["role"]) do
+      {:ok, _account} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Rolle von „#{account.name}“ gespeichert.")
+         |> close_role()
+         |> load_accounts()}
+
+      {:error, message} ->
+        {:noreply, assign(socket, :role_form, role_form(params, role: {message, []}))}
+    end
+  end
+
+  defp role_form(params, errors \\ []),
+    do: to_form(params, as: :role, errors: errors, action: if(errors != [], do: :update))
+
+  defp close_role(socket),
+    do: assign(socket, editing_role: nil, role_form: nil, role_options: nil)
+
+  defp find_account(socket, id),
+    do: Enum.find(socket.assigns.accounts, &(to_string(&1.id) == to_string(id)))
+
+  defp load_accounts(socket),
+    do: assign(socket, :accounts, AccountRoles.list_accounts(socket.assigns.current_scope))
 
   defp save(socket, portfolio, params) do
     scope = socket.assigns.current_scope
@@ -288,49 +537,6 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
 
   defp find_portfolio(socket, id),
     do: Enum.find(socket.assigns.active_portfolios, &(to_string(&1.id) == to_string(id)))
-
-  defp load_feeds(%{assigns: %{current_scope: %{user: %{budget_owner: true}} = scope}} = socket) do
-    feeds = BudgetFeed.feeds(scope)
-
-    assign(socket,
-      feed_rows: feed_rows(scope, feeds),
-      feed_options: feed_options(feeds),
-      feed_form:
-        to_form(Map.new(feeds, fn {key, account_id} -> {feed_key(key), account_id} end),
-          as: :feeds
-        )
-    )
-  end
-
-  defp load_feeds(socket), do: assign(socket, feed_rows: [], feed_options: [], feed_form: nil)
-
-  defp feed_options(feeds) do
-    Enum.map(BudgetFeed.account_choices(), &{&1.name, &1.id}) ++
-      for account <- BudgetFeed.fed_accounts_not_offered(feeds),
-          do:
-            {if(account.closed, do: "#{account.name} (geschlossen)", else: account.name),
-             account.id}
-  end
-
-  # Retired portfolios and accounts only while they feed an account.
-  defp feed_rows(scope, feeds) do
-    portfolios =
-      for portfolio <- Portfolios.list_portfolios(scope),
-          shown_feed?(portfolio, feeds, {:portfolio, portfolio.id}),
-          do:
-            {feed_key({:portfolio, portfolio.id}), "Depot „#{Format.portfolio_name(portfolio)}“"}
-
-    accounts =
-      for account <- Portfolios.list_accounts(scope),
-          shown_feed?(account, feeds, {:account, account.id}),
-          do: {feed_key({:account, account.id}), "Verrechnungskonto „#{account.name}“"}
-
-    portfolios ++ accounts
-  end
-
-  defp shown_feed?(item, feeds, key), do: not item.retired or Map.has_key?(feeds, key)
-
-  defp feed_key({kind, id}), do: "#{kind}-#{id}"
 
   defp load_active_portfolios(socket),
     do:

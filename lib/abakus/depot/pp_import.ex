@@ -9,7 +9,7 @@ defmodule Abakus.Depot.PPImport do
   import Ecto.Query
   import Ecto.Changeset, only: [change: 2]
 
-  alias Abakus.Depot.BudgetFeed
+  alias Abakus.Depot.{BudgetFeed, BudgetLink}
   alias Abakus.Depot.Portfolios.{Account, Portfolio, SavingsPlan, Transaction, TransactionUnit}
   alias Abakus.Depot.PPImport.Reader
   alias Abakus.Depot.Securities.{AttributeType, PPSecurityLink, Price, Security}
@@ -42,7 +42,13 @@ defmodule Abakus.Depot.PPImport do
   @doc "Imports a file already parsed by `Abakus.Depot.PPImport.Reader`."
   def import_client(%Scope{user: user}, client) do
     # A large file takes longer than the default 15 s checkout timeout.
-    Repo.transact(fn -> {:ok, do_import(user.id, client)} end, timeout: :timer.minutes(5))
+    Repo.transact(
+      fn ->
+        summary = do_import(user.id, client)
+        with :ok <- BudgetLink.sync(user.id), do: {:ok, summary}
+      end,
+      timeout: :timer.minutes(5)
+    )
   end
 
   defp do_import(user_id, client) do
@@ -245,7 +251,18 @@ defmodule Abakus.Depot.PPImport do
       end
 
     {ctx, ids} = upsert(ctx, :accounts, existing, incoming, Account)
+    drop_foreign_budget_roles(ctx.user_id)
     Map.merge(ctx, %{accounts: ids, stale_accounts: stale(existing, ids)})
+  end
+
+  # The budget is in euros; an account PP moved to another currency needs its role set again.
+  defp drop_foreign_budget_roles(user_id) do
+    Repo.update_all(
+      from(a in Account,
+        where: a.user_id == ^user_id and not is_nil(a.budget_account_id) and a.currency != "EUR"
+      ),
+      set: [budget_account_id: nil, updated_at: DateTime.utc_now()]
+    )
   end
 
   defp import_portfolios(ctx, client) do
@@ -524,7 +541,7 @@ defmodule Abakus.Depot.PPImport do
       )
       |> delete_or_detach(:accounts, Account, ctx.stale_accounts, :account_id, :other_account_id)
 
-    BudgetFeed.mark_fed_accounts()
+    BudgetFeed.sync_accounts()
 
     link_ids = Enum.map(ctx.stale_links, & &1.id)
     Repo.delete_all(from l in PPSecurityLink, where: l.id in ^link_ids)

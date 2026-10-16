@@ -31,21 +31,20 @@ defmodule AbakusWeb.Depot.PerformanceLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={:performance}
+      current={{:depots, @performance.portfolio && @performance.portfolio.id}}
     >
-      <.header>
-        Performance
+      <.depots_header
+        tab={:performance}
+        portfolio={@performance.portfolio}
+        portfolios={@performance.portfolios}
+        switch_path={&performance_path(@period, &1)}
+      >
         <:subtitle>
           <span class="whitespace-nowrap">{days(@performance.interval)}</span><.meta_sep /><span class="whitespace-nowrap">{portfolio_name(
             @performance.portfolio
           )}</span>
         </:subtitle>
         <:actions>
-          <.portfolio_switcher
-            portfolios={@performance.portfolios}
-            portfolio={@performance.portfolio}
-            path={&performance_path(@period, &1)}
-          />
           <Benchmark.toggle_button :if={@performance.benchmark} shown={@benchmark_shown} />
           <.segmented
             id="period"
@@ -56,7 +55,7 @@ defmodule AbakusWeb.Depot.PerformanceLive do
             options={Periods.options(@periods, &performance_path(&1, @performance.portfolio))}
           />
         </:actions>
-      </.header>
+      </.depots_header>
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <.stat

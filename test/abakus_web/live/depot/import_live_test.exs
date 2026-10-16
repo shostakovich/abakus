@@ -77,8 +77,21 @@ defmodule AbakusWeb.Depot.ImportLiveTest do
     refute has_element?(lv, "#import-summary")
   end
 
-  test "is a section of the settings, also before the first portfolio", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/settings")
-    assert has_element?(lv, ~s(#settings-nav a[href="/depot/import"]), "PP-Import")
+  test "is Import & Sync's tab Portfolio Performance, also before the first portfolio", %{
+    conn: conn
+  } do
+    {:ok, lv, _html} = live(conn, ~p"/depot/import")
+
+    assert has_element?(lv, "h1", "Import & Sync")
+
+    assert has_element?(
+             lv,
+             ~s|#import-tabs a[href="/depot/import"][aria-current=page]|,
+             "Portfolio Performance"
+           )
+
+    assert has_element?(lv, ~s|#import-tabs a[href="/budget/import"]|, "Bankdateien")
+    refute has_element?(lv, ~s|#import-tabs a[href="/depot/receipts"]|)
+    assert has_element?(lv, sidebar_link("/budget/import") <> "[aria-current=page]")
   end
 end

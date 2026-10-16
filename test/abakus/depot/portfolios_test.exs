@@ -164,13 +164,12 @@ defmodule Abakus.Depot.PortfoliosTest do
 
       assert [langfristig, sparplan] = Portfolios.overview(ctx.scope, :max, @saturday).portfolios
 
-      # The securities alone, as in the sidebar: the account's 240 € are its balance.
-      assert %{account: ^account, balance: 24_000, securities: 1, value: 102_000} = langfristig
+      # The securities alone: the account's 240 € are its cash.
+      assert %{cash: 24_000, securities: 1, value: 102_000} = langfristig
       assert langfristig.portfolio.id == portfolio.id
       assert_in_delta langfristig.ttwror, 102 / 100 - 1, 1.0e-12
 
-      assert %{account: ^savings, balance: 150_000, securities: 0, value: 0, ttwror: +0.0} =
-               sparplan
+      assert %{cash: 150_000, securities: 0, value: 0, ttwror: +0.0} = sparplan
     end
 
     test "counts a dividend paid into the reference account for the depot's TTWROR", ctx do
@@ -204,8 +203,8 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert [a_row, b_row, _langfristig] =
                Portfolios.overview(ctx.scope, :max, @saturday).portfolios
 
-      assert {a_row.portfolio.id, a_row.account, a_row.balance} == {a.id, account, money(50)}
-      assert {b_row.portfolio.id, b_row.account, b_row.value} == {b.id, nil, money(102)}
+      assert {a_row.portfolio.id, a_row.cash} == {a.id, money(50)}
+      assert {b_row.portfolio.id, b_row.cash, b_row.value} == {b.id, nil, money(102)}
     end
 
     test "gives an account a retired portfolio settles against too the active one", ctx do
@@ -217,13 +216,8 @@ defmodule Abakus.Depot.PortfoliosTest do
       shares_fixture(ctx.scope, retired, 1)
 
       assert [alt, langfristig] = Portfolios.overview(ctx.scope, :max, @saturday).portfolios
-      assert {alt.portfolio.id, alt.account} == {retired.id, nil}
-      assert {langfristig.account, langfristig.balance} == {account, money(50)}
-
-      assert [%{account: ^account, portfolio: %{id: id}}] =
-               Portfolios.sidebar(ctx.scope, @saturday).accounts
-
-      assert id == ctx.portfolio.id
+      assert {alt.portfolio.id, alt.cash} == {retired.id, nil}
+      assert langfristig.cash == money(50)
     end
 
     test "gives nothing but zeros without any transaction", ctx do
@@ -234,7 +228,7 @@ defmodule Abakus.Depot.PortfoliosTest do
                ttwror: +0.0,
                irr: +0.0,
                dividends: 0,
-               portfolios: [%{value: 0, securities: 0, account: nil, ttwror: +0.0}]
+               portfolios: [%{value: 0, securities: 0, cash: nil, ttwror: +0.0}]
              } = Portfolios.overview(ctx.scope, :six_months, @saturday)
     end
 
@@ -462,6 +456,19 @@ defmodule Abakus.Depot.PortfoliosTest do
                {money(3_100), money(920), money(180)}
     end
 
+    test "leaves out a Verrechnungskonto that is a budget account", ctx do
+      giro = Abakus.DomainFixtures.account_fixture(name: "Giro")
+      account = account_fixture(ctx.scope, %{name: "Giro", budget_account_id: giro.id})
+      deposit_on_friday(ctx.scope, account, 2_000)
+      Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
+
+      holdings = Portfolios.holdings(ctx.scope, nil, @saturday)
+
+      assert holdings.net_worth == 0
+      assert holdings.total.value == 0
+      assert Enum.flat_map(holdings.groups, & &1.accounts) == []
+    end
+
     test "shows an account two portfolios settle against under the first or the selected", ctx do
       account = account_fixture(ctx.scope, %{name: "K"})
       deposit_on_friday(ctx.scope, account, 50)
@@ -653,7 +660,7 @@ defmodule Abakus.Depot.PortfoliosTest do
     end
   end
 
-  describe "dividends/2" do
+  describe "dividends/3" do
     defp dividend(scope, security, date, net, tax) do
       transaction_fixture(scope, date,
         type: :dividend,
@@ -671,7 +678,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       dividend(ctx.scope, security, ~D[2025-07-01], 40, 10)
       dividend(user_scope_fixture(), security, ~D[2026-04-01], 70, 0)
 
-      result = Portfolios.dividends(ctx.scope, @saturday)
+      result = Portfolios.dividends(ctx.scope, nil, @saturday)
 
       assert Enum.map(result.received, &{&1.date, &1.security.id, &1.gross, &1.net}) == [
                {~D[2026-03-01], security.id, money(20), money(15)},
@@ -705,7 +712,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       deliver(other, portfolio_fixture(other), security, ~D[2025-01-02], 1_000)
       dividend(other, security, ~D[2026-04-01], 100, 0)
 
-      result = Portfolios.dividends(ctx.scope, @saturday)
+      result = Portfolios.dividends(ctx.scope, nil, @saturday)
 
       assert [%{pay_date: ~D[2026-10-20], shares: shares, gross: gross, net: net}] =
                result.upcoming
@@ -713,6 +720,43 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert {shares, gross, net} == {shares(10), money(10), money(8)}
       assert result.total == %{gross: money(10), net: money(8)}
       assert hd(result.months).announced == %{gross: money(10), net: money(8)}
+      assert {result.value, result.purchase_value} == {money(1_000), money(900)}
+    end
+
+    test "gives one portfolio's dividends on its reference account and for its shares", ctx do
+      security = security_fixture(quote_feed: :manual)
+      price_fixture(security, @friday, price(100), :pp)
+      account = account_fixture(ctx.scope)
+      own = portfolio_fixture(ctx.scope, %{name: "Eigen", reference_account_id: account.id})
+      other = portfolio_fixture(ctx.scope, %{name: "Anders"})
+
+      for {portfolio, count} <- [{own, 10}, {other, 30}] do
+        transaction_fixture(ctx.scope, @friday,
+          type: :buy,
+          portfolio_id: portfolio.id,
+          security_id: security.id,
+          shares: shares(count),
+          amount: money(count * 90)
+        )
+      end
+
+      transaction_fixture(ctx.scope, ~D[2026-03-01],
+        type: :dividend,
+        account_id: account.id,
+        security_id: security.id,
+        shares: shares(10),
+        amount: money(8)
+      )
+
+      dividend(ctx.scope, security, ~D[2026-03-01], 24, 6)
+      divvy_diary_dividend_fixture(security, nil, ~D[2026-10-20], 1)
+
+      result = Portfolios.dividends(ctx.scope, own.id, @saturday)
+
+      assert result.portfolio.id == own.id
+      assert Enum.map(result.received, & &1.net) == [money(8)]
+      assert [%{shares: shares, gross: gross}] = result.upcoming
+      assert {shares, gross} == {shares(10), money(10)}
       assert {result.value, result.purchase_value} == {money(1_000), money(900)}
     end
   end
@@ -905,59 +949,43 @@ defmodule Abakus.Depot.PortfoliosTest do
       )
     end
 
-    test "gives the portfolios with their securities and every account, adding up to net worth",
-         ctx do
+    test "gives the portfolios by name with the value of their securities", ctx do
       account = account_fixture(ctx.scope, %{name: "Konto Langfristig"})
       deposit_into(ctx.scope, account, 2_000)
       portfolio = Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
       held(ctx.scope, portfolio, 10, 100)
-      savings = account_fixture(ctx.scope, %{name: "Tagesgeld"})
-      deposit_into(ctx.scope, savings, 1_000)
       portfolio_fixture(ctx.scope, %{name: "Sparplan"})
 
-      sidebar = Portfolios.sidebar(ctx.scope, @saturday)
-
-      assert [
-               %{portfolio: %{name: "Langfristig"}, value: 100_000},
-               %{portfolio: %{name: "Sparplan"}, value: 0}
-             ] = sidebar.portfolios
-
-      assert sidebar.accounts == [
-               %{account: account, value: 200_000, portfolio: portfolio},
-               %{account: savings, value: 100_000, portfolio: nil}
-             ]
-
-      total = Enum.sum_by(sidebar.portfolios ++ sidebar.accounts, & &1.value)
-      assert Portfolios.net_worth(ctx.scope, [@saturday]) == %{@saturday => total}
+      assert %{
+               portfolios: [
+                 %{portfolio: %{name: "Langfristig"}, value: 100_000},
+                 %{portfolio: %{name: "Sparplan"}, value: 0}
+               ]
+             } = Portfolios.sidebar(ctx.scope, @saturday)
     end
 
-    test "gives an account two portfolios settle against the first of them", ctx do
-      account = account_fixture(ctx.scope, %{name: "K"})
+    test "adds the balance of the portfolio's cash to its value", ctx do
+      cash = account_fixture(ctx.scope, %{name: "Cash", cash_of_portfolio_id: ctx.portfolio.id})
+      deposit_into(ctx.scope, cash, 300)
+      held(ctx.scope, ctx.portfolio, 10, 100)
 
-      [a, _b] =
-        for name <- ["A", "B"],
-            do: portfolio_fixture(ctx.scope, %{name: name, reference_account_id: account.id})
-
-      assert [%{account: ^account, portfolio: ^a}] =
-               Portfolios.sidebar(ctx.scope, @saturday).accounts
-    end
-
-    test "leaves out retired portfolios and accounts, even while they hold something", ctx do
-      retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
-      held(ctx.scope, retired, 5, 100)
-      closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
-      deposit_into(ctx.scope, closed, 500)
-
-      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}}], accounts: []} =
+      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}, value: 130_000}]} =
                Portfolios.sidebar(ctx.scope, @saturday)
     end
 
-    test "leaves out other users' portfolios and accounts", ctx do
+    test "leaves out retired portfolios, even while they hold something", ctx do
+      retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
+      held(ctx.scope, retired, 5, 100)
+
+      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}}]} =
+               Portfolios.sidebar(ctx.scope, @saturday)
+    end
+
+    test "leaves out other users' portfolios", ctx do
       other = user_scope_fixture()
-      deposit_into(other, account_fixture(other, %{name: "Fremdes Konto"}), 1)
       held(other, portfolio_fixture(other, %{name: "Fremd"}), 1, 100)
 
-      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}, value: 0}], accounts: []} =
+      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}, value: 0}]} =
                Portfolios.sidebar(ctx.scope, @saturday)
     end
   end

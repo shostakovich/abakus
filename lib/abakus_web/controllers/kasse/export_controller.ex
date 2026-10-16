@@ -20,7 +20,7 @@ defmodule AbakusWeb.Kasse.ExportController do
 
       {:error, _message} ->
         query = for key <- ~w(from to), is_binary(params[key]), do: {key, params[key]}
-        conn |> put_status(:see_other) |> redirect(to: ~p"/kasse/export?#{query}")
+        conn |> put_status(:see_other) |> redirect(to: ~p"/settings/kasse/export?#{query}")
     end
   end
 end

@@ -5,20 +5,19 @@ defmodule AbakusWeb.UserLive.Settings do
 
   alias Abakus.Users
   alias AbakusWeb.Format
-  alias AbakusWeb.SettingsLive.Components
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Components.page
-      section={:access}
+    <Layouts.settings
+      current={:access}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
+      groups={@settings_groups}
     >
+      <.header>Zugang</.header>
       <div class="flex flex-col gap-8">
         <section id="passkeys" aria-labelledby="passkeys-title">
           <.section_heading id="passkeys-title" count={if @passkeys != [], do: length(@passkeys)}>
@@ -94,7 +93,7 @@ defmodule AbakusWeb.UserLive.Settings do
           </.form>
         </section>
       </div>
-    </Components.page>
+    </Layouts.settings>
     """
   end
 
@@ -115,7 +114,7 @@ defmodule AbakusWeb.UserLive.Settings do
 
     {:ok,
      socket
-     |> assign(:page_title, Components.label(:access))
+     |> assign(:page_title, "Zugang")
      |> assign(
        :email_form,
        to_form(Users.change_user_email(user, %{}, validate_unique: false))
