@@ -121,6 +121,24 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
     assert Portfolios.list_transactions(ctx.scope) == []
   end
 
+  test "attaches an uploaded PDF receipt", ctx do
+    lv = open_dialog(ctx.conn)
+    change(lv, %{kind: "deposit", amount: "500"}, "amount")
+
+    lv
+    |> file_input("#transaction-form", :receipt, [
+      %{name: "beleg.pdf", content: "%PDF-1.4\n%%EOF\n", type: "application/pdf"}
+    ])
+    |> render_upload("beleg.pdf")
+
+    lv |> form("#transaction-form") |> render_submit()
+
+    assert [%{type: :deposit, amount: 50_000, receipt_id: receipt_id}] =
+             Portfolios.list_transactions(ctx.scope)
+
+    assert receipt_id
+  end
+
   test "updates the sidebar once booked", ctx do
     lv = open_dialog(ctx.conn)
     change(lv, %{kind: "deposit", amount: "1.234,00"}, "amount")

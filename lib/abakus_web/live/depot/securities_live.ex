@@ -100,7 +100,11 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
             Aktive Wertpapiere
           </.section_heading>
           <.empty_state :if={@active == []} icon="layers">
-            Noch keine Wertpapiere. Lege eines beim Erfassen einer Buchung per ISIN an.
+            Noch keine Wertpapiere. Lege eines beim Erfassen einer Buchung per ISIN an oder übernimm
+            sie aus Portfolio Performance.
+            <:action>
+              <.button href={~p"/depot/import"} icon="upload">PP-Datei importieren</.button>
+            </:action>
           </.empty_state>
           <.list :if={@active != []}>
             <.security

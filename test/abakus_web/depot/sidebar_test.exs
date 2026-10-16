@@ -185,4 +185,14 @@ defmodule AbakusWeb.Depot.SidebarTest do
     refute has_element?(lv, sidebar, "Fremd")
     refute has_element?(lv, sidebar, "Verrechnungskonten")
   end
+
+  test "shows no count on „Buchungen“ while the inbox is empty", ctx do
+    portfolio_fixture(ctx.scope)
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+
+    link = lv |> element(sidebar_link("/depot/transactions")) |> render()
+    assert link =~ "Buchungen"
+    refute link =~ ~r/>\s*\d+\s*</
+    refute has_element?(lv, sidebar_link("/depot/transactions") <> "[aria-label]")
+  end
 end

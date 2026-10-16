@@ -115,9 +115,11 @@ defmodule AbakusWeb.Router do
       live "/securities", SecuritiesLive
       live "/securities/:id", SecurityLive
     end
+
+    get "/receipts/:id", ReceiptController, :show
   end
 
-  # The portfolios belong to the settings: creating the first one opens the Depot.
+  # The Depot's settings: creating the first portfolio, or importing a PP file, opens the Depot.
   scope "/depot", AbakusWeb.Depot do
     pipe_through [:browser, :require_authenticated_user]
 
@@ -129,6 +131,8 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.AccountDialog, :attach}
       ] do
       live "/portfolios", PortfoliosLive
+      live "/import", ImportLive
+      live "/receipt-intake", ReceiptIntakeLive
     end
   end
 

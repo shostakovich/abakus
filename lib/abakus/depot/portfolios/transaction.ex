@@ -45,6 +45,7 @@ defmodule Abakus.Depot.Portfolios.Transaction do
     field :pp_uuid, :string
     field :pp_other_uuid, :string
     field :pp_source, :string
+    belongs_to :receipt, Abakus.Depot.Portfolios.Receipt
 
     has_many :units, TransactionUnit
 

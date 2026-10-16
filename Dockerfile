@@ -48,7 +48,7 @@ FROM ${RUNNER_IMAGE} AS final
 
 # sqlite3 lets operators inspect and back up the database inside the container.
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y libstdc++6 openssl libncurses6 ca-certificates tzdata curl sqlite3 && \
+    apt-get install --no-install-recommends -y libstdc++6 openssl libncurses6 ca-certificates tzdata curl sqlite3 poppler-utils && \
     rm -rf /var/lib/apt/lists/*
 
 # The Kasse's dates and its jobs follow the local time.

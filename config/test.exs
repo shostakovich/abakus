@@ -19,6 +19,11 @@ config :abakus, Abakus.Depot.MarketData,
   rate_source: Abakus.Depot.FakeRateSource,
   symbol_source: Abakus.Depot.FakeSymbolSource
 
+config :abakus, Abakus.Depot.Receipts,
+  paperless: Abakus.Depot.FakePaperless,
+  model: Abakus.Depot.FakeModel,
+  text_extractor: Abakus.Depot.FakeTextExtractor
+
 config :abakus, AbakusWeb.Endpoint,
   url: [host: "localhost", port: 4002],
   http: [ip: {127, 0, 0, 1}, port: 4002],

@@ -1,0 +1,13 @@
+{
+  "kind": "sale",
+  "date": "2026-07-10",
+  "isin": "IE00B4L5Y983",
+  "security_name": "iShares Core MSCI World UCITS ETF",
+  "shares": 50,
+  "price": 84.20,
+  "fees": 9.90,
+  "taxes": 126.60,
+  "amount": 4073.50,
+  "depot_number": "987654321",
+  "bank_reference": "VK-88812"
+}

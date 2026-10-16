@@ -4,8 +4,9 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
+  import Ecto.Query, only: [from: 2]
 
-  alias Abakus.Depot.{FakeSymbolSearch, Portfolios}
+  alias Abakus.Depot.{FakeSymbolSearch, Portfolios, PPImport}
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.Securities.Security
   alias Abakus.Repo
@@ -18,11 +19,16 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     %{account: account, portfolio: portfolio, security: security_fixture()}
   end
 
-  defp book(ctx, params) do
+  defp book(ctx, params, receipt \\ nil) do
     params = Map.merge(%{"date" => "2026-10-01", "account_id" => ctx.account.id}, params)
 
     {:ok, transactions} =
-      Portfolios.book_transaction(ctx.scope, Portfolios.transaction_choices(ctx.scope), params)
+      Portfolios.book_transaction(
+        ctx.scope,
+        Portfolios.transaction_choices(ctx.scope),
+        params,
+        receipt
+      )
 
     transactions
   end
@@ -136,15 +142,9 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
   end
 
   test "imported transactions are read-only", ctx do
-    imported = [
-      transaction_fixture(ctx.scope, ~D[2026-09-01],
-        type: :deposit,
-        account_id: ctx.account.id,
-        amount: 100,
-        source: :pp_import
-      )
-    ]
-
+    {:ok, _summary} = PPImport.run(ctx.scope, "test/fixtures/depot/pp/sample.portfolio")
+    imported = Repo.all(from t in Transaction, where: t.source == :pp_import)
+    assert length(imported) == 21
     [own] = book(ctx, %{"kind" => "deposit", "amount" => "1"})
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
@@ -262,16 +262,58 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     assert Portfolios.list_transactions(ctx.scope) == []
   end
 
-  test "deletes a booked transaction", ctx do
-    [deposit] = book(ctx, %{"kind" => "deposit", "amount" => "100"})
+  test "deletes a booked transaction and its receipt", ctx do
+    path = Path.join(System.tmp_dir!(), "receipt-#{System.unique_integer([:positive])}.pdf")
+    File.write!(path, "%PDF-1.4\nzu löschen\n%%EOF\n")
+    on_exit(fn -> File.rm(path) end)
+    [deposit] = book(ctx, %{"kind" => "deposit", "amount" => "100"}, {path, "beleg.pdf"})
+    file = Portfolios.receipt_file(Repo.preload(deposit, :receipt).receipt)
+
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
 
+    assert has_element?(
+             lv,
+             "#transaction-#{deposit.id} a[href='/depot/receipts/#{deposit.receipt_id}']"
+           )
+
+    # A finger gets 44 px to hit the PDF badge.
+    for suffix <- ["", "-phone"] do
+      assert has_element?(
+               lv,
+               "#transaction-#{deposit.id}-receipt#{suffix}.pointer-coarse\\:min-h-11.pointer-coarse\\:min-w-11"
+             )
+    end
+
     lv |> element("#transaction-#{deposit.id} button") |> render_click()
+    assert has_element?(lv, "#transaction-form a", "beleg.pdf")
     confirm_click(lv, "#transaction-delete", "Diese Buchung löschen?")
 
     assert render(lv) =~ "Buchung gelöscht."
     refute has_element?(lv, "#transaction-#{deposit.id}")
     assert Portfolios.list_transactions(ctx.scope) == []
+    refute File.exists?(file)
+  end
+
+  test "a receipt picked before deleting does not hold up the next booking", ctx do
+    [deposit] = book(ctx, %{"kind" => "deposit", "amount" => "100"})
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
+
+    lv |> element("#transaction-#{deposit.id} button") |> render_click()
+
+    lv
+    |> file_input("#transaction-form", :receipt, [
+      %{name: "beleg.pdf", content: "%PDF-1.4\n%%EOF\n\n", type: "application/pdf"}
+    ])
+    |> render_upload("beleg.pdf", 50)
+
+    confirm_click(lv, "#transaction-delete", "Diese Buchung löschen?")
+
+    lv |> element("#transactions-book") |> render_click()
+    change(lv, %{kind: "deposit", amount: "5"}, "amount")
+    lv |> form("#transaction-form") |> render_submit()
+
+    assert render(lv) =~ "Buchung gespeichert."
+    assert [%{amount: 500}] = Portfolios.list_transactions(ctx.scope)
   end
 
   test "creates a security by its ISIN in the form and selects it", ctx do

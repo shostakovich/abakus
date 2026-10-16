@@ -3,6 +3,8 @@ defmodule Abakus.Application do
 
   use Application
 
+  alias Abakus.Depot.Receipts
+
   @impl true
   def start(_type, _args) do
     children =
@@ -16,6 +18,7 @@ defmodule Abakus.Application do
         {Task.Supervisor, name: Abakus.Depot.TaskSupervisor},
         Abakus.Kasse.Fx.Loader,
         Abakus.Kasse.Ynab.Cache,
+        Abakus.Depot.Receipts.Recognition,
         AbakusWeb.Endpoint
       ] ++ jobs()
 
@@ -29,7 +32,9 @@ defmodule Abakus.Application do
         Abakus.Kasse.Recurring.Job,
         Abakus.Backup.Job,
         Abakus.Kasse.Ynab.Scheduler,
-        Abakus.Depot.MarketData.Job
+        Abakus.Depot.MarketData.Job,
+        Abakus.Depot.Receipts.PaperlessJob,
+        {Task, &Receipts.resume_recognition/0}
       ],
       else: []
   end

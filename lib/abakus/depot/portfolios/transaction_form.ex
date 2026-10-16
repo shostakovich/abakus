@@ -14,6 +14,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
 
   alias Abakus.Depot.DecimalInput
   alias Abakus.Depot.Portfolios.Transaction
+  alias Abakus.Depot.Receipts.Fields
   alias Abakus.LocalTime
 
   @kinds [:purchase, :sale, :dividend, :deposit, :removal]
@@ -265,6 +266,49 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
     |> Map.merge(entered_values(kind, shares, amount, fees, taxes))
   end
 
+  @doc """
+  The params that show what the model recognised on a receipt, see `Abakus.Depot.Receipts.Fields`,
+  without portfolio, account and security. The receipt's amount counts as overwritten, so that
+  the form shows where the other fields give another one; a dividend's gross value is what the
+  account is credited with fees and taxes.
+  """
+  def params_of_receipt(%Fields{} = fields) do
+    fees = fields.fees || Decimal.new(0)
+    taxes = fields.taxes || Decimal.new(0)
+
+    %{
+      "kind" => to_string(fields.kind),
+      "date" => fields.date && Date.to_iso8601(fields.date),
+      "shares" => typed(fields.shares),
+      "fees" => typed(fees, 2),
+      "taxes" => typed(taxes, 2),
+      "amount" => fields.amount && fields.amount |> typed(2) |> group_thousands(),
+      "amount_set" => to_string(fields.amount != nil)
+    }
+    |> Map.merge(recognised_values(fields, fees, taxes))
+  end
+
+  defp recognised_values(%Fields{kind: :dividend, amount: nil} = fields, _fees, _taxes),
+    do: %{
+      "gross" =>
+        fields.shares && fields.price && typed(Decimal.mult(fields.shares, fields.price), 2)
+    }
+
+  defp recognised_values(%Fields{kind: :dividend} = fields, fees, taxes),
+    do: %{"gross" => fields.amount |> Decimal.add(fees) |> Decimal.add(taxes) |> typed(2)}
+
+  defp recognised_values(fields, _fees, _taxes), do: %{"price" => typed(fields.price, 2)}
+
+  # As the form shows a computed amount, e.g. `1.231,15`.
+  defp group_thousands(typed) do
+    [whole, fraction] = String.split(typed, ",")
+
+    grouped =
+      whole |> String.reverse() |> String.replace(~r/(\d{3})(?=\d)/, "\\1.") |> String.reverse()
+
+    grouped <> "," <> fraction
+  end
+
   defp kind_of(type) when type in [:buy, :inbound_delivery], do: :purchase
   defp kind_of(type) when type in [:sell, :outbound_delivery], do: :sale
   defp kind_of(type) when type in [:dividend, :deposit, :removal], do: type
@@ -315,7 +359,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
   end
 
   @doc """
-  The attributes of the transactions a valid form books, without user: one, or for
+  The attributes of the transactions a valid form books, without user and receipt: one, or for
   a dividend removed at once a second, independent removal of its amount.
   """
   def to_transactions(%__MODULE__{} = form) do

@@ -59,6 +59,30 @@ defmodule AbakusWeb.Areas do
     {:cont, Phoenix.Component.assign(socket, areas: areas, area: area && area.key)}
   end
 
+  @doc "Shows the Depot in the sidebar and the area switcher as soon as the user's first portfolio exists."
+  def open_depot(%{assigns: %{current_scope: %Scope{depot: true}}} = socket), do: socket
+
+  def open_depot(socket) do
+    scope = %{socket.assigns.current_scope | depot: true}
+
+    Phoenix.Component.assign(socket,
+      current_scope: scope,
+      areas: for_scope(scope),
+      area: socket.assigns.area || :depot
+    )
+  end
+
+  @doc "Hides the Depot again once the user's last portfolio is gone, e.g. after a PP import deleted it."
+  def close_depot(%{assigns: %{current_scope: %Scope{depot: false}}} = socket), do: socket
+
+  def close_depot(socket) do
+    scope = %{socket.assigns.current_scope | depot: false}
+    areas = for_scope(scope)
+    area = with :depot <- socket.assigns.area, do: areas |> List.first() |> then(&(&1 && &1.key))
+
+    Phoenix.Component.assign(socket, current_scope: scope, areas: areas, area: area)
+  end
+
   @doc "Whether the scope's user may use the area."
   def allowed?(scope, key) when is_atom(key), do: Enum.any?(for_scope(scope), &(&1.key == key))
 

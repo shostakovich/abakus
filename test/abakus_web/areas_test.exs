@@ -196,7 +196,7 @@ defmodule AbakusWeb.AreasTest do
     end
 
     test "gets 404 on every Depot page and sees no Depot", %{conn: conn} do
-      for path <- get_paths("/depot", 1), path != "/depot/portfolios" do
+      for path <- get_paths("/depot", 1), path not in ["/depot/portfolios", "/depot/import"] do
         assert_error_sent 404, fn -> get(conn, path) end
       end
 

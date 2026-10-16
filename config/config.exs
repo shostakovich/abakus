@@ -33,6 +33,11 @@ config :abakus, Abakus.Depot.MarketData,
   rate_source: Abakus.Depot.MarketData.ECB,
   symbol_source: Abakus.Depot.MarketData.DivvyDiary
 
+config :abakus, Abakus.Depot.Receipts,
+  paperless: Abakus.Depot.Receipts.PaperlessAPI,
+  model: Abakus.Depot.Receipts.ChatAPI,
+  text_extractor: Abakus.Depot.Receipts.Pdftotext
+
 config :abakus, Abakus.Repo,
   journal_mode: :wal,
   synchronous: :normal,

@@ -4,7 +4,7 @@ defmodule Abakus.Depot.NewSecurityTest do
   import Abakus.Depot.SecuritiesFixtures
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{FakeSymbolSearch, MarketData, Securities}
+  alias Abakus.Depot.{FakeSymbolSearch, MarketData, PPImport, Securities}
   alias Abakus.Depot.Securities.Security
 
   setup do
@@ -43,5 +43,17 @@ defmodule Abakus.Depot.NewSecurityTest do
     security_fixture(isin: "IE00BKM4GZ66", name: "EM IMI")
     {:error, changeset} = Securities.create_security(scope, %{isin: "IE00BKM4GZ66", name: "EM"})
     assert errors_on(changeset).isin == ["gehört schon zu EM IMI"]
+  end
+
+  test "a PP re-import neither takes over nor deletes a security created from an ISIN",
+       %{scope: scope} do
+    {:ok, created} =
+      Securities.create_security(scope, %{isin: "IE00B4L5Y983", name: "Mein MSCI World"})
+
+    {:ok, _summary} = PPImport.run(scope, "test/fixtures/depot/pp/sample.portfolio")
+    {:ok, _summary} = PPImport.run(scope, "test/fixtures/depot/pp/sample.portfolio")
+
+    assert %{name: "Mein MSCI World", source: :manual} = Repo.reload!(created)
+    assert Repo.aggregate(from(s in Security, where: s.isin == "IE00B4L5Y983"), :count) == 2
   end
 end

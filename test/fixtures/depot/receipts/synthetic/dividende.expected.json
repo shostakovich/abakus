@@ -1,0 +1,13 @@
+{
+  "kind": "dividend",
+  "date": "2026-05-20",
+  "isin": "DE0007164600",
+  "security_name": "SAP SE Inhaber-Aktien o.N.",
+  "shares": 40,
+  "price": 2.35,
+  "fees": null,
+  "taxes": 24.79,
+  "amount": 69.21,
+  "depot_number": "0123 456 789",
+  "bank_reference": "DIV-2026-31415"
+}

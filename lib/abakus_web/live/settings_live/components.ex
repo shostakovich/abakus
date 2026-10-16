@@ -1,8 +1,8 @@
 defmodule AbakusWeb.SettingsLive.Components do
   @moduledoc """
   The frame of the settings: the overview lists the sections; a section shows them as tabs from `lg` and below
-  it a way back to the overview. The links load the page, since Zugang sits behind the sudo plug and Depots in
-  the Depot's routes.
+  it a way back to the overview. The links load the page, since Zugang sits behind the sudo plug and the Depot's
+  sections in the Depot's routes.
   """
   use AbakusWeb, :html
 
@@ -10,6 +10,8 @@ defmodule AbakusWeb.SettingsLive.Components do
     {:access, "Zugang", "key-round", "Passkeys und E-Mail"},
     {:appearance, "Aussehen", "palette", "Hell, Dunkel oder System"},
     {:depots, "Depots", "briefcase", "Deine Depots und ihre Verrechnungskonten"},
+    {:pp_import, "PP-Import", "upload", "Depots und Buchungen aus Portfolio Performance"},
+    {:receipt_intake, "Belegeingang", "file-text", "Belege aus Paperless-ngx und ihre Erkennung"},
     {:ynab, "YNAB-Import", "history", "Was aus YNAB übernommen wurde"}
   ]
 
@@ -64,11 +66,14 @@ defmodule AbakusWeb.SettingsLive.Components do
     """
   end
 
-  # YNAB-Import belongs to the Budget.
+  # YNAB-Import belongs to the Budget, Belegeingang to the Depot.
   defp sections(scope) do
-    budget? = AbakusWeb.Areas.allowed?(scope, :budget)
-    Enum.filter(@sections, fn {key, _label, _icon, _hint} -> key != :ynab or budget? end)
+    Enum.filter(@sections, fn {key, _label, _icon, _hint} -> shown?(key, scope) end)
   end
+
+  defp shown?(:ynab, scope), do: AbakusWeb.Areas.allowed?(scope, :budget)
+  defp shown?(:receipt_intake, scope), do: AbakusWeb.Areas.allowed?(scope, :depot)
+  defp shown?(_key, _scope), do: true
 
   @doc "The section's name, e.g. for the page title."
   def label(section) do
@@ -79,5 +84,7 @@ defmodule AbakusWeb.SettingsLive.Components do
   defp path(:access), do: ~p"/settings/access"
   defp path(:appearance), do: ~p"/settings/appearance"
   defp path(:depots), do: ~p"/depot/portfolios"
+  defp path(:pp_import), do: ~p"/depot/import"
+  defp path(:receipt_intake), do: ~p"/depot/receipt-intake"
   defp path(:ynab), do: ~p"/settings/ynab"
 end

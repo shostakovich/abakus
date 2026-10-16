@@ -4,8 +4,8 @@ defmodule Abakus.Depot.BookingTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{Portfolios, Valuation}
-  alias Abakus.Depot.Portfolios.{Transaction, TransactionForm}
+  alias Abakus.Depot.{Portfolios, PPImport, Valuation}
+  alias Abakus.Depot.Portfolios.{Receipt, Transaction, TransactionForm}
   alias Abakus.Depot.Valuation.Market
   alias Abakus.LocalTime
 
@@ -39,8 +39,8 @@ defmodule Abakus.Depot.BookingTest do
     )
   end
 
-  defp book(ctx, kind, attrs),
-    do: Portfolios.book_transaction(ctx.scope, ctx.choices, form(ctx, kind, attrs))
+  defp book(ctx, kind, attrs, receipt \\ nil),
+    do: Portfolios.book_transaction(ctx.scope, ctx.choices, form(ctx, kind, attrs), receipt)
 
   defp booked(transaction) do
     transaction = Repo.preload(transaction, :units, force: true)
@@ -337,10 +337,93 @@ defmodule Abakus.Depot.BookingTest do
 
   defp sorted_keys(map), do: map |> Map.keys() |> Enum.sort()
 
+  describe "receipts" do
+    @pdf "%PDF-1.4\nein Beleg\n%%EOF\n"
+
+    setup do
+      path = Path.join(System.tmp_dir!(), "receipt-#{System.unique_integer([:positive])}.pdf")
+      File.write!(path, @pdf)
+      on_exit(fn -> File.rm(path) end)
+      %{path: path}
+    end
+
+    test "are stored once per file and attached to the transaction", ctx do
+      assert {:ok, [first]} = book(ctx, "deposit", %{"amount" => "1"}, {ctx.path, "a.pdf"})
+      assert {:ok, [second]} = book(ctx, "deposit", %{"amount" => "2"}, {ctx.path, "b.pdf"})
+
+      assert first.receipt_id == second.receipt_id
+      receipt = Repo.get!(Receipt, first.receipt_id)
+      assert %{filename: "a.pdf", byte_size: 25, user_id: user_id} = receipt
+      assert user_id == ctx.scope.user.id
+      assert receipt.sha256 == Base.encode16(:crypto.hash(:sha256, @pdf), case: :lower)
+      assert File.read!(Portfolios.receipt_file(receipt)) == @pdf
+    end
+
+    test "attach to the dividend, not to its removal", ctx do
+      attrs = %{"gross" => "10", "remove_at_once" => "true"}
+      assert {:ok, [dividend, removal]} = book(ctx, "dividend", attrs, {ctx.path, "d.pdf"})
+      assert dividend.receipt_id
+      assert removal.receipt_id == nil
+    end
+
+    test "leave no file behind when booking fails", ctx do
+      Repo.delete!(ctx.security)
+      sha256 = Base.encode16(:crypto.hash(:sha256, @pdf), case: :lower)
+
+      assert_raise Ecto.ConstraintError, fn ->
+        book(ctx, "dividend", %{"gross" => "10"}, {ctx.path, "d.pdf"})
+      end
+
+      refute Repo.exists?(Receipt)
+      refute File.exists?(Portfolios.receipt_file(sha256))
+
+      refute sha256
+             |> Portfolios.receipt_file()
+             |> Path.dirname()
+             |> File.ls!()
+             |> Enum.any?(&(&1 =~ sha256))
+    end
+
+    test "must be PDFs", ctx do
+      File.write!(ctx.path, "kein PDF")
+
+      assert {:error, changeset} =
+               book(ctx, "deposit", %{"amount" => "1"}, {ctx.path, "x.pdf"})
+
+      assert errors_on(changeset).receipt == ["ist keine PDF-Datei"]
+      assert Portfolios.list_transactions(ctx.scope) == []
+    end
+  end
+
+  test "a PP re-import keeps manually booked transactions", ctx do
+    {:ok, _} = PPImport.run(ctx.scope, "test/fixtures/depot/pp/sample.portfolio")
+    {:ok, [deposit]} = book(ctx, "deposit", %{"amount" => "100"})
+
+    {:ok, _} = PPImport.run(ctx.scope, "test/fixtures/depot/pp/sample.portfolio")
+
+    assert Repo.get(Transaction, deposit.id)
+  end
+
   describe "editing and deleting" do
-    defp edit(ctx, transaction, kind, attrs) do
+    @pdf "%PDF-1.4\nein Beleg\n%%EOF\n"
+
+    defp receipt_path(content) do
+      path = Path.join(System.tmp_dir!(), "receipt-#{System.unique_integer([:positive])}.pdf")
+      File.write!(path, content)
+      on_exit(fn -> File.rm(path) end)
+      path
+    end
+
+    defp edit(ctx, transaction, kind, attrs, receipt \\ nil) do
       transaction = Portfolios.get_transaction(ctx.scope, transaction.id)
-      Portfolios.update_transaction(ctx.scope, ctx.choices, transaction, form(ctx, kind, attrs))
+
+      Portfolios.update_transaction(
+        ctx.scope,
+        ctx.choices,
+        transaction,
+        form(ctx, kind, attrs),
+        receipt
+      )
     end
 
     test "the form shows a booked transaction as it was entered", ctx do
@@ -472,13 +555,8 @@ defmodule Abakus.Depot.BookingTest do
     end
 
     test "imported and other users' transactions are read-only", ctx do
-      imported =
-        transaction_fixture(ctx.scope, @day,
-          type: :deposit,
-          account_id: ctx.account.id,
-          amount: 100,
-          source: :pp_import
-        )
+      {:ok, _} = PPImport.run(ctx.scope, "test/fixtures/depot/pp/sample.portfolio")
+      imported = Repo.one!(from t in Transaction, where: t.type == :deposit, limit: 1)
 
       assert {:error, :read_only} = edit(ctx, imported, "deposit", %{"amount" => "1"})
       assert {:error, :read_only} = Portfolios.delete_transaction(ctx.scope, imported)
@@ -524,6 +602,64 @@ defmodule Abakus.Depot.BookingTest do
                )
 
       assert Portfolios.list_transactions(ctx.scope) == []
+    end
+
+    test "deleting removes the receipt file once no transaction uses it", ctx do
+      path = receipt_path(@pdf)
+      {:ok, [first]} = book(ctx, "deposit", %{"amount" => "1"}, {path, "a.pdf"})
+      {:ok, [second]} = book(ctx, "deposit", %{"amount" => "2"}, {path, "a.pdf"})
+      file = Portfolios.receipt_file(Repo.get!(Receipt, first.receipt_id))
+
+      assert {:ok, _} = Portfolios.delete_transaction(ctx.scope, first)
+      refute Repo.get(Transaction, first.id)
+      assert File.exists?(file)
+
+      assert {:ok, _} = Portfolios.delete_transaction(ctx.scope, second)
+      refute Repo.get(Receipt, second.receipt_id)
+      refute File.exists?(file)
+    end
+
+    test "a receipt file another user's receipt needs stays", ctx do
+      path = receipt_path(@pdf)
+      {:ok, [own]} = book(ctx, "deposit", %{"amount" => "1"}, {path, "a.pdf"})
+
+      other = user_scope_fixture()
+      other_account = account_fixture(other)
+
+      {:ok, _} =
+        Portfolios.book_transaction(
+          other,
+          Portfolios.transaction_choices(other),
+          %{
+            "kind" => "deposit",
+            "date" => "2026-10-01",
+            "amount" => "1",
+            "account_id" => other_account.id
+          },
+          {path, "b.pdf"}
+        )
+
+      assert {:ok, _} = Portfolios.delete_transaction(ctx.scope, own)
+
+      assert File.exists?(
+               Portfolios.receipt_file(Base.encode16(:crypto.hash(:sha256, @pdf), case: :lower))
+             )
+    end
+
+    test "a new receipt replaces the old one, whose file goes", ctx do
+      old = "%PDF-1.4\nalt\n%%EOF\n"
+      {:ok, [deposit]} = book(ctx, "deposit", %{"amount" => "1"}, {receipt_path(old), "alt.pdf"})
+      old_file = Portfolios.receipt_file(Repo.get!(Receipt, deposit.receipt_id))
+
+      {:ok, kept} = edit(ctx, deposit, "deposit", %{"amount" => "2"})
+      assert kept.receipt_id == deposit.receipt_id
+
+      {:ok, updated} =
+        edit(ctx, deposit, "deposit", %{"amount" => "2"}, {receipt_path(@pdf), "neu.pdf"})
+
+      assert updated.receipt.filename == "neu.pdf"
+      refute File.exists?(old_file)
+      assert File.exists?(Portfolios.receipt_file(updated.receipt))
     end
   end
 

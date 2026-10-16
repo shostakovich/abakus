@@ -63,3 +63,27 @@
   .app-heatmap-total .app-heat-down { background: color-mix(in oklab, var(--heat-down-high) calc(var(--heat) * 40%), var(--heat-down-low)); }
   .app-heatmap-total .app-heat::before { font-size: .875em; }
 }
+
+/* „Beleg prüfen“: the receipt's text as on paper, the recognised values marked in the warning fill
+   with its own text colour, so they read in both themes. Wide lines scroll sideways behind an
+   always visible scrollbar (macOS hides overlay scrollbars), so no value is cut off unnoticed. */
+.app-receipt-lines { margin: 0; padding-bottom: .25rem; overflow-x: auto; font-family: ui-monospace, Menlo, monospace; font-size: .75rem; line-height: 1.45; white-space: pre; }
+.app-receipt-lines mark { padding: 0 .1rem; border-radius: .125rem; background: var(--color-warning); color: var(--color-warning-content); }
+.app-receipt-lines::-webkit-scrollbar { width: .5rem; height: .5rem; }
+.app-receipt-lines::-webkit-scrollbar-track { border-radius: 9999px; background: color-mix(in oklab, var(--color-base-content) 8%, transparent); }
+.app-receipt-lines::-webkit-scrollbar-thumb { border-radius: 9999px; background: color-mix(in oklab, var(--color-base-content) 40%, transparent); }
+@supports not selector(::-webkit-scrollbar) {
+  .app-receipt-lines { scrollbar-color: color-mix(in oklab, var(--color-base-content) 40%, transparent) transparent; }
+}
+/* The receipt stays beside the form while it scrolls; below lg twelve lines fading out show that it
+   scrolls. */
+@media (min-width: 64rem) {
+  .app-receipt-pane { position: sticky; top: 0; align-self: flex-start; }
+}
+@media (max-width: 63.99rem) {
+  .app-receipt-lines {
+    max-height: calc(12 * 1.45em); overflow-y: auto;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 2rem), transparent);
+  }
+}
+@media (max-width: 39.99rem) { .app-receipt-lines { white-space: pre-wrap; overflow-wrap: anywhere; } }

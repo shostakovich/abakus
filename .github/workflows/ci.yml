@@ -43,6 +43,10 @@ jobs:
       - name: Credo
         run: mix credo --strict
 
+      # The receipt tests tagged :pdftotext need poppler's pdftotext.
+      - name: Install pdftotext
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+
       - name: Run tests
         run: mix test
 

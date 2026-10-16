@@ -1,0 +1,25 @@
+Zipfelbank AG · Postfach 12 34 · 99997 Zipfelberg
+
+Herrn                                              Depotnummer     5550 1234 00
+Max Mustermann                                     Datum           12.03.2026
+Beispielweg 7
+99999 Zipfelhausen
+
+Gutschrift fälliger Wertpapier-Erträge
+Dividendengutschrift
+
+Depotbestand                  Wertpapier-Bezeichnung              WKN/ISIN
+per 06.03.2026                Allianz SE vink.Namens-Aktien o.N.  840400
+STK            12,000                                             DE0008404005
+EUR 15,40     Dividende pro Stück für Geschäftsjahr 01.01.25 bis 31.12.25
+zahlbar ab 10.03.2026
+
+                       Abrechnung Dividendengutschrift
+Bruttobetrag:                                           EUR          184,80
+Gutschrift auf Konto            Valuta          Zu Ihren Gunsten vor Steuern
+5550123401   EUR                10.03.2026      EUR          184,80
+
+Informationen zur steuerlichen Behandlung dieses Geschäftsvorgangs und den auf
+Ihrem Konto gebuchten Endbetrag finden Sie auf der separaten Steuermitteilung.
+
+Dieser Beleg wurde maschinell erstellt und wird nicht unterschrieben.

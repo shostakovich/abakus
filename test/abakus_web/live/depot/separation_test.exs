@@ -2,10 +2,10 @@ defmodule AbakusWeb.Depot.SeparationTest do
   use AbakusWeb.ConnCase
 
   import Phoenix.LiveViewTest
-  import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
+  import Abakus.Depot.{PortfoliosFixtures, ReceiptsFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.Portfolios
+  alias Abakus.Depot.{FakeModel, Portfolios, Receipts}
   alias Abakus.LocalTime
 
   setup :register_and_log_in_user
@@ -86,5 +86,46 @@ defmodule AbakusWeb.Depot.SeparationTest do
     refute has_element?(lv, "#transaction-modal")
     assert {:error, :read_only} = Portfolios.delete_transaction(ctx.scope, ctx.deposit)
     assert Portfolios.get_transaction(ctx.other, ctx.deposit.id)
+  end
+
+  test "a user never sees another user's receipts", ctx do
+    FakeModel.stub(fn _text -> {:ok, answer()} end)
+    {:ok, :added} = Receipts.upload(ctx.other, pdf_file("fremd-eingang.pdf"), "fremd-eingang.pdf")
+    await_recognition()
+    [waiting] = Receipts.list_inbox(ctx.other)
+
+    {:ok, [booked]} =
+      Portfolios.book_transaction(
+        ctx.other,
+        Portfolios.transaction_choices(ctx.other),
+        %{
+          "kind" => "deposit",
+          "date" => "2026-10-01",
+          "amount" => "1",
+          "account_id" => ctx.account.id
+        },
+        {pdf_file("fremd-gebucht.pdf"), "fremd-gebucht.pdf"}
+      )
+
+    {:ok, lv, html} = live(ctx.conn, ~p"/depot/transactions")
+
+    refute has_element?(lv, "#inbox")
+    refute has_element?(lv, sidebar_link("/depot/transactions") <> " .tabular-nums")
+    refute html =~ "fremd-eingang.pdf"
+    refute html =~ "fremd-gebucht.pdf"
+
+    lv
+    |> with_target("#transaction-dialog")
+    |> render_click("open_receipt", %{"id" => waiting.id})
+
+    refute has_element?(lv, "#transaction-modal")
+    assert render(lv) =~ "Dieser Beleg liegt nicht mehr im Eingang."
+
+    render_click(lv, "discard", %{"id" => waiting.id})
+    assert [%{id: id}] = Receipts.list_inbox(ctx.other)
+    assert id == waiting.id
+
+    assert ctx.conn |> get(~p"/depot/receipts/#{waiting.id}") |> response(404)
+    assert ctx.conn |> get(~p"/depot/receipts/#{booked.receipt_id}") |> response(404)
   end
 end

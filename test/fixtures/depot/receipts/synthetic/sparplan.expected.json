@@ -1,0 +1,14 @@
+{
+  "kind": "purchase",
+  "date": "2026-08-03",
+  "isin": "IE00B4L5Y983",
+  "security_name": "iShares Core MSCI World",
+  "shares": 0.412371,
+  "price": 121.25,
+  "fees": null,
+  "taxes": 0.20,
+  "amount": 50.20,
+  "depot_number": "4455667788",
+  "bank_reference": "77120934",
+  "unscored": ["bank_reference"]
+}

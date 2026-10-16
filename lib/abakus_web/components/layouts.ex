@@ -39,7 +39,7 @@ defmodule AbakusWeb.Layouts do
   attr :depot_sidebar, :map,
     default: nil,
     doc:
-      "the portfolios and accounts with their values from `AbakusWeb.Depot.Sidebar`, on the Depot's pages"
+      "the portfolios and accounts with their values and the inbox's count from `AbakusWeb.Depot.Sidebar`, on the Depot's pages"
 
   attr :depot_marked, :any,
     default: nil,
@@ -64,8 +64,9 @@ defmodule AbakusWeb.Layouts do
   The Budget: Budget and all accounts, the open accounts by group with their balance and how many transactions
   wait for approval and "Konto hinzufügen" (not in the icon rail or the dock), then Import & Sync. The Kasse:
   Ausgaben, Salden, Aktivität and Gruppe (its settings). The Depot: Übersicht, Bestand, Dividenden, Buchungen,
-  Performance and Wertpapiere; on its own pages also „Buchung erfassen“ (in the icon rail too) and the active
-  portfolios and accounts with their values (not in the icon rail or the dock).
+  Performance and Wertpapiere; on its own pages Buchungen counts the recognised receipts in the inbox, and there
+  are „Buchung erfassen“ (in the icon rail too) and the active portfolios and accounts with their values (not in
+  the icon rail or the dock).
 
   With one area the brand is its name; with more, each area's entries start with its name as section title, and
   in the top bar the brand is a menu that switches the area. On phones the dock holds the current area's entries;
@@ -235,6 +236,8 @@ defmodule AbakusWeb.Layouts do
         dock={@in_depot_dock?}
         navigate={navigate(~p"/depot/transactions", @current)}
         href={href(~p"/depot/transactions", @current)}
+        count={inbox_count(@depot_sidebar)}
+        count_label="im Eingang"
       />
       <:nav
         :if={@depot?}
@@ -371,6 +374,9 @@ defmodule AbakusWeb.Layouts do
   defp nav_key(%{current: current}), do: current
 
   defp initial(email), do: String.upcase(String.first(email) || "")
+
+  defp inbox_count(%{inbox: count}) when count > 0, do: count
+  defp inbox_count(_sidebar), do: nil
 
   # Each area and the settings have live_sessions of their own (Zugang a further one behind the sudo plug), so
   # only links within an area navigate; the others load the page.

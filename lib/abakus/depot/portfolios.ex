@@ -1,7 +1,7 @@
 defmodule Abakus.Depot.Portfolios do
   @moduledoc """
   Portfolios, accounts, their transactions and savings plans, each of one user, the transactions
-  the user books, and what the screens show of them: net worth, the overview,
+  the user books with their receipts, and what the screens show of them: net worth, the overview,
   the holdings, the dividends, the performance, the sidebar and the user's holding of a security,
   computed from the transactions on every request.
   """
@@ -30,6 +30,7 @@ defmodule Abakus.Depot.Portfolios do
     Account,
     Portfolio,
     PortfolioForm,
+    Receipt,
     SavingsPlan,
     Transaction,
     TransactionForm,
@@ -739,6 +740,13 @@ defmodule Abakus.Depot.Portfolios do
 
   defp first_day([], date), do: date
 
+  @doc "Whether the user has transactions that did not come from a PP import."
+  def own_transactions?(%Scope{} = scope) do
+    Repo.exists?(
+      from t in Transaction, where: t.user_id == ^scope.user.id and t.source != :pp_import
+    )
+  end
+
   ## Transactions
 
   @filters %{
@@ -762,7 +770,8 @@ defmodule Abakus.Depot.Portfolios do
     :portfolio,
     :account,
     :other_portfolio,
-    :other_account
+    :other_account,
+    :receipt
   ]
 
   @doc """
@@ -798,6 +807,10 @@ defmodule Abakus.Depot.Portfolios do
         preload: ^@transaction_preloads
     )
   end
+
+  @doc "A receipt of the user, nil for an unknown one or another user's."
+  def get_receipt(%Scope{} = scope, id),
+    do: Repo.get_by(Receipt, id: id, user_id: scope.user.id)
 
   ## Booking
 
@@ -876,16 +889,53 @@ defmodule Abakus.Depot.Portfolios do
 
   @doc """
   Books the transaction form with `attrs` and returns the booked transactions: one, or a dividend
-  and its removal.
+  and its removal. `receipt` is an optional PDF as `{path, filename}`, attached to the first of
+  them, which counts as booked manually; or a ready receipt of the inbox, which the first is
+  booked from and which is booked with it, `{:error, :gone}` if it no longer waits.
   """
-  def book_transaction(%Scope{} = scope, choices, attrs) do
+  def book_transaction(scope, choices, attrs, receipt \\ nil)
+
+  def book_transaction(%Scope{} = scope, choices, attrs, %Receipt{} = receipt) do
     changeset = change_transaction_form(scope, choices, attrs)
 
     Repo.transact(fn ->
-      with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :insert) do
-        {:ok, Enum.map(TransactionForm.to_transactions(form), &insert_transaction(scope, &1))}
+      with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :insert),
+           :ok <- claim_ready_receipt(scope, receipt) do
+        {:ok, insert_transactions(scope, form, %{receipt_id: receipt.id, source: :receipt})}
       end
     end)
+  end
+
+  def book_transaction(%Scope{} = scope, choices, attrs, receipt) do
+    changeset = change_transaction_form(scope, choices, attrs)
+
+    transact_with_receipt(receipt, fn ->
+      with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :insert),
+           {:ok, receipt_id} <- store_receipt(scope, receipt, changeset) do
+        {:ok, insert_transactions(scope, form, %{receipt_id: receipt_id})}
+      end
+    end)
+  end
+
+  # The first transaction carries `first_attrs`, a dividend's removal is booked manually.
+  defp insert_transactions(scope, form, first_attrs) do
+    [first | rest] = TransactionForm.to_transactions(form)
+
+    [
+      insert_transaction(scope, Map.merge(first, first_attrs))
+      | Enum.map(rest, &insert_transaction(scope, &1))
+    ]
+  end
+
+  defp claim_ready_receipt(scope, receipt) do
+    query =
+      from r in Receipt,
+        where: r.id == ^receipt.id and r.user_id == ^scope.user.id and r.status == :ready
+
+    case Repo.update_all(query, set: [status: :booked, updated_at: DateTime.utc_now()]) do
+      {1, _receipts} -> :ok
+      {0, _receipts} -> {:error, :gone}
+    end
   end
 
   defp insert_transaction(scope, attrs) do
@@ -904,32 +954,51 @@ defmodule Abakus.Depot.Portfolios do
   def transaction_form_params(%Transaction{} = transaction),
     do: TransactionForm.params_of(transaction)
 
-  @doc "Saves the transaction form with `attrs` over `transaction`, one the user booked: its fields and units."
-  def update_transaction(%Scope{} = scope, choices, %Transaction{} = transaction, attrs) do
+  @doc """
+  Saves the transaction form with `attrs` over `transaction`, one the user booked: its fields and
+  units. A new PDF `receipt` replaces the attached one, which goes once nothing uses it.
+  """
+  def update_transaction(
+        %Scope{} = scope,
+        choices,
+        %Transaction{} = transaction,
+        attrs,
+        receipt \\ nil
+      ) do
     changeset = change_transaction_form(scope, choices, attrs, transaction)
 
-    with :ok <- check_editable(scope, transaction) do
-      Repo.transact(fn -> save_transaction(scope, changeset, transaction) end)
+    with :ok <- check_editable(scope, transaction),
+         {:ok, {updated, unused}} <-
+           transact_with_receipt(receipt, fn ->
+             save_transaction(scope, changeset, transaction, receipt)
+           end) do
+      remove_receipt_file(unused)
+      {:ok, updated}
     end
   end
 
-  defp save_transaction(scope, changeset, transaction) do
+  defp save_transaction(scope, changeset, transaction, receipt) do
     with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :update),
          %Transaction{} <- Repo.get(Transaction, transaction.id) || {:error, :gone},
          [attrs] = TransactionForm.to_transactions(%{form | remove_at_once: false}),
          {units, attrs} = Map.pop!(attrs, :units),
          true <-
            keeps_holding?(scope, transaction, struct!(Transaction, attrs)) ||
-             {:error, holding_error(changeset, form.kind)} do
+             {:error, holding_error(changeset, form.kind)},
+         {:ok, receipt_id} <- store_receipt(scope, receipt, changeset) do
+      attrs =
+        attrs |> Map.delete(:source) |> Map.put(:receipt_id, receipt_id || transaction.receipt_id)
+
       Repo.delete_all(from u in TransactionUnit, where: u.transaction_id == ^transaction.id)
-      Repo.update!(Ecto.Changeset.change(transaction, Map.delete(attrs, :source)))
+      Repo.update!(Ecto.Changeset.change(transaction, attrs))
 
       Repo.insert_all(
         TransactionUnit,
         Enum.map(units, &Map.put(&1, :transaction_id, transaction.id))
       )
 
-      {:ok, get_transaction(scope, transaction.id)}
+      unused = if receipt_id, do: drop_unused_receipt(transaction.receipt_id)
+      {:ok, {get_transaction(scope, transaction.id), unused}}
     end
   end
 
@@ -944,13 +1013,18 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   @doc """
-  Deletes a transaction the user booked; refused with `{:error, :holding}` when a later sale would
-  exceed the holding without it.
+  Deletes a transaction the user booked, and its receipt and the receipt's file once nothing uses
+  them; refused with `{:error, :holding}` when a later sale would exceed the holding without it.
   """
   def delete_transaction(%Scope{} = scope, %Transaction{} = transaction) do
     with :ok <- check_editable(scope, transaction),
-         true <- keeps_holding?(scope, transaction, nil) || {:error, :holding} do
-      Repo.delete!(transaction, allow_stale: true)
+         true <- keeps_holding?(scope, transaction, nil) || {:error, :holding},
+         {:ok, unused} <-
+           Repo.transact(fn ->
+             Repo.delete!(transaction, allow_stale: true)
+             {:ok, drop_unused_receipt(transaction.receipt_id)}
+           end) do
+      remove_receipt_file(unused)
       {:ok, transaction}
     end
   end
@@ -960,4 +1034,117 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   defp check_editable(_scope, _transaction), do: {:error, :read_only}
+
+  # Drops the receipt with `id` if no transaction uses it any more; returns the hash of its file if
+  # no user's receipt needs the file either.
+  defp drop_unused_receipt(nil), do: nil
+
+  defp drop_unused_receipt(id) do
+    with false <- Repo.exists?(from t in Transaction, where: t.receipt_id == ^id),
+         %Receipt{sha256: sha256} = receipt <- Repo.get(Receipt, id) do
+      Repo.delete!(receipt)
+      unless Repo.exists?(from r in Receipt, where: r.sha256 == ^sha256), do: sha256
+    else
+      _used -> nil
+    end
+  end
+
+  defp remove_receipt_file(nil), do: :ok
+
+  defp remove_receipt_file(sha256) do
+    _gone_already_is_fine = File.rm(receipt_file(sha256))
+    :ok
+  end
+
+  # A receipt's file is written before its record commits; it goes again if none is committed.
+  defp transact_with_receipt(receipt, fun) do
+    Repo.transact(fun)
+  after
+    remove_orphan_receipt_file(receipt)
+  end
+
+  defp remove_orphan_receipt_file(nil), do: :ok
+
+  defp remove_orphan_receipt_file({path, _filename}) do
+    sha256 = path |> File.read!() |> sha256()
+
+    if Repo.exists?(from r in Receipt, where: r.sha256 == ^sha256),
+      do: :ok,
+      else: remove_receipt_file(sha256)
+  end
+
+  defp store_receipt(_scope, nil, _changeset), do: {:ok, nil}
+
+  defp store_receipt(scope, {path, filename}, changeset) do
+    content = File.read!(path)
+
+    case store_receipt_file(content) do
+      {:ok, sha256} ->
+        {:ok, receipt_record(scope, sha256, filename, byte_size(content)).id}
+
+      {:error, :not_pdf} ->
+        {:error,
+         Ecto.Changeset.add_error(%{changeset | action: :insert}, :receipt, "ist keine PDF-Datei")}
+    end
+  end
+
+  @doc """
+  Stores the PDF `content` in the receipts directory, once for all users, and returns its
+  SHA-256; `{:error, :not_pdf}` for content that is no PDF.
+  """
+  def store_receipt_file(content) do
+    if pdf?(content) do
+      sha256 = sha256(content)
+      file = receipt_file(sha256)
+      File.mkdir_p!(Path.dirname(file))
+      unless File.exists?(file), do: write_atomically(file, content)
+      {:ok, sha256}
+    else
+      {:error, :not_pdf}
+    end
+  end
+
+  defp pdf?(content), do: String.starts_with?(content, "%PDF-")
+
+  defp sha256(content), do: :sha256 |> :crypto.hash(content) |> Base.encode16(case: :lower)
+
+  defp write_atomically(file, content) do
+    temp = "#{file}.#{System.unique_integer([:positive])}.tmp"
+
+    try do
+      File.write!(temp, content)
+      File.rename!(temp, file)
+    after
+      File.rm(temp)
+    end
+  end
+
+  # The same file waiting in the inbox, or discarded from it, is booked with the transaction.
+  defp receipt_record(scope, sha256, filename, byte_size) do
+    case Repo.get_by(Receipt, user_id: scope.user.id, sha256: sha256) do
+      nil ->
+        Repo.insert!(%Receipt{
+          user_id: scope.user.id,
+          sha256: sha256,
+          filename: filename,
+          byte_size: byte_size
+        })
+
+      %Receipt{status: :booked} = receipt ->
+        receipt
+
+      receipt ->
+        Repo.update!(Ecto.Changeset.change(receipt, status: :booked))
+    end
+  end
+
+  @doc "Where the file of a receipt lies: in `receipts/` next to the database, named by its hash."
+  def receipt_file(%Receipt{sha256: sha256}), do: receipt_file(sha256)
+
+  def receipt_file(sha256) when is_binary(sha256) do
+    Repo.config()
+    |> Keyword.fetch!(:database)
+    |> Path.dirname()
+    |> Path.join("receipts/#{sha256}.pdf")
+  end
 end

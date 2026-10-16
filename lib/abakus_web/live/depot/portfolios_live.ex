@@ -1,11 +1,12 @@
 defmodule AbakusWeb.Depot.PortfoliosLive do
   @moduledoc """
-  „Depots“ in the settings: the user's active portfolios with their depot numbers, each edited in place, and a new
-  portfolio with its Verrechnungskonto. The first one opens the Depot area.
+  „Depots“ in the settings: the user's active portfolios with their depot numbers, which find a receipt's
+  portfolio, each edited in place, and a new portfolio with its Verrechnungskonto. The first one opens the Depot
+  area.
   """
   use AbakusWeb, :depot_live_view
 
-  alias Abakus.Depot.Portfolios
+  alias Abakus.Depot.{Portfolios, Receipts}
   alias AbakusWeb.Areas
   alias AbakusWeb.Depot.Format
   alias AbakusWeb.SettingsLive.Components
@@ -28,7 +29,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
             Deine Depots
           </.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
-            Die Depotnummer, wie die Bank sie druckt; nur die Ziffern zählen.
+            Belege finden ihr Depot über die Depotnummer, wie die Bank sie druckt; nur die Ziffern zählen.
           </p>
           <.list>
             <.depot_number_row
@@ -178,7 +179,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
          socket
          |> put_flash(:info, "Depot „#{Format.portfolio_name(portfolio)}“ angelegt.")
          |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
-         |> open_depot()
+         |> Areas.open_depot()
          |> load_active_portfolios()}
 
       {:error, changeset} ->
@@ -210,22 +211,13 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   def handle_event("cancel_depot_number", _params, socket),
     do: {:noreply, assign(socket, editing: nil, depot_number_form: nil)}
 
-  # The sidebar and the area switcher show the Depot as soon as it exists.
-  defp open_depot(%{assigns: %{current_scope: %{depot: true}}} = socket), do: socket
-
-  defp open_depot(socket) do
-    scope = %{socket.assigns.current_scope | depot: true}
-
-    assign(socket,
-      current_scope: scope,
-      areas: Areas.for_scope(scope),
-      area: socket.assigns.area || :depot
-    )
-  end
-
   defp save(socket, portfolio, params) do
-    case Portfolios.update_depot_number(socket.assigns.current_scope, portfolio, params) do
+    scope = socket.assigns.current_scope
+
+    case Portfolios.update_depot_number(scope, portfolio, params) do
       {:ok, _portfolio} ->
+        Receipts.recheck(scope)
+
         {:noreply,
          socket
          |> put_flash(:info, "Depotnummer von „#{Format.portfolio_name(portfolio)}“ gespeichert.")

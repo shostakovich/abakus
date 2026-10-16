@@ -2,23 +2,27 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   @moduledoc """
   The dialog „Buchung erfassen“ on the Depot's pages, opened by `open/0` from the sidebar entry of
   that name (also in the rail), the Buchungen page and the phone's button: a purchase, sale,
-  dividend, deposit or removal. The amount follows the other fields until the user overwrites it. A
-  security missing from the list is created by its ISIN, with name and Yahoo symbol from Yahoo's
-  search.
+  dividend, deposit or removal with an optional PDF receipt. The amount follows the other fields
+  until the user overwrites it. A security missing from the list is created by its ISIN, with name
+  and Yahoo symbol from Yahoo's search.
 
   `edit/1` opens it as „Buchung bearbeiten“ for a transaction the user booked, which it saves or
-  deletes. Once booked, every page loads its figures again, and the page shows what was booked:
+  deletes. `open_receipt/1` opens it as „Beleg prüfen“ for a receipt of the inbox, prefilled with
+  what the model recognised, beside the receipt's checks and text; booking attaches the receipt,
+  which may also be discarded or left for later. Once booked, every page loads its figures again,
+  and the page shows what was booked:
   components cannot show a flash themselves, so `on_mount/4` lets the page do it.
   """
   use AbakusWeb, :live_component
 
   import AbakusWeb.Depot.Components
 
-  alias Abakus.Depot.{MarketData, Portfolios, Securities}
-  alias Abakus.Depot.Portfolios.Transaction
+  alias Abakus.Depot.{MarketData, Portfolios, Receipts, Securities}
+  alias Abakus.Depot.Portfolios.{Transaction, TransactionForm}
+  alias Abakus.Depot.Receipts.{Checks, Fields}
   alias Abakus.Depot.Securities.ISIN
   alias Abakus.LocalTime
-  alias AbakusWeb.Depot.Format
+  alias AbakusWeb.Depot.{Format, ReceiptComponents}
 
   @id "transaction-dialog"
   @kinds [
@@ -28,6 +32,8 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     deposit: "Einlage",
     removal: "Entnahme"
   ]
+
+  @receipt_gone "Dieser Beleg liegt nicht mehr im Eingang."
 
   @holding_error "Ohne diese Buchung fiele der Bestand später unter null. " <>
                    "Bitte zuerst die späteren Verkäufe ändern."
@@ -41,6 +47,9 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   @doc "Opens the dialog for the transaction with `id`, one the user booked."
   def edit(id), do: JS.push("edit", value: %{id: id}, target: "##{@id}")
 
+  @doc "Opens the dialog for the receipt with `id`, one ready in the user's inbox."
+  def open_receipt(id), do: JS.push("open_receipt", value: %{id: id}, target: "##{@id}")
+
   @doc "Shows the dialog's message on the page that renders it."
   def on_mount(:default, _params, _session, socket),
     do: {:cont, Phoenix.LiveView.attach_hook(socket, :transaction_dialog, :handle_info, &flash/2)}
@@ -52,7 +61,10 @@ defmodule AbakusWeb.Depot.TransactionDialog do
 
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, open: false, editing: nil, new_security: nil, delete_error: nil)}
+    {:ok,
+     socket
+     |> assign(open: false, editing: nil, receipt: nil, new_security: nil, delete_error: nil)
+     |> allow_upload(:receipt, accept: ~w(.pdf), max_entries: 1, max_file_size: 20_000_000)}
   end
 
   @impl true
@@ -62,11 +74,14 @@ defmodule AbakusWeb.Depot.TransactionDialog do
       <.modal
         :if={@open}
         id="transaction-modal"
-        title={if @editing, do: "Buchung bearbeiten", else: "Buchung erfassen"}
+        title={title(@receipt, @editing)}
         show
         on_cancel={JS.push("close", target: @myself)}
-        class="sm:max-w-2xl"
+        class={if @receipt, do: "sm:max-w-6xl", else: "sm:max-w-2xl"}
       >
+        <p :if={@receipt} class="text-sm text-base-content/70 wrap-anywhere">
+          {ReceiptComponents.receipt_subtitle(@receipt)}
+        </p>
         <.form
           for={@form}
           id="transaction-form"
@@ -75,16 +90,28 @@ defmodule AbakusWeb.Depot.TransactionDialog do
           phx-submit="book"
           phx-target={@myself}
         >
-          <.kinds field={@form[:kind]} />
-          <.fields
-            form={@form}
-            kind={@kind}
-            choices={@choices}
-            editing={@editing}
-            today={@today}
-            new_security={@new_security}
-            myself={@myself}
-          />
+          <input :if={@receipt} type="hidden" name="receipt_id" value={@receipt.id} />
+          <div class={@receipt && "grid gap-6 lg:grid-cols-[3fr_2fr]"}>
+            <div :if={@receipt} class="app-receipt-pane min-w-0">
+              <ReceiptComponents.sheet receipt={@receipt} />
+            </div>
+            <div class="min-w-0">
+              <ReceiptComponents.checklist :if={@receipt} receipt={@receipt} />
+              <.kinds field={@form[:kind]} receipt={@receipt} />
+              <.fields
+                form={@form}
+                kind={@kind}
+                choices={@choices}
+                receipt={@receipt}
+                editing={@editing}
+                today={@today}
+                new_security={@new_security}
+                depot_number_warning={@depot_number_warning}
+                uploads={@uploads}
+                myself={@myself}
+              />
+            </div>
+          </div>
           <.alert
             :if={@delete_error}
             id="transaction-delete-error"
@@ -93,7 +120,30 @@ defmodule AbakusWeb.Depot.TransactionDialog do
           >
             {@delete_error}
           </.alert>
-          <.action_bar sticky class="mt-6">
+          <.action_bar :if={@receipt} sticky class="mt-6">
+            <:secondary>
+              <.button
+                id="receipt-discard"
+                variant={:ghost}
+                phx-click="discard_receipt"
+                phx-target={@myself}
+              >
+                Verwerfen
+              </.button>
+            </:secondary>
+            <.button id="receipt-later" phx-click={close_js()}>Später</.button>
+            <.button
+              id="transaction-book"
+              type="submit"
+              name="intent"
+              value="book"
+              variant={:primary}
+              phx-disable-with="Wird gebucht …"
+            >
+              Buchen
+            </.button>
+          </.action_bar>
+          <.action_bar :if={!@receipt} sticky class="mt-6">
             <:secondary :if={@editing}>
               <.button
                 id="transaction-delete"
@@ -123,15 +173,22 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     """
   end
 
+  defp title(%{} = _receipt, _editing), do: "Beleg prüfen"
+  defp title(nil, %{} = _editing), do: "Buchung bearbeiten"
+  defp title(nil, nil), do: "Buchung erfassen"
+
   # Closes natively, so focus goes back to what opened the dialog; `on_cancel` tells the server.
   defp close_js, do: hide_modal("transaction-modal")
 
   attr :form, Phoenix.HTML.Form, required: true
   attr :kind, :atom, required: true
   attr :choices, :map, required: true
+  attr :receipt, :any, required: true
   attr :editing, :any, required: true
   attr :today, Date, required: true
   attr :new_security, :any, required: true
+  attr :depot_number_warning, :string, default: nil
+  attr :uploads, :map, required: true
   attr :myself, :any, required: true
 
   defp fields(assigns) do
@@ -145,7 +202,9 @@ defmodule AbakusWeb.Depot.TransactionDialog do
           type="select"
           label="Depot"
           options={Enum.map(@choices.portfolios, &{Format.portfolio_name(&1), &1.id})}
-          prompt={if @kind == :dividend, do: "Ohne Depot"}
+          prompt={portfolio_prompt(@kind, @receipt)}
+          help={@depot_number_warning}
+          help_tone={:warning}
         />
       </div>
       <div class={["col-span-2", if(@security?, do: "sm:col-span-3", else: "sm:col-span-6")]}>
@@ -160,7 +219,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
           prompt="Wertpapier wählen"
         />
         <.button
-          :if={!@new_security}
+          :if={!@new_security and !(@receipt && @form[:security_id].value not in [nil, ""])}
           id="new-security"
           variant={:link}
           size={:sm}
@@ -181,7 +240,13 @@ defmodule AbakusWeb.Depot.TransactionDialog do
         <.number field={@form[:shares]} label="Stück" />
       </div>
       <div :if={@kind in [:purchase, :sale]} class="sm:col-span-2">
-        <.number field={@form[:price]} label="Kurs" euros />
+        <.number
+          field={@form[:price]}
+          label="Kurs"
+          euros
+          help={ReceiptComponents.price_warning(@receipt)}
+          help_tone={:warning}
+        />
       </div>
       <div :if={@kind == :dividend} class="sm:col-span-2">
         <.number field={@form[:gross]} label="Brutto" euros />
@@ -212,7 +277,50 @@ defmodule AbakusWeb.Depot.TransactionDialog do
           help="Bucht den Nettobetrag am selben Tag vom Konto ab."
         />
       </div>
+      <div :if={!@receipt} class="col-span-2 sm:col-span-6">
+        <.receipt_file uploads={@uploads} form={@form} editing={@editing} />
+      </div>
     </div>
+    """
+  end
+
+  attr :uploads, :map, required: true
+  attr :form, Phoenix.HTML.Form, required: true
+  attr :editing, :any, required: true
+
+  defp receipt_file(assigns) do
+    assigns =
+      assign(assigns,
+        ref: assigns.uploads.receipt.ref,
+        errors: receipt_errors(assigns.uploads, assigns.form),
+        attached: assigns.editing && assigns.editing.receipt
+      )
+
+    ~H"""
+    <fieldset class="fieldset min-w-0">
+      <label class="fieldset-legend" for={@ref}>
+        {if @attached, do: "Beleg ersetzen", else: "Beleg"}
+        <span class="font-normal text-base-content/70">(optional)</span>
+      </label>
+      <.live_file_input
+        upload={@uploads.receipt}
+        class={["file-input w-full", @errors != [] && "file-input-error"]}
+        aria-invalid={@errors != [] && "true"}
+        aria-describedby={field_describedby(@ref, @errors, @attached)}
+      />
+      <.field_error id={@ref} errors={@errors} />
+      <.field_help :if={@attached} id={@ref}>
+        Angehängt:
+        <a
+          href={~p"/depot/receipts/#{@editing.receipt_id}"}
+          target="_blank"
+          rel="noopener"
+          class="link"
+        >
+          {@editing.receipt.filename}
+        </a>
+      </.field_help>
+    </fieldset>
     """
   end
 
@@ -285,9 +393,14 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   defp lookup_text({:error, message}, _isin), do: message
 
   attr :field, Phoenix.HTML.FormField, required: true
+  attr :receipt, :any, required: true
 
+  # A receipt is a purchase, sale or dividend.
   defp kinds(assigns) do
-    assigns = assign(assigns, :kinds, Enum.map(@kinds, fn {kind, label} -> {label, kind} end))
+    kinds =
+      if assigns.receipt, do: Keyword.take(@kinds, [:purchase, :sale, :dividend]), else: @kinds
+
+    assigns = assign(assigns, :kinds, Enum.map(kinds, fn {kind, label} -> {label, kind} end))
 
     ~H"""
     <.segmented
@@ -304,6 +417,8 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   attr :field, Phoenix.HTML.FormField, required: true
   attr :label, :string, required: true
   attr :euros, :boolean, default: false
+  attr :help, :string, default: nil, doc: "what a receipt's failed check says about it"
+  attr :help_tone, :atom, default: nil
 
   # A number as typed, in German notation, with its error once the field was used.
   defp number(assigns) do
@@ -315,6 +430,8 @@ defmodule AbakusWeb.Depot.TransactionDialog do
       numeric
       suffix={@euros && "€"}
       autocomplete="off"
+      help={@help}
+      help_tone={@help_tone}
     />
     """
   end
@@ -372,6 +489,10 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   defp security_label(%{isin: isin} = security) when isin in [nil, ""], do: security.name
   defp security_label(security), do: "#{security.name} (#{security.isin})"
 
+  defp portfolio_prompt(:dividend, _receipt), do: "Ohne Depot"
+  defp portfolio_prompt(_kind, nil), do: nil
+  defp portfolio_prompt(_kind, _receipt), do: "Depot wählen"
+
   defp account_prompt(:purchase), do: "Ohne Konto (Einlieferung)"
   defp account_prompt(:sale), do: "Ohne Konto (Auslieferung)"
   defp account_prompt(_kind), do: "Konto wählen"
@@ -396,6 +517,18 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   defp zero?(%Decimal{} = value), do: Decimal.eq?(value, 0)
   defp zero?(_blank), do: true
 
+  defp receipt_errors(uploads, form) do
+    upload = uploads.receipt
+    entry_errors = Enum.flat_map(upload.entries, &upload_errors(upload, &1))
+
+    Enum.map(upload_errors(upload) ++ entry_errors, &upload_error/1) ++ form[:receipt].errors
+  end
+
+  defp upload_error(:too_large), do: "Die Datei ist zu groß."
+  defp upload_error(:not_accepted), do: "Bitte eine PDF-Datei wählen."
+  defp upload_error(:too_many_files), do: "Bitte nur eine Datei wählen."
+  defp upload_error(_error), do: "Die Datei ließ sich nicht hochladen."
+
   @impl true
   def handle_event("open", _params, socket) do
     scope = socket.assigns.current_scope
@@ -413,10 +546,27 @@ defmodule AbakusWeb.Depot.TransactionDialog do
 
     {:noreply,
      socket
-     |> assign(open: true, editing: nil, new_security: nil, delete_error: nil)
+     |> assign(open: true, editing: nil, receipt: nil, new_security: nil, delete_error: nil)
      |> assign(choices: choices, today: LocalTime.today())
      |> put_form(Portfolios.change_transaction_form(scope, choices, params))}
   end
+
+  def handle_event("open_receipt", %{"id" => id}, socket) do
+    case Receipts.get_ready_receipt(socket.assigns.current_scope, id) do
+      nil -> done(socket, @receipt_gone)
+      receipt -> {:noreply, open_receipt_for(socket, receipt)}
+    end
+  end
+
+  def handle_event("discard_receipt", _params, %{assigns: %{receipt: %{} = receipt}} = socket) do
+    case Receipts.discard(socket.assigns.current_scope, receipt.id) do
+      :ok -> socket |> close() |> done("Beleg verworfen.")
+      {:error, :gone} -> socket |> close() |> done(@receipt_gone)
+    end
+  end
+
+  # A click that comes after the receipt has left the dialog.
+  def handle_event("discard_receipt", _params, socket), do: {:noreply, close(socket)}
 
   def handle_event("edit", %{"id" => id}, socket) do
     scope = socket.assigns.current_scope
@@ -450,16 +600,38 @@ defmodule AbakusWeb.Depot.TransactionDialog do
       else: {:noreply, socket}
   end
 
-  # A submit that comes after the dialog closed books nothing.
+  def handle_event(
+        "book",
+        %{"transaction" => params},
+        %{assigns: %{receipt: %{} = receipt}} = socket
+      ) do
+    %{current_scope: scope, choices: choices} = socket.assigns
+
+    case Receipts.book(scope, choices, params, receipt) do
+      {:error, :gone} -> socket |> close() |> done(@receipt_gone)
+      result -> saved(result, socket)
+    end
+  end
+
+  # A submit that comes after the dialog closed or its receipt left it books nothing.
   def handle_event("book", _params, %{assigns: %{open: false}} = socket),
     do: {:noreply, socket}
+
+  def handle_event("book", %{"receipt_id" => _id}, socket), do: {:noreply, close(socket)}
 
   def handle_event("book", %{"transaction" => params}, socket) do
     changeset = change_form(socket, params)
 
-    if changeset.valid?,
-      do: socket |> save(params) |> saved(socket),
-      else: {:noreply, put_form(socket, Map.put(changeset, :action, :insert))}
+    cond do
+      not changeset.valid? ->
+        {:noreply, put_form(socket, Map.put(changeset, :action, :insert))}
+
+      match?({_done, [_ | _]}, uploaded_entries(socket, :receipt)) ->
+        {:noreply, socket}
+
+      true ->
+        socket |> save(params) |> recheck_inbox(socket) |> saved(socket)
+    end
   end
 
   def handle_event("delete", _params, %{assigns: %{editing: %{} = transaction}} = socket) do
@@ -467,6 +639,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
 
     case Portfolios.delete_transaction(scope, transaction) do
       {:ok, _deleted} ->
+        Receipts.recheck(scope)
         socket |> close() |> done("Buchung gelöscht.")
 
       {:error, :read_only} ->
@@ -498,10 +671,81 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     params = Portfolios.transaction_form_params(transaction)
 
     socket
-    |> assign(open: true, editing: transaction, new_security: nil, delete_error: nil)
+    |> assign(
+      open: true,
+      editing: transaction,
+      receipt: nil,
+      new_security: nil,
+      delete_error: nil
+    )
     |> assign(choices: choices, today: LocalTime.today())
     |> put_form(Portfolios.change_transaction_form(scope, choices, params, transaction))
   end
+
+  # The portfolio is the one of the receipt's depot number, with its reference account; the user
+  # picks it for an unknown depot number. An unknown ISIN opens „Neues Wertpapier“ with it.
+  defp open_receipt_for(socket, receipt) do
+    scope = socket.assigns.current_scope
+    choices = Portfolios.transaction_choices(scope)
+    portfolio_id = receipt_portfolio_id(choices, receipt)
+
+    params =
+      %{
+        "kind" => "purchase",
+        "date" => Date.to_iso8601(LocalTime.today()),
+        "fees" => "0,00",
+        "taxes" => "0,00"
+      }
+      |> Map.merge(receipt_params(receipt.fields), fn _key, default, value -> value || default end)
+      |> Map.merge(%{
+        "portfolio_id" => portfolio_id && to_string(portfolio_id),
+        "account_id" => reference_account(choices, portfolio_id),
+        "security_id" => security_id(choices, receipt.fields)
+      })
+
+    socket
+    |> assign(open: true, editing: nil, receipt: receipt, new_security: nil, delete_error: nil)
+    |> assign(choices: choices, today: LocalTime.today())
+    |> put_form(Portfolios.change_transaction_form(scope, choices, params))
+    |> open_new_security(receipt.fields, params["security_id"])
+  end
+
+  # Without a depot number on the receipt, a user with one portfolio needs no choice.
+  defp receipt_portfolio_id(choices, receipt) do
+    case {Checks.portfolio(receipt.checks), choices.portfolios} do
+      {{id, _name}, portfolios} -> if Enum.any?(portfolios, &(&1.id == id)), do: id
+      {nil, [only]} -> if depot_number_check(receipt) in [nil, :missing], do: only.id
+      {nil, _none_or_many} -> nil
+    end
+  end
+
+  defp depot_number_check(receipt) do
+    Enum.find_value(receipt.checks, &(&1.name == :depot && &1.result))
+  end
+
+  defp receipt_params(nil), do: %{}
+  defp receipt_params(fields), do: TransactionForm.params_of_receipt(fields)
+
+  defp security_id(_choices, nil), do: ""
+
+  defp security_id(choices, %Fields{isin: isin}) do
+    case Enum.find(choices.securities, &(&1.isin == isin and isin != nil)) do
+      nil -> ""
+      security -> to_string(security.id)
+    end
+  end
+
+  defp open_new_security(socket, %Fields{kind: kind, isin: isin} = fields, "")
+       when kind in [:purchase, :sale, :dividend] and is_binary(isin) do
+    params = %{"isin" => isin, "name" => fields.security_name || ""}
+    new_security = %{form: security_form(params, nil), lookup: nil, isin: nil}
+
+    socket
+    |> assign(:new_security, new_security)
+    |> change_new_security(params, ["security", "isin"])
+  end
+
+  defp open_new_security(socket, _fields, _security_id), do: socket
 
   defp change_form(socket, params) do
     %{current_scope: scope, choices: choices, editing: editing} = socket.assigns
@@ -561,8 +805,9 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     case Securities.create_security(scope, new_security.form.params) do
       {:ok, security} ->
         if security.quote_feed == :yahoo, do: MarketData.fetch_in_background(security)
+        Receipts.recheck(scope)
         choices = Portfolios.transaction_choices(scope, editing)
-        socket = assign(socket, choices: choices, new_security: nil)
+        socket = assign(socket, choices: choices, new_security: nil) |> recheck_receipt()
         params = Map.put(socket.assigns.form.params, "security_id", to_string(security.id))
         {:noreply, put_form(socket, Map.put(change_form(socket, params), :action, :validate))}
 
@@ -592,15 +837,32 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     end
   end
 
-  defp save(%{assigns: %{editing: nil}} = socket, params) do
-    %{current_scope: scope, choices: choices} = socket.assigns
-    Portfolios.book_transaction(scope, choices, params)
+  defp save(socket, params) do
+    case consume_uploaded_entries(socket, :receipt, fn %{path: path}, entry ->
+           {:ok, save(socket, params, {path, entry.client_name})}
+         end) do
+      [result] -> result
+      [] -> save(socket, params, nil)
+    end
   end
 
-  defp save(socket, params) do
-    %{current_scope: scope, choices: choices, editing: transaction} = socket.assigns
-    Portfolios.update_transaction(scope, choices, transaction, params)
+  defp save(%{assigns: %{editing: nil}} = socket, params, receipt) do
+    %{current_scope: scope, choices: choices} = socket.assigns
+    Portfolios.book_transaction(scope, choices, params, receipt)
   end
+
+  defp save(socket, params, receipt) do
+    %{current_scope: scope, choices: choices, editing: transaction} = socket.assigns
+    Portfolios.update_transaction(scope, choices, transaction, params, receipt)
+  end
+
+  # A booking or a change, with or without a receipt, may change the checks of the inbox.
+  defp recheck_inbox({:ok, _transaction_or_transactions} = result, socket) do
+    Receipts.recheck(socket.assigns.current_scope)
+    result
+  end
+
+  defp recheck_inbox(result, _socket), do: result
 
   defp saved({:ok, [_dividend, _removal]}, socket),
     do: done(socket, "Dividende und Entnahme gebucht.")
@@ -615,14 +877,37 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   defp done(socket, message) do
     MarketData.broadcast()
     send(self(), {__MODULE__, :done, message})
-    {:noreply, assign(socket, open: false, editing: nil, new_security: nil)}
+    {:noreply, assign(socket, open: false, editing: nil, receipt: nil, new_security: nil)}
   end
 
-  defp close(socket), do: assign(socket, open: false, editing: nil, new_security: nil)
+  # A security created from the receipt passes its check.
+  defp recheck_receipt(%{assigns: %{receipt: %{} = receipt}} = socket) do
+    case Receipts.get_ready_receipt(socket.assigns.current_scope, receipt.id) do
+      nil -> socket
+      fresh -> assign(socket, :receipt, fresh)
+    end
+  end
 
+  defp recheck_receipt(socket), do: socket
+
+  defp close(socket) do
+    socket =
+      Enum.reduce(socket.assigns.uploads.receipt.entries, socket, fn entry, socket ->
+        cancel_upload(socket, :receipt, entry.ref)
+      end)
+
+    assign(socket, open: false, editing: nil, receipt: nil, new_security: nil)
+  end
+
+  # A receipt whose depot number names no portfolio marks the select until one is picked.
   defp put_form(socket, changeset) do
+    depot_number_warning =
+      socket.assigns.receipt && Ecto.Changeset.get_field(changeset, :portfolio_id) == nil &&
+        ReceiptComponents.depot_number_warning(socket.assigns.receipt)
+
     socket
     |> assign(:kind, Ecto.Changeset.get_field(changeset, :kind))
     |> assign(:form, to_form(changeset, as: :transaction))
+    |> assign(:depot_number_warning, depot_number_warning || nil)
   end
 end
