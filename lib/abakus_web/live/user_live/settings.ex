@@ -3,8 +3,8 @@ defmodule AbakusWeb.UserLive.Settings do
 
   on_mount {AbakusWeb.UserAuth, :require_sudo_mode}
 
+  alias Abakus.Format
   alias Abakus.Users
-  alias AbakusWeb.Format
 
   @impl true
   def render(assigns) do

@@ -14,6 +14,7 @@ defmodule Abakus.Kasse.Expenses.Form do
 
   import Ecto.Changeset
 
+  alias Abakus.Format
   alias Abakus.Kasse.{Dates, Split, Suggestions}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Money
@@ -358,7 +359,7 @@ defmodule Abakus.Kasse.Expenses.Form do
     change(form,
       rate: Money.format_rate(rate.rate),
       rate_source: rate.source,
-      rate_hint: "#{hint} vom #{Dates.format(rate.date)}."
+      rate_hint: "#{hint} vom #{Format.date(rate.date)}."
     )
   end
 

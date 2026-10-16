@@ -5,7 +5,8 @@ defmodule Abakus.Kasse.Activities.Changes do
   are not changes, so an expense saved unchanged has none.
   """
 
-  alias Abakus.Kasse.{Dates, Split}
+  alias Abakus.Format
+  alias Abakus.Kasse.Split
   alias Abakus.Money
 
   @type change :: %{field: String.t(), old: String.t(), new: String.t()}
@@ -26,7 +27,7 @@ defmodule Abakus.Kasse.Activities.Changes do
       {"Titel", old.title, new.title},
       {"Betrag", Money.plain(old.amount_cents), Money.plain(new.amount_cents)},
       {"Originalbetrag", original(old), original(new)},
-      {"Datum", Dates.format(old.date), Dates.format(new.date)}
+      {"Datum", Format.date(old.date), Format.date(new.date)}
     ]
     |> Kernel.++(category(old, new, categories))
     |> Kernel.++([

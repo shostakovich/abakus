@@ -5,9 +5,8 @@ defmodule AbakusWeb.Depot.HoldingsLive do
 
   alias Abakus.Depot.{MarketData, Portfolios}
   alias Abakus.Depot.Portfolios.Account
-  alias Abakus.LocalTime
-  alias Abakus.Money
-  alias AbakusWeb.Depot.Format
+  alias Abakus.{Format, LocalTime, Money}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   # Allocation tab, also its URL parameter, and label; the first is the default. A taxonomy's tab
   # is its id.
@@ -49,7 +48,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
           <.position_name item={item} />
         </:col>
         <:col :let={item} label="Stück" align={:end} show_from={:xl}>
-          <span :if={item.type == :holding}>{Format.shares(item.entry.shares)}</span>
+          <span :if={item.type == :holding}>{DepotFormat.shares(item.entry.shares)}</span>
         </:col>
         <:col :let={item} label="Kurs" align={:end} show_from={:xl}>
           <span :if={item.type == :holding}>{price(item.entry)}</span>
@@ -80,7 +79,9 @@ defmodule AbakusWeb.Depot.HoldingsLive do
         </:col>
         <:foot>
           <th scope="row" id="holdings-total">
-            {if @holdings.portfolio, do: Format.portfolio_name(@holdings.portfolio), else: "Gesamt"}
+            {if @holdings.portfolio,
+              do: DepotFormat.portfolio_name(@holdings.portfolio),
+              else: "Gesamt"}
           </th>
           <td class={show_from(:xl)}></td>
           <td class={show_from(:xl)}></td>
@@ -133,7 +134,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     {@entry.security.name}
     <.cell_sub :if={@entry.security.isin} show_from={:xl}>{@entry.security.isin}</.cell_sub>
     <.cell_sub hide_from={:xl} class="tabular-nums">
-      <span class="whitespace-nowrap">{Format.shares(@entry.shares)} Stück</span><.meta_sep /><span class="whitespace-nowrap">{price(
+      <span class="whitespace-nowrap">{DepotFormat.shares(@entry.shares)} Stück</span><.meta_sep /><span class="whitespace-nowrap">{price(
         @entry
       )}</span>
     </.cell_sub>
@@ -177,7 +178,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
 
     %{
       id: "portfolio-#{portfolio.id}",
-      label: Format.portfolio_name(portfolio),
+      label: DepotFormat.portfolio_name(portfolio),
       rows: securities ++ none ++ accounts(group)
     }
   end
@@ -283,7 +284,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
       <.section_heading id="costs-title">
         Kosten
         <:actions :if={@costs.ter}>
-          <span class="text-sm text-base-content/70">gewichtet {Format.ter(@costs.ter)}</span>
+          <span class="text-sm text-base-content/70">gewichtet {DepotFormat.ter(@costs.ter)}</span>
         </:actions>
       </.section_heading>
       <.table id="cost-rows" rows={@costs.funds} row_id={&"cost-#{&1.security.id}"} size={:sm}>
@@ -295,12 +296,12 @@ defmodule AbakusWeb.Depot.HoldingsLive do
             Fondsgröße {fund_size(fund)}
           </.cell_sub>
         </:col>
-        <:col :let={fund} label="TER" align={:end}>{Format.ter(fund.ter)}</:col>
+        <:col :let={fund} label="TER" align={:end}>{DepotFormat.ter(fund.ter)}</:col>
         <:col :let={fund} label="Größe" align={:end} show_from={:sm}>{fund_size(fund)}</:col>
         <:col :let={fund} label="pro Jahr" align={:end}><.per_year cents={fund.per_year} /></:col>
         <:foot>
           <th scope="row">Gesamt</th>
-          <td class="text-end">{Format.ter(@costs.ter)}</td>
+          <td class="text-end">{DepotFormat.ter(@costs.ter)}</td>
           <td class={show_from(:sm)}></td>
           <td class="text-end whitespace-nowrap"><.per_year cents={@costs.per_year} /></td>
         </:foot>
@@ -390,7 +391,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     end
   end
 
-  defp price(%{price: price, security: security}), do: Format.price(price, security.currency)
+  defp price(%{price: price, security: security}), do: DepotFormat.price(price, security.currency)
 
   defp deviation_tone(:above), do: :warning
   defp deviation_tone(:below), do: :error
@@ -407,7 +408,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
 
   defp source(as_of), do: "#{@source}, Stand #{Format.date(as_of)}."
 
-  defp fund_size(fund), do: Format.fund_size(fund.fund_size, fund.security.currency)
+  defp fund_size(fund), do: DepotFormat.fund_size(fund.fund_size, fund.security.currency)
 
   attr :cents, :integer, required: true, doc: "nil without a TER"
 

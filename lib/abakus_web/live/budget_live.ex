@@ -14,7 +14,7 @@ defmodule AbakusWeb.BudgetLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{Budget, Categories, LocalTime, Money}
+  alias Abakus.{Budget, Categories, Format, LocalTime, Money}
 
   alias AbakusWeb.BudgetLive.{
     CategoryEditor,
@@ -27,8 +27,6 @@ defmodule AbakusWeb.BudgetLive do
     TargetForm,
     Window
   }
-
-  alias AbakusWeb.Format
 
   @fit %{months: 1, span: 7, compact: false}
 

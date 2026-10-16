@@ -5,7 +5,7 @@ defmodule AbakusWeb.BudgetLive.MonthDetails do
   """
   use AbakusWeb, :html
 
-  import AbakusWeb.Format
+  import Abakus.Format, only: [month_year: 1]
 
   alias Abakus.Budget.Month
   alias AbakusWeb.BudgetLive.{Components, Status, Window}

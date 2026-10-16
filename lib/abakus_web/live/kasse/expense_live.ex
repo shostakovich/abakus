@@ -263,7 +263,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
       </.header>
 
       <.alert :if={@deleted?} tone={:warning} class="mb-6">
-        Diese Ausgabe wurde am {Format.datetime(LocalTime.from_utc(@expense.deleted_at))} gelöscht
+        Diese Ausgabe wurde am {Format.datetime(@expense.deleted_at)} gelöscht
         und zählt nicht mehr zu den Salden.
       </.alert>
 
@@ -554,14 +554,12 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   defp heading(_expense, false), do: "Ausgabe bearbeiten"
 
   defp created(expense) do
-    created = "Angelegt am " <> local(expense.inserted_at)
+    created = "Angelegt am " <> Format.datetime(expense.inserted_at)
 
     if expense.updated_at == expense.inserted_at,
       do: created,
-      else: join_meta([created, "geändert am " <> local(expense.updated_at)])
+      else: join_meta([created, "geändert am " <> Format.datetime(expense.updated_at)])
   end
-
-  defp local(utc), do: utc |> LocalTime.from_utc() |> Format.datetime()
 
   defp error_text(changeset),
     do: Enum.map_join(changeset.errors, " ", fn {_field, {message, _opts}} -> message end)

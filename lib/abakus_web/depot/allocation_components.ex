@@ -8,7 +8,7 @@ defmodule AbakusWeb.Depot.AllocationComponents do
   import Setzkasten.Components.Data, only: [bar: 1]
   import Setzkasten.Components.Feedback, only: [alert: 1]
 
-  alias AbakusWeb.Depot.Format
+  alias Abakus.Format
 
   @regions %{
     usa: "USA",

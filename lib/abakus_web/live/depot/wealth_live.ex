@@ -10,10 +10,11 @@ defmodule AbakusWeb.Depot.WealthLive do
   import AbakusWeb.Depot.DividendComponents
 
   alias Abakus.Depot.{AccountRoles, Period, Portfolios}
-  alias Abakus.{Ledger, LocalTime}
+  alias Abakus.{Format, Ledger, LocalTime}
   alias Abakus.Money
   alias AbakusWeb.Areas
-  alias AbakusWeb.Depot.{Benchmark, Format, Periods}
+  alias AbakusWeb.Depot.{Benchmark, Periods}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   on_mount Benchmark
 
@@ -141,7 +142,7 @@ defmodule AbakusWeb.Depot.WealthLive do
             <.list_row
               :for={entry <- @overview.portfolios}
               id={"portfolio-#{entry.portfolio.id}"}
-              title={Format.portfolio_name(entry.portfolio)}
+              title={DepotFormat.portfolio_name(entry.portfolio)}
               navigate={depots_path(:holdings, entry.portfolio.id)}
               trailing_on_phone={:title}
             >
@@ -225,7 +226,7 @@ defmodule AbakusWeb.Depot.WealthLive do
 
   defp change_note(assigns) do
     ~H"""
-    <span class={tone(Money.euros(@change, signed: true, decimals: 0))}>
+    <span class={amount_tone(@change, 0)}>
       <.amount value={@change} signed decimals={0} /> heute{percent_note(@percent)}
     </span>
     """

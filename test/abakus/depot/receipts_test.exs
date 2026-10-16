@@ -270,9 +270,9 @@ defmodule Abakus.Depot.ReceiptsTest do
       assert_received {:correction, message}
 
       assert message ==
-               "Stück × Kurs ergibt 1.125,00 €, du nennst 1.025,00 €. " <>
+               "Stück × Kurs ergibt 1.125,00\u00A0€, du nennst 1.025,00\u00A0€. " <>
                  "Prüfe Betrag, Kurs, Gebühren und Steuern im Beleg. " <>
-                 "Betrag 1.025,00 € steht nicht im Beleg. " <>
+                 "Betrag 1.025,00\u00A0€ steht nicht im Beleg. " <>
                  "Übernimm nur Werte, die im Beleg stehen. Antworte erneut im selben Schema."
 
       assert [%Receipt{fields: fields, checks: checks}] = Receipts.list_inbox(ctx.scope)

@@ -1,11 +1,9 @@
 defmodule Abakus.Kasse.Dates do
   @moduledoc """
-  Calendar dates as entered (`"2026-10-02"` or `"2.10.2026"`) and shown (`"02.10.2026"`), and
-  the occurrences of a recurring date, always counted from its anchor: monthly from 31 January
-  gives 28 (or 29) February, then 31 March again.
+  Calendar dates as entered (`"2026-10-02"` or `"2.10.2026"`), and the occurrences of a
+  recurring date, always counted from its anchor: monthly from 31 January gives 28 (or 29)
+  February, then 31 March again. `Abakus.Format` writes them.
   """
-
-  alias Abakus.LocalTime
 
   # Guards against typos ("0026") and endless recurrences from an absurd date.
   @years 2000..2100
@@ -56,15 +54,6 @@ defmodule Abakus.Kasse.Dates do
       nil -> nil
     end
   end
-
-  @doc ~s(A date as shown: `"02.10.2026"`.)
-  @spec format(Date.t()) :: String.t()
-  def format(%Date{} = date), do: Calendar.strftime(date, "%d.%m.%Y")
-
-  @doc ~s(A moment as shown, in local time: `"02.10.2026, 14:05"`.)
-  @spec format_time(DateTime.t() | NaiveDateTime.t()) :: String.t()
-  def format_time(%DateTime{} = utc), do: utc |> LocalTime.from_utc() |> format_time()
-  def format_time(%NaiveDateTime{} = local), do: Calendar.strftime(local, "%d.%m.%Y, %H:%M")
 
   @doc "The `n`-th occurrence after `anchor` (0 is the anchor itself, negative ones lie before)."
   @spec occurrence(frequency(), Date.t(), integer()) :: Date.t()

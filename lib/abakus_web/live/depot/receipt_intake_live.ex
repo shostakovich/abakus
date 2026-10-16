@@ -8,8 +8,8 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLive do
   alias Abakus.Depot.{Receipts, Settings}
   alias Abakus.Depot.Receipts.PaperlessJob
   alias Abakus.Depot.Settings.Setting
+  alias Abakus.Format
   alias AbakusWeb.{Areas, NotFoundError}
-  alias AbakusWeb.Depot.Format
 
   @impl true
   def render(assigns) do

@@ -43,7 +43,7 @@ defmodule AbakusWeb do
 
       import AbakusWeb.Kasse.Components
 
-      alias Setzkasten.Format
+      alias Abakus.Format
     end
   end
 

@@ -9,8 +9,8 @@ defmodule AbakusWeb.ImportLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{FileImport, Ledger}
-  alias AbakusWeb.{Format, ImportSync}
+  alias Abakus.{FileImport, Format, Ledger}
+  alias AbakusWeb.ImportSync
   alias AbakusWeb.RegisterLive.{Components, TransactionEditor}
 
   @max_file_size 5_000_000

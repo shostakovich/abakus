@@ -7,10 +7,9 @@ defmodule AbakusWeb.Kasse.Components do
   use Setzkasten
   use AbakusWeb, :verified_routes
 
+  alias Abakus.Format
   alias Abakus.Kasse.Activities.Activity
-  alias Abakus.LocalTime
   alias Phoenix.LiveView.JS
-  alias Setzkasten.Format
 
   @doc "A UTC moment in local time, `14.10.2026, 18:05`, machine-readable in `datetime`."
   attr :at, DateTime, required: true
@@ -19,7 +18,7 @@ defmodule AbakusWeb.Kasse.Components do
   def local_time(assigns) do
     ~H"""
     <time datetime={DateTime.to_iso8601(DateTime.truncate(@at, :second))} class={@class}>
-      {Format.datetime(LocalTime.from_utc(@at))}
+      {Format.datetime(@at)}
     </time>
     """
   end

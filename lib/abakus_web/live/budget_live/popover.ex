@@ -9,7 +9,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
   """
   use AbakusWeb, :html
 
-  import AbakusWeb.Format
+  import Abakus.Format, only: [month_name: 1, month_year: 1]
 
   alias Abakus.Money
   alias AbakusWeb.BudgetLive.{Components, Inspector, Status}

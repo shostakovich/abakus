@@ -15,8 +15,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
   alias Abakus.Depot.DecimalInput
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.Receipts.Fields
-  alias Abakus.LocalTime
-  alias Abakus.Money
+  alias Abakus.{Format, LocalTime}
 
   @kinds [:purchase, :sale, :dividend, :deposit, :removal]
 
@@ -168,7 +167,6 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
        else: put_change(changeset, :expected_amount, nil)
   end
 
-  # The exact amount the other fields give, nil while one of them is missing.
   defp computed_amount(changeset) do
     fees_and_taxes = Decimal.add(get_field(changeset, :fees), get_field(changeset, :taxes))
 
@@ -223,7 +221,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
            ),
          true <- shares(fetch!(changeset, :shares)) > held do
       add_error(changeset, :shares, "übersteigt den Bestand von %{held} Stück",
-        held: format_shares(held)
+        held: Format.shares(held)
       )
     else
       _fine -> changeset
@@ -232,18 +230,10 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
 
   defp fetch!(changeset, field), do: fetch_field!(changeset, field)
 
-  defp format_shares(shares) do
-    shares
-    |> Decimal.div(100_000_000)
-    |> Decimal.normalize()
-    |> Decimal.to_string(:normal)
-    |> String.replace(".", ",")
-  end
-
   @doc """
   The params that show `transaction`, one `Transaction.editable?/1`, in the form, as
-  `Abakus.Money.number/2` writes them. The price comes from gross value and shares; the amount counts as overwritten when
-  that price, rounded to four places, gives another one.
+  `Abakus.Format.decimal/2` writes them. The price comes from gross value and shares; the amount
+  counts as overwritten when that price, rounded to four places, gives another one.
   """
   def params_of(%Transaction{} = transaction) do
     kind = kind_of(transaction.type)
@@ -339,7 +329,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
 
   defp typed(decimal, places \\ 0)
   defp typed(nil, _places), do: ""
-  defp typed(decimal, places), do: Money.number(decimal, places)
+  defp typed(decimal, places), do: Format.decimal(decimal, places)
 
   @doc """
   The attributes of the transactions a valid form books, without user and receipt: one, or for

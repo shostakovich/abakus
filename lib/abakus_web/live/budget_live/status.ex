@@ -6,7 +6,8 @@ defmodule AbakusWeb.BudgetLive.Status do
   (`:error`, `:warning`, `:success`, `:neutral`, `:muted`); the components map them to theme tokens.
   """
 
-  import AbakusWeb.Format
+  import Abakus.Format,
+    only: [long_date: 1, day_month: 1, month_name: 1, month_abbr: 1, month_year: 1]
 
   alias Abakus.Budget.{CategoryMonth, Month}
   alias Abakus.Money
@@ -131,7 +132,7 @@ defmodule AbakusWeb.BudgetLive.Status do
   """
   def calculation(%Month{} = month) do
     funds = month.not_assigned_last_month + month.income
-    last = month_short(Date.shift(month.month, month: -1))
+    last = month_abbr(Date.shift(month.month, month: -1))
 
     [
       %{label: "Verfügbare Mittel", value: funds, tone: error(funds < 0)},

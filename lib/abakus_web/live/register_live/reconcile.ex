@@ -12,9 +12,9 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
   use AbakusWeb, :html
 
   alias Abakus.Amount
+  alias Abakus.Format
   alias Abakus.Ledger.BankBalance
   alias Abakus.Money
-  alias AbakusWeb.Format
 
   @doc "The bank's balance to reconcile against, from a stored bank balance."
   def bank(%BankBalance{} = bank),

@@ -10,8 +10,9 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
 
   alias Abakus.Depot.{AccountRoles, BudgetLink, Portfolios, Receipts}
   alias Abakus.Depot.Portfolios.Account
+  alias Abakus.Format
   alias AbakusWeb.{Areas, SettingsNav}
-  alias AbakusWeb.Depot.Format
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   @impl true
   def render(assigns) do
@@ -167,7 +168,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
 
   defp depot_number_row(%{form: false} = assigns) do
     ~H"""
-    <.list_row id={"depot-number-#{@portfolio.id}"} title={Format.portfolio_name(@portfolio)}>
+    <.list_row id={"depot-number-#{@portfolio.id}"} title={DepotFormat.portfolio_name(@portfolio)}>
       <:leading><.plush name="briefcase" size={:lg} /></:leading>
       <:meta>
         <span :for={{part, index} <- Enum.with_index(depot_number_details(@portfolio))}><.meta_sep :if={
@@ -179,7 +180,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           size={:sm}
           phx-click="edit_depot_number"
           phx-value-id={@portfolio.id}
-          aria-label={"#{depot_number_action(@portfolio)}: Depotnummer von „#{Format.portfolio_name(@portfolio)}“"}
+          aria-label={"#{depot_number_action(@portfolio)}: Depotnummer von „#{DepotFormat.portfolio_name(@portfolio)}“"}
         >
           {depot_number_action(@portfolio)}
         </.button>
@@ -201,12 +202,12 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
         phx-window-keydown="cancel_depot_number"
         phx-key="Escape"
       >
-        <p class="font-medium wrap-anywhere">{Format.portfolio_name(@portfolio)}</p>
+        <p class="font-medium wrap-anywhere">{DepotFormat.portfolio_name(@portfolio)}</p>
         <div class="flex flex-col sm:flex-row sm:items-start sm:gap-2">
           <div class="sm:max-w-md sm:flex-1">
             <.input
               field={@form[:depot_number]}
-              label={"Depotnummer von „#{Format.portfolio_name(@portfolio)}“"}
+              label={"Depotnummer von „#{DepotFormat.portfolio_name(@portfolio)}“"}
               inline
               class="tabular-nums"
               inputmode="numeric"
@@ -306,7 +307,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
         "ist Budgetkonto „#{account.budget_account.name}“"
 
       {:portfolio_cash, _id} ->
-        "Cash von Depot „#{Format.portfolio_name(account.cash_of_portfolio)}“"
+        "Cash von Depot „#{DepotFormat.portfolio_name(account.cash_of_portfolio)}“"
 
       :none ->
         "keine Rolle"
@@ -329,7 +330,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
        for(
          p <- portfolios,
          do:
-           {"Cash von Depot „#{Format.portfolio_name(p)}“",
+           {"Cash von Depot „#{DepotFormat.portfolio_name(p)}“",
             AccountRoles.param({:portfolio_cash, p.id})}
        )},
       {"Keine", [{"keine Rolle", AccountRoles.param(:none)}]}
@@ -341,7 +342,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     Enum.reject(
       [
         if(portfolio.depot_number,
-          do: "Depotnummer #{Format.masked(portfolio.depot_number)}",
+          do: "Depotnummer #{DepotFormat.masked(portfolio.depot_number)}",
           else: "Keine Depotnummer"
         ),
         portfolio.reference_account && "Verrechnungskonto „#{portfolio.reference_account.name}“"
@@ -378,7 +379,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
       {:ok, portfolio} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Depot „#{Format.portfolio_name(portfolio)}“ angelegt.")
+         |> put_flash(:info, "Depot „#{DepotFormat.portfolio_name(portfolio)}“ angelegt.")
          |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
          |> Areas.open_depot()
          |> SettingsNav.assign_groups()
@@ -521,7 +522,10 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Depotnummer von „#{Format.portfolio_name(portfolio)}“ gespeichert.")
+         |> put_flash(
+           :info,
+           "Depotnummer von „#{DepotFormat.portfolio_name(portfolio)}“ gespeichert."
+         )
          |> assign(editing: nil, depot_number_form: nil)
          |> load_active_portfolios()}
 

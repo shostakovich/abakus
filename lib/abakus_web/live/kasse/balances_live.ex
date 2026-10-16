@@ -6,6 +6,7 @@ defmodule AbakusWeb.Kasse.BalancesLive do
   use AbakusWeb, :kasse_live_view
 
   alias Abakus.Kasse.{Balances, Expenses, Ledger, Participants}
+  alias Abakus.Money
 
   @impl true
   def mount(_params, _session, socket) do
@@ -46,7 +47,7 @@ defmodule AbakusWeb.Kasse.BalancesLive do
 
   defp summary(rows) do
     "Salden: " <>
-      Enum.map_join(rows, ", ", &"#{name(&1.person)} #{Format.money(&1.cents, signed: true)}")
+      Enum.map_join(rows, ", ", &"#{name(&1.person)} #{Money.euros(&1.cents, signed: true)}")
   end
 
   defp name(%{archived_at: nil, name: name}), do: name

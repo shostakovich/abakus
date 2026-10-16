@@ -6,7 +6,7 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   use AbakusWeb, :html
 
-  import AbakusWeb.Format
+  import Abakus.Format, only: [month_name: 1, month_abbr: 1, month_year: 1]
 
   alias Abakus.Budget.Month
   alias Abakus.Money
@@ -47,7 +47,7 @@ defmodule AbakusWeb.BudgetLive.Components do
           phx-click="show_month"
           phx-value-month={Window.param(entry.month)}
         >
-          {month_short(entry.month)}
+          {month_abbr(entry.month)}
         </button>
       <% end %>
       <button

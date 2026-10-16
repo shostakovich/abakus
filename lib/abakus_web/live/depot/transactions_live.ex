@@ -8,9 +8,9 @@ defmodule AbakusWeb.Depot.TransactionsLive do
 
   alias Abakus.Depot.{Portfolios, Valuation}
   alias Abakus.Depot.Portfolios.Transaction
-  alias Abakus.LocalTime
-  alias Abakus.Money
-  alias AbakusWeb.Depot.{Format, TransactionDialog}
+  alias Abakus.{Format, LocalTime, Money}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
+  alias AbakusWeb.Depot.TransactionDialog
 
   @filters [
     {nil, nil, "Alle"},
@@ -101,7 +101,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
         <.list :if={@months != []} id="transactions">
           <%= for {month, transactions} <- @months do %>
             <.list_heading>
-              <h2 id={"month-#{Date.to_iso8601(month)}"}>{month_name(month)}</h2>
+              <h2 id={"month-#{Date.to_iso8601(month)}"}>{Format.month_year(month)}</h2>
             </.list_heading>
             <.transaction
               :for={transaction <- transactions}
@@ -143,7 +143,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
         <.amount
           value={signed_cents(@transaction)}
           currency={@transaction.currency}
-          currency_display={Format.currency_display(@transaction.currency)}
+          currency_display={DepotFormat.currency_display(@transaction.currency)}
           signed={signed?(@transaction.type)}
           tone={inflow?(@transaction.type)}
           class="font-semibold"
@@ -203,7 +203,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
 
   defp details(transaction) do
     join_meta(
-      [Calendar.strftime(transaction.date_time, "%d.%m.%Y")] ++
+      [Format.date(transaction.date_time)] ++
         where(transaction) ++
         [
           shares(transaction),
@@ -221,12 +221,12 @@ defmodule AbakusWeb.Depot.TransactionsLive do
     do: ["#{name(transaction.account)} → #{name(transaction.other_account)}"]
 
   defp where(transaction) do
-    [transaction.portfolio && Format.portfolio_name(transaction.portfolio)] ++
+    [transaction.portfolio && DepotFormat.portfolio_name(transaction.portfolio)] ++
       [transaction.account && transaction.account.name]
   end
 
   defp portfolio(nil), do: "–"
-  defp portfolio(portfolio), do: Format.portfolio_name(portfolio)
+  defp portfolio(portfolio), do: DepotFormat.portfolio_name(portfolio)
 
   defp name(nil), do: "–"
   defp name(record), do: record.name
@@ -235,10 +235,11 @@ defmodule AbakusWeb.Depot.TransactionsLive do
 
   defp shares(%Transaction{type: type} = transaction) when type in [:buy, :sell] do
     price = Valuation.price_per_share(transaction, transaction.currency)
-    "#{Format.shares(transaction.shares)} Stück à #{Format.price(price, transaction.currency)}"
+
+    "#{DepotFormat.shares(transaction.shares)} Stück à #{DepotFormat.price(price, transaction.currency)}"
   end
 
-  defp shares(transaction), do: "#{Format.shares(transaction.shares)} Stück"
+  defp shares(transaction), do: "#{DepotFormat.shares(transaction.shares)} Stück"
 
   defp gross(%Transaction{type: :dividend, amount: amount} = transaction) do
     case Valuation.gross_value(transaction, transaction.currency) do
@@ -260,9 +261,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
     do: transaction.units |> Enum.filter(&(&1.type == type)) |> Enum.sum_by(& &1.amount)
 
   defp money(cents, transaction),
-    do: Money.amount(cents) <> "\u00A0" <> Format.currency(transaction.currency)
-
-  defp month_name(month), do: "#{Format.month_name(month)} #{month.year}"
+    do: Money.amount(cents) <> "\u00A0" <> DepotFormat.currency(transaction.currency)
 
   defp transactions_path(filter_param, portfolio_id) do
     query = Enum.reject([filter: filter_param, portfolio: portfolio_id], &is_nil(elem(&1, 1)))

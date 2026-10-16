@@ -4,8 +4,9 @@ defmodule AbakusWeb.Depot.SecurityLive do
   import AbakusWeb.Depot.{AllocationComponents, DividendComponents}
 
   alias Abakus.Depot.{MarketData, Portfolios, Securities}
-  alias Abakus.{ExchangeRates, LocalTime, Money}
-  alias AbakusWeb.Depot.{AttributeValue, Format, Periods}
+  alias Abakus.{ExchangeRates, Format, LocalTime, Money}
+  alias AbakusWeb.Depot.{AttributeValue, Periods}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
 
   # URL parameter, period, button label and its accessible name; the first is the default.
   @periods [
@@ -66,7 +67,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
         <:subtitle>{subtitle(@security)}</:subtitle>
         <:actions>
           <div :if={@price} id="price" class="whitespace-nowrap tabular-nums sm:text-end">
-            <div class="text-2xl font-bold">{Format.price(@price, @security.currency)}</div>
+            <div class="text-2xl font-bold">{DepotFormat.price(@price, @security.currency)}</div>
             <div
               :if={@price_yesterday}
               class={["text-sm", tone(change_note(@price, @price_yesterday, @security.currency))]}
@@ -150,7 +151,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
         Nicht im Bestand.
       </.empty_state>
       <.description_list :if={@holdings != []} class="border-t border-base-content/10">
-        <:item label="Stück">{Format.shares(@total.shares)}</:item>
+        <:item label="Stück">{DepotFormat.shares(@total.shares)}</:item>
         <:item label="Wert"><.amount value={@total.value} class="font-semibold" /></:item>
         <:item label="Einstand"><.amount value={@total.purchase_value} /></:item>
         <:item label="Gewinn">
@@ -162,12 +163,12 @@ defmodule AbakusWeb.Depot.SecurityLive do
         <.list_row
           :for={entry <- @holdings}
           id={"holding-#{entry.portfolio.id}"}
-          title={Format.portfolio_name(entry.portfolio)}
+          title={DepotFormat.portfolio_name(entry.portfolio)}
           navigate={depots_path(:holdings, entry.portfolio.id)}
           trailing_on_phone={:title}
         >
           <:leading><.plush name="briefcase" size={:lg} /></:leading>
-          <:meta>{Format.shares(entry.shares)} Stück</:meta>
+          <:meta>{DepotFormat.shares(entry.shares)} Stück</:meta>
           <:trailing>
             <div class="text-end">
               <.amount value={entry.value} class="font-semibold" />
@@ -201,18 +202,18 @@ defmodule AbakusWeb.Depot.SecurityLive do
             {Format.date(dividend.pay_date)}
           </time>
           <.cell_sub hide_from={:sm} class="tabular-nums">
-            {Format.shares(dividend.shares)}&nbsp;Stück × {per_share(dividend, @places)}
+            {DepotFormat.shares(dividend.shares)}&nbsp;Stück × {per_share(dividend, @places)}
           </.cell_sub>
         </:col>
         <:col :let={dividend} label="Ex-Tag" show_from={:sm}>
-          <span class="tabular-nums text-base-content/70">{Format.short_date(dividend.ex_date)}</span>
+          <span class="tabular-nums text-base-content/70">{Format.date(dividend.ex_date, year: false)}</span>
         </:col>
         <:col :let={dividend} label="Art"><.kind_tag kind={dividend.kind} /></:col>
         <:col :let={dividend} label="je Anteil" align={:end} show_from={:sm}>
           {per_share(dividend, @places)}
         </:col>
         <:col :let={dividend} label="Stück" align={:end} show_from={:sm}>
-          {Format.shares(dividend.shares)}
+          {DepotFormat.shares(dividend.shares)}
         </:col>
         <:col :let={dividend} label="Brutto" align={:end}>{expected(dividend, :gross, 2)}</:col>
       </.table>
@@ -225,10 +226,13 @@ defmodule AbakusWeb.Depot.SecurityLive do
     do: "~" <> per_share(%{dividend | kind: :announced}, places)
 
   defp per_share(dividend, places),
-    do: Format.price(dividend.per_share, dividend.currency, places)
+    do: DepotFormat.price(dividend.per_share, dividend.currency, places)
 
   defp per_share_places(rows) do
-    for(%{per_share: per_share} when per_share != nil <- rows, do: Format.price_places(per_share))
+    for(
+      %{per_share: per_share} when per_share != nil <- rows,
+      do: DepotFormat.price_places(per_share)
+    )
     |> Enum.max(fn -> 2 end)
   end
 
@@ -278,13 +282,13 @@ defmodule AbakusWeb.Depot.SecurityLive do
           </time>
         </:col>
         <:col :let={entry} :if={@ex_dates} label="Ex-Tag" show_from={:sm}>
-          <span class="tabular-nums text-base-content/70">{Format.short_date(entry.ex_date)}</span>
+          <span class="tabular-nums text-base-content/70">{Format.date(entry.ex_date, year: false)}</span>
         </:col>
         <:col :let={entry} label="je Anteil" align={:end}>
-          {Format.price(entry.per_share, entry.currency, @places)}
+          {DepotFormat.price(entry.per_share, entry.currency, @places)}
         </:col>
         <:col :let={entry} label="Stück" align={:end} show_from={:sm}>
-          {if entry.shares > 0, do: Format.shares(entry.shares), else: "–"}
+          {if entry.shares > 0, do: DepotFormat.shares(entry.shares), else: "–"}
         </:col>
         <:col :let={entry} label="Brutto" align={:end}><.amount value={entry.gross} /></:col>
       </.table>
@@ -367,7 +371,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
 
     fund_size =
       if profile.fund_size,
-        do: [{"Fondsgröße", {:text, Format.fund_size(profile.fund_size, security.currency)}}],
+        do: [{"Fondsgröße", {:text, DepotFormat.fund_size(profile.fund_size, security.currency)}}],
         else: []
 
     attributes =
@@ -378,10 +382,10 @@ defmodule AbakusWeb.Depot.SecurityLive do
     ter ++ fund_size ++ attributes
   end
 
-  defp ter(ter, nil), do: Format.ter(ter)
+  defp ter(ter, nil), do: DepotFormat.ter(ter)
 
   defp ter(ter, per_year),
-    do: join_meta([Format.ter(ter), "#{Money.euros(per_year, decimals: 0)} im Jahr"])
+    do: join_meta([DepotFormat.ter(ter), "#{Money.euros(per_year, decimals: 0)} im Jahr"])
 
   # PP names its built-in attributes in the language the file was created in; its English
   # default for the vendor reads in German here. A name the user chose stays.
@@ -437,7 +441,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
           </div>
         </:item>
         <:item :if={@security.currency != "EUR"} label={"Wechselkurs #{@security.currency}"}>
-          <p>{join_meta(["EZB", @exchange_rate && Format.rate(@exchange_rate.rate)])}</p>
+          <p>{join_meta(["EZB", @exchange_rate && Format.decimal(@exchange_rate.rate)])}</p>
           <p class="font-normal text-base-content/70">
             {if @exchange_rate,
               do: "Stand #{Format.date(@exchange_rate.date)}",
@@ -505,7 +509,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
       if yesterday > 0,
         do: " (#{change |> Format.percent_of(yesterday) |> Format.signed_percent()})"
 
-    "#{Format.signed_price(change, currency)}#{percent} heute"
+    "#{DepotFormat.signed_price(change, currency)}#{percent} heute"
   end
 
   defp period_text(:one_year), do: "des letzten Jahres"
@@ -565,7 +569,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
   defp push_chart(socket, chart) do
     if connected?(socket) do
       push_event(socket, "price-chart", %{
-        currency: Format.currency(socket.assigns.security.currency),
+        currency: DepotFormat.currency(socket.assigns.security.currency),
         dates: Enum.map(chart.prices, & &1.date),
         prices: Enum.map(chart.prices, & &1.price),
         trades: chart.trades

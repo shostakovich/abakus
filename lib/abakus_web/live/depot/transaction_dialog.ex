@@ -396,7 +396,6 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   attr :field, Phoenix.HTML.FormField, required: true
   attr :receipt, :any, required: true
 
-  # A receipt is a purchase, sale or dividend.
   defp kinds(assigns) do
     kinds =
       if assigns.receipt, do: Keyword.take(@kinds, [:purchase, :sale, :dividend]), else: @kinds
@@ -421,7 +420,6 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   attr :help, :string, default: nil, doc: "what a receipt's failed check says about it"
   attr :help_tone, :atom, default: nil
 
-  # A number as typed, in German notation, with its error once the field was used.
   defp number(assigns) do
     ~H"""
     <.input
@@ -440,7 +438,6 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   attr :form, Phoenix.HTML.Form, required: true
   attr :kind, :atom, required: true
 
-  # The amount computed or overwritten, and what the other fields give when it differs.
   defp amount_field(assigns) do
     form = assigns.form
     expected = form[:expected_amount].value

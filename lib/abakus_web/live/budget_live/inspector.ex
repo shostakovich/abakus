@@ -8,7 +8,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   """
   use AbakusWeb, :html
 
-  import AbakusWeb.Format
+  import Abakus.Format, only: [month_name: 1, month_abbr: 1, month_year: 1]
 
   alias Abakus.Budget.{CategoryMonth, Month}
   alias Abakus.Money
@@ -192,7 +192,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
         <:item label="Übrig aus Vormonat"><.amount value={@cell.carried} /></:item>
         <:item
           :if={@previous && @previous.available < 0}
-          label={"Überzug im #{month_short(@previous.month)}"}
+          label={"Überzug im #{month_abbr(@previous.month)}"}
         >
           <.amount value={@previous.available} class="text-error-ink" />
         </:item>

@@ -7,10 +7,11 @@ defmodule AbakusWeb.RegisterLive.Components do
   """
   use AbakusWeb, :html
 
+  alias Abakus.Format
   alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
   alias Abakus.Money
   alias Abakus.Names
-  alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
+  alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.RegisterLive.{Rows, TransactionEditor}
 
   @flags [
@@ -622,7 +623,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         </td>
         <td {cell(@transaction, "date")}>
           <span class="app-wide">{Format.date(@transaction.date)}</span>
-          <span class="app-short">{Format.day(@transaction.date)}</span>
+          <span class="app-short">{Format.date(@transaction.date, year: false)}</span>
         </td>
         <td
           :if={@columns.all}
@@ -718,7 +719,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td class="app-flag-col"></td>
         <td>
           <span class="app-wide">{Format.date(@proposal.date)}</span>
-          <span class="app-short">{Format.day(@proposal.date)}</span>
+          <span class="app-short">{Format.date(@proposal.date, year: false)}</span>
         </td>
         <td :if={@columns.all} class="app-konto" title={@accounts[@proposal.account_id].name}>
           <.account_cell account={@accounts[@proposal.account_id]} />
@@ -809,7 +810,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           <:leading><.icon name="link" class="size-5 text-base-content/70" /></:leading>
           <:meta>
             {join_meta([
-              Format.day(transaction.date),
+              Format.date(transaction.date, year: false),
               if(@all, do: @accounts[transaction.account_id].name),
               match_text(transaction.matched_transaction, @accounts)
             ])}
@@ -854,7 +855,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           </:leading>
           <:meta>
             {join_meta([
-              Format.day(transaction.date),
+              Format.date(transaction.date, year: false),
               if(@all, do: @accounts[transaction.account_id].name),
               category_text(transaction, @accounts),
               transaction.memo

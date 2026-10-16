@@ -123,7 +123,7 @@ defmodule Abakus.Money do
   defp invalid(text), do: "Ungültiger Betrag „#{text}“."
 
   # Only space and no-break space: U+202F and other spaces are not part of a number.
-  defp strip_spaces(text), do: String.replace(text, [" ", " "], "")
+  defp strip_spaces(text), do: String.replace(text, [" ", "\u00A0"], "")
 
   # "1200,00" is 1200 yen, e.g. after switching an amount from euros to yen.
   defp trim_zeros(frac, decimals) do
@@ -251,13 +251,6 @@ defmodule Abakus.Money do
   @spec amount(integer(), String.t()) :: String.t()
   def amount(minor, currency \\ "EUR") when is_integer(minor),
     do: Setzkasten.Format.number(minor, minor_units: true, minor_digits: decimals(currency))
-
-  @doc ~s(A number with the places it has, at least `places`, as a Depot field holds it: `"1.234,5678"`.)
-  @spec number(Decimal.t(), non_neg_integer()) :: String.t()
-  def number(%Decimal{} = number, places \\ 0) do
-    normalized = Decimal.normalize(number)
-    Setzkasten.Format.number(normalized, decimals: max(-normalized.exp, places))
-  end
 
   @doc ~s(Basis points as a percentage: `"33,33 %"`.)
   @spec format_basis_points(integer()) :: String.t()

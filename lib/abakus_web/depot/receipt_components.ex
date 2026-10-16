@@ -9,8 +9,9 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
 
   alias Abakus.Depot.Portfolios.Receipt
   alias Abakus.Depot.Receipts.{Check, Checks, Correction, Fields}
-  alias Abakus.Money
-  alias AbakusWeb.Depot.{Format, ReceiptText, TransactionDialog}
+  alias Abakus.{Format, Money}
+  alias AbakusWeb.Depot.Format, as: DepotFormat
+  alias AbakusWeb.Depot.{ReceiptText, TransactionDialog}
 
   @kinds %{purchase: "Kauf", sale: "Verkauf", dividend: "Dividende"}
 
@@ -173,7 +174,7 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
   defp figures(fields) do
     [
       date(fields),
-      fields.shares && "#{Format.rate(fields.shares)} Stück",
+      fields.shares && "#{Format.decimal(fields.shares)} Stück",
       fields.amount && euros(fields.amount)
     ]
   end
@@ -285,7 +286,7 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
   @doc "What the portfolio field says when the receipt's depot number names none, nil otherwise."
   def depot_number_warning(%Receipt{checks: checks, fields: fields}) do
     case Enum.find(checks, &(&1.name == :depot)) do
-      %Check{result: :failed} -> "Laut Beleg Depot #{Format.masked(fields.depot_number)}"
+      %Check{result: :failed} -> "Laut Beleg Depot #{DepotFormat.masked(fields.depot_number)}"
       %Check{result: :missing} -> "Der Beleg nennt keine Depotnummer."
       _passed_or_none -> nil
     end
@@ -341,11 +342,11 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
 
   defp check_text(%Check{name: :depot, result: :passed} = check, fields),
     do:
-      "Depot #{Format.masked(fields.depot_number)} gehört zu „#{Format.portfolio_name(check.portfolio_name)}“"
+      "Depot #{DepotFormat.masked(fields.depot_number)} gehört zu „#{DepotFormat.portfolio_name(check.portfolio_name)}“"
 
   defp check_text(%Check{name: :depot, result: :failed}, fields),
     do:
-      "Depot #{Format.masked(fields.depot_number)} gehört zu keinem deiner Depots. " <>
+      "Depot #{DepotFormat.masked(fields.depot_number)} gehört zu keinem deiner Depots. " <>
         "Bitte Depot wählen."
 
   defp check_text(%Check{name: :depot, result: :missing}, _fields),

@@ -1,7 +1,7 @@
 defmodule Abakus.MoneyTest do
   use ExUnit.Case, async: true
 
-  alias Abakus.Money
+  alias Abakus.{Format, Money}
 
   @blank "Bitte einen Betrag eingeben."
   @places "Höchstens 2 Nachkommastellen erlaubt."
@@ -245,23 +245,6 @@ defmodule Abakus.MoneyTest do
     end
   end
 
-  describe "number/2" do
-    for {number, places, text} <- [
-          {"1234.5678", 0, "1.234,5678"},
-          {"1500", 0, "1.500"},
-          {"1E+3", 0, "1.000"},
-          {"0.125", 0, "0,125"},
-          {"12.5", 2, "12,50"},
-          {"12.500", 0, "12,5"},
-          {"-9.99", 2, "−9,99"},
-          {"0", 2, "0,00"}
-        ] do
-      test "writes #{number} with at least #{places} places as #{text}" do
-        assert Money.number(Decimal.new(unquote(number)), unquote(places)) == unquote(text)
-      end
-    end
-  end
-
   describe "a field value reads back as written" do
     values =
       [0, 1, 5, 99, 100, 999, 1000, 1001, 123_456, 1_000_000, 1_234_567, 100_000_000] ++
@@ -284,7 +267,7 @@ defmodule Abakus.MoneyTest do
         places <- [0, 2] do
       test "#{number} with at least #{places} places" do
         number = Decimal.new(unquote(number))
-        assert {:ok, read} = Money.parse_number(Money.number(number, unquote(places)))
+        assert {:ok, read} = Money.parse_number(Format.decimal(number, unquote(places)))
         assert Decimal.equal?(read, number)
       end
     end
