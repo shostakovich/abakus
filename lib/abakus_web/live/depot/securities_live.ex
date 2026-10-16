@@ -31,7 +31,7 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
       account_dialog={@account_dialog}
       current={{:depots, nil}}
     >
-      <.depots_header tab={:securities} inbox={@depot_sidebar.inbox}>
+      <.depots_header tab={:securities}>
         <:subtitle>
           Kurse kommen von Yahoo, täglich um 18:00 und beim Öffnen dieser Seite. Am selben Tag gilt
           ein Kurs aus Portfolio Performance vor einem von Yahoo.

@@ -108,16 +108,15 @@ defmodule AbakusWeb.Kasse.RecurringLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.kasse
+    <Layouts.settings
+      current={:kasse_recurring}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
-      current={:settings}
+      groups={@settings_groups}
     >
-      <.header back={~p"/kasse/settings"} back_label="Gruppe">
+      <.header>
         Wiederkehrende Ausgaben
         <:subtitle>
           Eine wiederkehrende Ausgabe legst du bei einer bestehenden Ausgabe über „Als wiederkehrend einrichten“ an. Fällige Termine werden automatisch als Ausgaben eingetragen – auch verpasste. Gibt es an einem Termin schon eine Ausgabe mit gleichem Titel, Betrag und Zahler, wird er übersprungen. Pausierte Termine werden beim Fortsetzen nicht nachgeholt.
@@ -195,7 +194,7 @@ defmodule AbakusWeb.Kasse.RecurringLive do
         plush="repeat"
         title="Noch keine wiederkehrenden Ausgaben."
       />
-    </Layouts.kasse>
+    </Layouts.settings>
     """
   end
 end

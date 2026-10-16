@@ -48,18 +48,33 @@ defmodule AbakusWeb.Areas do
   @doc "Plug for a part's pages: 404 unless the user may use it; otherwise the session remembers its area."
   def require_area(conn, part) do
     ensure_allowed!(conn.assigns.current_scope, part)
-    put_session(conn, :area, Atom.to_string(area_of(part)))
+    remember_area(conn, area_of(part))
+  end
+
+  @doc "Plug for a page open to everyone that belongs to `area`: the session remembers it."
+  def remember_area(conn, area), do: put_session(conn, :area, Atom.to_string(area))
+
+  @doc "Plug for a part's settings: 404 unless the user may use it; the area used last stays."
+  def require_part(conn, part) do
+    ensure_allowed!(conn.assigns.current_scope, part)
+    conn
   end
 
   @doc """
   `on_mount`: `{:require, part}` for a part's pages, which answer 404 unless the user may use it;
-  `:assign` for pages outside the areas, which show the area used last. Both assign `areas` (those the user may
-  use) and `area` (the current one's key, or `nil`).
+  `:assign` for pages outside the areas, which show the area used last, and `{:assign, part}` for a part's
+  settings, which also answer 404 to others. All assign `areas` (those the user may use) and `area` (the current
+  one's key, or `nil`).
   """
   def on_mount({:require, part}, _params, _session, socket) do
     scope = socket.assigns.current_scope
     ensure_allowed!(scope, part)
     {:cont, Phoenix.Component.assign(socket, areas: for_scope(scope), area: area_of(part))}
+  end
+
+  def on_mount({:assign, part}, params, session, socket) do
+    ensure_allowed!(socket.assigns.current_scope, part)
+    on_mount(:assign, params, session, socket)
   end
 
   def on_mount(:assign, _params, session, socket) do

@@ -227,6 +227,18 @@ The area of the budget and the portfolios: the budget's pages for the budget own
 Sync for everyone with the budget or a portfolio. Code: `:finanzen`. UI "Finanzen".
 _Avoid_: Budget area, Depot area, finances
 
+**Import & Sync**:
+Finanzen's page for what comes in from outside, in tabs: Bankdateien (the budget owner's file import), Belege (the
+inbox, for users with a portfolio) and Portfolio Performance (the PP import). UI "Import & Sync".
+_Avoid_: Settings (it is a task, not a setting)
+
+**Settings hub**:
+The sidebar's settings mode: a way back to the area used last, then the sections grouped by area, Allgemein for
+everyone, Budget, Kasse and Depot for the users of that area; Depot for everyone, so anyone may start a Depot, with
+Belegeingang once they have a portfolio. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI
+"Einstellungen".
+_Avoid_: Settings page, Mehr (that is the dock's button)
+
 ## Kasse
 
 The shared expenses of one household: who paid what for whom, the balances that follow and how to settle them.
@@ -300,7 +312,7 @@ their date (keeping category, cleared state, approval and flag), books every oth
 the owner's YNAB connection and removes the YNAB connection. A split, a transfer or a second marked transaction of
 an expense stays unlinked for the owner to check, and its expense gets no booking. Any other expense dated before
 that start date gets a linked transaction only when entered later or moved past it. UI "Mit Budget verknüpfen", the
-settings page "Budget".
+settings page "Budget-Verknüpfung".
 _Avoid_: Sync, budget export
 
 **Linked transaction**:
@@ -325,7 +337,7 @@ belong to one user, who alone sees them; securities, prices, exchange rates and 
 
 **Depot**:
 The code area of the portfolios (`Abakus.Depot`, `/depot`), shown in Finanzen as Vermögen and Depots; a user without
-the budget gets Finanzen once they have a portfolio, created or imported under Einstellungen. No UI area of its own.
+the budget gets Finanzen once they have a portfolio, created under Einstellungen › Depots or imported from a PP file. No UI area of its own.
 _Avoid_: Portfolio app, investments, Depot area
 
 **Security**:
@@ -404,7 +416,7 @@ _Avoid_: Document, statement
 
 **Inbox**:
 A user's receipts waiting for them to confirm, correct or discard what a language model recognised in them (ADR
-0015); nothing is booked without confirmation. Code: `Abakus.Depot.Receipts`. UI "Eingang", on "Buchungen".
+0015); nothing is booked without confirmation. Code: `Abakus.Depot.Receipts`. UI "Eingang", Import & Sync's tab "Belege".
 
 **Receipt intake**:
 Where a user's receipts come from besides uploads: their own Paperless-ngx, polled every 15 minutes for documents
@@ -413,7 +425,7 @@ with their tag (ADR 0016), kept in their Depot settings. UI "Belegeingang".
 **PP import**:
 Reads a Portfolio Performance file into the user's Depot, again and again: objects are matched by their PP UUID,
 those missing from the file go, what was entered in the Depot stays. Open before the first portfolio, so a file can
-start the Depot. Code: `Abakus.Depot.PPImport`. UI "PP-Import".
+start the Depot. Code: `Abakus.Depot.PPImport`. UI "Portfolio Performance", Import & Sync's tab.
 
 **Savings plan**:
 A recurring purchase, deposit, removal or interest payment with a start, an interval and an amount, as Portfolio

@@ -12,7 +12,7 @@ defmodule AbakusWeb.AreasTest do
   alias Abakus.Users.Scope
 
   @pages ["Budget", "Vermögen", "Alle Konten", "Import & Sync", "Depots"] ++
-           ["Ausgaben", "Salden", "Aktivität", "Gruppe"]
+           ["Ausgaben", "Salden", "Aktivität"]
 
   defp sidebar_labels(view) do
     view
@@ -103,17 +103,17 @@ defmodule AbakusWeb.AreasTest do
         assert_error_sent 404, fn -> get(conn, path) end
       end
 
-      assert_error_sent 404, fn -> get(conn, ~p"/settings/ynab") end
+      assert_error_sent 404, fn -> get(conn, ~p"/settings/budget/ynab") end
     end
 
     test "sees no Budget in the sidebar or the settings", %{conn: conn} do
-      {:ok, view, html} = live(conn, ~p"/settings")
+      {:ok, view, html} = live(conn, ~p"/settings/appearance")
 
       refute has_element?(view, ~s|a[href^="/budget"]|)
       refute has_element?(view, "#side-add-account-sidebar")
       refute html =~ "Girokonto"
-      refute has_element?(view, ~s|#settings-nav a[href="/settings/ynab"]|)
-      assert has_element?(view, ~s|#settings-nav a[href="/settings/access"]|)
+      refute has_element?(view, "#settings-ynab-import-sidebar")
+      assert has_element?(view, ~s|#settings-access-sidebar[href="/settings/access"]|)
     end
 
     test "is sent to the settings by /, never to the Budget used before", %{conn: conn} do
@@ -203,8 +203,19 @@ defmodule AbakusWeb.AreasTest do
       assert has_element?(view, ~s|#area-switcher a[href="/budget"]|)
       assert has_element?(view, ~s|#area-switcher a[href="/kasse"][aria-current=page]|)
 
-      assert get_session(get(conn, ~p"/kasse/export/expenses.csv"), :area) == "kasse"
+      assert get_session(get(conn, ~p"/kasse/balances"), :area) == "kasse"
       assert get_session(get(conn, ~p"/depot"), :area) == "finanzen"
+
+      in_finanzen = Plug.Test.init_test_session(conn, area: "finanzen")
+      assert get_session(get(in_finanzen, ~p"/settings/kasse"), :area) == "finanzen"
+    end
+
+    test "opens the PP import in Finanzen, coming from the Kasse", %{conn: conn} do
+      in_kasse = Plug.Test.init_test_session(conn, area: "kasse")
+      assert get_session(get(in_kasse, ~p"/depot/import"), :area) == "finanzen"
+
+      {:ok, view, _html} = live(in_kasse, ~p"/depot/import")
+      assert has_element?(view, ~s|#area-finanzen-sidebar[aria-current=page]|)
     end
 
     test "sees only the current area's entries", %{conn: conn} do
@@ -213,7 +224,7 @@ defmodule AbakusWeb.AreasTest do
 
       {:ok, view, _html} = live(conn, ~p"/kasse")
 
-      assert sidebar_labels(view) == ["Ausgaben", "Salden", "Aktivität", "Gruppe"]
+      assert sidebar_labels(view) == ["Ausgaben", "Salden", "Aktivität"]
       refute has_element?(view, "aside nav .menu-title")
       refute has_element?(view, sidebar_link("/budget"))
 
@@ -242,7 +253,7 @@ defmodule AbakusWeb.AreasTest do
     end
 
     test "gets 404 on every Depot page and sees no Finanzen", %{conn: conn} do
-      for path <- get_paths("/depot", 1), path not in ["/depot/portfolios", "/depot/import"] do
+      for path <- get_paths("/depot", 1), path != "/depot/import" do
         assert_error_sent 404, fn -> get(conn, path) end
       end
 
@@ -255,18 +266,23 @@ defmodule AbakusWeb.AreasTest do
       conn: conn,
       dora: dora
     } do
-      {:ok, view, _html} = live(conn, ~p"/settings")
-      assert has_element?(view, ~s|#settings-nav a[href="/depot/portfolios"]|, "Depots")
+      {:ok, view, _html} = live(conn, ~p"/settings/appearance")
 
-      {:ok, view, _html} = live(conn, ~p"/depot/portfolios")
+      assert has_element?(
+               view,
+               ~s|#settings-depots-sidebar[href="/settings/depot/portfolios"]|,
+               "Depots"
+             )
+
+      {:ok, view, _html} = live(conn, ~p"/settings/depot/portfolios")
       refute render(view) =~ "Ottos Altersvorsorge"
+      refute has_element?(view, "#settings-receipt-intake-sidebar")
 
       view
       |> form("#new-portfolio-form", portfolio: %{name: "Doras Depot"})
       |> render_submit()
 
-      assert has_element?(view, ~s|#area-switcher a[href="/depot"]|, "Finanzen")
-      assert has_element?(view, ~s|#area-finanzen-sidebar[href="/depot"]|)
+      assert has_element?(view, "#settings-receipt-intake-sidebar", "Belegeingang")
 
       {:ok, view, _html} = live(conn, ~p"/depot")
       assert has_element?(view, "aside nav", "Doras Depot")
@@ -279,7 +295,7 @@ defmodule AbakusWeb.AreasTest do
     end
 
     test "is not seen by the budget owner, who has a Depot of their own", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/depot/portfolios")
+      {:ok, view, _html} = live(conn, ~p"/settings/depot/portfolios")
       view |> form("#new-portfolio-form", portfolio: %{name: "Doras Depot"}) |> render_submit()
 
       owner = Abakus.Repo.get_by!(Abakus.Users.User, budget_owner: true)
@@ -306,7 +322,7 @@ defmodule AbakusWeb.AreasTest do
       assert has_element?(view, "header .navbar", "Finanzen")
       refute has_element?(view, ~s|nav[aria-label="Bereich wechseln"]|)
       assert sidebar_labels(view) == ["Vermögen", "Import & Sync", "Depots"]
-      assert has_element?(view, sidebar_link("/depot/import"), "Import & Sync")
+      assert has_element?(view, sidebar_link("/depot/receipts"), "Import & Sync")
       assert has_element?(view, sidebar_link(~p"/depot/holdings?#{[portfolio: portfolio.id]}"))
       refute has_element?(view, ~s|a[href^="/budget"]|)
       refute has_element?(view, "#side-add-account-sidebar")

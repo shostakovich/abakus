@@ -162,16 +162,15 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.kasse
+    <Layouts.settings
+      current={:kasse_participants}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
-      current={:settings}
+      groups={@settings_groups}
     >
-      <.header back={~p"/kasse/settings"} back_label="Gruppe">
+      <.header>
         Teilnehmer
         <:subtitle>
           Personen umbenennen oder archivieren. Archivierte Personen stehen bei neuen Ausgaben nicht mehr zur Wahl; ihre alten Ausgaben bleiben erhalten.
@@ -285,7 +284,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
         anchor={"person-#{@renaming.id}"}
         form={@rename_form}
       />
-    </Layouts.kasse>
+    </Layouts.settings>
     """
   end
 

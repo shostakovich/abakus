@@ -7,9 +7,8 @@ defmodule AbakusWeb.Depot.Sidebar do
   (`:default`) `:market_data_updated` reaches the LiveView after the sidebar, so one that shows
   prices itself only handles it; on the budget's pages (`:budget`) it stops at the sidebar.
 
-  It counts the recognised receipts in the inbox for the count on the tab „Buchungen“, as
-  `@depot_sidebar.inbox`; a page that shows the inbox itself, i.e. assigns `:inbox`, also gets
-  `:receipts_updated`.
+  It counts the recognised receipts in the inbox for Import & Sync, as `@depot_sidebar.inbox`; a page that shows
+  the inbox itself, i.e. assigns `:inbox`, also gets `:receipts_updated`.
   """
   use AbakusWeb, :verified_routes
 

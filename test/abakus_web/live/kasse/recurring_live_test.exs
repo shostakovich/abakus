@@ -27,7 +27,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
   end
 
   test "without rules it says how to make one", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/recurring")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/recurring")
 
     assert page_title(view) == "Wiederkehrende Ausgaben · Abakus"
     assert texts(view, "main") |> hd() =~ "Noch keine wiederkehrenden Ausgaben."
@@ -39,7 +39,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
        %{conn: conn, h: h} do
     rule = due_rule(h)
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/recurring")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/recurring")
 
     assert texts(view, "#rule-#{rule.id} p.truncate") == [
              "Wöchentlich seit #{Format.date(rule.start_date)}",
@@ -56,7 +56,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
     rule = due_rule(h)
     {:ok, _paused} = Recurring.pause_rule(h.anna, rule)
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/recurring")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/recurring")
     assert texts(view, "#rule-#{rule.id} .badge") == ["pausiert"]
 
     view |> element("#rule-#{rule.id}-resume") |> render_click()
@@ -72,7 +72,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
   test "taking the template from the newest occurrence", %{conn: conn, h: h} do
     rule = due_rule(h)
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/recurring")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/recurring")
 
     view |> element("#rule-#{rule.id}-template-menu-item") |> render_click()
     assert flash(view, :info) == "Vorlage aus der letzten Ausgabe übernommen."
@@ -88,7 +88,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
   test "deleting asks first and keeps the expenses", %{conn: conn, h: h} do
     rule = due_rule(h)
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/recurring")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/recurring")
 
     assert asked(view, "#rule-#{rule.id}-delete-menu-item").text ==
              "Bereits eingetragene Ausgaben bleiben erhalten."
@@ -108,7 +108,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
 
   test "a rule that is gone meanwhile", %{conn: conn, h: h} do
     rule = due_rule(h)
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/recurring")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/recurring")
     {:ok, _deleted} = Recurring.delete_rule(h.anna, rule)
 
     view |> element("#rule-#{rule.id}-pause") |> render_click()

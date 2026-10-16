@@ -64,16 +64,11 @@ defmodule AbakusWeb.LayoutsTest do
     assert Enum.all?(budget_links, &(LazyHTML.attribute(&1, "data-phx-link") != []))
     assert budget |> LazyHTML.query(~s|a[href="/settings/access"]|) |> Enum.empty?()
 
-    for path <- [
-          ~p"/settings",
-          ~p"/settings/access",
-          ~p"/settings/appearance",
-          ~p"/settings/ynab"
-        ] do
+    for path <- [~p"/settings/access", ~p"/settings/appearance", ~p"/settings/budget/ynab"] do
       page = conn |> get(path) |> html_response(200) |> LazyHTML.from_document()
 
       assert page |> LazyHTML.query(~s|a[href="/settings/access"]|) |> Enum.any?()
-      assert page |> LazyHTML.query("a[data-phx-link]") |> Enum.empty?()
+      assert page |> LazyHTML.query(~s|a[href="/budget"]:not([data-phx-link])|) |> Enum.any?()
     end
   end
 

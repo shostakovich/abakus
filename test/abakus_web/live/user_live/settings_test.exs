@@ -17,7 +17,7 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       refute html =~ "Passwort"
       assert has_element?(lv, "#passkey-register .btn-primary", "Passkey hinzufügen")
       refute has_element?(lv, "#email-form .btn-primary")
-      assert has_element?(lv, "#side-settings-sidebar[aria-current=page]")
+      assert has_element?(lv, "#settings-access-sidebar[aria-current=page]")
     end
 
     test "redirects if user is not logged in", %{conn: conn} do

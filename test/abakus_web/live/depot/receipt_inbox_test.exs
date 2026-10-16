@@ -50,9 +50,9 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
 
   defp pdf(id \\ System.unique_integer()), do: "%PDF-1.4\n% #{id}\n%%EOF\n"
 
-  # Uploads PDFs on „Buchungen“ and waits until the model has read them.
+  # Uploads PDFs on Import & Sync's Belege and waits until the model has read them.
   defp upload_and_recognise(conn, files \\ [{"beleg.pdf", pdf()}]) do
-    {:ok, lv, _html} = live(conn, ~p"/depot/transactions")
+    {:ok, lv, _html} = live(conn, ~p"/depot/receipts")
     upload(lv, files)
     await_recognition()
     lv
@@ -61,6 +61,34 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
   defp only_receipt(scope), do: hd(Receipts.list_inbox(scope))
 
   defp refute_inbox_count(lv), do: refute(has_element?(lv, "#inbox-count"))
+
+  test "the inbox is Import & Sync's Belege, with its count in the sidebar, not on Buchungen",
+       ctx do
+    {:ok, empty, _html} = live(ctx.conn, ~p"/depot/receipts")
+    assert has_element?(empty, "#inbox-empty", "Keine Belege im Eingang")
+
+    FakeModel.stub(fn _text -> {:ok, answer()} end)
+    lv = upload_and_recognise(ctx.conn)
+
+    assert has_element?(lv, "h1", "Import & Sync")
+
+    assert has_element?(
+             lv,
+             ~s|#import-tabs a[href="/depot/receipts"][aria-current=page]|,
+             "Belege"
+           )
+
+    assert has_element?(lv, ~s|#import-tabs a[href="/budget/import"]|, "Bankdateien")
+    assert has_element?(lv, ~s|#import-tabs a[href="/depot/import"]|, "Portfolio Performance")
+    assert has_element?(lv, "#side-import-sidebar[aria-current=page]", "1")
+
+    {:ok, transactions, _html} = live(ctx.conn, ~p"/depot/transactions")
+
+    refute has_element?(transactions, "#inbox")
+    refute has_element?(transactions, "#receipts-upload")
+    refute has_element?(transactions, "#depots-tabs #inbox-count")
+    assert has_element?(transactions, "#side-import-sidebar", "1")
+  end
 
   test "an uploaded PDF goes through the model into the inbox and is booked once confirmed",
        ctx do
@@ -75,7 +103,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
              "01.10.2026\u2060\u00A0· 93,207 Stück\u2060\u00A0· 1.125,00\u00A0€\u2060\u00A0· Upload"
 
     assert has_element?(lv, "#receipt-#{receipt.id}-status", "Geprüft")
-    assert has_element?(lv, "#depots-tabs #inbox-count", "1")
+    assert has_element?(lv, "#import-tabs #inbox-count", "1")
 
     lv |> element("#receipt-#{receipt.id} button", "Prüfen und buchen") |> render_click()
 
@@ -114,7 +142,8 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     assert transaction.account_id == ctx.account.id
     assert receipt_id == receipt.id
     assert Repo.get!(Receipt, receipt.id).status == :booked
-    assert has_element?(lv, "#transaction-#{transaction.id}-receipt")
+    {:ok, transactions, _html} = live(ctx.conn, ~p"/depot/transactions")
+    assert has_element?(transactions, "#transaction-#{transaction.id}-receipt")
   end
 
   test "shows „wird erkannt“ until the model is done and updates every open page", ctx do
@@ -126,7 +155,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     end)
 
     {:ok, other, _html} = live(ctx.conn, ~p"/depot/holdings")
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/receipts")
     upload(lv, [{"beleg.pdf", pdf()}])
     assert_receive {:waiting, task}
 
@@ -137,7 +166,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     send(task, :go)
     await_recognition()
     assert has_element?(lv, "#inbox button", "Prüfen und buchen")
-    assert has_element?(other, "#depots-tabs #inbox-count", "1")
+    assert has_element?(other, "#side-import-sidebar", "1")
   end
 
   test "Scenario: Unknown depot number — the user picks the portfolio before booking", ctx do
@@ -153,7 +182,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
            )
 
     assert has_element?(lv, "#receipt-#{receipt.id}-status", "Bitte prüfen")
-    assert has_element?(lv, "#depots-tabs #inbox-count", "1")
+    assert has_element?(lv, "#import-tabs #inbox-count", "1")
 
     lv |> element("#receipt-#{receipt.id} button", "Prüfen und buchen") |> render_click()
 
@@ -196,7 +225,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     receipt = only_receipt(ctx.scope)
     langfristig = Enum.find(Portfolios.list_portfolios(ctx.scope), &(&1.name == "Langfristig"))
 
-    {:ok, portfolios_page, _html} = live(ctx.conn, ~p"/depot/portfolios")
+    {:ok, portfolios_page, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
     portfolios_page |> element("#depot-number-#{langfristig.id} button") |> render_click()
 
     portfolios_page
@@ -222,7 +251,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
         "paperless_tag" => "zf"
       })
 
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/receipts")
     Receipts.poll_paperless(setting)
     await_recognition()
     receipt = only_receipt(ctx.scope)
@@ -302,10 +331,11 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     assert has_element?(lv, "#receipt-#{second.id}", "gleiche Referenznummer")
 
     [transaction] = Portfolios.list_transactions(ctx.scope)
-    lv |> element("#transaction-#{transaction.id} button") |> render_click()
-    confirm_click(lv, "#transaction-delete", "Diese Buchung löschen?")
+    {:ok, transactions, _html} = live(ctx.conn, ~p"/depot/transactions")
+    transactions |> element("#transaction-#{transaction.id} button") |> render_click()
+    confirm_click(transactions, "#transaction-delete", "Diese Buchung löschen?")
 
-    assert render(lv) =~ "Buchung gelöscht."
+    assert render(transactions) =~ "Buchung gelöscht."
     assert has_element?(lv, "#receipt-#{second.id}-status", "Geprüft")
   end
 
@@ -313,10 +343,10 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     FakeModel.stub(fn _text -> {:ok, answer()} end)
     content = pdf()
     lv = upload_and_recognise(ctx.conn, [{"beleg.pdf", content}])
-    {:ok, other, _html} = live(ctx.conn, ~p"/depot/transactions")
+    {:ok, other, _html} = live(ctx.conn, ~p"/depot/receipts")
     assert has_element?(other, "#inbox")
 
-    lv |> element("#depots-book") |> render_click()
+    lv |> with_target("#transaction-dialog") |> render_click("open", %{})
 
     lv
     |> form("#transaction-form",
@@ -370,7 +400,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     lv = upload_and_recognise(ctx.conn, [{"a.pdf", pdf()}, {"b.pdf", pdf()}])
 
     assert has_element?(lv, "#inbox-title span", ~r/^\s*2\s*$/)
-    assert has_element?(lv, "#depots-tabs #inbox-count", "2")
+    assert has_element?(lv, "#import-tabs #inbox-count", "2")
     assert render(lv) =~ "2 Belege liegen im Eingang."
   end
 
@@ -386,7 +416,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
   end
 
   test "refuses a file that is no PDF", ctx do
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/receipts")
     upload(lv, [{"beleg.pdf", "kein PDF"}])
 
     assert render(lv) =~ "beleg.pdf ist keine PDF-Datei."
@@ -395,7 +425,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
 
   test "says once that a file is no PDF and drops it, so the next upload goes through", ctx do
     FakeModel.stub(fn _text -> {:ok, answer()} end)
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/receipts")
 
     input =
       file_input(lv, "#receipts-upload", :receipts, [
@@ -549,7 +579,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     render_submit(dialog, "book", params)
     render_click(dialog, "discard_receipt", %{})
 
-    lv |> element("#depots-book") |> render_click()
+    lv |> with_target("#transaction-dialog") |> render_click("open", %{})
     render_submit(dialog, "book", params)
 
     refute has_element?(lv, "#transaction-modal")

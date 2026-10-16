@@ -110,7 +110,7 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       {:ok, settings, _html} = live(c.conn, ~p"/settings/access")
 
-      assert has_element?(settings, "#side-account-#{c.giro.id}-sidebar:not([data-phx-link])")
+      refute has_element?(settings, "#side-account-#{c.giro.id}-sidebar")
     end
 
     test "on an account's register dock and rail mark Alle Konten", c do
@@ -174,9 +174,9 @@ defmodule AbakusWeb.AccountsLiveTest do
       path = ~p"/budget/accounts/#{account}"
       assert {^path, _flash} = assert_redirect(view)
 
-      {:ok, settings, _html} = live(conn, ~p"/settings/access")
-      settings |> element("#side-add-account-sidebar") |> render_click()
-      assert has_element?(settings, "#account-dialog h2", "Konto hinzufügen")
+      {:ok, transactions, _html} = live(conn, ~p"/budget/accounts/all")
+      transactions |> element("#side-add-account-sidebar") |> render_click()
+      assert has_element?(transactions, "#account-dialog h2", "Konto hinzufügen")
     end
 
     test "shows what is missing", %{conn: conn} do

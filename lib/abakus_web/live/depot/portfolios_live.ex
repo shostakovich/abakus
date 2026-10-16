@@ -1,28 +1,27 @@
 defmodule AbakusWeb.Depot.PortfoliosLive do
   @moduledoc """
   „Depots“ in the settings: the user's active portfolios with their depot numbers, which find a receipt's
-  portfolio, each edited in place, and a new portfolio with its Verrechnungskonto. The first one opens the Depot
-  area. The budget owner also picks the tracking account each portfolio and Verrechnungskonto feeds.
+  portfolio, each edited in place, and a new portfolio with its Verrechnungskonto. The first one opens
+  Finanzen. The budget owner also picks the tracking account each portfolio and Verrechnungskonto feeds.
   """
   use AbakusWeb, :depot_live_view
 
   alias Abakus.Depot.{BudgetFeed, Portfolios, Receipts}
-  alias AbakusWeb.Areas
+  alias AbakusWeb.{Areas, SettingsNav}
   alias AbakusWeb.Depot.Format
-  alias AbakusWeb.SettingsLive.Components
 
   @impl true
   def render(assigns) do
     ~H"""
-    <Components.page
-      section={:depots}
+    <Layouts.settings
+      current={:depots}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
+      groups={@settings_groups}
     >
+      <.header>Depots</.header>
       <div class="flex flex-col gap-8">
         <section :if={@active_portfolios != []} id="depot-numbers" aria-labelledby="depots-title">
           <.section_heading id="depots-title" count={length(@active_portfolios)}>
@@ -76,7 +75,11 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           <.section_heading id="new-portfolio-title">Depot anlegen</.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
             Nur du siehst deine Depots. Käufe, Verkäufe und Dividenden laufen über ein
-            Verrechnungskonto, das mit dem Depot angelegt wird.
+            Verrechnungskonto, das mit dem Depot angelegt wird. Oder <.link
+              id="new-portfolio-import"
+              href={~p"/depot/import"}
+              class="link"
+            >importiere eine Datei aus Portfolio Performance</.link>.
           </p>
           <.form
             for={@new_form}
@@ -95,7 +98,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           </.form>
         </section>
       </div>
-    </Components.page>
+    </Layouts.settings>
     """
   end
 
@@ -213,6 +216,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
          |> put_flash(:info, "Depot „#{Format.portfolio_name(portfolio)}“ angelegt.")
          |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
          |> Areas.open_depot()
+         |> SettingsNav.assign_groups()
          |> load_active_portfolios()
          |> load_feeds()}
 

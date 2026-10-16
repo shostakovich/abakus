@@ -36,10 +36,10 @@ The context is `Abakus.Users` (an "account" is a bank account here):
 - Areas ([ADR 0017](../DECISIONS.md)): Finanzen (the budget under `/budget`, the Depot under `/depot`) and the
   Kasse (`/kasse`), each with its own sidebar and dock on phones; a user sees only the areas they may use (the
   budget's pages: its owner; the Depot's: the budget owner and every user with a portfolio of their own, created or
-  imported under Einstellungen; the Kasse: its active participants, [ADR 0008](../DECISIONS.md)), and anyone else
+  imported from a PP file; the Kasse: its active participants, [ADR 0008](../DECISIONS.md)), and anyone else
   gets 404 on their pages. Finanzen lists Budget, Vermögen, Alle Konten, Import & Sync, the open accounts, then
   Depots with the active portfolios; without the budget only Vermögen, Import & Sync and Depots. The Kasse lists
-  Ausgaben, Salden, Aktivität and Gruppe. With one area the brand is its name; with more, a segmented switch tops
+  Ausgaben, Salden and Aktivität. With one area the brand is its name; with more, a segmented switch tops
   the sidebar and the title in the top bar switches the area; switching opens the area's first page. `/` opens
   the area used last, kept in the session
 - Passkeys implemented in-house with `:crypto`, `:public_key`, `JSON`; attestation `none`; discoverable
@@ -266,22 +266,25 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 - **Budget**: multi-month view
 - **Konten**: account list, register, reconcile
 - **Buchung**: transaction form (FAB on phones)
-- **Import & Sync**: file import with preview, bank connections with consent expiry
-- **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement, Aktivität, and Gruppe: the
-  group's name, Teilnehmer (adding one invites their user), Kategorien, wiederkehrende Ausgaben, Wechselkurse,
-  Budget (the budget owner's only: switching the link on, its account and which budget category each Kasse
-  category's shares land in), YNAB (each participant's own sync to YNAB, until they are linked) and the CSV/JSON
-  export
+- **Import & Sync**: tabs Bankdateien (file import with preview; the budget owner's), Belege (the receipt
+  inbox and the PDF upload, its count on the tab and the sidebar entry; users with a portfolio) and Portfolio
+  Performance (a PP file into the Depot; open before the first portfolio); later bank connections with consent
+  expiry
+- **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement and Aktivität
 - **Depot**: Vermögen (net worth: for the budget owner all open budget and tracking accounts, for anyone else
   their portfolios and Verrechnungskonten, optionally against the benchmark) and Depots, for all portfolios or
-  one, with „Buchung erfassen“ and the tabs Bestand (holdings and Verrechnungskonten), Buchungen (the
-  transactions and the receipt inbox, its count on the tab), Dividenden, Performance and, for all portfolios,
+  one, with „Buchung erfassen“ and the tabs Bestand (holdings and Verrechnungskonten), Buchungen, Dividenden, Performance and, for all portfolios,
   Wertpapiere (prices, quote feeds, the benchmark, exchange rates); a page per security
-- **Mehr**: the settings in six sections: Zugang (passkeys, email), Aussehen (theme, per device), Depots (the
-  user's portfolios and Verrechnungskonten, for the budget owner also the tracking account each feeds), PP-Import
-  (a Portfolio Performance file into the Depot), Belegeingang (Paperless-ngx and the receipt recognition; Depot
-  users only) and YNAB-Import (what the import brought over; the budget owner's only). Categories and groups are
-  edited in the budget
+- **Einstellungen**: a mode of the sidebar under `/settings/…`, with the way back to the area used last and the
+  sections grouped by area; each group shows only to users of its area, whose settings answer 404 to others.
+  Allgemein: Zugang (passkeys, email), Aussehen (theme, per device). Budget: YNAB-Import (what the import brought
+  over). Kasse: Gruppe (the group's name), Teilnehmer (adding one invites their user), Kategorien, Wiederkehrende
+  Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget owner's only: switching the link on, its account and
+  which budget category each Kasse category's shares land in), Export (CSV/JSON) and YNAB (each participant's own
+  sync to YNAB, until they are linked). Depot, for everyone, so anyone may start one: Depots (the user's
+  portfolios and Verrechnungskonten, for the budget owner also the tracking account each feeds) and Belegeingang
+  (Paperless-ngx and the receipt recognition; users with a portfolio). Categories and groups are edited in the
+  budget
 
 State that should survive a reload (screen, month, account, filters) lives in the URL; the number of months
 follows the window.

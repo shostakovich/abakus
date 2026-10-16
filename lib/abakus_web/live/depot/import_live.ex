@@ -1,13 +1,13 @@
 defmodule AbakusWeb.Depot.ImportLive do
   @moduledoc """
-  „PP-Import“ in the settings: imports a Portfolio Performance file, again and again, see `Abakus.Depot.PPImport`.
-  A first import with a portfolio opens the Depot area, one that leaves no portfolio closes it.
+  Import & Sync's Portfolio Performance: imports a PP file, again and again, see `Abakus.Depot.PPImport`. Open
+  before the first portfolio: a first import with a portfolio opens Finanzen, one that leaves no portfolio closes
+  the Depot.
   """
   use AbakusWeb, :depot_live_view
 
   alias Abakus.Depot.{MarketData, Portfolios, PPImport}
-  alias AbakusWeb.Areas
-  alias AbakusWeb.SettingsLive.Components
+  alias AbakusWeb.{Areas, ImportSync}
 
   @labels [
     securities: "Wertpapiere",
@@ -25,15 +25,17 @@ defmodule AbakusWeb.Depot.ImportLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Components.page
-      section={:pp_import}
+    <Layouts.app
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
+      current={:import_pp}
       account_groups={@account_groups}
+      depot_sidebar={@depot_sidebar}
       account_dialog={@account_dialog}
     >
+      <ImportSync.import_header tab={:pp} current_scope={@current_scope} inbox={@depot_sidebar.inbox} />
       <div class="flex flex-col gap-8">
         <section aria-labelledby="import-file-title">
           <.section_heading id="import-file-title">Datei importieren</.section_heading>
@@ -97,7 +99,7 @@ defmodule AbakusWeb.Depot.ImportLive do
           </.table>
         </section>
       </div>
-    </Components.page>
+    </Layouts.app>
     """
   end
 
@@ -105,7 +107,7 @@ defmodule AbakusWeb.Depot.ImportLive do
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(:page_title, Components.label(:pp_import))
+     |> assign(:page_title, "Portfolio Performance")
      |> assign(:summary, nil)
      |> assign(:own_transactions?, Portfolios.own_transactions?(socket.assigns.current_scope))
      # `.portfolio` has no MIME type; the reader checks the contents instead.

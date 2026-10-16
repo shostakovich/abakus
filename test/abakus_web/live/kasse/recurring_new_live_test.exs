@@ -44,13 +44,13 @@ defmodule AbakusWeb.Kasse.RecurringNewLiveTest do
     %{h: h, conn: log_in_participant(conn, h.anna)}
   end
 
-  defp new_page(id), do: ~p"/kasse/settings/recurring/new?#{[expense_id: id]}"
+  defp new_page(id), do: ~p"/settings/kasse/recurring/new?#{[expense_id: id]}"
 
   defp choose(view, frequency),
     do: view |> form("#recurring-form", recurring: %{frequency: frequency}) |> render_submit()
 
   test "without an expense it says where to start", %{conn: conn} do
-    for path <- [~p"/kasse/settings/recurring/new", new_page("")] do
+    for path <- [~p"/settings/kasse/recurring/new", new_page("")] do
       {:ok, view, _html} = live(conn, path)
 
       assert texts(view, "h1") == ["Wiederkehrende Ausgabe anlegen"]
@@ -136,7 +136,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLiveTest do
 
     choose(view, "weekly")
 
-    assert {"/kasse/settings/recurring", %{"info" => message}} = assert_redirect(view)
+    assert {"/settings/kasse/recurring", %{"info" => message}} = assert_redirect(view)
     assert message == "„Gemüsekiste“ wiederholt sich jetzt wöchentlich. 2 Ausgaben nachgetragen."
     assert Repo.aggregate(Expense, :count) == 3
     assert [rule] = Recurring.list_rules()
@@ -168,7 +168,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLiveTest do
              "Diese Ausgabe gehört schon zu einer wiederkehrenden Ausgabe."
            )
 
-    assert has_element?(view, ~s(#recurring-exists a[href="/kasse/settings/recurring"]))
+    assert has_element?(view, ~s(#recurring-exists a[href="/settings/kasse/recurring"]))
     refute has_element?(view, "#recurring-form")
   end
 end

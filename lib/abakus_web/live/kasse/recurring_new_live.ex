@@ -62,7 +62,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
       if created > 0, do: "#{message} #{expense_count(created)} nachgetragen.", else: message
 
     {:noreply,
-     socket |> put_flash(:info, message) |> push_navigate(to: ~p"/kasse/settings/recurring")}
+     socket |> put_flash(:info, message) |> push_navigate(to: ~p"/settings/kasse/recurring")}
   end
 
   defp create(socket, {:error, :already_recurring}, _frequency) do
@@ -73,8 +73,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
   end
 
   defp create(socket, {:error, :not_found}, _frequency) do
-    {:noreply,
-     socket |> put_flash(:error, "Ausgabe nicht gefunden.") |> push_navigate(to: ~p"/kasse")}
+    {:noreply, socket |> put_flash(:error, "Ausgabe nicht gefunden.") |> redirect(to: ~p"/kasse")}
   end
 
   @doc """
@@ -120,18 +119,17 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <Layouts.kasse
+    <Layouts.settings
+      current={:kasse_recurring}
       flash={@flash}
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
-      current={:settings}
-      fab={is_nil(@expense)}
+      groups={@settings_groups}
     >
       <.header
-        back={if @expense, do: ~p"/kasse/expenses/#{@expense}", else: ~p"/kasse/settings/recurring"}
+        back={if !@expense, do: ~p"/settings/kasse/recurring"}
+        back_href={if @expense, do: ~p"/kasse/expenses/#{@expense}"}
         back_label={if @expense, do: "Ausgabe", else: "Wiederkehrende Ausgaben"}
       >
         Wiederkehrende Ausgabe anlegen
@@ -164,7 +162,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
 
         <div :if={@expense.recurring_expense_id} id="recurring-exists" class="mt-8">
           <p>Diese Ausgabe gehört schon zu einer wiederkehrenden Ausgabe.</p>
-          <.button navigate={~p"/kasse/settings/recurring"} class="mt-3">
+          <.button navigate={~p"/settings/kasse/recurring"} class="mt-3">
             Zu den wiederkehrenden Ausgaben
           </.button>
         </div>
@@ -184,7 +182,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
             options={Enum.map(@previews, &frequency_option/1)}
           />
           <.action_bar>
-            <.button navigate={~p"/kasse/expenses/#{@expense}"}>Abbrechen</.button>
+            <.button href={~p"/kasse/expenses/#{@expense}"}>Abbrechen</.button>
             <.button
               id="recurring-submit"
               type="submit"
@@ -200,9 +198,9 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
         <p class="max-w-prose">
           Öffne zuerst die Ausgabe, die sich wiederholen soll, und wähle dort „Als wiederkehrend einrichten“.
         </p>
-        <.button navigate={~p"/kasse"} class="mt-4">Zu den Ausgaben</.button>
+        <.button href={~p"/kasse"} class="mt-4">Zu den Ausgaben</.button>
       <% end %>
-    </Layouts.kasse>
+    </Layouts.settings>
     """
   end
 

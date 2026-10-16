@@ -32,7 +32,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
         tab={:holdings}
         portfolio={@holdings.portfolio}
         portfolios={@holdings.portfolios}
-        inbox={@depot_sidebar.inbox}
         switch_path={&holdings_path(portfolio: &1, allocation: @allocation_tab)}
       >
         <:subtitle>{subtitle(@holdings)}</:subtitle>

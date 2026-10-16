@@ -20,13 +20,13 @@ defmodule AbakusWeb.Kasse.ExportLiveTest do
     do: view |> form("#export-period", %{from: from, to: to}) |> render_change()
 
   test "downloads everything without a period", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/export")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/export")
 
     assert page_title(view) == "Export · Abakus"
 
     assert hrefs(view) == [
-             "/kasse/export/expenses.csv",
-             "/kasse/export/expenses.json"
+             "/settings/kasse/export/expenses.csv",
+             "/settings/kasse/export/expenses.json"
            ]
 
     assert texts(view, "#export-expenses-csv") == ["CSV (Excel, Numbers)"]
@@ -34,21 +34,21 @@ defmodule AbakusWeb.Kasse.ExportLiveTest do
   end
 
   test "the links follow the period", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/export")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/export")
 
     period(view, "2026-09-01", "2026-09-30")
 
     assert hrefs(view) == [
-             "/kasse/export/expenses.csv?from=2026-09-01&to=2026-09-30",
-             "/kasse/export/expenses.json?from=2026-09-01&to=2026-09-30"
+             "/settings/kasse/export/expenses.csv?from=2026-09-01&to=2026-09-30",
+             "/settings/kasse/export/expenses.json?from=2026-09-01&to=2026-09-30"
            ]
 
     period(view, "", "2026-09-30")
-    assert hrefs(view) |> hd() == "/kasse/export/expenses.csv?to=2026-09-30"
+    assert hrefs(view) |> hd() == "/settings/kasse/export/expenses.csv?to=2026-09-30"
   end
 
   test "an end before the start is shown and blocks the downloads", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/export")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/export")
 
     period(view, "2026-09-30", "2026-09-01")
 
@@ -59,7 +59,7 @@ defmodule AbakusWeb.Kasse.ExportLiveTest do
   end
 
   test "the period's error shows on the field not typed in too", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/export?to=2026-09-01")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/export?to=2026-09-01")
 
     render_change(view, "period", %{
       "from" => "2026-09-30",
@@ -71,17 +71,17 @@ defmodule AbakusWeb.Kasse.ExportLiveTest do
   end
 
   test "a period in the address is preset, with its error", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/export?from=2026-09-30&to=2026-09-01")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/export?from=2026-09-30&to=2026-09-01")
 
     assert has_element?(view, "#from[value='2026-09-30']")
     assert texts(view, "#to-error-0") == ["„Bis“ liegt vor „Von“."]
     assert hrefs(view) == []
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/export?from=broken")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/export?from=broken")
     assert texts(view, "#from-error-0") == ["Ungültiges Datum „broken“."]
     refute has_element?(view, "#to-error-0")
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/export?from=2026-09-01")
-    assert hrefs(view) |> hd() == "/kasse/export/expenses.csv?from=2026-09-01"
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/export?from=2026-09-01")
+    assert hrefs(view) |> hd() == "/settings/kasse/export/expenses.csv?from=2026-09-01"
   end
 end

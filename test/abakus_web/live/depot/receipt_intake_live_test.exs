@@ -26,20 +26,25 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLiveTest do
     do: lv |> form("#paperless-form", %{"paperless" => params}) |> render_submit()
 
   test "is a section of the settings once the user has the Depot", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/settings")
-    assert has_element?(lv, ~s(#settings-nav a[href="/depot/receipt-intake"]), "Belegeingang")
+    {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
+
+    assert has_element?(
+             lv,
+             "#settings-receipt-intake-sidebar[aria-current=page]",
+             "Belegeingang"
+           )
   end
 
   test "is not there without the Depot" do
     %{conn: conn} = register_and_log_in_user(%{conn: build_conn()})
 
-    {:ok, lv, _html} = live(conn, ~p"/settings")
-    refute has_element?(lv, ~s(#settings-nav a[href="/depot/receipt-intake"]))
-    assert_error_sent 404, fn -> get(conn, ~p"/depot/receipt-intake") end
+    {:ok, lv, _html} = live(conn, ~p"/settings/appearance")
+    refute has_element?(lv, "#settings-receipt-intake-sidebar")
+    assert_error_sent 404, fn -> get(conn, ~p"/settings/depot/receipt-intake") end
   end
 
   test "connects the user's Paperless and never shows the token again", %{conn: conn} = ctx do
-    {:ok, lv, _html} = live(conn, ~p"/depot/receipt-intake")
+    {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
     assert has_element?(lv, "#paperless-status [data-status]", "Nicht verbunden")
     refute has_element?(lv, "#paperless-form button", "Trennen")
 
@@ -83,13 +88,13 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLiveTest do
       })
 
     :ok = Settings.paperless_polled(settings)
-    {:ok, lv, _html} = live(conn, ~p"/depot/receipt-intake")
+    {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
 
     assert has_element?(lv, "#paperless-status", "zuletzt abgefragt")
   end
 
   test "refuses a URL without scheme and a missing token or tag", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/depot/receipt-intake")
+    {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
 
     result = save_paperless(lv, %{"paperless_url" => "paperless.local"})
 
@@ -100,11 +105,11 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLiveTest do
   end
 
   test "names the recognition model, or that there is none", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/depot/receipt-intake")
+    {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
     assert has_element?(lv, "#recognition-status [data-status]", "Kein Modell")
 
     FakeModel.stub(fn _text -> {:ok, "{}"} end)
-    {:ok, lv, _html} = live(conn, ~p"/depot/receipt-intake")
+    {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
     assert has_element?(lv, "#recognition-status [data-status]", "Eingerichtet")
     assert ["Testmodell ·", "Text aus Paperless," | _rest] = status(lv, "#recognition-status")
   end

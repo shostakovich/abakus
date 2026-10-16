@@ -38,7 +38,6 @@ defmodule AbakusWeb.Depot.DividendsLive do
         tab={:dividends}
         portfolio={@dividends.portfolio}
         portfolios={@dividends.portfolios}
-        inbox={@depot_sidebar.inbox}
         switch_path={&dividends_path(@tab, @amount, &1)}
       >
         <:subtitle :if={any?(assigns)}>{subtitle(@tab)}</:subtitle>

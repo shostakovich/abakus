@@ -14,29 +14,24 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
 
   setup :register_and_log_in_user
 
-  test "belongs to the settings in the navigation", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/depot/portfolios")
-
-    assert has_element?(lv, sidebar_link("/settings") <> "[aria-current=page]")
+  test "is the Depot's section of the settings and links the PP import", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/settings/depot/portfolios")
 
     assert has_element?(
              lv,
-             ~s|#settings-nav a[href="/depot/portfolios"][aria-current=page]|,
+             ~s|#settings-depots-sidebar[href="/settings/depot/portfolios"][aria-current=page]|,
              "Depots"
            )
-  end
 
-  test "is listed in the settings", %{conn: conn} do
-    {:ok, lv, _html} = live(conn, ~p"/settings")
-
-    assert has_element?(lv, ~s|#settings-nav a[href="/depot/portfolios"]|, "Depots")
+    assert has_element?(lv, "h1", "Depots")
+    assert has_element?(lv, ~s|#new-portfolio-import[href="/depot/import"]|)
   end
 
   test "shows a portfolio without a name, as PP may store one, as „Ohne Namen“", ctx do
     portfolio = portfolio_fixture(ctx.scope, %{name: ""})
     path = Sidebar.portfolio_path(portfolio)
 
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/portfolios")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
     assert has_element?(lv, "#depot-number-#{portfolio.id}", "Ohne Namen")
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
@@ -50,7 +45,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
 
   describe "a new portfolio" do
     test "comes with its Verrechnungskonto", %{conn: conn, scope: scope} do
-      {:ok, lv, _html} = live(conn, ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(conn, ~p"/settings/depot/portfolios")
       refute has_element?(lv, "#depot-numbers")
 
       lv
@@ -72,7 +67,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
     end
 
     test "needs a name and an account name", %{conn: conn, scope: scope} do
-      {:ok, lv, _html} = live(conn, ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(conn, ~p"/settings/depot/portfolios")
 
       html =
         lv
@@ -98,7 +93,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
       other = portfolio_fixture(ctx.scope, %{name: "Langfristig"})
       retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
 
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
 
       assert has_element?(
                lv,
@@ -116,7 +111,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
       portfolio_fixture(ctx.scope, %{name: "Sparplan", depot_number: "4472"})
       portfolio = portfolio_fixture(ctx.scope, %{name: "Langfristig"})
 
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
       lv |> element("#depot-number-#{portfolio.id} button", "Eintragen") |> render_click()
 
       assert lv
@@ -142,7 +137,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
     test "cancels editing", ctx do
       portfolio = portfolio_fixture(ctx.scope, %{name: "Sparplan"})
 
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
       lv |> element("#depot-number-#{portfolio.id} button") |> render_click()
       lv |> element("#depot-number-form button", "Abbrechen") |> render_click()
 
@@ -162,7 +157,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
       retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
       DomainFixtures.account_fixture(name: "Giro", kind: :checking)
 
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
 
       assert has_element?(lv, "#budget-feeds", "Wertänderung")
 
@@ -201,7 +196,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
       {:ok, _closed} = Ledger.update_account(ctx.depot, %{closed: true})
       DomainFixtures.account_fixture(name: "Tagesgeld", kind: :tracking)
 
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
 
       assert has_element?(
                lv,
@@ -221,7 +216,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
     test "says when the budget has no open tracking account", ctx do
       {:ok, _closed} = Ledger.update_account(ctx.depot, %{closed: true})
 
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
 
       assert has_element?(lv, "#budget-feeds-none", "Tracking-Konto")
       refute has_element?(lv, "#budget-feeds-form")
@@ -231,7 +226,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
       member = user_fixture()
       portfolio_fixture(Scope.for_user(member))
 
-      {:ok, lv, _html} = live(log_in_user(build_conn(), member), ~p"/depot/portfolios")
+      {:ok, lv, _html} = live(log_in_user(build_conn(), member), ~p"/settings/depot/portfolios")
 
       assert has_element?(lv, "#depot-numbers")
       refute has_element?(lv, "#budget-feeds")

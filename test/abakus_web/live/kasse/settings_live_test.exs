@@ -18,39 +18,28 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
   defp renames,
     do: for(a <- Activities.list_activities(), a.details.text =~ "Gruppe", do: a.details.text)
 
-  defp links(view) do
-    for link <-
-          view |> render() |> LazyHTML.from_fragment() |> LazyHTML.query("#settings-links a") do
-      {link |> LazyHTML.attribute("href") |> hd(), link |> LazyHTML.text() |> String.trim()}
-    end
+  test "is the Kasse's first section of the settings, no longer in the Kasse's navigation", %{
+    conn: conn
+  } do
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse")
+
+    assert has_element?(view, "h1", "Gruppe")
+    assert has_element?(view, "#settings-kasse-group-sidebar[aria-current=page]", "Gruppe")
+    assert has_element?(view, "#settings-kasse-budget-sidebar", "Budget-Verknüpfung")
+
+    {:ok, kasse, _html} = live(conn, ~p"/kasse")
+    refute has_element?(kasse, sidebar_link("/settings/kasse"))
   end
 
-  test "links the other settings with their plush, the budget for its owner", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings")
-
-    assert links(view) == [
-             {"/kasse/settings/participants", "Teilnehmer"},
-             {"/kasse/settings/categories", "Kategorien"},
-             {"/kasse/settings/recurring", "Wiederkehrende Ausgaben"},
-             {"/kasse/settings/rates", "Wechselkurse"},
-             {"/kasse/settings/budget", "Budget"},
-             {"/kasse/settings/ynab", "YNAB"},
-             {"/kasse/export", "Export"}
-           ]
-
-    for plush <- ~w(users tag repeat banknote scale wallet archive),
-        do: assert(has_element?(view, ~s(#settings-links img[src^="/images/plush/#{plush}"])))
-  end
-
-  test "links no budget for anyone else", %{conn: conn, anna: anna} do
+  test "offers the Budget-Verknüpfung to no one but the budget owner", %{conn: conn, anna: anna} do
     ben = person!("Ben", anna.id)
-    {:ok, view, _html} = live(log_in_participant(conn, ben.id), ~p"/kasse/settings")
+    {:ok, view, _html} = live(log_in_participant(conn, ben.id), ~p"/settings/kasse")
 
-    refute {"/kasse/settings/budget", "Budget"} in links(view)
+    refute has_element?(view, "#settings-kasse-budget-sidebar")
   end
 
   test "renames the group, logged only when the name changes", %{conn: conn, anna: anna} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse")
     assert has_element?(view, "#settings_group_name[value=Kasse]")
 
     save(view, "  WG   Süd ")
@@ -66,7 +55,7 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
   end
 
   test "an empty or long name stays in the field with its error", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse")
 
     save(view, "  ")
 

@@ -37,7 +37,6 @@ defmodule AbakusWeb.Depot.PerformanceLive do
         tab={:performance}
         portfolio={@performance.portfolio}
         portfolios={@performance.portfolios}
-        inbox={@depot_sidebar.inbox}
         switch_path={&performance_path(@period, &1)}
       >
         <:subtitle>

@@ -31,7 +31,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
   test "lists the people with their expenses and balance", %{conn: conn, h: h} do
     create!(equal(h, "Essen", 3000, "2026-10-01", h.anna, [h.anna, h.ben, h.cleo]))
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/participants")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/participants")
 
     assert page_title(view) == "Teilnehmer · Abakus"
 
@@ -46,13 +46,13 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
 
     assert has_element?(view, "#person-#{h.ben} data[value='-10.00'].text-error-ink")
     refute has_element?(view, "#participants-archived")
-    assert has_element?(view, ~s(a[href="/kasse/settings"]), "Gruppe")
+    assert has_element?(view, ~s(a[href="/settings/kasse"]), "Gruppe")
   end
 
   test "adds a person and invites their user, refusing a name taken regardless of case", %{
     conn: conn
   } do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/participants")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/participants")
 
     add(view, "  Dora   D. ", " Dora@Example.com")
     assert flash(view, :info) == "„Dora D.“ hinzugefügt und per Mail eingeladen."
@@ -78,7 +78,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
   test "adds a user who signed in before without inviting them", %{conn: conn} do
     Abakus.UsersFixtures.user_fixture(email: "olga@example.com")
     assert_received {:email, %{subject: "Abakus: Anmeldelink"}}
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/participants")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/participants")
 
     add(view, "Olga", "olga@example.com")
 
@@ -87,7 +87,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
   end
 
   test "renames in a popover at the row", %{conn: conn, h: h} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/participants")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/participants")
 
     view |> element("#person-#{h.cleo}-rename") |> render_click()
 
@@ -120,7 +120,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
 
   test "archiving oneself leaves the Kasse", %{conn: conn, h: h} do
     topic = subscribe_to_other_device(h.anna)
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/participants")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/participants")
 
     view |> element("#person-#{h.anna}-archive") |> render_click()
 
@@ -130,7 +130,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
   end
 
   test "closing the popover forgets the rename", %{conn: conn, h: h} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/participants")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/participants")
 
     view |> element("#person-#{h.cleo}-rename") |> render_click()
     render_hook(view, "cancel_rename", %{})
@@ -142,7 +142,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
     create!(equal(h, "Essen", 3000, "2026-10-01", h.anna, [h.anna, h.ben, h.cleo]))
     dora = person!("Dora")
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/participants")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/participants")
 
     view |> element("#person-#{h.ben}-archive") |> render_click()
 

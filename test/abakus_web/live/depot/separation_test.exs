@@ -107,12 +107,15 @@ defmodule AbakusWeb.Depot.SeparationTest do
         {pdf_file("fremd-gebucht.pdf"), "fremd-gebucht.pdf"}
       )
 
-    {:ok, lv, html} = live(ctx.conn, ~p"/depot/transactions")
+    {:ok, transactions, html} = live(ctx.conn, ~p"/depot/transactions")
+    refute html =~ "fremd-gebucht.pdf"
+
+    {:ok, lv, html} = live(ctx.conn, ~p"/depot/receipts")
 
     refute has_element?(lv, "#inbox")
-    refute has_element?(lv, sidebar_link("/depot/transactions") <> " .tabular-nums")
+    refute has_element?(lv, "#inbox-count")
+    refute has_element?(transactions, sidebar_link("/budget/import") <> " .badge")
     refute html =~ "fremd-eingang.pdf"
-    refute html =~ "fremd-gebucht.pdf"
 
     lv
     |> with_target("#transaction-dialog")

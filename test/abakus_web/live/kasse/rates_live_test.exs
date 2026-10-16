@@ -23,7 +23,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
     do: view |> form("#rate-form", rate: params) |> render_submit()
 
   test "an empty cache and no manual rates", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/rates")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     assert page_title(view) == "Wechselkurse · Abakus"
     assert texts(view, "main") |> hd() =~ "Noch keine manuellen Kurse."
@@ -39,7 +39,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
   end
 
   test "keeps the manual rate as typed through a re-render", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/rates")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     view
     |> form("#rate-form", rate: %{currency: "THB", date: "2026-09-01", rate: "38,5"})
@@ -53,7 +53,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
   end
 
   test "adds a manual rate as typed and deletes it after asking", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/rates")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     save(view, %{currency: " usd ", date: "2026-10-01", rate: "1,0850"})
 
@@ -75,7 +75,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
   end
 
   test "keeps the typed values with the errors", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/rates")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     save(view, %{currency: "EUR", date: "", rate: "abc"})
 
@@ -99,7 +99,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
 
   test "a rate deleted meanwhile", %{conn: conn, h: h} do
     {:ok, _rate} = Fx.put_manual_rate(h.ben, %{currency: "CHF", date: ~D[2026-09-01], rate: 0.95})
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/rates")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
     {:ok, _activity} = Fx.delete_manual_rate(h.ben, "CHF", ~D[2026-09-01])
 
     confirm_click(view, "#manual-CHF-2026-09-01-delete")
@@ -119,7 +119,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
     usd = foreign(h, "Diner", 4200, "USD", 1.1195, "2026-10-01", h.anna, [h.anna, h.ben])
     expense = create!(usd)
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/rates")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     assert texts(view, "#rates-stats") |> hd() =~
              "Zwischengespeichert: 3 Kurse für 2 Währungen vom 30.09.2026 bis 01.10.2026."
@@ -134,7 +134,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
   end
 
   test "refreshing the ECB rates in the background reports a failure", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/rates")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     view |> element("#rates-refresh") |> render_click()
     render_async(view)
@@ -154,7 +154,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
       id: :test_loader
     )
 
-    {:ok, view, _html} = live(conn, ~p"/kasse/settings/rates")
+    {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     view |> element("#rates-refresh") |> render_click()
     assert has_element?(view, "#rates-refresh[aria-busy]")

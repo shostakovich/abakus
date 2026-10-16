@@ -8,7 +8,6 @@ defmodule AbakusWeb.Depot.Components do
 
   import Setzkasten.Components.Actions, only: [button: 1]
   import Setzkasten.Components.Data, only: [amount: 1]
-  import Setzkasten.Components.Feedback, only: [badge: 1]
   import Setzkasten.Components.Icons, only: [icon: 1]
   import Setzkasten.Components.Layout, only: [header: 1]
   import Setzkasten.Components.Navigation, only: [dropdown: 1, tabs: 1]
@@ -26,7 +25,6 @@ defmodule AbakusWeb.Depot.Components do
   attr :tab, :atom, required: true, values: Keyword.keys(@tabs)
   attr :portfolio, :any, default: nil, doc: "the one shown, nil for all"
   attr :portfolios, :list, default: [], doc: "those the menu offers; none on Wertpapiere"
-  attr :inbox, :integer, default: 0, doc: "the recognised receipts in the inbox"
 
   attr :switch_path, :any,
     default: nil,
@@ -37,8 +35,7 @@ defmodule AbakusWeb.Depot.Components do
 
   @doc """
   The Depots pages' title, all portfolios or one, with „Buchung erfassen“ and the portfolio menu,
-  then the tabs: Bestand, Buchungen with the inbox's count, Dividenden, Performance, and
-  Wertpapiere for all portfolios.
+  then the tabs: Bestand, Buchungen, Dividenden, Performance, and Wertpapiere for all portfolios.
   """
   def depots_header(assigns) do
     assigns =
@@ -77,9 +74,6 @@ defmodule AbakusWeb.Depot.Components do
         active={tab == @tab}
       >
         {label}
-        <.badge :if={tab == :transactions and @inbox > 0} id="inbox-count" style={:plain}>
-          {@inbox}<span class="sr-only"> im Eingang</span>
-        </.badge>
       </:tab>
     </.tabs>
     """
