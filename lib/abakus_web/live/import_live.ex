@@ -367,7 +367,7 @@ defmodule AbakusWeb.ImportLive do
 
   defp count_text(0), do: "Keine neuen Buchungen"
   defp count_text(1), do: "1 Buchung importiert"
-  defp count_text(count), do: "#{count} Buchungen importiert"
+  defp count_text(count), do: "#{Format.number(count)} Buchungen importiert"
 
   defp register_path([%{account: account}]), do: ~p"/budget/accounts/#{account}"
   defp register_path(_statements), do: ~p"/budget/accounts/all"
