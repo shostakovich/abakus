@@ -72,6 +72,25 @@ defmodule AbakusWeb.SettingsLiveTest do
       assert has_element?(view, "#settings-appearance-sidebar[aria-current=page]")
       refute has_element?(view, "#area-finanzen-sidebar")
       refute has_element?(view, ".dock")
+
+      for {id, plush} <- [
+            access: "key",
+            appearance: "palette",
+            ynab_import: "history",
+            kasse_group: "house",
+            kasse_participants: "users",
+            kasse_categories: "tag",
+            kasse_recurring: "repeat",
+            kasse_rates: "banknote",
+            kasse_budget: "link",
+            kasse_export: "archive",
+            kasse_ynab: "wallet",
+            depots: "briefcase",
+            receipt_intake: "file-text"
+          ] do
+        id = id |> Atom.to_string() |> String.replace("_", "-")
+        assert has_element?(view, ~s|#settings-#{id}-sidebar img[src^="/images/plush/#{plush}"]|)
+      end
     end
 
     test "leads back to the area used last", %{conn: conn, user: user} do

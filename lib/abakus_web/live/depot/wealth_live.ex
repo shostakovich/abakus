@@ -144,7 +144,7 @@ defmodule AbakusWeb.Depot.WealthLive do
               navigate={depots_path(:holdings, entry.portfolio.id)}
               trailing_on_phone={:title}
             >
-              <:leading><.avatar icon="briefcase" /></:leading>
+              <:leading><.plush name="briefcase" size={:lg} /></:leading>
               <:meta>{portfolio_note(entry)}</:meta>
               <:trailing>
                 <div class="text-end">

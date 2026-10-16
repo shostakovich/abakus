@@ -26,7 +26,7 @@ defmodule AbakusWeb.UserLive.Settings do
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
             Mit einem Passkey meldest du dich per Face ID, Fingerabdruck oder Geräte-PIN an.
           </p>
-          <.empty_state :if={@passkeys == []} icon="key-round">
+          <.empty_state :if={@passkeys == []} plush="key" icon="key-round">
             Noch kein Passkey hinterlegt.
           </.empty_state>
           <.list :if={@passkeys != []}>

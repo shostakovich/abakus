@@ -168,7 +168,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   defp depot_number_row(%{form: false} = assigns) do
     ~H"""
     <.list_row id={"depot-number-#{@portfolio.id}"} title={Format.portfolio_name(@portfolio)}>
-      <:leading><.icon name="briefcase" class="size-5 text-base-content/70" /></:leading>
+      <:leading><.plush name="briefcase" size={:lg} /></:leading>
       <:meta>
         <span :for={{part, index} <- Enum.with_index(depot_number_details(@portfolio))}><.meta_sep :if={
           index > 0
@@ -191,7 +191,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   defp depot_number_row(assigns) do
     ~H"""
     <li id={"depot-number-#{@portfolio.id}"} class="list-row items-start">
-      <.icon name="briefcase" class="mt-0.5 size-5 text-base-content/70" />
+      <.plush name="briefcase" size={:lg} />
       <.form
         for={@form}
         id="depot-number-form"

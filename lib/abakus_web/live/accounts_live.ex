@@ -6,7 +6,9 @@ defmodule AbakusWeb.AccountsLive do
   """
   use AbakusWeb, :live_view
 
-  alias AbakusWeb.AccountGroups
+  alias Abakus.Ledger.Account
+  alias Abakus.Names
+  alias AbakusWeb.{AccountGroups, AccountMotif}
   alias AbakusWeb.RegisterLive.Balances
 
   @impl true
@@ -46,7 +48,7 @@ defmodule AbakusWeb.AccountsLive do
       </:actions>
     </.header>
 
-    <.empty_state :if={@groups == []} icon="landmark" title="Noch keine Konten">
+    <.empty_state :if={@groups == []} plush="landmark" icon="landmark" title="Noch keine Konten">
       Lege ein Konto an, um Buchungen zu erfassen oder zu importieren.
       <:action>
         <.button id="add-account" variant={:primary} icon="plus" phx-click="open_account_dialog">
@@ -72,7 +74,8 @@ defmodule AbakusWeb.AccountsLive do
           navigate={~p"/budget/accounts/#{row.account}"}
           trailing_on_phone={:title}
         >
-          {row.account.name}
+          <:leading><.figure account={row.account} /></:leading>
+          {label(row.account.name)}
           <.badge :if={row.unapproved > 0} tone={:primary} class="ms-1.5 align-text-bottom">
             {row.unapproved} zu bestätigen
           </.badge>
@@ -102,6 +105,22 @@ defmodule AbakusWeb.AccountsLive do
     </.description_list>
     """
   end
+
+  attr :account, Account, required: true
+
+  defp figure(assigns) do
+    assigns = assign(assigns, :glyph, glyph(assigns.account.name))
+
+    ~H"""
+    <span :if={@glyph} class="grid size-8 place-items-center text-2xl leading-none" aria-hidden="true">
+      {@glyph}
+    </span>
+    <.plush :if={!@glyph} name={AccountMotif.for_account(@account)} size={:lg} />
+    """
+  end
+
+  defp glyph(name), do: name |> Names.split_emoji() |> elem(0)
+  defp label(name), do: name |> Names.split_emoji() |> elem(1)
 
   # The trailing balances render twice on phones (end of the title line) and from md (column).
   defp balance_id(row, :column, part), do: "account-#{row.account.id}-#{part}"

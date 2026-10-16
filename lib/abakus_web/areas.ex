@@ -17,8 +17,15 @@ defmodule AbakusWeb.Areas do
   def for_scope(%Scope{} = scope) do
     [
       allowed?(scope, :finanzen) &&
-        %{key: :finanzen, label: "Finanzen", icon: "wallet", path: finanzen_path(scope)},
-      allowed?(scope, :kasse) && %{key: :kasse, label: "Kasse", icon: "receipt", path: ~p"/kasse"}
+        %{
+          key: :finanzen,
+          label: "Finanzen",
+          plush: "wallet",
+          icon: "wallet",
+          path: finanzen_path(scope)
+        },
+      allowed?(scope, :kasse) &&
+        %{key: :kasse, label: "Kasse", plush: "receipt", icon: "receipt", path: ~p"/kasse"}
     ]
     |> Enum.filter(& &1)
   end

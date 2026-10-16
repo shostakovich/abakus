@@ -1,7 +1,10 @@
 defmodule AbakusWeb.LayoutsTest do
   use AbakusWeb.ConnCase
 
+  alias Abakus.Depot.Portfolios.Portfolio
+  alias Abakus.Ledger.Account
   alias Abakus.Users.{Scope, User}
+  alias AbakusWeb.AccountGroups
 
   test "the root layout links the manifest, sets theme colours and the theme before the stylesheet",
        %{conn: conn} do
@@ -72,13 +75,97 @@ defmodule AbakusWeb.LayoutsTest do
     end
   end
 
+  describe "Finanzen's sidebar" do
+    import Phoenix.Component, only: [sigil_H: 2]
+    import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
+
+    test "shows the entries' plush, for a portfolio without emoji the briefcase" do
+      assigns = %{
+        areas: [
+          %{key: :finanzen, label: "Finanzen", plush: "wallet", icon: "wallet", path: "/budget"}
+        ],
+        scope: %Scope{user: %User{email: "kim@example.com", budget_owner: true}, depot: true},
+        sidebar: %{
+          portfolios: [%{portfolio: %Portfolio{id: 7, name: "Langfristig"}, value: 100}],
+          inbox: 0
+        }
+      }
+
+      html =
+        ~H"""
+        <AbakusWeb.Layouts.app
+          flash={%{}}
+          current_scope={@scope}
+          areas={@areas}
+          area={:finanzen}
+          depot_sidebar={@sidebar}
+        >
+          Inhalt
+        </AbakusWeb.Layouts.app>
+        """
+        |> rendered_to_string()
+        |> LazyHTML.from_fragment()
+
+      for {id, plush} <- [
+            {"side-budget", "wallet"},
+            {"side-depot-wealth", "trending-up"},
+            {"side-all-accounts", "landmark"},
+            {"side-depots", "briefcase"},
+            {"side-import", "inbox"},
+            {"side-depot-portfolio-7", "briefcase"},
+            {"side-settings", "settings"}
+          ] do
+        selector = ~s|##{id}-sidebar img[src^="/images/plush/#{plush}"]|
+        assert html |> LazyHTML.query(selector) |> Enum.any?(), selector
+      end
+    end
+
+    test "shows an account's emoji, for one without emoji its kind's plush" do
+      accounts = [
+        %Account{id: 1, name: "Girokonto", kind: :checking},
+        %Account{id: 2, name: "💶 Bargeld", kind: :cash}
+      ]
+
+      assigns = %{
+        areas: [
+          %{key: :finanzen, label: "Finanzen", plush: "wallet", icon: "wallet", path: "/budget"}
+        ],
+        scope: %Scope{user: %User{email: "kim@example.com", budget_owner: true}},
+        groups: AccountGroups.build(accounts, %{})
+      }
+
+      html =
+        ~H"""
+        <AbakusWeb.Layouts.app
+          flash={%{}}
+          current_scope={@scope}
+          areas={@areas}
+          area={:finanzen}
+          account_groups={@groups}
+        >
+          Inhalt
+        </AbakusWeb.Layouts.app>
+        """
+        |> rendered_to_string()
+        |> LazyHTML.from_fragment()
+
+      assert html
+             |> LazyHTML.query(~s|#side-account-1-sidebar img[src^="/images/plush/landmark"]|)
+             |> Enum.any?()
+
+      cash = LazyHTML.query(html, "#side-account-2-sidebar")
+      assert LazyHTML.text(cash) =~ "💶"
+      assert cash |> LazyHTML.query("img") |> Enum.empty?()
+    end
+  end
+
   describe "with more than one area" do
     import Phoenix.Component, only: [sigil_H: 2]
     import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
 
     @areas [
-      %{key: :finanzen, label: "Finanzen", icon: "wallet", path: "/budget"},
-      %{key: :kasse, label: "Kasse", icon: "receipt", path: "/kasse"}
+      %{key: :finanzen, label: "Finanzen", plush: "wallet", icon: "wallet", path: "/budget"},
+      %{key: :kasse, label: "Kasse", plush: "receipt", icon: "receipt", path: "/kasse"}
     ]
 
     defp app_with_areas(area) do
@@ -132,6 +219,17 @@ defmodule AbakusWeb.LayoutsTest do
                &{LazyHTML.attribute(&1, "href"), LazyHTML.attribute(&1, "aria-current")}
              ) ==
                [{["/budget"], []}, {["/kasse"], ["page"]}]
+    end
+
+    test "the area switch and the top bar's area menu show the areas' plush" do
+      html = app_with_areas(:kasse)
+
+      for {key, path, plush} <- [{:finanzen, "/budget", "wallet"}, {:kasse, "/kasse", "receipt"}],
+          selector <- [
+            ~s|#area-#{key}-sidebar img[src^="/images/plush/#{plush}"]|,
+            ~s|#area-switcher a[href="#{path}"] img[src^="/images/plush/#{plush}"]|
+          ],
+          do: assert(html |> LazyHTML.query(selector) |> Enum.any?(), selector)
     end
 
     test "the dock holds only the current area's pages" do

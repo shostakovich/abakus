@@ -75,6 +75,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
         <.empty_state
           :if={@months == [] and @filter != nil}
           id="transactions-empty"
+          plush="clipboard-list"
           icon="list"
         >
           Keine Buchungen dieser Art.
@@ -84,7 +85,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
           :if={@months == [] and @filter == nil}
           id="transactions-empty"
           layout={:page}
-          plush="receipt"
+          plush="clipboard-list"
           icon="list"
           title="Noch keine Buchungen"
         >
@@ -133,7 +134,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
       trailing_on_phone={:title}
       data-month={Date.to_iso8601(@month)}
     >
-      <:leading><.avatar icon={type_icon(@transaction.type)} /></:leading>
+      <:leading><.plush name={type_plush(@transaction.type)} size={:lg} /></:leading>
       <span :if={@editable} class="sr-only"> bearbeiten</span>
       <:meta>{details(@transaction)}</:meta>
       <:trailing :let={place}>
@@ -183,13 +184,13 @@ defmodule AbakusWeb.Depot.TransactionsLive do
 
   defp title(transaction), do: @labels[transaction.type]
 
-  defp type_icon(type) when type in [:dividend, :interest], do: "coins"
+  defp type_plush(type) when type in [:dividend, :interest], do: "coins"
 
-  defp type_icon(type)
+  defp type_plush(type)
        when type in [:buy, :sell, :inbound_delivery, :outbound_delivery, :security_transfer],
        do: "layers"
 
-  defp type_icon(_type), do: "wallet"
+  defp type_plush(_type), do: "wallet"
 
   # From the user's money's view: what comes into an account counts plus, what leaves it minus;
   # deliveries and transfers move what is there already.

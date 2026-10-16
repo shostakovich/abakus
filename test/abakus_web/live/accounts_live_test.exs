@@ -41,7 +41,8 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       assert has_element?(view, "#group-budget h2", "Budget")
       assert has_element?(view, "#group-budget-balance", "2.437,51 €")
-      assert has_element?(view, "#account-#{c.giro.id}", "💶 Girokonto")
+      assert has_element?(view, "#account-#{c.giro.id} span[aria-hidden]", "💶")
+      assert has_element?(view, ~s|#account-#{c.old.id} img[src^="/images/plush/piggy-bank"]|)
       assert has_element?(view, "#account-#{c.giro.id}", "Girokonto\u2060\u00A0· Gehalt")
       assert has_element?(view, "#account-#{c.giro.id}-balance", "2.450,01 €")
       assert has_element?(view, "#account-#{c.giro.id}-cleared", "2.500,00 €")

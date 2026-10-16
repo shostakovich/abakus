@@ -39,7 +39,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
       current={@current}
     >
       <.header>Wertpapier nicht gefunden</.header>
-      <.empty_state icon="layers">
+      <.empty_state plush="layers" icon="layers">
         Unter dieser Adresse gibt es kein Wertpapier.
         <:action><.button navigate={~p"/depot/holdings"} size={:sm}>Zum Bestand</.button></:action>
       </.empty_state>
@@ -100,7 +100,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
           }
           class="min-w-0"
         >
-          <.empty_state id="price-chart-empty" icon="trending-up">
+          <.empty_state id="price-chart-empty" plush="trending-up" icon="trending-up">
             Keine Kurse in diesem Zeitraum.
           </.empty_state>
           <:legend :if={@chart.prices != [] and @chart.trades != []}>
@@ -146,7 +146,9 @@ defmodule AbakusWeb.Depot.SecurityLive do
     ~H"""
     <section id="holding" aria-labelledby="holding-title">
       <.section_heading id="holding-title">Position</.section_heading>
-      <.empty_state :if={@holdings == []} icon="briefcase">Nicht im Bestand.</.empty_state>
+      <.empty_state :if={@holdings == []} plush="briefcase" icon="briefcase">
+        Nicht im Bestand.
+      </.empty_state>
       <.description_list :if={@holdings != []} class="border-t border-base-content/10">
         <:item label="Stück">{Format.shares(@total.shares)}</:item>
         <:item label="Wert"><.amount value={@total.value} class="font-semibold" /></:item>
@@ -164,7 +166,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
           navigate={depots_path(:holdings, entry.portfolio.id)}
           trailing_on_phone={:title}
         >
-          <:leading><.icon name="briefcase" class="size-5 text-base-content/70" /></:leading>
+          <:leading><.plush name="briefcase" size={:lg} /></:leading>
           <:meta>{Format.shares(entry.shares)} Stück</:meta>
           <:trailing>
             <div class="text-end">
@@ -260,7 +262,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
           </span>
         </:actions>
       </.section_heading>
-      <.empty_state :if={@distributions == []} icon="coins">
+      <.empty_state :if={@distributions == []} plush="coins" icon="coins">
         Keine Ausschüttungen gebucht.
       </.empty_state>
       <.table
@@ -322,7 +324,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
         <:tab :for={tab <- @tabs} patch={tab.path} active={tab.active}>{tab.label}</:tab>
       </.tabs>
       <.missing_key :if={!@available} />
-      <.empty_state :if={@available and !@composition} icon="layers">
+      <.empty_state :if={@available and !@composition} plush="layers" icon="layers">
         {if @isin in [nil, ""],
           do: "Ohne ISIN fragt Abakus DivvyDiary nicht nach Ländern und Sektoren.",
           else: "Von DivvyDiary liegen für dieses Wertpapier keine Länder und Sektoren vor."}
@@ -347,7 +349,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
     ~H"""
     <section id="profile" aria-labelledby="profile-title">
       <.section_heading id="profile-title">Steckbrief</.section_heading>
-      <.empty_state :if={@rows == []} icon="file-text">
+      <.empty_state :if={@rows == []} plush="layers" icon="layers">
         Keine Angaben aus Portfolio Performance.
       </.empty_state>
       <.description_list :if={@rows != []} class="border-t border-base-content/10">

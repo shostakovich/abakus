@@ -66,6 +66,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
        ctx do
     {:ok, empty, _html} = live(ctx.conn, ~p"/depot/receipts")
     assert has_element?(empty, "#inbox-empty", "Keine Belege im Eingang")
+    assert has_element?(empty, "#inbox-empty img[src^='/images/plush/file-text']")
 
     FakeModel.stub(fn _text -> {:ok, answer()} end)
     lv = upload_and_recognise(ctx.conn)
