@@ -15,7 +15,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
   setup do
     checking = account_fixture(kind: :checking)
-    rta = Categories.ready_to_assign!()
+    rta = Categories.ready_to_assign!(budget_scope())
     daily = category_group_fixture(name: "🛒 Alltag", position: 0)
     housing = category_group_fixture(name: "🏠 Wohnen", position: 1)
 
@@ -32,8 +32,8 @@ defmodule AbakusWeb.BudgetDetailsTest do
     test "its card opens its details: how Zu verteilen adds up, the summary, the need and later months",
          c do
       income(c, 100_000)
-      Categories.assign(c.groceries, @october, 10_000)
-      Categories.assign(c.rent, @november, 30_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
+      Categories.assign(budget_scope(), c.rent, @november, 30_000)
       monthly(c.rent, 50_000)
 
       {:ok, view, _html} = open(c.conn)
@@ -93,9 +93,9 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
     test "Verteilen › Zuweisung zurücksetzen takes back what the month has assigned, after asking",
          c do
-      Categories.assign(c.groceries, @october, 10_000)
-      Categories.assign(c.rent, @october, 20_000)
-      Categories.assign(c.rent, @november, 20_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
+      Categories.assign(budget_scope(), c.rent, @october, 20_000)
+      Categories.assign(budget_scope(), c.rent, @november, 20_000)
       {:ok, view, _html} = open(c.conn)
 
       refute has_element?(view, "#distribute-underfunded-2026-10")
@@ -154,7 +154,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
     test "a closed month offers no Verteilen when later months assigned what it left", c do
       income(c, 5_000, ~D[2026-09-01])
-      Categories.assign(c.fuel, @october, 5_000)
+      Categories.assign(budget_scope(), c.fuel, @october, 5_000)
 
       {:ok, view, _html} = live(c.conn, ~p"/budget?month=2026-09")
 
@@ -206,7 +206,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
     end
 
     test "moves money to another category or to Zu verteilen", c do
-      Categories.assign(c.groceries, @october, 10_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
       {:ok, view, _html} = open(c.conn)
 
       view |> element("#pill-#{c.groceries.id}-2026-10") |> render_click()
@@ -239,8 +239,8 @@ defmodule AbakusWeb.BudgetDetailsTest do
     end
 
     test "refuses Ready to Assign as a category and ids it cannot read", c do
-      hidden = Categories.ready_to_assign!()
-      Categories.assign(c.groceries, @october, 10_000)
+      hidden = Categories.ready_to_assign!(budget_scope())
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
       {:ok, view, _html} = open(c.conn)
 
       id = "#{c.groceries.id}"
@@ -257,7 +257,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
     end
 
     test "an amount that is no number stays in the popover with a message", c do
-      Categories.assign(c.groceries, @october, 10_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
       {:ok, view, _html} = open(c.conn)
 
       view |> element("#pill-#{c.groceries.id}-2026-10") |> render_click()
@@ -286,7 +286,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
     end
 
     test "covers overspending from another category, as far as it has", c do
-      Categories.assign(c.groceries, @october, 1_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 1_000)
       spend(c, c.fuel, -2_500)
       {:ok, view, _html} = open(c.conn)
 
@@ -340,7 +340,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
   describe "a category's dialog" do
     test "the name or the pencil opens the dialog: name, target, note and deleting", c do
-      Categories.update_category(c.groceries, %{note: "Wocheneinkauf"})
+      Categories.update_category(budget_scope(), c.groceries, %{note: "Wocheneinkauf"})
       spend(c, nil, -999)
       {:ok, view, _html} = open(c.conn)
 
@@ -382,7 +382,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
     test "the bar of a target by a date shows the whole amount", c do
       income(c, 100_000)
       by_date(c.rent, 120_000, ~D[2027-06-01])
-      Categories.assign(c.rent, @october, 8_000)
+      Categories.assign(budget_scope(), c.rent, @october, 8_000)
       {:ok, view, _html} = open(c.conn)
 
       view |> element("#edit-category-#{c.rent.id}") |> render_click()
@@ -418,7 +418,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       |> render_submit()
 
       assert %{cadence: :monthly, amount: 70_000, set_aside: false, from_month: @october} =
-               Categories.target_for(c.groceries, @october)
+               Categories.target_for(budget_scope(), c.groceries, @october)
 
       assert has_element?(view, "#inspector-target", "Jeden Monat auffüllen bis 700,00 €")
       refute has_element?(view, "#inspector-target", "bis zum")
@@ -451,7 +451,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       |> render_submit()
 
       assert %{cadence: :by_date, amount: 45_000, due_on: ~D[2026-12-24], repeats_yearly: true} =
-               Categories.target_for(c.rent, @october)
+               Categories.target_for(budget_scope(), c.rent, @october)
 
       assert has_element?(view, "#inspector-target", "450,00 € bis 24. Dezember ansparen")
       assert has_element?(view, "#inspector-target", "Jedes Jahr")
@@ -468,14 +468,14 @@ defmodule AbakusWeb.BudgetDetailsTest do
       |> render_submit()
 
       assert %{due_on: ~D[2027-03-01], repeats_yearly: false} =
-               Categories.target_for(c.rent, @october)
+               Categories.target_for(budget_scope(), c.rent, @october)
 
       assert has_element?(view, "#inspector-target", "Einmalig")
     end
 
     test "edits a repeating target after its due date", c do
       {:ok, _} =
-        Categories.set_target(c.rent, %{
+        Categories.set_target(budget_scope(), c.rent, %{
           from_month: ~D[2026-09-01],
           cadence: :by_date,
           amount: 30_000,
@@ -493,7 +493,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       view |> form("#target-form", %{"target" => %{"amount" => "360"}}) |> render_submit()
 
       assert %{amount: 36_000, due_on: ~D[2027-09-20], repeats_yearly: true} =
-               Categories.target_for(c.rent, @october)
+               Categories.target_for(budget_scope(), c.rent, @october)
     end
 
     test "a target editor that is not filled in right says why and keeps what was typed", c do
@@ -519,7 +519,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       |> render_submit()
 
       assert has_element?(view, "#target-due-on-error-0", "Darf nicht vor dem Beginn")
-      assert Categories.target_for(c.rent, @october) == nil
+      assert Categories.target_for(budget_scope(), c.rent, @october) == nil
 
       view |> element("#target-cancel") |> render_click()
 
@@ -535,8 +535,8 @@ defmodule AbakusWeb.BudgetDetailsTest do
       view |> element("#target-edit") |> render_click()
       Confirm.confirm_click(view, "#target-delete", "Ziel löschen?")
 
-      assert Categories.target_for(c.groceries, @october) == nil
-      assert Categories.target_for(c.groceries, ~D[2026-09-01]).amount == 40_000
+      assert Categories.target_for(budget_scope(), c.groceries, @october) == nil
+      assert Categories.target_for(budget_scope(), c.groceries, ~D[2026-09-01]).amount == 40_000
       assert has_element?(view, "#inspector-target", "Kein Ziel")
     end
 
@@ -547,13 +547,13 @@ defmodule AbakusWeb.BudgetDetailsTest do
       view |> element("#edit-category-#{c.groceries.id}") |> render_click()
       view |> element("#target-snooze", "Pausieren") |> render_click()
 
-      assert Categories.target_snoozed?(c.groceries, @october)
+      assert Categories.target_snoozed?(budget_scope(), c.groceries, @october)
       assert has_element?(view, "#inspector-target .badge", "pausiert")
       assert has_element?(view, "#inspector-target", "Im Oktober pausiert")
 
       view |> element("#target-snooze", "Fortsetzen") |> render_click()
 
-      refute Categories.target_snoozed?(c.groceries, @october)
+      refute Categories.target_snoozed?(budget_scope(), c.groceries, @october)
       assert has_element?(view, "#target-status", "Noch 400,00 € nötig")
     end
 
@@ -660,12 +660,16 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
   defp monthly(category, amount, from \\ @october) do
     {:ok, _} =
-      Categories.set_target(category, %{from_month: from, cadence: :monthly, amount: amount})
+      Categories.set_target(budget_scope(), category, %{
+        from_month: from,
+        cadence: :monthly,
+        amount: amount
+      })
   end
 
   defp by_date(category, amount, due_on) do
     {:ok, _} =
-      Categories.set_target(category, %{
+      Categories.set_target(budget_scope(), category, %{
         from_month: @october,
         cadence: :by_date,
         amount: amount,
@@ -674,7 +678,8 @@ defmodule AbakusWeb.BudgetDetailsTest do
   end
 
   defp income(c, amount, date \\ @october) do
-    {:ok, payee} = Ledger.create_payee(%{name: "Arbeitgeber #{System.unique_integer()}"})
+    {:ok, payee} =
+      Ledger.create_payee(budget_scope(), %{name: "Arbeitgeber #{System.unique_integer()}"})
 
     transaction_fixture(
       account_id: c.checking.id,
@@ -695,6 +700,6 @@ defmodule AbakusWeb.BudgetDetailsTest do
   end
 
   defp assigned(category, month) do
-    Map.get(Categories.budget().assigned, {category.id, month}, 0)
+    Map.get(Categories.budget(budget_scope()).assigned, {category.id, month}, 0)
   end
 end

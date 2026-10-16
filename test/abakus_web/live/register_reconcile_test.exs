@@ -37,7 +37,11 @@ defmodule AbakusWeb.RegisterReconcileTest do
     by_hand = cleared(c.giro, ~D[2026-10-09], -1_000)
 
     {:ok, _} =
-      Ledger.put_bank_balance(c.giro, %{amount: 13_248, date: ~D[2026-10-08], source: :file})
+      Ledger.put_bank_balance(budget_scope(), c.giro, %{
+        amount: 13_248,
+        date: ~D[2026-10-08],
+        source: :file
+      })
 
     view = open(c.conn, c.giro)
 
@@ -110,7 +114,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
 
     assert %Transaction{approved: true, cleared: :reconciled} = adjustment
     assert adjustment.payee.name == "Ausgleichsbuchung"
-    assert adjustment.category_id == Categories.ready_to_assign!().id
+    assert adjustment.category_id == Categories.ready_to_assign!(budget_scope()).id
     assert has_element?(view, "#balance-cleared", "150,42 €")
     assert has_element?(view, "#balance-working", "150,42 €")
     assert has_element?(view, "#tx-#{adjustment.id}", "Ausgleichsbuchung")
@@ -122,7 +126,11 @@ defmodule AbakusWeb.RegisterReconcileTest do
     later = cleared(c.giro, ~D[2026-10-09], 5_000)
 
     {:ok, _} =
-      Ledger.put_bank_balance(c.giro, %{amount: 11_000, date: ~D[2026-10-08], source: :file})
+      Ledger.put_bank_balance(budget_scope(), c.giro, %{
+        amount: 11_000,
+        date: ~D[2026-10-08],
+        source: :file
+      })
 
     view = open(c.conn, c.giro)
 

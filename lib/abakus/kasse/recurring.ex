@@ -4,25 +4,26 @@ defmodule Abakus.Kasse.Recurring do
   from an expense, which becomes its template and first occurrence.
 
   The occurrences up to today are created by a catch-up, every hour (see
-  `Abakus.Kasse.Recurring.Job`) and right after a rule is created or resumed: automatically (no
-  actor), at most 400 per rule and run. An occurrence is skipped when a live expense on its date
+  `Abakus.Kasse.Recurring.Job`) and right after a rule is created or resumed: by the system, at
+  most 400 per rule and run. An occurrence is skipped when a live expense on its date
   has the same title regardless of case, payer and amount (of a foreign one the original amount
   and currency). A foreign occurrence takes the rate of its date; without one it keeps the
   template's.
 
-  Option of the functions: `:today`.
+  The functions that read or write rules take the caller's scope. Option of the functions: `:today`.
   """
 
   import Ecto.Query
 
   require Logger
 
-  alias Abakus.Kasse.{Activities, Dates, Expenses, Names, Rates}
+  alias Abakus.Kasse.{Access, Activities, Dates, Expenses, Names, Rates}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Recurring.RecurringExpense
   alias Abakus.Kasse.Recurring.RecurringExpense.Template
   alias Abakus.{LocalTime, Repo}
   alias Abakus.Money
+  alias Abakus.Users.Scope
   alias Ecto.Changeset
 
   @frequencies [:weekly, :monthly, :yearly]
@@ -48,23 +49,32 @@ defmodule Abakus.Kasse.Recurring do
   def frequency_label(frequency), do: frequency |> adverb() |> String.capitalize()
 
   @doc "All rules, the active ones first, by next date."
-  def list_rules do
+  def list_rules(%Scope{} = scope) do
+    Access.check!(scope)
     Repo.all(from r in RecurringExpense, order_by: [desc: r.active, asc: r.next_date, asc: r.id])
   end
 
   @doc "The rule with `id`, or nil."
-  def get_rule(id), do: Repo.get(RecurringExpense, id)
+  def get_rule(%Scope{} = scope, id) do
+    Access.check!(scope)
+    Repo.get(RecurringExpense, id)
+  end
 
   @doc "The rule with `id`; raises if there is none."
-  def get_rule!(id), do: Repo.get!(RecurringExpense, id)
+  def get_rule!(%Scope{} = scope, id) do
+    Access.check!(scope)
+    Repo.get!(RecurringExpense, id)
+  end
 
   @doc """
   Makes a live expense the template and first occurrence of a rule, which starts on its date,
   and catches up the occurrences since then. Gives the rule and the number of expenses created;
   `{:error, :not_found}` for a deleted expense, `{:error, :already_recurring}` for one of a rule.
   """
-  def create_rule(actor_id, %Expense{id: expense_id}, frequency, opts \\ [])
+  def create_rule(%Scope{} = scope, %Expense{id: expense_id}, frequency, opts \\ [])
       when frequency in @frequencies do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       with {:ok, expense} <- fetch_live_expense(expense_id),
            {:ok, rule} <-
@@ -113,15 +123,15 @@ defmodule Abakus.Kasse.Recurring do
   defp template_input(%Expense{} = expense), do: Map.delete(Expenses.input(expense), :date)
 
   @doc "Pauses a rule; it keeps its next date."
-  def pause_rule(actor_id, %RecurringExpense{id: id}, opts \\ []),
-    do: set_active(actor_id, id, false, opts)
+  def pause_rule(%Scope{} = scope, %RecurringExpense{id: id}, opts \\ []),
+    do: set_active(Access.actor_id!(scope), id, false, opts)
 
   @doc """
   Resumes a rule. The occurrences missed meanwhile are skipped: the next one is the first from
   today on. Then it catches up like `create_rule/4` and gives the number created.
   """
-  def resume_rule(actor_id, %RecurringExpense{id: id}, opts \\ []) do
-    actor_id |> set_active(id, true, opts) |> caught_up(opts)
+  def resume_rule(%Scope{} = scope, %RecurringExpense{id: id}, opts \\ []) do
+    scope |> Access.actor_id!() |> set_active(id, true, opts) |> caught_up(opts)
   end
 
   defp set_active(actor_id, id, active, opts) do
@@ -153,7 +163,7 @@ defmodule Abakus.Kasse.Recurring do
 
   # The rule itself was changed, so a failed catch-up is only logged.
   defp caught_up({:ok, rule}, opts) do
-    case catch_up_rule(rule.id, opts) do
+    case catch_up_one(rule.id, opts) do
       {:ok, created} ->
         {:ok, rule, created}
 
@@ -168,7 +178,9 @@ defmodule Abakus.Kasse.Recurring do
   @doc """
   Takes the template from the newest live occurrence; `{:error, :no_occurrence}` without one.
   """
-  def refresh_template(actor_id, %RecurringExpense{id: id}) do
+  def refresh_template(%Scope{} = scope, %RecurringExpense{id: id}) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       with {:ok, rule} <- fetch_rule(id),
            {:ok, latest} <- latest_occurrence(id),
@@ -201,7 +213,9 @@ defmodule Abakus.Kasse.Recurring do
   end
 
   @doc "Deletes a rule; its expenses stay, no longer linked to it."
-  def delete_rule(actor_id, %RecurringExpense{id: id}) do
+  def delete_rule(%Scope{} = scope, %RecurringExpense{id: id}) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       with {:ok, rule} <- fetch_rule(id),
            {:ok, deleted} <- Repo.delete(rule),
@@ -217,7 +231,7 @@ defmodule Abakus.Kasse.Recurring do
   end
 
   defp fetch_rule(id) do
-    case get_rule(id) do
+    case Repo.get(RecurringExpense, id) do
       nil -> {:error, :not_found}
       rule -> {:ok, rule}
     end
@@ -230,7 +244,8 @@ defmodule Abakus.Kasse.Recurring do
   the number of occurrences missed up to today (counting stops after `max_missed/0`) and how
   many of them would be skipped as already entered.
   """
-  def previews(%Expense{} = expense, opts \\ []) do
+  def previews(%Scope{} = scope, %Expense{} = expense, opts \\ []) do
+    Access.check!(scope)
     today = today(opts)
 
     existing =
@@ -259,9 +274,10 @@ defmodule Abakus.Kasse.Recurring do
   Catches up all due rules. Gives the number of expenses created, with the errors of the rules
   that failed; the other rules go on.
   """
-  @spec catch_up(keyword()) ::
+  @spec catch_up(Scope.t(), keyword()) ::
           {:ok, non_neg_integer()} | {:error, non_neg_integer(), [String.t()]}
-  def catch_up(opts \\ []) do
+  def catch_up(%Scope{} = scope, opts \\ []) do
+    Access.check!(scope)
     today = today(opts)
 
     due =
@@ -282,13 +298,18 @@ defmodule Abakus.Kasse.Recurring do
     if errors == [], do: {:ok, created}, else: {:error, created, Enum.reverse(errors)}
   end
 
-  @doc "Catches up the rule with `id` if it is active and due; as `catch_up/1`."
-  @spec catch_up_rule(integer(), keyword()) ::
+  @doc "Catches up the rule with `id` if it is active and due; as `catch_up/2`."
+  @spec catch_up_rule(Scope.t(), integer(), keyword()) ::
           {:ok, non_neg_integer()} | {:error, non_neg_integer(), String.t()}
-  def catch_up_rule(id, opts \\ []) do
+  def catch_up_rule(%Scope{} = scope, id, opts \\ []) do
+    Access.check!(scope)
+    catch_up_one(id, opts)
+  end
+
+  defp catch_up_one(id, opts) do
     today = today(opts)
 
-    with %RecurringExpense{active: true} = rule <- get_rule(id),
+    with %RecurringExpense{active: true} = rule <- Repo.get(RecurringExpense, id),
          false <- Date.after?(rule.next_date, today) do
       case run(rule, today, opts) do
         {count, nil} -> {:ok, count}
@@ -358,7 +379,9 @@ defmodule Abakus.Kasse.Recurring do
   end
 
   defp occurrence(rule, date, false, opts) do
-    case Expenses.create_expense(nil, instance(rule, date, opts), recurring_expense_id: rule.id) do
+    case Expenses.create_expense(Scope.system(), instance(rule, date, opts),
+           recurring_expense_id: rule.id
+         ) do
       {:ok, _expense} -> {:ok, 1}
       {:error, :rule_changed} -> :changed
       {:error, %Changeset{} = changeset} -> created_before(changeset)
@@ -396,7 +419,7 @@ defmodule Abakus.Kasse.Recurring do
   end
 
   defp convert(rule, %{original_currency: currency, date: date} = attrs, opts) do
-    case Rates.rate(currency, date, opts) do
+    case Rates.rate(Scope.system(), currency, date, opts) do
       {:ok, rate} ->
         case Money.to_eur_cents(attrs.original_amount, currency, rate.rate) do
           {:ok, cents} when cents > 0 and cents <= @max_cents ->

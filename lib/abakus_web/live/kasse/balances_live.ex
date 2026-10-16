@@ -10,7 +10,7 @@ defmodule AbakusWeb.Kasse.BalancesLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Expenses.subscribe()
+    if connected?(socket), do: Expenses.subscribe(socket.assigns.current_scope)
     {:ok, socket |> assign(page_title: "Salden") |> load()}
   end
 
@@ -18,8 +18,8 @@ defmodule AbakusWeb.Kasse.BalancesLive do
   def handle_info({:expenses_changed, _ids}, socket), do: {:noreply, load(socket)}
 
   defp load(socket) do
-    balances = Balances.balances()
-    people = Participants.list_participants(:all)
+    balances = Balances.balances(socket.assigns.current_scope)
+    people = Participants.list_participants(socket.assigns.current_scope, :all)
     by_id = Map.new(people, &{&1.id, &1})
 
     rows =
@@ -81,7 +81,7 @@ defmodule AbakusWeb.Kasse.BalancesLive do
             >
               <span class={[
                 "truncate",
-                row.person.id == @current_participant.id && "font-semibold"
+                row.person.id == @current_scope.participant.id && "font-semibold"
               ]}>
                 {name(row.person)}
               </span>

@@ -1,9 +1,9 @@
 defmodule Abakus.Categories.Category do
   @moduledoc """
   An envelope in the budget. A category is deleted only by moving everything it has into another
-  (`Abakus.Categories.delete_category/3`), so history keeps its references. `hidden` comes from YNAB, for the import
-  and its check; the budget ignores it. Internal categories (Ready to Assign) come from a migration and cannot be
-  changed.
+  (`Abakus.Categories.delete_category/4`), so history keeps its references. `hidden` comes from YNAB, for the import
+  and its check; the budget ignores it. Each user's internal category, Ready to Assign, comes with its first use
+  (`Abakus.Categories.ready_to_assign!/1`) and cannot be changed.
   """
 
   use Abakus.Schema
@@ -24,6 +24,7 @@ defmodule Abakus.Categories.Category do
     field :note, :string
 
     belongs_to :category_group, CategoryGroup
+    belongs_to :user, Abakus.Users.User
     has_many :target_versions, TargetVersion
 
     timestamps()
@@ -33,7 +34,7 @@ defmodule Abakus.Categories.Category do
   def changeset(category, attrs) do
     category
     |> cast(attrs, [:name, :hidden, :position, :note, :category_group_id])
-    |> validate_required([:name, :category_group_id])
+    |> validate_required([:user_id, :name, :category_group_id])
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_not_internal()
     |> Names.put_lookup_key()

@@ -229,7 +229,7 @@ defmodule AbakusWeb.BudgetLive do
        page_title: "Budget",
        current: Date.beginning_of_month(LocalTime.today()),
        fit: fit(connect["fit"]),
-       income: Categories.income_by_payee(),
+       income: Categories.income_by_payee(socket.assigns.current_scope),
        focus: nil,
        invalid: nil,
        selected: nil,
@@ -497,7 +497,7 @@ defmodule AbakusWeb.BudgetLive do
   def handle_event("save_target", %{"target" => params}, socket) do
     with %{category: category} <- socket.assigns.inspector.selected,
          {:ok, attrs} <- TargetForm.attrs(params, socket.assigns.window.focus),
-         {:ok, _version} <- Categories.set_target(category, attrs) do
+         {:ok, _version} <- Categories.set_target(socket.assigns.current_scope, category, attrs) do
       {:noreply, changed(socket, "Ziel gespeichert.")}
     else
       nil ->
@@ -514,7 +514,7 @@ defmodule AbakusWeb.BudgetLive do
   def handle_event("delete_target", _params, socket) do
     with %{category: category} <- socket.assigns.inspector.selected,
          {:ok, _version} <-
-           Categories.set_target(category, %{
+           Categories.set_target(socket.assigns.current_scope, category, %{
              from_month: socket.assigns.window.focus,
              cadence: :none
            }) do
@@ -529,7 +529,7 @@ defmodule AbakusWeb.BudgetLive do
 
     case socket.assigns.inspector.selected do
       %{category: category, cell: %{target: %{}}} ->
-        {:ok, _snooze} = Categories.snooze_target(category, month)
+        {:ok, _snooze} = Categories.snooze_target(socket.assigns.current_scope, category, month)
         {:noreply, changed(socket, "Ziel im #{Format.month_name(month)} pausiert.")}
 
       _other ->
@@ -540,7 +540,13 @@ defmodule AbakusWeb.BudgetLive do
   def handle_event("unsnooze", _params, socket) do
     case socket.assigns.inspector.selected do
       %{category: category} ->
-        :ok = Categories.unsnooze_target(category, socket.assigns.window.focus)
+        :ok =
+          Categories.unsnooze_target(
+            socket.assigns.current_scope,
+            category,
+            socket.assigns.window.focus
+          )
+
         {:noreply, changed(socket, "Ziel läuft wieder.")}
 
       nil ->
@@ -555,7 +561,11 @@ defmodule AbakusWeb.BudgetLive do
     do: {:noreply, assign(socket, :editing, closed(socket.assigns.editing))}
 
   def handle_event("edit_save", %{"name" => name}, %{assigns: %{editing: %{} = editing}} = socket) do
-    case CategoryEditor.save(%{editing | step: :name, error: nil}, name) do
+    case CategoryEditor.save(
+           socket.assigns.current_scope,
+           %{editing | step: :name, error: nil},
+           name
+         ) do
       :ok -> {:noreply, socket |> edited() |> renamed(socket.assigns.editing)}
       result -> {:noreply, refused(socket, result)}
     end
@@ -570,7 +580,11 @@ defmodule AbakusWeb.BudgetLive do
         %{assigns: %{editing: %{step: :name, kind: kind}}} = socket
       )
       when kind in [:group, :category] do
-    case CategoryEditor.delete(socket.assigns.editing, socket.assigns.groups) do
+    case CategoryEditor.delete(
+           socket.assigns.current_scope,
+           socket.assigns.editing,
+           socket.assigns.groups
+         ) do
       :ok -> {:noreply, edited(socket)}
       {:ask, editing} -> {:noreply, assign(socket, :editing, editing)}
       result -> {:noreply, refused(socket, result)}
@@ -590,7 +604,12 @@ defmodule AbakusWeb.BudgetLive do
         %{"into" => into},
         %{assigns: %{editing: %{step: :delete}}} = socket
       ) do
-    case CategoryEditor.confirm_delete(socket.assigns.editing, into, socket.assigns.groups) do
+    case CategoryEditor.confirm_delete(
+           socket.assigns.current_scope,
+           socket.assigns.editing,
+           into,
+           socket.assigns.groups
+         ) do
       :ok -> {:noreply, edited(socket)}
       result -> {:noreply, refused(socket, result)}
     end
@@ -627,7 +646,7 @@ defmodule AbakusWeb.BudgetLive do
     do: entry.cell.target |> TargetForm.params(focus) |> TargetForm.to_target_form()
 
   defp delete_group(socket, edit) do
-    case CategoryEditor.delete(edit, socket.assigns.groups) do
+    case CategoryEditor.delete(socket.assigns.current_scope, edit, socket.assigns.groups) do
       :ok -> edited(socket)
       result -> refused(socket, result)
     end
@@ -680,7 +699,13 @@ defmodule AbakusWeb.BudgetLive do
   defp positive_amount(_text), do: {:error, "Bitte einen Betrag angeben."}
 
   defp move(socket, from, to, amount, message) do
-    case Categories.move_assigned(from, to, socket.assigns.window.focus, amount) do
+    case Categories.move_assigned(
+           socket.assigns.current_scope,
+           from,
+           to,
+           socket.assigns.window.focus,
+           amount
+         ) do
       {:ok, _amount} -> {:noreply, changed(socket, message)}
       {:error, _changeset} -> {:noreply, popover_error(socket, "Der Betrag ist zu groß.")}
     end
@@ -699,7 +724,14 @@ defmodule AbakusWeb.BudgetLive do
   end
 
   defp auto(socket, "underfunded", month, category) do
-    {:ok, _fills} = Categories.fill_underfunded(month, socket.assigns.current, category)
+    {:ok, _fills} =
+      Categories.fill_underfunded(
+        socket.assigns.current_scope,
+        month,
+        socket.assigns.current,
+        category
+      )
+
     socket = changed(socket, nil)
     inspector = socket.assigns.inspector
 
@@ -717,7 +749,7 @@ defmodule AbakusWeb.BudgetLive do
   end
 
   defp auto(socket, "reset", month, category) do
-    :ok = Categories.reset_assignments(month, category)
+    :ok = Categories.reset_assignments(socket.assigns.current_scope, month, category)
     changed(socket, "Zuweisungen im #{Format.month_name(month)} zurückgesetzt.")
   end
 
@@ -797,7 +829,7 @@ defmodule AbakusWeb.BudgetLive do
     if Map.get(socket.assigns.budget.assigned, {category.id, month}, 0) == amount do
       socket |> assign(:invalid, nil) |> assign_view()
     else
-      case Categories.assign(category, month, amount) do
+      case Categories.assign(socket.assigns.current_scope, category, month, amount) do
         {:ok, _assignment} -> socket |> assign(:invalid, nil) |> assign_budget() |> assign_view()
         {:error, _changeset} -> mark_invalid(socket, category, month, value)
       end
@@ -815,7 +847,11 @@ defmodule AbakusWeb.BudgetLive do
 
   # Groups load with the budget, so a category deleted in another tab leaves both.
   defp assign_budget(socket),
-    do: assign(socket, budget: Categories.budget(), groups: Categories.list_category_groups())
+    do:
+      assign(socket,
+        budget: Categories.budget(socket.assigns.current_scope),
+        groups: Categories.list_category_groups(socket.assigns.current_scope)
+      )
 
   defp assign_view(socket) do
     %{budget: budget, current: current, requested: requested, fit: fit, focus: focus} =

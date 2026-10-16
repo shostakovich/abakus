@@ -9,46 +9,50 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
   alias Abakus.Categories
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Kasse.Categories, as: KasseCategories
-  alias Abakus.Kasse.Ynab.Connections
+  alias Abakus.Users.Scope
 
   @impl true
   def mount(_params, _session, socket) do
-    if !socket.assigns.current_scope.user.budget_owner, do: raise(AbakusWeb.NotFoundError)
+    if !Scope.budget_owner?(socket.assigns.current_scope), do: raise(AbakusWeb.NotFoundError)
 
     {:ok,
      socket
-     |> assign(page_title: "Budget-Verknüpfung", budget_groups: budget_groups())
+     |> assign(
+       page_title: "Budget-Verknüpfung",
+       budget_groups: budget_groups(socket.assigns.current_scope)
+     )
      |> load_link()
      |> load()}
   end
 
   defp load_link(socket) do
-    participant = socket.assigns.current_participant
-    account = BudgetLink.account(participant)
-    choices = if account, do: [], else: BudgetLink.account_choices()
+    scope = socket.assigns.current_scope
+    account = BudgetLink.account(scope)
+    choices = if account, do: [], else: BudgetLink.account_choices(scope)
     fed = Enum.find(choices, &(&1.fed_by == :shared_expenses))
 
     assign(socket,
       account: account,
       account_options: Enum.map(choices, &{&1.name, &1.id}),
-      start_date: if(!account, do: start_date(Connections.get(participant.id))),
+      start_date: if(!account, do: start_date(BudgetLink.start_date(scope))),
       link_form: to_form(%{"account_id" => fed && fed.id}, as: :link)
     )
   end
 
-  defp start_date(%{start_date: %Date{} = date}), do: Format.date(date)
-  defp start_date(_connection), do: nil
+  defp start_date(%Date{} = date), do: Format.date(date)
+  defp start_date(nil), do: nil
 
-  defp budget_groups do
-    for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(),
+  defp budget_groups(scope) do
+    for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(scope),
         do: {group.name, Enum.map(categories, &{&1.name, &1.id})}
   end
 
   defp load(socket) do
-    mapping = BudgetLink.category_mapping()
+    scope = socket.assigns.current_scope
+    mapping = BudgetLink.category_mapping(scope)
 
     rows =
-      for category <- KasseCategories.list_categories(:all),
+      for category <- KasseCategories.list_categories(scope, :all),
           is_nil(category.archived_at) or Map.has_key?(mapping, category.id),
           do: category
 
@@ -62,7 +66,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
   def handle_event("switch_on", params, socket) do
     account_id = get_in(params, ["link", "account_id"])
 
-    case BudgetLink.switch_on(socket.assigns.current_participant, account_id) do
+    case BudgetLink.switch_on(socket.assigns.current_scope, account_id) do
       {:ok, counts} ->
         {:noreply,
          socket
@@ -76,7 +80,9 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
   end
 
   def handle_event("map_categories", params, socket) do
-    case BudgetLink.put_category_mapping(Map.get(params, "mapping", %{})) do
+    mapping = Map.get(params, "mapping", %{})
+
+    case BudgetLink.put_category_mapping(socket.assigns.current_scope, mapping) do
       {:ok, _mapping} ->
         {:noreply, socket |> put_flash(:info, "Kategorie-Zuordnung gespeichert.") |> load()}
 

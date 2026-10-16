@@ -7,6 +7,7 @@ defmodule AbakusWeb.AccountGroups do
 
   alias Abakus.Ledger
   alias Abakus.Ledger.Account
+  alias Abakus.Users.Scope
   alias AbakusWeb.Areas
 
   @no_transactions %{balance: 0, cleared: 0, unapproved: 0}
@@ -19,11 +20,12 @@ defmodule AbakusWeb.AccountGroups do
 
   @doc "Assigns `account_groups` for the sidebar of every signed-in page; none for a user without the Budget."
   def on_mount(:assign, _params, _session, socket) do
-    groups = if Areas.allowed?(socket.assigns.current_scope, :budget), do: load(), else: []
+    scope = socket.assigns.current_scope
+    groups = if Areas.allowed?(scope, :budget), do: load(scope), else: []
     {:cont, Phoenix.Component.assign(socket, :account_groups, groups)}
   end
 
-  def load, do: build(Ledger.list_accounts(), Ledger.balances())
+  def load(%Scope{} = scope), do: build(Ledger.list_accounts(scope), Ledger.balances(scope))
 
   def build(accounts, balances) do
     rows = Enum.map(accounts, &row(&1, balances))

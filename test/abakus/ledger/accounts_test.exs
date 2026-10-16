@@ -6,9 +6,10 @@ defmodule Abakus.Ledger.AccountsTest do
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Payee}
 
-  describe "create_account/1" do
+  describe "create_account/2" do
     test "creates the account with its transfer payee" do
-      assert {:ok, account} = Ledger.create_account(%{name: "💳 Girokonto", kind: :checking})
+      assert {:ok, account} =
+               Ledger.create_account(budget_scope(), %{name: "💳 Girokonto", kind: :checking})
 
       assert %Payee{name: "Transfer : 💳 Girokonto", lookup_key: "transfer : girokonto"} =
                account.transfer_payee
@@ -21,7 +22,7 @@ defmodule Abakus.Ledger.AccountsTest do
       reconciled_at = ~U[2026-10-01 08:30:00.123456Z]
 
       assert {:ok, account} =
-               Ledger.create_account(%{
+               Ledger.create_account(budget_scope(), %{
                  name: "Depot",
                  kind: "tracking",
                  fed_by: "portfolio",
@@ -38,33 +39,42 @@ defmodule Abakus.Ledger.AccountsTest do
                note: "Wertpapiere",
                position: 3
              } =
-               Ledger.get_account!(account.id)
+               Ledger.get_account!(budget_scope(), account.id)
 
-      assert Ledger.get_account!(account.id).last_reconciled_at == reconciled_at
+      assert Ledger.get_account!(budget_scope(), account.id).last_reconciled_at == reconciled_at
     end
 
     test "puts a new account after the others unless it has a position" do
       account_fixture(position: 4)
       account_fixture(position: 2)
 
-      assert {:ok, %Account{position: 5}} = Ledger.create_account(%{name: "Bar", kind: :cash})
+      assert {:ok, %Account{position: 5}} =
+               Ledger.create_account(budget_scope(), %{name: "Bar", kind: :cash})
 
       assert {:ok, %Account{position: 1}} =
-               Ledger.create_account(%{"name" => "Spar", "kind" => "savings", "position" => "1"})
+               Ledger.create_account(budget_scope(), %{
+                 "name" => "Spar",
+                 "kind" => "savings",
+                 "position" => "1"
+               })
 
       assert {:ok, %Account{position: 0}} =
-               Ledger.create_account(%{name: "Depot", kind: :tracking, position: 0})
+               Ledger.create_account(budget_scope(), %{
+                 name: "Depot",
+                 kind: :tracking,
+                 position: 0
+               })
     end
 
     test "requires a name and a kind" do
-      assert {:error, changeset} = Ledger.create_account(%{name: " "})
+      assert {:error, changeset} = Ledger.create_account(budget_scope(), %{name: " "})
       assert %{name: ["can't be blank"], kind: ["can't be blank"]} = errors_on(changeset)
       assert Repo.aggregate(Payee, :count) == 0
     end
 
     test "rejects unknown kinds, feeders and negative positions" do
       assert {:error, changeset} =
-               Ledger.create_account(%{
+               Ledger.create_account(budget_scope(), %{
                  name: "Karte",
                  kind: :credit_card,
                  fed_by: :mint,
@@ -98,12 +108,12 @@ defmodule Abakus.Ledger.AccountsTest do
     refute Account.takes_category?(depot, checking)
   end
 
-  describe "update_account/2" do
+  describe "update_account/3" do
     test "renaming renames the transfer payee" do
       account = account_fixture(name: "Girokonto")
 
       assert {:ok, %Account{name: "🏦 Gemeinschaftskonto"} = renamed} =
-               Ledger.update_account(account, %{name: "🏦 Gemeinschaftskonto"})
+               Ledger.update_account(budget_scope(), account, %{name: "🏦 Gemeinschaftskonto"})
 
       assert renamed.transfer_payee.name == "Transfer : 🏦 Gemeinschaftskonto"
 
@@ -119,7 +129,7 @@ defmodule Abakus.Ledger.AccountsTest do
       payee = Repo.get_by!(Payee, transfer_account_id: account.id)
 
       assert {:ok, %Account{closed: true} = closed} =
-               Ledger.update_account(account, %{closed: true})
+               Ledger.update_account(budget_scope(), account, %{closed: true})
 
       assert Repo.get!(Payee, payee.id).updated_at == payee.updated_at
       assert closed.transfer_payee.id == payee.id
@@ -128,18 +138,21 @@ defmodule Abakus.Ledger.AccountsTest do
     test "keeps an account on its side of the budget" do
       account = account_fixture(kind: :checking)
 
-      assert {:ok, account} = Ledger.update_account(account, %{kind: :savings})
-      assert {:error, changeset} = Ledger.update_account(account, %{kind: :tracking})
+      assert {:ok, account} = Ledger.update_account(budget_scope(), account, %{kind: :savings})
+
+      assert {:error, changeset} =
+               Ledger.update_account(budget_scope(), account, %{kind: :tracking})
+
       assert %{kind: ["kann nicht zwischen Budget und Tracking wechseln"]} = errors_on(changeset)
 
       tracking = account_fixture(kind: :tracking)
-      assert {:error, changeset} = Ledger.update_account(tracking, %{kind: :cash})
+      assert {:error, changeset} = Ledger.update_account(budget_scope(), tracking, %{kind: :cash})
       assert %{kind: ["kann nicht zwischen Budget und Tracking wechseln"]} = errors_on(changeset)
     end
 
     test "returns the changeset of an invalid update" do
       account = account_fixture()
-      assert {:error, changeset} = Ledger.update_account(account, %{name: ""})
+      assert {:error, changeset} = Ledger.update_account(budget_scope(), account, %{name: ""})
       assert %{name: ["can't be blank"]} = errors_on(changeset)
     end
   end
@@ -154,9 +167,9 @@ defmodule Abakus.Ledger.AccountsTest do
 
     transaction_fixture(%{account_id: cash.id, amount: -300, approved: false})
     deleted = transaction_fixture(%{account_id: cash.id, amount: -99_999, approved: false})
-    {:ok, _deleted} = Ledger.delete_transaction(deleted)
+    {:ok, _deleted} = Ledger.delete_transaction(budget_scope(), deleted)
 
-    assert Ledger.balances() == %{
+    assert Ledger.balances(budget_scope()) == %{
              giro.id => %{balance: 6_500, cleared: 7_500, uncleared: -1_000, unapproved: 0},
              cash.id => %{balance: -300, cleared: 0, uncleared: -300, unapproved: 1}
            }
@@ -175,57 +188,61 @@ defmodule Abakus.Ledger.AccountsTest do
 
     transaction_fixture(%{account_id: other.id, date: ~D[2026-10-01], amount: 400})
     deleted = transaction_fixture(%{account_id: giro.id, date: ~D[2026-10-01], amount: -99_999})
-    {:ok, _deleted} = Ledger.delete_transaction(deleted)
+    {:ok, _deleted} = Ledger.delete_transaction(budget_scope(), deleted)
 
-    assert Ledger.balance(giro, ~D[2026-10-02]) == 7_500
-    assert Ledger.balance(giro, ~D[2026-09-30]) == 0
+    assert Ledger.balance(budget_scope(), giro, ~D[2026-10-02]) == 7_500
+    assert Ledger.balance(budget_scope(), giro, ~D[2026-09-30]) == 0
   end
 
   test "list_accounts/0 orders by position" do
     second = account_fixture(position: 2)
     first = account_fixture(position: 1)
 
-    assert Enum.map(Ledger.list_accounts(), & &1.id) == [first.id, second.id]
+    assert Enum.map(Ledger.list_accounts(budget_scope()), & &1.id) == [first.id, second.id]
   end
 
-  describe "link_ofx_account/3" do
+  describe "link_ofx_account/4" do
     test "remembers the file's account, so it finds the account again" do
       account = account_fixture()
 
       assert {:ok, %Account{ofx_bank_id: "10020030", ofx_acct_id: "DE02"}} =
-               Ledger.link_ofx_account(account, "10020030", "DE02")
+               Ledger.link_ofx_account(budget_scope(), account, "10020030", "DE02")
 
-      assert Ledger.get_account_by_ofx("10020030", "DE02").id == account.id
-      assert Ledger.get_account_by_ofx("10020031", "DE02") == nil
-      assert Ledger.get_account_by_ofx(nil, "DE02") == nil
+      assert Ledger.get_account_by_ofx(budget_scope(), "10020030", "DE02").id == account.id
+      assert Ledger.get_account_by_ofx(budget_scope(), "10020031", "DE02") == nil
+      assert Ledger.get_account_by_ofx(budget_scope(), nil, "DE02") == nil
     end
 
     test "finds a card account by its account id alone" do
       account = account_fixture()
-      {:ok, _account} = Ledger.link_ofx_account(account, nil, "4111")
+      {:ok, _account} = Ledger.link_ofx_account(budget_scope(), account, nil, "4111")
 
-      assert Ledger.get_account_by_ofx(nil, "4111").id == account.id
-      assert Ledger.get_account_by_ofx("1", "4111") == nil
+      assert Ledger.get_account_by_ofx(budget_scope(), nil, "4111").id == account.id
+      assert Ledger.get_account_by_ofx(budget_scope(), "1", "4111") == nil
     end
 
     test "takes the file's account from the account that had it, and replaces the account's own" do
       old = account_fixture()
       new = account_fixture()
-      {:ok, _old} = Ledger.link_ofx_account(old, "1", "A")
+      {:ok, _old} = Ledger.link_ofx_account(budget_scope(), old, "1", "A")
 
-      assert {:ok, _new} = Ledger.link_ofx_account(new, "1", "A")
-      assert Ledger.get_account_by_ofx("1", "A").id == new.id
+      assert {:ok, _new} = Ledger.link_ofx_account(budget_scope(), new, "1", "A")
+      assert Ledger.get_account_by_ofx(budget_scope(), "1", "A").id == new.id
       assert %Account{ofx_bank_id: nil, ofx_acct_id: nil} = Repo.reload!(old)
 
-      assert {:ok, _new} = Ledger.link_ofx_account(new, "1", "B")
-      assert Ledger.get_account_by_ofx("1", "A") == nil
+      assert {:ok, _new} = Ledger.link_ofx_account(budget_scope(), new, "1", "B")
+      assert Ledger.get_account_by_ofx(budget_scope(), "1", "A") == nil
     end
 
     test "the account form does not change the link" do
-      {:ok, account} = Ledger.link_ofx_account(account_fixture(), "1", "A")
+      {:ok, account} = Ledger.link_ofx_account(budget_scope(), account_fixture(), "1", "A")
 
       assert {:ok, %Account{ofx_bank_id: "1", ofx_acct_id: "A"}} =
-               Ledger.update_account(account, %{name: "Neu", ofx_bank_id: "2", ofx_acct_id: "B"})
+               Ledger.update_account(budget_scope(), account, %{
+                 name: "Neu",
+                 ofx_bank_id: "2",
+                 ofx_acct_id: "B"
+               })
     end
   end
 
@@ -234,7 +251,7 @@ defmodule Abakus.Ledger.AccountsTest do
     assert_raise Ecto.ConstraintError, fn -> Repo.delete(account) end
   end
 
-  describe "net_worth/1" do
+  describe "net_worth/2" do
     test "adds up the open budget and tracking accounts at the end of each day" do
       checking = account_fixture(kind: :checking)
       depot = account_fixture(kind: :tracking)
@@ -244,13 +261,13 @@ defmodule Abakus.Ledger.AccountsTest do
       transaction_fixture(account_id: checking.id, date: ~D[2026-10-03], amount: -2_000)
       transaction_fixture(account_id: closed.id, date: ~D[2026-10-02], amount: 99_900)
 
-      assert Ledger.net_worth(Date.range(~D[2026-10-02], ~D[2026-10-04])) == [
+      assert Ledger.net_worth(budget_scope(), Date.range(~D[2026-10-02], ~D[2026-10-04])) == [
                {~D[2026-10-02], 10_000},
                {~D[2026-10-03], 13_000},
                {~D[2026-10-04], 13_000}
              ]
 
-      assert Ledger.first_open_date() == ~D[2026-10-01]
+      assert Ledger.first_open_date(budget_scope()) == ~D[2026-10-01]
     end
 
     test "keeps the history of a closed account without money" do
@@ -258,17 +275,20 @@ defmodule Abakus.Ledger.AccountsTest do
       transaction_fixture(account_id: closed.id, date: ~D[2026-10-01], amount: 5_000)
       transaction_fixture(account_id: closed.id, date: ~D[2026-10-03], amount: -5_000)
 
-      assert Ledger.net_worth(Date.range(~D[2026-10-02], ~D[2026-10-03])) == [
+      assert Ledger.net_worth(budget_scope(), Date.range(~D[2026-10-02], ~D[2026-10-03])) == [
                {~D[2026-10-02], 5_000},
                {~D[2026-10-03], 0}
              ]
 
-      assert Ledger.first_open_date() == ~D[2026-10-01]
+      assert Ledger.first_open_date(budget_scope()) == ~D[2026-10-01]
     end
 
     test "is nothing without transactions" do
-      assert Ledger.net_worth(Date.range(~D[2026-10-01], ~D[2026-10-01])) == [{~D[2026-10-01], 0}]
-      assert Ledger.first_open_date() == nil
+      assert Ledger.net_worth(budget_scope(), Date.range(~D[2026-10-01], ~D[2026-10-01])) == [
+               {~D[2026-10-01], 0}
+             ]
+
+      assert Ledger.first_open_date(budget_scope()) == nil
     end
   end
 end

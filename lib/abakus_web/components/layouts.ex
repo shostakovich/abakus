@@ -252,6 +252,7 @@ defmodule AbakusWeb.Layouts do
       :if={@account_dialog}
       module={AbakusWeb.AccountDialog}
       id="account-dialog"
+      current_scope={@current_scope}
       account={@account_dialog.account}
       balance={@account_dialog.balance}
     />

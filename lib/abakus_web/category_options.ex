@@ -1,19 +1,19 @@
 defmodule AbakusWeb.CategoryOptions do
   @moduledoc """
-  Categories as the category pickers offer them, in groups: Ready to Assign first as income, then the categories
-  by group, each with what it has available in the month of `today`, as YNAB shows them. An option's `text` is how
-  the register names the category, `key` its lookup key.
+  The scope's user's categories as the category pickers offer them, in groups: Ready to Assign first as income,
+  then the categories by group, each with what it has available in the month of `today`, as YNAB shows them. An
+  option's `text` is how the register names the category, `key` its lookup key.
   """
 
   alias Abakus.{Budget, Categories, Names}
 
-  def build(%Date{} = today) do
-    ready_to_assign = Categories.ready_to_assign!()
-    month = month(today)
+  def build(scope, %Date{} = today) do
+    ready_to_assign = Categories.ready_to_assign!(scope)
+    month = month(scope, today)
     available = Map.new(month.categories, &{&1.category_id, &1.available})
 
     groups =
-      for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups() do
+      for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(scope) do
         %{
           name: group.name,
           options:
@@ -31,9 +31,9 @@ defmodule AbakusWeb.CategoryOptions do
     [%{name: "Einnahme", options: [income]} | groups]
   end
 
-  defp month(today) do
+  defp month(scope, today) do
     month = Date.beginning_of_month(today)
-    Categories.budget() |> Budget.months(today) |> Enum.find(&(&1.month == month))
+    scope |> Categories.budget() |> Budget.months(today) |> Enum.find(&(&1.month == month))
   end
 
   defp option(id, name, text, available),

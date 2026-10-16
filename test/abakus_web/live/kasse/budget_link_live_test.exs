@@ -6,7 +6,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
   import Abakus.KasseFixtures
   import AbakusWeb.PageText
 
-  alias Abakus.Kasse.{BudgetLink, Expenses, Participants, Ynab}
+  alias Abakus.Kasse.{BudgetLink, Expenses, Ynab}
   alias Abakus.Kasse.BudgetLink.LinkedTransaction
   alias Abakus.Kasse.Ynab.Posting
   alias Abakus.Ledger.Transaction
@@ -29,8 +29,10 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
   end
 
   defp link!(c) do
-    {:ok, _mapping} = BudgetLink.put_category_mapping(%{c.h.food => c.groceries.id})
-    {:ok, _anna} = BudgetLink.switch_on(Participants.get_participant!(c.h.anna), c.account.id)
+    {:ok, _mapping} =
+      BudgetLink.put_category_mapping(scope_of(c.h.anna), %{c.h.food => c.groceries.id})
+
+    {:ok, _anna} = BudgetLink.switch_on(scope_of(c.h.anna), c.account.id)
 
     expense =
       create!(equal(c.h, "Wocheneinkauf", 8742, "2026-10-12", c.h.ben, [c.h.anna, c.h.ben]))
@@ -50,7 +52,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       |> render_submit()
 
       assert has_element?(view, "#flash-info", "gespeichert")
-      assert BudgetLink.category_mapping() == %{c.h.food => c.groceries.id}
+      assert BudgetLink.category_mapping(scope_of(c.h.anna)) == %{c.h.food => c.groceries.id}
 
       assert has_element?(
                view,
@@ -89,7 +91,8 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
     end
 
     test "links the imported transactions, books the rest and removes the YNAB connection", c do
-      {:ok, _mapping} = BudgetLink.put_category_mapping(%{c.h.food => c.groceries.id})
+      {:ok, _mapping} =
+        BudgetLink.put_category_mapping(scope_of(c.h.anna), %{c.h.food => c.groceries.id})
 
       weekly =
         create!(equal(c.h, "Wocheneinkauf", 8742, "2026-03-05", c.h.ben, [c.h.anna, c.h.ben]))
@@ -162,7 +165,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
         })
       end
 
-      {:ok, _deleted} = Expenses.delete_expense(c.h.ben, gone)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), gone)
       {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
 
       Confirm.confirm_click(view, "#budget-link-submit", "Mit Budget verknüpfen?")

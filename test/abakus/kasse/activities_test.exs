@@ -3,14 +3,16 @@ defmodule Abakus.Kasse.ActivitiesTest do
 
   alias Abakus.Kasse.Activities
   alias Abakus.Kasse.Activities.Activity
+  alias Abakus.Users.Scope
 
   test "lists the newest entries first and pages before an id" do
     for n <- 1..5, do: {:ok, _activity} = Activities.log_settings(nil, "Eintrag #{n}")
 
-    [newest, second] = Activities.list_activities(limit: 2)
+    [newest, second] = Activities.list_activities(Scope.system(), limit: 2)
     assert {newest.details.text, second.details.text} == {"Eintrag 5", "Eintrag 4"}
 
-    assert Activities.list_activities(before_id: second.id) |> Enum.map(& &1.details.text) ==
+    assert Activities.list_activities(Scope.system(), before_id: second.id)
+           |> Enum.map(& &1.details.text) ==
              ["Eintrag 3", "Eintrag 2", "Eintrag 1"]
   end
 
@@ -23,7 +25,7 @@ defmodule Abakus.Kasse.ActivitiesTest do
       })
 
     assert [%Activity{action: :expense_updated, actor: nil, details: details}] =
-             Activities.list_activities()
+             Activities.list_activities(Scope.system())
 
     assert {details.title, details.amount_cents, details.text} == {"Theater", 1000, nil}
     assert [%{field: "Titel", old: "Kino", new: "Theater"}] = details.changes
@@ -57,6 +59,6 @@ defmodule Abakus.Kasse.ActivitiesTest do
              %{details: %{title: nil}},
              %{details: %{changes: [], text: nil, amount_cents: 900}} | _
            ] =
-             Activities.list_activities()
+             Activities.list_activities(Scope.system())
   end
 end

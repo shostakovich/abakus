@@ -14,7 +14,7 @@ defmodule AbakusWeb.Kasse.ActivityLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Expenses.subscribe()
+    if connected?(socket), do: Expenses.subscribe(socket.assigns.current_scope)
 
     {:ok,
      socket
@@ -46,7 +46,8 @@ defmodule AbakusWeb.Kasse.ActivityLive do
   end
 
   defp load(socket, count, opts \\ []) do
-    activities = Activities.list_activities(limit: count + 1, before_id: socket.assigns.before_id)
+    %{current_scope: scope, before_id: before_id} = socket.assigns
+    activities = Activities.list_activities(scope, limit: count + 1, before_id: before_id)
 
     {page, more?} =
       if length(activities) > count,

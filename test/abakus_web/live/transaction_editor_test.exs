@@ -31,7 +31,8 @@ defmodule AbakusWeb.TransactionEditorTest do
   defp reload(%{id: id}), do: Repo.get!(Transaction, id)
 
   defp newest(account) do
-    account |> Ledger.list_transactions() |> List.first() |> then(&Ledger.get_transaction!(&1.id))
+    %{id: id} = budget_scope() |> Ledger.list_transactions(account) |> List.first()
+    Ledger.get_transaction!(budget_scope(), id)
   end
 
   defp open_new(c, account) do
@@ -113,7 +114,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "typing one of outflow and inflow clears the other; income goes to Ready to Assign", c do
       view = open_new(c, c.giro)
-      rta = Categories.ready_to_assign!().id
+      rta = Categories.ready_to_assign!(budget_scope()).id
 
       change(view, %{"outflow" => "5"}, ["outflow"])
       change(view, %{"outflow" => "5", "inflow" => "100"}, ["inflow"])
@@ -158,7 +159,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "the category picker lists Ready to Assign and the categories with what they have", c do
-      {:ok, _} = Categories.assign(c.groceries, ~D[2026-10-01], 30_000)
+      {:ok, _} = Categories.assign(budget_scope(), c.groceries, ~D[2026-10-01], 30_000)
       view = open_new(c, c.giro)
       html = render(view)
 
@@ -176,7 +177,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       view |> element("#new-transaction") |> render_click()
       view |> element("#tx-cancel") |> render_click()
       refute has_element?(view, "#tx-editor")
-      assert Ledger.list_transactions(c.giro) == []
+      assert Ledger.list_transactions(budget_scope(), c.giro) == []
     end
 
     test "the phone opens a sheet, amount first, whose sign makes an inflow", c do
@@ -321,7 +322,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "the transfer is edited from its other side too", c do
       {:ok, transfer} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
           date: ~D[2026-10-03],
           amount: -20_000,
@@ -454,12 +455,12 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       assert has_element?(view, ~s|#tx-sub-0-payee[value="Rewe"]|)
       assert has_element?(view, ~s|#tx-sub-0-memo[value="Obst"]|)
-      [first, second] = Ledger.get_transaction!(split.id).subtransactions
+      [first, second] = Ledger.get_transaction!(budget_scope(), split.id).subtransactions
 
       pick(view, "1", "category", "#{c.saving.id}")
       submit(view)
 
-      assert [obst, seife] = Ledger.get_transaction!(split.id).subtransactions
+      assert [obst, seife] = Ledger.get_transaction!(budget_scope(), split.id).subtransactions
       assert {obst.id, obst.payee_id, obst.memo} == {first.id, rewe.id, "Obst"}
 
       assert {seife.id, seife.payee_id, seife.memo, seife.category_id} ==
@@ -497,7 +498,7 @@ defmodule AbakusWeb.TransactionEditorTest do
         )
 
       counterpart =
-        Enum.at(Ledger.get_transaction!(split.id).subtransactions, 1).transfer_transaction_id
+        Enum.at(Ledger.get_transaction!(budget_scope(), split.id).subtransactions, 1).transfer_transaction_id
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.savings}")
       open_edit(view, %{id: counterpart})
@@ -634,7 +635,7 @@ defmodule AbakusWeb.TransactionEditorTest do
         )
 
       counterpart =
-        Enum.at(Ledger.get_transaction!(split.id).subtransactions, 1).transfer_transaction_id
+        Enum.at(Ledger.get_transaction!(budget_scope(), split.id).subtransactions, 1).transfer_transaction_id
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       view |> element("#tx-#{split.id}-select") |> render_click()
@@ -647,7 +648,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "a reconciled transaction asks before it is changed or deleted", c do
-      {:ok, old} = Ledger.update_transaction(c.shopping, %{cleared: :reconciled})
+      {:ok, old} = Ledger.update_transaction(budget_scope(), c.shopping, %{cleared: :reconciled})
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       open_edit(view, old)
@@ -673,7 +674,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "a counterpart that is reconciled asks before deleting too", c do
       {:ok, transfer} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
           date: ~D[2026-10-03],
           amount: -2_000,
@@ -681,9 +682,13 @@ defmodule AbakusWeb.TransactionEditorTest do
         })
 
       {:ok, _counterpart} =
-        Ledger.update_transaction(%Transaction{id: transfer.transfer_transaction_id}, %{
-          cleared: :reconciled
-        })
+        Ledger.update_transaction(
+          budget_scope(),
+          %Transaction{id: transfer.transfer_transaction_id},
+          %{
+            cleared: :reconciled
+          }
+        )
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       view |> element("#tx-#{transfer.id}-select") |> render_click()
@@ -697,7 +702,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "a deleted transaction is not found", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-      {:ok, _deleted} = Ledger.delete_transaction(c.shopping)
+      {:ok, _deleted} = Ledger.delete_transaction(budget_scope(), c.shopping)
 
       render_click(view, "edit", %{"id" => "#{c.shopping.id}"})
       refute has_element?(view, "#tx-editor")

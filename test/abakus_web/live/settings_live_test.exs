@@ -27,7 +27,9 @@ defmodule AbakusWeb.SettingsLiveTest do
   end
 
   defp olga!(user),
-    do: {:ok, _olga} = Participants.create_participant(nil, %{name: "Olga", email: user.email})
+    do:
+      {:ok, _olga} =
+        Participants.create_participant(Scope.system(), %{name: "Olga", email: user.email})
 
   describe "the hub" do
     @tag signed_in_minutes_ago: 11
@@ -188,8 +190,8 @@ defmodule AbakusWeb.SettingsLiveTest do
     end
 
     test "shows when the import ran and what it brought over", %{conn: conn} do
-      {:ok, _report} = YnabImport.import_plan(@plan)
-      %{imported_at: imported_at} = YnabImport.status()
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
+      %{imported_at: imported_at} = YnabImport.status(budget_scope())
 
       {:ok, view, _html} = live(conn, ~p"/settings/budget/ynab")
 

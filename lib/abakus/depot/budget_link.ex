@@ -2,7 +2,8 @@ defmodule Abakus.Depot.BudgetLink do
   @moduledoc """
   Depot cash flows linked to the budget (ADR 0018), as the Kasse's shares are (ADR 0006). Once the budget owner
   switches it on, every flow between one of their portfolios and a Verrechnungskonto that is a budget account
-  (`Abakus.Depot.AccountRoles`) is a linked transaction in that budget account, written through the Ledger:
+  (`Abakus.Depot.AccountRoles`) is a linked transaction in that budget account, written through the Ledger with
+  their scope:
 
     * a purchase, or a cash transfer into a portfolio's cash, is an outflow in the link's category;
     * a sale, or a cash transfer out of a portfolio's cash, is an inflow to Ready to Assign;
@@ -37,9 +38,9 @@ defmodule Abakus.Depot.BudgetLink do
   def change_link(attrs \\ %{}),
     do: Link.changeset(%Link{start_date: LocalTime.today()}, attrs)
 
-  @doc "The regular budget categories purchases can be booked in, grouped for a select."
-  def category_options do
-    for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(),
+  @doc "The user's regular budget categories purchases can be booked in, grouped for a select."
+  def category_options(%Scope{} = scope) do
+    for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(scope),
         do: {group.name, Enum.map(categories, &{&1.name, &1.id})}
   end
 
@@ -48,54 +49,72 @@ defmodule Abakus.Depot.BudgetLink do
   since then. Returns `{:ok, link}`, `{:error, changeset}`, `{:error, :not_budget_owner}`, `{:error, :linked}` or
   `{:error, message}` when a linked transaction cannot be written.
   """
-  def switch_on(%Scope{user: %User{budget_owner: true} = user}, attrs) do
-    Repo.transact(fn -> link(user, attrs) end)
+  def switch_on(%Scope{} = scope, attrs) do
+    if Scope.budget_owner?(scope),
+      do: Repo.transact(fn -> link(scope, attrs) end),
+      else: {:error, :not_budget_owner}
   end
 
-  def switch_on(%Scope{}, _attrs), do: {:error, :not_budget_owner}
-
-  defp link(user, attrs) do
+  defp link(%Scope{user: user} = scope, attrs) do
     with :ok <- if(Repo.get(Link, user.id), do: {:error, :linked}, else: :ok),
          {:ok, link} <-
            %Link{user_id: user.id}
            |> Link.changeset(attrs)
            |> validate_category()
            |> Repo.insert(),
-         :ok <- sync(user.id) do
+         :ok <- sync(scope) do
       {:ok, link}
     end
   end
 
-  @doc "Changes the category of later purchases; linked transactions keep theirs."
-  def change_category(%Link{} = link, category_id) do
-    link
-    |> Link.changeset(%{category_id: category_id})
-    |> validate_category()
-    |> Repo.update()
+  @doc """
+  Changes the category of the user's later purchases; linked transactions keep theirs. Returns `{:ok, link}`,
+  `{:error, changeset}` or `{:error, :not_linked}`.
+  """
+  def change_category(%Scope{} = scope, category_id) do
+    case get(scope) do
+      nil ->
+        {:error, :not_linked}
+
+      link ->
+        link
+        |> Link.changeset(%{category_id: category_id})
+        |> validate_category()
+        |> Repo.update()
+    end
   end
 
-  defp validate_category(changeset) do
+  defp validate_category(%Changeset{data: %Link{user_id: user_id}} = changeset) do
     Changeset.validate_change(changeset, :category_id, fn :category_id, id ->
-      if Repo.exists?(from c in Category, where: c.id == ^id and not c.internal),
-        do: [],
-        else: [category_id: "ist keine Kategorie des Budgets"]
+      if Repo.exists?(
+           from c in Category, where: c.id == ^id and c.user_id == ^user_id and not c.internal
+         ),
+         do: [],
+         else: [category_id: "ist keine Kategorie des Budgets"]
     end)
   end
 
-  @doc "Whether anything is linked, which a wipe of the budget would break."
-  def in_use?, do: Repo.exists?(Link) or Repo.exists?(LinkedTransaction)
+  @doc "Whether the user's Depot is linked, which a wipe of their budget would break."
+  def in_use?(%Scope{user: %User{id: user_id}}),
+    do:
+      Repo.exists?(where(Link, user_id: ^user_id)) or
+        Repo.exists?(where(LinkedTransaction, user_id: ^user_id))
 
-  @doc "Moves the link's category from one budget category to another, as deleting `from_id` does."
-  def recategorize(from_id, to_id) do
-    Repo.update_all(where(Link, category_id: ^from_id), set: [category_id: to_id])
+  @doc "Moves the user's link's category from one budget category to another, as deleting `from_id` does."
+  def recategorize(%Scope{user: %User{id: user_id}}, from_id, to_id) do
+    Repo.update_all(where(Link, user_id: ^user_id, category_id: ^from_id),
+      set: [category_id: to_id]
+    )
+
     :ok
   end
 
-  @doc "Which of `transaction_ids` the Depot wrote as linked transactions or their transfer counterparts."
-  def linked_ids(transaction_ids) do
+  @doc "Which of `transaction_ids` the Depot wrote as the user's linked transactions or their transfer counterparts."
+  def linked_ids(%Scope{user: %User{id: user_id}}, transaction_ids) do
     Repo.all(
       from l in LinkedTransaction,
         join: t in assoc(l, :transaction),
+        where: l.user_id == ^user_id,
         where: t.id in ^transaction_ids or t.transfer_transaction_id in ^transaction_ids,
         select: [t.id, t.transfer_transaction_id]
     )
@@ -105,17 +124,17 @@ defmodule Abakus.Depot.BudgetLink do
   end
 
   @doc """
-  Brings the linked transactions of the user with `user_id` in line with their Depot transactions, inside the
-  caller's database transaction. Returns `:ok` or `{:error, message}`, in German.
+  Brings the scope's user's linked transactions in line with their Depot transactions, inside the caller's
+  database transaction. Returns `:ok` or `{:error, message}`, in German.
   """
-  def sync(user_id) do
+  def sync(%Scope{user: %User{id: user_id}} = scope) do
     link = Repo.get(Link, user_id)
     wanted = if link, do: wanted_by_depot_transaction(link), else: %{}
     linked = linked_transactions(user_id)
 
-    with :ok <- each(linked, &remove_unwanted(&1, wanted)) do
+    with :ok <- each(linked, &remove_unwanted(scope, &1, wanted)) do
       kept = Map.new(Enum.filter(linked, &kept?(&1, wanted)), &{&1.depot_transaction_id, &1})
-      each(Enum.sort(wanted), fn {id, wanted} -> write(link, id, kept[id], wanted) end)
+      each(Enum.sort(wanted), fn {id, wanted} -> write(scope, link, id, kept[id], wanted) end)
     end
   end
 
@@ -126,7 +145,7 @@ defmodule Abakus.Depot.BudgetLink do
     do:
       is_nil(linked.transaction.deleted_at) and Map.has_key?(wanted, linked.depot_transaction_id)
 
-  defp remove_unwanted(linked, wanted) do
+  defp remove_unwanted(scope, linked, wanted) do
     cond do
       linked.transaction.deleted_at ->
         Repo.delete!(linked)
@@ -137,7 +156,7 @@ defmodule Abakus.Depot.BudgetLink do
 
       true ->
         with {:ok, _deleted} <-
-               Ledger.delete_transaction(linked.transaction, reconciled: :confirmed) do
+               Ledger.delete_transaction(scope, linked.transaction, reconciled: :confirmed) do
           Repo.delete!(linked)
           :ok
         end
@@ -154,8 +173,8 @@ defmodule Abakus.Depot.BudgetLink do
     end)
   end
 
-  defp write(link, depot_transaction_id, nil, wanted) do
-    with {:ok, transaction} <- Ledger.create_transaction(new_attrs(link, wanted)) do
+  defp write(scope, link, depot_transaction_id, nil, wanted) do
+    with {:ok, transaction} <- Ledger.create_transaction(scope, new_attrs(scope, link, wanted)) do
       %LinkedTransaction{user_id: link.user_id, depot_transaction_id: depot_transaction_id}
       |> written(transaction, wanted)
       |> Repo.insert!()
@@ -164,7 +183,7 @@ defmodule Abakus.Depot.BudgetLink do
     end
   end
 
-  defp write(_link, _id, linked, wanted) do
+  defp write(scope, _link, _id, linked, wanted) do
     written = %{
       account_id: linked.written_account_id,
       amount: linked.written_amount,
@@ -175,16 +194,16 @@ defmodule Abakus.Depot.BudgetLink do
     attrs =
       wanted
       |> Map.take([:account_id, :amount, :date])
-      |> Map.merge(payee_attrs(wanted.payee))
+      |> Map.merge(payee_attrs(scope, wanted.payee))
       |> Enum.reject(fn {field, value} -> Map.get(written, field) == value end)
       |> Map.new()
 
-    if attrs == %{}, do: :ok, else: rewrite(linked, attrs, wanted)
+    if attrs == %{}, do: :ok, else: rewrite(scope, linked, attrs, wanted)
   end
 
-  defp rewrite(linked, attrs, wanted) do
+  defp rewrite(scope, linked, attrs, wanted) do
     with {:ok, transaction} <-
-           Ledger.update_transaction(linked.transaction, attrs, reconciled: :confirmed) do
+           Ledger.update_transaction(scope, linked.transaction, attrs, reconciled: :confirmed) do
       linked |> written(transaction, wanted) |> Repo.insert_or_update!()
       :ok
     end
@@ -200,27 +219,29 @@ defmodule Abakus.Depot.BudgetLink do
     )
   end
 
-  defp new_attrs(link, wanted) do
+  defp new_attrs(scope, link, wanted) do
     wanted
     |> Map.take([:account_id, :amount, :date, :memo])
-    |> Map.merge(payee_attrs(wanted.payee))
+    |> Map.merge(payee_attrs(scope, wanted.payee))
     |> Map.merge(%{
-      category_id: if(wanted.amount < 0, do: link.category_id, else: ready_to_assign_id()),
+      category_id:
+        if(wanted.amount < 0,
+          do: link.category_id,
+          else: Categories.ready_to_assign!(scope).id
+        ),
       cleared: :uncleared,
       source: :depot
     })
   end
 
-  defp payee_attrs({:transfer, payee_id}), do: %{payee_id: payee_id}
+  defp payee_attrs(_scope, {:transfer, payee_id}), do: %{payee_id: payee_id}
 
-  defp payee_attrs({:name, name}) do
-    case Ledger.find_payee_by_name(name) do
+  defp payee_attrs(scope, {:name, name}) do
+    case Ledger.find_payee_by_name(scope, name) do
       %{transfer_account_id: nil, id: id} -> %{payee_id: id}
       _none -> %{payee_name: name}
     end
   end
-
-  defp ready_to_assign_id, do: Categories.ready_to_assign!().id
 
   defp wanted_by_depot_transaction(%Link{} = link) do
     context = context(link.user_id)

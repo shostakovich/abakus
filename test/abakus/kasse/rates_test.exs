@@ -3,17 +3,19 @@ defmodule Abakus.Kasse.RatesTest do
 
   import Abakus.Kasse.ActivityTexts
   import Abakus.KasseFixtures
+  import Abakus.UsersFixtures
 
   alias Abakus.ExchangeRates
   alias Abakus.ExchangeRates.ExchangeRate
-  alias Abakus.Kasse.{Expenses, Rates}
+  alias Abakus.Kasse.{AccessError, Expenses, Rates}
   alias Abakus.Money
+  alias Abakus.Users.Scope
 
   @today ~D[2026-10-02]
 
   defp ecb!(currency, date, rate), do: ExchangeRates.store([{currency, date, Decimal.new(rate)}])
 
-  defp rate(currency, date), do: Rates.rate(currency, date, today: @today)
+  defp rate(currency, date), do: Rates.rate(Scope.system(), currency, date, today: @today)
 
   setup do
     ecb!("USD", ~D[2026-09-29], "1.10")
@@ -22,7 +24,17 @@ defmodule Abakus.Kasse.RatesTest do
     :ok
   end
 
-  describe "rate/3" do
+  test "refuse a signed-in user who is not a person" do
+    outsider = Scope.for_user(user_fixture())
+    attrs = %{currency: "USD", date: ~D[2026-09-30], rate: 1.2}
+
+    assert_raise AccessError, fn -> Rates.rate(outsider, "USD", ~D[2026-09-30]) end
+    assert_raise AccessError, fn -> Rates.put_manual_rate(outsider, attrs) end
+    assert_raise AccessError, fn -> Rates.delete_manual_rate(outsider, "USD", ~D[2026-09-30]) end
+    assert ExchangeRates.list_manual_rates() == []
+  end
+
+  describe "rate/4" do
     test "is 1 for euros" do
       assert rate(" eur ", ~D[2026-09-01]) ==
                {:ok, %{currency: "EUR", source: :fixed, date: ~D[2026-09-01], rate: 1.0}}
@@ -35,17 +47,17 @@ defmodule Abakus.Kasse.RatesTest do
       assert {:ok, %{date: ~D[2026-09-29], rate: 1.1}} = rate("USD", ~D[2026-09-29])
 
       assert {:ok, %{date: ~D[2026-09-30]}} =
-               Rates.rate("USD", ~D[2026-10-10], today: ~D[2026-10-10])
+               Rates.rate(Scope.system(), "USD", ~D[2026-10-10], today: ~D[2026-10-10])
 
-      assert Rates.rate("USD", ~D[2026-10-11], today: ~D[2026-10-11]) ==
+      assert Rates.rate(Scope.system(), "USD", ~D[2026-10-11], today: ~D[2026-10-11]) ==
                {:error, :no_rate}
     end
 
     test "counts a date after today as today" do
       assert {:ok, %{date: ~D[2026-09-30]}} =
-               Rates.rate("USD", ~D[2026-12-24], today: ~D[2026-10-02])
+               Rates.rate(Scope.system(), "USD", ~D[2026-12-24], today: ~D[2026-10-02])
 
-      assert Rates.rate("USD", ~D[2026-12-24], today: ~D[2026-12-24]) ==
+      assert Rates.rate(Scope.system(), "USD", ~D[2026-12-24], today: ~D[2026-12-24]) ==
                {:error, :no_rate}
     end
 
@@ -67,7 +79,11 @@ defmodule Abakus.Kasse.RatesTest do
   describe "manual rates" do
     setup do
       {:ok, _rate} =
-        Rates.put_manual_rate(nil, %{currency: " usd ", date: ~D[2026-09-30], rate: 1.2})
+        Rates.put_manual_rate(Scope.system(), %{
+          currency: " usd ",
+          date: ~D[2026-09-30],
+          rate: 1.2
+        })
 
       :ok
     end
@@ -76,14 +92,14 @@ defmodule Abakus.Kasse.RatesTest do
       assert {:ok, %{source: :manual, rate: 1.2}} = rate("USD", ~D[2026-10-02])
 
       assert {:ok, %{source: :manual, rate: 1.2}} =
-               Rates.rate("USD", ~D[2027-05-01], today: ~D[2027-05-01])
+               Rates.rate(Scope.system(), "USD", ~D[2027-05-01], today: ~D[2027-05-01])
 
       assert {:ok, %{source: :ecb, rate: 1.1}} = rate("USD", ~D[2026-09-29])
     end
 
     test "replace a manual rate of the same day, but leave the ECB rate" do
       {:ok, _rate} =
-        Rates.put_manual_rate(nil, %{currency: "USD", date: ~D[2026-09-30], rate: 1.21})
+        Rates.put_manual_rate(Scope.system(), %{currency: "USD", date: ~D[2026-09-30], rate: 1.21})
 
       assert [%ExchangeRate{currency: "USD", rate: rate}] = ExchangeRates.list_manual_rates()
       assert Decimal.equal?(rate, "1.21")
@@ -94,9 +110,9 @@ defmodule Abakus.Kasse.RatesTest do
 
     test "are logged when saved and deleted" do
       {:ok, _rate} =
-        Rates.put_manual_rate(nil, %{currency: "USD", date: ~D[2026-09-30], rate: 1.21})
+        Rates.put_manual_rate(Scope.system(), %{currency: "USD", date: ~D[2026-09-30], rate: 1.21})
 
-      {:ok, _activity} = Rates.delete_manual_rate(nil, "usd", ~D[2026-09-30])
+      {:ok, _activity} = Rates.delete_manual_rate(Scope.system(), "usd", ~D[2026-09-30])
 
       assert activity_texts() == [
                "Manueller Kurs für USD ab 30.09.2026 gelöscht",
@@ -106,17 +122,20 @@ defmodule Abakus.Kasse.RatesTest do
     end
 
     test "leave the ECB rate of their day when deleted" do
-      {:ok, _activity} = Rates.delete_manual_rate(nil, "USD", ~D[2026-09-30])
+      {:ok, _activity} = Rates.delete_manual_rate(Scope.system(), "USD", ~D[2026-09-30])
 
       assert {:ok, %{source: :ecb, rate: 1.11}} = rate("USD", ~D[2026-10-02])
       assert ExchangeRates.list_manual_rates() == []
     end
 
     test "cannot be deleted twice, or for a currency that has none" do
-      {:ok, _activity} = Rates.delete_manual_rate(nil, "USD", ~D[2026-09-30])
+      {:ok, _activity} = Rates.delete_manual_rate(Scope.system(), "USD", ~D[2026-09-30])
 
-      assert Rates.delete_manual_rate(nil, "USD", ~D[2026-09-30]) == {:error, :not_found}
-      assert Rates.delete_manual_rate(nil, "GBP", ~D[2026-09-30]) == {:error, :not_found}
+      assert Rates.delete_manual_rate(Scope.system(), "USD", ~D[2026-09-30]) ==
+               {:error, :not_found}
+
+      assert Rates.delete_manual_rate(Scope.system(), "GBP", ~D[2026-09-30]) ==
+               {:error, :not_found}
     end
 
     for {currency, rate, field, message} <- [
@@ -129,7 +148,7 @@ defmodule Abakus.Kasse.RatesTest do
         ] do
       test "refuse #{currency} at #{inspect(rate)}" do
         assert {:error, changeset} =
-                 Rates.put_manual_rate(nil, %{
+                 Rates.put_manual_rate(Scope.system(), %{
                    currency: unquote(currency),
                    date: ~D[2026-09-30],
                    rate: unquote(rate)
@@ -141,7 +160,7 @@ defmodule Abakus.Kasse.RatesTest do
 
     test "need a date" do
       assert {:error, changeset} =
-               Rates.put_manual_rate(nil, %{currency: "USD", rate: 1.2})
+               Rates.put_manual_rate(Scope.system(), %{currency: "USD", rate: 1.2})
 
       assert errors_on(changeset) == %{date: ["Bitte ein Datum angeben."]}
     end
@@ -150,10 +169,10 @@ defmodule Abakus.Kasse.RatesTest do
   test "a foreign expense saved now has the euro amount of the rate parsed from the ECB's text" do
     h = household()
     ecb!("JPY", ~D[2026-09-30], "158.37")
-    form = Expenses.new_form(today: @today, participant_id: h.anna)
+    form = Expenses.new_form(scope_of(h.anna), today: @today)
     form = %{form | title: "Ramen", amount: "12345", currency: "JPY", category_id: h.food}
 
-    {:ok, expense} = Expenses.save_form(nil, form, nil, today: @today)
+    {:ok, expense} = Expenses.save_form(Scope.system(), form, nil, today: @today)
 
     assert {expense.fx_rate, expense.fx_source} == {String.to_float("158.37"), :ecb}
 

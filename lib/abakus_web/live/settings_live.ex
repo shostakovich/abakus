@@ -92,7 +92,10 @@ defmodule AbakusWeb.SettingsLive do
      socket
      |> assign(:section, section)
      |> assign(:page_title, @titles[section])
-     |> assign(:ynab_status, if(section == :ynab_import, do: YnabImport.status()))}
+     |> assign(
+       :ynab_status,
+       if(section == :ynab_import, do: YnabImport.status(socket.assigns.current_scope))
+     )}
   end
 
   defp ensure_budget!(scope),

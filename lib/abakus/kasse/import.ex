@@ -9,9 +9,10 @@ defmodule Abakus.Kasse.Import do
   """
 
   alias Abakus.ExchangeRates.ExchangeRate
+  alias Abakus.Kasse.Access
   alias Abakus.Repo
   alias Abakus.Users
-  alias Abakus.Users.User
+  alias Abakus.Users.{Scope, User}
   alias Exqlite.Sqlite3
 
   # In the order of their foreign keys; the old app's tables lack the prefix.
@@ -22,10 +23,12 @@ defmodule Abakus.Kasse.Import do
   @chunk 200
 
   @doc """
-  Imports the file at `path`; `emails` gives each person's email address by name (case-insensitive).
-  Returns the rows imported per table and the users matched and created, by email.
+  Imports the file at `path` with the system's scope; `emails` gives each person's email address by name
+  (case-insensitive). Returns the rows imported per table and the users matched and created, by email.
   """
-  def run(path, emails) do
+  def run(%Scope{} = scope, path, emails) do
+    Access.system!(scope)
+
     with {:ok, data} <- read(path),
          {:ok, emails} <- emails_by_id(data["participants"], emails) do
       Repo.transact(fn -> write_once(data, emails) end)

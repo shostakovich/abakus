@@ -15,11 +15,12 @@ defmodule AbakusWeb.Kasse.RecurringLive do
     do: {:ok, socket |> assign(page_title: "Wiederkehrende Ausgaben") |> load()}
 
   defp load(socket) do
-    people = Map.new(Participants.list_participants(:all), &{&1.id, &1.name})
-    categories = Map.new(Categories.list_categories(:all), &{&1.id, &1})
+    scope = socket.assigns.current_scope
+    people = Map.new(Participants.list_participants(scope, :all), &{&1.id, &1.name})
+    categories = Map.new(Categories.list_categories(scope, :all), &{&1.id, &1})
 
     rows =
-      for %{template: template} = rule <- Recurring.list_rules() do
+      for %{template: template} = rule <- Recurring.list_rules(scope) do
         %{
           rule: rule,
           payer: people[template.paid_by_id],
@@ -36,8 +37,8 @@ defmodule AbakusWeb.Kasse.RecurringLive do
 
   @impl true
   def handle_event("pause", %{"id" => id}, socket) do
-    with_rule(socket, id, fn rule, me ->
-      case Recurring.pause_rule(me, rule) do
+    with_rule(socket, id, fn rule, scope ->
+      case Recurring.pause_rule(scope, rule) do
         {:ok, _rule} -> put_flash(socket, :info, "Pausiert.")
         {:error, :not_found} -> not_found(socket)
       end
@@ -45,8 +46,8 @@ defmodule AbakusWeb.Kasse.RecurringLive do
   end
 
   def handle_event("resume", %{"id" => id}, socket) do
-    with_rule(socket, id, fn rule, me ->
-      case Recurring.resume_rule(me, rule) do
+    with_rule(socket, id, fn rule, scope ->
+      case Recurring.resume_rule(scope, rule) do
         {:ok, _rule, 0} ->
           put_flash(socket, :info, "Fortgesetzt.")
 
@@ -60,8 +61,8 @@ defmodule AbakusWeb.Kasse.RecurringLive do
   end
 
   def handle_event("refresh_template", %{"id" => id}, socket) do
-    with_rule(socket, id, fn rule, me ->
-      case Recurring.refresh_template(me, rule) do
+    with_rule(socket, id, fn rule, scope ->
+      case Recurring.refresh_template(scope, rule) do
         {:ok, _rule} ->
           put_flash(socket, :info, "Vorlage aus der letzten Ausgabe übernommen.")
 
@@ -79,8 +80,8 @@ defmodule AbakusWeb.Kasse.RecurringLive do
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
-    with_rule(socket, id, fn rule, me ->
-      case Recurring.delete_rule(me, rule) do
+    with_rule(socket, id, fn rule, scope ->
+      case Recurring.delete_rule(scope, rule) do
         {:ok, _rule} ->
           put_flash(
             socket,
@@ -95,9 +96,11 @@ defmodule AbakusWeb.Kasse.RecurringLive do
   end
 
   defp with_rule(socket, id, fun) do
+    scope = socket.assigns.current_scope
+
     socket =
-      case Recurring.get_rule(id) do
-        %RecurringExpense{} = rule -> fun.(rule, socket.assigns.current_participant.id)
+      case Recurring.get_rule(scope, id) do
+        %RecurringExpense{} = rule -> fun.(rule, scope)
         nil -> not_found(socket)
       end
 

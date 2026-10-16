@@ -1,6 +1,7 @@
 defmodule Abakus.Depot.PPImportTest do
   use Abakus.DataCase
 
+  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import Abakus.Depot.SecuritiesFixtures, only: [security_fixture: 1]
   import Abakus.UsersFixtures
 
@@ -16,6 +17,7 @@ defmodule Abakus.Depot.PPImportTest do
   }
 
   alias Abakus.Depot.Portfolios.Transaction
+  alias Abakus.Depot.PortfoliosFixtures
   alias Abakus.Depot.PPImport.Reader
   alias Abakus.Depot.Securities.{Price, Security}
   alias Abakus.{DomainFixtures, Ledger}
@@ -227,14 +229,18 @@ defmodule Abakus.Depot.PPImportTest do
 
     defp in_giro(giro),
       do:
-        Repo.all(from t in Ledger.in_register(), where: t.account_id == ^giro.id, order_by: t.id)
+        Repo.all(
+          from t in Ledger.in_register(budget_scope()),
+            where: t.account_id == ^giro.id,
+            order_by: t.id
+        )
 
     defp first_buy(client), do: Enum.find(client.transactions, &(&1.note == "Erstkauf"))
 
     test "a re-import changes a linked transaction's amount and keeps its category", c do
       [outflow | _] = Enum.filter(in_giro(c.giro), &(&1.amount == -100_550))
       other = DomainFixtures.category_fixture()
-      {:ok, _} = Ledger.update_transaction(outflow, %{category_id: other.id})
+      {:ok, _} = Ledger.update_transaction(budget_scope(), outflow, %{category_id: other.id})
 
       buy = first_buy(c.client)
 
@@ -485,7 +491,17 @@ defmodule Abakus.Depot.PPImportTest do
 
     assert summary.portfolios.deleted == 2
     assert Enum.all?(accounts, &Repo.reload!(&1).closed)
-    refute BudgetFeed.in_use?()
+    refute BudgetFeed.in_use?(budget_scope())
+  end
+
+  test "only the budget owner's import brings their portfolios' accounts in line", %{scope: scope} do
+    untied = PortfoliosFixtures.portfolio_fixture(scope, %{name: "Ohne Konto"})
+
+    {:ok, _} = PPImport.run(user_scope_fixture(), @sample)
+    assert Repo.reload!(untied).budget_account_id == nil
+
+    {:ok, _} = PPImport.run(scope, @sample)
+    assert Repo.reload!(untied).budget_account_id
   end
 
   test "keeps a security PP recreated under a new UUID", %{scope: scope, client: client} do

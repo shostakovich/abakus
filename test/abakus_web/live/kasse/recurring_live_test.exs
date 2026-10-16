@@ -9,6 +9,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
   alias Abakus.Kasse.{Expenses, Recurring}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.{LocalTime, Repo}
+  alias Abakus.Users.Scope
   alias Setzkasten.Format
 
   setup %{conn: conn} do
@@ -22,7 +23,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
   defp due_rule(h, title \\ "Gemüsekiste") do
     expense = create!(equal(h, title, 2890, days_ago(7), h.ben, [h.anna, h.ben]), h.ben)
     yesterday = Date.add(LocalTime.today(), -1)
-    {:ok, rule, 0} = Recurring.create_rule(h.anna, expense, :weekly, today: yesterday)
+    {:ok, rule, 0} = Recurring.create_rule(scope_of(h.anna), expense, :weekly, today: yesterday)
     rule
   end
 
@@ -54,7 +55,7 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
 
   test "pausing and resuming, which enters the dates due since", %{conn: conn, h: h} do
     rule = due_rule(h)
-    {:ok, _paused} = Recurring.pause_rule(h.anna, rule)
+    {:ok, _paused} = Recurring.pause_rule(scope_of(h.anna), rule)
 
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/recurring")
     assert texts(view, "#rule-#{rule.id} .badge") == ["pausiert"]
@@ -77,8 +78,8 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
     view |> element("#rule-#{rule.id}-template-menu-item") |> render_click()
     assert flash(view, :info) == "Vorlage aus der letzten Ausgabe übernommen."
 
-    [expense] = Expenses.list_expenses()
-    {:ok, _deleted} = Expenses.delete_expense(h.anna, expense)
+    [expense] = Expenses.list_expenses(Scope.system())
+    {:ok, _deleted} = Expenses.delete_expense(scope_of(h.anna), expense)
     view |> element("#rule-#{rule.id}-template-menu-item") |> render_click()
 
     assert flash(view, :error) ==
@@ -103,13 +104,13 @@ defmodule AbakusWeb.Kasse.RecurringLiveTest do
              "Wiederholung gelöscht. Bereits angelegte Ausgaben bleiben erhalten."
 
     refute has_element?(view, "#rule-#{rule.id}")
-    assert [%Expense{recurring_expense_id: nil}] = Expenses.list_expenses()
+    assert [%Expense{recurring_expense_id: nil}] = Expenses.list_expenses(Scope.system())
   end
 
   test "a rule that is gone meanwhile", %{conn: conn, h: h} do
     rule = due_rule(h)
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/recurring")
-    {:ok, _deleted} = Recurring.delete_rule(h.anna, rule)
+    {:ok, _deleted} = Recurring.delete_rule(scope_of(h.anna), rule)
 
     view |> element("#rule-#{rule.id}-pause") |> render_click()
 

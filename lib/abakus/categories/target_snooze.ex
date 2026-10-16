@@ -11,16 +11,17 @@ defmodule Abakus.Categories.TargetSnooze do
     field :month, :date
 
     belongs_to :category, Category
+    belongs_to :user, Abakus.Users.User
 
     timestamps()
   end
 
-  @doc "Changeset for a snooze whose `category_id` is set; any day stands for its month."
+  @doc "Changeset for a snooze whose `category_id` and `user_id` are set; any day stands for its month."
   def changeset(snooze, attrs) do
     snooze
     |> cast(attrs, [:month])
     |> update_change(:month, &Date.beginning_of_month/1)
-    |> validate_required([:category_id, :month])
+    |> validate_required([:category_id, :user_id, :month])
     |> unique_constraint([:category_id, :month])
   end
 end

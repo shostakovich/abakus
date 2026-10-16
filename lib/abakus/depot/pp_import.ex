@@ -40,21 +40,25 @@ defmodule Abakus.Depot.PPImport do
   end
 
   @doc "Imports a file already parsed by `Abakus.Depot.PPImport.Reader`."
-  def import_client(%Scope{user: user}, client) do
+  def import_client(%Scope{} = scope, client) do
     # A large file takes longer than the default 15 s checkout timeout.
     Repo.transact(
       fn ->
-        summary = do_import(user.id, client)
-        with :ok <- BudgetLink.sync(user.id), do: {:ok, summary}
+        summary = do_import(scope, client)
+        with :ok <- BudgetLink.sync(scope), do: {:ok, summary}
       end,
       timeout: :timer.minutes(5)
     )
   end
 
-  defp do_import(user_id, client) do
+  defp do_import(scope, client) do
     empty = %{created: 0, updated: 0, deleted: 0}
 
-    %{user_id: user_id, summary: Map.new(@kinds, &{&1, empty})}
+    %{
+      user_id: scope.user.id,
+      budget_owner?: Scope.budget_owner?(scope),
+      summary: Map.new(@kinds, &{&1, empty})
+    }
     |> import_attribute_types(client)
     |> import_securities(client)
     |> import_prices(client)
@@ -541,7 +545,7 @@ defmodule Abakus.Depot.PPImport do
       )
       |> delete_or_detach(:accounts, Account, ctx.stale_accounts, :account_id, :other_account_id)
 
-    BudgetFeed.sync_accounts()
+    if ctx.budget_owner?, do: BudgetFeed.sync_accounts()
 
     link_ids = Enum.map(ctx.stale_links, & &1.id)
     Repo.delete_all(from l in PPSecurityLink, where: l.id in ^link_ids)

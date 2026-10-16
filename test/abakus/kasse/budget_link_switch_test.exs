@@ -4,13 +4,14 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
   import Abakus.DomainFixtures
   import Abakus.KasseFixtures
 
-  alias Abakus.Kasse.{Activities, BudgetLink, Expenses, Participants}
+  alias Abakus.Kasse.{Activities, BudgetLink, Expenses}
   alias Abakus.Kasse.BudgetLink.{Link, LinkedTransaction}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Ynab
   alias Abakus.Kasse.Ynab.Posting
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
+  alias Abakus.Users.Scope
 
   @start ~D[2026-03-01]
 
@@ -19,7 +20,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     account = account_fixture(%{name: "Geteilt", kind: :cash})
     groceries = category_fixture(%{name: "🛒 Lebensmittel"})
     treats = category_fixture(%{name: "🍷 Genuss"})
-    {:ok, _mapping} = BudgetLink.put_category_mapping(%{h.food => groceries.id})
+    {:ok, _mapping} = BudgetLink.put_category_mapping(scope_of(h.anna), %{h.food => groceries.id})
 
     Repo.insert!(%Ynab.Connection{
       participant_id: h.anna,
@@ -38,9 +39,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     %{h: h, account: account, groceries: groceries.id, treats: treats.id}
   end
 
-  defp anna(h), do: Participants.get_participant!(h.anna)
-
-  defp switch_on(c), do: BudgetLink.switch_on(anna(c.h), c.account.id)
+  defp switch_on(c), do: BudgetLink.switch_on(scope_of(c.h.anna), c.account.id)
 
   defp expense!(h, title, cents, date, payer \\ nil),
     do: create!(equal(h, title, cents, date, payer || h.ben, [h.anna, h.ben]))
@@ -85,7 +84,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       _twice = imported!(c, weekly)
       older_ynab = imported!(c, older)
       gone_ynab = imported!(c, gone)
-      {:ok, _deleted} = Expenses.delete_expense(c.h.ben, gone)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), gone)
 
       Repo.insert!(%Ynab.Transaction{
         expense_id: weekly.id,
@@ -129,7 +128,9 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       assert Repo.all(Ynab.Connection) == []
       assert Repo.all(Ynab.CategoryMapping) == []
       assert Repo.all(Ynab.Transaction) == []
-      assert hd(Activities.list_activities()).details.text == "YNAB-Verbindung entfernt"
+
+      assert hd(Activities.list_activities(Scope.system())).details.text ==
+               "YNAB-Verbindung entfernt"
     end
 
     test "leaves a split or a transfer with the marker as it is and books its expense not twice",
@@ -199,12 +200,12 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
           date: ~D[2026-02-10]
         })
 
-      {:ok, older} = Expenses.update_expense(c.h.ben, older, changed)
+      {:ok, older} = Expenses.update_expense(scope_of(c.h.ben), older, changed)
 
       assert %{id: id, amount: -3000, date: ~D[2026-02-10], category_id: treats} = linked(older)
       assert {id, treats} == {older_ynab.id, c.treats}
 
-      {:ok, _deleted} = Expenses.delete_expense(c.h.ben, older)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), older)
       assert Repo.reload!(older_ynab).deleted_at
     end
 
@@ -227,7 +228,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     end
 
     test "links only the budget owner's participant", c do
-      assert BudgetLink.switch_on(Participants.get_participant!(c.h.ben), c.account.id) ==
+      assert BudgetLink.switch_on(scope_of(c.h.ben), c.account.id) ==
                {:error, :not_budget_owner}
     end
 
@@ -242,12 +243,12 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       depot = account_fixture(%{kind: :checking, fed_by: :portfolio})
 
       for id <- [closed.id, tracking.id, depot.id, "", "x", -1] do
-        assert BudgetLink.switch_on(anna(c.h), id) == {:error, :no_account}
+        assert BudgetLink.switch_on(scope_of(c.h.anna), id) == {:error, :no_account}
       end
 
       assert Repo.all(Link) == []
       assert Repo.get(Ynab.Connection, c.h.anna)
-      assert BudgetLink.account_choices() |> Enum.map(& &1.id) == [c.account.id]
+      assert BudgetLink.account_choices(scope_of(c.h.anna)) |> Enum.map(& &1.id) == [c.account.id]
     end
   end
 
@@ -260,7 +261,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
 
     test "an older expense gets no transaction when it changes", c do
       changed = Map.merge(Expenses.input(c.older), %{amount_cents: 6000, original_amount: 6000})
-      {:ok, older} = Expenses.update_expense(c.h.ben, c.older, changed)
+      {:ok, older} = Expenses.update_expense(scope_of(c.h.ben), c.older, changed)
 
       assert linked(older) == nil
     end
@@ -268,7 +269,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     test "an older expense gets one once moved after the start date", c do
       {:ok, older} =
         Expenses.update_expense(
-          c.h.ben,
+          scope_of(c.h.ben),
           c.older,
           Map.put(Expenses.input(c.older), :date, ~D[2026-03-02])
         )
@@ -283,7 +284,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     end
 
     test "the account takes no entries and offers no reconcile", c do
-      account = Ledger.get_account!(c.account.id)
+      account = Ledger.get_account!(budget_scope(), c.account.id)
       refute Account.takes_entries?(account)
       refute Account.reconcilable?(account)
     end

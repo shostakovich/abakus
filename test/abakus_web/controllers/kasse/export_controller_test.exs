@@ -9,7 +9,7 @@ defmodule AbakusWeb.Kasse.ExportControllerTest do
     anna = person!("Anna")
 
     {:ok, _expense} =
-      Expenses.create_expense(anna.id, %{
+      Expenses.create_expense(scope_of(anna.id), %{
         title: "Rewe",
         date: ~D[2026-09-01],
         paid_by_id: anna.id,

@@ -2,10 +2,12 @@ defmodule Abakus.Kasse.ExpensesTest do
   use Abakus.DataCase
 
   import Abakus.KasseFixtures
+  import Abakus.UsersFixtures
 
-  alias Abakus.Kasse.{Activities, Balances, Categories, Expenses, Participants}
+  alias Abakus.Kasse.{AccessError, Activities, Balances, Categories, Expenses, Participants}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Recurring.RecurringExpense
+  alias Abakus.Users.Scope
 
   setup do
     %{h: household()}
@@ -17,9 +19,63 @@ defmodule Abakus.Kasse.ExpensesTest do
 
   defp changes(expense) do
     [%{action: :expense_updated, details: details}] =
-      Activities.list_activities(expense_id: expense.id, limit: 1)
+      Activities.list_activities(Scope.system(), expense_id: expense.id, limit: 1)
 
     Map.new(details.changes, &{&1.field, {&1.old, &1.new}})
+  end
+
+  describe "the caller" do
+    test "a person creates, changes and deletes an expense another person paid", %{h: h} do
+      ben = scope_of(h.ben)
+      attrs = equal(h, "Einkauf", 1000, "2026-09-30", h.anna, [h.anna, h.ben])
+
+      {:ok, expense} = Expenses.create_expense(ben, attrs)
+      {:ok, expense} = Expenses.update_expense(ben, expense, %{attrs | amount_cents: 1200})
+      {:ok, _deleted} = Expenses.delete_expense(ben, expense)
+
+      assert [
+               %{action: :expense_deleted, actor_id: ben_id},
+               %{action: :expense_updated, actor_id: ben_id},
+               %{action: :expense_created, actor_id: ben_id}
+             ] = Activities.list_activities(Scope.system(), expense_id: expense.id)
+
+      assert ben_id == h.ben
+    end
+
+    test "the system writes without an actor", %{h: h} do
+      attrs = equal(h, "Einkauf", 1000, "2026-09-30", h.anna, [h.anna])
+
+      {:ok, _expense} = Expenses.create_expense(Scope.system(), attrs)
+
+      assert [%{actor_id: nil}] =
+               Activities.list_activities(Scope.system(), action: :expense_created)
+    end
+
+    test "a signed-in user who is not a person is refused", %{h: h} do
+      outsider = Scope.for_user(user_fixture())
+      attrs = equal(h, "Einkauf", 1000, "2026-09-30", h.anna, [h.anna])
+
+      assert_raise AccessError, fn -> Expenses.create_expense(outsider, attrs) end
+      assert_raise AccessError, fn -> Expenses.list_expenses(outsider) end
+      assert_raise AccessError, fn -> Balances.balances(outsider) end
+      assert_raise AccessError, fn -> Activities.list_activities(outsider) end
+      assert Expenses.list_expenses(Scope.system()) == []
+    end
+
+    test "an archived person is refused", %{h: h} do
+      {:ok, cleo} =
+        Participants.archive_participant(
+          Scope.system(),
+          Participants.get_participant!(Scope.system(), h.cleo)
+        )
+
+      archived = Scope.for_participant(cleo)
+      attrs = equal(h, "Einkauf", 1000, "2026-09-30", h.anna, [h.anna])
+
+      assert_raise AccessError, fn -> Expenses.create_expense(archived, attrs) end
+      assert_raise AccessError, fn -> Expenses.list_expenses(archived) end
+      assert_raise AccessError, fn -> Expenses.new_form(archived, today: ~D[2026-09-30]) end
+    end
   end
 
   describe "creating an expense" do
@@ -52,7 +108,7 @@ defmodule Abakus.Kasse.ExpensesTest do
     end
 
     test "logs the creation and broadcasts it", %{h: h} do
-      Expenses.subscribe()
+      Expenses.subscribe(Scope.system())
 
       expense =
         h |> equal("Einkauf Rewe", 1000, "2026-09-30", h.anna, [h.anna]) |> create!(h.anna)
@@ -68,19 +124,21 @@ defmodule Abakus.Kasse.ExpensesTest do
                  details: details
                }
              ] =
-               Activities.list_activities(expense_id: id)
+               Activities.list_activities(Scope.system(), expense_id: id)
 
       assert {details.title, details.amount_cents, details.changes} == {"Einkauf Rewe", 1000, []}
     end
 
     test "logs a text given for the entry", %{h: h} do
       {:ok, expense} =
-        Expenses.create_expense(h.anna, equal(h, "Kino", 1000, "2026-09-01", h.anna, [h.anna]),
+        Expenses.create_expense(
+          scope_of(h.anna),
+          equal(h, "Kino", 1000, "2026-09-01", h.anna, [h.anna]),
           text: "Über MCP angelegt"
         )
 
       assert [%{details: %{text: "Über MCP angelegt"}}] =
-               Activities.list_activities(expense_id: expense.id)
+               Activities.list_activities(Scope.system(), expense_id: expense.id)
     end
 
     test "predicts the ID of the next expense, also after a deletion", %{h: h} do
@@ -88,7 +146,7 @@ defmodule Abakus.Kasse.ExpensesTest do
       expense = h |> equal("Kaffee", 300, "2026-09-01", h.anna, [h.anna]) |> create!()
       assert expense.id == next
 
-      {:ok, _deleted} = Expenses.delete_expense(h.anna, expense)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(h.anna), expense)
       assert Expenses.next_id() == expense.id + 1
       assert create!(equal(h, "Tee", 300, "2026-09-01", h.anna, [h.anna])).id == expense.id + 1
     end
@@ -99,10 +157,13 @@ defmodule Abakus.Kasse.ExpensesTest do
       )
 
       assert_raise Exqlite.Error, ~r/no activity/, fn ->
-        Expenses.create_expense(h.anna, equal(h, "Kino", 1000, "2026-09-01", h.anna, [h.anna]))
+        Expenses.create_expense(
+          scope_of(h.anna),
+          equal(h, "Kino", 1000, "2026-09-01", h.anna, [h.anna])
+        )
       end
 
-      assert Expenses.list_expenses() == []
+      assert Expenses.list_expenses(Scope.system()) == []
     end
   end
 
@@ -172,10 +233,10 @@ defmodule Abakus.Kasse.ExpensesTest do
       test "rejects an expense #{name}", %{h: h} do
         attrs = (&unquote(change)).(equal(h, "Kino", 2000, "2026-09-01", h.anna, [h.anna, h.ben]))
 
-        assert {:error, changeset} = Expenses.create_expense(h.anna, attrs)
+        assert {:error, changeset} = Expenses.create_expense(scope_of(h.anna), attrs)
         assert %{unquote(field) => [unquote(message)]} = errors_on(changeset)
-        assert Expenses.list_expenses() == []
-        assert Activities.list_activities() |> Enum.filter(& &1.expense_id) == []
+        assert Expenses.list_expenses(Scope.system()) == []
+        assert Activities.list_activities(Scope.system()) |> Enum.filter(& &1.expense_id) == []
       end
     end
 
@@ -187,24 +248,27 @@ defmodule Abakus.Kasse.ExpensesTest do
           String.duplicate("a\r\n", 999) <> "aa"
         )
 
-      assert {:ok, _expense} = Expenses.create_expense(h.anna, attrs)
+      assert {:ok, _expense} = Expenses.create_expense(scope_of(h.anna), attrs)
 
       assert {:error, changeset} =
-               Expenses.create_expense(h.anna, Map.update!(attrs, :notes, &(&1 <> "a")))
+               Expenses.create_expense(scope_of(h.anna), Map.update!(attrs, :notes, &(&1 <> "a")))
 
       assert errors_on(changeset) == %{notes: ["Die Notiz ist zu lang (höchstens 2000 Zeichen)."]}
     end
 
     test "accepts archived people and categories", %{h: h} do
-      [food | _] = Categories.list_categories()
-      {:ok, _archived} = Categories.archive_category(nil, food)
+      [food | _] = Categories.list_categories(Scope.system())
+      {:ok, _archived} = Categories.archive_category(Scope.system(), food)
 
       {:ok, _archived} =
-        Participants.archive_participant(nil, Participants.get_participant!(h.cleo))
+        Participants.archive_participant(
+          Scope.system(),
+          Participants.get_participant!(Scope.system(), h.cleo)
+        )
 
       assert {:ok, _expense} =
                Expenses.create_expense(
-                 h.anna,
+                 scope_of(h.anna),
                  equal(h, "Kino", 1000, "2026-09-01", h.cleo, [h.cleo, h.anna])
                )
     end
@@ -219,13 +283,14 @@ defmodule Abakus.Kasse.ExpensesTest do
     end
 
     test "writes nothing when it is saved unchanged", %{h: h, expense: expense} do
-      Expenses.subscribe()
+      Expenses.subscribe(Scope.system())
 
-      assert {:ok, same} = Expenses.update_expense(h.ben, expense, Expenses.input(expense))
+      assert {:ok, same} =
+               Expenses.update_expense(scope_of(h.ben), expense, Expenses.input(expense))
 
       assert same.updated_at == expense.updated_at
       refute_received {:expenses_changed, _ids}
-      assert length(Activities.list_activities(expense_id: expense.id)) == 1
+      assert length(Activities.list_activities(Scope.system(), expense_id: expense.id)) == 1
     end
 
     test "stores the new values and recomputes the shares", %{h: h, expense: expense} do
@@ -238,7 +303,7 @@ defmodule Abakus.Kasse.ExpensesTest do
           category_id: nil
       }
 
-      assert {:ok, updated} = Expenses.update_expense(h.ben, expense, attrs)
+      assert {:ok, updated} = Expenses.update_expense(scope_of(h.ben), expense, attrs)
 
       assert {updated.title, updated.amount_cents, updated.category_id} ==
                {"Pizza & Wein", 4500, nil}
@@ -250,7 +315,7 @@ defmodule Abakus.Kasse.ExpensesTest do
       h: h,
       expense: expense
     } do
-      Expenses.subscribe()
+      Expenses.subscribe(Scope.system())
 
       attrs = %{
         Expenses.input(expense)
@@ -260,11 +325,13 @@ defmodule Abakus.Kasse.ExpensesTest do
           category_id: nil
       }
 
-      {:ok, _updated} = Expenses.update_expense(h.ben, expense, attrs)
+      {:ok, _updated} = Expenses.update_expense(scope_of(h.ben), expense, attrs)
 
       assert_received {:expenses_changed, [id]}
       assert id == expense.id
-      assert [%{actor: %{name: "Ben"}} | _] = Activities.list_activities(expense_id: expense.id)
+
+      assert [%{actor: %{name: "Ben"}} | _] =
+               Activities.list_activities(Scope.system(), expense_id: expense.id)
 
       assert changes(expense) == %{
                "Betrag" => {"30,00 €", "45,00 €"},
@@ -278,9 +345,14 @@ defmodule Abakus.Kasse.ExpensesTest do
 
     test "logs the details of the update", %{h: h, expense: expense} do
       {:ok, _updated} =
-        Expenses.update_expense(h.anna, expense, %{Expenses.input(expense) | title: "Theater"})
+        Expenses.update_expense(scope_of(h.anna), expense, %{
+          Expenses.input(expense)
+          | title: "Theater"
+        })
 
-      assert [%{details: details} | _] = Activities.list_activities(expense_id: expense.id)
+      assert [%{details: details} | _] =
+               Activities.list_activities(Scope.system(), expense_id: expense.id)
+
       assert {details.title, details.amount_cents, details.text} == {"Theater", 3000, nil}
       assert changes(expense) == %{"Titel" => {"Pizza", "Theater"}}
     end
@@ -295,7 +367,7 @@ defmodule Abakus.Kasse.ExpensesTest do
           assert share(expense, lucky) == 151
 
           {:ok, updated} =
-            Expenses.update_expense(h.anna, expense, %{
+            Expenses.update_expense(scope_of(h.anna), expense, %{
               Expenses.input(expense)
               | amount_cents: 501
             })
@@ -317,16 +389,19 @@ defmodule Abakus.Kasse.ExpensesTest do
         })
 
       attrs = equal(h, "Miete", 100_000, "2026-01-31", h.anna, [h.anna, h.ben])
-      {:ok, _first} = Expenses.create_expense(nil, attrs, recurring_expense_id: rule.id)
+
+      {:ok, _first} =
+        Expenses.create_expense(Scope.system(), attrs, recurring_expense_id: rule.id)
+
       Repo.update_all(where(RecurringExpense, id: ^rule.id), set: [next_date: ~D[2026-02-28]])
 
       {:ok, second} =
-        Expenses.create_expense(nil, %{attrs | date: ~D[2026-02-28]},
+        Expenses.create_expense(Scope.system(), %{attrs | date: ~D[2026-02-28]},
           recurring_expense_id: rule.id
         )
 
       assert {:error, changeset} =
-               Expenses.update_expense(h.anna, second, %{attrs | date: ~D[2026-01-31]})
+               Expenses.update_expense(scope_of(h.anna), second, %{attrs | date: ~D[2026-01-31]})
 
       assert errors_on(changeset) == %{
                recurring_expense_id: [
@@ -335,7 +410,7 @@ defmodule Abakus.Kasse.ExpensesTest do
              }
 
       assert {:error, _changeset} =
-               Expenses.create_expense(nil, attrs, recurring_expense_id: rule.id)
+               Expenses.create_expense(Scope.system(), attrs, recurring_expense_id: rule.id)
     end
   end
 
@@ -348,35 +423,35 @@ defmodule Abakus.Kasse.ExpensesTest do
     end
 
     test "keeps it as deleted, out of the list and the balances", %{h: h, expense: expense} do
-      {:ok, deleted} = Expenses.delete_expense(h.ben, expense)
+      {:ok, deleted} = Expenses.delete_expense(scope_of(h.ben), expense)
 
       assert Expense.deleted?(deleted)
-      assert Expense.deleted?(Expenses.get_expense!(expense.id))
-      assert Expenses.list_expenses() == []
-      assert Balances.balances() == %{}
+      assert Expense.deleted?(Expenses.get_expense!(Scope.system(), expense.id))
+      assert Expenses.list_expenses(Scope.system()) == []
+      assert Balances.balances(Scope.system()) == %{}
     end
 
     test "logs the deletion and broadcasts it", %{h: h, expense: expense} do
-      Expenses.subscribe()
+      Expenses.subscribe(Scope.system())
 
-      {:ok, _deleted} = Expenses.delete_expense(h.ben, expense)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(h.ben), expense)
 
       assert_received {:expenses_changed, [id]}
       assert id == expense.id
 
       assert [%{action: :expense_deleted, details: %{title: "Bahn", amount_cents: 5000}} | _] =
-               Activities.list_activities()
+               Activities.list_activities(Scope.system())
     end
 
     test "refuses to delete or update a deleted expense", %{h: h, expense: expense} do
-      {:ok, _deleted} = Expenses.delete_expense(h.ben, expense)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(h.ben), expense)
 
-      assert Expenses.delete_expense(h.ben, expense) == {:error, :not_found}
+      assert Expenses.delete_expense(scope_of(h.ben), expense) == {:error, :not_found}
 
-      assert Expenses.update_expense(h.ben, expense, Expenses.input(expense)) ==
+      assert Expenses.update_expense(scope_of(h.ben), expense, Expenses.input(expense)) ==
                {:error, :deleted}
 
-      assert Expenses.update_expense(h.ben, %Expense{id: 999}, Expenses.input(expense)) ==
+      assert Expenses.update_expense(scope_of(h.ben), %Expense{id: 999}, Expenses.input(expense)) ==
                {:error, :not_found}
     end
   end
@@ -395,32 +470,46 @@ defmodule Abakus.Kasse.ExpensesTest do
     end
 
     test "lists the newest first, with their shares", %{h: _h} do
-      expenses = Expenses.list_expenses()
+      expenses = Expenses.list_expenses(Scope.system())
 
       assert titles(expenses) == ["Tanken", "Kino 100%", "Rewe Einkauf"]
       assert Enum.all?(expenses, &(&1.shares != []))
     end
 
     test "pages after the last expense shown" do
-      [first, second, third] = Expenses.list_expenses()
+      [first, second, third] = Expenses.list_expenses(Scope.system())
 
-      assert Expenses.list_expenses([], limit: 2) == [first, second]
-      assert Expenses.list_expenses([], limit: 2, after: {second.date, second.id}) == [third]
+      assert Expenses.list_expenses(Scope.system(), [], limit: 2) == [first, second]
+
+      assert Expenses.list_expenses(Scope.system(), [], limit: 2, after: {second.date, second.id}) ==
+               [third]
     end
 
     test "finds a text in the title or the notes, also one with a LIKE wildcard" do
-      assert titles(Expenses.list_expenses(q: " rewe ")) == ["Tanken", "Rewe Einkauf"]
-      assert titles(Expenses.list_expenses(q: "100%")) == ["Kino 100%"]
-      assert length(Expenses.list_expenses(q: "", category_id: nil)) == 3
+      assert titles(Expenses.list_expenses(Scope.system(), q: " rewe ")) == [
+               "Tanken",
+               "Rewe Einkauf"
+             ]
+
+      assert titles(Expenses.list_expenses(Scope.system(), q: "100%")) == ["Kino 100%"]
+      assert length(Expenses.list_expenses(Scope.system(), q: "", category_id: nil)) == 3
     end
 
     test "lists the expenses of a category", %{h: h} do
-      assert titles(Expenses.list_expenses(category_id: h.food)) == ["Kino 100%", "Rewe Einkauf"]
+      assert titles(Expenses.list_expenses(Scope.system(), category_id: h.food)) == [
+               "Kino 100%",
+               "Rewe Einkauf"
+             ]
     end
 
     test "lists the expenses a person paid or shares", %{h: h} do
-      assert titles(Expenses.list_expenses(participant_id: h.cleo)) == ["Tanken", "Kino 100%"]
-      assert titles(Expenses.list_expenses(participant_id: h.cleo, q: "kino")) == ["Kino 100%"]
+      assert titles(Expenses.list_expenses(Scope.system(), participant_id: h.cleo)) == [
+               "Tanken",
+               "Kino 100%"
+             ]
+
+      assert titles(Expenses.list_expenses(Scope.system(), participant_id: h.cleo, q: "kino")) ==
+               ["Kino 100%"]
     end
   end
 
@@ -460,7 +549,7 @@ defmodule Abakus.Kasse.ExpensesTest do
         ] do
       test "finds #{Enum.join(expected, ", ")} for #{inspect(text)} regardless of the case of umlauts and ß",
            %{ids: ids} do
-        assert Enum.map(Expenses.list_expenses(q: unquote(text)), & &1.id) ==
+        assert Enum.map(Expenses.list_expenses(Scope.system(), q: unquote(text)), & &1.id) ==
                  Enum.map(unquote(expected), &ids[&1])
       end
     end
@@ -470,12 +559,12 @@ defmodule Abakus.Kasse.ExpensesTest do
     create!(equal(h, "Essen", 3000, "2026-09-01", h.anna, [h.anna, h.ben, h.cleo]), h.anna)
 
     {:ok, paid_back} =
-      Expenses.create_expense(h.ben, reimbursement(1000, "2026-09-02", h.ben, h.anna))
+      Expenses.create_expense(scope_of(h.ben), reimbursement(1000, "2026-09-02", h.ben, h.anna))
 
     assert {paid_back.reimbursement, paid_back.split_mode, share(paid_back, h.anna)} ==
              {true, :equal, 1000}
 
-    assert Balances.balances() == %{h.anna => 1000, h.ben => 0, h.cleo => -1000}
+    assert Balances.balances(Scope.system()) == %{h.anna => 1000, h.ben => 0, h.cleo => -1000}
   end
 
   test "a reimbursement is always split equally", %{h: h} do
@@ -484,7 +573,7 @@ defmodule Abakus.Kasse.ExpensesTest do
       |> then(&reimbursement(1000, "2026-09-02", &1, h.anna))
       |> Map.put(:split_mode, :shares)
 
-    assert {:ok, %{split_mode: :equal}} = Expenses.create_expense(h.ben, attrs)
+    assert {:ok, %{split_mode: :equal}} = Expenses.create_expense(scope_of(h.ben), attrs)
   end
 
   describe "finding a likely duplicate" do
@@ -500,25 +589,35 @@ defmodule Abakus.Kasse.ExpensesTest do
     } do
       attrs = equal(h, " REWE ", 2340, "2026-09-01", h.anna, [h.anna])
 
-      assert Expenses.find_duplicate(attrs).id == expense.id
-      refute Expenses.find_duplicate(%{attrs | title: "Edeka"})
-      refute Expenses.find_duplicate(%{attrs | amount_cents: 2341})
-      refute Expenses.find_duplicate(%{attrs | date: ~D[2026-09-02]})
-      refute Expenses.find_duplicate(%{attrs | paid_by_id: h.ben})
+      assert Expenses.find_duplicate(Scope.system(), attrs).id == expense.id
+      refute Expenses.find_duplicate(Scope.system(), %{attrs | title: "Edeka"})
+      refute Expenses.find_duplicate(Scope.system(), %{attrs | amount_cents: 2341})
+      refute Expenses.find_duplicate(Scope.system(), %{attrs | date: ~D[2026-09-02]})
+      refute Expenses.find_duplicate(Scope.system(), %{attrs | paid_by_id: h.ben})
     end
 
     test "finds a reimbursement to the same recipient", %{h: h, paid_back: paid_back} do
-      assert Expenses.find_duplicate(reimbursement(1000, "2026-09-02", h.ben, h.anna)).id ==
+      assert Expenses.find_duplicate(
+               Scope.system(),
+               reimbursement(1000, "2026-09-02", h.ben, h.anna)
+             ).id ==
                paid_back.id
 
-      refute Expenses.find_duplicate(reimbursement(1000, "2026-09-02", h.ben, h.cleo))
+      refute Expenses.find_duplicate(
+               Scope.system(),
+               reimbursement(1000, "2026-09-02", h.ben, h.cleo)
+             )
     end
 
     test "finds nothing for a deleted expense or an invalid input", %{h: h, expense: expense} do
-      {:ok, _deleted} = Expenses.delete_expense(nil, expense)
+      {:ok, _deleted} = Expenses.delete_expense(Scope.system(), expense)
 
-      refute Expenses.find_duplicate(equal(h, "Rewe", 2340, "2026-09-01", h.anna, [h.anna]))
-      refute Expenses.find_duplicate(%{})
+      refute Expenses.find_duplicate(
+               Scope.system(),
+               equal(h, "Rewe", 2340, "2026-09-01", h.anna, [h.anna])
+             )
+
+      refute Expenses.find_duplicate(Scope.system(), %{})
     end
   end
 
@@ -526,14 +625,19 @@ defmodule Abakus.Kasse.ExpensesTest do
     create!(equal(h, "A", 1000, "2026-09-30", h.anna, [h.anna, h.ben]))
     deleted = create!(equal(h, "B", 1000, "2026-09-30", h.ben, [h.ben]))
     create!(%{equal(h, "C", 1000, "2026-09-30", h.cleo, [h.ben]) | category_id: h.restaurant})
-    {:ok, _deleted} = Expenses.delete_expense(h.anna, deleted)
+    {:ok, _deleted} = Expenses.delete_expense(scope_of(h.anna), deleted)
 
-    assert Expenses.count_by_participant() == %{h.anna => 1, h.ben => 2, h.cleo => 1}
-    assert Expenses.count_by_category() == %{h.food => 1, h.restaurant => 1}
+    assert Expenses.count_by_participant(Scope.system()) == %{
+             h.anna => 1,
+             h.ben => 2,
+             h.cleo => 1
+           }
+
+    assert Expenses.count_by_category(Scope.system()) == %{h.food => 1, h.restaurant => 1}
   end
 
   test "learns categories from the live expenses with an active category, newest first", %{h: h} do
-    [_food, other, archived | _] = Categories.list_categories()
+    [_food, other, archived | _] = Categories.list_categories(Scope.system())
 
     mk = fn title, date, category_id ->
       create!(%{equal(h, title, 1000, date, h.anna, [h.anna, h.ben]) | category_id: category_id})
@@ -543,15 +647,22 @@ defmodule Abakus.Kasse.ExpensesTest do
     mk.("Kino", "2026-09-10", other.id)
     mk.("Ohne", "2026-09-11", nil)
     mk.("Archiviert", "2026-09-12", archived.id)
-    {:ok, _deleted} = Expenses.delete_expense(nil, mk.("Gelöscht", "2026-09-13", h.food))
-    {:ok, _archived} = Categories.archive_category(nil, archived)
+
+    {:ok, _deleted} =
+      Expenses.delete_expense(Scope.system(), mk.("Gelöscht", "2026-09-13", h.food))
+
+    {:ok, _archived} = Categories.archive_category(Scope.system(), archived)
 
     create!(
       Map.put(equal(h, "Kaufland", 500, "2026-09-14", h.ben, [h.anna]), :reimbursement, true)
     )
 
     assert Expenses.category_history() == [{"Kino", other.id}, {"Kaufland", h.food}]
-    assert Expenses.category_suggestions().titles == %{"kino" => other.id, "kaufland" => h.food}
+
+    assert Expenses.category_suggestions(Scope.system()).titles == %{
+             "kino" => other.id,
+             "kaufland" => h.food
+           }
   end
 
   test "lists the rates of the newest foreign expenses", %{h: h} do
@@ -561,11 +672,11 @@ defmodule Abakus.Kasse.ExpensesTest do
 
     {:ok, _deleted} =
       Expenses.delete_expense(
-        nil,
+        Scope.system(),
         create!(foreign(h, "Weg", 100, "GBP", 0.8, "2026-10-01", h.anna, [h.anna]))
       )
 
-    assert Expenses.recent_foreign_rates() == [
+    assert Expenses.recent_foreign_rates(Scope.system()) == [
              %{
                expense_id: usd.id,
                title: "Hotel",
@@ -584,6 +695,6 @@ defmodule Abakus.Kasse.ExpensesTest do
              }
            ]
 
-    assert length(Expenses.recent_foreign_rates(1)) == 1
+    assert length(Expenses.recent_foreign_rates(Scope.system(), 1)) == 1
   end
 end

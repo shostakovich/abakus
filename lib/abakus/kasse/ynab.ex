@@ -5,13 +5,15 @@ defmodule Abakus.Kasse.Ynab do
   and reimbursements are transfers inside YNAB. Everything is per person: a personal access
   token, plan, account, start date and category mapping. The app is the source of truth.
 
-  The functions for the YNAB page answer `{:ok, message}` or `{:error, message}`, in German.
+  The functions for the YNAB page take the caller's scope, act on the connection of the scope's person and answer
+  `{:ok, message}` or `{:error, message}`, in German.
   """
 
-  alias Abakus.Kasse.{Balances, Categories, Dates}
+  alias Abakus.Kasse.{Access, Balances, Categories, Dates}
   alias Abakus.Kasse.Ynab.{Cache, Client, Connection, Connections, Error}
   alias Abakus.Kasse.Ynab.{Scheduler, Selection, Transactions}
-  alias Abakus.LocalTime
+  alias Abakus.{LocalTime, Repo}
+  alias Abakus.Users.Scope
 
   @token_invalid "Der YNAB-Token ist ungültig oder abgelaufen. Bitte einen neuen Token eintragen."
   @not_ready "YNAB ist noch nicht fertig eingerichtet (Token, Plan, Konto und Startdatum)."
@@ -101,7 +103,8 @@ defmodule Abakus.Kasse.Ynab do
   Saves a personal access token after checking with YNAB that it works. If the new token cannot
   reach the chosen plan, plan and account are reset.
   """
-  def save_token(participant_id, text) do
+  def save_token(%Scope{} = scope, text) do
+    participant_id = Access.person!(scope).id
     token = String.trim(text)
 
     cond do
@@ -142,7 +145,9 @@ defmodule Abakus.Kasse.Ynab do
   end
 
   @doc "Disconnects: forgets the token, keeps plan, account, mapping and what is in YNAB."
-  def disconnect(participant_id) do
+  def disconnect(%Scope{} = scope) do
+    participant_id = Access.person!(scope).id
+
     {:ok, _reset?} =
       Scheduler.change_connection(fn -> Connections.put_token(participant_id, nil) end)
 
@@ -150,7 +155,9 @@ defmodule Abakus.Kasse.Ynab do
   end
 
   @doc ~s(Chooses plan and account, given as "plan id|account id", and the start date.)
-  def choose_target(participant_id, target, start) do
+  def choose_target(%Scope{} = scope, target, start) do
+    participant_id = Access.person!(scope).id
+
     with {:token, %Connection{token: token}} when is_binary(token) <-
            {:token, Connections.get(participant_id)},
          {:start, {:ok, start}} <- {:start, Dates.parse(start)},
@@ -190,15 +197,16 @@ defmodule Abakus.Kasse.Ynab do
   Maps app categories (ids, also as text) to YNAB category ids, `""` for none. A YNAB category no
   longer offered may stay mapped as it was.
   """
-  def map_categories(participant_id, mapping) do
+  def map_categories(%Scope{} = scope, mapping) do
+    participant_id = Access.person!(scope).id
+
     with {:connection, %Connection{token: token, plan_id: plan_id}}
          when is_binary(token) and is_binary(plan_id) <-
            {:connection, Connections.get(participant_id)},
          {:categories, {:ok, groups}} <- {:categories, categories(token, plan_id)},
          mapping = ids(mapping),
          :ok <- check_mapping(participant_id, mapping, groups),
-         {:ok, _changed} <-
-           Connections.put_category_mapping(participant_id, mapping, category_names(groups)) do
+         {:ok, _changed} <- put_category_mapping(scope, participant_id, mapping, groups) do
       Scheduler.trigger()
       {:ok, "Kategorie-Zuordnung gespeichert."}
     else
@@ -211,6 +219,17 @@ defmodule Abakus.Kasse.Ynab do
       {:error, message} ->
         {:error, message}
     end
+  end
+
+  defp put_category_mapping(scope, participant_id, mapping, groups) do
+    Repo.transact(fn ->
+      Connections.put_category_mapping(
+        participant_id,
+        mapping,
+        Categories.list_categories(scope, :all),
+        category_names(groups)
+      )
+    end)
   end
 
   defp ids(mapping) do
@@ -238,9 +257,9 @@ defmodule Abakus.Kasse.Ynab do
   end
 
   @doc "Starts a full sync of the person in the background."
-  def sync_now(participant_id) do
-    if Connections.ready?(Connections.get(participant_id)) do
-      Scheduler.sync_now(participant_id)
+  def sync_now(%Scope{} = scope) do
+    if Connections.ready?(Connections.get(Access.person!(scope).id)) do
+      Scheduler.sync_now(scope)
       {:ok, "Synchronisierung gestartet – Status unten aktualisiert sich nach dem Neuladen."}
     else
       {:error, @not_ready}
@@ -248,14 +267,15 @@ defmodule Abakus.Kasse.Ynab do
   end
 
   @doc """
-  Everything the YNAB page shows for a person: the connection and its status, the plans with
+  Everything the YNAB page shows for the scope's person: the connection and its status, the plans with
   their usable accounts (`%{name, accounts: [%{value, name, selected}]}`, value
   "plan id|account id"), a non-euro currency of the chosen plan, the categories with their
   mapping (`missing` if YNAB no longer offers the mapped one), the usable YNAB category groups,
   the synced count, failed expenses and the balance. `api_error` says why YNAB could not be asked.
   Options: `refresh: true` bypasses the cache, `:now`.
   """
-  def overview(participant_id, opts \\ []) do
+  def overview(%Scope{} = scope, opts \\ []) do
+    participant_id = Access.person!(scope).id
     connection = Connections.get(participant_id) || %Connection{participant_id: participant_id}
     now = Keyword.get_lazy(opts, :now, &DateTime.utc_now/0)
     token_invalid? = not is_nil(connection.token) and connection.token_invalid
@@ -272,7 +292,8 @@ defmodule Abakus.Kasse.Ynab do
       currency: remote.currency,
       has_target: has_target?,
       start_date: connection.start_date || today(now),
-      categories: if(has_target?, do: category_rows(participant_id, remote.groups), else: []),
+      categories:
+        if(has_target?, do: category_rows(scope, participant_id, remote.groups), else: []),
       groups: remote.groups,
       ready: Connections.ready?(connection),
       retry_at:
@@ -281,7 +302,7 @@ defmodule Abakus.Kasse.Ynab do
         ),
       synced: synced,
       problems: problems,
-      balance: Balances.balance(participant_id)
+      balance: Balances.balance(scope)
     }
   end
 
@@ -332,11 +353,11 @@ defmodule Abakus.Kasse.Ynab do
     end)
   end
 
-  defp category_rows(participant_id, groups) do
+  defp category_rows(scope, participant_id, groups) do
     mapping = Connections.category_mapping(participant_id)
     known = known_categories(groups)
 
-    for category <- Categories.list_categories(:all),
+    for category <- Categories.list_categories(scope, :all),
         is_nil(category.archived_at) or Map.has_key?(mapping, category.id) do
       selected = Map.get(mapping, category.id)
 

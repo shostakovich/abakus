@@ -35,7 +35,7 @@ defmodule AbakusWeb.TransactionForm do
     |> Map.merge(blank_side())
   end
 
-  @doc "The form for a transaction from `Abakus.Ledger.get_transaction!/1`."
+  @doc "The form for a transaction from `Abakus.Ledger.get_transaction!/2`."
   def from_transaction(%Transaction{} = transaction) do
     split? = transaction.subtransactions != []
 

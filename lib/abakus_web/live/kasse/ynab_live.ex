@@ -11,7 +11,7 @@ defmodule AbakusWeb.Kasse.YnabLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if BudgetLink.account(socket.assigns.current_participant), do: raise(AbakusWeb.NotFoundError)
+    if BudgetLink.account(socket.assigns.current_scope), do: raise(AbakusWeb.NotFoundError)
 
     {:ok,
      assign(socket,
@@ -29,11 +29,11 @@ defmodule AbakusWeb.Kasse.YnabLive do
     do: {:noreply, load(socket, refresh: params["refresh"] == "1")}
 
   defp load(socket, opts \\ []) do
-    id = socket.assigns.current_participant.id
+    scope = socket.assigns.current_scope
 
     socket
     |> assign(failed: false)
-    |> start_async(:overview, fn -> Ynab.overview(id, opts) end)
+    |> start_async(:overview, fn -> Ynab.overview(scope, opts) end)
   end
 
   defp token_form, do: to_form(%{"token" => ""}, as: :connection)
@@ -64,11 +64,11 @@ defmodule AbakusWeb.Kasse.YnabLive do
     do: {:noreply, run(socket, :sync, &Ynab.sync_now/1)}
 
   defp run(%{assigns: %{busy: nil}} = socket, action, fun) do
-    id = socket.assigns.current_participant.id
+    scope = socket.assigns.current_scope
 
     socket
     |> assign(busy: action)
-    |> start_async(:action, fn -> {action, fun.(id)} end)
+    |> start_async(:action, fn -> {action, fun.(scope)} end)
   end
 
   defp run(socket, _action, _fun), do: socket

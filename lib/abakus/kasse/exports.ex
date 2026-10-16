@@ -3,8 +3,8 @@ defmodule Abakus.Kasse.Exports do
   Downloads of the expenses, oldest first and without deleted ones, for a period (both ends
   inclusive, either open): a CSV for German Excel and a JSON file of everything.
 
-  Each export returns `%{filename, content_type, body}`; options `:now` (UTC) and `:today` (the
-  local date of the file name).
+  Each export takes the caller's scope and returns `%{filename, content_type, body}`; options `:now` (UTC) and
+  `:today` (the local date of the file name).
   """
 
   alias Abakus.{Format, LocalTime}
@@ -13,6 +13,7 @@ defmodule Abakus.Kasse.Exports do
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.{OrderedJSON, Participants, Settings, Split}
   alias Abakus.Money
+  alias Abakus.Users.Scope
 
   @bom "﻿"
   @csv_header ~w(ID Datum Titel Kategorie) ++
@@ -48,9 +49,9 @@ defmodule Abakus.Kasse.Exports do
   defp date_param(_value), do: {:error, "Bitte ein Datum angeben."}
 
   @doc "Every expense with the shares of the people involved, for German Excel."
-  def expenses_csv(period, opts \\ []) do
-    expenses = expenses(period)
-    people = involved(expenses)
+  def expenses_csv(%Scope{} = scope, period, opts \\ []) do
+    expenses = expenses(scope, period)
+    people = involved(scope, expenses)
 
     rows =
       for expense <- expenses do
@@ -80,29 +81,29 @@ defmodule Abakus.Kasse.Exports do
       else: ""
   end
 
-  defp involved(expenses) do
+  defp involved(scope, expenses) do
     ids =
       for expense <- expenses,
           id <- [expense.paid_by_id | Enum.map(expense.shares, & &1.participant_id)],
           into: MapSet.new(),
           do: id
 
-    Enum.filter(Participants.list_participants(:all), &MapSet.member?(ids, &1.id))
+    Enum.filter(Participants.list_participants(scope, :all), &MapSet.member?(ids, &1.id))
   end
 
   @doc "Everything about the expenses, with all people, as JSON."
-  def expenses_json(period, opts \\ []) do
-    people = Participants.list_participants(:all)
+  def expenses_json(%Scope{} = scope, period, opts \\ []) do
+    people = Participants.list_participants(scope, :all)
     names = Map.new(people, &{&1.id, &1.name})
 
     document =
-      [group: Settings.group_name(), exported_at: timestamp(now(opts))] ++
+      [group: Settings.group_name(scope), exported_at: timestamp(now(opts))] ++
         period_dates(period) ++
         [
           currency: "EUR",
           participants:
             Enum.map(people, &[id: &1.id, name: &1.name, archived: not is_nil(&1.archived_at)]),
-          expenses: Enum.map(expenses(period), &json_expense(&1, names))
+          expenses: Enum.map(expenses(scope, period), &json_expense(&1, names))
         ]
 
     body = OrderedJSON.format!(document)
@@ -166,8 +167,8 @@ defmodule Abakus.Kasse.Exports do
       else: field
   end
 
-  defp expenses(period),
-    do: Expenses.list_expenses([from: period.from, to: period.to], sort: :date_asc)
+  defp expenses(scope, period),
+    do: Expenses.list_expenses(scope, [from: period.from, to: period.to], sort: :date_asc)
 
   defp download(kind, period, extension, content_type, body, opts) do
     today = Keyword.get_lazy(opts, :today, fn -> LocalTime.date(now(opts)) end)

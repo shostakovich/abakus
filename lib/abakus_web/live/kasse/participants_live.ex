@@ -20,11 +20,11 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
   end
 
   defp load(socket) do
-    counts = Expenses.count_by_participant()
-    balances = Balances.balances()
+    counts = Expenses.count_by_participant(socket.assigns.current_scope)
+    balances = Balances.balances(socket.assigns.current_scope)
 
     {archived, active} =
-      Participants.list_participants(:all)
+      Participants.list_participants(socket.assigns.current_scope, :all)
       |> Enum.map(fn person ->
         %{
           person: person,
@@ -50,9 +50,9 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
   end
 
   def handle_event("create", %{"person" => params}, socket) do
-    me = socket.assigns.current_participant.id
+    scope = socket.assigns.current_scope
 
-    case Participants.invite_participant(me, params, &UserAuth.magic_link_url/1) do
+    case Participants.invite_participant(scope, params, &UserAuth.magic_link_url/1) do
       {:ok, person} ->
         {:noreply, socket |> put_flash(:info, added(person)) |> added_person()}
 
@@ -85,16 +85,19 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
   end
 
   def handle_event("save_rename", %{"rename" => params}, socket) do
-    %{current_participant: me, renaming: person} = socket.assigns
+    %{current_scope: scope, renaming: person} = socket.assigns
 
-    case Participants.rename_participant(me.id, person, params) do
+    case Participants.rename_participant(scope, person, params) do
       {:ok, renamed} ->
-        me = if renamed.id == me.id, do: renamed, else: me
+        scope =
+          if renamed.id == scope.participant.id,
+            do: %{scope | participant: renamed},
+            else: scope
 
         {:noreply,
          socket
          |> put_flash(:info, "Gespeichert.")
-         |> assign(renaming: nil, current_participant: me)
+         |> assign(renaming: nil, current_scope: scope)
          |> load()}
 
       {:error, changeset} ->
@@ -104,9 +107,10 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
 
   def handle_event("archive", %{"id" => id}, socket) do
     with_person(socket, id, fn person ->
-      me = socket.assigns.current_participant.id
+      scope = socket.assigns.current_scope
+      me = scope.participant.id
 
-      case Participants.archive_participant(me, person) do
+      case Participants.archive_participant(scope, person) do
         {:ok, %Participant{id: ^me} = archived} ->
           disconnect_when_gone(archived.user_id)
           socket |> put_flash(:info, "„#{archived.name}“ archiviert.") |> redirect(to: ~p"/")
@@ -124,8 +128,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
 
   def handle_event("reactivate", %{"id" => id}, socket) do
     with_person(socket, id, fn person ->
-      {:ok, person} =
-        Participants.reactivate_participant(socket.assigns.current_participant.id, person)
+      {:ok, person} = Participants.reactivate_participant(socket.assigns.current_scope, person)
 
       socket |> put_flash(:info, "„#{person.name}“ reaktiviert.") |> load()
     end)
@@ -153,7 +156,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
     do: socket |> assign_new_form(Participants.change_new_participant()) |> load()
 
   defp with_person(socket, id, fun) do
-    case Participants.get_participant(id) do
+    case Participants.get_participant(socket.assigns.current_scope, id) do
       %Participant{} = person -> {:noreply, fun.(person)}
       nil -> {:noreply, socket |> put_flash(:error, "Person nicht gefunden.") |> load()}
     end
@@ -188,11 +191,11 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
               <.avatar
                 initials={initial(row.person.name)}
                 shape={:round}
-                tone={if row.person.id == @current_participant.id, do: :primary, else: :base}
+                tone={if row.person.id == @current_scope.participant.id, do: :primary, else: :base}
               />
             </:leading>
             <.badge
-              :if={row.person.id == @current_participant.id}
+              :if={row.person.id == @current_scope.participant.id}
               style={:plain}
               class="ms-1.5 align-text-bottom"
             >

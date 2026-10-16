@@ -8,6 +8,7 @@ defmodule Abakus.MCP.ToolsTest do
   alias Abakus.ExchangeRates
   alias Abakus.Kasse.{Activities, Categories, Expenses, Participants}
   alias Abakus.MCP.Tools
+  alias Abakus.Users.Scope
 
   @today ~D[2026-10-03]
   @usd_sept_30 1.1261
@@ -23,9 +24,9 @@ defmodule Abakus.MCP.ToolsTest do
     anna = person!("Anna")
     [ben, cleo, dora, emil] = for name <- ~w(Ben Cleo Dora Emil), do: person!(name, anna.id)
 
-    {:ok, _emil} = Participants.archive_participant(anna.id, emil)
-    health = Enum.find(Categories.list_categories(), &(&1.name == "Gesundheit"))
-    {:ok, _health} = Categories.archive_category(anna.id, health)
+    {:ok, _emil} = Participants.archive_participant(scope_of(anna.id), emil)
+    health = Enum.find(Categories.list_categories(Scope.system()), &(&1.name == "Gesundheit"))
+    {:ok, _health} = Categories.archive_category(scope_of(anna.id), health)
 
     for {date, rate} <- [{~D[2026-09-30], @usd_sept_30}, {~D[2026-10-02], @usd_oct_2}],
         do: ExchangeRates.store([{"USD", date, Decimal.from_float(rate)}])
@@ -106,7 +107,9 @@ defmodule Abakus.MCP.ToolsTest do
     )
 
     ok("create_expense", ~s({"title":"Taxi","amount":"10","currency":"USD","paid_by":"Ben"}))
-    Expenses.list_expenses([reimbursement: nil], sort: :date_asc) |> Map.new(&{&1.title, &1.id})
+
+    Expenses.list_expenses(Scope.system(), [reimbursement: nil], sort: :date_asc)
+    |> Map.new(&{&1.title, &1.id})
   end
 
   test "people and categories come from the app" do
@@ -219,7 +222,7 @@ defmodule Abakus.MCP.ToolsTest do
         ],
         do: decode_refusal("create_expense", args, field)
 
-    assert Expenses.list_expenses() == []
+    assert Expenses.list_expenses(Scope.system()) == []
   end
 
   test "create_reimbursement: every refusal" do
@@ -251,7 +254,7 @@ defmodule Abakus.MCP.ToolsTest do
     )
 
     decode_refusal("create_reimbursement", ~s({"from":["Ben"],"to":"Anna","amount":"5"}), "from")
-    assert Expenses.list_expenses(reimbursement: nil) == []
+    assert Expenses.list_expenses(Scope.system(), reimbursement: nil) == []
   end
 
   test "create_expense and create_reimbursement store ordinary entries with the payer as author",
@@ -341,7 +344,7 @@ defmodule Abakus.MCP.ToolsTest do
                "expenses (50.0%) have no category. Values of activities.action: expense_created, settings_updated."
            )
 
-    [newest | _] = Activities.list_activities(limit: 1)
+    [newest | _] = Activities.list_activities(Scope.system(), limit: 1)
 
     assert {newest.action, newest.actor_id, newest.expense_id, newest.details.text} ==
              {:expense_created, people.ben, ids["Taxi"], "Über MCP angelegt"}
@@ -1170,7 +1173,10 @@ defmodule Abakus.MCP.ToolsTest do
            })["shown"] == 14
 
     {:ok, expense} =
-      Expenses.delete_expense(people.anna, Expenses.get_expense!(newest["expense_id"]))
+      Expenses.delete_expense(
+        scope_of(people.anna),
+        Expenses.get_expense!(Scope.system(), newest["expense_id"])
+      )
 
     assert [%{"action" => "expense_deleted"}, %{"action" => "expense_created"}] =
              ok("activity", %{"expense_id" => expense.id})["entries"]
@@ -1191,10 +1197,10 @@ defmodule Abakus.MCP.ToolsTest do
 
   test "activity shows the changes of an update", people do
     %{"Rewe" => id} = entries()
-    expense = Expenses.get_expense!(id)
+    expense = Expenses.get_expense!(Scope.system(), id)
 
     {:ok, _expense} =
-      Expenses.update_expense(people.anna, expense, %{
+      Expenses.update_expense(scope_of(people.anna), expense, %{
         Expenses.input(expense)
         | title: "Rewe City"
       })
@@ -1294,7 +1300,7 @@ defmodule Abakus.MCP.ToolsTest do
     end
 
     test "prefer a real category named None" do
-      {:ok, _none} = Categories.create_category(nil, %{name: "None"})
+      {:ok, _none} = Categories.create_category(Scope.system(), %{name: "None"})
       ok("create_expense", %{"title" => "Tanken", "amount" => "50", "paid_by" => "Anna"})
 
       ok("create_expense", %{

@@ -1,20 +1,27 @@
 defmodule Abakus.Kasse.Categories do
   @moduledoc """
   The categories of expenses, in an order the group chooses. New ones go before "Sonstiges";
-  positions are renumbered 10, 20, … whenever the order changes. Every change is logged.
+  positions are renumbered 10, 20, … whenever the order changes. Every change is logged. The functions take the
+  caller's scope, which `Abakus.Kasse.Access` checks.
   """
 
   import Ecto.Query
 
-  alias Abakus.Kasse.Activities
+  alias Abakus.Kasse.{Access, Activities}
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Repo
+  alias Abakus.Users.Scope
   alias Ecto.Changeset
 
   @other "sonstiges"
 
   @doc "The categories in their order: `:active` (default), `:archived` or `:all`."
-  def list_categories(which \\ :active) do
+  def list_categories(%Scope{} = scope, which \\ :active) do
+    Access.check!(scope)
+    all(which)
+  end
+
+  defp all(which) do
     Category
     |> archived(which)
     |> order_by([c], [c.position, fragment("? COLLATE NOCASE", c.name), c.id])
@@ -26,19 +33,27 @@ defmodule Abakus.Kasse.Categories do
   defp archived(query, :all), do: query
 
   @doc "The category with `id`, or nil."
-  def get_category(id), do: Repo.get(Category, id)
+  def get_category(%Scope{} = scope, id) do
+    Access.check!(scope)
+    Repo.get(Category, id)
+  end
 
   @doc "The category with `id`; raises if there is none."
-  def get_category!(id), do: Repo.get!(Category, id)
+  def get_category!(%Scope{} = scope, id) do
+    Access.check!(scope)
+    Repo.get!(Category, id)
+  end
 
   @doc "A changeset for the name form."
   def change_category(%Category{} = category, attrs \\ %{}),
     do: Category.changeset(category, attrs)
 
   @doc ~s(Adds a category before the active "Sonstiges", wherever that was moved to, or at the end.)
-  def create_category(actor_id, attrs) do
+  def create_category(%Scope{} = scope, attrs) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
-      active = list_categories()
+      active = all(:active)
 
       with {:ok, category} <- Repo.insert(Category.changeset(%Category{}, attrs)),
            :ok <- renumber(insert_before_other(active, category)),
@@ -63,7 +78,9 @@ defmodule Abakus.Kasse.Categories do
   end
 
   @doc "Renames a category; logged only when the name changes."
-  def rename_category(actor_id, %Category{} = category, attrs) do
+  def rename_category(%Scope{} = scope, %Category{} = category, attrs) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       with {:ok, renamed} <- Repo.update(Category.changeset(category, attrs)),
            {:ok, _activity} <- log_rename(actor_id, category.name, renamed.name) do
@@ -81,9 +98,12 @@ defmodule Abakus.Kasse.Categories do
   Swaps a category with its neighbour `:up` or `:down`; at the edge nothing happens. Only active
   categories move: `{:error, :not_found}` otherwise.
   """
-  def move_category(actor_id, %Category{id: id}, direction) when direction in [:up, :down] do
+  def move_category(%Scope{} = scope, %Category{id: id}, direction)
+      when direction in [:up, :down] do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
-      active = list_categories()
+      active = all(:active)
 
       case Enum.find_index(active, &(&1.id == id)) do
         nil -> {:error, :not_found}
@@ -116,13 +136,16 @@ defmodule Abakus.Kasse.Categories do
   end
 
   @doc "Archives a category; old expenses keep it."
-  def archive_category(actor_id, %Category{} = category),
-    do:
-      Repo.transact(fn -> set_archived(actor_id, category, DateTime.utc_now(), "archiviert") end)
+  def archive_category(%Scope{} = scope, %Category{} = category) do
+    actor_id = Access.actor_id!(scope)
+    Repo.transact(fn -> set_archived(actor_id, category, DateTime.utc_now(), "archiviert") end)
+  end
 
   @doc "Brings an archived category back."
-  def reactivate_category(actor_id, %Category{} = category),
-    do: Repo.transact(fn -> set_archived(actor_id, category, nil, "reaktiviert") end)
+  def reactivate_category(%Scope{} = scope, %Category{} = category) do
+    actor_id = Access.actor_id!(scope)
+    Repo.transact(fn -> set_archived(actor_id, category, nil, "reaktiviert") end)
+  end
 
   # Logged even when nothing changes.
   defp set_archived(actor_id, category, archived_at, verb) do

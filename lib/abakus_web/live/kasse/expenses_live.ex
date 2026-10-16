@@ -16,7 +16,7 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Expenses.subscribe()
+    if connected?(socket), do: Expenses.subscribe(socket.assigns.current_scope)
 
     {:ok,
      socket
@@ -85,11 +85,11 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
     do: filter.q != "" or not is_nil(filter.category_id) or not is_nil(filter.person_id)
 
   defp assign_balance(socket) do
-    assign(socket, :balance, Balances.balance(socket.assigns.current_participant.id))
+    assign(socket, :balance, Balances.balance(socket.assigns.current_scope))
   end
 
   defp assign_choices(socket, filter) do
-    people = Participants.list_participants(:all)
+    people = Participants.list_participants(socket.assigns.current_scope, :all)
 
     assign(socket,
       names: Map.new(people, &{&1.id, &1.name}),
@@ -97,7 +97,7 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
       people: for(p <- people, is_nil(p.archived_at) or p.id == filter.person_id, do: p),
       categories:
         for(
-          c <- Categories.list_categories(:all),
+          c <- Categories.list_categories(socket.assigns.current_scope, :all),
           is_nil(c.archived_at) or c.id == filter.category_id,
           do: c
         )
@@ -105,7 +105,7 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
   end
 
   defp load(socket, count) do
-    {expenses, cursor} = fetch(socket.assigns.filter, count, nil)
+    {expenses, cursor} = fetch(socket, count, nil)
     {rows, last_heading} = rows(socket, expenses, nil)
 
     socket
@@ -115,7 +115,7 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
   end
 
   defp append(socket, count) do
-    {expenses, cursor} = fetch(socket.assigns.filter, count, socket.assigns.cursor)
+    {expenses, cursor} = fetch(socket, count, socket.assigns.cursor)
     {rows, last_heading} = rows(socket, expenses, socket.assigns.last_heading)
 
     socket
@@ -124,14 +124,16 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
     |> stream(:rows, rows)
   end
 
-  defp fetch(filter, count, cursor) do
+  defp fetch(socket, count, cursor) do
+    %{current_scope: scope, filter: filter} = socket.assigns
+
     filters = [
       q: if(filter.q != "", do: filter.q),
       category_id: filter.category_id,
       participant_id: filter.person_id
     ]
 
-    case Expenses.list_expenses(filters, limit: count + 1, after: cursor) do
+    case Expenses.list_expenses(scope, filters, limit: count + 1, after: cursor) do
       expenses when length(expenses) > count ->
         page = Enum.take(expenses, count)
         last = List.last(page)
@@ -154,7 +156,7 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
   end
 
   defp row(assigns, %Expense{} = expense) do
-    me = assigns.current_participant.id
+    me = assigns.current_scope.participant.id
     share = Expense.share_of(expense, me)
     paid = if expense.paid_by_id == me, do: expense.amount_cents, else: 0
 

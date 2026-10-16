@@ -2,7 +2,7 @@ defmodule AbakusWeb.RegisterLive.Rows do
   @moduledoc """
   Which transactions the register shows and what it shows beside them: the view (all, waiting for approval, not
   cleared), the search, the running balance and whether a transaction takes a category. Transactions come from
-  `Abakus.Ledger.list_transactions/1` (match proposals from `list_match_proposals/1`), newest first, with payee,
+  `Abakus.Ledger.list_transactions/2` (match proposals from `list_match_proposals/2`), newest first, with payee,
   category and subtransactions.
   """
 

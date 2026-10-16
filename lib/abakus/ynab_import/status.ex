@@ -12,6 +12,7 @@ defmodule Abakus.YnabImport.Status do
   alias Abakus.Categories.{Assignment, Category, CategoryGroup}
   alias Abakus.Ledger.{Account, Payee, TransactionOrigin}
   alias Abakus.Repo
+  alias Abakus.Users.{Scope, User}
 
   defstruct [
     :imported_at,
@@ -23,33 +24,39 @@ defmodule Abakus.YnabImport.Status do
     :first_month
   ]
 
-  @doc "The status, or nil when nothing came from YNAB."
-  def read do
+  @doc "The status of the user's budget, or nil when nothing came from YNAB."
+  def read(%Scope{user: %User{id: user_id}}) do
     case Repo.one(
            from o in TransactionOrigin,
-             where: o.source == :ynab,
+             where: o.user_id == ^user_id and o.source == :ynab,
              select: {max(o.inserted_at), count()}
          ) do
       {nil, 0} -> nil
-      {imported_at, transactions} -> read(imported_at, transactions)
+      {imported_at, transactions} -> read(user_id, imported_at, transactions)
     end
   end
 
-  defp read(imported_at, transactions) do
+  defp read(user_id, imported_at, transactions) do
+    created = &created_by(&1, user_id, imported_at)
+
     %__MODULE__{
       imported_at: imported_at,
       transactions: transactions,
-      accounts: count(Account, imported_at),
-      category_groups: count(from(g in CategoryGroup, where: not g.internal), imported_at),
-      categories: count(from(c in Category, where: not c.internal), imported_at),
-      payees: count(from(p in Payee, where: is_nil(p.transfer_account_id)), imported_at),
-      first_month: Repo.one(from a in created_by(Assignment, imported_at), select: min(a.month))
+      accounts: count(created.(Account)),
+      category_groups: count(where(created.(CategoryGroup), [g], not g.internal)),
+      categories: count(where(created.(Category), [c], not c.internal)),
+      payees: count(where(created.(Payee), [p], is_nil(p.transfer_account_id))),
+      first_month: Repo.one(from a in created.(Assignment), select: min(a.month))
     }
   end
 
-  defp count(queryable, imported_at),
-    do: queryable |> created_by(imported_at) |> Repo.aggregate(:count)
+  defp count(queryable), do: Repo.aggregate(queryable, :count)
 
-  defp created_by(queryable, imported_at),
-    do: where(queryable, [record], record.inserted_at <= ^imported_at)
+  defp created_by(queryable, user_id, imported_at),
+    do:
+      where(
+        queryable,
+        [record],
+        record.user_id == ^user_id and record.inserted_at <= ^imported_at
+      )
 end

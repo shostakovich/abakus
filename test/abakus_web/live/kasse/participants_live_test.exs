@@ -7,6 +7,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
   import AbakusWeb.PageText
 
   alias Abakus.Kasse.Participants
+  alias Abakus.Users.Scope
 
   setup %{conn: conn} do
     h = household()
@@ -61,7 +62,7 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
     assert has_element?(view, "#person_email:not([value])")
     assert "Dora D." in texts(view, "#participants li p.font-medium")
     assert last_activity() == "Person „Dora D.“ hinzugefügt"
-    assert Participants.get_participant!(dora_id(view)).user_id
+    assert Participants.get_participant!(Scope.system(), dora_id(view)).user_id
 
     add(view, " dora d. ", "dora2@example.com")
     assert texts(view, "#person_name-error-0") == ["„dora d.“ gibt es schon."]
@@ -105,13 +106,13 @@ defmodule AbakusWeb.Kasse.ParticipantsLiveTest do
     view |> form("#rename-form", rename: %{name: " Cleopatra "}) |> render_submit()
     assert flash(view, :info) == "Gespeichert."
     refute has_element?(view, "#rename-form")
-    assert Participants.get_participant!(h.cleo).name == "Cleopatra"
+    assert Participants.get_participant!(Scope.system(), h.cleo).name == "Cleopatra"
     assert last_activity() == "Person „Cleo“ umbenannt in „Cleopatra“"
   end
 
   defp subscribe_to_other_device(participant_id) do
-    %{user: user} =
-      participant_id |> Participants.get_participant!() |> Abakus.Repo.preload(:user)
+    participant = Participants.get_participant!(Scope.system(), participant_id)
+    %{user: user} = Abakus.Repo.preload(participant, :user)
 
     topic = "users_sessions:#{Base.url_encode64(Abakus.Users.generate_user_session_token(user))}"
     AbakusWeb.Endpoint.subscribe(topic)

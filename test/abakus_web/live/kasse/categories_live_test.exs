@@ -7,6 +7,7 @@ defmodule AbakusWeb.Kasse.CategoriesLiveTest do
   import AbakusWeb.PageText
 
   alias Abakus.Kasse.Categories
+  alias Abakus.Users.Scope
 
   @defaults [
     "Lebensmittel",
@@ -42,8 +43,8 @@ defmodule AbakusWeb.Kasse.CategoriesLiveTest do
     for {id, plush} <- [{h.food, "shopping-cart"}, {h.restaurant, "utensils"}],
         do: assert(has_element?(view, ~s(#category-#{id} img[src^="/images/plush/#{plush}"])))
 
-    [first | _] = Categories.list_categories()
-    last = List.last(Categories.list_categories())
+    [first | _] = Categories.list_categories(Scope.system())
+    last = List.last(Categories.list_categories(Scope.system()))
     assert has_element?(view, "#category-#{first.id}-up[disabled]")
     refute has_element?(view, "#category-#{first.id}-down[disabled]")
     assert has_element?(view, "#category-#{last.id}-down[disabled]")

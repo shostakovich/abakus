@@ -1,8 +1,9 @@
 defmodule Abakus.MCP.WriteTools do
   @moduledoc """
-  The tools that add entries, as if the payer had entered them in the app (the payer is the
-  author). Amounts are strict: a dot as decimal separator and no thousands separator, so "1.234"
-  is never 1234. A likely duplicate is refused unless the call allows it.
+  The tools that add entries, as if the payer had entered them in the app: they write with the
+  payer's scope, so the payer is the author. Amounts are strict: a dot as decimal separator and
+  no thousands separator, so "1.234" is never 1234. A likely duplicate is refused unless the call
+  allows it.
   """
 
   require Logger
@@ -11,6 +12,7 @@ defmodule Abakus.MCP.WriteTools do
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.MCP.{Directory, Output, ReadTools, ToolError}
   alias Abakus.Money
+  alias Abakus.Users.Scope
 
   @doc "Creates an expense."
   def create_expense(args, opts) do
@@ -122,7 +124,7 @@ defmodule Abakus.MCP.WriteTools do
   end
 
   defp ecb_rate(currency, date, opts) do
-    case Rates.rate(currency, date, today: ReadTools.today(opts)) do
+    case Rates.rate(Scope.system(), currency, date, today: ReadTools.today(opts)) do
       {:ok, rate} ->
         {rate.rate, rate.source}
 
@@ -198,10 +200,12 @@ defmodule Abakus.MCP.WriteTools do
   end
 
   defp create(input, payer, directory, allow_duplicate?) do
-    if not allow_duplicate? and input.amount_cents > 0,
-      do: refuse_duplicate(Expenses.find_duplicate(input))
+    scope = Scope.for_participant(payer)
 
-    case Expenses.create_expense(payer.id, input, text: "Über MCP angelegt") do
+    if not allow_duplicate? and input.amount_cents > 0,
+      do: refuse_duplicate(Expenses.find_duplicate(scope, input))
+
+    case Expenses.create_expense(scope, input, text: "Über MCP angelegt") do
       {:ok, expense} ->
         Logger.info("MCP created entry #{expense.id}")
 

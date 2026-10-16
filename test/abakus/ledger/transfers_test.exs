@@ -17,14 +17,15 @@ defmodule Abakus.Ledger.TransfersTest do
   end
 
   defp transfer(from, to, attrs \\ %{}) do
-    attrs
-    |> Enum.into(%{
-      account_id: from.id,
-      payee_id: to.transfer_payee.id,
-      date: ~D[2026-10-09],
-      amount: -1_250
-    })
-    |> Ledger.create_transaction()
+    Ledger.create_transaction(
+      budget_scope(),
+      Enum.into(attrs, %{
+        account_id: from.id,
+        payee_id: to.transfer_payee.id,
+        date: ~D[2026-10-09],
+        amount: -1_250
+      })
+    )
   end
 
   defp reload(%{id: id}), do: Repo.get!(Transaction, id)
@@ -84,7 +85,7 @@ defmodule Abakus.Ledger.TransfersTest do
       assert {inflow.account_id, inflow.payee_id, inflow.transfer_transaction_id} ==
                {c.savings.id, c.checking.transfer_payee.id, outflow.id}
 
-      assert Enum.map(Ledger.list_transactions(c.savings), & &1.id) == [inflow.id]
+      assert Enum.map(Ledger.list_transactions(budget_scope(), c.savings), & &1.id) == [inflow.id]
       assert_balanced()
     end
 
@@ -130,7 +131,7 @@ defmodule Abakus.Ledger.TransfersTest do
       assert %{payee_id: ["darf nicht das eigene Konto sein"]} = errors_on(changeset)
 
       assert {:error, changeset} =
-               Ledger.create_transaction(%{
+               Ledger.create_transaction(budget_scope(), %{
                  account_id: c.checking.id,
                  date: ~D[2026-10-09],
                  amount: -1_250,
@@ -147,7 +148,7 @@ defmodule Abakus.Ledger.TransfersTest do
     end
 
     test "to a closed account is allowed, as imported history has them", c do
-      {:ok, savings} = Ledger.update_account(c.savings, %{closed: true})
+      {:ok, savings} = Ledger.update_account(budget_scope(), c.savings, %{closed: true})
 
       assert {:ok, outflow} = transfer(c.checking, savings)
       assert counterpart(outflow).account_id == savings.id
@@ -159,13 +160,20 @@ defmodule Abakus.Ledger.TransfersTest do
       {:ok, outflow} = transfer(c.checking, c.savings)
 
       {:ok, outflow} =
-        Ledger.update_transaction(outflow, %{amount: -5_000, date: ~D[2026-10-01], memo: "Rest"})
+        Ledger.update_transaction(budget_scope(), outflow, %{
+          amount: -5_000,
+          date: ~D[2026-10-01],
+          memo: "Rest"
+        })
 
       assert %Transaction{amount: 5_000, date: ~D[2026-10-01], memo: "Rest"} =
                counterpart(outflow)
 
       {:ok, _inflow} =
-        Ledger.update_transaction(counterpart(outflow), %{amount: 4_000, memo: nil})
+        Ledger.update_transaction(budget_scope(), counterpart(outflow), %{
+          amount: 4_000,
+          memo: nil
+        })
 
       assert %Transaction{amount: -4_000, memo: nil} = reload(outflow)
       assert_balanced()
@@ -175,7 +183,10 @@ defmodule Abakus.Ledger.TransfersTest do
       {:ok, outflow} = transfer(c.checking, c.savings)
 
       {:ok, _} =
-        Ledger.update_transaction(counterpart(outflow), %{cleared: :cleared, flag: :green})
+        Ledger.update_transaction(budget_scope(), counterpart(outflow), %{
+          cleared: :cleared,
+          flag: :green
+        })
 
       assert %Transaction{cleared: :uncleared, flag: nil} = reload(outflow)
     end
@@ -183,23 +194,36 @@ defmodule Abakus.Ledger.TransfersTest do
     test "another transfer payee moves the counterpart", c do
       {:ok, outflow} = transfer(c.checking, c.savings)
       inflow = counterpart(outflow)
-      {:ok, _} = Ledger.add_origin(inflow, :ynab, "ynab-1")
+      {:ok, _} = Ledger.add_origin(budget_scope(), inflow, :ynab, "ynab-1")
 
-      {:ok, outflow} = Ledger.update_transaction(outflow, %{payee_id: c.cash.transfer_payee.id})
+      {:ok, outflow} =
+        Ledger.update_transaction(budget_scope(), outflow, %{payee_id: c.cash.transfer_payee.id})
 
       assert %Transaction{id: id, account_id: account_id} = counterpart(outflow)
       assert {id, account_id} == {inflow.id, c.cash.id}
-      assert Ledger.get_transaction_by_origin(c.cash, :ynab, "ynab-1").id == inflow.id
+
+      assert Ledger.get_transaction_by_origin(budget_scope(), c.cash, :ynab, "ynab-1").id ==
+               inflow.id
+
       assert_balanced()
     end
 
     test "the counterpart cannot move into an account that has its external id already", c do
       {:ok, outflow} = transfer(c.checking, c.savings)
-      {:ok, _} = Ledger.add_origin(counterpart(outflow), :ynab, "ynab-1")
-      {:ok, _} = Ledger.add_origin(transaction_fixture(account_id: c.cash.id), :ynab, "ynab-1")
+      {:ok, _} = Ledger.add_origin(budget_scope(), counterpart(outflow), :ynab, "ynab-1")
+
+      {:ok, _} =
+        Ledger.add_origin(
+          budget_scope(),
+          transaction_fixture(account_id: c.cash.id),
+          :ynab,
+          "ynab-1"
+        )
 
       assert {:error, changeset} =
-               Ledger.update_transaction(outflow, %{payee_id: c.cash.transfer_payee.id})
+               Ledger.update_transaction(budget_scope(), outflow, %{
+                 payee_id: c.cash.transfer_payee.id
+               })
 
       assert %{
                payee_id: [
@@ -214,12 +238,15 @@ defmodule Abakus.Ledger.TransfersTest do
     test "moving the account gives the counterpart that account's transfer payee", c do
       {:ok, outflow} = transfer(c.checking, c.savings)
 
-      {:ok, outflow} = Ledger.update_transaction(outflow, %{account_id: c.cash.id})
+      {:ok, outflow} =
+        Ledger.update_transaction(budget_scope(), outflow, %{account_id: c.cash.id})
 
       assert counterpart(outflow).payee_id == c.cash.transfer_payee.id
       assert_balanced()
 
-      assert {:error, changeset} = Ledger.update_transaction(outflow, %{account_id: c.savings.id})
+      assert {:error, changeset} =
+               Ledger.update_transaction(budget_scope(), outflow, %{account_id: c.savings.id})
+
       assert %{payee_id: ["darf nicht das eigene Konto sein"]} = errors_on(changeset)
     end
 
@@ -227,7 +254,8 @@ defmodule Abakus.Ledger.TransfersTest do
       {:ok, outflow} = transfer(c.checking, c.savings)
       inflow = counterpart(outflow)
 
-      {:ok, outflow} = Ledger.update_transaction(outflow, %{payee_id: payee_fixture().id})
+      {:ok, outflow} =
+        Ledger.update_transaction(budget_scope(), outflow, %{payee_id: payee_fixture().id})
 
       assert outflow.transfer_transaction_id == nil
 
@@ -235,7 +263,9 @@ defmodule Abakus.Ledger.TransfersTest do
                reload(inflow)
 
       {:ok, outflow} =
-        Ledger.update_transaction(outflow, %{payee_id: c.savings.transfer_payee.id})
+        Ledger.update_transaction(budget_scope(), outflow, %{
+          payee_id: c.savings.transfer_payee.id
+        })
 
       assert %Transaction{id: id, amount: 1_250} = counterpart(outflow)
       assert id != inflow.id
@@ -246,7 +276,9 @@ defmodule Abakus.Ledger.TransfersTest do
       {:ok, outflow} = transfer(c.depot, c.checking, counterpart_category_id: c.category.id)
 
       {:ok, outflow} =
-        Ledger.update_transaction(outflow, %{payee_id: c.savings.transfer_payee.id})
+        Ledger.update_transaction(budget_scope(), outflow, %{
+          payee_id: c.savings.transfer_payee.id
+        })
 
       assert %Transaction{account_id: account_id, category_id: category_id} = counterpart(outflow)
       assert {account_id, category_id} == {c.savings.id, c.category.id}
@@ -255,11 +287,13 @@ defmodule Abakus.Ledger.TransfersTest do
     test "a transfer moving to a tracking account needs the counterpart's category", c do
       {:ok, outflow} = transfer(c.checking, c.savings)
 
-      assert {:error, changeset} = Ledger.update_transaction(outflow, %{account_id: c.depot.id})
+      assert {:error, changeset} =
+               Ledger.update_transaction(budget_scope(), outflow, %{account_id: c.depot.id})
+
       assert %{counterpart_category_id: ["can't be blank"]} = errors_on(changeset)
 
       {:ok, outflow} =
-        Ledger.update_transaction(outflow, %{
+        Ledger.update_transaction(budget_scope(), outflow, %{
           account_id: c.depot.id,
           counterpart_category_id: c.category.id
         })
@@ -272,7 +306,7 @@ defmodule Abakus.Ledger.TransfersTest do
       inflow = counterpart(outflow)
 
       {:ok, split} =
-        Ledger.update_transaction(outflow, %{
+        Ledger.update_transaction(budget_scope(), outflow, %{
           payee_id: nil,
           subtransactions: [%{amount: -1_000}, %{amount: -250}]
         })
@@ -285,7 +319,7 @@ defmodule Abakus.Ledger.TransfersTest do
   describe "transfers of subtransactions" do
     setup c do
       {:ok, split} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.checking.id,
           date: ~D[2026-10-09],
           amount: -1_250,
@@ -313,7 +347,7 @@ defmodule Abakus.Ledger.TransfersTest do
 
     test "keep the counterpart in step with the split", c do
       {:ok, _} =
-        Ledger.update_transaction(c.split, %{
+        Ledger.update_transaction(budget_scope(), c.split, %{
           date: ~D[2026-10-05],
           amount: -1_400,
           subtransactions: [
@@ -324,7 +358,7 @@ defmodule Abakus.Ledger.TransfersTest do
 
       assert %Transaction{amount: 400, date: ~D[2026-10-05], memo: nil} = reload(c.inflow)
 
-      {:ok, _} = Ledger.update_transaction(c.split, %{account_id: c.cash.id})
+      {:ok, _} = Ledger.update_transaction(budget_scope(), c.split, %{account_id: c.cash.id})
       assert reload(c.inflow).payee_id == c.cash.transfer_payee.id
       assert_balanced()
     end
@@ -335,14 +369,15 @@ defmodule Abakus.Ledger.TransfersTest do
       end
 
       {:ok, _} =
-        Ledger.update_transaction(c.split, %{
+        Ledger.update_transaction(budget_scope(), c.split, %{
           subtransactions: with_payee.(c.cash.transfer_payee.id)
         })
 
       assert %Transaction{id: id, account_id: account_id} = reload(c.inflow)
       assert {id, account_id} == {c.inflow.id, c.cash.id}
 
-      {:ok, split} = Ledger.update_transaction(c.split, %{subtransactions: with_payee.(nil)})
+      {:ok, split} =
+        Ledger.update_transaction(budget_scope(), c.split, %{subtransactions: with_payee.(nil)})
 
       assert %Transaction{deleted_at: %DateTime{}, transfer_subtransaction_id: nil} =
                reload(c.inflow)
@@ -350,7 +385,7 @@ defmodule Abakus.Ledger.TransfersTest do
       assert Enum.all?(split.subtransactions, &is_nil(&1.transfer_transaction_id))
 
       {:ok, split} =
-        Ledger.update_transaction(c.split, %{
+        Ledger.update_transaction(budget_scope(), c.split, %{
           subtransactions: with_payee.(c.savings.transfer_payee.id)
         })
 
@@ -360,23 +395,35 @@ defmodule Abakus.Ledger.TransfersTest do
 
     test "lose the counterpart when the subtransaction goes", c do
       {:ok, _} =
-        Ledger.update_transaction(c.split, %{
+        Ledger.update_transaction(budget_scope(), c.split, %{
           subtransactions: [%{id: c.groceries.id}, %{amount: -250}]
         })
 
       assert reload(c.inflow).deleted_at
       assert Repo.get(Subtransaction, c.to_savings.id) == nil
 
-      {:ok, _} = Ledger.update_transaction(c.split, %{subtransactions: [], category_id: nil})
+      {:ok, _} =
+        Ledger.update_transaction(budget_scope(), c.split, %{
+          subtransactions: [],
+          category_id: nil
+        })
+
       assert_balanced()
     end
 
     test "cannot move their counterpart into an account that has its external id already", c do
-      {:ok, _} = Ledger.add_origin(c.inflow, :ynab, "ynab-2")
-      {:ok, _} = Ledger.add_origin(transaction_fixture(account_id: c.cash.id), :ynab, "ynab-2")
+      {:ok, _} = Ledger.add_origin(budget_scope(), c.inflow, :ynab, "ynab-2")
+
+      {:ok, _} =
+        Ledger.add_origin(
+          budget_scope(),
+          transaction_fixture(account_id: c.cash.id),
+          :ynab,
+          "ynab-2"
+        )
 
       assert {:error, changeset} =
-               Ledger.update_transaction(c.split, %{
+               Ledger.update_transaction(budget_scope(), c.split, %{
                  subtransactions: [
                    %{id: c.groceries.id},
                    %{id: c.to_savings.id, payee_id: c.cash.transfer_payee.id}
@@ -394,14 +441,19 @@ defmodule Abakus.Ledger.TransfersTest do
 
     test "their counterpart takes no counterpart category", c do
       assert {:error, changeset} =
-               Ledger.update_transaction(c.inflow, %{counterpart_category_id: c.category.id})
+               Ledger.update_transaction(budget_scope(), c.inflow, %{
+                 counterpart_category_id: c.category.id
+               })
 
       assert %{counterpart_category_id: ["muss leer sein"]} = errors_on(changeset)
     end
 
     test "change their counterpart in the split; its own fields stay its own", c do
       assert {:error, changeset} =
-               Ledger.update_transaction(c.inflow, %{amount: 1, date: ~D[2026-10-01]})
+               Ledger.update_transaction(budget_scope(), c.inflow, %{
+                 amount: 1,
+                 date: ~D[2026-10-01]
+               })
 
       assert %{
                amount: ["wird in der Aufteilung geändert"],
@@ -410,12 +462,15 @@ defmodule Abakus.Ledger.TransfersTest do
                errors_on(changeset)
 
       assert {:ok, %Transaction{cleared: :cleared, approved: false}} =
-               Ledger.update_transaction(c.inflow, %{cleared: :cleared, approved: false})
+               Ledger.update_transaction(budget_scope(), c.inflow, %{
+                 cleared: :cleared,
+                 approved: false
+               })
     end
 
     test "the counterpart in a budget account takes the category from a tracking split", c do
       {:ok, split} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.depot.id,
           date: ~D[2026-10-09],
           amount: -500,
@@ -436,22 +491,22 @@ defmodule Abakus.Ledger.TransfersTest do
   describe "deleting a transfer" do
     test "deletes both sides, from either side", c do
       {:ok, outflow} = transfer(c.checking, c.savings)
-      {:ok, _} = Ledger.delete_transaction(outflow)
+      {:ok, _} = Ledger.delete_transaction(budget_scope(), outflow)
 
       assert reload(outflow).deleted_at
       assert counterpart(outflow).deleted_at
-      assert Ledger.list_transactions(c.savings) == []
+      assert Ledger.list_transactions(budget_scope(), c.savings) == []
 
       {:ok, outflow} = transfer(c.checking, c.savings)
-      {:ok, _} = Ledger.delete_transaction(counterpart(outflow))
+      {:ok, _} = Ledger.delete_transaction(budget_scope(), counterpart(outflow))
 
       assert reload(outflow).deleted_at
-      assert Ledger.list_transactions(c.checking) == []
+      assert Ledger.list_transactions(budget_scope(), c.checking) == []
     end
 
     test "deletes the counterparts of a split's subtransactions", c do
       {:ok, split} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.checking.id,
           date: ~D[2026-10-09],
           amount: -1_250,
@@ -461,14 +516,14 @@ defmodule Abakus.Ledger.TransfersTest do
           ]
         })
 
-      {:ok, _} = Ledger.delete_transaction(split)
+      {:ok, _} = Ledger.delete_transaction(budget_scope(), split)
 
       assert Enum.all?(split.subtransactions, &counterpart(&1).deleted_at)
     end
 
     test "a subtransaction's counterpart goes only with its split", c do
       {:ok, split} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.checking.id,
           date: ~D[2026-10-09],
           amount: -1_250,
@@ -480,7 +535,7 @@ defmodule Abakus.Ledger.TransfersTest do
 
       inflow = counterpart(Enum.at(split.subtransactions, 1))
 
-      assert {:error, changeset} = Ledger.delete_transaction(inflow)
+      assert {:error, changeset} = Ledger.delete_transaction(budget_scope(), inflow)
 
       assert %{transfer_subtransaction_id: ["wird mit ihrer Aufteilung gelöscht"]} =
                errors_on(changeset)
@@ -497,6 +552,7 @@ defmodule Abakus.Ledger.TransfersTest do
 
       assert_raise Ecto.ConstraintError, ~r/transactions_transfer_transaction_id_index/, fn ->
         Repo.insert!(%Transaction{
+          user_id: c.checking.user_id,
           account_id: c.checking.id,
           date: ~D[2026-10-09],
           amount: -1,
@@ -506,6 +562,7 @@ defmodule Abakus.Ledger.TransfersTest do
 
       [first, second] =
         Repo.insert!(%Transaction{
+          user_id: c.checking.user_id,
           account_id: c.checking.id,
           date: ~D[2026-10-09],
           amount: -2,
@@ -545,9 +602,9 @@ defmodule Abakus.Ledger.TransfersTest do
         ])
 
       case Enum.random(1..10) do
-        1 -> Ledger.delete_transaction(transaction)
+        1 -> Ledger.delete_transaction(budget_scope(), transaction)
         2 -> transfer(account, Enum.random(accounts -- [account]))
-        _ -> Ledger.update_transaction(transaction, attrs)
+        _ -> Ledger.update_transaction(budget_scope(), transaction, attrs)
       end
 
       assert_balanced()

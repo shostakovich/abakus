@@ -7,19 +7,7 @@ defmodule Abakus.ExchangeRates.MigrationTest do
   @moduletag :tmp_dir
   @before 20_261_016_220_000
 
-  setup %{tmp_dir: dir} do
-    path = Path.join(dir, "abakus.sqlite3")
-
-    repo =
-      start_supervised!(
-        {Repo, name: nil, database: path, pool: DBConnection.ConnectionPool, pool_size: 1},
-        id: {Repo, path}
-      )
-
-    Repo.put_dynamic_repo(repo)
-    on_exit(fn -> Repo.put_dynamic_repo(Repo) end)
-    %{repo: repo}
-  end
+  setup %{tmp_dir: dir}, do: %{repo: TestMigrations.start_repo!(dir)}
 
   test "copies the Depot's ECB rates into the shared table", %{repo: repo} do
     TestMigrations.run!(repo, to: @before)

@@ -1,11 +1,12 @@
 defmodule Abakus.Kasse.Rates do
   @moduledoc """
   The Kasse's exchange rates: a manual rate wins over the ECB rates, and every change to the
-  manual rates is logged.
+  manual rates is logged. The functions take the caller's scope.
   """
 
   alias Abakus.{ExchangeRates, Format, LocalTime, Money, Repo}
-  alias Abakus.Kasse.Activities
+  alias Abakus.Kasse.{Access, Activities}
+  alias Abakus.Users.Scope
 
   @lookback_days 10
 
@@ -22,8 +23,9 @@ defmodule Abakus.Kasse.Rates do
   (weekends, holidays). Euros are 1. The rate is a float, as the Kasse converts with it. Option
   `:today`.
   """
-  @spec rate(String.t(), Date.t(), keyword()) :: {:ok, rate()} | {:error, :no_rate}
-  def rate(currency, date, opts \\ []) do
+  @spec rate(Scope.t(), String.t(), Date.t(), keyword()) :: {:ok, rate()} | {:error, :no_rate}
+  def rate(%Scope{} = scope, currency, date, opts \\ []) do
+    Access.check!(scope)
     code = Money.normalize_currency(currency)
     today = Keyword.get_lazy(opts, :today, &LocalTime.today/0)
 
@@ -52,7 +54,9 @@ defmodule Abakus.Kasse.Rates do
   end
 
   @doc "Saves a manual rate for a currency from a date on, replacing one of the same day; logged."
-  def put_manual_rate(actor_id, attrs) do
+  def put_manual_rate(%Scope{} = scope, attrs) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       with {:ok, rate} <- ExchangeRates.put_manual_rate(attrs),
            {:ok, _activity} <-
@@ -67,7 +71,8 @@ defmodule Abakus.Kasse.Rates do
   end
 
   @doc "Deletes the manual rate of a currency from a date on, logged; the ECB rates stay."
-  def delete_manual_rate(actor_id, currency, date) do
+  def delete_manual_rate(%Scope{} = scope, currency, date) do
+    actor_id = Access.actor_id!(scope)
     currency = Money.normalize_currency(currency)
 
     Repo.transact(fn ->

@@ -1,9 +1,10 @@
 defmodule Abakus.YnabImport.Loader do
   @moduledoc """
-  Replaces the budget with a YNAB plan, inside the caller's database transaction: `wipe/0` deletes it, `load/1`
-  writes the plan through the contexts, so their rules hold as for any other entry. Transactions go in by date
-  through the Ledger, which creates the counterparts of transfers; each counterpart then takes its own cleared
-  state, approval and flag from YNAB, and every side gets its YNAB id as an origin.
+  Replaces the budget owner's budget with a YNAB plan, inside the caller's database transaction: `wipe/1` deletes
+  it, `load/2` writes the plan through the contexts with the owner's scope, so their rules hold as for any other
+  entry. Transactions go in by date through the Ledger, which creates the counterparts of transfers; each
+  counterpart then takes its own cleared state, approval and flag from YNAB, and every side gets its YNAB id as an
+  origin.
   """
 
   import Ecto.Query
@@ -20,6 +21,7 @@ defmodule Abakus.YnabImport.Loader do
     TransactionOrigin
   }
 
+  alias Abakus.Users.Scope
   alias Abakus.YnabImport.{Plan, Targets}
 
   @kinds %{"checking" => :checking, "savings" => :savings, "cash" => :cash}
@@ -29,9 +31,15 @@ defmodule Abakus.YnabImport.Loader do
     defexception [:message]
   end
 
-  @doc "Deletes the whole budget but the internal Ready to Assign; users stay."
-  def wipe do
-    Repo.update_all(Transaction,
+  @doc "Deletes the owner's whole budget but the internal Ready to Assign; users stay."
+  def wipe(%Scope{user: %{id: user_id}}) do
+    transactions = from t in Transaction, where: t.user_id == ^user_id
+
+    subtransactions =
+      from s in Subtransaction,
+        where: s.transaction_id in subquery(select(transactions, [t], t.id))
+
+    Repo.update_all(transactions,
       set: [
         transfer_transaction_id: nil,
         transfer_subtransaction_id: nil,
@@ -39,15 +47,17 @@ defmodule Abakus.YnabImport.Loader do
       ]
     )
 
-    Repo.update_all(Subtransaction, set: [transfer_transaction_id: nil])
+    Repo.update_all(subtransactions, set: [transfer_transaction_id: nil])
+    Repo.delete_all(subtransactions)
 
     for schema <-
-          [TransactionOrigin, Subtransaction, Transaction, Payee, BankBalance, Account] ++
-            [Assignment, TargetSnooze, TargetVersion],
-        do: Repo.delete_all(schema)
+          [TransactionOrigin, Transaction, Payee, BankBalance, Account, Assignment] ++
+            [TargetSnooze, TargetVersion],
+        do: Repo.delete_all(from r in schema, where: r.user_id == ^user_id)
 
-    Repo.delete_all(from c in Category, where: not c.internal)
-    Repo.delete_all(from g in CategoryGroup, where: not g.internal)
+    for schema <- [Category, CategoryGroup],
+        do: Repo.delete_all(from r in schema, where: r.user_id == ^user_id and not r.internal)
+
     :ok
   end
 
@@ -55,14 +65,14 @@ defmodule Abakus.YnabImport.Loader do
   Writes the plan into an empty budget. Returns the Abakus ids by YNAB id (`accounts`, and `categories`, where
   Uncategorized is nil), the `counts` and the `merged_payees` as `{name, other_names}`.
   """
-  def load(plan) do
-    accounts = load_accounts(plan)
-    {payees, merged} = load_payees(plan, accounts)
-    categories = load_categories(plan)
+  def load(%Scope{} = owner, plan) do
+    accounts = load_accounts(owner, plan)
+    {payees, merged} = load_payees(owner, plan, accounts)
+    categories = load_categories(owner, plan)
     regular = Map.new(Plan.regular_categories(plan), &{&1["id"], categories[&1["id"]]})
-    load_assignments(plan, regular)
-    load_targets(plan, regular)
-    load_transactions(plan, %{accounts: accounts, payees: payees, categories: categories})
+    load_assignments(owner, plan, regular)
+    load_targets(owner, plan, regular)
+    load_transactions(owner, plan, %{accounts: accounts, payees: payees, categories: categories})
 
     %{
       accounts: Map.new(accounts, fn {id, account} -> {id, account.id} end),
@@ -71,13 +81,19 @@ defmodule Abakus.YnabImport.Loader do
       counts: %{
         accounts: map_size(accounts),
         categories: map_size(regular),
-        payees: Repo.aggregate(from(p in Payee, where: is_nil(p.transfer_account_id)), :count),
+        payees:
+          Repo.aggregate(
+            from(p in Payee,
+              where: p.user_id == ^owner.user.id and is_nil(p.transfer_account_id)
+            ),
+            :count
+          ),
         transactions: length(Plan.transactions(plan))
       }
     }
   end
 
-  defp load_accounts(plan) do
+  defp load_accounts(owner, plan) do
     plan
     |> Plan.accounts()
     |> Enum.with_index()
@@ -91,7 +107,7 @@ defmodule Abakus.YnabImport.Loader do
         last_reconciled_at: timestamp(account["last_reconciled_at"])
       }
 
-      {account["id"], ok!(Ledger.create_account(attrs), "account #{account["name"]}")}
+      {account["id"], ok!(Ledger.create_account(owner, attrs), "account #{account["name"]}")}
     end)
   end
 
@@ -112,7 +128,7 @@ defmodule Abakus.YnabImport.Loader do
   end
 
   # Payees with the same lookup key become one, under the first one's name.
-  defp load_payees(plan, accounts) do
+  defp load_payees(owner, plan, accounts) do
     {transfer, regular} = Enum.split_with(Plan.payees(plan), & &1["transfer_account_id"])
 
     transfer_ids =
@@ -123,7 +139,7 @@ defmodule Abakus.YnabImport.Loader do
     regular
     |> group_in_order(&Names.lookup_key(&1["name"]))
     |> Enum.reduce({transfer_ids, []}, fn [first | others] = same, {ids, merged} ->
-      payee = ok!(Ledger.create_payee(%{name: first["name"]}), "payee #{first["name"]}")
+      payee = ok!(Ledger.create_payee(owner, %{name: first["name"]}), "payee #{first["name"]}")
       ids = Enum.reduce(same, ids, &Map.put(&2, &1["id"], payee.id))
       names = others |> Enum.map(& &1["name"]) |> Enum.uniq()
       {ids, if(names == [], do: merged, else: merged ++ [{first["name"], names}])}
@@ -137,7 +153,7 @@ defmodule Abakus.YnabImport.Loader do
 
   # Groups only where categories land: YNAB marks every group internal and lists its own empty ones. A hidden
   # category sits in YNAB's hidden group but keeps its original group.
-  defp load_categories(plan) do
+  defp load_categories(owner, plan) do
     by_group =
       plan
       |> Plan.regular_categories()
@@ -147,21 +163,21 @@ defmodule Abakus.YnabImport.Loader do
     |> Plan.category_groups()
     |> Enum.filter(&Map.has_key?(by_group, &1["id"]))
     |> Enum.with_index()
-    |> Enum.reduce(special_categories(plan), fn {group, position}, ids ->
+    |> Enum.reduce(special_categories(owner, plan), fn {group, position}, ids ->
       attrs = %{name: group["name"], hidden: group["hidden"], position: position}
-      saved = ok!(Categories.create_category_group(attrs), "group #{group["name"]}")
+      saved = ok!(Categories.create_category_group(owner, attrs), "group #{group["name"]}")
 
       by_group
       |> Map.fetch!(group["id"])
       |> Enum.with_index()
       |> Enum.reduce(ids, fn {category, position}, ids ->
-        Map.put(ids, category["id"], create_category(category, saved, position).id)
+        Map.put(ids, category["id"], create_category(owner, category, saved, position).id)
       end)
     end)
   end
 
-  defp special_categories(plan) do
-    ready_to_assign = Categories.ready_to_assign!().id
+  defp special_categories(owner, plan) do
+    ready_to_assign = Categories.ready_to_assign!(owner).id
 
     for category <- Plan.categories(plan),
         role = Plan.role(category),
@@ -170,40 +186,40 @@ defmodule Abakus.YnabImport.Loader do
         do: {category["id"], if(role == :ready_to_assign, do: ready_to_assign)}
   end
 
-  defp create_category(category, group, position) do
-    %{
+  defp create_category(owner, category, group, position) do
+    owner
+    |> Categories.create_category(%{
       name: category["name"],
       hidden: category["hidden"],
       note: category["note"],
       position: position,
       category_group_id: group.id
-    }
-    |> Categories.create_category()
+    })
     |> ok!("category #{category["name"]}")
   end
 
-  defp load_assignments(plan, regular) do
+  defp load_assignments(owner, plan, regular) do
     for {month, %{"budgeted" => budgeted} = category} <- Plan.regular_category_months(plan),
         budgeted != 0 do
-      %Category{id: regular[category["id"]]}
-      |> Categories.assign(month, Plan.cents(budgeted))
+      owner
+      |> Categories.assign(%Category{id: regular[category["id"]]}, month, Plan.cents(budgeted))
       |> ok!("assignment")
     end
   end
 
-  defp load_targets(plan, regular) do
+  defp load_targets(owner, plan, regular) do
     for {category_id, versions} <- Targets.versions(plan), version <- versions do
-      ok!(Categories.set_target(%Category{id: regular[category_id]}, version), "target")
+      ok!(Categories.set_target(owner, %Category{id: regular[category_id]}, version), "target")
     end
 
     for {category_id, month} <- Targets.snoozes(plan) do
-      ok!(Categories.snooze_target(%Category{id: regular[category_id]}, month), "snooze")
+      ok!(Categories.snooze_target(owner, %Category{id: regular[category_id]}, month), "snooze")
     end
   end
 
   # A split's transfer part has no id of its counterpart, so counterparts of parts wait until their split is in
   # and are paired with its parts by account, date and amount.
-  defp load_transactions(plan, ids) do
+  defp load_transactions(owner, plan, ids) do
     {part_counterparts, transactions} =
       Enum.split_with(Plan.transactions(plan), &Plan.part_counterpart?/1)
 
@@ -215,22 +231,22 @@ defmodule Abakus.YnabImport.Loader do
         counterparts: %{}
       })
 
-    _booked = Enum.reduce(transactions ++ part_counterparts, context, &book/2)
+    _booked = Enum.reduce(transactions ++ part_counterparts, context, &book(owner, &1, &2))
     :ok
   end
 
-  defp book(transaction, context) do
+  defp book(owner, transaction, context) do
     case Map.fetch(context.counterparts, transaction["id"]) do
       {:ok, counterpart_id} ->
-        take_own_fields(counterpart_id, transaction)
+        take_own_fields(owner, counterpart_id, transaction)
         context
 
       :error ->
-        create(transaction, context)
+        create(owner, transaction, context)
     end
   end
 
-  defp create(transaction, context) do
+  defp create(owner, transaction, context) do
     account = transaction["account_id"]
 
     {parts, context} =
@@ -253,8 +269,8 @@ defmodule Abakus.YnabImport.Loader do
       })
       |> without_split_category()
 
-    created = ok!(Ledger.create_transaction(attrs), "transaction #{transaction["id"]}")
-    ok!(Ledger.add_origin(created, :ynab, transaction["id"]), "origin")
+    created = ok!(Ledger.create_transaction(owner, attrs), "transaction #{transaction["id"]}")
+    ok!(Ledger.add_origin(owner, created, :ynab, transaction["id"]), "origin")
 
     pairs =
       [{counterpart, created.transfer_transaction_id}] ++
@@ -312,7 +328,7 @@ defmodule Abakus.YnabImport.Loader do
 
   defp counterpart_category(_account, _side, nil, _context), do: nil
 
-  defp take_own_fields(counterpart_id, transaction) do
+  defp take_own_fields(owner, counterpart_id, transaction) do
     attrs = %{
       cleared: transaction["cleared"],
       approved: transaction["approved"],
@@ -320,9 +336,12 @@ defmodule Abakus.YnabImport.Loader do
     }
 
     counterpart =
-      ok!(Ledger.update_transaction(%Transaction{id: counterpart_id}, attrs), "counterpart")
+      ok!(
+        Ledger.update_transaction(owner, %Transaction{id: counterpart_id}, attrs),
+        "counterpart"
+      )
 
-    ok!(Ledger.add_origin(counterpart, :ynab, transaction["id"]), "origin")
+    ok!(Ledger.add_origin(owner, counterpart, :ynab, transaction["id"]), "origin")
   end
 
   defp ok!({:ok, value}, _what), do: value

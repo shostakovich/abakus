@@ -45,7 +45,10 @@ defmodule AbakusWeb.AccountDialog do
   defp handle_page_info({__MODULE__, :done, message, result}, socket) do
     socket =
       socket
-      |> assign(account_dialog: nil, account_groups: AccountGroups.load())
+      |> assign(
+        account_dialog: nil,
+        account_groups: AccountGroups.load(socket.assigns.current_scope)
+      )
       |> clear_flash()
       |> put_flash(:info, message)
 
@@ -175,7 +178,7 @@ defmodule AbakusWeb.AccountDialog do
   end
 
   def handle_event("save", %{"account" => params}, socket) do
-    case save(socket.assigns.account, editable(params)) do
+    case save(socket.assigns.current_scope, socket.assigns.account, editable(params)) do
       {:ok, account} -> {:noreply, saved(socket, account)}
       {:error, changeset} -> {:noreply, assign(socket, :form, to_form(changeset))}
     end
@@ -186,8 +189,11 @@ defmodule AbakusWeb.AccountDialog do
   def handle_event("reopen", _params, socket),
     do: set_closed(socket, false, "Konto wieder geöffnet.")
 
-  defp save(%Account{id: nil}, params), do: Ledger.create_account(params)
-  defp save(account, params), do: Ledger.update_account(account, params)
+  defp save(current_scope, %Account{id: nil}, params),
+    do: Ledger.create_account(current_scope, params)
+
+  defp save(current_scope, account, params),
+    do: Ledger.update_account(current_scope, account, params)
 
   defp saved(%{assigns: %{account: %Account{id: nil}}} = socket, account),
     do: done(socket, "Konto angelegt.", {:created, account})
@@ -195,7 +201,8 @@ defmodule AbakusWeb.AccountDialog do
   defp saved(socket, _account), do: done(socket, "Konto gespeichert.", :changed)
 
   defp set_closed(socket, closed, message) do
-    {:ok, _account} = Ledger.update_account(socket.assigns.account, %{closed: closed})
+    %{current_scope: current_scope, account: account} = socket.assigns
+    {:ok, _account} = Ledger.update_account(current_scope, account, %{closed: closed})
     {:noreply, done(socket, message, :changed)}
   end
 

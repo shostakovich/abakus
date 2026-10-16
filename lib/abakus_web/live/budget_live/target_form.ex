@@ -2,7 +2,7 @@ defmodule AbakusWeb.BudgetLive.TargetForm do
   @moduledoc """
   The target editor in a category's dialog (its sheet on phones), as in YNAB: the amount, monthly or by a date (with the date and
   "Jährlich wiederholen"), "Weitere zurücklegen" or "Auffüllen bis"; save, delete and cancel. The form holds what
-  was typed; saving sets the target from the focus month on (`Abakus.Categories.set_target/2`).
+  was typed; saving sets the target from the focus month on (`Abakus.Categories.set_target/3`).
   """
   use AbakusWeb, :html
 

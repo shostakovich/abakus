@@ -4,13 +4,13 @@ defmodule AbakusWeb.Kasse.ExportController do
 
   alias Abakus.Kasse.Exports
 
-  def expenses_csv(conn, params), do: download(conn, params, &Exports.expenses_csv/1)
-  def expenses_json(conn, params), do: download(conn, params, &Exports.expenses_json/1)
+  def expenses_csv(conn, params), do: download(conn, params, &Exports.expenses_csv/2)
+  def expenses_json(conn, params), do: download(conn, params, &Exports.expenses_json/2)
 
   defp download(conn, params, export) do
     case Exports.period(params) do
       {:ok, period} ->
-        file = export.(period)
+        file = export.(conn.assigns.current_scope, period)
 
         conn
         |> put_resp_header("content-type", file.content_type)

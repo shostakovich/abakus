@@ -10,33 +10,36 @@ defmodule Abakus.FileImport do
   else a new one), the memo from `MEMO`. The statement's ledger balance becomes the account's bank balance from the
   file.
 
-  Accounts fed by another app and closed ones take no file import.
+  Accounts fed by another app and closed ones take no file import. Everything goes through the Ledger with the
+  caller's scope.
   """
 
   alias Abakus.FileImport.OFX
   alias Abakus.{Ledger, Repo}
   alias Abakus.Ledger.Account
+  alias Abakus.Users.Scope
 
   @doc "The statements of a file, or why it cannot be read."
   defdelegate read(content), to: OFX, as: :parse
 
   @doc "The accounts a statement can go into, in their order."
-  def accounts, do: Enum.filter(Ledger.list_accounts(), &Account.takes_entries?/1)
+  def accounts(%Scope{} = scope),
+    do: Enum.filter(Ledger.list_accounts(scope), &Account.takes_entries?/1)
 
   @doc "The account the statement's account is linked to, as long as it takes a file import."
-  def linked_account(%{bank_id: bank_id, acct_id: acct_id}) do
-    account = Ledger.get_account_by_ofx(bank_id, acct_id)
+  def linked_account(%Scope{} = scope, %{bank_id: bank_id, acct_id: acct_id}) do
+    account = Ledger.get_account_by_ofx(scope, bank_id, acct_id)
     if account && Account.takes_entries?(account), do: account
   end
 
   @doc """
   The statement's transactions, each with its status in the account and how many have which: `:existing` (its
   FITID is there), `:reconciled` (dated up to the account's newest reconciled transaction, which takes no match, so
-  it would come in twice), `:matched` (it proposes a match, see `Abakus.Ledger.find_matches/3`, for `match`) or
+  it would come in twice), `:matched` (it proposes a match, see `Abakus.Ledger.find_matches/4`, for `match`) or
   `:new`. Without an account all are new.
   """
-  def preview(statement, account) do
-    rows = statement.transactions |> unique() |> rows(account)
+  def preview(%Scope{} = scope, statement, account) do
+    rows = statement.transactions |> unique() |> rows(scope, account)
     counts = Enum.frequencies_by(rows, & &1.status)
 
     Map.new([:new, :existing, :matched, :reconciled], &{&1, Map.get(counts, &1, 0)})
@@ -45,14 +48,15 @@ defmodule Abakus.FileImport do
 
   defp unique(transactions), do: Enum.uniq_by(transactions, & &1.fitid)
 
-  defp rows(transactions, nil), do: Enum.map(transactions, &row(&1, :new))
+  defp rows(transactions, _scope, nil), do: Enum.map(transactions, &row(&1, :new))
 
-  defp rows(transactions, account) do
-    existing = Ledger.existing_external_ids(account, :file, Enum.map(transactions, & &1.fitid))
-    reconciled_until = Ledger.last_reconciled_date(account)
+  defp rows(transactions, scope, account) do
+    fitids = Enum.map(transactions, & &1.fitid)
+    existing = Ledger.existing_external_ids(scope, account, :file, fitids)
+    reconciled_until = Ledger.last_reconciled_date(scope, account)
     rows = Enum.map(transactions, &row(&1, status(&1, existing, reconciled_until)))
     {open, _others} = Enum.split_with(rows, &(&1.status == :new))
-    matches = Ledger.find_matches(account, :file, Enum.map(open, & &1.transaction))
+    matches = Ledger.find_matches(scope, account, :file, Enum.map(open, & &1.transaction))
 
     match_by_fitid =
       open |> Enum.zip(matches) |> Map.new(fn {row, match} -> {row.transaction.fitid, match} end)
@@ -81,20 +85,20 @@ defmodule Abakus.FileImport do
   import or two statements into one account with a message, a transaction the Ledger refuses with
   `{transaction, changeset}`.
   """
-  def import(statements) do
+  def import(%Scope{} = scope, statements) do
     Repo.transact(fn ->
-      with {:ok, statements} <- fresh_accounts(statements),
-           {:ok, statuses} <- collect(statements, &import_statement/1) do
+      with {:ok, statements} <- fresh_accounts(scope, statements),
+           {:ok, statuses} <- collect(statements, &import_statement(scope, &1)) do
         counts = statuses |> List.flatten() |> Enum.frequencies()
         {:ok, %{new: Map.get(counts, :new, 0), matched: Map.get(counts, :matched, 0)}}
       end
     end)
   end
 
-  defp fresh_accounts(statements) do
+  defp fresh_accounts(scope, statements) do
     statements =
       Enum.map(statements, fn {statement, %Account{id: id}} ->
-        {statement, Ledger.get_account!(id)}
+        {statement, Ledger.get_account!(scope, id)}
       end)
 
     accounts = Enum.map(statements, &elem(&1, 1))
@@ -111,20 +115,21 @@ defmodule Abakus.FileImport do
     end
   end
 
-  defp import_statement({statement, account}) do
-    with {:ok, account} <- Ledger.link_ofx_account(account, statement.bank_id, statement.acct_id),
-         {:ok, statuses} <- import_transactions(statement, account),
-         :ok <- put_bank_balance(account, statement.ledger_balance) do
+  defp import_statement(scope, {statement, account}) do
+    with {:ok, account} <-
+           Ledger.link_ofx_account(scope, account, statement.bank_id, statement.acct_id),
+         {:ok, statuses} <- import_transactions(scope, statement, account),
+         :ok <- put_bank_balance(scope, account, statement.ledger_balance) do
       {:ok, statuses}
     end
   end
 
-  defp import_transactions(statement, account) do
-    rows = Enum.filter(preview(statement, account).rows, &(&1.status in [:new, :matched]))
-    collect(rows, &create(account, &1))
+  defp import_transactions(scope, statement, account) do
+    rows = Enum.filter(preview(scope, statement, account).rows, &(&1.status in [:new, :matched]))
+    collect(rows, &create(scope, account, &1))
   end
 
-  defp create(account, %{transaction: transaction, status: status, match: match}) do
+  defp create(scope, account, %{transaction: transaction, status: status, match: match}) do
     attrs = %{
       account_id: account.id,
       date: transaction.date,
@@ -136,18 +141,19 @@ defmodule Abakus.FileImport do
       matched_transaction_id: match && match.id
     }
 
-    with {:ok, created} <- Ledger.create_transaction(attrs),
-         {:ok, _origin} <- Ledger.add_origin(created, :file, transaction.fitid) do
+    with {:ok, created} <- Ledger.create_transaction(scope, attrs),
+         {:ok, _origin} <- Ledger.add_origin(scope, created, :file, transaction.fitid) do
       {:ok, status}
     else
       {:error, changeset} -> {:error, {transaction, changeset}}
     end
   end
 
-  defp put_bank_balance(_account, nil), do: :ok
+  defp put_bank_balance(_scope, _account, nil), do: :ok
 
-  defp put_bank_balance(account, balance) do
-    with {:ok, _balance} <- Ledger.put_bank_balance(account, Map.put(balance, :source, :file)),
+  defp put_bank_balance(scope, account, balance) do
+    with {:ok, _balance} <-
+           Ledger.put_bank_balance(scope, account, Map.put(balance, :source, :file)),
          do: :ok
   end
 

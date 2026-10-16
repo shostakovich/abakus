@@ -5,6 +5,7 @@ defmodule Abakus.Kasse.ExportsTest do
 
   alias Abakus.Kasse.{Categories, Expenses, Exports, Participants, Settings}
   alias Abakus.Kasse.Expenses.Expense
+  alias Abakus.Users.Scope
 
   @now ~U[2026-10-03 10:00:00Z]
   @opts [now: @now, today: ~D[2026-10-03]]
@@ -66,10 +67,15 @@ defmodule Abakus.Kasse.ExportsTest do
         |> Map.put("Anna", anna.id)
 
       {:ok, _xaver} =
-        Participants.archive_participant(nil, Participants.get_participant!(people["Xaver"]))
+        Participants.archive_participant(
+          Scope.system(),
+          Participants.get_participant!(Scope.system(), people["Xaver"])
+        )
 
-      {:ok, _settings} = Settings.update_settings(nil, %{group_name: ~s(WG <Zipfel> & "Co")})
-      categories = Map.new(Categories.list_categories(), &{&1.name, &1.id})
+      {:ok, _settings} =
+        Settings.update_settings(Scope.system(), %{group_name: ~s(WG <Zipfel> & "Co")})
+
+      categories = Map.new(Categories.list_categories(Scope.system()), &{&1.name, &1.id})
       [anna, ben, dora, jue] = Enum.map(~w(Anna Ben Dora Jürgen), &people[&1])
 
       inputs = [
@@ -109,17 +115,22 @@ defmodule Abakus.Kasse.ExportsTest do
               Map.new(extra)
             )
 
-          {:ok, expense} = Expenses.create_expense(payer, attrs)
+          {:ok, expense} = Expenses.create_expense(scope_of(payer), attrs)
           assert expense.id == index
           expense.id
         end
 
-      {:ok, _deleted} = Expenses.delete_expense(anna, Expenses.get_expense!(Enum.at(ids, 9)))
+      {:ok, _deleted} =
+        Expenses.delete_expense(
+          scope_of(anna),
+          Expenses.get_expense!(Scope.system(), Enum.at(ids, 9))
+        )
+
       %{people: people}
     end
 
     test "the CSV for German Excel has every expense with the shares of the people involved" do
-      file = Exports.expenses_csv(period(), @opts)
+      file = Exports.expenses_csv(Scope.system(), period(), @opts)
 
       assert {file.filename, file.content_type} ==
                {"kasse-ausgaben-2026-10-03.csv", "text/csv; charset=utf-8"}
@@ -145,20 +156,20 @@ defmodule Abakus.Kasse.ExportsTest do
                    &(&1 <> "\n")
                  )
 
-      assert Exports.expenses_csv(period("2026-12-01"), @opts).filename ==
+      assert Exports.expenses_csv(Scope.system(), period("2026-12-01"), @opts).filename ==
                "kasse-ausgaben-ab-2026-12-01.csv"
 
-      assert Exports.expenses_csv(period(nil, "2026-08-31"), @opts).body ==
+      assert Exports.expenses_csv(Scope.system(), period(nil, "2026-08-31"), @opts).body ==
                "\uFEFF#{@header};Anteil Anna;Anteil Jürgen\n1;30.08.2026;Brötchen;;Jürgen;4,00;4,00;EUR;;Ausgabe;Gleichmäßig;;2,00;2,00\n"
 
-      empty = Exports.expenses_csv(period("2020-01-01", "2020-01-02"), @opts)
+      empty = Exports.expenses_csv(Scope.system(), period("2020-01-01", "2020-01-02"), @opts)
 
       assert {empty.filename, empty.body} ==
                {"kasse-ausgaben-2020-01-01_2020-01-02.csv", "\uFEFF#{@header}\n"}
     end
 
     test "the JSON has everything with shares", %{people: people} do
-      file = Exports.expenses_json(period("2026-09-03", "2026-09-06"), @opts)
+      file = Exports.expenses_json(Scope.system(), period("2026-09-03", "2026-09-06"), @opts)
 
       assert {file.filename, file.content_type} ==
                {"kasse-ausgaben-2026-09-03_2026-09-06.json", "application/json; charset=utf-8"}
@@ -223,7 +234,7 @@ defmodule Abakus.Kasse.ExportsTest do
       assert {sushi["original_amount_minor"], sushi["fx_rate"], sushi["amount_cents"]} ==
                {2000, 160.5, 1246}
 
-      all = JSON.decode!(Exports.expenses_json(period(), @opts).body)
+      all = JSON.decode!(Exports.expenses_json(Scope.system(), period(), @opts).body)
       assert Enum.sort(Map.keys(all)) == ~w(currency expenses exported_at group participants)
       assert Enum.map(all["expenses"], & &1["id"]) == [1, 2, 3, 4, 6, 7, 8, 9, 5, 12, 13, 11]
       phone = Enum.find(all["expenses"], &(&1["id"] == 8))
@@ -237,10 +248,10 @@ defmodule Abakus.Kasse.ExportsTest do
     test "keeps its keys in the documented order" do
       anna = person!("Anna")
       ben = person!("Ben", anna.id)
-      food = Enum.find(Categories.list_categories(), &(&1.name == "Lebensmittel"))
+      food = Enum.find(Categories.list_categories(Scope.system()), &(&1.name == "Lebensmittel"))
 
       {:ok, expense} =
-        Expenses.create_expense(anna.id, %{
+        Expenses.create_expense(scope_of(anna.id), %{
           title: "Rewe",
           date: ~D[2026-09-01],
           paid_by_id: anna.id,
@@ -257,63 +268,64 @@ defmodule Abakus.Kasse.ExportsTest do
         ]
       )
 
-      assert Exports.expenses_json(period("2026-09-01", "2026-09-30"), @opts).body == """
-             {
-               "group": "Kasse",
-               "exported_at": "2026-10-03T10:00:00Z",
-               "from": "2026-09-01",
-               "to": "2026-09-30",
-               "currency": "EUR",
-               "participants": [
-                 {
-                   "id": #{anna.id},
-                   "name": "Anna",
-                   "archived": false
-                 },
-                 {
-                   "id": #{ben.id},
-                   "name": "Ben",
-                   "archived": false
-                 }
-               ],
-               "expenses": [
-                 {
-                   "id": #{expense.id},
-                   "date": "2026-09-01",
-                   "title": "Rewe",
-                   "category_id": #{food.id},
-                   "category": "Lebensmittel",
-                   "paid_by": #{anna.id},
-                   "paid_by_name": "Anna",
-                   "amount_cents": 1001,
-                   "is_reimbursement": false,
-                   "split_mode": "equal",
-                   "original_amount_minor": 1001,
-                   "original_currency": "EUR",
-                   "fx_rate": 1.0,
-                   "fx_source": "",
-                   "notes": "Wochenende",
-                   "recurring_id": null,
-                   "shares": [
-                     {
-                       "participant_id": #{anna.id},
-                       "name": "Anna",
-                       "weight": 1,
-                       "amount_cents": 500
-                     },
-                     {
-                       "participant_id": #{ben.id},
-                       "name": "Ben",
-                       "weight": 1,
-                       "amount_cents": 501
-                     }
-                   ],
-                   "created_at": "2026-09-01T18:00:00Z",
-                   "updated_at": "2026-09-02T07:30:00Z"
-                 }
-               ]
-             }
-             """
+      assert Exports.expenses_json(Scope.system(), period("2026-09-01", "2026-09-30"), @opts).body ==
+               """
+               {
+                 "group": "Kasse",
+                 "exported_at": "2026-10-03T10:00:00Z",
+                 "from": "2026-09-01",
+                 "to": "2026-09-30",
+                 "currency": "EUR",
+                 "participants": [
+                   {
+                     "id": #{anna.id},
+                     "name": "Anna",
+                     "archived": false
+                   },
+                   {
+                     "id": #{ben.id},
+                     "name": "Ben",
+                     "archived": false
+                   }
+                 ],
+                 "expenses": [
+                   {
+                     "id": #{expense.id},
+                     "date": "2026-09-01",
+                     "title": "Rewe",
+                     "category_id": #{food.id},
+                     "category": "Lebensmittel",
+                     "paid_by": #{anna.id},
+                     "paid_by_name": "Anna",
+                     "amount_cents": 1001,
+                     "is_reimbursement": false,
+                     "split_mode": "equal",
+                     "original_amount_minor": 1001,
+                     "original_currency": "EUR",
+                     "fx_rate": 1.0,
+                     "fx_source": "",
+                     "notes": "Wochenende",
+                     "recurring_id": null,
+                     "shares": [
+                       {
+                         "participant_id": #{anna.id},
+                         "name": "Anna",
+                         "weight": 1,
+                         "amount_cents": 500
+                       },
+                       {
+                         "participant_id": #{ben.id},
+                         "name": "Ben",
+                         "weight": 1,
+                         "amount_cents": 501
+                       }
+                     ],
+                     "created_at": "2026-09-01T18:00:00Z",
+                     "updated_at": "2026-09-02T07:30:00Z"
+                   }
+                 ]
+               }
+               """
     end
   end
 end

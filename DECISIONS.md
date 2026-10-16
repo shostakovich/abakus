@@ -102,7 +102,8 @@ Accepted, 2026-10-15
 
 ## 0007. The budget has one owner
 
-Accepted, 2026-10-15. Replaces "domain tables have no user: all users see everything" from the spec.
+Accepted, 2026-10-15; partly superseded by 0019, 2026-10-16. Replaces "domain tables have no user: all users see
+everything" from the spec.
 
 - **Context:** The Kasse brings in a member who shares expenses but must not see the budget.
 - **Decision:** Exactly one user owns the budget, set by the invite; only that user sees the Budget area. A per-user
@@ -249,3 +250,17 @@ Accepted, 2026-10-16 (#56).
 - **Consequences:** Investing becomes budget spending, so every savings plan run is a transaction to approve, and
   the value change shrinks to market movement and income inside the portfolio. Every Depot write, including PP
   re-imports, must keep its linked transactions in the same database transaction.
+
+## 0019. Every context takes the scope
+
+Accepted, 2026-10-16 (#73).
+
+- **Context:** The Depot took `%Scope{}`, the Kasse a person's id with access checked only in the router, and the
+  budget nothing, its tables carrying no user (0007), so a job or an MCP tool could reach any data, and the budget
+  owner was checked in five places.
+- **Decision:** Every public context function called from outside its context takes `%Scope{}`, reads included.
+  Callers without a person (jobs, release and mix tasks, MCP reads) pass `Scope.system()`, MCP writes act as the
+  expense's payer; separate internal entry points for jobs were rejected as a second API.
+- **Consequences:** Each context must allow the system scope explicitly where it is valid, and the Kasse refuses a
+  signed-in user who is not a person itself. Budget tables get their owner's `user_id`, so 0007's "budget tables
+  carry no user" no longer holds, while the budget keeps one owner.

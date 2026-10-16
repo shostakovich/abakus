@@ -243,7 +243,7 @@ defmodule AbakusWeb.ImportLive do
      |> assign(
        page_title: "Import & Sync",
        preview: nil,
-       accounts: FileImport.accounts(),
+       accounts: FileImport.accounts(socket.assigns.current_scope),
        transfer_accounts: %{}
      )
      |> allow_upload(:file,
@@ -259,15 +259,17 @@ defmodule AbakusWeb.ImportLive do
     content =
       consume_uploaded_entry(socket, entry, fn %{path: path} -> {:ok, File.read!(path)} end)
 
+    scope = socket.assigns.current_scope
+
     case FileImport.read(content) do
       {:ok, statements} ->
         {:noreply,
          socket
          |> clear_flash()
-         |> assign(:transfer_accounts, Map.new(Ledger.list_accounts(), &{&1.id, &1}))
+         |> assign(:transfer_accounts, Map.new(Ledger.list_accounts(scope), &{&1.id, &1}))
          |> assign(:preview, %{
            file_name: entry.client_name,
-           statements: Enum.map(statements, &item/1)
+           statements: Enum.map(statements, &item(scope, &1))
          })}
 
       {:error, message} ->
@@ -277,9 +279,14 @@ defmodule AbakusWeb.ImportLive do
 
   defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
 
-  defp item(statement, account \\ nil) do
-    account = account || FileImport.linked_account(statement)
-    %{statement: statement, account: account, preview: FileImport.preview(statement, account)}
+  defp item(scope, statement, account \\ nil) do
+    account = account || FileImport.linked_account(scope, statement)
+
+    %{
+      statement: statement,
+      account: account,
+      preview: FileImport.preview(scope, statement, account)
+    }
   end
 
   @impl true
@@ -292,7 +299,11 @@ defmodule AbakusWeb.ImportLive do
       account = Enum.find(socket.assigns.accounts, &(Integer.to_string(&1.id) == id))
 
       statements =
-        List.replace_at(preview.statements, index, item(item.statement, account))
+        List.replace_at(
+          preview.statements,
+          index,
+          item(socket.assigns.current_scope, item.statement, account)
+        )
 
       {:noreply, assign(socket, :preview, %{preview | statements: statements})}
     else
@@ -304,9 +315,10 @@ defmodule AbakusWeb.ImportLive do
 
   def handle_event("import", _params, %{assigns: %{preview: %{statements: statements}}} = socket) do
     if Enum.all?(statements, & &1.account) do
-      statements
-      |> Enum.map(&{&1.statement, &1.account})
-      |> FileImport.import()
+      pairs = Enum.map(statements, &{&1.statement, &1.account})
+
+      socket.assigns.current_scope
+      |> FileImport.import(pairs)
       |> imported(statements, socket)
     else
       {:noreply, socket}
@@ -323,21 +335,25 @@ defmodule AbakusWeb.ImportLive do
   end
 
   defp imported({:error, reason}, _statements, socket) do
-    accounts = FileImport.accounts()
+    scope = socket.assigns.current_scope
+    accounts = FileImport.accounts(scope)
     preview = socket.assigns.preview
 
     {:noreply,
      socket
      |> assign(
        accounts: accounts,
-       preview: %{preview | statements: Enum.map(preview.statements, &refreshed(&1, accounts))}
+       preview: %{
+         preview
+         | statements: Enum.map(preview.statements, &refreshed(scope, &1, accounts))
+       }
      )
      |> put_flash(:error, "Nicht importiert: #{error_text(reason)}")}
   end
 
   # A chosen account stays while it is still offered.
-  defp refreshed(%{statement: statement, account: account}, accounts),
-    do: item(statement, Enum.find(accounts, &(&1.id == account.id)))
+  defp refreshed(scope, %{statement: statement, account: account}, accounts),
+    do: item(scope, statement, Enum.find(accounts, &(&1.id == account.id)))
 
   defp error_text({transaction, changeset}),
     do:

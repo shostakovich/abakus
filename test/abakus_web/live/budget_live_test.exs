@@ -18,7 +18,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
     setup do
       checking = account_fixture(kind: :checking)
-      rta = Categories.ready_to_assign!()
+      rta = Categories.ready_to_assign!(budget_scope())
       daily = category_group_fixture(name: "🛒 Alltag", position: 0)
       housing = category_group_fixture(name: "🏠 Wohnen", position: 1)
       groceries = category_fixture(name: "🛒 Lebensmittel", category_group_id: daily.id)
@@ -95,7 +95,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
     test "a blank amount assigns zero", c do
       for value <- ["", "  "] do
-        Categories.assign(c.groceries, @october, 1_200)
+        Categories.assign(budget_scope(), c.groceries, @october, 1_200)
         {:ok, view, _html} = open(c.conn)
 
         view |> element("#assign-#{c.groceries.id}-2026-10") |> render_blur(%{"value" => value})
@@ -113,7 +113,7 @@ defmodule AbakusWeb.BudgetLiveTest do
         render_hook(view, "assign", %{"category" => id, "month" => "2026-10", "value" => value})
       end
 
-      assert Categories.budget().assigned == %{}
+      assert Categories.budget(budget_scope()).assigned == %{}
     end
 
     test "an unchanged amount writes nothing", c do
@@ -121,7 +121,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       view |> element("#assign-#{c.groceries.id}-2026-10") |> render_blur(%{"value" => "0,00"})
 
-      assert Categories.budget().assigned == %{}
+      assert Categories.budget(budget_scope()).assigned == %{}
     end
 
     test "assigns only to shown months and listed categories", c do
@@ -135,15 +135,15 @@ defmodule AbakusWeb.BudgetLiveTest do
         render_hook(view, "assign", %{"category" => "#{id}", "month" => month, "value" => "5"})
       end
 
-      assert Categories.budget().assigned == %{}
+      assert Categories.budget(budget_scope()).assigned == %{}
     end
 
     test "the month's details warn while a later month is not covered, the month card with a sign",
          c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
-      Categories.assign(c.groceries, @october, 40_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 40_000)
       spend(c, c.groceries, -80_000, ~D[2026-10-05])
-      Categories.assign(c.rent, @november, 50_000)
+      Categories.assign(budget_scope(), c.rent, @november, 50_000)
 
       {:ok, view, _html} = open(c.conn, ~p"/budget", months: 2)
 
@@ -161,8 +161,8 @@ defmodule AbakusWeb.BudgetLiveTest do
     test "the current month is the focus month, with pills; a card's details have its calculation",
          c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
-      Categories.assign(c.groceries, @october, 30_000)
-      Categories.assign(c.groceries, @november, 30_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 30_000)
+      Categories.assign(budget_scope(), c.groceries, @november, 30_000)
       {:ok, view, _html} = open(c.conn, ~p"/budget", months: 3)
 
       assert has_element?(
@@ -280,9 +280,9 @@ defmodule AbakusWeb.BudgetLiveTest do
     end
 
     test "groups show their totals; categories and groups hidden in YNAB are shown", c do
-      Categories.assign(c.groceries, @october, 10_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
       hidden = category_fixture(name: "Alt", category_group_id: c.groceries.category_group_id)
-      Categories.update_category(hidden, %{hidden: true})
+      Categories.update_category(budget_scope(), hidden, %{hidden: true})
       gone = category_group_fixture(name: "Weg", hidden: true)
       category_fixture(name: "Auch weg", category_group_id: gone.id)
 
@@ -325,13 +325,13 @@ defmodule AbakusWeb.BudgetLiveTest do
     end
 
     test "a target shows its state on the pill, not on the row", c do
-      Categories.set_target(c.groceries, %{
+      Categories.set_target(budget_scope(), c.groceries, %{
         from_month: @october,
         cadence: :monthly,
         amount: 70_000
       })
 
-      Categories.assign(c.groceries, @october, 65_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 65_000)
 
       {:ok, view, _html} = open(c.conn)
 
@@ -353,9 +353,13 @@ defmodule AbakusWeb.BudgetLiveTest do
       category = category_fixture(name: "🧴 Drogerie", category_group_id: group.id)
 
       {:ok, _} =
-        Categories.set_target(category, %{from_month: @october, cadence: :monthly, amount: 1_000})
+        Categories.set_target(budget_scope(), category, %{
+          from_month: @october,
+          cadence: :monthly,
+          amount: 1_000
+        })
 
-      Categories.assign(category, @october, 1_000)
+      Categories.assign(budget_scope(), category, @october, 1_000)
       %{checking: checking, category: category}
     end
 
@@ -412,7 +416,7 @@ defmodule AbakusWeb.BudgetLiveTest do
   end
 
   defp income(c, amount, date, payee) do
-    {:ok, payee} = Ledger.create_payee(%{name: payee})
+    {:ok, payee} = Ledger.create_payee(budget_scope(), %{name: payee})
 
     transaction_fixture(
       account_id: c.checking.id,
@@ -433,6 +437,6 @@ defmodule AbakusWeb.BudgetLiveTest do
   end
 
   defp assigned(category, month) do
-    Map.get(Categories.budget().assigned, {category.id, month}, 0)
+    Map.get(Categories.budget(budget_scope()).assigned, {category.id, month}, 0)
   end
 end

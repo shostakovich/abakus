@@ -11,17 +11,19 @@ defmodule AbakusWeb.Kasse.SettingsLive do
     {:ok,
      socket
      |> assign(page_title: "Gruppe")
-     |> assign_form(Settings.change_settings(Settings.get_settings()))}
+     |> assign_form(Settings.change_settings(Settings.get_settings(socket.assigns.current_scope)))}
   end
 
   @impl true
   def handle_event("validate", %{"settings" => params}, socket) do
-    changeset = Settings.change_settings(Settings.get_settings(), params)
+    changeset =
+      Settings.change_settings(Settings.get_settings(socket.assigns.current_scope), params)
+
     {:noreply, assign_form(socket, Map.put(changeset, :action, :validate))}
   end
 
   def handle_event("save", %{"settings" => params}, socket) do
-    case Settings.update_settings(socket.assigns.current_participant.id, params) do
+    case Settings.update_settings(socket.assigns.current_scope, params) do
       {:ok, setting} ->
         {:noreply,
          socket

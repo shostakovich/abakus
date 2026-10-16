@@ -80,8 +80,7 @@ defmodule AbakusWeb.Router do
     live_session :kasse,
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
-        {AbakusWeb.Areas, {:require, :kasse}},
-        AbakusWeb.Kasse.CurrentParticipant
+        {AbakusWeb.Areas, {:require, :kasse}}
       ] do
       live "/", ExpensesLive
       live "/expenses/new", ExpenseLive, :new
@@ -155,8 +154,7 @@ defmodule AbakusWeb.Router do
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
         {AbakusWeb.Areas, {:assign, :kasse}},
-        AbakusWeb.SettingsNav,
-        AbakusWeb.Kasse.CurrentParticipant
+        AbakusWeb.SettingsNav
       ] do
       live "/", SettingsLive
       live "/participants", ParticipantsLive

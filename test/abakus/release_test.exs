@@ -1,12 +1,14 @@
 defmodule Abakus.ReleaseTest do
   use Abakus.DataCase
 
+  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import ExUnit.CaptureIO
   import Abakus.UsersFixtures
 
   alias Abakus.Depot.PortfoliosFixtures
   alias Abakus.FakeYnab
   alias Abakus.Kasse.Participants
+  alias Abakus.Users.Scope
   alias Mix.Tasks.Abakus.AddParticipant
   alias Mix.Tasks.Abakus.Invite
   alias Mix.Tasks.Abakus.YnabImport, as: YnabImportTask
@@ -105,7 +107,7 @@ defmodule Abakus.ReleaseTest do
     assert output =~ "5 expenses"
     assert output =~ "Users matched: none."
     assert output =~ "sign-in page: anna@example.com, ben@example.com, cleo@example.com."
-    assert Participants.get_participant!(5).name == "Cleo"
+    assert Participants.get_participant!(Scope.system(), 5).name == "Cleo"
   end
 
   @tag :tmp_dir
@@ -124,6 +126,7 @@ defmodule Abakus.ReleaseTest do
 
   describe "the YNAB import" do
     setup do
+      budget_scope()
       FakeYnab.start(%{"plan-test" => @plan})
       previous = System.get_env("YNAB_TOKEN")
       System.put_env("YNAB_TOKEN", FakeYnab.token())
@@ -153,7 +156,7 @@ defmodule Abakus.ReleaseTest do
       assert_received {:mix_shell, :info,
                        ["  2026-08, Ready to Assign: YNAB 2770.01, Abakus 2770.00"]}
 
-      assert length(Abakus.Ledger.list_accounts()) == 4
+      assert length(Abakus.Ledger.list_accounts(budget_scope())) == 4
     end
 
     test "mix abakus.ynab_import prints the report, and fails on errors" do

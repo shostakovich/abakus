@@ -8,6 +8,7 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
 
   alias Abakus.{ExchangeRates, LocalTime}
   alias Abakus.Kasse.Expenses
+  alias Abakus.Users.Scope
   alias Setzkasten.Format
 
   setup %{conn: conn} do
@@ -34,7 +35,7 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
         do: {"#{index}", %{"selected" => "#{flag}"}}
   end
 
-  defp newest, do: Expenses.list_expenses() |> Enum.max_by(& &1.id)
+  defp newest, do: Expenses.list_expenses(Scope.system()) |> Enum.max_by(& &1.id)
 
   test "a new expense is dated today, paid by the reader and shared by everybody",
        %{conn: conn, h: h} do
@@ -125,7 +126,7 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
              "Bitte mindestens eine Person ankreuzen, für die bezahlt wurde."
 
     assert has_element?(view, "#expense-split[aria-invalid=true]")
-    assert Expenses.list_expenses() == []
+    assert Expenses.list_expenses(Scope.system()) == []
   end
 
   test "editing shows the values and history and saves the changes", %{conn: conn, h: h} do

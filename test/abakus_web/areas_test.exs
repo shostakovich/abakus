@@ -176,8 +176,8 @@ defmodule AbakusWeb.AreasTest do
     end
 
     test "an archived person among them", %{h: h} do
-      anna = Participants.get_participant!(h.anna)
-      {:ok, _anna} = Participants.archive_participant(nil, anna)
+      anna = Participants.get_participant!(Scope.system(), h.anna)
+      {:ok, _anna} = Participants.archive_participant(Scope.system(), anna)
       conn = log_in_participant(build_conn(), anna.id)
 
       assert_error_sent 404, fn -> get(conn, ~p"/kasse") end
@@ -189,7 +189,7 @@ defmodule AbakusWeb.AreasTest do
 
     setup %{user: user} do
       {:ok, olga} =
-        Participants.create_participant(nil, %{name: "Olga", email: user.email})
+        Participants.create_participant(Scope.system(), %{name: "Olga", email: user.email})
 
       %{olga: olga}
     end

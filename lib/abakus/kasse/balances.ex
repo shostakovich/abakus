@@ -1,18 +1,24 @@
 defmodule Abakus.Kasse.Balances do
   @moduledoc """
   Balances over all expenses that are not deleted, reimbursements included: positive means the
-  others owe the person. See `Abakus.Kasse.Ledger` for the math.
+  others owe the person. See `Abakus.Kasse.Ledger` for the math. The functions take the caller's scope.
   """
 
   import Ecto.Query
 
+  alias Abakus.Kasse.{Access, Ledger, Periods}
   alias Abakus.Kasse.Expenses.{Expense, ExpenseShare}
-  alias Abakus.Kasse.{Ledger, Periods}
   alias Abakus.{LocalTime, Repo}
+  alias Abakus.Users.Scope
 
   @doc "The balance of everybody who paid or shares an expense, by participant id."
-  @spec balances() :: %{integer() => integer()}
-  def balances do
+  @spec balances(Scope.t()) :: %{integer() => integer()}
+  def balances(%Scope{} = scope) do
+    Access.check!(scope)
+    all()
+  end
+
+  defp all do
     paid =
       from e in Expense,
         where: is_nil(e.deleted_at),
@@ -35,13 +41,17 @@ defmodule Abakus.Kasse.Balances do
     end)
   end
 
-  @doc "The balance of one person."
-  @spec balance(integer()) :: integer()
-  def balance(participant_id), do: Map.get(balances(), participant_id, 0)
+  @doc "The balance of the scope's person."
+  @spec balance(Scope.t()) :: integer()
+  def balance(%Scope{} = scope), do: balance_of(Access.person!(scope).id)
+
+  @doc "The balance of one person, for the Kasse's own checks."
+  @spec balance_of(integer()) :: integer()
+  def balance_of(participant_id), do: Map.get(all(), participant_id, 0)
 
   @doc "The transfers that settle all balances."
-  @spec settlement() :: [Ledger.transfer()]
-  def settlement, do: Ledger.settle(balances())
+  @spec settlement(Scope.t()) :: [Ledger.transfer()]
+  def settlement(%Scope{} = scope), do: Ledger.settle(balances(scope))
 
   @doc """
   The balances at the end of each period of `unit` (`:year`, `:month` or `:week`), by expense
@@ -49,7 +59,8 @@ defmodule Abakus.Kasse.Balances do
   first and last period; by default the first expense and today, or a later expense) and
   `:today`.
   """
-  def history(unit, opts \\ []) do
+  def history(%Scope{} = scope, unit, opts \\ []) do
+    Access.check!(scope)
     to = opts[:to]
     entries = dated_entries(to && Periods.last_day(unit, to))
     to = to || last_date(entries, Keyword.get_lazy(opts, :today, &LocalTime.today/0))

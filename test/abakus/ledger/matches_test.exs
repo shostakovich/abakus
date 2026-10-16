@@ -3,7 +3,7 @@ defmodule Abakus.Ledger.MatchesTest do
 
   import Abakus.DomainFixtures
 
-  alias Abakus.Ledger
+  alias Abakus.{Ledger, UsersFixtures}
   alias Abakus.Ledger.{Payee, Transaction, TransactionOrigin}
 
   setup do
@@ -26,32 +26,33 @@ defmodule Abakus.Ledger.MatchesTest do
     {external_id, attrs} = attrs |> Map.new() |> Map.pop(:external_id, "tx-7")
 
     {:ok, proposal} =
-      attrs
-      |> Enum.into(%{
-        account_id: c.account.id,
-        date: ~D[2026-10-07],
-        amount: -4_875,
-        memo: "DROGERIE SAUBER",
-        cleared: :cleared,
-        source: :bank,
-        matched_transaction_id: c.manual.id
-      })
-      |> Ledger.create_transaction()
+      Ledger.create_transaction(
+        budget_scope(),
+        Enum.into(attrs, %{
+          account_id: c.account.id,
+          date: ~D[2026-10-07],
+          amount: -4_875,
+          memo: "DROGERIE SAUBER",
+          cleared: :cleared,
+          source: :bank,
+          matched_transaction_id: c.manual.id
+        })
+      )
 
-    {:ok, _} = Ledger.add_origin(proposal, :bank, external_id)
+    {:ok, _} = Ledger.add_origin(budget_scope(), proposal, :bank, external_id)
     proposal
   end
 
   test "a proposal counts nowhere until it is decided", c do
     proposal = propose(c)
 
-    assert Enum.map(Ledger.list_transactions(c.account), & &1.id) == [c.manual.id]
+    assert Enum.map(Ledger.list_transactions(budget_scope(), c.account), & &1.id) == [c.manual.id]
 
     assert [%Transaction{id: id, matched_transaction: matched}] =
-             Ledger.list_match_proposals(c.account)
+             Ledger.list_match_proposals(budget_scope(), c.account)
 
     assert {id, matched.id} == {proposal.id, c.manual.id}
-    assert Repo.aggregate(Ledger.in_register(), :count) == 1
+    assert Repo.aggregate(Ledger.in_register(budget_scope()), :count) == 1
   end
 
   test "one proposal per existing transaction, in its account", c do
@@ -60,14 +61,20 @@ defmodule Abakus.Ledger.MatchesTest do
     attrs = %{account_id: c.account.id, date: ~D[2026-10-07], amount: -4_875, source: :file}
 
     assert {:error, changeset} =
-             Ledger.create_transaction(Map.put(attrs, :matched_transaction_id, c.manual.id))
+             Ledger.create_transaction(
+               budget_scope(),
+               Map.put(attrs, :matched_transaction_id, c.manual.id)
+             )
 
     assert %{matched_transaction_id: ["has already been taken"]} = errors_on(changeset)
 
     other = transaction_fixture(amount: -4_875)
 
     assert {:error, changeset} =
-             Ledger.create_transaction(Map.put(attrs, :matched_transaction_id, other.id))
+             Ledger.create_transaction(
+               budget_scope(),
+               Map.put(attrs, :matched_transaction_id, other.id)
+             )
 
     assert %{matched_transaction_id: ["muss im selben Konto sein"]} = errors_on(changeset)
   end
@@ -77,6 +84,7 @@ defmodule Abakus.Ledger.MatchesTest do
 
     assert {:error, changeset} =
              Ledger.create_transaction(
+               budget_scope(),
                %{attrs | amount: -999}
                |> Map.put(:matched_transaction_id, c.manual.id)
              )
@@ -86,7 +94,10 @@ defmodule Abakus.Ledger.MatchesTest do
     proposal = propose(c)
 
     assert {:error, changeset} =
-             Ledger.create_transaction(Map.put(attrs, :matched_transaction_id, proposal.id))
+             Ledger.create_transaction(
+               budget_scope(),
+               Map.put(attrs, :matched_transaction_id, proposal.id)
+             )
 
     assert %{matched_transaction_id: ["ist selbst ein Zuordnungsvorschlag"]} =
              errors_on(changeset)
@@ -95,7 +106,10 @@ defmodule Abakus.Ledger.MatchesTest do
       transaction_fixture(account_id: c.account.id, amount: -4_875, cleared: :reconciled)
 
     assert {:error, changeset} =
-             Ledger.create_transaction(Map.put(attrs, :matched_transaction_id, reconciled.id))
+             Ledger.create_transaction(
+               budget_scope(),
+               Map.put(attrs, :matched_transaction_id, reconciled.id)
+             )
 
     assert %{matched_transaction_id: ["ist abgeschlossen"]} = errors_on(changeset)
   end
@@ -103,13 +117,13 @@ defmodule Abakus.Ledger.MatchesTest do
   test "deleting a proposal frees its transaction for the next one", c do
     proposal = propose(c)
 
-    {:ok, _} = Ledger.delete_transaction(proposal)
+    {:ok, _} = Ledger.delete_transaction(budget_scope(), proposal)
 
     assert %Transaction{matched_transaction_id: nil, deleted_at: %DateTime{}} =
              Repo.get!(Transaction, proposal.id)
 
     assert {:ok, _} =
-             Ledger.create_transaction(%{
+             Ledger.create_transaction(budget_scope(), %{
                account_id: c.account.id,
                date: ~D[2026-10-07],
                amount: -4_875,
@@ -124,6 +138,7 @@ defmodule Abakus.Ledger.MatchesTest do
     for source <- [:manual, :ynab, :api] do
       assert {:error, changeset} =
                Ledger.create_transaction(
+                 budget_scope(),
                  Map.merge(attrs, %{source: source, matched_transaction_id: c.manual.id})
                )
 
@@ -133,6 +148,7 @@ defmodule Abakus.Ledger.MatchesTest do
 
     assert {:ok, _} =
              Ledger.create_transaction(
+               budget_scope(),
                Map.merge(attrs, %{source: :file, matched_transaction_id: c.manual.id})
              )
   end
@@ -140,12 +156,12 @@ defmodule Abakus.Ledger.MatchesTest do
   test "a proposal leaves its payee's last category alone", c do
     payee = payee_fixture()
     remembered = category_fixture()
-    {:ok, _} = Ledger.update_payee(payee, %{last_category_id: remembered.id})
+    {:ok, _} = Ledger.update_payee(budget_scope(), payee, %{last_category_id: remembered.id})
 
     proposal = propose(c, payee_id: payee.id, category_id: category_fixture().id)
     assert Repo.get!(Payee, payee.id).last_category_id == remembered.id
 
-    {:ok, _} = Ledger.reject_match(proposal)
+    {:ok, _} = Ledger.reject_match(budget_scope(), proposal)
     assert Repo.get!(Payee, payee.id).last_category_id == remembered.id
   end
 
@@ -156,13 +172,20 @@ defmodule Abakus.Ledger.MatchesTest do
 
     for transaction <- [proposal, c.manual] do
       assert {:error, changeset} =
-               Ledger.update_transaction(transaction, %{account_id: other.id, amount: -1})
+               Ledger.update_transaction(budget_scope(), transaction, %{
+                 account_id: other.id,
+                 amount: -1
+               })
 
       assert %{account_id: [^locked], amount: [^locked]} = errors_on(changeset)
     end
 
-    assert {:ok, _} = Ledger.update_transaction(c.manual, %{memo: "Drogerie Sauber"})
-    assert {:ok, %Transaction{account_id: account_id}} = Ledger.accept_match(proposal)
+    assert {:ok, _} =
+             Ledger.update_transaction(budget_scope(), c.manual, %{memo: "Drogerie Sauber"})
+
+    assert {:ok, %Transaction{account_id: account_id}} =
+             Ledger.accept_match(budget_scope(), proposal)
+
     assert account_id == c.account.id
   end
 
@@ -170,8 +193,12 @@ defmodule Abakus.Ledger.MatchesTest do
     proposal = propose(c)
     other = account_fixture(kind: :savings)
 
-    assert {:error, _} = Ledger.update_transaction(proposal, %{account_id: other.id})
-    assert {:ok, %Transaction{account_id: account_id}} = Ledger.reject_match(proposal)
+    assert {:error, _} =
+             Ledger.update_transaction(budget_scope(), proposal, %{account_id: other.id})
+
+    assert {:ok, %Transaction{account_id: account_id}} =
+             Ledger.reject_match(budget_scope(), proposal)
+
     assert account_id == c.account.id
   end
 
@@ -180,7 +207,7 @@ defmodule Abakus.Ledger.MatchesTest do
     cash = account_fixture(kind: :cash)
 
     {:ok, outflow} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: c.account.id,
         date: ~D[2026-10-01],
         amount: -10_000,
@@ -188,7 +215,7 @@ defmodule Abakus.Ledger.MatchesTest do
       })
 
     {:ok, _} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: savings.id,
         date: ~D[2026-10-02],
         amount: 10_000,
@@ -196,7 +223,7 @@ defmodule Abakus.Ledger.MatchesTest do
         matched_transaction_id: outflow.transfer_transaction_id
       })
 
-    assert {:error, changeset} = Ledger.update_transaction(outflow, %{amount: -1})
+    assert {:error, changeset} = Ledger.update_transaction(budget_scope(), outflow, %{amount: -1})
 
     assert %{
              amount: [
@@ -206,7 +233,9 @@ defmodule Abakus.Ledger.MatchesTest do
              errors_on(changeset)
 
     assert {:error, changeset} =
-             Ledger.update_transaction(outflow, %{payee_id: cash.transfer_payee.id})
+             Ledger.update_transaction(budget_scope(), outflow, %{
+               payee_id: cash.transfer_payee.id
+             })
 
     assert %{payee_id: [_]} = errors_on(changeset)
     assert Repo.get!(Transaction, outflow.transfer_transaction_id).account_id == savings.id
@@ -215,38 +244,46 @@ defmodule Abakus.Ledger.MatchesTest do
   test "accepting re-checks the proposal and its transaction", c do
     proposal = propose(c)
 
-    {:ok, _} = Ledger.update_transaction(c.manual, %{cleared: :reconciled})
+    {:ok, _} = Ledger.update_transaction(budget_scope(), c.manual, %{cleared: :reconciled})
 
-    assert {:error, changeset} = Ledger.accept_match(proposal)
+    assert {:error, changeset} = Ledger.accept_match(budget_scope(), proposal)
     assert %{matched_transaction_id: ["ist abgeschlossen"]} = errors_on(changeset)
 
-    {:ok, _} = Ledger.update_transaction(c.manual, %{cleared: :cleared}, reconciled: :confirmed)
+    {:ok, _} =
+      Ledger.update_transaction(budget_scope(), c.manual, %{cleared: :cleared},
+        reconciled: :confirmed
+      )
+
     other = account_fixture(kind: :savings)
-    {:ok, _} = Ledger.add_origin(transaction_fixture(account_id: other.id), :bank, "tx-7")
+
+    {:ok, _} =
+      Ledger.add_origin(budget_scope(), transaction_fixture(account_id: other.id), :bank, "tx-7")
 
     # Rows changed behind the Ledger's back, e.g. by hand in the database.
     Repo.update_all(from(t in Transaction, where: t.id == ^proposal.id),
       set: [account_id: other.id]
     )
 
-    assert {:error, changeset} = Ledger.accept_match(proposal)
+    assert {:error, changeset} = Ledger.accept_match(budget_scope(), proposal)
     assert %{matched_transaction_id: ["muss im selben Konto sein"]} = errors_on(changeset)
 
     Repo.update_all(from(t in Transaction, where: t.id == ^proposal.id),
       set: [account_id: c.account.id, amount: -1]
     )
 
-    assert {:error, changeset} = Ledger.accept_match(proposal)
+    assert {:error, changeset} = Ledger.accept_match(budget_scope(), proposal)
     assert %{matched_transaction_id: ["muss denselben Betrag haben"]} = errors_on(changeset)
     assert Repo.get(Transaction, proposal.id)
-    assert Ledger.get_transaction_by_origin(c.account, :bank, "tx-7").id == proposal.id
+
+    assert Ledger.get_transaction_by_origin(budget_scope(), c.account, :bank, "tx-7").id ==
+             proposal.id
   end
 
   test "accepting into a split takes the date for the split and its counterparts", c do
     savings = account_fixture(kind: :savings)
 
     {:ok, split} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: c.account.id,
         date: ~D[2026-10-01],
         amount: -500,
@@ -259,7 +296,7 @@ defmodule Abakus.Ledger.MatchesTest do
     proposal = propose(c, amount: -500, matched_transaction_id: split.id)
 
     assert {:ok, %Transaction{date: ~D[2026-10-07], memo: "DROGERIE SAUBER", category_id: nil}} =
-             Ledger.accept_match(proposal)
+             Ledger.accept_match(budget_scope(), proposal)
 
     counterpart_id = Enum.at(split.subtransactions, 1).transfer_transaction_id
     assert Repo.get!(Transaction, counterpart_id).date == ~D[2026-10-07]
@@ -269,7 +306,7 @@ defmodule Abakus.Ledger.MatchesTest do
     savings = account_fixture(kind: :savings)
 
     {:ok, split} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: savings.id,
         date: ~D[2026-10-01],
         amount: -500,
@@ -280,7 +317,7 @@ defmodule Abakus.Ledger.MatchesTest do
     proposal = propose(c, amount: 400, matched_transaction_id: inflow_id)
 
     assert {:ok, %Transaction{date: ~D[2026-10-01], memo: nil, cleared: :cleared, approved: true}} =
-             Ledger.accept_match(proposal)
+             Ledger.accept_match(budget_scope(), proposal)
   end
 
   test "a proposal is no transfer and no split", c do
@@ -291,13 +328,17 @@ defmodule Abakus.Ledger.MatchesTest do
       Map.put(attrs, :matched_transaction_id, transaction_fixture(account_id: c.account.id).id)
 
     assert {:error, changeset} =
-             Ledger.create_transaction(Map.put(attrs, :payee_id, savings.transfer_payee.id))
+             Ledger.create_transaction(
+               budget_scope(),
+               Map.put(attrs, :payee_id, savings.transfer_payee.id)
+             )
 
     assert %{payee_id: ["darf bei einem Zuordnungsvorschlag keine Umbuchung sein"]} =
              errors_on(changeset)
 
     assert {:error, changeset} =
              Ledger.create_transaction(
+               budget_scope(),
                Map.put(attrs, :subtransactions, [%{amount: -4_000}, %{amount: -875}])
              )
 
@@ -309,13 +350,15 @@ defmodule Abakus.Ledger.MatchesTest do
     transaction = transaction_fixture(account_id: c.account.id)
 
     assert {:ok, %Transaction{matched_transaction_id: nil}} =
-             Ledger.update_transaction(transaction, %{matched_transaction_id: c.manual.id})
+             Ledger.update_transaction(budget_scope(), transaction, %{
+               matched_transaction_id: c.manual.id
+             })
   end
 
   test "accepting merges the import into the existing transaction", c do
     proposal = propose(c)
 
-    assert {:ok, merged} = Ledger.accept_match(proposal)
+    assert {:ok, merged} = Ledger.accept_match(budget_scope(), proposal)
 
     assert %Transaction{
              date: ~D[2026-10-07],
@@ -328,9 +371,12 @@ defmodule Abakus.Ledger.MatchesTest do
 
     assert {merged.id, merged.category_id} == {c.manual.id, c.category.id}
     assert Repo.get(Transaction, proposal.id) == nil
-    assert Ledger.get_transaction_by_origin(c.account, :bank, "tx-7").id == c.manual.id
+
+    assert Ledger.get_transaction_by_origin(budget_scope(), c.account, :bank, "tx-7").id ==
+             c.manual.id
+
     assert Repo.aggregate(TransactionOrigin, :count) == 1
-    assert Ledger.list_match_proposals(c.account) == []
+    assert Ledger.list_match_proposals(budget_scope(), c.account) == []
   end
 
   test "accepting takes the import's category and memo where the manual entry has none", c do
@@ -341,7 +387,7 @@ defmodule Abakus.Ledger.MatchesTest do
       propose(c, amount: -999, category_id: imported.id, matched_transaction_id: blank.id)
 
     assert {:ok, %Transaction{memo: "DROGERIE SAUBER", category_id: category_id}} =
-             Ledger.accept_match(proposal)
+             Ledger.accept_match(budget_scope(), proposal)
 
     assert category_id == imported.id
   end
@@ -350,7 +396,7 @@ defmodule Abakus.Ledger.MatchesTest do
     proposal = propose(c, category_id: category_fixture().id)
 
     assert {:ok, %Transaction{memo: "Drogerie", category_id: category_id}} =
-             Ledger.accept_match(proposal)
+             Ledger.accept_match(budget_scope(), proposal)
 
     assert category_id == c.category.id
   end
@@ -359,7 +405,7 @@ defmodule Abakus.Ledger.MatchesTest do
     savings = account_fixture(kind: :savings)
 
     {:ok, outflow} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: c.account.id,
         date: ~D[2026-10-01],
         amount: -10_000,
@@ -368,7 +414,7 @@ defmodule Abakus.Ledger.MatchesTest do
 
     proposal = propose(c, amount: -10_000, matched_transaction_id: outflow.id)
 
-    {:ok, _} = Ledger.accept_match(proposal)
+    {:ok, _} = Ledger.accept_match(budget_scope(), proposal)
 
     assert Repo.get!(Transaction, outflow.transfer_transaction_id).date == ~D[2026-10-07]
   end
@@ -378,48 +424,79 @@ defmodule Abakus.Ledger.MatchesTest do
     refute proposal.approved
 
     assert {:ok, %Transaction{matched_transaction_id: nil, approved: true}} =
-             Ledger.reject_match(proposal)
+             Ledger.reject_match(budget_scope(), proposal)
 
-    assert Enum.map(Ledger.list_transactions(c.account), & &1.id) == [proposal.id, c.manual.id]
-    assert Ledger.list_match_proposals(c.account) == []
+    assert Enum.map(Ledger.list_transactions(budget_scope(), c.account), & &1.id) == [
+             proposal.id,
+             c.manual.id
+           ]
+
+    assert Ledger.list_match_proposals(budget_scope(), c.account) == []
   end
 
   test "deleting the existing transaction turns its proposal into an ordinary import", c do
     proposal = propose(c)
 
-    {:ok, _} = Ledger.delete_transaction(c.manual)
+    {:ok, _} = Ledger.delete_transaction(budget_scope(), c.manual)
 
     assert Repo.get!(Transaction, proposal.id).matched_transaction_id == nil
-    assert Enum.map(Ledger.list_transactions(c.account), & &1.id) == [proposal.id]
+    assert Enum.map(Ledger.list_transactions(budget_scope(), c.account), & &1.id) == [proposal.id]
   end
 
   test "only pending proposals can be decided", c do
-    assert Ledger.accept_match(c.manual) == {:error, :not_a_proposal}
-    assert Ledger.reject_match(c.manual) == {:error, :not_a_proposal}
+    assert Ledger.accept_match(budget_scope(), c.manual) == {:error, :not_a_proposal}
+    assert Ledger.reject_match(budget_scope(), c.manual) == {:error, :not_a_proposal}
 
     proposal = propose(c)
-    {:ok, _} = Ledger.reject_match(proposal)
-    assert Ledger.accept_match(proposal) == {:error, :not_a_proposal}
+    {:ok, _} = Ledger.reject_match(budget_scope(), proposal)
+    assert Ledger.accept_match(budget_scope(), proposal) == {:error, :not_a_proposal}
   end
 
   test "an accepted proposal is gone, so deciding it again is refused", c do
     proposal = propose(c)
-    {:ok, _} = Ledger.accept_match(proposal)
+    {:ok, _} = Ledger.accept_match(budget_scope(), proposal)
 
-    assert Ledger.accept_match(proposal) == {:error, :not_a_proposal}
-    assert Ledger.reject_match(proposal) == {:error, :not_a_proposal}
-    assert Ledger.accept_matches([proposal]) == {:error, :not_a_proposal}
+    assert Ledger.accept_match(budget_scope(), proposal) == {:error, :not_a_proposal}
+    assert Ledger.reject_match(budget_scope(), proposal) == {:error, :not_a_proposal}
+    assert Ledger.accept_matches(budget_scope(), [proposal]) == {:error, :not_a_proposal}
   end
 
-  describe "find_matches/3" do
+  describe "find_matches/4" do
     defp import_row(date, amount \\ -4_875), do: %{date: date, amount: amount}
+
+    test "neither offers nor takes another user's transaction", c do
+      other = UsersFixtures.user_scope_fixture()
+      {:ok, own} = Ledger.create_account(other, %{name: "Giro", kind: :checking})
+
+      assert Ledger.find_matches(other, c.account, :file, [import_row(~D[2026-10-03])]) == [nil]
+
+      assert {:error, changeset} =
+               Ledger.create_transaction(other, %{
+                 account_id: own.id,
+                 date: ~D[2026-10-03],
+                 amount: -4_875,
+                 cleared: :cleared,
+                 source: :bank,
+                 matched_transaction_id: c.manual.id
+               })
+
+      assert %{matched_transaction_id: ["does not exist"]} = errors_on(changeset)
+      assert Ledger.list_match_proposals(budget_scope(), c.account) == []
+    end
 
     test "proposes the closest date within 10 days, on a tie the older transaction", c do
       before = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-01], amount: -4_875)
       later = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-13], amount: -4_875)
 
       find =
-        &ids(Ledger.find_matches(c.account, :file, Enum.map(&1, fn date -> import_row(date) end)))
+        &ids(
+          Ledger.find_matches(
+            budget_scope(),
+            c.account,
+            :file,
+            Enum.map(&1, fn date -> import_row(date) end)
+          )
+        )
 
       assert find.([~D[2026-10-04]]) == [c.manual.id]
       assert find.([~D[2026-10-02]]) == [before.id]
@@ -434,8 +511,15 @@ defmodule Abakus.Ledger.MatchesTest do
       early = import_row(~D[2026-10-01], -450)
       same_day = import_row(~D[2026-10-05], -450)
 
-      assert ids(Ledger.find_matches(c.account, :file, [early, same_day])) == [nil, at.id]
-      assert ids(Ledger.find_matches(c.account, :file, [same_day, early])) == [at.id, nil]
+      assert ids(Ledger.find_matches(budget_scope(), c.account, :file, [early, same_day])) == [
+               nil,
+               at.id
+             ]
+
+      assert ids(Ledger.find_matches(budget_scope(), c.account, :file, [same_day, early])) == [
+               at.id,
+               nil
+             ]
     end
 
     test "matches a transaction once, with the same amount in the same account", c do
@@ -443,7 +527,7 @@ defmodule Abakus.Ledger.MatchesTest do
       transaction_fixture(account_id: other.id, date: ~D[2026-10-03], amount: -4_875)
 
       assert ids(
-               Ledger.find_matches(c.account, :file, [
+               Ledger.find_matches(budget_scope(), c.account, :file, [
                  import_row(~D[2026-10-04]),
                  import_row(~D[2026-10-03]),
                  import_row(~D[2026-10-03], -4_876)
@@ -456,51 +540,61 @@ defmodule Abakus.Ledger.MatchesTest do
       at = ~D[2026-10-03]
       reconciled = transaction_fixture(account_id: c.account.id, date: at, cleared: :reconciled)
       deleted = transaction_fixture(account_id: c.account.id, date: at)
-      {:ok, _} = Ledger.delete_transaction(deleted)
+      {:ok, _} = Ledger.delete_transaction(budget_scope(), deleted)
       imported = transaction_fixture(account_id: c.account.id, date: at, source: :file)
-      {:ok, _} = Ledger.add_origin(imported, :file, "MM-1")
+      {:ok, _} = Ledger.add_origin(budget_scope(), imported, :file, "MM-1")
       from_ynab = transaction_fixture(account_id: c.account.id, date: at, source: :ynab)
-      {:ok, _} = Ledger.add_origin(from_ynab, :ynab, "ynab-1")
+      {:ok, _} = Ledger.add_origin(budget_scope(), from_ynab, :ynab, "ynab-1")
       propose(c)
 
       rows = [import_row(at, -1_250), import_row(at, -1_250), import_row(at)]
 
-      assert ids(Ledger.find_matches(c.account, :file, rows)) == [from_ynab.id, nil, nil]
-      assert ids(Ledger.find_matches(c.account, :bank, rows)) == [imported.id, from_ynab.id, nil]
-      refute reconciled.id in ids(Ledger.find_matches(c.account, :bank, rows))
+      assert ids(Ledger.find_matches(budget_scope(), c.account, :file, rows)) == [
+               from_ynab.id,
+               nil,
+               nil
+             ]
+
+      assert ids(Ledger.find_matches(budget_scope(), c.account, :bank, rows)) == [
+               imported.id,
+               from_ynab.id,
+               nil
+             ]
+
+      refute reconciled.id in ids(Ledger.find_matches(budget_scope(), c.account, :bank, rows))
     end
 
     test "looks up more amounts than SQLite takes variables", c do
       rows = Enum.map(1..40_000, &import_row(~D[2026-10-03], -&1))
 
-      assert c.manual.id in ids(Ledger.find_matches(c.account, :file, rows))
+      assert c.manual.id in ids(Ledger.find_matches(budget_scope(), c.account, :file, rows))
     end
 
     test "finds nothing without imports", c do
-      assert Ledger.find_matches(c.account, :file, []) == []
+      assert Ledger.find_matches(budget_scope(), c.account, :file, []) == []
     end
   end
 
   defp ids(transactions), do: Enum.map(transactions, &(&1 && &1.id))
 
   test "the newest reconciled transaction's date, of the register", c do
-    assert Ledger.last_reconciled_date(c.account) == nil
+    assert Ledger.last_reconciled_date(budget_scope(), c.account) == nil
 
     transaction_fixture(account_id: c.account.id, date: ~D[2026-09-15], cleared: :reconciled)
 
     deleted =
       transaction_fixture(account_id: c.account.id, date: ~D[2026-09-30], cleared: :reconciled)
 
-    {:ok, _} = Ledger.delete_transaction(deleted, reconciled: :confirmed)
+    {:ok, _} = Ledger.delete_transaction(budget_scope(), deleted, reconciled: :confirmed)
     transaction_fixture(date: ~D[2026-10-01], cleared: :reconciled)
 
-    assert Ledger.last_reconciled_date(c.account) == ~D[2026-09-15]
+    assert Ledger.last_reconciled_date(budget_scope(), c.account) == ~D[2026-09-15]
   end
 
   test "proposals wait for approval in the balances but add nothing to them", c do
     propose(c)
 
-    assert Ledger.balances()[c.account.id] == %{
+    assert Ledger.balances(budget_scope())[c.account.id] == %{
              balance: -4_875,
              cleared: 0,
              uncleared: -4_875,
@@ -515,19 +609,19 @@ defmodule Abakus.Ledger.MatchesTest do
     other_proposal = propose(%{c | account: other, manual: elsewhere}, amount: -100)
 
     assert [%{id: first, matched_transaction: %Transaction{payee: nil}}, %{id: second}] =
-             Ledger.list_match_proposals(:all)
+             Ledger.list_match_proposals(budget_scope(), :all)
 
     assert {first, second} == {other_proposal.id, proposal.id}
   end
 
-  describe "accept_matches/2" do
+  describe "accept_matches/3" do
     test "accepts all or none", c do
       proposal = propose(c)
       blank = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-02], amount: -999)
       other = propose(c, amount: -999, matched_transaction_id: blank.id, external_id: "tx-8")
 
-      assert {:ok, [_, _]} = Ledger.accept_matches([proposal, other])
-      assert Ledger.list_match_proposals(c.account) == []
+      assert {:ok, [_, _]} = Ledger.accept_matches(budget_scope(), [proposal, other])
+      assert Ledger.list_match_proposals(budget_scope(), c.account) == []
       assert Repo.get!(Transaction, blank.id).approved
     end
 
@@ -540,9 +634,9 @@ defmodule Abakus.Ledger.MatchesTest do
         set: [cleared: :reconciled]
       )
 
-      assert {:error, changeset} = Ledger.accept_matches([proposal, other])
+      assert {:error, changeset} = Ledger.accept_matches(budget_scope(), [proposal, other])
       assert %{matched_transaction_id: ["ist abgeschlossen"]} = errors_on(changeset)
-      assert length(Ledger.list_match_proposals(c.account)) == 2
+      assert length(Ledger.list_match_proposals(budget_scope(), c.account)) == 2
     end
   end
 end

@@ -23,7 +23,7 @@ defmodule Abakus.Depot.ImportTest do
   end
 
   defp import!(path) do
-    {:ok, report} = Import.run(path)
+    {:ok, report} = Import.run(Scope.system(), path)
     report
   end
 
@@ -158,23 +158,25 @@ defmodule Abakus.Depot.ImportTest do
     path: path,
     tmp_dir: dir
   } do
-    assert Import.run(path <> ".missing") == {:error, "#{path}.missing is not a file"}
+    assert Import.run(Scope.system(), path <> ".missing") ==
+             {:error, "#{path}.missing is not a file"}
 
     missing = Path.join([dir, "receipts", "#{@savings_plan}.pdf"])
     File.rm!(missing)
-    assert Import.run(path) == {:error, "receipt file missing: #{missing}"}
+    assert Import.run(Scope.system(), path) == {:error, "receipt file missing: #{missing}"}
     refute Users.get_user_by_email("ben@example.com")
 
     complete = PortfoliosFixtures.old_app_file!(Path.join(dir, "complete"))
     import!(complete)
 
-    assert Import.run(complete) == {:error, "the Depot holds data already (depot_securities)"}
+    assert Import.run(Scope.system(), complete) ==
+             {:error, "the Depot holds data already (depot_securities)"}
   end
 
   test "refuses an Abakus without users, whose budget owner it would make", %{path: path} do
     Repo.delete_all(Users.User)
 
-    assert {:error, message} = Import.run(path)
+    assert {:error, message} = Import.run(Scope.system(), path)
     assert message =~ "invite the budget owner first"
     refute Repo.exists?(Users.User)
     refute Repo.exists?(Abakus.Depot.Securities.Security)
@@ -184,7 +186,7 @@ defmodule Abakus.Depot.ImportTest do
     damaged = Path.join([dir, "receipts", "#{@savings_plan}.pdf"])
     File.write!(damaged, "%PDF-1.4\nanders\n%%EOF\n")
 
-    assert Import.run(path) == {:error, "receipt file damaged: #{damaged}"}
+    assert Import.run(Scope.system(), path) == {:error, "receipt file damaged: #{damaged}"}
 
     refute Users.get_user_by_email("ben@example.com")
     refute Repo.exists?(Abakus.Depot.Securities.Security)

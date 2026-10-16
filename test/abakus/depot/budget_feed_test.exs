@@ -1,6 +1,7 @@
 defmodule Abakus.Depot.BudgetFeedTest do
   use Abakus.DataCase
 
+  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
   import ExUnit.CaptureLog
@@ -67,7 +68,7 @@ defmodule Abakus.Depot.BudgetFeedTest do
     )
   end
 
-  defp balance(account), do: Ledger.balances()[account.id].balance
+  defp balance(account), do: Ledger.balances(budget_scope())[account.id].balance
 
   describe "the switch to one account per portfolio" do
     test "closes the old fed account with its history and starts each portfolio's account at its value",
@@ -120,7 +121,7 @@ defmodule Abakus.Depot.BudgetFeedTest do
 
       assert account_of(c.portfolio)
       assert account_of(theirs) == nil
-      assert BudgetFeed.in_use?()
+      assert BudgetFeed.in_use?(budget_scope())
     end
 
     test "renames an account after its renamed portfolio", c do
@@ -134,7 +135,10 @@ defmodule Abakus.Depot.BudgetFeedTest do
 
     test "keeps the account's leading emoji when it renames it", c do
       :ok = BudgetFeed.sync_accounts()
-      {:ok, _account} = Ledger.update_account(account_of(c.portfolio), %{name: "📈 Alt"})
+
+      {:ok, _account} =
+        Ledger.update_account(budget_scope(), account_of(c.portfolio), %{name: "📈 Alt"})
+
       Repo.update!(change(c.portfolio, name: "Rente"))
 
       :ok = BudgetFeed.sync_accounts()
@@ -155,7 +159,7 @@ defmodule Abakus.Depot.BudgetFeedTest do
     test "keeps an account the user closed closed and opens no other", c do
       :ok = BudgetFeed.sync_accounts()
       account = account_of(c.portfolio)
-      {:ok, _closed} = Ledger.update_account(account, %{closed: true})
+      {:ok, _closed} = Ledger.update_account(budget_scope(), account, %{closed: true})
 
       :ok = BudgetFeed.book_value_changes(@day)
 
@@ -171,24 +175,39 @@ defmodule Abakus.Depot.BudgetFeedTest do
 
       :ok = BudgetFeed.book_value_changes(@day)
 
-      assert Ledger.net_worth(Date.range(~D[2026-10-15], @day)) == [
+      assert Ledger.net_worth(budget_scope(), Date.range(~D[2026-10-15], @day)) == [
                {~D[2026-10-15], 5_000_000},
                {@day, 4_000_000}
              ]
 
-      assert Ledger.first_open_date() == ~D[2026-10-01]
+      assert Ledger.first_open_date(budget_scope()) == ~D[2026-10-01]
     end
 
     test "finds the portfolio of its account", c do
       :ok = BudgetFeed.sync_accounts()
       account = account_of(c.portfolio)
 
-      assert BudgetFeed.portfolio(account).id == c.portfolio.id
-      assert BudgetFeed.portfolio(DomainFixtures.account_fixture(name: "Giro")) == nil
+      assert BudgetFeed.portfolio(c.owner, account).id == c.portfolio.id
+      assert BudgetFeed.portfolio(user_scope_fixture(), account) == nil
+      assert BudgetFeed.portfolio(c.owner, DomainFixtures.account_fixture(name: "Giro")) == nil
     end
   end
 
   describe "the daily value change" do
+    test "lands in the budget owner's budget with their user", c do
+      holdings_fixture(c, manual_security(400))
+      member = user_scope_fixture()
+
+      :ok = BudgetFeed.book_value_changes(@day)
+
+      assert [%Transaction{user_id: user_id, payee: payee}] =
+               value_changes(account_of(c.portfolio))
+
+      assert user_id == c.owner.user.id
+      assert payee.user_id == c.owner.user.id
+      assert Ledger.list_transactions(member, :all) == []
+    end
+
     test "counts the balance of the portfolio's cash, and of no other Verrechnungskonto", c do
       holdings_fixture(c, manual_security(400))
       {:ok, _cash} = AccountRoles.set_role(c.owner, c.cash, "portfolio_cash:#{c.portfolio.id}")

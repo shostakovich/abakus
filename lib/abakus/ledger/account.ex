@@ -27,6 +27,7 @@ defmodule Abakus.Ledger.Account do
     field :ofx_bank_id, :string
     field :ofx_acct_id, :string
 
+    belongs_to :user, Abakus.Users.User
     has_one :transfer_payee, Payee, foreign_key: :transfer_account_id
 
     timestamps()
@@ -58,7 +59,7 @@ defmodule Abakus.Ledger.Account do
   def changeset(account, attrs) do
     account
     |> cast(attrs, [:name, :kind, :fed_by, :closed, :note, :position, :last_reconciled_at])
-    |> validate_required([:name, :kind])
+    |> validate_required([:user_id, :name, :kind])
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_budget_side()
   end

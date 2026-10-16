@@ -19,10 +19,10 @@ defmodule AbakusWeb.Kasse.CategoriesLive do
   end
 
   defp load(socket) do
-    counts = Expenses.count_by_category()
+    counts = Expenses.count_by_category(socket.assigns.current_scope)
 
     {archived, active} =
-      Categories.list_categories(:all)
+      Categories.list_categories(socket.assigns.current_scope, :all)
       |> Enum.map(&%{category: &1, expenses: Map.get(counts, &1.id, 0)})
       |> Enum.split_with(&Category.archived?(&1.category))
 
@@ -42,7 +42,7 @@ defmodule AbakusWeb.Kasse.CategoriesLive do
   end
 
   def handle_event("create", %{"category" => params}, socket) do
-    case Categories.create_category(socket.assigns.current_participant.id, params) do
+    case Categories.create_category(socket.assigns.current_scope, params) do
       {:ok, category} ->
         {:noreply,
          socket
@@ -72,9 +72,9 @@ defmodule AbakusWeb.Kasse.CategoriesLive do
   end
 
   def handle_event("save_rename", %{"rename" => params}, socket) do
-    %{current_participant: me, renaming: category} = socket.assigns
+    %{current_scope: scope, renaming: category} = socket.assigns
 
-    case Categories.rename_category(me.id, category, params) do
+    case Categories.rename_category(scope, category, params) do
       {:ok, _renamed} ->
         {:noreply, socket |> put_flash(:info, "Gespeichert.") |> assign(renaming: nil) |> load()}
 
@@ -86,9 +86,9 @@ defmodule AbakusWeb.Kasse.CategoriesLive do
   def handle_event("move", %{"id" => id, "direction" => direction}, socket)
       when direction in ["up", "down"] do
     with_category(socket, id, fn category ->
-      me = socket.assigns.current_participant.id
+      scope = socket.assigns.current_scope
 
-      case Categories.move_category(me, category, String.to_existing_atom(direction)) do
+      case Categories.move_category(scope, category, String.to_existing_atom(direction)) do
         {:ok, _category} -> load(socket)
         {:error, :not_found} -> socket |> put_flash(:error, "Kategorie nicht gefunden.") |> load()
       end
@@ -97,8 +97,7 @@ defmodule AbakusWeb.Kasse.CategoriesLive do
 
   def handle_event("archive", %{"id" => id}, socket) do
     with_category(socket, id, fn category ->
-      {:ok, category} =
-        Categories.archive_category(socket.assigns.current_participant.id, category)
+      {:ok, category} = Categories.archive_category(socket.assigns.current_scope, category)
 
       socket |> put_flash(:info, "Kategorie „#{category.name}“ archiviert.") |> load()
     end)
@@ -106,15 +105,14 @@ defmodule AbakusWeb.Kasse.CategoriesLive do
 
   def handle_event("reactivate", %{"id" => id}, socket) do
     with_category(socket, id, fn category ->
-      {:ok, category} =
-        Categories.reactivate_category(socket.assigns.current_participant.id, category)
+      {:ok, category} = Categories.reactivate_category(socket.assigns.current_scope, category)
 
       socket |> put_flash(:info, "Kategorie „#{category.name}“ reaktiviert.") |> load()
     end)
   end
 
   defp with_category(socket, id, fun) do
-    case Categories.get_category(id) do
+    case Categories.get_category(socket.assigns.current_scope, id) do
       %Category{} = category -> {:noreply, fun.(category)}
       nil -> {:noreply, socket |> put_flash(:error, "Kategorie nicht gefunden.") |> load()}
     end

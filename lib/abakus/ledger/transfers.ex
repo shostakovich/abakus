@@ -73,12 +73,12 @@ defmodule Abakus.Ledger.Transfers do
   @doc "Transactions by id."
   def by_id(ids), do: Map.new(Repo.all(by_ids(ids)), &{&1.id, &1})
 
-  @doc "The accounts of those payees that are transfer payees, by payee id."
-  def accounts_by_payee(payee_ids) do
+  @doc "The accounts of those payees of the user that are transfer payees, by payee id."
+  def accounts_by_payee(user_id, payee_ids) do
     Repo.all(
       from p in Payee,
         join: a in assoc(p, :transfer_account),
-        where: p.id in ^Enum.reject(payee_ids, &is_nil/1),
+        where: p.user_id == ^user_id and p.id in ^Enum.reject(payee_ids, &is_nil/1),
         select: {p.id, a}
     )
     |> Map.new()
@@ -136,6 +136,7 @@ defmodule Abakus.Ledger.Transfers do
 
   defp create_counterpart(side, fields, context) do
     %Transaction{
+      user_id: context.transaction.user_id,
       cleared: :uncleared,
       approved: context.transaction.approved,
       source: context.transaction.source

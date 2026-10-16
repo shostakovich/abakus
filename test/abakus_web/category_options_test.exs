@@ -10,19 +10,19 @@ defmodule AbakusWeb.CategoryOptionsTest do
     group = category_group_fixture(name: "🏠 Wohnen")
     rent = category_fixture(name: "🏡 Miete", category_group_id: group.id)
     old = category_fixture(name: "Alt", category_group_id: group.id, hidden: true)
-    {:ok, _} = Categories.assign(rent, ~D[2026-10-01], 95_000)
+    {:ok, _} = Categories.assign(budget_scope(), rent, ~D[2026-10-01], 95_000)
     giro = account_fixture()
 
     transaction_fixture(
       account_id: giro.id,
       amount: 200_000,
-      category_id: Categories.ready_to_assign!().id
+      category_id: Categories.ready_to_assign!(budget_scope()).id
     )
 
     category_group_fixture(name: "Leer")
 
     assert [income, %{name: "🏠 Wohnen", options: [miete, kept]}] =
-             CategoryOptions.build(~D[2026-10-09])
+             CategoryOptions.build(budget_scope(), ~D[2026-10-09])
 
     assert %{name: "Einnahme", options: [%{name: "Zu verteilen", available: 105_000}]} = income
 

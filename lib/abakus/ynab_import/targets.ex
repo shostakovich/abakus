@@ -11,7 +11,7 @@ defmodule Abakus.YnabImport.Targets do
   alias Abakus.Categories.TargetVersion
   alias Abakus.YnabImport.Plan
 
-  @doc "`{category_id, versions}` per regular category with targets; versions as `Categories.set_target/2` takes them."
+  @doc "`{category_id, versions}` per regular category with targets; versions as `Categories.set_target/3` takes them."
   def versions(plan) do
     by_category = Enum.group_by(Plan.regular_category_months(plan), fn {_month, c} -> c["id"] end)
 

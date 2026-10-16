@@ -37,6 +37,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLiveTest do
   alias Abakus.Kasse.{Expenses, Recurring}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.{LocalTime, Repo}
+  alias Abakus.Users.Scope
   alias Setzkasten.Format
 
   setup %{conn: conn} do
@@ -65,7 +66,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLiveTest do
 
   test "an unknown or deleted expense is not found", %{conn: conn, h: h} do
     expense = create!(equal(h, "Kino", 2400, "2026-09-01", h.anna, [h.anna, h.ben]))
-    {:ok, _deleted} = Expenses.delete_expense(h.anna, expense)
+    {:ok, _deleted} = Expenses.delete_expense(scope_of(h.anna), expense)
 
     for id <- ["abc", "0", "-1", "999", "1.5", "99999999999999999999", "#{expense.id}"] do
       assert_error_sent 404, fn -> get(conn, new_page(id)) end
@@ -105,7 +106,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLiveTest do
                Format.date(date)
              ]
 
-    [weekly, monthly, yearly] = Recurring.previews(expense)
+    [weekly, monthly, yearly] = Recurring.previews(Scope.system(), expense)
 
     assert texts(view, "#recurring-form fieldset label") == [
              "Wöchentlich Nächster Termin #{Format.date(weekly.next_date)}; " <>
@@ -139,7 +140,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLiveTest do
     assert {"/settings/kasse/recurring", %{"info" => message}} = assert_redirect(view)
     assert message == "„Gemüsekiste“ wiederholt sich jetzt wöchentlich. 2 Ausgaben nachgetragen."
     assert Repo.aggregate(Expense, :count) == 3
-    assert [rule] = Recurring.list_rules()
+    assert [rule] = Recurring.list_rules(Scope.system())
     assert {rule.frequency, rule.created_by_id} == {:weekly, h.anna}
   end
 
@@ -157,7 +158,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLiveTest do
     render_hook(view, "create", %{})
     assert texts(view, "#recurring_frequency-error-0") == ["Bitte eine Häufigkeit wählen."]
 
-    {:ok, _rule, 0} = Recurring.create_rule(h.ben, expense, :monthly)
+    {:ok, _rule, 0} = Recurring.create_rule(scope_of(h.ben), expense, :monthly)
     choose(view, "yearly")
 
     assert flash(view, :error) == "Diese Ausgabe gehört schon zu einer wiederkehrenden Ausgabe."

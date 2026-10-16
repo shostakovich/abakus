@@ -17,15 +17,16 @@ defmodule Abakus.Ledger.BankBalance do
     field :amount, :integer
 
     belongs_to :account, Account
+    belongs_to :user, Abakus.Users.User
 
     timestamps()
   end
 
-  @doc "Changeset for a balance whose `account_id` is set."
+  @doc "Changeset for a balance whose `account_id` and `user_id` are set."
   def changeset(balance, attrs) do
     balance
     |> cast(attrs, [:source, :date, :amount])
-    |> validate_required([:account_id, :source, :date, :amount])
+    |> validate_required([:account_id, :user_id, :source, :date, :amount])
     |> Amount.validate()
   end
 end

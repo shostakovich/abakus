@@ -35,7 +35,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     do: view |> form("#category-name-form", %{"name" => name}) |> render_submit()
 
   defp names(group_id) do
-    Enum.find(Categories.list_category_groups(), &(&1.id == group_id)).categories
+    Enum.find(Categories.list_category_groups(budget_scope()), &(&1.id == group_id)).categories
     |> Enum.map(& &1.name)
   end
 
@@ -46,7 +46,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     assert has_element?(view, "#edit-pop", "Neue Kategoriegruppe")
     submit_name(view, "🏠 Wohnen")
 
-    assert List.last(Categories.list_category_groups()).name == "🏠 Wohnen"
+    assert List.last(Categories.list_category_groups(budget_scope())).name == "🏠 Wohnen"
     refute has_element?(view, ~s|#edit-pop[data-show="true"]|)
     assert has_element?(view, "tbody tr.app-grp", "Wohnen")
   end
@@ -59,7 +59,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     submit_name(view, "🎢 Freizeitpark")
 
     assert names(c.leisure.id) == ["🎬 Kino", "🎳 Bowling", "🎢 Freizeitpark"]
-    [_movies, _games, park] = hd(Categories.list_category_groups()).categories
+    [_movies, _games, park] = hd(Categories.list_category_groups(budget_scope())).categories
     assert has_element?(view, "#category-#{park.id}", "Freizeitpark")
   end
 
@@ -163,8 +163,8 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
   describe "deleting a category" do
     test "moves everything into the chosen category", c do
-      Categories.assign(c.movies, @october, 2_000)
-      Categories.assign(c.games, @october, 500)
+      Categories.assign(budget_scope(), c.movies, @october, 2_000)
+      Categories.assign(budget_scope(), c.games, @october, 500)
       view = open(c.conn)
 
       edit_category(view, c.movies)
@@ -181,7 +181,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
       refute Repo.reload(c.movies)
       assert has_element?(view, ~s|dialog#category-dialog[data-show="false"]|)
-      assert Categories.budget().assigned == %{{c.games.id, @october} => 2_500}
+      assert Categories.budget(budget_scope()).assigned == %{{c.games.id, @october} => 2_500}
       refute has_element?(view, "#category-#{c.movies.id}")
       assert has_element?(view, "#assign-#{c.games.id}-2026-10[value='25,00']")
     end
@@ -211,7 +211,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
       edit_category(view, c.movies)
       view |> element("#edit-delete") |> render_click()
-      Ledger.update_transaction(transaction, %{cleared: :reconciled})
+      Ledger.update_transaction(budget_scope(), transaction, %{cleared: :reconciled})
       view |> form("#delete-form") |> render_submit(%{"into" => "#{c.games.id}"})
 
       assert %Category{} = Repo.reload(c.movies)
@@ -263,7 +263,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
       edit_category(view, c.movies)
       view |> element("#edit-delete") |> render_click()
 
-      rta = Categories.ready_to_assign!()
+      rta = Categories.ready_to_assign!(budget_scope())
       refute has_element?(view, ~s|#delete-form [role=option][data-value="#{rta.id}"]|)
 
       assert has_element?(
@@ -301,7 +301,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
       view = open(c.conn)
 
       edit_category(view, c.movies)
-      {:ok, _deleted} = Categories.delete_category(c.movies, c.games)
+      {:ok, _deleted} = Categories.delete_category(budget_scope(), c.movies, c.games)
       rename(view, "Kino neu")
 
       assert render(view) =~ "inzwischen geändert oder gelöscht"
@@ -313,7 +313,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
       view = open(c.conn)
 
       view |> element("#edit-group-#{empty.id}") |> render_click()
-      {:ok, _deleted} = Categories.delete_category_group(empty)
+      {:ok, _deleted} = Categories.delete_category_group(budget_scope(), empty)
       Confirm.confirm_click(view, "#edit-delete")
 
       assert render(view) =~ "inzwischen geändert oder gelöscht"
@@ -322,7 +322,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
     test "assigning after a category was deleted in another tab", c do
       view = open(c.conn)
-      {:ok, _deleted} = Categories.delete_category(c.movies, c.games)
+      {:ok, _deleted} = Categories.delete_category(budget_scope(), c.movies, c.games)
 
       view |> element("#assign-#{c.games.id}-2026-10") |> render_blur(%{"value" => "5"})
 
@@ -336,7 +336,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
       edit_category(view, c.movies)
       view |> element("#edit-delete") |> render_click()
-      Ledger.update_transaction(transaction, %{cleared: :reconciled})
+      Ledger.update_transaction(budget_scope(), transaction, %{cleared: :reconciled})
       view |> form("#delete-form") |> render_submit(%{"into" => "#{c.games.id}"})
 
       assert has_element?(view, ~s|#delete-into-combobox input[name=into][value="#{c.games.id}"]|)
@@ -344,8 +344,8 @@ defmodule AbakusWeb.BudgetCategoriesTest do
   end
 
   test "a sum of assignments out of range is refused with a note", c do
-    Categories.assign(c.movies, @october, 10_000_000_000_000)
-    Categories.assign(c.games, @october, 1)
+    Categories.assign(budget_scope(), c.movies, @october, 10_000_000_000_000)
+    Categories.assign(budget_scope(), c.games, @october, 1)
     view = open(c.conn)
 
     edit_category(view, c.movies)

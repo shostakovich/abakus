@@ -97,10 +97,10 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
 
   test "a rate deleted meanwhile", %{conn: conn, h: h} do
     {:ok, _rate} =
-      Rates.put_manual_rate(h.ben, %{currency: "CHF", date: ~D[2026-09-01], rate: 0.95})
+      Rates.put_manual_rate(scope_of(h.ben), %{currency: "CHF", date: ~D[2026-09-01], rate: 0.95})
 
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
-    {:ok, _activity} = Rates.delete_manual_rate(h.ben, "CHF", ~D[2026-09-01])
+    {:ok, _activity} = Rates.delete_manual_rate(scope_of(h.ben), "CHF", ~D[2026-09-01])
 
     confirm_click(view, "#manual-CHF-2026-09-01-delete")
 
