@@ -18,6 +18,12 @@ defmodule Abakus.DailyJob do
   def start_link(opts),
     do: GenServer.start_link(__MODULE__, opts, name: Keyword.fetch!(opts, :name))
 
+  @doc "Whether `last_run`, in local time, is older than the last slot at `at` before `now`."
+  def missed?(nil, _now, _at), do: true
+
+  def missed?(last_run, now, at),
+    do: NaiveDateTime.before?(last_run, NaiveDateTime.add(LocalTime.next_at(now, at), -1, :day))
+
   @impl true
   def init(opts), do: {:ok, opts |> Map.new() |> Map.put(:due, nil), {:continue, :boot}}
 

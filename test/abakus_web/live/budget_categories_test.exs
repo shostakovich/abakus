@@ -11,6 +11,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
   @october ~D[2026-10-01]
 
   setup :register_and_log_in_user
+  setup do: fix_today(~D[2026-10-10])
 
   setup do
     leisure = category_group_fixture(name: "🎉 Freizeit")
@@ -20,10 +21,8 @@ defmodule AbakusWeb.BudgetCategoriesTest do
   end
 
   defp open(conn) do
-    conn
-    |> put_connect_params(%{"today" => "2026-10-10"})
-    |> live(~p"/budget")
-    |> then(fn {:ok, view, _html} -> view end)
+    {:ok, view, _html} = live(conn, ~p"/budget")
+    view
   end
 
   defp edit_category(view, category),
@@ -125,7 +124,6 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     {:ok, view, _html} =
       c.conn
       |> put_connect_params(%{
-        "today" => "2026-10-10",
         "fit" => %{"months" => 1, "span" => 7, "compact" => true}
       })
       |> live(~p"/budget")

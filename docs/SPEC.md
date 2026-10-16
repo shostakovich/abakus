@@ -20,7 +20,7 @@ recurring one (rent) comes from the shared expenses' recurring expenses (#43).
 - Elixir, Phoenix 1.8, LiveView, SQLite (`ecto_sqlite3`), esbuild, one amd64 container
 - Tailwind CSS 4 and daisyUI 5 with Setzkasten, the component library shared with the owner's other apps
   (ADR 0004)
-- HTTP: `req`; mail: `swoosh`
+- HTTP: `:httpc`; mail: `swoosh`
 - New dependencies only with a reason
 - SQLite conventions: `default_transaction_mode: :immediate`, WAL, `:utc_datetime_usec`, synchronous DB tests,
   `pool_size: 1` in test
@@ -338,7 +338,7 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
   operator's job. The Depot's receipt files live in `receipts/` next to the database, in the data volume but
   outside the nightly backup
 - Jobs in the release: the ECB rates (daily at 17:00), recurring expenses (hourly), the Kasse's YNAB sync (shortly
-  after a change and hourly), the Depot's prices, exchange rates and DivvyDiary data (daily at 18:00), each user's
+  after a change and hourly), the Depot's prices and DivvyDiary data (daily at 18:00), each user's
   Paperless (every 15 minutes) and the backup, at the host's
   local time (`TZ`, `Europe/Berlin` in the image); `jobs: false` turns them off in tests
 - Runs behind the operator's HTTPS reverse proxy, which sets `X-Forwarded-Proto`

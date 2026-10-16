@@ -37,11 +37,14 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   script without `nonce={@csp_nonce}` and no inline `style` attributes.
 - The Kasse (`Abakus.Kasse`, `AbakusWeb.Kasse`, tables `kasse_…`): money is integer cents, local time is the
   host's `TZ` (`Abakus.LocalTime`, no time zone database). Its jobs and the backup run in the release;
-  `config/test.exs` turns them off (`jobs: false`), and tests fake the ECB and YNAB with Bandit stubs
-  (`Abakus.Kasse.FakeEcb`, `Abakus.Kasse.FakeYnab`). The YNAB sync's fingerprint and memo stay byte-identical
-  (ADR 0011).
+  `config/test.exs` turns them off (`jobs: false`), and tests fake YNAB with a Bandit stub
+  (`Abakus.Kasse.FakeYnab`). The YNAB sync's fingerprint and memo stay byte-identical (ADR 0011).
+- Exchange rates (`Abakus.ExchangeRates`, tables `exchange_rates`, `exchange_rate_runs`) are shared: one daily job
+  loads the ECB rates, each area looks them up by its own rule, manual rates are the Kasse's only; its rule and the
+  logged changes to manual rates live in `Abakus.Kasse.Rates`. Tests swap the source in `config/test.exs`
+  (`Abakus.FakeExchangeRateSource`).
 - The Depot (`Abakus.Depot`, `AbakusWeb.Depot`, tables `depot_…`): context functions take `%Scope{}` and see only
-  the user's own data, except securities, prices, exchange rates and compositions, which all share. Outside
+  the user's own data, except securities, prices and compositions, which all share. Outside
   services are behaviours swapped in `config/test.exs` (`Abakus.Depot.Fake…`); `:pdftotext` tests need poppler.
   Receipt files live in `receipts/` next to the database. Only `Abakus.Depot.BudgetFeed` (value changes) and
   `Abakus.Depot.BudgetLink` (transfers) write to accounts fed by `portfolio`.

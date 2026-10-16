@@ -5,9 +5,9 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{ExchangeRates, FakeSymbolSource}
+  alias Abakus.Depot.FakeSymbolSource
   alias Abakus.Depot.Portfolios.TransactionUnit
-  alias Abakus.LocalTime
+  alias Abakus.{ExchangeRates, LocalTime}
   alias Abakus.Repo
   alias AbakusWeb.Depot.Format
 

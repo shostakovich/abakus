@@ -1,32 +1,30 @@
-defmodule Abakus.Kasse.Fx.Rate do
+defmodule Abakus.ExchangeRates.ExchangeRate do
   @moduledoc """
-  An exchange rate in units of the currency per 1 €, valid from its date. ECB and manual rates of
-  the same day sit side by side. A looked-up euro rate is `:fixed` and never stored.
+  A rate as quoted: 1 EUR = `rate` units of `currency` on `date`, from the ECB or entered by hand.
+  A manual rate is valid from its date on; the ECB and a manual rate of the same day sit side by side.
   """
-
   use Abakus.Schema
 
   import Ecto.Changeset
 
-  alias Abakus.Kasse.Money
+  alias Abakus.Currency
 
   @max_rate 1.0e9
 
   @type t :: %__MODULE__{}
 
-  @primary_key false
-  schema "kasse_fx_rates" do
-    field :currency, :string, primary_key: true
-    field :source, Ecto.Enum, values: [:ecb, :manual], primary_key: true
-    field :date, :date, primary_key: true
-    field :rate, :float
+  schema "exchange_rates" do
+    field :currency, :string
+    field :date, :date
+    field :source, Ecto.Enum, values: [:ecb, :manual]
+    field :rate, :decimal
   end
 
   @doc "A manual rate entered for a currency from a date on."
   def manual_changeset(rate, attrs) do
     rate
     |> cast(attrs, [:currency, :date, :rate])
-    |> update_change(:currency, &Money.normalize_currency/1)
+    |> update_change(:currency, &Currency.normalize/1)
     |> put_change(:source, :manual)
     |> validate_currency()
     |> validate_required(:date, message: "Bitte ein Datum angeben.")
@@ -44,7 +42,7 @@ defmodule Abakus.Kasse.Fx.Rate do
         add_error(changeset, :currency, "Für Euro braucht es keinen Kurs.")
 
       currency ->
-        if Money.valid_currency?(currency || ""),
+        if Currency.valid?(currency || ""),
           do: changeset,
           else:
             add_error(

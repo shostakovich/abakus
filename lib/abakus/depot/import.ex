@@ -91,8 +91,8 @@ defmodule Abakus.Depot.Import do
     end
   end
 
-  # Exchange rates get new ids, as the Depot may have fetched some already; the old app lacks the budget's columns.
-  defp columns("exchange_rates"), do: table_columns("exchange_rates") -- ["id"]
+  # The old app's rates are ECB rates without a source and get new ids; it lacks the budget's columns.
+  defp columns("exchange_rates"), do: ~w(currency date rate)
   defp columns("portfolios"), do: table_columns("portfolios") -- ["budget_account_id"]
 
   defp columns("accounts"),
@@ -170,9 +170,9 @@ defmodule Abakus.Depot.Import do
   defp atoms(row), do: Map.new(row, fn {column, value} -> {String.to_atom(column), value} end)
 
   defp insert("exchange_rates", rows) do
-    Repo.insert_all("depot_exchange_rates", rows,
+    Repo.insert_all("exchange_rates", Enum.map(rows, &Map.put(&1, :source, "ecb")),
       on_conflict: {:replace, [:rate]},
-      conflict_target: [:currency, :date]
+      conflict_target: [:currency, :source, :date]
     )
   end
 

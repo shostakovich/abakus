@@ -7,7 +7,7 @@ defmodule Abakus.MCP.WriteTools do
 
   require Logger
 
-  alias Abakus.Kasse.{Expenses, Fx, Money, Split}
+  alias Abakus.Kasse.{Expenses, Money, Rates, Split}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.MCP.{Directory, Output, ReadTools, ToolError}
 
@@ -121,7 +121,7 @@ defmodule Abakus.MCP.WriteTools do
   end
 
   defp ecb_rate(currency, date, opts) do
-    case Fx.rate(currency, date, today: ReadTools.today(opts)) do
+    case Rates.rate(currency, date, today: ReadTools.today(opts)) do
       {:ok, rate} ->
         {rate.rate, rate.source}
 

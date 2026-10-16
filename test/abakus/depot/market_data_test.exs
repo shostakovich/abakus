@@ -3,27 +3,18 @@ defmodule Abakus.Depot.MarketDataTest do
 
   import Abakus.Depot.SecuritiesFixtures
 
-  alias Abakus.Depot.{
-    ExchangeRates,
-    FakePriceFeed,
-    FakeRateSource,
-    FakeSymbolSearch,
-    FakeSymbolSource,
-    MarketData,
-    Securities
-  }
+  alias Abakus.Depot.{FakePriceFeed, FakeSymbolSearch, FakeSymbolSource, MarketData, Securities}
 
   alias Abakus.Depot.MarketData.DivvyDiary.Response
   alias Abakus.Depot.Securities.Security
 
+  alias Abakus.FakeExchangeRateSource
+
   @now ~U[2026-10-09 16:00:00.000000Z]
 
-  defp usd(date, rate), do: {"USD", date, Decimal.new(rate)}
-
   describe "run_daily/1" do
-    test "stores rates and prices; the next run fetches from the last stored day on" do
+    test "stores prices; the next run fetches from the last stored day on" do
       security = security_fixture()
-      FakeRateSource.stub(fn _from -> {:ok, [usd(~D[2026-10-08], "1.1186")]} end)
 
       FakePriceFeed.stub(fn _symbol, _from, _now ->
         {:ok, FakePriceFeed.chart_result([{~D[2026-10-08], 100}])}
@@ -31,9 +22,7 @@ defmodule Abakus.Depot.MarketDataTest do
 
       MarketData.run_daily(@now)
 
-      assert_received {:rates, ~D[1999-01-04]}
       assert_received {:chart, "VGWL.DE", nil}
-      assert ExchangeRates.latest("USD").rate == Decimal.new("1.1186")
       assert prices_of(security) == [{~D[2026-10-08], 100, :yahoo}]
 
       security = Repo.reload!(security)
@@ -43,8 +32,15 @@ defmodule Abakus.Depot.MarketDataTest do
 
       MarketData.run_daily(@now)
 
-      assert_received {:rates, ~D[2026-10-08]}
       assert_received {:chart, "VGWL.DE", ~D[2026-10-08]}
+    end
+
+    test "fetches no exchange rates" do
+      FakeExchangeRateSource.stub(fn _from -> {:ok, []} end)
+
+      MarketData.run_daily(@now)
+
+      refute_received {:rates, _from}
     end
 
     test "PP and manual prices win over Yahoo" do
@@ -86,14 +82,12 @@ defmodule Abakus.Depot.MarketDataTest do
       refute_received {:chart, _symbol, _from}
     end
 
-    test "a failing source is recorded, the other one still runs" do
+    test "a failing fetch is recorded on the security" do
       security = security_fixture(fetched_at: ~U[2026-10-08 16:00:00.000000Z])
-      FakeRateSource.stub(fn _from -> {:error, {:http_status, 503}} end)
       FakePriceFeed.stub(fn _symbol, _from, _now -> {:error, :not_found} end)
 
       MarketData.run_daily(@now)
 
-      assert MarketData.last_run().error == "Die EZB antwortet mit HTTP 503."
       security = Repo.reload!(security)
       assert security.fetch_error == "Yahoo kennt das Symbol VGWL.DE nicht."
       assert security.fetched_at == ~U[2026-10-08 16:00:00.000000Z]
@@ -116,7 +110,6 @@ defmodule Abakus.Depot.MarketDataTest do
     test "an exception is recorded and does not stop the other securities" do
       broken = security_fixture(symbol: "BROKEN.DE")
       fine = security_fixture(symbol: "FINE.DE")
-      FakeRateSource.stub(fn _from -> raise "ECB parser exploded" end)
 
       FakePriceFeed.stub(fn
         "BROKEN.DE", _from, _now -> raise "chart exploded"
@@ -124,9 +117,6 @@ defmodule Abakus.Depot.MarketDataTest do
       end)
 
       ExUnit.CaptureLog.capture_log(fn -> MarketData.run_daily(@now) end)
-
-      assert MarketData.last_run().error ==
-               "Die Wechselkurse ließen sich nicht speichern: ECB parser exploded"
 
       assert Repo.reload!(broken).fetch_error ==
                "Die Kurse ließen sich nicht speichern: chart exploded"
@@ -137,7 +127,6 @@ defmodule Abakus.Depot.MarketDataTest do
     test "an exit is recorded without its reason, which may hold the request" do
       broken = security_fixture(symbol: "BROKEN.DE")
       fine = security_fixture(symbol: "FINE.DE")
-      FakeRateSource.stub(fn _from -> exit({:noproc, [{"authorization", "SECRET"}]}) end)
 
       FakePriceFeed.stub(fn
         "BROKEN.DE", _from, _now -> exit({:noproc, [{"authorization", "SECRET"}]})
@@ -146,7 +135,6 @@ defmodule Abakus.Depot.MarketDataTest do
 
       log = ExUnit.CaptureLog.capture_log(fn -> MarketData.run_daily(@now) end)
 
-      assert MarketData.last_run().error == "Die Wechselkurse ließen sich nicht abrufen."
       assert Repo.reload!(broken).fetch_error == "Die Kurse ließen sich nicht abrufen."
       assert prices_of(fine) == [{~D[2026-10-08], 100, :yahoo}]
       assert log =~ "BROKEN.DE"
@@ -459,6 +447,7 @@ defmodule Abakus.Depot.MarketDataTest do
       assert {:error, :unreachable} = MarketData.lookup_isin("IE00BKM4GZ66")
       assert MarketData.lookup_error(:unreachable) == "Yahoo ist nicht erreichbar."
       assert MarketData.lookup_error(:timeout) == "Yahoo ist nicht erreichbar."
+      assert MarketData.lookup_error(:too_large) == "Yahoo liefert eine zu große Antwort."
     end
   end
 

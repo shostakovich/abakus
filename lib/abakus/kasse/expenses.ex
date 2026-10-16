@@ -9,7 +9,7 @@ defmodule Abakus.Kasse.Expenses do
 
   import Ecto.Query
 
-  alias Abakus.Kasse.{Activities, BudgetLink, Dates, Fx, Money, Participants, Suggestions}
+  alias Abakus.Kasse.{Activities, BudgetLink, Dates, Money, Participants, Rates, Suggestions}
   alias Abakus.Kasse.Activities.Changes
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Kasse.Expenses.{Expense, ExpenseShare, Form}
@@ -302,12 +302,31 @@ defmodule Abakus.Kasse.Expenses do
   @doc "The split preview of a form; a new expense splits by the id it will get."
   def preview_form(%Form{} = form), do: Form.preview(form, form.expense_id || next_id())
 
+  @doc "The rates of the newest live expenses in another currency than euros, newest first."
+  @spec recent_foreign_rates(pos_integer()) :: [map()]
+  def recent_foreign_rates(limit \\ 10) do
+    Repo.all(
+      from e in Expense,
+        where: is_nil(e.deleted_at) and e.original_currency != "EUR",
+        order_by: [desc: e.date, desc: e.id],
+        limit: ^limit,
+        select: %{
+          expense_id: e.id,
+          title: e.title,
+          currency: e.original_currency,
+          date: e.date,
+          rate: e.fx_rate,
+          source: e.fx_source
+        }
+    )
+  end
+
   @doc "Looks up the rate of the form's currency on its date. Option `:today`."
   def lookup_form_rate(%Form{} = form, opts \\ []) do
     with {:ok, date} <- Dates.parse(form.date),
          currency = Form.currency_code(form),
          true <- Money.valid_currency?(currency) and currency != "EUR" do
-      Form.put_rate(form, Fx.rate(currency, date, opts))
+      Form.put_rate(form, Rates.rate(currency, date, opts))
     else
       _invalid -> Changeset.change(form)
     end
@@ -351,7 +370,7 @@ defmodule Abakus.Kasse.Expenses do
   defp saved_ecb_rate?(_existing, _input), do: false
 
   defp lookup_rate(form, %{original_currency: currency, date: date} = input, opts) do
-    case Fx.rate(currency, date, opts) do
+    case Rates.rate(currency, date, opts) do
       {:ok, rate} ->
         form = form |> Form.put_rate({:ok, rate}) |> Changeset.apply_changes()
         {:ok, form, %{input | fx_rate: rate.rate, fx_source: rate.source}}

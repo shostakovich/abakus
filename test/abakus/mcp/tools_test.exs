@@ -5,8 +5,8 @@ defmodule Abakus.MCP.ToolsTest do
 
   @moduletag :capture_log
 
+  alias Abakus.ExchangeRates
   alias Abakus.Kasse.{Activities, Categories, Expenses, Participants}
-  alias Abakus.Kasse.Fx.Rate
   alias Abakus.MCP.Tools
 
   @today ~D[2026-10-03]
@@ -28,7 +28,7 @@ defmodule Abakus.MCP.ToolsTest do
     {:ok, _health} = Categories.archive_category(anna.id, health)
 
     for {date, rate} <- [{~D[2026-09-30], @usd_sept_30}, {~D[2026-10-02], @usd_oct_2}],
-        do: Repo.insert!(%Rate{currency: "USD", source: :ecb, date: date, rate: rate})
+        do: ExchangeRates.store([{"USD", date, Decimal.from_float(rate)}])
 
     %{anna: anna.id, ben: ben.id, cleo: cleo.id, dora: dora.id, emil: emil.id}
   end
@@ -1220,7 +1220,7 @@ defmodule Abakus.MCP.ToolsTest do
            )
 
     assert text =~
-             "YNAB tables (credentials) are not visible via MCP, nor is anything outside the Kasse"
+             "YNAB tables (credentials) are not visible via MCP, nor is anything outside the Kasse but exchange_rates"
 
     assert text =~ "GROUP BY 1 ORDER BY 2 DESC;\n\nPeople (id: name): "
 
@@ -1234,7 +1234,7 @@ defmodule Abakus.MCP.ToolsTest do
 
     assert tables ==
              ~w(kasse_participants kasse_categories kasse_settings kasse_recurring_expenses kasse_expenses
-                kasse_expense_shares kasse_activities kasse_fx_rates)
+                kasse_expense_shares kasse_activities exchange_rates)
 
     refute String.downcase(text) =~ "ynab_"
     decode_refusal("schema", %{"table" => "expenses"}, "table")
@@ -1257,7 +1257,7 @@ defmodule Abakus.MCP.ToolsTest do
            })["rows"] ==
              Enum.map(
                Enum.sort(
-                 ~w(kasse_activities kasse_categories kasse_expense_shares kasse_expenses kasse_fx_rates
+                 ~w(exchange_rates kasse_activities kasse_categories kasse_expense_shares kasse_expenses
                      kasse_participants kasse_recurring_expenses kasse_settings)
                ),
                &[&1]

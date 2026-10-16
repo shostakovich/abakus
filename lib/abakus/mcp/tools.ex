@@ -284,7 +284,7 @@ defmodule Abakus.MCP.Tools do
 
     rate =
       number(
-        "Only for a foreign currency: units of that currency per 1 EUR. Default: the ECB reference rate of the date.",
+        "Only for a foreign currency: units of that currency per 1 EUR. Default: the manual rate valid on the date, else the ECB reference rate.",
         exclusive_minimum: 0
       )
 

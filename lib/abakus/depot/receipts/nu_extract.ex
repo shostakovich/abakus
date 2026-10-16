@@ -9,8 +9,8 @@ defmodule Abakus.Depot.Receipts.NuExtract do
   """
   @behaviour Abakus.Depot.Receipts.Model
 
-  alias Abakus.Depot.MarketData.HTTP
   alias Abakus.Depot.Receipts.{ChatAPI, Fields}
+  alias Abakus.HTTP
 
   @impl true
   defdelegate available?, to: ChatAPI
@@ -31,7 +31,7 @@ defmodule Abakus.Depot.Receipts.NuExtract do
 
     url = String.trim_trailing(config[:url], "/") <> "/chat/completions"
 
-    with {:ok, 200, response} <- HTTP.post_json(url, body, [], timeout: 300_000),
+    with {:ok, 200, response} <- HTTP.post(url, json: body, timeout: 300_000),
          {:ok, %{"choices" => [%{"message" => %{"content" => content}} | _]}} <-
            JSON.decode(response) do
       {:ok, answer_json(content, schema)}

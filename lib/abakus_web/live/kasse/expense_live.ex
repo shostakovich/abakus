@@ -4,7 +4,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   or saved (`:edit`, read-only once deleted, with its history and, for the budget owner, the
   transaction it is linked to in the budget). Every change goes through
   `Abakus.Kasse.Expenses.Form`, which keeps the text as typed and fills in what an edit implies;
-  the split shows live, and a foreign rate is looked up in the background.
+  the split shows live, and a foreign rate is looked up as currency or date change.
 
   Errors of a submit stay on the fields until they change.
   """
@@ -24,8 +24,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
         people: Participants.list_participants(:all),
         categories: Categories.list_categories(:all),
         errors: [],
-        submitted: nil,
-        rate_loading: false
+        submitted: nil
       )
 
     {:ok, socket |> start(socket.assigns.live_action, params) |> assign_form()}
@@ -176,36 +175,9 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   defp changeset(socket, params),
     do: Form.changeset(socket.assigns.data, params, suggestions: socket.assigns.suggestions)
 
-  # The ECB file may take seconds to download; the form stays usable meanwhile.
   defp lookup_rate(socket) do
-    data = socket.assigns.data
-    asked = {Form.currency_code(data), data.date, data.rate}
-
-    socket
-    |> assign(rate_loading: true)
-    |> start_async(:rate, fn -> {asked, Expenses.lookup_form_rate(data)} end)
-  end
-
-  @impl true
-  def handle_async(:rate, {:ok, {asked, %Changeset{changes: changes}}}, socket) do
-    data = socket.assigns.data
-    socket = assign(socket, rate_loading: false)
-
-    if asked == {Form.currency_code(data), data.date, data.rate} do
-      data = data |> Changeset.change(changes) |> Changeset.apply_changes()
-      {:noreply, socket |> assign(data: data) |> assign_form()}
-    else
-      {:noreply, assign_form(socket)}
-    end
-  end
-
-  def handle_async(:rate, {:exit, _reason}, socket) do
-    data = %{
-      socket.assigns.data
-      | rate_hint: "Kurs konnte nicht geladen werden. Kurs bitte von Hand eintragen."
-    }
-
-    {:noreply, socket |> assign(data: data, rate_loading: false) |> assign_form()}
+    data = socket.assigns.data |> Expenses.lookup_form_rate() |> Changeset.apply_changes()
+    assign(socket, data: data)
   end
 
   defp keep_errors(%{assigns: %{errors: []}} = socket), do: socket
@@ -373,7 +345,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
                   numeric
                   placeholder="automatisch"
                   autocomplete="off"
-                  help={rate_hint(@data, @rate_loading)}
+                  help={rate_hint(@data)}
                 />
                 <.button
                   :if={@data.rate_source != :ecb}
@@ -381,7 +353,6 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
                   variant={:ghost}
                   size={:sm}
                   icon="refresh-cw"
-                  loading={@rate_loading}
                   phx-click="load_rate"
                   class="-ms-3"
                 >
@@ -621,11 +592,10 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   defp currency_label("EUR"), do: "EUR – Euro"
   defp currency_label(code), do: code
 
-  defp rate_hint(_data, true), do: "Kurs wird geladen …"
-  defp rate_hint(%Form{rate_hint: hint}, _loading) when is_binary(hint), do: hint
-  defp rate_hint(%Form{rate_source: :manual}, _loading), do: "Von Hand eingetragener Kurs."
-  defp rate_hint(%Form{rate_source: :ecb}, _loading), do: "EZB-Kurs."
-  defp rate_hint(_data, _loading), do: "Leer lassen für den EZB-Kurs."
+  defp rate_hint(%Form{rate_hint: hint}) when is_binary(hint), do: hint
+  defp rate_hint(%Form{rate_source: :manual}), do: "Von Hand eingetragener Kurs."
+  defp rate_hint(%Form{rate_source: :ecb}), do: "EZB-Kurs."
+  defp rate_hint(_data), do: "Leer lassen für den EZB-Kurs."
 
   defp sum_text({_ok_or_error, text}), do: text
   defp sum_text(nil), do: nil

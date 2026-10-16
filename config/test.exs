@@ -11,12 +11,12 @@ config :abakus, Abakus.Repo,
 config :abakus, :backup_dir, Path.join(Path.dirname(database), "backups")
 
 config :abakus, jobs: false
-config :abakus, Abakus.Kasse.Fx.Ecb, base_url: nil
+
+config :abakus, Abakus.ExchangeRates, source: Abakus.FakeExchangeRateSource
 
 config :abakus, Abakus.Depot.MarketData,
   price_feed: Abakus.Depot.FakePriceFeed,
   symbol_search: Abakus.Depot.FakeSymbolSearch,
-  rate_source: Abakus.Depot.FakeRateSource,
   symbol_source: Abakus.Depot.FakeSymbolSource
 
 config :abakus, Abakus.Depot.Receipts,

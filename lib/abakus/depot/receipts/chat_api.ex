@@ -7,7 +7,7 @@ defmodule Abakus.Depot.Receipts.ChatAPI do
   """
   @behaviour Abakus.Depot.Receipts.Model
 
-  alias Abakus.Depot.MarketData.HTTP
+  alias Abakus.HTTP
 
   # A model on the CPU takes about a minute per receipt.
   @timeout 300_000
@@ -36,7 +36,7 @@ defmodule Abakus.Depot.Receipts.ChatAPI do
         }
       })
 
-    case HTTP.post_json(url(), body, headers(), timeout: @timeout) do
+    case HTTP.post(url(), json: body, headers: headers(), timeout: @timeout) do
       {:ok, 200, response} -> content(response)
       {:ok, status, _response} -> {:error, {:http_status, status}}
       {:error, reason} -> {:error, reason}

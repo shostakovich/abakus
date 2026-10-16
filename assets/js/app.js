@@ -24,16 +24,9 @@ const appHooks = {
   UpcomingDividendChart,
 }
 
-// The user's own date, so the current month turns over at their midnight.
-const today = () => {
-  const date = new Date()
-  const pad = (number) => String(number).padStart(2, "0")
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
-  params: () => ({ _csrf_token: csrfToken, today: today(), fit: initialBudgetFit(), benchmark: benchmarkChoice() }),
+  params: () => ({ _csrf_token: csrfToken, fit: initialBudgetFit(), benchmark: benchmarkChoice() }),
   hooks: { ...colocatedHooks, ...setzkastenHooks, ...appHooks },
 })
 

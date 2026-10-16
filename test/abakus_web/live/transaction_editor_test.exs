@@ -18,7 +18,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     market = payee_fixture(name: "Frischmarkt", last_category_id: groceries.id)
 
     %{
-      conn: put_connect_params(conn, %{"today" => "2026-10-09"}),
+      conn: conn,
       giro: giro,
       savings: savings,
       depot: depot,
@@ -82,12 +82,13 @@ defmodule AbakusWeb.TransactionEditorTest do
     do: has_element?(view, ~s|#tx-category-combobox input[data-value-input][value="#{id}"]|)
 
   describe "creating" do
-    test "Buchung adds an empty row on top, today, and books an outflow in the register's account",
+    test "Buchung adds an empty row on top, on the host's local date, and books an outflow in the register's account",
          c do
+      fix_today(~D[2031-03-15])
       view = open_new(c, c.giro)
 
       assert has_element?(view, ~s|#tx-editor[data-focus="tx-date"]|)
-      assert has_element?(view, ~s|#tx-date[value="2026-10-09"]|)
+      assert has_element?(view, ~s|#tx-date[value="2031-03-15"]|)
       refute has_element?(view, "#tx-account")
       assert has_element?(view, ~s|#tx-save[aria-label="Speichern"]|)
       refute has_element?(view, "#tx-delete")
@@ -101,7 +102,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       transaction = newest(c.giro)
 
-      assert %Transaction{amount: -1_234, date: ~D[2026-10-09], memo: "Brötchen", approved: true} =
+      assert %Transaction{amount: -1_234, date: ~D[2031-03-15], memo: "Brötchen", approved: true} =
                transaction
 
       assert transaction.payee.name == "🥖 Bäckerei"

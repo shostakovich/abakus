@@ -3,8 +3,9 @@ defmodule Abakus.Kasse.ImportTest do
 
   import Swoosh.TestAssertions
 
+  alias Abakus.ExchangeRates
   alias Abakus.Kasse.{Activities, Categories, Expenses, Import, Participants, Recurring, Settings}
-  alias Abakus.Kasse.{FakeYnab, Fx}
+  alias Abakus.Kasse.FakeYnab
   alias Abakus.Kasse.Ynab.{Connections, Sync, Transactions}
   alias Abakus.Repo
   alias Abakus.Users
@@ -90,7 +91,11 @@ defmodule Abakus.Kasse.ImportTest do
 
     assert Expenses.get_expense!(9).recurring_expense_id == 3
 
-    assert {:ok, %{rate: 1.15, source: :manual}} = Fx.rate("USD", ~D[2026-10-02])
+    assert [%{currency: "USD", date: ~D[2026-10-01], rate: rate}] =
+             ExchangeRates.list_manual_rates()
+
+    assert Decimal.equal?(rate, "1.15")
+    assert ExchangeRates.ecb_stats().count == 0
   end
 
   test "keeps the activity log with its authors and changes", %{path: path} do

@@ -73,6 +73,12 @@ defmodule AbakusWeb.ConnCase do
     log_in_user(conn, participant.user)
   end
 
+  @doc "Fixes `Abakus.LocalTime.today/0` for the rest of the test; for synchronous tests only."
+  def fix_today(%Date{} = date) do
+    Application.put_env(:abakus, :today, date)
+    ExUnit.Callbacks.on_exit(fn -> Application.delete_env(:abakus, :today) end)
+  end
+
   @doc "Waits until the tasks started under `Abakus.TaskSupervisor` (e.g. sign-in mails) are done."
   def await_background_tasks do
     for pid <- Task.Supervisor.children(Abakus.TaskSupervisor) do

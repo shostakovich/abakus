@@ -7,17 +7,17 @@ defmodule Abakus.Kasse.Recurring do
   `Abakus.Kasse.Recurring.Job`) and right after a rule is created or resumed: automatically (no
   actor), at most 400 per rule and run. An occurrence is skipped when a live expense on its date
   has the same title regardless of case, payer and amount (of a foreign one the original amount
-  and currency). A foreign occurrence takes the rate of its date; without one for good it keeps
-  the template's, while ECB rates that could not be loaded leave it for the next run.
+  and currency). A foreign occurrence takes the rate of its date; without one it keeps the
+  template's.
 
-  Options of the functions: `:today` and those of `Abakus.Kasse.Fx.rate/3`.
+  Option of the functions: `:today`.
   """
 
   import Ecto.Query
 
   require Logger
 
-  alias Abakus.Kasse.{Activities, Dates, Expenses, Fx, Money, Names}
+  alias Abakus.Kasse.{Activities, Dates, Expenses, Money, Names, Rates}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Recurring.RecurringExpense
   alias Abakus.Kasse.Recurring.RecurringExpense.Template
@@ -357,12 +357,10 @@ defmodule Abakus.Kasse.Recurring do
   end
 
   defp occurrence(rule, date, false, opts) do
-    with {:ok, attrs} <- instance(rule, date, opts) do
-      case Expenses.create_expense(nil, attrs, recurring_expense_id: rule.id) do
-        {:ok, _expense} -> {:ok, 1}
-        {:error, :rule_changed} -> :changed
-        {:error, %Changeset{} = changeset} -> created_before(changeset)
-      end
+    case Expenses.create_expense(nil, instance(rule, date, opts), recurring_expense_id: rule.id) do
+      {:ok, _expense} -> {:ok, 1}
+      {:error, :rule_changed} -> :changed
+      {:error, %Changeset{} = changeset} -> created_before(changeset)
     end
   end
 
@@ -393,18 +391,18 @@ defmodule Abakus.Kasse.Recurring do
           Enum.map(rule.template.parts, &%{participant_id: &1.participant_id, weight: &1.weight})
       })
 
-    if Money.eur?(attrs.original_currency), do: {:ok, attrs}, else: convert(rule, attrs, opts)
+    if Money.eur?(attrs.original_currency), do: attrs, else: convert(rule, attrs, opts)
   end
 
   defp convert(rule, %{original_currency: currency, date: date} = attrs, opts) do
-    case Fx.rate(currency, date, opts) do
+    case Rates.rate(currency, date, opts) do
       {:ok, rate} ->
         case Money.to_eur_cents(attrs.original_amount, currency, rate.rate) do
           {:ok, cents} when cents > 0 and cents <= @max_cents ->
-            {:ok, %{attrs | fx_rate: rate.rate, fx_source: rate.source}}
+            %{attrs | fx_rate: rate.rate, fx_source: rate.source}
 
           _invalid ->
-            {:ok, attrs}
+            attrs
         end
 
       {:error, :no_rate} ->
@@ -413,11 +411,7 @@ defmodule Abakus.Kasse.Recurring do
             "keeping the template's rate"
         )
 
-        {:ok, attrs}
-
-      {:error, {:unavailable, message}} ->
-        {:error,
-         "rate for #{currency} on #{date} not available, retrying in the next run: #{message}"}
+        attrs
     end
   end
 

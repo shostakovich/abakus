@@ -5,7 +5,8 @@ defmodule Abakus.Depot.MarketData.SymbolSearch do
   """
 
   @type listing :: %{symbol: String.t(), name: String.t(), exchange: String.t() | nil}
-  @type reason :: :unreachable | :timeout | :invalid_response | {:http_status, pos_integer}
+  @type reason ::
+          :unreachable | :timeout | :too_large | :invalid_response | {:http_status, pos_integer}
 
   @callback search(query :: String.t()) :: {:ok, [listing]} | {:error, reason}
 end

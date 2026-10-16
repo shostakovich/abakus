@@ -14,7 +14,12 @@ defmodule Abakus.Depot.MarketData.SymbolSource do
         }
   @type symbol :: %{composition: composition, dividends: [dividend]}
   @type reason ::
-          :not_found | :unreachable | :timeout | :invalid_response | {:http_status, pos_integer}
+          :not_found
+          | :unreachable
+          | :timeout
+          | :too_large
+          | :invalid_response
+          | {:http_status, pos_integer}
 
   @callback available?() :: boolean
   @callback symbol(isin :: String.t()) :: {:ok, symbol} | {:error, reason}

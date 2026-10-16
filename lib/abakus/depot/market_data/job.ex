@@ -1,10 +1,10 @@
 defmodule Abakus.Depot.MarketData.Job do
   @moduledoc """
   Runs `Abakus.Depot.MarketData.run_daily/1` every day at 18:00 local time, then books the value
-  changes into the budget (`Abakus.Depot.BudgetFeed`): Xetra closes at 17:30, the ECB publishes
-  around 16:00. At boot it runs at once when the last run is older than the last 18:00 slot, and
-  otherwise books only the value changes, which open the accounts of new portfolios, e.g. after an update.
-  There are no retries; the next run fills the gaps.
+  changes into the budget (`Abakus.Depot.BudgetFeed`): Xetra closes at 17:30, and the ECB rates
+  come at 17:00 (`Abakus.ExchangeRates.Job`). At boot it runs at once when the last run is older
+  than the last 18:00 slot, and otherwise books only the value changes, which open the accounts
+  of new portfolios, e.g. after an update. There are no retries; the next run fills the gaps.
   """
 
   alias Abakus.{DailyJob, LocalTime}
@@ -33,8 +33,5 @@ defmodule Abakus.Depot.MarketData.Job do
   end
 
   @doc "Whether the last run, in local time, is older than the last slot before `now`."
-  def due?(nil, _now), do: true
-
-  def due?(last_run, now),
-    do: NaiveDateTime.before?(last_run, NaiveDateTime.add(LocalTime.next_at(now, @at), -1, :day))
+  def due?(last_run, now), do: DailyJob.missed?(last_run, now, @at)
 end

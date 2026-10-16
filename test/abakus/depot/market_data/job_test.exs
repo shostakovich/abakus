@@ -1,8 +1,16 @@
 defmodule Abakus.Depot.MarketData.JobTest do
   use Abakus.DataCase
 
-  alias Abakus.Depot.{FakeRateSource, MarketData}
+  import Abakus.Depot.SecuritiesFixtures
+
+  alias Abakus.Depot.{FakePriceFeed, MarketData}
   alias Abakus.Depot.MarketData.{Job, JobRun}
+
+  setup do
+    security_fixture()
+    FakePriceFeed.stub(fn _symbol, _from, _now -> {:ok, FakePriceFeed.chart_result([])} end)
+    :ok
+  end
 
   describe "at boot" do
     test "runs at once when a slot was missed" do
@@ -11,22 +19,20 @@ defmodule Abakus.Depot.MarketData.JobTest do
         ran_at: DateTime.add(DateTime.utc_now(:microsecond), -2, :day)
       })
 
-      FakeRateSource.stub(fn _from -> {:ok, []} end)
       MarketData.subscribe()
 
       start_supervised!(Job)
 
       assert_receive :market_data_updated
-      assert_received {:rates, _from}
+      assert_received {:chart, "VGWL.DE", _from}
     end
 
     test "waits when the last slot already ran" do
       Repo.insert!(%JobRun{name: "daily", ran_at: DateTime.utc_now(:microsecond)})
-      FakeRateSource.stub(fn _from -> {:ok, []} end)
 
       start_supervised!(Job)
 
-      refute_receive {:rates, _from}, 100
+      refute_receive {:chart, _symbol, _from}, 100
     end
   end
 

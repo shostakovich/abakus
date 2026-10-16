@@ -13,7 +13,12 @@ defmodule Abakus.Depot.MarketData.PriceFeed do
           quote: quote_
         }
   @type reason ::
-          :not_found | :unreachable | :timeout | :invalid_response | {:http_status, pos_integer}
+          :not_found
+          | :unreachable
+          | :timeout
+          | :too_large
+          | :invalid_response
+          | {:http_status, pos_integer}
 
   @callback chart(symbol :: String.t(), from :: Date.t() | nil, now :: DateTime.t()) ::
               {:ok, chart} | {:error, reason}

@@ -32,7 +32,8 @@ defmodule AbakusWeb.RegisterLive do
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
-  alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
+  alias Abakus.LocalTime
+  alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.Depot.Components, as: DepotComponents
   alias AbakusWeb.RegisterLive.{Balances, Components, Reconcile, Rows, TransactionEditor}
   alias Plug.Conn.Query
@@ -159,11 +160,9 @@ defmodule AbakusWeb.RegisterLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    connect = get_connect_params(socket) || %{}
-
     {:ok,
      assign(socket,
-       today: Format.today(connect["today"]),
+       today: LocalTime.today(),
        scope: nil,
        editor: nil,
        selected: MapSet.new(),

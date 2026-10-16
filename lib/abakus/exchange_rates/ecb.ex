@@ -1,17 +1,18 @@
-defmodule Abakus.Depot.MarketData.ECB do
+defmodule Abakus.ExchangeRates.ECB do
   @moduledoc "Daily reference rates of all currencies from the ECB Data Portal, in one request."
-  @behaviour Abakus.Depot.MarketData.RateSource
+  @behaviour Abakus.ExchangeRates.Source
 
-  alias Abakus.Depot.MarketData.HTTP
+  alias Abakus.HTTP
 
   @url "https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A"
+  @max_rate Decimal.new("1e9")
 
   # The ECB blocks requests that start after today, so `from` must not be in the future.
   @impl true
   def rates(from) do
     params = [format: "csvdata", detail: "dataonly", startPeriod: Date.to_iso8601(from)]
 
-    case HTTP.get(@url, params) do
+    case HTTP.get(@url, params: params, follow_redirects: true) do
       {:ok, 200, body} -> parse(body)
       {:ok, 404, _body} -> {:ok, []}
       {:ok, status, _body} -> {:error, {:http_status, status}}
@@ -19,7 +20,7 @@ defmodule Abakus.Depot.MarketData.ECB do
     end
   end
 
-  @doc "Reads the CSV; rows without a finite value are skipped."
+  @doc "Reads the CSV; rows without a value above 0 and up to 10⁹ are skipped."
   def parse(csv) do
     case String.split(csv, ["\r\n", "\n"], trim: true) do
       [] -> {:ok, []}
@@ -46,7 +47,8 @@ defmodule Abakus.Depot.MarketData.ECB do
 
     with {:ok, date} <- Date.from_iso8601(date || ""),
          {rate, ""} <- Decimal.parse(value || ""),
-         false <- Decimal.nan?(rate) or Decimal.inf?(rate) do
+         false <- Decimal.nan?(rate) or Decimal.inf?(rate),
+         true <- Decimal.gt?(rate, 0) and not Decimal.gt?(rate, @max_rate) do
       [{currency, date, rate}]
     else
       _missing -> []

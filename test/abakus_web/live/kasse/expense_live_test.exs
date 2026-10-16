@@ -6,9 +6,8 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
   import Abakus.KasseFixtures
   import AbakusWeb.PageText
 
+  alias Abakus.{ExchangeRates, LocalTime}
   alias Abakus.Kasse.Expenses
-  alias Abakus.Kasse.Fx.Rate
-  alias Abakus.{LocalTime, Repo}
   alias Setzkasten.Format
 
   setup %{conn: conn} do
@@ -218,11 +217,10 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
   end
 
   test "a foreign amount looks its rate up and takes a typed one", %{conn: conn} do
-    Repo.insert!(%Rate{currency: "USD", source: :ecb, date: Date.add(today(), -1), rate: 1.25})
+    ExchangeRates.store([{"USD", Date.add(today(), -1), Decimal.new("1.25")}])
     {:ok, view, _html} = live(conn, ~p"/kasse/expenses/new")
 
     change(view, %{currency: "USD", amount: "10"})
-    render_async(view)
 
     assert value(view, "#expense_rate") == ["1,25"]
 
@@ -241,6 +239,18 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
 
     assert {expense.original_currency, expense.original_amount, expense.fx_rate,
             expense.fx_source, expense.amount_cents} == {"USD", 1000, 1.6, :manual, 625}
+  end
+
+  test "the ECB rate replaces a typed one at once", %{conn: conn} do
+    ExchangeRates.store([{"USD", Date.add(today(), -1), Decimal.new("1.25")}])
+    {:ok, view, _html} = live(conn, ~p"/kasse/expenses/new")
+    change(view, %{currency: "USD", amount: "10"})
+    change(view, %{rate: "1,6"})
+
+    view |> element("#expense-load-rate") |> render_click()
+
+    assert value(view, "#expense_rate") == ["1,25"]
+    assert text(view, "#expense_rate-help") =~ "EZB-Kurs vom"
   end
 
   test "a reconnect recovers the form as typed, without what an edit implies",
@@ -274,7 +284,6 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
 
     change(view, %{currency: ""})
     change(view, %{currency_other: "thb", amount: "100"})
-    render_async(view)
 
     assert text(view, "#expense_rate-help") ==
              "Kein Kurs verfügbar. Kurs bitte von Hand eintragen."

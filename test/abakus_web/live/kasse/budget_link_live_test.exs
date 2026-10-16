@@ -21,7 +21,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
 
     %{
       h: h,
-      conn: conn |> put_connect_params(%{"today" => "2026-10-12"}) |> log_in_participant(h.anna),
+      conn: conn |> log_in_participant(h.anna),
       account: account,
       groceries: groceries,
       treats: treats

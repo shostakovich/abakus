@@ -281,13 +281,8 @@ defmodule Abakus.Kasse.Money do
     {int <> frac, byte_size(int) + exponent}
   end
 
-  @doc ~s(A currency code as stored: `" usd "` is `"USD"`.)
-  @spec normalize_currency(String.t()) :: String.t()
-  def normalize_currency(currency), do: currency |> String.trim() |> String.upcase()
-
-  @doc "Whether `code` is three ASCII capitals."
-  @spec valid_currency?(String.t()) :: boolean()
-  def valid_currency?(code), do: code =~ ~r/\A[A-Z]{3}\z/
+  defdelegate normalize_currency(currency), to: Abakus.Currency, as: :normalize
+  defdelegate valid_currency?(code), to: Abakus.Currency, as: :valid?
 
   @doc "Whether `currency` means euros; an empty one does."
   @spec eur?(String.t()) :: boolean()

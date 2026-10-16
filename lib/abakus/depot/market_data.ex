@@ -1,19 +1,18 @@
 defmodule Abakus.Depot.MarketData do
   @moduledoc """
-  Fetches prices, exchange rates and the compositions and dividends of the securities and stores
-  them. The daily job calls `run_daily/1`; pages refresh stale quotes in the background and hear
-  about every update over PubSub. Screens never call a source themselves.
+  Fetches prices and the compositions and dividends of the securities and stores them. The daily
+  job calls `run_daily/1`; pages refresh stale quotes in the background and hear about every
+  update over PubSub. Screens never call a source themselves.
   """
 
   require Logger
 
-  alias Abakus.Depot.{ExchangeRates, Securities}
   alias Abakus.Depot.MarketData.JobRun
+  alias Abakus.Depot.Securities
   alias Abakus.Repo
   alias Abakus.Users.Scope
 
   @topic "market_data"
-  @first_rate_date ~D[1999-01-04]
   @stale_after_seconds 15 * 60
 
   def subscribe, do: Phoenix.PubSub.subscribe(Abakus.PubSub, @topic)
@@ -22,14 +21,11 @@ defmodule Abakus.Depot.MarketData do
   def broadcast, do: Phoenix.PubSub.broadcast(Abakus.PubSub, @topic, :market_data_updated)
 
   @doc """
-  Fetches the exchange rates, the prices of every Yahoo security and, with an API key, the
-  composition and the dividends of every security with an ISIN, then records the run. A step
-  that fails, even with an exception or an exit, is recorded or logged and does not stop the
-  others.
+  Fetches the prices of every Yahoo security and, with an API key, the composition and the
+  dividends of every security with an ISIN, then records the run. A step that fails, even with
+  an exception or an exit, is recorded or logged and does not stop the others.
   """
   def run_daily(now \\ DateTime.utc_now()) do
-    rates_error = update_rates()
-
     for security <- Securities.list_yahoo_securities() do
       update_prices_safely(security, Securities.last_price_date(security), now)
     end
@@ -38,7 +34,7 @@ defmodule Abakus.Depot.MarketData do
       Enum.each(Securities.list_securities_with_isin(), &update_symbol(&1, now))
     end
 
-    record_run(now, rates_error)
+    record_run(now)
     broadcast()
   end
 
@@ -47,27 +43,11 @@ defmodule Abakus.Depot.MarketData do
 
   def last_run, do: Repo.get_by(JobRun, name: "daily")
 
-  defp record_run(now, error) do
-    Repo.insert!(%JobRun{name: "daily", ran_at: now, error: error},
-      on_conflict: {:replace, [:ran_at, :error]},
+  defp record_run(now) do
+    Repo.insert!(%JobRun{name: "daily", ran_at: now},
+      on_conflict: {:replace, [:ran_at]},
       conflict_target: :name
     )
-  end
-
-  # From the last stored day on, which may still change; the ECB refuses a start in the future.
-  defp update_rates do
-    case rate_source().rates(ExchangeRates.last_date() || @first_rate_date) do
-      {:ok, rates} ->
-        ExchangeRates.store(rates)
-        nil
-
-      {:error, reason} ->
-        source_error("Die EZB", reason)
-    end
-  rescue
-    exception -> log_and_describe(exception, __STACKTRACE__, "Die Wechselkurse")
-  catch
-    :exit, _reason -> exited("the exchange rates", "Die Wechselkurse")
   end
 
   # Exchanges that quote in euros, Xetra first.
@@ -280,11 +260,11 @@ defmodule Abakus.Depot.MarketData do
     do: "#{source} ist nicht erreichbar."
 
   defp source_error(source, {:http_status, status}), do: "#{source} antwortet mit HTTP #{status}."
+  defp source_error(source, :too_large), do: "#{source} liefert eine zu große Antwort."
   defp source_error(source, :invalid_response), do: "#{source} liefert eine unerwartete Antwort."
 
   defp price_feed, do: config(:price_feed)
   defp symbol_search, do: config(:symbol_search)
-  defp rate_source, do: config(:rate_source)
   defp symbol_source, do: config(:symbol_source)
   defp config(key), do: Application.fetch_env!(:abakus, __MODULE__)[key]
 end

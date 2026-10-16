@@ -43,8 +43,9 @@ Arguments:
 Write tools:
 
 - `create_expense`: `title`, `amount`, `paid_by` (required), `date` (today), `category`, `currency` (EUR), `fx_rate`
-  (the ECB rate of the date), `split` (`equal`, `shares`, `percent`, `amount`), `participants` (for `equal`; all
-  active people by default), `weights` (person → value for the other modes), `notes`, `allow_duplicate`.
+  (the manual rate valid on the date, else the ECB rate), `split` (`equal`, `shares`, `percent`, `amount`),
+  `participants` (for `equal`; all active people by default), `weights` (person → value for the other modes), `notes`,
+  `allow_duplicate`.
 - `create_reimbursement`: `from`, `to`, `amount` (required), `currency`, `fx_rate`, `date`, `notes`,
   `allow_duplicate`; the title is "Rückzahlung".
 - Amounts are strict: digits and a dot, no thousands separator (`"1234.50"`); `"1.234"` is refused.
@@ -75,7 +76,7 @@ Output:
 - At most 500 rows and 8 MiB are returned; long texts are cut inside SQLite, before they reach the app.
 - It is cancelled after 2 seconds, the copy included.
 - Visible tables: `kasse_participants`, `kasse_categories`, `kasse_expenses`, `kasse_expense_shares`,
-  `kasse_recurring_expenses`, `kasse_activities`, `kasse_fx_rates`, `kasse_settings`. The YNAB tables (they hold
+  `kasse_recurring_expenses`, `kasse_activities`, `kasse_settings`, `exchange_rates`. The YNAB tables (they hold
   tokens), the users and the budget are never copied.
 - `kasse_expenses.title_folded` and `notes_folded` are case-folded copies of title and notes (Unicode-correct, "ß" as
   "ss"): compare them with a folded term, e.g. `instr(title_folded, 'bäckerei') > 0`.

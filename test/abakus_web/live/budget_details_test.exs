@@ -11,6 +11,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
   @november ~D[2026-11-01]
 
   setup :register_and_log_in_user
+  setup do: fix_today(~D[2026-10-10])
 
   setup do
     checking = account_fixture(kind: :checking)
@@ -155,10 +156,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       income(c, 5_000, ~D[2026-09-01])
       Categories.assign(c.fuel, @october, 5_000)
 
-      {:ok, view, _html} =
-        c.conn
-        |> put_connect_params(%{"today" => "2026-10-10"})
-        |> live(~p"/budget?month=2026-09")
+      {:ok, view, _html} = live(c.conn, ~p"/budget?month=2026-09")
 
       assert has_element?(view, "#ready-2026-09", "50,00")
       refute has_element?(view, "#distribute-2026-09")
@@ -642,7 +640,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
     }
 
     conn
-    |> put_connect_params(%{"today" => "2026-10-10", "fit" => fit})
+    |> put_connect_params(%{"fit" => fit})
     |> live(~p"/budget")
   end
 
