@@ -349,6 +349,15 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert {:error, :linked} = BudgetLink.switch_on(c.owner, attrs)
     end
 
+    test "changing the category changes the scope's own link", c do
+      switch_on(c)
+      other = DomainFixtures.category_fixture(name: "Sparen")
+
+      assert {:ok, link} = BudgetLink.change_category(c.owner, other.id)
+      assert link.category_id == other.id
+      assert Repo.reload!(link).category_id == other.id
+    end
+
     test "sees only the user's own budget", c do
       member = user_scope_fixture()
       {:ok, group} = Categories.create_category_group(member, %{name: "Eigenes"})
@@ -365,7 +374,8 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert id == c.investieren.id
       assert [{"Eigenes", [{"Investieren", own_id}]}] = BudgetLink.category_options(member)
       assert own_id == own.id
-      assert {:error, %Ecto.Changeset{}} = BudgetLink.change_category(link, own.id)
+      assert {:error, %Ecto.Changeset{}} = BudgetLink.change_category(c.owner, own.id)
+      assert {:error, :not_linked} = BudgetLink.change_category(member, own.id)
 
       assert BudgetLink.in_use?(c.owner)
       refute BudgetLink.in_use?(member)

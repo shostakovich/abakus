@@ -457,14 +457,14 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   end
 
   def handle_event("save_category", %{"link" => %{"category_id" => id}}, socket) do
-    case socket.assigns.link && BudgetLink.change_category(socket.assigns.link, id) do
+    case BudgetLink.change_category(socket.assigns.current_scope, id) do
       {:ok, _link} ->
         {:noreply, socket |> put_flash(:info, "Kategorie für Käufe gespeichert.") |> load_link()}
 
-      {:error, changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, :link_form, to_form(changeset, as: :link, action: :update))}
 
-      nil ->
+      {:error, :not_linked} ->
         {:noreply, socket}
     end
   end

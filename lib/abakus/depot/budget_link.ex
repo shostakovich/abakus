@@ -67,12 +67,21 @@ defmodule Abakus.Depot.BudgetLink do
     end
   end
 
-  @doc "Changes the category of later purchases; linked transactions keep theirs."
-  def change_category(%Link{} = link, category_id) do
-    link
-    |> Link.changeset(%{category_id: category_id})
-    |> validate_category()
-    |> Repo.update()
+  @doc """
+  Changes the category of the user's later purchases; linked transactions keep theirs. Returns `{:ok, link}`,
+  `{:error, changeset}` or `{:error, :not_linked}`.
+  """
+  def change_category(%Scope{} = scope, category_id) do
+    case get(scope) do
+      nil ->
+        {:error, :not_linked}
+
+      link ->
+        link
+        |> Link.changeset(%{category_id: category_id})
+        |> validate_category()
+        |> Repo.update()
+    end
   end
 
   defp validate_category(%Changeset{data: %Link{user_id: user_id}} = changeset) do
