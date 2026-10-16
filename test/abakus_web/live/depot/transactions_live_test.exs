@@ -219,9 +219,12 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     lv |> element("#transaction-#{purchase.id} button") |> render_click()
     confirm_click(lv, "#transaction-delete", "Diese Buchung löschen?")
 
-    assert has_element?(lv, "#transaction-delete-error", "fiele der Bestand später unter null")
+    assert has_element?(lv, "#transaction-error", "fiele der Bestand später unter null")
     assert has_element?(lv, "#transaction-modal")
     assert length(Portfolios.list_transactions(ctx.scope)) == 2
+
+    lv |> form("#transaction-form") |> render_change(%{"transaction" => %{"shares" => "3"}})
+    refute has_element?(lv, "#transaction-error")
   end
 
   test "does not open another user's transaction", ctx do

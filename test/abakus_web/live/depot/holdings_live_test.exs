@@ -5,7 +5,8 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures, TaxonomiesFixtures}
 
   alias Abakus.Depot.FakeSymbolSource
-  alias Abakus.Depot.Portfolios.TransactionUnit
+  alias Abakus.Depot.Portfolios
+  alias Abakus.Depot.Portfolios.{Account, TransactionUnit}
   alias Abakus.LocalTime
   alias Abakus.Repo
 
@@ -500,13 +501,6 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
       assert_patch(lv, ~p"/depot/holdings")
       assert has_element?(lv, "#holdings-portfolio-#{ctx.a.id}")
     end
-
-    test "marks the row of the account it was opened for", ctx do
-      {:ok, lv, _html} =
-        live(ctx.conn, ~p"/depot/holdings?portfolio=#{ctx.a.id}&account=#{ctx.account.id}")
-
-      assert has_element?(lv, "#account-#{ctx.account.id}[aria-current=true]")
-    end
   end
 
   describe "a portfolio's cash" do
@@ -530,6 +524,32 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
       assert has_element?(lv, "tfoot:has(#holdings-total)", "1.000,00\u00A0€")
     end
 
+    test "keeps what a purchase from it left as „davon Cash“", %{scope: scope, conn: conn} do
+      {:ok, portfolio} =
+        Portfolios.create_portfolio(scope, %{name: "Depot", account_name: "Cash"})
+
+      deposit(
+        scope,
+        Repo.get!(Account, portfolio.reference_account_id),
+        1_000
+      )
+
+      transaction_fixture(scope, Date.add(today(), -1),
+        type: :buy,
+        portfolio_id: portfolio.id,
+        account_id: portfolio.reference_account_id,
+        security_id: security(100).id,
+        shares: shares(9),
+        amount: money(900)
+      )
+
+      {:ok, lv, _html} = live(conn, ~p"/depot/holdings?portfolio=#{portfolio.id}")
+
+      assert has_element?(lv, "header", "davon Cash\u00A0100,00\u00A0€")
+      assert lv |> element("[id^=holding-#{portfolio.id}-]") |> render() =~ "900,00\u00A0€"
+      assert has_element?(lv, "tfoot:has(#holdings-total)", "1.000,00\u00A0€")
+    end
+
     test "appears under its portfolio while all are shown", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
@@ -544,15 +564,10 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     portfolio = portfolio_fixture(ctx.scope)
     deliver(ctx.scope, portfolio, security(100), 10, 1_000)
 
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?account=#{savings.id}")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
     assert has_element?(lv, "#holdings-accounts", "Konten")
-
-    assert has_element?(
-             lv,
-             "#holdings-accounts #account-#{savings.id}[aria-current=true]",
-             "Tagesgeld"
-           )
+    assert has_element?(lv, "#holdings-accounts #account-#{savings.id}", "Tagesgeld")
 
     assert lv |> element("#account-#{savings.id}") |> render() =~ "1.000,00\u00A0€"
     assert lv |> element("#account-#{savings.id}") |> render() =~ "50,0\u00A0%"

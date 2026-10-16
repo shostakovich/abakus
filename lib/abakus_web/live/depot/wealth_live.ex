@@ -12,7 +12,7 @@ defmodule AbakusWeb.Depot.WealthLive do
   alias Abakus.Depot.{AccountRoles, Period, Portfolios}
   alias Abakus.{Ledger, LocalTime}
   alias AbakusWeb.Areas
-  alias AbakusWeb.Depot.{Benchmark, Format, Periods, Sidebar}
+  alias AbakusWeb.Depot.{Benchmark, Format, Periods}
 
   on_mount Benchmark
 
@@ -141,7 +141,7 @@ defmodule AbakusWeb.Depot.WealthLive do
               :for={entry <- @overview.portfolios}
               id={"portfolio-#{entry.portfolio.id}"}
               title={Format.portfolio_name(entry.portfolio)}
-              navigate={Sidebar.portfolio_path(entry.portfolio)}
+              navigate={depots_path(:holdings, entry.portfolio.id)}
               trailing_on_phone={:title}
             >
               <:leading><.avatar icon="briefcase" /></:leading>

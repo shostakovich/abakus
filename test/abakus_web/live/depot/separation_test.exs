@@ -47,7 +47,6 @@ defmodule AbakusWeb.Depot.SeparationTest do
       ~p"/depot",
       ~p"/depot/holdings",
       ~p"/depot/holdings?#{[portfolio: ctx.portfolio.id]}",
-      ~p"/depot/holdings?#{[account: ctx.account.id]}",
       ~p"/depot/dividends",
       ~p"/depot/transactions",
       ~p"/depot/performance",

@@ -13,8 +13,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   changes; a chosen category stays. A transfer between a budget and a tracking account takes a category and
   suggests the one last used between the two. Changing or deleting a reconciled transaction, or one whose
   counterpart is, asks first. A transaction linked to a Kasse expense (`expense_id`) links to it and keeps account,
-  date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006). So does a value
-  change the Depot booked (`source: :depot`), as the Depot alone writes to its account.
+  date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006). So does whatever
+  the Depot booked (`source: :depot`): a value change, or a transaction linked to a Depot transaction (ADR 0018).
 
   Tells its LiveView `{TransactionEditor, :done, message}` once the transaction is saved or deleted; the events
   `cancel_edit` (Cancel, Escape) go to the LiveView itself.
@@ -22,6 +22,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   use AbakusWeb, :live_component
 
   alias Abakus.{Categories, Ledger, Names}
+  alias Abakus.Depot.BudgetLink, as: DepotLink
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.{Account, Transaction}
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format, TransactionForm}
@@ -30,12 +31,12 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @linked_delete "Eine Buchung aus der Kasse wird mit ihrer Ausgabe gelöscht."
 
-  @depot_delete "Eine Wertänderung bucht das Depot; sie lässt sich hier nicht löschen."
+  @depot_delete "Diese Buchung bucht das Depot; sie lässt sich hier nicht löschen."
 
   @doc "Why a transaction linked to a Kasse expense cannot be deleted in the register."
   def linked_delete, do: @linked_delete
 
-  @doc "Why a value change the Depot booked cannot be deleted in the register."
+  @doc "Why a transaction the Depot booked cannot be deleted in the register."
   def depot_delete, do: @depot_delete
 
   @labels %{
@@ -409,7 +410,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :transaction, :any, required: true
   attr :accounts, :map, required: true
   attr :expense_id, :integer, default: nil
-  attr :depot, :boolean, default: false
+  attr :depot, :atom, default: nil, doc: "`:value_change` or `:linked` for what the Depot booked"
   attr :error, :string, default: nil
   attr :sheet, :boolean, default: false
 
@@ -425,8 +426,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         class="link link-primary"
       >Ausgabe</.link>.
     </p>
-    <p :if={@depot} id="tx-depot" class="mr-auto text-sm text-base-content/70">
+    <p :if={@depot == :value_change} id="tx-depot" class="mr-auto text-sm text-base-content/70">
       Wertänderung des Depots: Betrag, Datum und Empfänger bucht das Depot.
+    </p>
+    <p :if={@depot == :linked} id="tx-depot" class="mr-auto text-sm text-base-content/70">
+      Aus dem Depot: Betrag, Datum und Empfänger folgen der <.link
+        id="tx-depot-link"
+        navigate={~p"/depot/transactions"}
+        class="link link-primary"
+      >Buchung im Depot</.link>.
     </p>
     <.alert :if={@error && @sheet} id="tx-error" tone={:error}>{@error}</.alert>
     <p
@@ -939,9 +947,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   # Account, date, amount and payee are another area's.
   defp assign_fixed(%{assigns: assigns} = socket) do
-    depot = match?(%Transaction{source: :depot}, assigns.transaction)
-    assign(socket, depot: depot, fixed: depot or assigns.expense_id != nil)
+    depot = depot(assigns.transaction)
+    assign(socket, depot: depot, fixed: depot != nil or assigns.expense_id != nil)
   end
+
+  defp depot(%Transaction{source: :depot, id: id}) do
+    if MapSet.member?(DepotLink.linked_ids([id]), id), do: :linked, else: :value_change
+  end
+
+  defp depot(_transaction), do: nil
 
   defp load(socket, key) do
     %{transaction: transaction, accounts: accounts} = socket.assigns
@@ -1054,7 +1068,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   def handle_event("delete", _event, %{assigns: %{expense_id: id}} = socket) when id != nil,
     do: {:noreply, assign(socket, :error, @linked_delete)}
 
-  def handle_event("delete", _event, %{assigns: %{depot: true}} = socket),
+  def handle_event("delete", _event, %{assigns: %{depot: depot}} = socket) when depot != nil,
     do: {:noreply, assign(socket, :error, @depot_delete)}
 
   def handle_event("delete", event, socket) do
@@ -1194,8 +1208,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   defp register_fields(attrs, %{fixed: false}), do: {:ok, attrs}
 
-  defp register_fields(%{subtransactions: [_ | _]}, %{depot: true}),
-    do: {:error, "Eine Wertänderung lässt sich nicht aufteilen."}
+  defp register_fields(%{subtransactions: [_ | _]}, %{depot: depot}) when depot != nil,
+    do: {:error, "Eine Buchung aus dem Depot lässt sich nicht aufteilen."}
 
   defp register_fields(%{subtransactions: [_ | _]}, _assigns),
     do: {:error, "Eine Buchung aus der Kasse lässt sich nicht aufteilen."}

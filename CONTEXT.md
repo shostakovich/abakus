@@ -316,10 +316,11 @@ settings page "Budget-Verknüpfung".
 _Avoid_: Sync, budget export
 
 **Linked transaction**:
-The transaction a linked participant's share of an expense is, written with the expense: minus the share, its date,
-its title as payee, the mapped category, a memo describing the expense, unapproved. Amount, date and payee follow
-the expense; the register keeps the category, memo, flag and approval it set, until the expense's Kasse category
-changes, which writes the mapped category again.
+A transaction another area writes into the budget and leads: amount, date and payee follow it, the register keeps
+the category, memo, flag and approval it set, and it is deleted only with what it is linked to. In the Kasse, a
+linked participant's share of an expense, written with the expense: minus the share, its date, its title as payee,
+the mapped category, a memo describing the expense, unapproved; a change of the expense's Kasse category writes the
+mapped category again. In the Depot, see Depot link.
 _Avoid_: Synced transaction, mirror
 
 **YNAB sync**:
@@ -367,7 +368,8 @@ as its cash. Code: `Abakus.Depot.AccountRoles`, `Account.role/1`. UI "Rolle", "R
 
 **Budget account role**:
 The role of a Verrechnungskonto that is the same bank account as a budget account: in euros, the budget owner's only,
-at most one per budget account; it counts toward nothing else. UI "ist Budgetkonto „X“".
+at most one per budget account; it counts toward nothing else, and once the Depot link is on its flows with the
+user's portfolios are linked transactions in that budget account. UI "ist Budgetkonto „X“".
 
 **Portfolio cash**:
 The role of a Verrechnungskonto that is cash held at the broker of one of the user's portfolios, in any currency: its
@@ -417,10 +419,20 @@ _Avoid_: Transaction unqualified in code (that is the budget's), entry
 **Value change**:
 The daily transaction, after the price job, in a portfolio's account (fed by `portfolio`): the portfolio's value,
 its cash included, minus the account's balance, approved and cleared; none without a difference, so a new account starts at the
-portfolio's value. One per day: another run that day amends it, and deletes it once nothing differs. Nothing else
-writes to the account, and it cannot be reconciled. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its
-payee).
+portfolio's value. One per day: another run that day amends it, and deletes it once nothing differs. Besides it, only
+the transfers of the Depot link write to the account, so the value change keeps the market movement and the income
+inside the portfolio; it cannot be reconciled. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its payee).
 _Avoid_: Revaluation, market value adjustment
+
+**Depot link**:
+The budget owner's Depot linked to the budget (ADR 0018), switched on under Einstellungen › Depots with a start date
+and the category for purchases. Every euro Depot transaction since the start date between one of their portfolios
+and a Verrechnungskonto with the budget account role is a linked transaction in that budget account, written in the
+Depot change's database transaction, PP imports included: a purchase or a cash transfer into a portfolio's cash is
+an outflow in that category, a sale or a cash transfer back an inflow to Ready to Assign, each a transfer to the
+portfolio's account, unapproved; a dividend is an inflow to Ready to Assign with the security as payee. Flows inside
+a portfolio's own cash stay out. Code: `Abakus.Depot.BudgetLink`. UI "Mit Budget verknüpfen".
+_Avoid_: Budget link (that is the Kasse's), sync
 
 **Receipt**:
 A bank's PDF for a Depot transaction, such as a purchase confirmation or a dividend statement, uploaded or taken from

@@ -7,6 +7,7 @@ defmodule Abakus.Depot.AccountRoles do
 
   import Ecto.Query
 
+  alias Abakus.Depot.BudgetLink
   alias Abakus.Depot.Portfolios.{Account, Portfolio}
   alias Abakus.Ledger
   alias Abakus.Repo
@@ -90,10 +91,17 @@ defmodule Abakus.Depot.AccountRoles do
       when user_id == scope.user.id do
     with {:ok, role} <- parse(param),
          :ok <- check(scope, account, role) do
-      case account |> Account.role_changeset(role) |> Repo.update() do
-        {:ok, account} -> {:ok, account}
-        {:error, changeset} -> {:error, first_error(changeset)}
-      end
+      Repo.transact(fn -> save_role(account, role) end)
+    end
+  end
+
+  defp save_role(account, role) do
+    case account |> Account.role_changeset(role) |> Repo.update() do
+      {:ok, account} ->
+        with :ok <- BudgetLink.sync(account.user_id), do: {:ok, account}
+
+      {:error, changeset} ->
+        {:error, first_error(changeset)}
     end
   end
 

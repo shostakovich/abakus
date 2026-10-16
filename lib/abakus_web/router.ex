@@ -81,8 +81,6 @@ defmodule AbakusWeb.Router do
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
         {AbakusWeb.Areas, {:require, :kasse}},
-        {AbakusWeb.AccountGroups, :assign},
-        {AbakusWeb.AccountDialog, :attach},
         AbakusWeb.Kasse.CurrentParticipant
       ] do
       live "/", ExpensesLive

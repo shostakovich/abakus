@@ -40,10 +40,9 @@ defmodule AbakusWeb.Depot.HoldingsLive do
 
       <.table
         id="holdings"
-        groups={groups(@holdings, @account_id)}
+        groups={groups(@holdings)}
         row_id={& &1.id}
         row_link={&row_link/1}
-        row_attrs={&row_attrs/1}
       >
         <:col :let={item} label="Wertpapier" class="min-w-52">
           <.position_name item={item} />
@@ -155,24 +154,17 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     """
   end
 
-  # A security opens its page; the account the page was opened for is marked.
   defp row_link(%{type: :holding, entry: entry}), do: ~p"/depot/securities/#{entry.security}"
   defp row_link(_item), do: nil
 
-  defp row_attrs(%{type: :account, marked: true}),
-    do: %{"aria-current": "true", class: "bg-primary/8"}
-
-  defp row_attrs(_item), do: %{}
-
   # A group per portfolio, its securities, a note when it has none, and its reference account;
   # last the accounts of no portfolio as „Konten“.
-  defp groups(holdings, marked_account_id),
-    do: Enum.map(holdings.groups, &group(&1, marked_account_id))
+  defp groups(holdings), do: Enum.map(holdings.groups, &group/1)
 
-  defp group(%{portfolio: nil} = group, marked_account_id),
-    do: %{id: "accounts", label: "Konten", rows: accounts(group, marked_account_id)}
+  defp group(%{portfolio: nil} = group),
+    do: %{id: "accounts", label: "Konten", rows: accounts(group)}
 
-  defp group(%{portfolio: portfolio} = group, marked_account_id) do
+  defp group(%{portfolio: portfolio} = group) do
     securities =
       for entry <- group.holdings,
           do: %{type: :holding, id: "holding-#{portfolio.id}-#{entry.security.id}", entry: entry}
@@ -185,18 +177,17 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     %{
       id: "portfolio-#{portfolio.id}",
       label: Format.portfolio_name(portfolio),
-      rows: securities ++ none ++ accounts(group, marked_account_id)
+      rows: securities ++ none ++ accounts(group)
     }
   end
 
-  defp accounts(group, marked_account_id) do
+  defp accounts(group) do
     for entry <- group.accounts do
       %{
         type: :account,
         id: "account-#{entry.account.id}",
         entry: entry,
-        note: account_note(group, entry.account),
-        marked: entry.account.id == marked_account_id
+        note: account_note(group, entry.account)
       }
     end
   end
@@ -337,8 +328,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp allocation_param(tab) when is_atom(tab), do: Atom.to_string(tab)
   defp allocation_param(taxonomy_id), do: Integer.to_string(taxonomy_id)
 
-  # Regions, sectors, then each taxonomy with value shown in it. A tab keeps the portfolio and the
-  # account marked.
+  # Regions, sectors, then each taxonomy with value shown in it. A tab keeps the portfolio.
   defp allocation_tabs(assigns) do
     shown = shown_tab(assigns)
 
@@ -348,11 +338,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
 
     for {tab, label} <- @allocation_tabs ++ taxonomies do
       path =
-        holdings_path(
-          portfolio: shown_portfolio_id(assigns),
-          account: assigns.account_id,
-          allocation: tab
-        )
+        holdings_path(portfolio: shown_portfolio_id(assigns), allocation: tab)
 
       %{label: label, path: path, active: tab == shown}
     end
@@ -448,10 +434,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   @impl true
   def handle_params(params, _uri, socket) do
     socket
-    |> assign(
-      portfolio_id: parse_id(params["portfolio"]),
-      account_id: parse_id(params["account"])
-    )
+    |> assign(portfolio_id: parse_id(params["portfolio"]))
     |> assign(allocation_tab: allocation_tab(params["allocation"]))
     |> load_holdings()
     |> then(&{:noreply, &1})

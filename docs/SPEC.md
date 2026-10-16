@@ -229,12 +229,18 @@ area, the way YNAB tools post market values:
   (ADR 0017) and named after it; its register is the portfolio's tab Register, and the sidebar lists it only
   under Depots. An account fed by `portfolio` whose portfolio is gone is closed with its history, as were the
   accounts several portfolios fed before
-- Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus
+- Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus: once the
+  budget owner links the Depot to the budget under Einstellungen › Depots (start date, category for purchases;
+  ADR 0018), each flow between a portfolio and a Verrechnungskonto that is a budget account is a linked transaction
+  there, led by the Depot (`Abakus.Depot.BudgetLink`): purchases and cash moved into a portfolio's cash are outflows
+  in that category, sales and cash moved back inflows to Ready to Assign, all transfers to the portfolio's account;
+  dividends are inflows to Ready to Assign from the security. Depot transactions before the start date stay in the
+  Depot only
 - Every day after the price job, the Depot area books the difference between the account's balance and the value
   of its portfolio, its cash included, as one transaction through the Ledger, payee "Wertänderung", approved and cleared, none without
   a difference, so a new account starts at the portfolio's value; another run that day amends that transaction
-  instead of booking a second one. Nothing else changes the account (`Abakus.Depot.BudgetFeed` is its only
-  writer), and it cannot be reconciled
+  instead of booking a second one. Only it (`Abakus.Depot.BudgetFeed`) and the linked transfers change the
+  account, so the value change keeps the market movement, and it cannot be reconciled
 - Each Verrechnungskonto has a role, set under Einstellungen › Depots: "ist Budgetkonto X" (the same bank account
   as a budget account; EUR only, the budget owner's only, at most one per budget account), counting toward nothing
   else; "Cash von Depot Y" (cash at the broker of one of the user's portfolios), counting toward that portfolio's
@@ -290,7 +296,7 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget owner's only: switching the link on, its account and
   which budget category each Kasse category's shares land in), Export (CSV/JSON) and YNAB (each participant's own
   sync to YNAB, until they are linked). Depot, for everyone, so anyone may start one: Depots (the user's
-  portfolios and Verrechnungskonten with their roles) and Belegeingang
+  portfolios and Verrechnungskonten with their roles, and for the budget owner the link to the budget) and Belegeingang
   (Paperless-ngx and the receipt recognition; users with a portfolio). Categories and groups are edited in the
   budget
 

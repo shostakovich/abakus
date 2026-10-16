@@ -56,22 +56,14 @@ defmodule AbakusWeb.Depot.SidebarTest do
 
     assert has_element?(lv, "#holdings-portfolio-#{retired.id}")
     refute has_element?(lv, sidebar_link(~p"/depot/holdings?#{[portfolio: retired.id]}"))
-    refute has_element?(lv, sidebar_link(~p"/depot/holdings?#{[account: closed.id]}"))
   end
 
-  test "marks „Depots“ for a retired portfolio or account, which it leaves out", ctx do
+  test "marks „Depots“ for a retired portfolio, which it leaves out", ctx do
     retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
     holding(ctx.scope, retired, 5, 100)
-    closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
-    deposit(ctx.scope, closed, 50)
 
-    for path <- [
-          ~p"/depot/holdings?#{[portfolio: retired.id]}",
-          ~p"/depot/holdings?#{[account: closed.id]}"
-        ] do
-      {:ok, lv, _html} = live(ctx.conn, path)
-      assert has_element?(lv, sidebar_link("/depot/holdings") <> "[aria-current=page]")
-    end
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?#{[portfolio: retired.id]}")
+    assert has_element?(lv, sidebar_link("/depot/holdings") <> "[aria-current=page]")
   end
 
   test "leaves „Buchung erfassen“ to the Depots pages", ctx do
@@ -118,17 +110,6 @@ defmodule AbakusWeb.Depot.SidebarTest do
       assert has_element?(lv, "#{rail} a[href='/depot/holdings']")
       assert has_element?(lv, "#{rail} a[href='/settings']")
       assert has_element?(lv, sidebar_link(ctx.portfolio_path))
-    end
-
-    test "mark the portfolio of an account the holdings show marked", ctx do
-      {:ok, lv, _html} =
-        live(
-          ctx.conn,
-          ~p"/depot/holdings?#{[portfolio: ctx.portfolio.id, account: ctx.account.id]}"
-        )
-
-      assert has_element?(lv, "#account-#{ctx.account.id}[aria-current=true]")
-      assert has_element?(lv, sidebar_link(ctx.portfolio_path) <> "[aria-current=page]")
     end
 
     test "mark the open portfolio, or the screen", ctx do
@@ -207,6 +188,38 @@ defmodule AbakusWeb.Depot.SidebarTest do
       send(lv.pid, :receipts_updated)
 
       assert lv |> element(sidebar_link(path)) |> render() =~ "1.100,00"
+    end
+
+    test "offers „Konto hinzufügen“ after the portfolios", ctx do
+      portfolio = portfolio_fixture(ctx.owner, %{name: "Langfristig"})
+      {:ok, lv, _html} = live(ctx.conn, ~p"/budget")
+
+      ids =
+        lv
+        |> render()
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#app-shell-sidebar-full [id^=side-]")
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "id"))
+        |> Enum.map(&String.replace_suffix(&1, "-sidebar", ""))
+
+      assert Enum.drop_while(ids, &(&1 != "side-depots")) ==
+               [
+                 "side-depots",
+                 "side-depot-portfolio-#{portfolio.id}",
+                 "side-add-account",
+                 "side-settings"
+               ]
+    end
+
+    test "updates the budget accounts' balances after a Depot booking", ctx do
+      portfolio_fixture(ctx.owner)
+      giro = DomainFixtures.account_fixture(name: "Girokonto")
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
+
+      DomainFixtures.transaction_fixture(account_id: giro.id, amount: 123_400)
+      MarketData.broadcast()
+
+      assert lv |> element(sidebar_link(~p"/budget/accounts/#{giro}")) |> render() =~ "1.234,00"
     end
   end
 end

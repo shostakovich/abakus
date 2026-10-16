@@ -12,6 +12,7 @@ defmodule Abakus.Depot.Portfolios do
     AccountRoles,
     Allocation,
     BudgetFeed,
+    BudgetLink,
     Costs,
     Distributions,
     Dividends,
@@ -972,7 +973,7 @@ defmodule Abakus.Depot.Portfolios do
     Repo.transact(fn ->
       with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :insert),
            :ok <- claim_ready_receipt(scope, receipt) do
-        {:ok, insert_transactions(scope, form, %{receipt_id: receipt.id, source: :receipt})}
+        insert_transactions(scope, form, %{receipt_id: receipt.id, source: :receipt})
       end
     end)
   end
@@ -983,7 +984,7 @@ defmodule Abakus.Depot.Portfolios do
     transact_with_receipt(receipt, fn ->
       with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :insert),
            {:ok, receipt_id} <- store_receipt(scope, receipt, changeset) do
-        {:ok, insert_transactions(scope, form, %{receipt_id: receipt_id})}
+        insert_transactions(scope, form, %{receipt_id: receipt_id})
       end
     end)
   end
@@ -992,10 +993,12 @@ defmodule Abakus.Depot.Portfolios do
   defp insert_transactions(scope, form, first_attrs) do
     [first | rest] = TransactionForm.to_transactions(form)
 
-    [
+    transactions = [
       insert_transaction(scope, Map.merge(first, first_attrs))
       | Enum.map(rest, &insert_transaction(scope, &1))
     ]
+
+    with :ok <- BudgetLink.sync(scope.user.id), do: {:ok, transactions}
   end
 
   defp claim_ready_receipt(scope, receipt) do
@@ -1069,7 +1072,9 @@ defmodule Abakus.Depot.Portfolios do
       )
 
       unused = if receipt_id, do: drop_unused_receipt(transaction.receipt_id)
-      {:ok, {get_transaction(scope, transaction.id), unused}}
+
+      with :ok <- BudgetLink.sync(scope.user.id),
+           do: {:ok, {get_transaction(scope, transaction.id), unused}}
     end
   end
 
@@ -1090,14 +1095,16 @@ defmodule Abakus.Depot.Portfolios do
   def delete_transaction(%Scope{} = scope, %Transaction{} = transaction) do
     with :ok <- check_editable(scope, transaction),
          true <- keeps_holding?(scope, transaction, nil) || {:error, :holding},
-         {:ok, unused} <-
-           Repo.transact(fn ->
-             Repo.delete!(transaction, allow_stale: true)
-             {:ok, drop_unused_receipt(transaction.receipt_id)}
-           end) do
+         {:ok, unused} <- Repo.transact(fn -> remove_transaction(scope, transaction) end) do
       remove_receipt_file(unused)
       {:ok, transaction}
     end
+  end
+
+  defp remove_transaction(scope, transaction) do
+    Repo.delete!(transaction, allow_stale: true)
+    unused = drop_unused_receipt(transaction.receipt_id)
+    with :ok <- BudgetLink.sync(scope.user.id), do: {:ok, unused}
   end
 
   defp check_editable(%Scope{user: %{id: user_id}}, %Transaction{user_id: user_id} = transaction) do

@@ -169,6 +169,8 @@ defmodule AbakusWeb.Depot.ImportLive do
 
   defp error_message(:too_large), do: "Die Datei ist entpackt zu groß."
 
+  defp error_message(message) when is_binary(message), do: message
+
   defp error_message(:malformed), do: "Die Datei ist beschädigt oder hat ein unbekanntes Format."
 
   defp error_message(_),

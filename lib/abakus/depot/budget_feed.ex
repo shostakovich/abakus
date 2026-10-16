@@ -1,10 +1,10 @@
 defmodule Abakus.Depot.BudgetFeed do
   @moduledoc """
   The budget owner's portfolios in the budget: each is one tracking account fed by `portfolio`, its
-  `budget_account` (ADR 0017); an account fed by `portfolio` that no portfolio has is closed, as were those that
-  several portfolios fed before. Every day after the price job, `book_value_changes/1` books the difference between a
-  portfolio's value, its cash included (`Abakus.Depot.AccountRoles`), and its account's balance as one value change
-  through the Ledger; nothing else writes to such an account.
+  `budget_account` (ADR 0017); an account fed by `portfolio` that no portfolio has is closed. Every day after the
+  price job, `book_value_changes/1` books the difference between a portfolio's value, its cash included
+  (`Abakus.Depot.AccountRoles`), and its account's balance as one value change through the Ledger; besides it, only
+  the transfers of `Abakus.Depot.BudgetLink` write to such an account.
   """
 
   import Ecto.Query
@@ -139,7 +139,9 @@ defmodule Abakus.Depot.BudgetFeed do
   defp booked_change(account, date) do
     Repo.one(
       from t in Ledger.in_register(),
-        where: t.account_id == ^account.id and t.date == ^date and t.source == :depot,
+        where:
+          t.account_id == ^account.id and t.date == ^date and t.source == :depot and
+            is_nil(t.transfer_transaction_id),
         order_by: t.id,
         limit: 1
     )

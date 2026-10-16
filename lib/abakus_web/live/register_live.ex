@@ -7,8 +7,8 @@ defmodule AbakusWeb.RegisterLive do
   Here transactions are approved (one, the selected or all), categorised (the selected), flagged and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
-  no manual entry and no reconcile, and a portfolio's account shows the Depots tabs as its Register tab; transactions linked to Kasse expenses are deleted only with their expense, the
-  value changes the Depot books not at all here.
+  no manual entry and no reconcile, and a portfolio's account shows the Depots tabs as its Register tab.
+  Transactions linked to Kasse expenses are deleted only with their expense, those the Depot books not at all here.
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
   the transaction they match: "Zuordnen" merges them, "Trennen" keeps the import as a transaction of its own, and

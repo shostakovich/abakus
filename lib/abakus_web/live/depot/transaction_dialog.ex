@@ -63,7 +63,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   def mount(socket) do
     {:ok,
      socket
-     |> assign(open: false, editing: nil, receipt: nil, new_security: nil, delete_error: nil)
+     |> assign(open: false, editing: nil, receipt: nil, new_security: nil, error: nil)
      |> allow_upload(:receipt, accept: ~w(.pdf), max_entries: 1, max_file_size: 20_000_000)}
   end
 
@@ -113,12 +113,12 @@ defmodule AbakusWeb.Depot.TransactionDialog do
             </div>
           </div>
           <.alert
-            :if={@delete_error}
-            id="transaction-delete-error"
+            :if={@error}
+            id="transaction-error"
             tone={:error}
             class="mt-4"
           >
-            {@delete_error}
+            {@error}
           </.alert>
           <.action_bar :if={@receipt} sticky class="mt-6">
             <:secondary>
@@ -546,7 +546,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
 
     {:noreply,
      socket
-     |> assign(open: true, editing: nil, receipt: nil, new_security: nil, delete_error: nil)
+     |> assign(open: true, editing: nil, receipt: nil, new_security: nil, error: nil)
      |> assign(choices: choices, today: LocalTime.today())
      |> put_form(Portfolios.change_transaction_form(scope, choices, params))}
   end
@@ -590,6 +590,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
 
     {:noreply,
      socket
+     |> assign(:error, nil)
      |> put_form(changeset)
      |> change_new_security(event["security"], event["_target"])}
   end
@@ -646,7 +647,10 @@ defmodule AbakusWeb.Depot.TransactionDialog do
         {:noreply, close(socket)}
 
       {:error, :holding} ->
-        {:noreply, assign(socket, :delete_error, @holding_error)}
+        {:noreply, assign(socket, :error, @holding_error)}
+
+      {:error, message} when is_binary(message) ->
+        {:noreply, assign(socket, :error, message)}
     end
   end
 
@@ -676,7 +680,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
       editing: transaction,
       receipt: nil,
       new_security: nil,
-      delete_error: nil
+      error: nil
     )
     |> assign(choices: choices, today: LocalTime.today())
     |> put_form(Portfolios.change_transaction_form(scope, choices, params, transaction))
@@ -704,7 +708,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
       })
 
     socket
-    |> assign(open: true, editing: nil, receipt: receipt, new_security: nil, delete_error: nil)
+    |> assign(open: true, editing: nil, receipt: receipt, new_security: nil, error: nil)
     |> assign(choices: choices, today: LocalTime.today())
     |> put_form(Portfolios.change_transaction_form(scope, choices, params))
     |> open_new_security(receipt.fields, params["security_id"])
@@ -872,6 +876,10 @@ defmodule AbakusWeb.Depot.TransactionDialog do
 
   defp saved({:error, :read_only}, socket), do: {:noreply, close(socket)}
   defp saved({:error, :gone}, socket), do: done(socket, "Diese Buchung gibt es nicht mehr.")
+
+  defp saved({:error, message}, socket) when is_binary(message),
+    do: {:noreply, assign(socket, :error, message)}
+
   defp saved({:error, changeset}, socket), do: {:noreply, put_form(socket, changeset)}
 
   defp done(socket, message) do

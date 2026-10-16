@@ -4,7 +4,7 @@ defmodule AbakusWeb.Layouts do
 
   alias Abakus.Names
   alias AbakusWeb.{AccountGroups, Areas}
-  alias AbakusWeb.Depot.{Format, Sidebar, TransactionDialog}
+  alias AbakusWeb.Depot.{Components, Format, TransactionDialog}
 
   @budget_pages [:budget, :accounts, :all_accounts, :import]
   @kasse_pages [:kasse_expenses, :kasse_balances, :kasse_activity]
@@ -58,9 +58,9 @@ defmodule AbakusWeb.Layouts do
   Signed-in pages in Setzkasten's sidebar shell, showing the current area's entries, then the settings.
 
   Finanzen: Budget, Vermögen, Alle Konten and Import & Sync with the receipts waiting in the inbox, the open
-  budget and tracking accounts with their balance and how many transactions wait for approval and „Konto
-  hinzufügen“, then Depots with the active portfolios and their values, each also an account of the budget owner; a user without the budget sees only
-  Vermögen, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of
+  budget and tracking accounts with their balance and how many transactions wait for approval, then Depots with
+  the active portfolios and their values, each also an account of the budget owner, and „Konto hinzufügen“; a user
+  without the budget sees only Vermögen, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of
   the icon rail and the dock.
 
   With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
@@ -165,15 +165,6 @@ defmodule AbakusWeb.Layouts do
         href={href(~p"/budget/accounts/#{row.account}", @current)}
       />
       <:nav
-        :if={@budget?}
-        key={:add_account}
-        id="side-add-account"
-        label="Konto hinzufügen"
-        icon="plus"
-        section={@groups |> List.last() |> then(&(&1 && account_section(&1)))}
-        on_click={JS.push("open_account_dialog")}
-      />
-      <:nav
         :if={@depot?}
         key={:depots}
         id="side-depots"
@@ -192,8 +183,16 @@ defmodule AbakusWeb.Layouts do
         rail={false}
         dock={false}
         parent={:depots}
-        navigate={navigate(Sidebar.portfolio_path(row.portfolio), @current)}
-        href={href(Sidebar.portfolio_path(row.portfolio), @current)}
+        navigate={navigate(Components.depots_path(:holdings, row.portfolio.id), @current)}
+        href={href(Components.depots_path(:holdings, row.portfolio.id), @current)}
+      />
+      <:nav
+        :if={@budget?}
+        key={:add_account}
+        id="side-add-account"
+        label="Konto hinzufügen"
+        icon="plus"
+        on_click={JS.push("open_account_dialog")}
       />
       <:nav
         :if={@kasse?}
@@ -382,8 +381,6 @@ defmodule AbakusWeb.Layouts do
   attr :current_scope, :map, required: true
   attr :areas, :list, required: true
   attr :area, :atom, required: true
-  attr :account_groups, :list, required: true
-  attr :account_dialog, :map, required: true
   attr :current, :atom, required: true, values: [:expenses, :balances, :activity]
   attr :fab, :boolean, default: true, doc: "false on forms, whose action bar is the main action"
   slot :inner_block, required: true
@@ -396,8 +393,6 @@ defmodule AbakusWeb.Layouts do
       current_scope={@current_scope}
       areas={@areas}
       area={@area}
-      account_groups={@account_groups}
-      account_dialog={@account_dialog}
       current={:"kasse_#{@current}"}
       width={:narrow}
     >

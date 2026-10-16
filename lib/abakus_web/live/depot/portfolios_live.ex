@@ -3,11 +3,12 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   „Depots“ in the settings: the user's active portfolios with their depot numbers, which find a receipt's
   portfolio, their Verrechnungskonten with their roles (`Abakus.Depot.AccountRoles`), each edited in place, and a
   new portfolio with its Verrechnungskonto. The first one opens Finanzen. A portfolio of the budget owner is also a
-  tracking account (`Abakus.Depot.BudgetFeed`).
+  tracking account (`Abakus.Depot.BudgetFeed`), and the budget owner links the Depot's cash flows to the budget here
+  (`Abakus.Depot.BudgetLink`).
   """
   use AbakusWeb, :depot_live_view
 
-  alias Abakus.Depot.{AccountRoles, Portfolios, Receipts}
+  alias Abakus.Depot.{AccountRoles, BudgetLink, Portfolios, Receipts}
   alias Abakus.Depot.Portfolios.Account
   alias AbakusWeb.{Areas, SettingsNav}
   alias AbakusWeb.Depot.Format
@@ -57,6 +58,77 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
               options={@editing_role == account.id && @role_options}
             />
           </.list>
+        </section>
+
+        <section
+          :if={@current_scope.user.budget_owner}
+          id="budget-link"
+          aria-labelledby="budget-link-title"
+        >
+          <.section_heading id="budget-link-title">Budget</.section_heading>
+          <p :if={@link} id="budget-link-state" class="mb-3 max-w-prose text-sm text-base-content/70">
+            Seit dem {Format.date(@link.start_date)} ist jeder Kauf, Verkauf und jede Dividende über ein
+            Verrechnungskonto, das ein Budgetkonto ist, eine Buchung in diesem Budgetkonto, ebenso Geld,
+            das von dort ins Cash eines Depots geht oder zurück. Betrag, Datum und Empfänger folgen dem
+            Depot; Kategorie, Memo und Bestätigung änderst du im Budget.
+          </p>
+          <p :if={!@link} id="budget-link-state" class="mb-3 max-w-prose text-sm text-base-content/70">
+            Noch nicht mit dem Budget verknüpft. Danach ist jeder Kauf, Verkauf und jede Dividende über ein
+            Verrechnungskonto, das ein Budgetkonto ist, eine Buchung in diesem Budgetkonto: Käufe als Ausgabe
+            in der gewählten Kategorie, Einnahmen unter „Zu verteilen“. Buchungen vor dem Startdatum bleiben
+            nur im Depot.
+          </p>
+          <.form
+            :if={!@link}
+            for={@link_form}
+            id="budget-link-form"
+            class="max-w-md"
+            phx-change="validate_link"
+            phx-submit="switch_on"
+          >
+            <.input field={@link_form[:start_date]} type="date" label="Ab" required />
+            <.input
+              field={@link_form[:category_id]}
+              type="select"
+              label="Kategorie für Käufe"
+              prompt="Kategorie wählen"
+              options={@category_options}
+              required
+            />
+            <.action_bar class="mt-4">
+              <.button
+                id="budget-link-submit"
+                type="submit"
+                variant={:primary}
+                icon="link"
+                confirm="Mit Budget verknüpfen?"
+                confirm_text="Das lässt sich nicht rückgängig machen."
+                confirm_label="Verknüpfen"
+              >
+                Mit Budget verknüpfen
+              </.button>
+            </.action_bar>
+          </.form>
+          <.form
+            :if={@link}
+            for={@link_form}
+            id="budget-category-form"
+            class="max-w-md"
+            phx-submit="save_category"
+          >
+            <.input
+              field={@link_form[:category_id]}
+              type="select"
+              label="Kategorie für neue Käufe"
+              options={@category_options}
+              required
+            />
+            <.action_bar class="mt-4">
+              <.button type="submit" variant={:primary} phx-disable-with="Speichert …">
+                Speichern
+              </.button>
+            </.action_bar>
+          </.form>
         </section>
 
         <section id="new-portfolio" aria-labelledby="new-portfolio-title">
@@ -287,6 +359,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
      socket
      |> assign(page_title: "Depots", editing: nil, depot_number_form: nil)
      |> assign(editing_role: nil, role_form: nil, role_options: nil)
+     |> load_link()
      |> load_accounts()
      |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
      |> load_active_portfolios()}
@@ -364,6 +437,54 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   end
 
   def handle_event("cancel_role", _params, socket), do: {:noreply, close_role(socket)}
+
+  def handle_event("validate_link", %{"link" => params}, socket),
+    do: {:noreply, assign(socket, :link_form, to_form(BudgetLink.change_link(params), as: :link))}
+
+  def handle_event("switch_on", %{"link" => params}, socket) do
+    case BudgetLink.switch_on(socket.assigns.current_scope, params) do
+      {:ok, _link} ->
+        {:noreply, socket |> put_flash(:info, "Mit dem Budget verknüpft.") |> load_link()}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :link_form, to_form(changeset, as: :link, action: :insert))}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, link_refused(reason))}
+    end
+  end
+
+  def handle_event("save_category", %{"link" => %{"category_id" => id}}, socket) do
+    case socket.assigns.link && BudgetLink.change_category(socket.assigns.link, id) do
+      {:ok, _link} ->
+        {:noreply, socket |> put_flash(:info, "Kategorie für Käufe gespeichert.") |> load_link()}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :link_form, to_form(changeset, as: :link, action: :update))}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  defp link_refused(:not_budget_owner), do: "Nur wer das Budget führt, kann es verknüpfen."
+  defp link_refused(:linked), do: "Das Depot ist schon mit dem Budget verknüpft."
+  defp link_refused(message) when is_binary(message), do: message
+
+  defp load_link(%{assigns: %{current_scope: %{user: %{budget_owner: true}} = scope}} = socket) do
+    link = BudgetLink.get(scope)
+
+    assign(socket,
+      link: link,
+      link_form:
+        to_form(if(link, do: Ecto.Changeset.change(link), else: BudgetLink.change_link()),
+          as: :link
+        ),
+      category_options: BudgetLink.category_options()
+    )
+  end
+
+  defp load_link(socket), do: assign(socket, link: nil, link_form: nil, category_options: [])
 
   defp save_role(socket, account, params) do
     case AccountRoles.set_role(socket.assigns.current_scope, account, params["role"]) do

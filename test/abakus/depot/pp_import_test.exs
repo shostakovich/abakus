@@ -4,11 +4,21 @@ defmodule Abakus.Depot.PPImportTest do
   import Abakus.Depot.SecuritiesFixtures, only: [security_fixture: 1]
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{BudgetFeed, Portfolios, PPImport, Securities, Settings, Taxonomies}
+  alias Abakus.Depot.{
+    AccountRoles,
+    BudgetFeed,
+    BudgetLink,
+    Portfolios,
+    PPImport,
+    Securities,
+    Settings,
+    Taxonomies
+  }
+
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.PPImport.Reader
   alias Abakus.Depot.Securities.{Price, Security}
-  alias Abakus.Ledger
+  alias Abakus.{DomainFixtures, Ledger}
 
   @sample "test/fixtures/depot/pp/sample.portfolio"
 
@@ -196,6 +206,91 @@ defmodule Abakus.Depot.PPImportTest do
     assert length(Portfolios.list_transactions(scope)) == 20
     refute Repo.get_by(Security, name: "Altfonds ohne ISIN")
     assert Enum.any?(Portfolios.list_savings_plans(scope), &(&1.amount == 20_000))
+  end
+
+  describe "with the Depot linked to the budget" do
+    setup %{scope: scope, client: client} do
+      {:ok, _} = PPImport.import_client(scope, client)
+      giro = DomainFixtures.account_fixture(name: "Giro")
+      [account_a | _] = Portfolios.list_accounts(scope)
+      {:ok, _} = AccountRoles.set_role(scope, account_a, "budget_account:#{giro.id}")
+
+      {:ok, _} =
+        BudgetLink.switch_on(scope, %{
+          category_id: DomainFixtures.category_fixture().id,
+          start_date: ~D[2024-01-01]
+        })
+
+      assert Enum.any?(in_giro(giro), &(&1.amount == -100_550))
+      %{giro: giro, account_a: account_a}
+    end
+
+    defp in_giro(giro),
+      do:
+        Repo.all(from t in Ledger.in_register(), where: t.account_id == ^giro.id, order_by: t.id)
+
+    defp first_buy(client), do: Enum.find(client.transactions, &(&1.note == "Erstkauf"))
+
+    test "a re-import changes a linked transaction's amount and keeps its category", c do
+      [outflow | _] = Enum.filter(in_giro(c.giro), &(&1.amount == -100_550))
+      other = DomainFixtures.category_fixture()
+      {:ok, _} = Ledger.update_transaction(outflow, %{category_id: other.id})
+
+      buy = first_buy(c.client)
+
+      changed =
+        Enum.map(c.client.transactions, &if(&1 == buy, do: %{buy | amount: 100_600}, else: &1))
+
+      {:ok, _} = PPImport.import_client(c.scope, %{c.client | transactions: changed})
+
+      assert %{amount: -100_600, category_id: category_id} = Repo.reload!(outflow)
+      assert category_id == other.id
+    end
+
+    test "a Depot transaction the file no longer has removes its linked transaction", c do
+      before = in_giro(c.giro)
+      buy = first_buy(c.client)
+
+      {:ok, _} =
+        PPImport.import_client(c.scope, %{
+          c.client
+          | transactions: List.delete(c.client.transactions, buy)
+        })
+
+      assert length(in_giro(c.giro)) == length(before) - 1
+      refute Enum.any?(in_giro(c.giro), &(&1.amount == -100_550))
+    end
+
+    test "an account PP moves away from euros loses its budget role and its linked transactions",
+         c do
+      accounts =
+        Enum.map(
+          c.client.accounts,
+          &if(&1.uuid == c.account_a.pp_uuid, do: %{&1 | currency: "USD"}, else: &1)
+        )
+
+      {:ok, _} = PPImport.import_client(c.scope, %{c.client | accounts: accounts})
+
+      assert Repo.reload!(c.account_a).budget_account_id == nil
+      assert in_giro(c.giro) == []
+    end
+  end
+
+  test "links no transaction dated before the link's start date", %{scope: scope, client: client} do
+    {:ok, _} = PPImport.import_client(scope, client)
+    giro = DomainFixtures.account_fixture(name: "Giro")
+    [account_a | _] = Portfolios.list_accounts(scope)
+    {:ok, _} = AccountRoles.set_role(scope, account_a, "budget_account:#{giro.id}")
+
+    {:ok, _} =
+      BudgetLink.switch_on(scope, %{
+        category_id: DomainFixtures.category_fixture().id,
+        start_date: ~D[2024-01-03]
+      })
+
+    {:ok, _} = PPImport.import_client(scope, client)
+
+    refute Enum.any?(in_giro(giro), &(&1.amount == -100_550))
   end
 
   test "keeps a security created in the Depot", %{scope: scope} do

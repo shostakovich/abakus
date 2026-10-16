@@ -1,7 +1,8 @@
 defmodule AbakusWeb.Depot.Sidebar do
   @moduledoc """
   The portfolios with their values that the sidebar lists in Finanzen. An `on_mount` hook assigns
-  them as `@depot_sidebar` and loads them again when new prices arrive.
+  them as `@depot_sidebar` and loads them again when new prices arrive or a booking was saved, the budget's
+  accounts in `@account_groups` too.
 
   The hook subscribes the page to the market data and refreshes stale quotes. On the Depot's pages
   (`:default`) `:market_data_updated` reaches the LiveView after the sidebar, so one that shows
@@ -17,6 +18,7 @@ defmodule AbakusWeb.Depot.Sidebar do
 
   alias Abakus.Depot.{MarketData, Portfolios, Receipts}
   alias Abakus.LocalTime
+  alias AbakusWeb.{AccountGroups, Areas}
 
   def on_mount(:default, _params, _session, socket), do: {:cont, attach(socket, :cont)}
   def on_mount(:budget, _params, _session, socket), do: {:cont, attach(socket, :halt)}
@@ -33,7 +35,8 @@ defmodule AbakusWeb.Depot.Sidebar do
     |> attach_hook(:depot_sidebar, :handle_info, &reload(&1, &2, prices))
   end
 
-  defp reload(:market_data_updated, socket, prices), do: {prices, load(socket)}
+  defp reload(:market_data_updated, socket, prices),
+    do: {prices, socket |> load() |> reload_account_groups()}
 
   defp reload(:receipts_updated, socket, _prices) do
     sidebar = %{socket.assigns.depot_sidebar | inbox: inbox_count(socket)}
@@ -48,8 +51,13 @@ defmodule AbakusWeb.Depot.Sidebar do
     assign(socket, :depot_sidebar, Map.put(sidebar, :inbox, inbox_count(socket)))
   end
 
-  defp inbox_count(socket), do: Receipts.inbox_count(socket.assigns.current_scope)
+  defp reload_account_groups(%{assigns: %{account_groups: _groups}} = socket) do
+    if Areas.allowed?(socket.assigns.current_scope, :budget),
+      do: assign(socket, :account_groups, AccountGroups.load()),
+      else: socket
+  end
 
-  @doc "A portfolio opens its holdings."
-  def portfolio_path(portfolio), do: ~p"/depot/holdings?#{[portfolio: portfolio.id]}"
+  defp reload_account_groups(socket), do: socket
+
+  defp inbox_count(socket), do: Receipts.inbox_count(socket.assigns.current_scope)
 end

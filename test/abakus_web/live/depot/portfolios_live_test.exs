@@ -7,7 +7,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
   alias Abakus.Depot.Portfolios
   alias Abakus.Depot.Portfolios.Portfolio
   alias Abakus.Repo
-  alias AbakusWeb.Depot.Sidebar
+  alias AbakusWeb.Depot.Components
 
   setup :register_and_log_in_user
 
@@ -26,7 +26,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
 
   test "shows a portfolio without a name, as PP may store one, as „Ohne Namen“", ctx do
     portfolio = portfolio_fixture(ctx.scope, %{name: ""})
-    path = Sidebar.portfolio_path(portfolio)
+    path = Components.depots_path(:holdings, portfolio.id)
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
     assert has_element?(lv, "#depot-number-#{portfolio.id}", "Ohne Namen")
