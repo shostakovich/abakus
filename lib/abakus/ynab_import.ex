@@ -1,10 +1,10 @@
 defmodule Abakus.YnabImport do
   @moduledoc """
   The import from YNAB (docs/SPEC.md, "YNAB import"): fetches a plan's export with a personal access token,
-  replaces the whole budget with it (DECISIONS.md, ADR 0002) and checks Abakus's numbers against
-  YNAB's. Data Abakus cannot represent stops it before anything is written (`Unsupported`); so does any
-  transaction that did not come from YNAB, as the budget then holds data of its own, and the Kasse's link or category mapping to it.
-  It is a task, so it takes the system scope, and writes the budget owner's budget with their scope.
+  replaces the whole budget with it (DECISIONS.md, ADR 0002) and checks Abakus's numbers against YNAB's. Data
+  Abakus cannot represent stops it before anything is written (`Unsupported`); so does any transaction that did
+  not come from YNAB, as the budget then holds data of its own, and the Kasse's link or category mapping to it. It
+  is a task, so it takes the system scope, and writes the budget owner's budget with their scope.
   """
 
   import Ecto.Query
