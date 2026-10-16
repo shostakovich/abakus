@@ -153,10 +153,10 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(list, ~s|#account-#{c.giro.id} a[href="/budget/accounts/#{c.giro.id}"]|)
     end
 
-    test "an account fed by another app offers no manual entry", c do
+    test "an account fed by the Depot offers no manual entry", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.depot}")
 
-      assert has_element?(view, "#feed-hint", "Depot-App")
+      assert has_element?(view, "#feed-hint", "Wert kommt aus dem Depot")
       assert has_element?(view, "#balance-working", "1.125,00 €")
       refute has_element?(view, "#balance-cleared")
 
@@ -181,6 +181,70 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       refute has_element?(view, "#new-transaction")
       refute has_element?(view, "#new-transaction-fab")
+    end
+
+    test "an account fed by the Depot offers no reconcile", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.depot}")
+
+      refute has_element?(view, "#reconcile-open")
+      render_click(view, "reconcile_open", %{})
+      refute has_element?(view, "#reconcile-question")
+    end
+
+    test "keeps account, date, amount and payee of the Depot's value change", c do
+      {:ok, change} =
+        Ledger.create_transaction(%{
+          account_id: c.depot.id,
+          date: ~D[2026-10-09],
+          amount: 5_000,
+          payee_name: "Wertänderung",
+          cleared: :cleared,
+          approved: true,
+          source: :depot
+        })
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.depot}")
+      view |> element("#tx-#{change.id} td.app-payee") |> render_click()
+      view |> element("#tx-#{change.id} td.app-payee") |> render_click()
+
+      assert has_element?(view, "#tx-depot", "bucht das Depot")
+
+      for field <- ~w(tx-date tx-outflow tx-inflow) do
+        assert has_element?(view, "##{field}[disabled]")
+      end
+
+      assert has_element?(view, "#tx-payee-combobox input[disabled]")
+      refute has_element?(view, "#tx-delete")
+
+      view
+      |> element("#tx-form")
+      |> render_submit(%{
+        "transaction" => %{
+          "memo" => "Kursplus",
+          "inflow" => "99",
+          "date" => "2026-01-01",
+          "payee_new" => "Jemand"
+        }
+      })
+
+      assert %{amount: 5_000, date: ~D[2026-10-09], memo: "Kursplus", account_id: depot_id} =
+               change = Repo.preload(reload(change), :payee)
+
+      assert depot_id == c.depot.id
+      assert change.payee.name == "Wertänderung"
+
+      render_click(view, "clear_selection", %{})
+      render_click(view, "select", %{"id" => "#{change.id}"})
+      render_click(view, "delete_selected", %{})
+      assert has_element?(view, "#flash-error", "bucht das Depot")
+
+      render_click(view, "clear_selection", %{})
+      view |> element("#tx-#{change.id} td.app-payee") |> render_click()
+      view |> element("#tx-#{change.id} td.app-payee") |> render_click()
+      view |> with_target("#tx-editor") |> render_click("delete", %{})
+      assert has_element?(view, "#tx-error", "bucht das Depot")
+
+      refute reload(change).deleted_at
     end
 
     test "without transactions it says so", c do

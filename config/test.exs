@@ -13,6 +13,17 @@ config :abakus, :backup_dir, Path.join(Path.dirname(database), "backups")
 config :abakus, jobs: false
 config :abakus, Abakus.Kasse.Fx.Ecb, base_url: nil
 
+config :abakus, Abakus.Depot.MarketData,
+  price_feed: Abakus.Depot.FakePriceFeed,
+  symbol_search: Abakus.Depot.FakeSymbolSearch,
+  rate_source: Abakus.Depot.FakeRateSource,
+  symbol_source: Abakus.Depot.FakeSymbolSource
+
+config :abakus, Abakus.Depot.Receipts,
+  paperless: Abakus.Depot.FakePaperless,
+  model: Abakus.Depot.FakeModel,
+  text_extractor: Abakus.Depot.FakeTextExtractor
+
 config :abakus, AbakusWeb.Endpoint,
   url: [host: "localhost", port: 4002],
   http: [ip: {127, 0, 0, 1}, port: 4002],

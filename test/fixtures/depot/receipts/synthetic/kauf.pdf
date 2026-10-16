@@ -1,0 +1,61 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1225 >>
+stream
+BT
+/F1 9 Tf
+11 TL
+40 800 Td
+(Musterbank Zipfelhausen AG · Am Zipfel 1 · 99999 Zipfelhausen) '
+() '
+(Herrn) '
+(Max Mustermann) '
+(Beispielweg 7) '
+(99999 Zipfelhausen) '
+(                                              Depotnummer     0123 456 789) '
+(                                              Ordernummer     ZB-2026-004711) '
+(                                              Datum           17.03.2026) '
+() '
+(Wertpapierabrechnung Kauf) '
+() '
+(Wertpapier                                          ISIN) '
+(Vanguard FTSE All-World U.ETF Reg. Shs USD Dis.oN   IE00B3RBWM25) '
+(Handelsplatz Xetra                Schlusstag/-Zeit  16.03.2026 09:04:12) '
+(Ausführungskurs  112,34 EUR       Valuta            18.03.2026) '
+() '
+(Stück                                      15) '
+(Kurswert                                              1.685,10 EUR) '
+(Provision                                                 4,95 EUR) '
+(Börsengebühr                                              1,50 EUR) '
+(Ausmachender Betrag zu Ihren Lasten                   1.691,55 EUR) '
+() '
+(Den Betrag buchen wir mit Valuta 18.03.2026 zu Lasten des Kontos 0123 456 700.) '
+(Dieser Beleg wurde maschinell erstellt und ist ohne Unterschrift gültig.) '
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000001518 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1613
+%%EOF

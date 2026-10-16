@@ -1,0 +1,21 @@
+Beispielbank Zipfeltal · Musterstraße 3 · 99998 Zipfeltal
+
+Erika Musterfrau                                   Depotnummer    987654321
+Probeweg 12                                        Abrechnungsnr. VK-88812
+99998 Zipfeltal                                    Datum          13.07.2026
+
+Wertpapierabrechnung Verkauf
+
+iShares Core MSCI World UCITS ETF                  ISIN IE00B4L5Y983
+Ausführung 10.07.2026 15:02:44 Xetra
+
+Stück 50               Kurs 84,20 EUR              Kurswert       EUR 4.210,00
+Provision                                                         EUR    -9,90
+Zu Ihren Gunsten vor Steuern:                                     EUR 4.200,10
+
+Kapitalertragsteuer                                               EUR  -120,00
+Solidaritätszuschlag                                              EUR    -6,60
+abgeführte Steuern                                                EUR  -126,60
+
+Zu Ihren Gunsten nach Steuern:                                    EUR 4.073,50
+Gutschrift auf Konto 987654300 mit Valuta 14.07.2026.

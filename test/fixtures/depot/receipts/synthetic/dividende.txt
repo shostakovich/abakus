@@ -1,0 +1,24 @@
+Musterbank Zipfelhausen AG · Am Zipfel 1 · 99999 Zipfelhausen
+
+Herrn
+Max Mustermann
+Beispielweg 7
+99999 Zipfelhausen
+                                              Depotnummer     0123 456 789
+                                              Referenz        DIV-2026-31415
+                                              Datum           21.05.2026
+
+Dividendengutschrift
+
+Wertpapier                                          ISIN
+SAP SE Inhaber-Aktien o.N.                          DE0007164600
+Zahltag 20.05.2026            Ex-Tag 18.05.2026     Bestand 40 Stück
+Dividende pro Stück                                       2,35 EUR
+
+Dividendengutschrift                                     94,00 EUR
+Kapitalertragsteuer 25,00 %                             -23,50 EUR
+Solidaritätszuschlag 5,50 %                              -1,29 EUR
+Ausmachender Betrag zu Ihren Gunsten                     69,21 EUR
+
+Den Betrag schreiben wir mit Valuta 20.05.2026 dem Konto 0123 456 700 gut.
+Dieser Beleg wurde maschinell erstellt und ist ohne Unterschrift gültig.

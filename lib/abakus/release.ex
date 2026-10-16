@@ -1,6 +1,7 @@
 defmodule Abakus.Release do
   @moduledoc "Tasks run from the release, where Mix is not available."
 
+  alias Abakus.Depot
   alias Abakus.Kasse
   alias Abakus.Kasse.Participants
   alias Abakus.YnabImport
@@ -94,6 +95,35 @@ defmodule Abakus.Release do
 
       {:error, reason} ->
         IO.puts(:stderr, "Could not import the Kasse: #{reason}")
+        System.halt(1)
+    end
+  end
+
+  @doc """
+  Imports the former portfolio app's database file into the empty Depot once, keeping its ids
+  (`Abakus.Depot.Import`), with the receipt files from the `receipts` folder next to it; each user becomes the user
+  with the same email address, and users missing in Abakus are created without mail:
+  `bin/abakus eval 'Abakus.Release.import_depot("/app/data/zipfelfolio/zipfelfolio.sqlite3")'`.
+  """
+  def import_depot(path) do
+    start_without_server()
+
+    case Depot.Import.run(path) do
+      {:ok, report} ->
+        rows = Enum.map_join(report.rows, ", ", fn {table, count} -> "#{count} #{table}" end)
+        IO.puts("Imported the Depot: #{rows}, #{report.receipt_files} receipt files.")
+        IO.puts("Users matched: #{list(report.matched)}.")
+
+        IO.puts(
+          "Users created, who ask for a sign-in link on the sign-in page: #{list(report.created)}."
+        )
+
+        IO.puts(
+          "Passkeys of the old address stay behind; add them again under Einstellungen › Zugang."
+        )
+
+      {:error, reason} ->
+        IO.puts(:stderr, "Could not import the Depot: #{reason}")
         System.halt(1)
     end
   end

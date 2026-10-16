@@ -162,6 +162,25 @@ defmodule Abakus.Ledger.AccountsTest do
            }
   end
 
+  test "balance/2 sums the account's register up to and including the day" do
+    giro = account_fixture()
+    other = account_fixture()
+
+    for {date, amount} <- [
+          {~D[2026-10-01], 10_000},
+          {~D[2026-10-02], -2_500},
+          {~D[2026-10-03], -1_000}
+        ],
+        do: transaction_fixture(%{account_id: giro.id, date: date, amount: amount})
+
+    transaction_fixture(%{account_id: other.id, date: ~D[2026-10-01], amount: 400})
+    deleted = transaction_fixture(%{account_id: giro.id, date: ~D[2026-10-01], amount: -99_999})
+    {:ok, _deleted} = Ledger.delete_transaction(deleted)
+
+    assert Ledger.balance(giro, ~D[2026-10-02]) == 7_500
+    assert Ledger.balance(giro, ~D[2026-09-30]) == 0
+  end
+
   test "list_accounts/0 orders by position" do
     second = account_fixture(position: 2)
     first = account_fixture(position: 1)

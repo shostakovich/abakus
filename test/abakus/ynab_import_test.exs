@@ -3,8 +3,9 @@ defmodule Abakus.YnabImportTest do
 
   import Abakus.DomainFixtures
 
-  alias Abakus.{Categories, FakeYnab, KasseFixtures, Ledger, YnabImport}
+  alias Abakus.{Categories, FakeYnab, KasseFixtures, Ledger, UsersFixtures, YnabImport}
   alias Abakus.Categories.{Assignment, Category, CategoryGroup, TargetSnooze, TargetVersion}
+  alias Abakus.Depot.{BudgetFeed, PortfoliosFixtures}
   alias Abakus.Kasse.{BudgetLink, Participants}
   alias Abakus.Ledger.{Account, BankBalance, Payee, Transaction}
   alias Abakus.YnabImport.Report
@@ -206,6 +207,17 @@ defmodule Abakus.YnabImportTest do
 
       assert YnabImport.import_plan(@plan) == {:error, :own_data}
       assert BudgetLink.category_mapping() != %{}
+    end
+
+    test "refuses once the Depot feeds a tracking account, which it would drop" do
+      {:ok, _report} = YnabImport.import_plan(@plan)
+      scope = UsersFixtures.user_scope_fixture()
+      portfolio = PortfoliosFixtures.portfolio_fixture(scope)
+      depot = Enum.find(Ledger.list_accounts(), &(&1.kind == :tracking))
+      {:ok, _feeds} = BudgetFeed.put_feeds(scope, %{{:portfolio, portfolio.id} => depot.id})
+
+      assert YnabImport.import_plan(@plan) == {:error, :own_data}
+      assert BudgetFeed.in_use?()
     end
 
     test "lists every case Abakus cannot represent and writes nothing" do

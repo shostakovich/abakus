@@ -1,0 +1,27 @@
+Zipfeldirekt Bank AG · Postfach 4 · 99995 Zipfelborn
+
+Herrn
+Max Mustermann
+Beispielweg 7                                     Depotnr.:     5550 2233 00
+99999 Zipfelhausen
+
+GESCHÄFTSABRECHNUNG VOM 19.08.2026
+
+Wertpapierkauf
+Geschäftsnummer   : 72 551234
+Geschäftstag      : 18.08.2026        Ausführung          Zipfeldirekt
+                                                          (Festpreisgeschäft)
+Wertpapier-Bezeichnung                                     WPKNR/ISIN
+Vanguard FTSE All-World U.ETF                              A1JX52
+Reg. Shs USD Dis.oN                                        IE00B3RBWM25
+
+Nennwert                  Zum Preis von
+St.  4,127                EUR  121,16
+                          Kurswert                    : EUR            500,03
+                          Provision                   : EUR              1,50
+
+IBAN                                  Valuta         Zu Ihren Lasten vor Steuern
+DE00 9999 0000 1111 2222 33   EUR     20.08.2026        EUR            501,53
+
+Informationen zur steuerlichen Behandlung dieses Geschäftsvorgangs und den auf
+Ihrem Konto gebuchten Endbetrag finden Sie auf der separaten Steuermitteilung.

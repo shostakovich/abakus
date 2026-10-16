@@ -1,0 +1,17 @@
+Zipfelkapital Bank GmbH • Zipfelstraße 5 • 99996 Zipfelstadt • Deutschland
+Erika Musterfrau
+Probeweg 12
+99998 Zipfeltal Datum 03.08.2026
+Deutschland Seite 1 / 1
+Wertpapierabrechnung
+Sparplanausführung
+Typ LIMIT Order ZKSP7Q2M
+Ausführung 03.08.2026 10:12:44 Geschäft 77120934
+Ausführungsplatz Zipfelbörse Lagerland Deutschland
+Depot 4455667788 Verwahrart Girosammelverwahrung
+Typ Wertpapier Anzahl Kurs Betrag
+Kauf iShares Core MSCI World 0,412371 Stk. 121,25 EUR 50,00 EUR
+IE00B4L5Y983
+Finanztransaktionssteuer +0,20 EUR
+Belastung 50,20 EUR
+Der Betrag wird mit dem Verrechnungskonto DE00999999990000123456 (Valuta: 05.08.2026) verrechnet.

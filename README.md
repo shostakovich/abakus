@@ -12,8 +12,11 @@ register, where transactions are edited in place as in YNAB, reconciling, the OF
 proposals and the settings, and the Kasse: the household's shared expenses, moved in from Zipfelkasse with its
 expenses, balances, activity log, recurring expenses, categories, exchange rates, CSV/JSON export, its sync to YNAB,
 its MCP server for AI assistants and the link that books the budget owner's shares in the budget, switched on in one
-step in place of the YNAB sync. What remains of v1 is removing the sync code after the switch; bank sync and the
-budget's MCP tools follow in v2.
+step in place of the YNAB sync; and the Depot, moved in from zipfelfolio: each user's portfolios with overview,
+holdings, dividends, transactions, performance and securities, whose prices come from Yahoo every evening, a
+receipt inbox that reads bank PDFs, uploaded or taken from Paperless-ngx, the Portfolio Performance import and the
+daily value change booked into the budget owner's tracking accounts. What remains of v1 is removing the sync code
+after the switch; bank sync and the budget's MCP tools follow in v2.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, phases
 - [docs/MCP.md](docs/MCP.md): the MCP server, its access rules and tools
@@ -47,6 +50,8 @@ Kasse → Gruppe → Teilnehmer, which invites them by mail:
 mix abakus.add_participant you@example.com "Your name"
 ```
 
+Each user's Depot opens once they create a portfolio under Einstellungen → Depots.
+
 In development the Kasse's YNAB sync talks to YNAB only with `YNAB_BASE_URL=https://api.ynab.com/v1`, so imported
 data with real tokens stays away from it.
 
@@ -61,8 +66,16 @@ data with real tokens stays away from it.
   the live UI only connects from `https://$PHX_HOST`.
 - `/up` answers 200 while the app and its database are up, for health checks.
 - Every night at 03:00 a copy of the database goes to `data/backups` (mode 0600); the newest seven are kept.
-- `TZ` (default `Europe/Berlin`) is the local time of the Kasse's dates and its jobs: ECB rates at 17:00,
-  recurring expenses hourly, the backup. The Kasse's YNAB sync runs shortly after each change and hourly.
+- `TZ` (default `Europe/Berlin`) is the local time of the Kasse's dates and the jobs: ECB rates at 17:00,
+  recurring expenses hourly, the Depot's prices at 18:00, the backup. The Kasse's YNAB sync runs shortly after each
+  change and hourly.
+- `DIVVYDIARY_API_KEY` (optional) brings the Depot's countries, sectors and dividend dates from DivvyDiary.
+- The Depot's receipt recognition (optional): any OpenAI-compatible chat API such as Ollama with
+  `RECEIPT_MODEL_URL` (e.g. `http://localhost:11434/v1`), `RECEIPT_MODEL` and, if the API wants one,
+  `RECEIPT_MODEL_KEY`; `RECEIPT_MODEL_THINKING=on` lets the model think. The text comes from Paperless or else from
+  `pdftotext`. Without a model a receipt opens an empty form. Receipt PDFs live in `data/receipts`, next to the
+  database, outside the nightly backup. Each user enters their Paperless-ngx under Einstellungen → Belegeingang;
+  it is polled every 15 minutes.
 - MCP ([docs/MCP.md](docs/MCP.md)): `MCP_SECRET` (empty turns it off; the endpoint is `/mcp/<MCP_SECRET>`),
   `MCP_ALLOWED_CIDRS` (who may call it, default `160.79.104.0/21`) and `TRUSTED_PROXIES` (proxies whose
   `X-Forwarded-For` counts).
@@ -94,11 +107,24 @@ Bring the Kasse over from Zipfelkasse once, instead of adding its first particip
 database file into `data/` and import it with every person's email address. Ids, shares, recurring expenses, the
 activity log and the YNAB connections stay as they were; each person becomes the user with that address, and users
 missing in Abakus are created without mail and ask for a sign-in link on the sign-in page. It refuses once the Kasse
-holds people or expenses.
+holds people or expenses, and while Abakus has no users: invite the budget owner first.
 
 ```sh
 docker compose exec abakus bin/abakus eval \
   'Abakus.Release.import_kasse("/app/data/zipfelkasse.sqlite3", %{"Anna" => "anna@example.com"})'
+```
+
+Bring the Depot over from zipfelfolio once: stop zipfelfolio, copy its database file together with the `receipts`
+folder next to it into a folder under `data/` and import it. Ids, transactions, receipts, benchmarks and Paperless
+settings stay as they were; each user becomes the user with the same email address, and users missing in Abakus are
+created without mail and ask for a sign-in link on the sign-in page. Passkeys made for the old address do not work
+here: add them again under Einstellungen › Zugang. It refuses once the Depot holds securities or portfolios, and
+while Abakus has no users: invite the budget owner first. Then
+redirect the old address to Abakus's `/depot` in the reverse proxy.
+
+```sh
+docker compose exec abakus bin/abakus eval \
+  'Abakus.Release.import_depot("/app/data/zipfelfolio/zipfelfolio.sqlite3")'
 ```
 
 ## Before you use this
@@ -115,4 +141,6 @@ one container behind a reverse proxy.
 
 Public domain ([The Unlicense](LICENSE)). Bank sync follows Actual Budget's Enable Banking integration (MIT). The
 Lucide icons in `assets/vendor/lucide` are under the ISC License (some derive from Feather, MIT), both in its
-`LICENSE`; the plush images in `priv/static/images/plush` were made for Zipfelkasse.
+`LICENSE`; the plush images in `priv/static/images/plush` were made for Zipfelkasse, except briefcase and coins,
+which derive from Noto Emoji (Apache License 2.0, see `NOTICE.txt` there). Chart.js in `assets/vendor` is under the
+MIT License.

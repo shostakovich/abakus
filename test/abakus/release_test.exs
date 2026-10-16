@@ -4,6 +4,7 @@ defmodule Abakus.ReleaseTest do
   import ExUnit.CaptureIO
   import Abakus.UsersFixtures
 
+  alias Abakus.Depot.PortfoliosFixtures
   alias Abakus.FakeYnab
   alias Abakus.Kasse.Participants
   alias Mix.Tasks.Abakus.AddParticipant
@@ -89,6 +90,7 @@ defmodule Abakus.ReleaseTest do
 
   @tag :tmp_dir
   test "import_kasse/2 imports the old app's file and names the users", %{tmp_dir: dir} do
+    user_fixture()
     path = Abakus.KasseFixtures.old_app_file!(dir)
 
     emails = %{
@@ -104,6 +106,20 @@ defmodule Abakus.ReleaseTest do
     assert output =~ "Users matched: none."
     assert output =~ "sign-in page: anna@example.com, ben@example.com, cleo@example.com."
     assert Participants.get_participant!(5).name == "Cleo"
+  end
+
+  @tag :tmp_dir
+  test "import_depot/1 imports the old app's file and names the users", %{tmp_dir: dir} do
+    user_fixture()
+    path = PortfoliosFixtures.old_app_file!(dir)
+
+    output = capture_io(fn -> Abakus.Release.import_depot(path) end)
+
+    assert output =~ "Imported the Depot: "
+    assert output =~ "5 transactions"
+    assert output =~ "2 receipt files."
+    assert output =~ "sign-in page: anna@example.com, ben@example.com."
+    assert output =~ "add them again under Einstellungen"
   end
 
   describe "the YNAB import" do

@@ -11,9 +11,9 @@ source, benevolent dictator: no PRs, forks welcome.
 - self-hosted, reachable from the internet over HTTPS only (behind the operator's reverse proxy)
 - online only; offline entry comes in v3, not a sync protocol like Actual's CRDTs
 
-Not in scope for now: reports beyond the budget view, payee rename rules, multiple budgets, other currencies,
-investment tracking (that is a separate portfolio app). No scheduled transactions: the only recurring one (rent)
-comes from the shared expenses' recurring expenses (#43).
+Not in scope for now: reports beyond the budget view, payee rename rules, multiple budgets, other currencies.
+Investment tracking is the Depot area (#44), each user's own portfolios. No scheduled transactions: the only
+recurring one (rent) comes from the shared expenses' recurring expenses (#43).
 
 ## Stack
 
@@ -33,10 +33,12 @@ The context is `Abakus.Users` (an "account" is a bank account here):
   mails a sign-in link at once: `mix abakus.invite EMAIL`, in the container
   `bin/abakus eval 'Abakus.Release.invite("EMAIL")'`. The first user invited owns the budget
   ([ADR 0007](../DECISIONS.md))
-- Areas: each has its pages under its path (the Budget under `/budget`, the Kasse under `/kasse`), its section in
-  the sidebar and its dock on phones; a user sees only the areas they may use (the Budget: its owner; the Kasse:
-  its active participants, [ADR 0008](../DECISIONS.md)), and anyone else gets 404 on their pages. With one area the brand is its name; with more, the title in the top bar switches the area. `/` opens
-  the area used last, kept in the session
+- Areas: each has its pages under its path (the Budget under `/budget`, the Kasse under `/kasse`, the Depot under
+  `/depot`), its section in the sidebar and its dock on phones; a user sees only the areas they may use (the
+  Budget: its owner; the Kasse: its active participants, [ADR 0008](../DECISIONS.md); the Depot: every user with a
+  portfolio of their own, created or imported under Einstellungen), and anyone else gets 404 on their pages. With
+  one area the brand is its name; with more, the title in the top bar switches the area. `/` opens the area used
+  last, kept in the session
 - Passkeys implemented in-house with `:crypto`, `:public_key`, `JSON`; attestation `none`; discoverable
   credentials; relying party id = the configured host (`PHX_HOST`); challenges are valid 5 minutes, one open
   per session, dropped from the session on any attempt. A sign-in challenge travels in the signed session, so
@@ -68,11 +70,11 @@ Terms: [`CONTEXT.md`](../CONTEXT.md). Two contexts: `Abakus.Ledger` (accounts, p
 `Abakus.Categories` (groups, categories, assignments, targets); `Abakus.Budget` is the pure math on top. Domain
 tables have no user: the budget is its owner's ([ADR 0007](../DECISIONS.md)).
 
-- **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from a portfolio app,
-  `shared_expenses`: the budget owner's shares of the Kasse's expenses, so the UI hides manual entry, file import
-  and reconcile for it; the Ledger accepts both), closed, note, position, last reconciled at, the file's account it
-  takes imports from (`BANKID`, `ACCTID`). Budget account = not tracking (derived; a kind never crosses that line).
-  No credit cards or loans. Closed, never deleted.
+- **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from the Depot,
+  `shared_expenses`: the budget owner's shares of the Kasse's expenses; either way the UI hides manual entry, file
+  import and reconcile for it, as its balance is the other area's; the Ledger accepts entries), closed, note,
+  position, last reconciled at, the file's account it takes imports from (`BANKID`, `ACCTID`). Budget account = not
+  tracking (derived; a kind never crosses that line). No credit cards or loans. Closed, never deleted.
 - **Payee**: name, transfer account, last used category. Each account has a transfer payee "Transfer : <account
   name>" as in YNAB, created and renamed with the account. Other payees are unique by lookup key.
 - **Category group** and **category**: name, hidden (from YNAB, for the import and its check; the budget ignores
@@ -100,8 +102,8 @@ tables have no user: the budget is its owner's ([ADR 0007](../DECISIONS.md)).
 - **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
   `reconciled`), approved (manual entries by default, imports not), flag (red, orange, yellow,
   green, blue, purple), transfer counterpart (a transaction, or for a split's transfer its subtransaction), source
-  (`manual`, `ynab`, `file`, `bank`, `api`, `kasse`: where it was created, set once; `api` from the former
-  YNAB-compatible API, `kasse` a share of a Kasse expense), matched transaction (see match
+  (`manual`, `ynab`, `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the
+  former YNAB-compatible API, `kasse` a share of a Kasse expense, `depot` a value change), matched transaction (see match
   proposals), deleted at (soft delete; deleted transactions cannot be changed, only
   moved with their category into another). The register is what counts: transactions not deleted and no match
   proposal (`Ledger.in_register/0`).
@@ -217,14 +219,18 @@ same source; across sources (and against manual entries) a match is proposed, ne
 
 ## Tracking accounts
 
-Only used for the portfolios (securities accounts and their cash accounts). Their value will be booked by the Depot
-area inside Abakus (#44), the way YNAB tools post market values:
+Only used for the portfolios (securities accounts and their cash accounts). Their value is booked by the Depot
+area, the way YNAB tools post market values:
 
+- The budget owner picks under Einstellungen › Depots which tracking account each of their portfolios and
+  Verrechnungskonten feeds; an account fed by one is fed by `portfolio`
 - Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus
-- The Depot area books the difference between the account's balance and the portfolio's value as one transaction,
-  payee "Wertänderung", approved and cleared; nothing else changes the account
+- Every day after the price job, the Depot area books the difference between the account's balance and the value
+  of what feeds it as one transaction through the Ledger, payee "Wertänderung", approved and cleared, none without
+  a difference; another run that day amends that transaction instead of booking a second one. Nothing else changes
+  the account (`Abakus.Depot.BudgetFeed` is its only writer), and it cannot be reconciled
 - Accounts that no aggregator reaches (e.g. a broker's settlement account) are covered this way too
-- Until the Depot area does this, the values imported from YNAB stay and can be adjusted by hand
+- A tracking account nothing feeds keeps its values from YNAB and can be adjusted by hand
 
 ## MCP
 
@@ -263,9 +269,15 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   Budget (the budget owner's only: switching the link on, its account and which budget category each Kasse
   category's shares land in), YNAB (each participant's own sync to YNAB, until they are linked) and the CSV/JSON
   export
-- **Mehr**: the settings in three sections: Zugang (passkeys, email), Aussehen (theme, per device) and
-  YNAB-Import (what the import brought over; the budget owner's only). Categories and groups
-  are edited in the budget
+- **Depot**: Übersicht (net worth, optionally against the benchmark), Bestand (holdings per portfolio and
+  Verrechnungskonto), Dividenden, Buchungen (the transactions, the receipt inbox and the booking form, also opened
+  by „Buchung erfassen“ in the sidebar), Performance, Wertpapiere (prices, quote feeds, the benchmark, exchange
+  rates) and a page per security
+- **Mehr**: the settings in six sections: Zugang (passkeys, email), Aussehen (theme, per device), Depots (the
+  user's portfolios and Verrechnungskonten, for the budget owner also the tracking account each feeds), PP-Import
+  (a Portfolio Performance file into the Depot), Belegeingang (Paperless-ngx and the receipt recognition; Depot
+  users only) and YNAB-Import (what the import brought over; the budget owner's only). Categories and groups are
+  edited in the budget
 
 State that should survive a reload (screen, month, account, filters) lives in the URL; the number of months
 follows the window.
@@ -282,6 +294,7 @@ follows the window.
 5. Accounts, register, transaction form, splits, transfers, reconcile
 6. OFX/QFX import with matching and approval
 7. The shared expenses move into Abakus and are linked to the budget (#43)
+8. The portfolios move into Abakus as the Depot and book their value into the tracking accounts (#44)
 
 Acceptance: after importing the owner's YNAB budget, every month since the start shows the same RTA and the same
 assigned, activity, available and underfunded per category as YNAB; account balances match; an OFX/QFX
@@ -300,14 +313,18 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
 
 - One container; all data (the SQLite database) lives in the data volume at `/app/data`; every night at 03:00 a
   copy (`VACUUM INTO`) goes to `/app/data/backups`, the newest seven are kept; copies elsewhere are the
-  operator's job
+  operator's job. The Depot's receipt files live in `receipts/` next to the database, in the data volume but
+  outside the nightly backup
 - Jobs in the release: the ECB rates (daily at 17:00), recurring expenses (hourly), the Kasse's YNAB sync (shortly
-  after a change and hourly) and the backup, at the host's
+  after a change and hourly), the Depot's prices, exchange rates and DivvyDiary data (daily at 18:00), each user's
+  Paperless (every 15 minutes) and the backup, at the host's
   local time (`TZ`, `Europe/Berlin` in the image); `jobs: false` turns them off in tests
 - Runs behind the operator's HTTPS reverse proxy, which sets `X-Forwarded-Proto`
 - Config via env: `PHX_HOST` (required: the public host, also the passkey relying party id), `SECRET_KEY_BASE`,
-  SMTP, `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES`, `YNAB_TOKEN` (import only), `ENABLE_BANKING_APP_ID` and the private key as a read-only
-  mounted file (v2)
+  SMTP, `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES`, `YNAB_TOKEN` (import only), `DIVVYDIARY_API_KEY`
+  (the Depot's countries, sectors and dividends; optional), `RECEIPT_MODEL_URL`, `RECEIPT_MODEL`,
+  `RECEIPT_MODEL_KEY`, `RECEIPT_MODEL_THINKING` (the Depot's receipt recognition; optional),
+  `ENABLE_BANKING_APP_ID` and the private key as a read-only mounted file (v2)
 - `/up` checks the DB and, from v2, that no bank connection has failed for more than a day
 
 ## Open

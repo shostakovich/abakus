@@ -47,6 +47,14 @@ defmodule AbakusWeb do
     end
   end
 
+  def depot_live_view do
+    quote do
+      unquote(live_view())
+
+      import AbakusWeb.Depot.Components
+    end
+  end
+
   def live_component do
     quote do
       use Phoenix.LiveComponent

@@ -22,6 +22,17 @@ config :abakus, :mcp,
   allowed_cidrs: networks!.("MCP_ALLOWED_CIDRS", "160.79.104.0/21"),
   trusted_proxies: networks!.("TRUSTED_PROXIES", "")
 
+# Countries, sectors and dividends of the Depot's securities; without a key DivvyDiary is never asked.
+config :abakus, Abakus.Depot.MarketData.DivvyDiary, api_key: System.get_env("DIVVYDIARY_API_KEY")
+
+# The Depot's receipt recognition by any OpenAI-compatible chat API, e.g. http://ollama:11434/v1; without URL and
+# model, receipts still land in the inbox and open an empty form.
+config :abakus, Abakus.Depot.Receipts.ChatAPI,
+  url: System.get_env("RECEIPT_MODEL_URL"),
+  model: System.get_env("RECEIPT_MODEL"),
+  api_key: System.get_env("RECEIPT_MODEL_KEY"),
+  thinking: System.get_env("RECEIPT_MODEL_THINKING") in ~w(on true 1)
+
 port = String.to_integer(System.get_env("PORT", "4000"))
 
 if config_env() == :dev do

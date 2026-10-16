@@ -1,0 +1,13 @@
+{
+  "kind": "dividend",
+  "date": "2026-03-10",
+  "isin": "DE0008404005",
+  "security_name": "Allianz SE vink.Namens-Aktien o.N.",
+  "shares": 12,
+  "price": 15.40,
+  "fees": null,
+  "taxes": 0,
+  "amount": 184.80,
+  "depot_number": "5550 1234 00",
+  "bank_reference": null
+}

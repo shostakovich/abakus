@@ -12,4 +12,5 @@
 @import "lib/setzkasten/priv/static/setzkasten.css";
 
 @import "./budget.css";
+@import "./depot.css";
 @import "./register.css";

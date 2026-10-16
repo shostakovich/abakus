@@ -1,0 +1,36 @@
+{
+  "_note": "Written by hand with invented numbers, in the shape of the real answer Portfolio Performance recorded for its tests (divvy_diary_response_with_payments.json), which Response.symbol/1 reads the same way; the forecast flag is the live API's, which PP's recording lacks.",
+  "name": "Beispiel Welt UCITS ETF",
+  "symbol": "BSPW",
+  "isin": "XX0000000001",
+  "exchange": "XETR",
+  "currency": "EUR",
+  "securityType": "ETF",
+  "sector": "mixed",
+  "sectorWeightings": [
+    { "sector": "Information Technology", "weight": 0.25 },
+    { "sector": "Financials", "weight": 0.2 },
+    { "sector": "Health Care", "weight": 0.15 },
+    { "sector": "Industrials", "weight": 0.15 },
+    { "sector": "Consumer Discretionary", "weight": 0.1 },
+    { "sector": "Energy", "weight": 0.1 },
+    { "sector": "Real Estate", "weight": 0.05 }
+  ],
+  "country": "mixed",
+  "countryWeightings": [
+    { "country": "US", "weight": 0.5 },
+    { "country": "JP", "weight": 0.1 },
+    { "country": "GB", "weight": 0.1 },
+    { "country": "CA", "weight": 0.05 },
+    { "country": "AU", "weight": 0.05 },
+    { "country": "CN", "weight": 0.1 },
+    { "country": "BR", "weight": 0.1 }
+  ],
+  "dividends": [
+    { "id": 104, "exDate": "2026-12-10", "payDate": "2026-12-23", "amount": 0.25, "currency": "USD", "forecast": true },
+    { "id": 103, "exDate": "2026-09-10", "payDate": "2026-09-24", "amount": 0.2, "currency": "USD", "forecast": false },
+    { "id": 102, "exDate": "2026-06-11", "payDate": "2026-06-24", "amount": 0.3125, "currency": "USD" },
+    { "id": 101, "exDate": "2026-03-12", "payDate": "2026-03-25", "amount": 0.15, "currency": "USD" }
+  ],
+  "splits": []
+}

@@ -17,7 +17,10 @@ defmodule Abakus.Kasse.ImportTest do
     "Cleo" => "cleo@example.com"
   }
 
-  setup %{tmp_dir: dir}, do: %{path: Abakus.KasseFixtures.old_app_file!(dir)}
+  setup %{tmp_dir: dir} do
+    {:ok, _owner} = Users.create_user(%{email: "owner@example.com"})
+    %{path: Abakus.KasseFixtures.old_app_file!(dir)}
+  end
 
   defp import!(path, emails \\ @emails) do
     {:ok, report} = Import.run(path, emails)
@@ -141,5 +144,14 @@ defmodule Abakus.Kasse.ImportTest do
              {:error, "the Kasse holds data already (kasse_participants)"}
 
     refute Repo.exists?(Abakus.Users.User |> where(email: "dora@example.com"))
+  end
+
+  test "refuses an Abakus without users, whose budget owner it would make", %{path: path} do
+    Repo.delete_all(Users.User)
+
+    assert {:error, message} = Import.run(path, @emails)
+    assert message =~ "invite the budget owner first"
+    refute Repo.exists?(Users.User)
+    assert Participants.list_participants(:all) == []
   end
 end

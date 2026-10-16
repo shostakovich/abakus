@@ -1,0 +1,13 @@
+{
+  "kind": "purchase",
+  "date": "2026-03-16",
+  "isin": "IE00B3RBWM25",
+  "security_name": "Vanguard FTSE All-World U.ETF Reg. Shs USD Dis.oN",
+  "shares": 15,
+  "price": 112.34,
+  "fees": 6.45,
+  "taxes": null,
+  "amount": 1691.55,
+  "depot_number": "0123 456 789",
+  "bank_reference": "ZB-2026-004711"
+}

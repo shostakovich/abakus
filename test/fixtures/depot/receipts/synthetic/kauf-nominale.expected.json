@@ -1,0 +1,13 @@
+{
+  "kind": "purchase",
+  "date": "2026-02-04",
+  "isin": "IE00BK5BQT80",
+  "security_name": "MUSTERFONDS GLOBAL AKTIEN UCITS ETF",
+  "shares": 21,
+  "price": 41.125,
+  "fees": 5.90,
+  "taxes": null,
+  "amount": 869.53,
+  "depot_number": "987654321",
+  "bank_reference": "771234/55.00"
+}

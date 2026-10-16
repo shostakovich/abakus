@@ -22,7 +22,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   ]
 
   @feeds %{
-    portfolio: "Wert kommt aus der Depot-App",
+    portfolio: "Wert kommt aus dem Depot",
     shared_expenses: "Buchungen kommen aus der Kasse"
   }
 
@@ -124,7 +124,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           <.figure
             id="balance-working"
             value={@balances.working}
-            label="Wert laut Depot-App"
+            label="Wert laut Depot"
             animate={!@reconciling}
           />
         <% @account -> %>

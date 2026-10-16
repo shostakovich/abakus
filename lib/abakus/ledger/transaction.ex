@@ -26,7 +26,7 @@ defmodule Abakus.Ledger.Transaction do
     field :flag, Ecto.Enum, values: [:red, :orange, :yellow, :green, :blue, :purple]
 
     field :source, Ecto.Enum,
-      values: [:manual, :ynab, :file, :bank, :api, :kasse],
+      values: [:manual, :ynab, :file, :bank, :api, :kasse, :depot],
       default: :manual
 
     field :deleted_at, :utc_datetime_usec

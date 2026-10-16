@@ -6,7 +6,7 @@ defmodule AbakusWeb.Plush do
   """
   @behaviour Setzkasten.Plush
 
-  @names ~w(activity archive baby banknote car gift graduation-cap heart house key paw-print
+  @names ~w(activity archive baby banknote briefcase car coins gift graduation-cap heart house key paw-print
             plane receipt repeat scale settings shield shirt shopping-cart smartphone tag ticket
             users utensils wallet zap)
 

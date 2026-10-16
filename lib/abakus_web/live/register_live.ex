@@ -7,8 +7,8 @@ defmodule AbakusWeb.RegisterLive do
   Here transactions are approved (one, the selected or all), categorised (the selected), flagged and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
-  no manual entry; the one fed by shared expenses offers no reconcile either, and its transactions linked to Kasse
-  expenses are deleted only with their expense.
+  no manual entry and no reconcile; transactions linked to Kasse expenses are deleted only with their expense, the
+  value changes the Depot books not at all here.
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
   the transaction they match: "Zuordnen" merges them, "Trennen" keeps the import as a transaction of its own, and
@@ -520,23 +520,34 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp delete(socket, transactions, params) do
-    if BudgetLink.expense_ids(Enum.map(transactions, & &1.id)) != %{} do
-      {:noreply,
-       put_flash(socket, :error, "Nicht gelöscht: #{TransactionEditor.linked_delete()}")}
+    with nil <- refused_delete(transactions),
+         {:ok, deleted} <- Ledger.delete_transactions(transactions, confirmed(params)) do
+      socket
+      |> assign(:selected, MapSet.new())
+      |> saved({:ok, deleted}, deleted_text(length(deleted)))
+      |> noreply()
     else
-      case Ledger.delete_transactions(transactions, confirmed(params)) do
-        {:ok, deleted} ->
-          socket
-          |> assign(:selected, MapSet.new())
-          |> saved({:ok, deleted}, deleted_text(length(deleted)))
-          |> noreply()
+      reason when is_binary(reason) ->
+        {:noreply, put_flash(socket, :error, "Nicht gelöscht: #{reason}")}
 
-        {:error, changeset} ->
-          socket
-          |> put_flash(:error, "Nicht gelöscht: #{TransactionEditor.error_message(changeset)}")
-          |> refresh()
-          |> noreply()
-      end
+      {:error, changeset} ->
+        socket
+        |> put_flash(:error, "Nicht gelöscht: #{TransactionEditor.error_message(changeset)}")
+        |> refresh()
+        |> noreply()
+    end
+  end
+
+  defp refused_delete(transactions) do
+    cond do
+      BudgetLink.expense_ids(Enum.map(transactions, & &1.id)) != %{} ->
+        TransactionEditor.linked_delete()
+
+      Enum.any?(transactions, &match?(%Transaction{source: :depot}, &1)) ->
+        TransactionEditor.depot_delete()
+
+      true ->
+        nil
     end
   end
 
