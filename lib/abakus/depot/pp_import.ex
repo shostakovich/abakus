@@ -9,6 +9,7 @@ defmodule Abakus.Depot.PPImport do
   import Ecto.Query
   import Ecto.Changeset, only: [change: 2]
 
+  alias Abakus.Depot.BudgetFeed
   alias Abakus.Depot.Portfolios.{Account, Portfolio, SavingsPlan, Transaction, TransactionUnit}
   alias Abakus.Depot.PPImport.Reader
   alias Abakus.Depot.Securities.{AttributeType, PPSecurityLink, Price, Security}
@@ -522,6 +523,8 @@ defmodule Abakus.Depot.PPImport do
         :other_portfolio_id
       )
       |> delete_or_detach(:accounts, Account, ctx.stale_accounts, :account_id, :other_account_id)
+
+    BudgetFeed.mark_fed_accounts()
 
     link_ids = Enum.map(ctx.stale_links, & &1.id)
     Repo.delete_all(from l in PPSecurityLink, where: l.id in ^link_ids)

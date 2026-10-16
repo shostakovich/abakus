@@ -143,6 +143,21 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   @doc """
+  What the user's portfolios with `portfolio_ids` and accounts with `account_ids` are worth on `date`, in euro
+  cents: the value of the portfolios' holdings plus the accounts' balances.
+  """
+  def value(%Scope{} = scope, portfolio_ids, account_ids, %Date{} = date) do
+    transactions = list_transactions(scope)
+    accounts = list_accounts(scope)
+    portfolios = Enum.filter(list_portfolios(scope), &(&1.id in portfolio_ids))
+    filter = Filter.new(portfolios, account_ids, transactions)
+    market = load_market(transactions, accounts, date, :since_first_transaction)
+
+    [%{net_worth: value}] = Valuation.history(transactions, accounts, market, [date], filter)
+    value
+  end
+
+  @doc """
   What the overview shows for `period` up to `today`, from one load of the user's transactions,
   amounts in euro cents:
 

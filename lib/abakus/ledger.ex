@@ -418,6 +418,15 @@ defmodule Abakus.Ledger do
   def in_register,
     do: from(t in Transaction, where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id))
 
+  @doc "The account's balance up to and including `through`: the sum of its transactions in the register dated so."
+  def balance(%Account{id: account_id}, %Date{} = through) do
+    Repo.one(
+      from t in in_register(),
+        where: t.account_id == ^account_id and t.date <= ^through,
+        select: coalesce(sum(t.amount), 0)
+    )
+  end
+
   @doc """
   Each account's register as `%{balance, cleared, uncleared, unapproved}` by account id; cleared counts reconciled
   transactions too, unapproved is how many wait for approval, match proposals included. Accounts without

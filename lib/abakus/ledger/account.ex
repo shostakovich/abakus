@@ -16,7 +16,7 @@ defmodule Abakus.Ledger.Account do
     field :name, :string
     field :kind, Ecto.Enum, values: @budget_kinds ++ [:tracking]
 
-    # Another app fills the account via the API; the UI hides manual entry and file import for it.
+    # Another area fills the account; the UI hides manual entry and file import for it.
     field :fed_by, Ecto.Enum, values: [:portfolio, :shared_expenses]
     field :closed, :boolean, default: false
     field :note, :string
@@ -49,8 +49,8 @@ defmodule Abakus.Ledger.Account do
   def takes_entries?(%__MODULE__{closed: closed, fed_by: fed_by}),
     do: not closed and is_nil(fed_by)
 
-  @doc "Whether the UI offers reconciling: not for an account fed by shared expenses, whose balance is the Kasse's."
-  def reconcilable?(%__MODULE__{fed_by: fed_by}), do: fed_by != :shared_expenses
+  @doc "Whether the UI offers reconciling: not for an account fed by another area, whose balance is that area's."
+  def reconcilable?(%__MODULE__{fed_by: fed_by}), do: is_nil(fed_by)
 
   @doc "The kinds of budget accounts."
   def budget_kinds, do: @budget_kinds

@@ -13,7 +13,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   changes; a chosen category stays. A transfer between a budget and a tracking account takes a category and
   suggests the one last used between the two. Changing or deleting a reconciled transaction, or one whose
   counterpart is, asks first. A transaction linked to a Kasse expense (`expense_id`) links to it and keeps account,
-  date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006).
+  date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006). So does a value
+  change the Depot booked (`source: :depot`), as the Depot alone writes to its account.
 
   Tells its LiveView `{TransactionEditor, :done, message}` once the transaction is saved or deleted; the events
   `cancel_edit` (Cancel, Escape) go to the LiveView itself.
@@ -29,8 +30,13 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @linked_delete "Eine Buchung aus der Kasse wird mit ihrer Ausgabe gelöscht."
 
+  @depot_delete "Eine Wertänderung bucht das Depot; sie lässt sich hier nicht löschen."
+
   @doc "Why a transaction linked to a Kasse expense cannot be deleted in the register."
   def linked_delete, do: @linked_delete
+
+  @doc "Why a value change the Depot booked cannot be deleted in the register."
+  def depot_delete, do: @depot_delete
 
   @labels %{
     account_id: "Konto",
@@ -77,6 +83,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
             transaction={@transaction}
             accounts={@accounts}
             expense_id={@expense_id}
+            depot={@depot}
             error={@error}
             sheet
           />
@@ -85,7 +92,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
             <div class="join w-full">
               <.button
                 id="tx-sign"
-                disabled={@expense_id != nil}
+                disabled={@fixed}
                 class={["join-item app-sign", sign_class(@params["sign"])]}
                 aria-label={sign_label(@params["sign"])}
                 title={sign_label(@params["sign"])}
@@ -100,7 +107,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                   name="transaction"
                   side={@params}
                   sign={@params["sign"]}
-                  disabled={@expense_id != nil}
+                  disabled={@fixed}
                   class="text-end tabular-nums app-tx-amount-input"
                 />
                 <span class="label">€</span>
@@ -173,7 +180,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
               value={@params["date"]}
               label="Datum"
               required
-              disabled={@expense_id != nil}
+              disabled={@fixed}
             />
             <.input
               :if={@columns.all}
@@ -184,7 +191,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
               value={@params["account_id"]}
               options={account_options(assigns)}
               label="Konto"
-              disabled={@expense_id != nil}
+              disabled={@fixed}
             />
           </div>
           <.input
@@ -196,7 +203,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
             autocomplete="off"
             phx-debounce="300"
           />
-          <div :if={@transaction && !@expense_id} class="mt-3 border-t border-base-content/10 pt-3">
+          <div :if={@transaction && !@fixed} class="mt-3 border-t border-base-content/10 pt-3">
             <.button
               id="tx-delete"
               variant={:ghost}
@@ -255,13 +262,13 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
             phx-target={@myself}
           >
             <div class="app-edit-date">
-              <.date_input value={@params["date"]} disabled={@expense_id != nil} />
+              <.date_input value={@params["date"]} disabled={@fixed} />
             </div>
             <div :if={@columns.all} class="app-konto">
               <.account_select
                 options={account_options(assigns)}
                 value={@params["account_id"]}
-                disabled={@expense_id != nil}
+                disabled={@fixed}
               />
             </div>
             <div class="app-payee">
@@ -285,7 +292,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                 name="transaction[outflow]"
                 value={@params["outflow"]}
                 placeholder="Ausgang"
-                disabled={@expense_id != nil}
+                disabled={@fixed}
               />
             </div>
             <div class="app-in">
@@ -294,7 +301,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                 name="transaction[inflow]"
                 value={@params["inflow"]}
                 placeholder="Eingang"
-                disabled={@expense_id != nil}
+                disabled={@fixed}
               />
             </div>
             <div class="app-edit-buttons">
@@ -382,13 +389,14 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
           </div>
         </td>
       </tr>
-      <tr :if={@split_of || @expense_id || @error} class="app-edit-notes">
+      <tr :if={@split_of || @expense_id || @depot || @error} class="app-edit-notes">
         <td colspan={@columns.count}>
           <.notes
             split_of={@split_of}
             transaction={@transaction}
             accounts={@accounts}
             expense_id={@expense_id}
+            depot={@depot}
             error={@error}
           />
         </td>
@@ -401,6 +409,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :transaction, :any, required: true
   attr :accounts, :map, required: true
   attr :expense_id, :integer, default: nil
+  attr :depot, :boolean, default: false
   attr :error, :string, default: nil
   attr :sheet, :boolean, default: false
 
@@ -415,6 +424,9 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         navigate={~p"/kasse/expenses/#{@expense_id}"}
         class="link link-primary"
       >Ausgabe</.link>.
+    </p>
+    <p :if={@depot} id="tx-depot" class="mr-auto text-sm text-base-content/70">
+      Wertänderung des Depots: Betrag, Datum und Empfänger bucht das Depot.
     </p>
     <.alert :if={@error && @sheet} id="tx-error" tone={:error}>{@error}</.alert>
     <p
@@ -690,7 +702,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       :categories,
       :payee_options,
       :category_options,
-      :expense_id
+      :fixed
     ])
   end
 
@@ -729,7 +741,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :params, :map, required: true
   attr :accounts, :map, required: true
   attr :payee_options, :list, required: true
-  attr :expense_id, :integer, default: nil
+  attr :fixed, :boolean, default: false
   attr :label, :boolean, default: false
   attr :small, :boolean, default: false
 
@@ -780,7 +792,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       create_field={@created}
       class={@small && "input-sm"}
       form="tx-form"
-      disabled={@expense_id != nil}
+      disabled={@fixed}
     />
     """
   end
@@ -790,7 +802,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :params, :map, required: true
   attr :accounts, :map, required: true
   attr :category_options, :list, required: true
-  attr :expense_id, :integer, default: nil
+  attr :fixed, :boolean, default: false
   attr :label, :boolean, default: false
   attr :small, :boolean, default: false
 
@@ -805,7 +817,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         values: side,
         category?: TransactionForm.category?(assigns.params, assigns.side, assigns.accounts),
         split?: main? and assigns.params["split"] == "true",
-        splittable?: main? and !TransactionForm.transfer?(side) and is_nil(assigns.expense_id)
+        splittable?: main? and !TransactionForm.transfer?(side) and !assigns.fixed
       )
 
     ~H"""
@@ -917,12 +929,18 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @impl true
   def update(assigns, socket) do
-    socket = assign(socket, assigns)
+    socket = socket |> assign(assigns) |> assign_fixed()
     key = assigns.transaction && assigns.transaction.id
 
     if Map.get(socket.assigns, :loaded) == {key},
       do: {:ok, socket},
       else: {:ok, load(socket, key)}
+  end
+
+  # Account, date, amount and payee are another area's.
+  defp assign_fixed(%{assigns: assigns} = socket) do
+    depot = match?(%Transaction{source: :depot}, assigns.transaction)
+    assign(socket, depot: depot, fixed: depot or assigns.expense_id != nil)
   end
 
   defp load(socket, key) do
@@ -1025,7 +1043,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     params = TransactionForm.change(socket.assigns.params, changed, accounts)
 
     with {:ok, attrs} <- TransactionForm.to_attrs(params, accounts, original),
-         {:ok, attrs} <- register_fields(attrs, socket.assigns.expense_id),
+         {:ok, attrs} <- register_fields(attrs, socket.assigns),
          {:ok, _transaction} <- write(original, attrs, confirmed(event)) do
       {:noreply, done(socket, if(original, do: "Gespeichert.", else: "Gebucht."))}
     else
@@ -1035,6 +1053,9 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   def handle_event("delete", _event, %{assigns: %{expense_id: id}} = socket) when id != nil,
     do: {:noreply, assign(socket, :error, @linked_delete)}
+
+  def handle_event("delete", _event, %{assigns: %{depot: true}} = socket),
+    do: {:noreply, assign(socket, :error, @depot_delete)}
 
   def handle_event("delete", event, socket) do
     case Ledger.delete_transaction(socket.assigns.transaction, confirmed(event)) do
@@ -1171,12 +1192,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   defp offered(socket, id), do: if(id in CategoryOptions.ids(socket.assigns.categories), do: id)
 
-  defp register_fields(attrs, nil), do: {:ok, attrs}
+  defp register_fields(attrs, %{fixed: false}), do: {:ok, attrs}
 
-  defp register_fields(%{subtransactions: [_ | _]}, _expense_id),
+  defp register_fields(%{subtransactions: [_ | _]}, %{depot: true}),
+    do: {:error, "Eine Wertänderung lässt sich nicht aufteilen."}
+
+  defp register_fields(%{subtransactions: [_ | _]}, _assigns),
     do: {:error, "Eine Buchung aus der Kasse lässt sich nicht aufteilen."}
 
-  defp register_fields(attrs, _expense_id),
+  defp register_fields(attrs, _assigns),
     do: {:ok, Map.take(attrs, BudgetLink.register_fields())}
 
   defp write(nil, attrs, _opts), do: Ledger.create_transaction(attrs)

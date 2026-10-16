@@ -4,10 +4,11 @@ defmodule Abakus.Depot.PPImportTest do
   import Abakus.Depot.SecuritiesFixtures, only: [security_fixture: 1]
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{Portfolios, PPImport, Securities, Settings, Taxonomies}
+  alias Abakus.Depot.{BudgetFeed, Portfolios, PPImport, Securities, Settings, Taxonomies}
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.PPImport.Reader
   alias Abakus.Depot.Securities.{Price, Security}
+  alias Abakus.DomainFixtures
 
   @sample "test/fixtures/depot/pp/sample.portfolio"
 
@@ -370,6 +371,24 @@ defmodule Abakus.Depot.PPImportTest do
     assert summary.accounts == %{created: 0, updated: 1, deleted: 0}
     assert %{pp_uuid: nil} = Repo.reload!(usd)
     assert Portfolios.own_transactions?(scope)
+  end
+
+  test "frees a tracking account whose feeding portfolio PP dropped", %{
+    scope: scope,
+    client: client
+  } do
+    {:ok, _} = PPImport.import_client(scope, client)
+    tracking = DomainFixtures.account_fixture(name: "Depot", kind: :tracking)
+    [portfolio | _] = Portfolios.list_portfolios(scope)
+    {:ok, _feeds} = BudgetFeed.put_feeds(scope, %{{:portfolio, portfolio.id} => tracking.id})
+    assert %{fed_by: :portfolio} = Repo.reload!(tracking)
+
+    {:ok, summary} =
+      PPImport.import_client(scope, %{client | portfolios: [], transactions: [], plans: []})
+
+    assert summary.portfolios.deleted == 2
+    assert BudgetFeed.feeds(scope) == %{}
+    assert %{fed_by: nil} = Repo.reload!(tracking)
   end
 
   test "keeps a security PP recreated under a new UUID", %{scope: scope, client: client} do
