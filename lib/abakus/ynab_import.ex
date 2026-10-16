@@ -9,7 +9,7 @@ defmodule Abakus.YnabImport do
 
   import Ecto.Query
 
-  alias Abakus.Depot.BudgetFeed
+  alias Abakus.Depot.{AccountRoles, BudgetFeed}
   alias Abakus.Depot.BudgetLink, as: DepotLink
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.Transaction
@@ -83,7 +83,8 @@ defmodule Abakus.YnabImport do
   defp load(owner, plan) do
     if Repo.exists?(
          from t in Transaction, where: t.user_id == ^owner.user.id and t.source != :ynab
-       ) or BudgetLink.in_use?(owner) or BudgetFeed.in_use?(owner) or DepotLink.in_use?(owner) do
+       ) or BudgetLink.in_use?(owner) or BudgetFeed.in_use?(owner) or DepotLink.in_use?(owner) or
+         AccountRoles.in_use?(owner) do
       {:error, :own_data}
     else
       Loader.wipe(owner)
@@ -94,7 +95,7 @@ defmodule Abakus.YnabImport do
   @doc "Why an import did not run, as lines for the operator."
   def error_lines(:own_data),
     do: [
-      "Abakus holds transactions that did not come from YNAB, the Kasse is linked to the budget or maps its categories to it, or the Depot feeds a tracking account or links its transactions; an import would delete them, so it stops."
+      "Abakus holds transactions that did not come from YNAB, the Kasse is linked to the budget or maps its categories to it, or the Depot feeds a tracking account, links its transactions or has a Verrechnungskonto as a budget account; an import would delete them, so it stops."
     ]
 
   def error_lines({:unsupported, problems}),

@@ -5,7 +5,7 @@ defmodule Abakus.YnabImportTest do
 
   alias Abakus.{Categories, FakeYnab, KasseFixtures, Ledger, UsersFixtures, YnabImport}
   alias Abakus.Categories.{Assignment, Category, CategoryGroup, TargetSnooze, TargetVersion}
-  alias Abakus.Depot.{BudgetFeed, PortfoliosFixtures}
+  alias Abakus.Depot.{AccountRoles, BudgetFeed, PortfoliosFixtures}
   alias Abakus.Kasse.BudgetLink
 
   alias Abakus.Ledger.{
@@ -297,6 +297,19 @@ defmodule Abakus.YnabImportTest do
 
       assert YnabImport.import_plan(Scope.system(), @plan) == {:error, :own_data}
       assert BudgetFeed.in_use?(budget_scope())
+    end
+
+    test "refuses once a Verrechnungskonto is a budget account, which it would clear" do
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
+      [giro | _] = Ledger.list_accounts(budget_scope())
+      clearing = PortfoliosFixtures.account_fixture(budget_scope(), %{name: "Giro-Verrechnung"})
+
+      {:ok, clearing} =
+        AccountRoles.set_role(budget_scope(), clearing, "budget_account:#{giro.id}")
+
+      assert YnabImport.import_plan(Scope.system(), @plan) == {:error, :own_data}
+      assert Repo.reload!(clearing).budget_account_id == giro.id
+      refute AccountRoles.in_use?(UsersFixtures.user_scope_fixture())
     end
 
     test "lists every case Abakus cannot represent and writes nothing" do
