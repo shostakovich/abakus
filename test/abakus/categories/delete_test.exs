@@ -16,14 +16,14 @@ defmodule Abakus.Categories.DeleteTest do
     %{
       checking: account_fixture(kind: :checking),
       depot: account_fixture(kind: :tracking),
-      rta: Categories.ready_to_assign!(),
+      rta: Categories.ready_to_assign!(budget_scope()),
       group: group,
       movies: category_fixture(name: "🎬 Kino", category_group_id: group.id),
       leisure: category_fixture(name: "🎳 Freizeit", category_group_id: group.id)
     }
   end
 
-  defp months, do: Budget.months(Categories.budget(), @october)
+  defp months, do: Budget.months(Categories.budget(budget_scope()), @october)
 
   defp totals do
     Enum.map(months(), fn month ->
@@ -43,9 +43,9 @@ defmodule Abakus.Categories.DeleteTest do
   describe "scenario: deleting moves everything to the chosen category" do
     setup c do
       transaction_fixture(account_id: c.checking.id, category_id: c.rta.id, amount: 100_000)
-      Categories.assign(c.movies, @september, 3_000)
-      Categories.assign(c.movies, @october, 2_000)
-      Categories.assign(c.leisure, @october, 5_000)
+      Categories.assign(budget_scope(), c.movies, @september, 3_000)
+      Categories.assign(budget_scope(), c.movies, @october, 2_000)
+      Categories.assign(budget_scope(), c.leisure, @october, 5_000)
 
       ticket =
         transaction_fixture(
@@ -79,8 +79,13 @@ defmodule Abakus.Categories.DeleteTest do
       deleted = transaction_fixture(account_id: c.checking.id, category_id: c.movies.id)
       {:ok, _deleted} = Ledger.delete_transaction(budget_scope(), deleted)
 
-      Categories.set_target(c.movies, %{from_month: @october, cadence: :monthly, amount: 2_000})
-      Categories.snooze_target(c.movies, @october)
+      Categories.set_target(budget_scope(), c.movies, %{
+        from_month: @october,
+        cadence: :monthly,
+        amount: 2_000
+      })
+
+      Categories.snooze_target(budget_scope(), c.movies, @october)
 
       %{ticket: ticket, split: split, transfer: transfer, deleted: deleted}
     end
@@ -93,7 +98,7 @@ defmodule Abakus.Categories.DeleteTest do
       assert available.(c.movies) == 2_000
       before = totals()
 
-      assert {:ok, %Category{}} = Categories.delete_category(c.movies, c.leisure)
+      assert {:ok, %Category{}} = Categories.delete_category(budget_scope(), c.movies, c.leisure)
 
       for transaction <- [c.ticket, c.transfer, c.deleted] do
         assert Repo.reload!(transaction).category_id == c.leisure.id
@@ -112,7 +117,7 @@ defmodule Abakus.Categories.DeleteTest do
       refute Repo.reload(c.movies)
 
       assert [%CategoryGroup{categories: [%Category{name: "🎳 Freizeit"}]}] =
-               Categories.list_category_groups()
+               Categories.list_category_groups(budget_scope())
 
       refute Repo.exists?(from a in Assignment, where: a.category_id == ^c.movies.id)
       refute Repo.exists?(from v in TargetVersion, where: v.category_id == ^c.movies.id)
@@ -133,14 +138,18 @@ defmodule Abakus.Categories.DeleteTest do
     end
 
     test "is refused without confirmation and moves them with it", c do
-      assert Categories.reconciled_transactions?(c.movies)
-      refute Categories.reconciled_transactions?(c.leisure)
+      assert Categories.reconciled_transactions?(budget_scope(), c.movies)
+      refute Categories.reconciled_transactions?(budget_scope(), c.leisure)
 
-      assert {:error, :reconciled} = Categories.delete_category(c.movies, c.leisure)
+      assert {:error, :reconciled} =
+               Categories.delete_category(budget_scope(), c.movies, c.leisure)
+
       assert Repo.reload(c.movies)
 
       assert {:ok, _category} =
-               Categories.delete_category(c.movies, c.leisure, reconciled: :confirmed)
+               Categories.delete_category(budget_scope(), c.movies, c.leisure,
+                 reconciled: :confirmed
+               )
 
       assert %Transaction{category_id: category_id, cleared: :reconciled} =
                Repo.reload!(c.transaction)
@@ -158,24 +167,24 @@ defmodule Abakus.Categories.DeleteTest do
         ]
       )
 
-      assert Categories.reconciled_transactions?(c.leisure)
+      assert Categories.reconciled_transactions?(budget_scope(), c.leisure)
     end
 
     test "a deleted reconciled transaction does not count", c do
       {:ok, _deleted} =
         Ledger.delete_transaction(budget_scope(), c.transaction, reconciled: :confirmed)
 
-      refute Categories.reconciled_transactions?(c.movies)
-      assert {:ok, _category} = Categories.delete_category(c.movies, c.leisure)
+      refute Categories.reconciled_transactions?(budget_scope(), c.movies)
+      assert {:ok, _category} = Categories.delete_category(budget_scope(), c.movies, c.leisure)
     end
   end
 
-  describe "delete_category/3" do
+  describe "delete_category/4" do
     test "moves into a category of another group", c do
       other = category_fixture()
-      Categories.assign(c.movies, @october, 1_000)
+      Categories.assign(budget_scope(), c.movies, @october, 1_000)
 
-      assert {:ok, _category} = Categories.delete_category(c.movies, other)
+      assert {:ok, _category} = Categories.delete_category(budget_scope(), c.movies, other)
       assert assignments(other) == [{@october, 1_000}]
     end
 
@@ -183,33 +192,35 @@ defmodule Abakus.Categories.DeleteTest do
       gone = category_fixture()
       Repo.delete!(gone)
 
-      assert {:error, :target} = Categories.delete_category(c.movies, c.rta)
-      assert {:error, :target} = Categories.delete_category(c.movies, c.movies)
-      assert {:error, :target} = Categories.delete_category(c.movies, gone)
+      assert {:error, :target} = Categories.delete_category(budget_scope(), c.movies, c.rta)
+      assert {:error, :target} = Categories.delete_category(budget_scope(), c.movies, c.movies)
+      assert {:error, :target} = Categories.delete_category(budget_scope(), c.movies, gone)
       assert Repo.reload(c.movies)
     end
 
     test "refuses Ready to Assign and a category that is gone as the one deleted", c do
-      assert {:error, :internal} = Categories.delete_category(c.rta, c.leisure)
+      assert {:error, :internal} = Categories.delete_category(budget_scope(), c.rta, c.leisure)
       Repo.delete!(c.movies)
-      assert {:error, :not_found} = Categories.delete_category(c.movies, c.leisure)
+
+      assert {:error, :not_found} =
+               Categories.delete_category(budget_scope(), c.movies, c.leisure)
     end
   end
 
-  describe "delete_category_group/1" do
+  describe "delete_category_group/2" do
     test "deletes an empty group" do
       group = category_group_fixture()
 
-      assert {:ok, %CategoryGroup{}} = Categories.delete_category_group(group)
+      assert {:ok, %CategoryGroup{}} = Categories.delete_category_group(budget_scope(), group)
       refute Repo.reload(group)
     end
 
     test "refuses a group with categories and the internal one", c do
-      assert {:error, :not_empty} = Categories.delete_category_group(c.group)
+      assert {:error, :not_empty} = Categories.delete_category_group(budget_scope(), c.group)
       assert Repo.reload(c.group)
 
       internal = Repo.preload(c.rta, :category_group).category_group
-      assert {:error, :internal} = Categories.delete_category_group(internal)
+      assert {:error, :internal} = Categories.delete_category_group(budget_scope(), internal)
     end
   end
 end

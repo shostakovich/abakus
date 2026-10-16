@@ -948,15 +948,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   # Account, date, amount and payee are another area's.
   defp assign_fixed(%{assigns: assigns} = socket) do
-    depot = depot(assigns.transaction)
+    depot = depot(assigns.current_scope, assigns.transaction)
     assign(socket, depot: depot, fixed: depot != nil or assigns.expense_id != nil)
   end
 
-  defp depot(%Transaction{source: :depot, id: id}) do
-    if MapSet.member?(DepotLink.linked_ids([id]), id), do: :linked, else: :value_change
+  defp depot(scope, %Transaction{source: :depot, id: id}) do
+    if MapSet.member?(DepotLink.linked_ids(scope, [id]), id), do: :linked, else: :value_change
   end
 
-  defp depot(_transaction), do: nil
+  defp depot(_scope, _transaction), do: nil
 
   defp load(socket, key) do
     %{transaction: transaction, accounts: accounts} = socket.assigns
@@ -971,8 +971,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       error: nil,
       payees: payees,
       payees_by_key: Map.new(payees, &{&1.lookup_key, &1}),
-      ready_to_assign_id: Categories.ready_to_assign!().id,
-      categories: CategoryOptions.build(socket.assigns.today),
+      ready_to_assign_id: Categories.ready_to_assign!(socket.assigns.current_scope).id,
+      categories: CategoryOptions.build(socket.assigns.current_scope, socket.assigns.today),
       locked: locked?(transaction),
       kept_accounts: kept_accounts(transaction, accounts)
     )

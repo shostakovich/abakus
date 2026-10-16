@@ -114,7 +114,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "typing one of outflow and inflow clears the other; income goes to Ready to Assign", c do
       view = open_new(c, c.giro)
-      rta = Categories.ready_to_assign!().id
+      rta = Categories.ready_to_assign!(budget_scope()).id
 
       change(view, %{"outflow" => "5"}, ["outflow"])
       change(view, %{"outflow" => "5", "inflow" => "100"}, ["inflow"])
@@ -159,7 +159,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "the category picker lists Ready to Assign and the categories with what they have", c do
-      {:ok, _} = Categories.assign(c.groceries, ~D[2026-10-01], 30_000)
+      {:ok, _} = Categories.assign(budget_scope(), c.groceries, ~D[2026-10-01], 30_000)
       view = open_new(c, c.giro)
       html = render(view)
 

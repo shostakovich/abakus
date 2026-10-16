@@ -54,8 +54,8 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   Creates or renames as the popover says: `:ok`, the state with the name's error, or `:gone` when what it names
   was deleted meanwhile.
   """
-  def save(edit, name) do
-    case write(edit, %{name: name}) do
+  def save(scope, edit, name) do
+    case write(scope, edit, %{name: name}) do
       {:ok, _saved} -> :ok
       {:error, changeset} -> name_error(edit, changeset)
     end
@@ -71,37 +71,38 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
     end
   end
 
-  defp write(%{kind: :new_group}, attrs), do: Categories.create_category_group(attrs)
+  defp write(scope, %{kind: :new_group}, attrs),
+    do: Categories.create_category_group(scope, attrs)
 
-  defp write(%{kind: :new_category, group: group}, attrs),
-    do: Categories.create_category(Map.put(attrs, :category_group_id, group.id))
+  defp write(scope, %{kind: :new_category, group: group}, attrs),
+    do: Categories.create_category(scope, Map.put(attrs, :category_group_id, group.id))
 
-  defp write(%{kind: :group, group: group}, attrs),
-    do: Categories.update_category_group(group, attrs)
+  defp write(scope, %{kind: :group, group: group}, attrs),
+    do: Categories.update_category_group(scope, group, attrs)
 
-  defp write(%{kind: :category, category: category}, attrs),
-    do: Categories.update_category(category, attrs)
+  defp write(scope, %{kind: :category, category: category}, attrs),
+    do: Categories.update_category(scope, category, attrs)
 
   @doc """
   "Löschen": deletes an empty group (`:ok`, the state with the error, or `:gone`), or for a category moves on to
   asking which category takes over (`{:ask, state}`), offering every other regular category.
   """
-  def delete(%{kind: :group, group: group} = edit, _groups) do
-    case Categories.delete_category_group(group) do
+  def delete(scope, %{kind: :group, group: group} = edit, _groups) do
+    case Categories.delete_category_group(scope, group) do
       {:ok, _group} -> :ok
       {:error, :not_empty} -> {:error, %{edit | error: "Nur leere Gruppen lassen sich löschen."}}
       {:error, _gone} -> :gone
     end
   end
 
-  def delete(%{kind: :category, category: category} = edit, groups) do
+  def delete(scope, %{kind: :category, category: category} = edit, groups) do
     targets =
       for group <- groups,
           options = for(c <- group.categories, c.id != category.id, do: {c.name, c.id}),
           options != [],
           do: {group.name, options}
 
-    reconciled = Categories.reconciled_transactions?(category)
+    reconciled = Categories.reconciled_transactions?(scope, category)
     asking = %{step: :delete, error: nil, targets: targets, reconciled: reconciled, into: nil}
     {:ask, Map.merge(edit, asking)}
   end
@@ -110,12 +111,12 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   Deletes the category into the one picked among the offered; the warning shown about reconciled transactions
   counts as asking. `:ok`, `{:error, state}` to show again, or `:gone`.
   """
-  def confirm_delete(%{kind: :category, step: :delete} = edit, into_id, groups) do
+  def confirm_delete(scope, %{kind: :category, step: :delete} = edit, into_id, groups) do
     edit = %{edit | into: into_id, error: nil}
 
     with %Category{} = into <- find_target(edit, groups, into_id),
          opts = if(edit.reconciled, do: [reconciled: :confirmed], else: []),
-         {:ok, _deleted} <- Categories.delete_category(edit.category, into, opts) do
+         {:ok, _deleted} <- Categories.delete_category(scope, edit.category, into, opts) do
       :ok
     else
       nil ->

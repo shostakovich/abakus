@@ -322,10 +322,12 @@ defmodule Abakus.Ledger.ReconciledTest do
     transaction =
       reconcile(transaction_fixture(account_id: c.checking.id, category_id: movies.id))
 
-    assert {:error, :reconciled} = Ledger.recategorize(movies.id, leisure.id)
+    assert {:error, :reconciled} = Ledger.recategorize(budget_scope(), movies.id, leisure.id)
     assert reload(transaction).category_id == movies.id
 
-    assert :ok = Ledger.recategorize(movies.id, leisure.id, reconciled: :confirmed)
+    assert :ok =
+             Ledger.recategorize(budget_scope(), movies.id, leisure.id, reconciled: :confirmed)
+
     assert reload(transaction).category_id == leisure.id
   end
 end

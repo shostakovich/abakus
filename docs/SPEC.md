@@ -71,8 +71,8 @@ Mirrors YNAB so the import is lossless.
 
 Terms: [`CONTEXT.md`](../CONTEXT.md). Two contexts: `Abakus.Ledger` (accounts, payees, transactions) and
 `Abakus.Categories` (groups, categories, assignments, targets); `Abakus.Budget` is the pure math on top. The budget
-is its owner's ([ADR 0007](../DECISIONS.md)); the Ledger's tables carry their owner's `user_id`, and the Ledger
-sees only the rows of its caller's user (ADR 0019).
+is its owner's ([ADR 0007](../DECISIONS.md)); its tables carry their owner's `user_id`, and both contexts see only
+the rows of their caller's user (ADR 0019).
 
 - **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from the Depot,
   `shared_expenses`: the budget owner's shares of the Kasse's expenses; either way the UI hides manual entry, file
@@ -84,10 +84,10 @@ sees only the rows of its caller's user (ADR 0019).
 - **Category group** and **category**: name, hidden (from YNAB, for the import and its check; the budget ignores
   it), position (new ones go to the end), note, internal. A category is deleted only into another, which takes over
   everything it has; a group only when it is empty ([ADR 0003](../DECISIONS.md)).
-  Lookup keys of categories are not unique (an old "Urlaub" next to "🏖️ Urlaub"); groups have none. A migration
-  creates YNAB's internal group "Internal Master Category" with "Inflow: Ready to Assign" (UI "Zu verteilen");
-  internal ones are not listed, not editable and take no assignments or targets. Ready to Assign's lookup key is
-  reserved: no other category takes it, and looking it up finds only Ready to Assign.
+  Lookup keys of categories are not unique (an old "Urlaub" next to "🏖️ Urlaub"); groups have none. Each user's
+  budget gets YNAB's internal group "Internal Master Category" with "Inflow: Ready to Assign" (UI "Zu verteilen")
+  with its first use; internal ones are not listed, not editable and take no assignments or targets. Ready to
+  Assign's lookup key is reserved: no other category takes it, and looking it up finds only Ready to Assign.
 - **Names** usually start with an emoji ("🛒 Lebensmittel"), stored as entered. Lookups by name (MCP, search,
   suggestions, import) use the lookup key: Unicode NFC, without emoji and symbols (incl. ZWJ sequences, skin tones,
   keycaps, flags, variation selectors), whitespace collapsed, lower case, "ß" as "ss"; emoji-only names keep their
@@ -116,7 +116,7 @@ sees only the rows of its caller's user (ADR 0019).
   split's subtransaction's edit kept in step (amount, date, memo, account, category), released (payee no longer a
   transfer, subtransaction removed, turned into a split) or deleted with it. The caller passes
   `reconciled: :confirmed` to `update_transaction/4`, `delete_transaction/3`, `accept_match/3` or
-  `recategorize/3` (deleting a category) after asking; the UI asks first.
+  `recategorize/4` (deleting a category) after asking; the UI asks first.
 - **Transfers**: a transaction or subtransaction is a transfer when its payee is a transfer payee; never to its own
   account, and a split is none as a whole. The Ledger alone creates and keeps the counterpart in the payee's
   account (amount negated, same date and memo, payee = the other account's transfer payee; cleared, approved and

@@ -13,7 +13,8 @@ defmodule Abakus.Kasse.BudgetLink do
   register changed, but a change of the Kasse category always writes the mapped category.
 
   The functions the link's page calls take the caller's scope; only the budget owner's may switch it on, choose the
-  account or map the categories. The link's tables stay out of the MCP's SQL sandbox, as they point into the budget.
+  account or map the categories. Those the budget calls take its user's scope and see only what points into their
+  budget. The link's tables stay out of the MCP's SQL sandbox, as they point into the budget.
   """
 
   import Ecto.Query
@@ -28,7 +29,7 @@ defmodule Abakus.Kasse.BudgetLink do
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.Money
   alias Abakus.Repo
-  alias Abakus.Users.Scope
+  alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
 
   @register_fields [:category_id, :memo, :flag, :cleared, :approved]
@@ -214,9 +215,20 @@ defmodule Abakus.Kasse.BudgetLink do
     connection && connection.start_date
   end
 
-  @doc "Whether anything is linked or mapped, which a wipe of the budget would break or drop."
-  def in_use?,
-    do: Repo.exists?(Link) or Repo.exists?(LinkedTransaction) or Repo.exists?(CategoryMapping)
+  @doc "Whether anything is linked or mapped into the user's budget, which a wipe of it would break or drop."
+  def in_use?(%Scope{user: %User{id: user_id}}) do
+    Repo.exists?(from l in Link, join: a in assoc(l, :account), where: a.user_id == ^user_id) or
+      Repo.exists?(
+        from l in LinkedTransaction,
+          join: t in assoc(l, :transaction),
+          where: t.user_id == ^user_id
+      ) or
+      Repo.exists?(
+        from m in CategoryMapping,
+          join: c in assoc(m, :budget_category),
+          where: c.user_id == ^user_id
+      )
+  end
 
   @doc """
   Writes what a change of an expense means for the linked transactions, inside the caller's database transaction:
@@ -410,12 +422,12 @@ defmodule Abakus.Kasse.BudgetLink do
     owner!(scope)
 
     with {:ok, mapping} <- cast_mapping(mapping) do
-      Repo.transact(fn -> replace_mapping(mapping) end)
+      Repo.transact(fn -> replace_mapping(scope, mapping) end)
     end
   end
 
-  defp replace_mapping(mapping) do
-    with :ok <- check_mapping(mapping) do
+  defp replace_mapping(scope, mapping) do
+    with :ok <- check_mapping(scope, mapping) do
       Repo.delete_all(from m in CategoryMapping, where: m.category_id in ^Map.keys(mapping))
 
       Repo.insert_all(
@@ -431,12 +443,16 @@ defmodule Abakus.Kasse.BudgetLink do
     end
   end
 
-  defp check_mapping(mapping) do
+  defp check_mapping(scope, mapping) do
     known = Repo.all(from c in Category, select: c.id)
     chosen = mapping |> Map.values() |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
     regular =
-      Repo.all(from c in BudgetCategory, where: c.id in ^chosen and not c.internal, select: c.id)
+      Repo.all(
+        from c in BudgetCategory,
+          where: c.user_id == ^scope.user.id and c.id in ^chosen and not c.internal,
+          select: c.id
+      )
 
     cond do
       Enum.any?(Map.keys(mapping), &(&1 not in known)) ->
@@ -466,24 +482,37 @@ defmodule Abakus.Kasse.BudgetLink do
 
   defp cast_id(id), do: Abakus.Schema.cast_id(id)
 
-  @doc "Moves the mapping and what the Kasse wrote from one budget category to another, as deleting `from_id` does."
-  def recategorize(from_id, to_id) do
-    Repo.update_all(where(CategoryMapping, budget_category_id: ^from_id),
+  @doc """
+  Moves the mapping and what the Kasse wrote from one of the user's budget categories to another, as deleting
+  `from_id` does.
+  """
+  def recategorize(%Scope{user: %User{id: user_id}}, from_id, to_id) do
+    categories = from c in BudgetCategory, where: c.user_id == ^user_id, select: c.id
+    transactions = from t in Transaction, where: t.user_id == ^user_id, select: t.id
+
+    Repo.update_all(
+      from(m in CategoryMapping,
+        where: m.budget_category_id == ^from_id and m.budget_category_id in subquery(categories)
+      ),
       set: [budget_category_id: to_id]
     )
 
-    Repo.update_all(where(LinkedTransaction, written_category_id: ^from_id),
+    Repo.update_all(
+      from(l in LinkedTransaction,
+        where: l.written_category_id == ^from_id and l.transaction_id in subquery(transactions)
+      ),
       set: [written_category_id: to_id]
     )
 
     :ok
   end
 
-  @doc "The expense id of each linked transaction among `transaction_ids`, by transaction id."
-  def expense_ids(transaction_ids) do
+  @doc "The expense id of each linked transaction among the user's `transaction_ids`, by transaction id."
+  def expense_ids(%Scope{user: %User{id: user_id}}, transaction_ids) do
     Repo.all(
       from l in LinkedTransaction,
-        where: l.transaction_id in ^transaction_ids,
+        join: t in assoc(l, :transaction),
+        where: t.user_id == ^user_id and l.transaction_id in ^transaction_ids,
         select: {l.transaction_id, l.expense_id}
     )
     |> Map.new()

@@ -260,7 +260,7 @@ defmodule AbakusWeb.RegisterLive do
       manual: manual_entry?(account, accounts),
       columns: columns,
       editor: follow_rows(socket.assigns.editor, rows, accounts, columns),
-      categories: CategoryOptions.build(socket.assigns.today),
+      categories: CategoryOptions.build(socket.assigns.current_scope, socket.assigns.today),
       balances: balances,
       unapproved: Enum.reject(transactions, & &1.approved),
       running_balances: running,
@@ -569,7 +569,7 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp delete(socket, transactions, params) do
-    with nil <- refused_delete(transactions),
+    with nil <- refused_delete(socket.assigns.current_scope, transactions),
          {:ok, deleted} <-
            Ledger.delete_transactions(
              socket.assigns.current_scope,
@@ -592,9 +592,9 @@ defmodule AbakusWeb.RegisterLive do
     end
   end
 
-  defp refused_delete(transactions) do
+  defp refused_delete(scope, transactions) do
     cond do
-      BudgetLink.expense_ids(Enum.map(transactions, & &1.id)) != %{} ->
+      BudgetLink.expense_ids(scope, Enum.map(transactions, & &1.id)) != %{} ->
         TransactionEditor.linked_delete()
 
       Enum.any?(transactions, &match?(%Transaction{source: :depot}, &1)) ->
@@ -661,7 +661,9 @@ defmodule AbakusWeb.RegisterLive do
         accounts: assigns.accounts,
         columns: assigns.columns,
         today: assigns.today,
-        expense_id: transaction && BudgetLink.expense_ids([transaction.id])[transaction.id]
+        expense_id:
+          transaction &&
+            BudgetLink.expense_ids(assigns.current_scope, [transaction.id])[transaction.id]
       }
     }
   end

@@ -24,6 +24,7 @@ defmodule Abakus.Categories.TargetVersion do
     field :set_aside, :boolean, default: true
 
     belongs_to :category, Category
+    belongs_to :user, Abakus.Users.User
 
     timestamps()
   end
@@ -35,12 +36,19 @@ defmodule Abakus.Categories.TargetVersion do
     |> Enum.find(&(not Date.before?(&1, month)))
   end
 
-  @doc "Changeset for a target version whose `category_id` is set; any day stands for its month."
+  @doc "Changeset for a target version whose `category_id` and `user_id` are set; any day stands for its month."
   def changeset(version, attrs) do
     version
     |> cast(attrs, [:from_month, :cadence, :amount, :due_on, :repeats_yearly, :set_aside])
     |> update_change(:from_month, &Date.beginning_of_month/1)
-    |> validate_required([:category_id, :from_month, :cadence, :repeats_yearly, :set_aside])
+    |> validate_required([
+      :category_id,
+      :user_id,
+      :from_month,
+      :cadence,
+      :repeats_yearly,
+      :set_aside
+    ])
     |> validate_cadence()
     |> check_constraint(:amount, name: :target_versions_amount_positive)
     |> unique_constraint([:category_id, :from_month])

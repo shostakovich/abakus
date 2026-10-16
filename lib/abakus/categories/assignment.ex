@@ -13,16 +13,17 @@ defmodule Abakus.Categories.Assignment do
     field :amount, :integer
 
     belongs_to :category, Category
+    belongs_to :user, Abakus.Users.User
 
     timestamps()
   end
 
-  @doc "Changeset for an assignment whose `category_id` is set; any day stands for its month."
+  @doc "Changeset for an assignment whose `category_id` and `user_id` are set; any day stands for its month."
   def changeset(assignment, attrs) do
     assignment
     |> cast(attrs, [:month, :amount])
     |> update_change(:month, &Date.beginning_of_month/1)
-    |> validate_required([:category_id, :month, :amount])
+    |> validate_required([:category_id, :user_id, :month, :amount])
     |> Amount.validate()
     |> unique_constraint([:category_id, :month])
   end

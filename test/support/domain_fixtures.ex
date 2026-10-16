@@ -28,7 +28,10 @@ defmodule Abakus.DomainFixtures do
 
   def category_group_fixture(attrs \\ %{}) do
     {:ok, group} =
-      attrs |> Enum.into(%{name: unique_name("Gruppe")}) |> Categories.create_category_group()
+      Categories.create_category_group(
+        budget_scope(),
+        Enum.into(attrs, %{name: unique_name("Gruppe")})
+      )
 
     group
   end
@@ -36,7 +39,7 @@ defmodule Abakus.DomainFixtures do
   def category_fixture(attrs \\ %{}) do
     attrs = Enum.into(attrs, %{name: unique_name("Kategorie")})
     attrs = Map.put_new_lazy(attrs, :category_group_id, fn -> category_group_fixture().id end)
-    {:ok, category} = Categories.create_category(attrs)
+    {:ok, category} = Categories.create_category(budget_scope(), attrs)
     category
   end
 

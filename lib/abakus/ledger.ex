@@ -1,8 +1,7 @@
 defmodule Abakus.Ledger do
   @moduledoc """
   Accounts, payees and transactions, each the user's: functions take the caller's `%Scope{}` and see only its
-  user's records; another user's behave like missing ones. Only what `Abakus.Categories` asks by category
-  (`budget_activity/0`, `category_activity_by_payee/1`, `reconciled_in_category?/1`, `recategorize/3`) takes none.
+  user's records and categories; another user's behave like missing ones.
 
   The Ledger owns transfers: a transaction or subtransaction with a transfer payee gets its counterpart in that
   payee's account, created, kept in step (amount negated, date, memo), moved, and removed by the Ledger alone
@@ -15,7 +14,7 @@ defmodule Abakus.Ledger do
   only its own fields (cleared, approved, flag, category) change on it directly.
 
   A reconciled transaction is locked: the Ledger refuses any change to it, made directly, through a transfer
-  (a counterpart kept in step, moved, released or deleted) or by moving its category (`recategorize/3`), unless the
+  (a counterpart kept in step, moved, released or deleted) or by moving its category (`recategorize/4`), unless the
   caller passes `reconciled: :confirmed` after asking. Leaving the reconciled state is a change too.
 
   A match proposal (an import with `matched_transaction_id`, see `find_matches/4`) counts nowhere until
@@ -27,6 +26,7 @@ defmodule Abakus.Ledger do
   import Ecto.Query
   import Abakus.Owned
 
+  alias Abakus.Categories
   alias Abakus.Categories.Category
 
   alias Abakus.Ledger.{
@@ -226,25 +226,18 @@ defmodule Abakus.Ledger do
       date: date,
       amount: difference,
       payee_name: @adjustment_payee,
-      category_id: if(Account.budget_account?(account), do: ready_to_assign_id()),
+      category_id:
+        if(Account.budget_account?(account), do: Categories.ready_to_assign!(scope).id),
       memo: @adjustment_memo,
       cleared: :cleared,
       approved: true
     })
   end
 
-  defp ready_to_assign_id,
-    do:
-      Repo.one!(
-        from c in Category,
-          where: c.internal and c.name == ^Category.ready_to_assign_name(),
-          select: c.id
-      )
-
   def create_payee(%Scope{} = scope, attrs) do
     %Payee{user_id: user_id(scope)}
     |> Payee.changeset(attrs)
-    |> References.validate_exists(:last_category_id, Category)
+    |> References.validate_exists(:last_category_id, owned(Category, scope))
     |> Repo.insert()
   end
 
@@ -252,7 +245,7 @@ defmodule Abakus.Ledger do
     scope
     |> own!(payee)
     |> Payee.changeset(attrs)
-    |> References.validate_exists(:last_category_id, Category)
+    |> References.validate_exists(:last_category_id, owned(Category, scope))
     |> Repo.update()
   end
 
@@ -435,10 +428,10 @@ defmodule Abakus.Ledger do
   end
 
   @doc "Transactions in the register, which count for listings and balances: not deleted and no match proposal."
-  def in_register(%Scope{} = scope), do: owned(register(), scope)
-
-  defp register,
-    do: from(t in Transaction, where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id))
+  def in_register(%Scope{} = scope) do
+    from t in owned(Transaction, scope),
+      where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id)
+  end
 
   @doc "The account's balance up to and including `through`: the sum of its transactions in the register dated so."
   def balance(%Scope{} = scope, %Account{id: account_id}, %Date{} = through) do
@@ -533,9 +526,9 @@ defmodule Abakus.Ledger do
   subtransactions, a transaction or subtransaction without a category under `nil`, unless it is a transfer
   (between budget accounts, which have none). Tracking accounts do not count.
   """
-  def budget_activity do
+  def budget_activity(%Scope{} = scope) do
     transactions =
-      from t in register(),
+      from t in in_register(scope),
         join: a in assoc(t, :account),
         where: a.kind in ^Account.budget_kinds(),
         where: t.id not in subquery(from s in Subtransaction, select: s.transaction_id),
@@ -547,7 +540,7 @@ defmodule Abakus.Ledger do
 
     subtransactions =
       from s in Subtransaction,
-        join: t in subquery(register()),
+        join: t in subquery(in_register(scope)),
         on: t.id == s.transaction_id,
         join: a in Account,
         on: a.id == t.account_id,
@@ -563,9 +556,9 @@ defmodule Abakus.Ledger do
   What the budget accounts' register adds up to in one category per `{payee_name, month}` (`nil` without a payee):
   a split by its subtransactions, each under its own payee or else the split's.
   """
-  def category_activity_by_payee(category_id) do
+  def category_activity_by_payee(%Scope{} = scope, category_id) do
     transactions =
-      from t in register(),
+      from t in in_register(scope),
         join: a in assoc(t, :account),
         left_join: p in assoc(t, :payee),
         where: a.kind in ^Account.budget_kinds() and t.category_id == ^category_id,
@@ -574,7 +567,7 @@ defmodule Abakus.Ledger do
 
     subtransactions =
       from s in Subtransaction,
-        join: t in subquery(register()),
+        join: t in subquery(in_register(scope)),
         on: t.id == s.transaction_id,
         join: a in Account,
         on: a.id == t.account_id,
@@ -588,9 +581,9 @@ defmodule Abakus.Ledger do
   end
 
   @doc "Whether a reconciled transaction, not deleted, has the category, itself or in a split line."
-  def reconciled_in_category?(category_id) do
+  def reconciled_in_category?(%Scope{} = scope, category_id) do
     Repo.exists?(
-      from t in Transaction,
+      from t in owned(Transaction, scope),
         left_join: s in Subtransaction,
         on: s.transaction_id == t.id,
         where: t.cleared == :reconciled and is_nil(t.deleted_at),
@@ -601,31 +594,39 @@ defmodule Abakus.Ledger do
   @doc """
   Points everything that has the category `from_id` to `to_id`: transactions and split lines, deleted ones and match
   proposals included, and payees' last categories. Reconciled transactions among them need `reconciled: :confirmed`
-  (see `reconciled_in_category?/1`).
+  (see `reconciled_in_category?/2`).
   """
-  def recategorize(from_id, to_id, opts \\ []) do
-    if Keyword.get(opts, :reconciled) != :confirmed and reconciled_in_category?(from_id),
+  def recategorize(%Scope{} = scope, from_id, to_id, opts \\ []) do
+    if Keyword.get(opts, :reconciled) != :confirmed and reconciled_in_category?(scope, from_id),
       do: {:error, :reconciled},
-      else: move_category(from_id, to_id)
+      else: move_category(scope, from_id, to_id)
   end
 
-  defp move_category(from_id, to_id) do
+  defp move_category(scope, from_id, to_id) do
     now = DateTime.utc_now()
-    splits = from s in Subtransaction, where: s.category_id == ^from_id, select: s.transaction_id
+    transaction_ids = select(owned(Transaction, scope), [t], t.id)
+
+    splits =
+      from s in Subtransaction,
+        where: s.category_id == ^from_id and s.transaction_id in subquery(transaction_ids),
+        select: s.transaction_id
 
     Repo.update_all(from(t in Transaction, where: t.id in subquery(splits)),
       set: [updated_at: now]
     )
 
-    Repo.update_all(from(s in Subtransaction, where: s.category_id == ^from_id),
+    Repo.update_all(
+      from(s in Subtransaction,
+        where: s.category_id == ^from_id and s.transaction_id in subquery(transaction_ids)
+      ),
       set: [category_id: to_id, updated_at: now]
     )
 
-    Repo.update_all(from(t in Transaction, where: t.category_id == ^from_id),
+    Repo.update_all(from(t in owned(Transaction, scope), where: t.category_id == ^from_id),
       set: [category_id: to_id, updated_at: now]
     )
 
-    Repo.update_all(from(p in Payee, where: p.last_category_id == ^from_id),
+    Repo.update_all(from(p in owned(Payee, scope), where: p.last_category_id == ^from_id),
       set: [last_category_id: to_id, updated_at: now]
     )
 
@@ -809,7 +810,7 @@ defmodule Abakus.Ledger do
 
     categories =
       References.existing(
-        Category,
+        from(c in Category, where: c.user_id == ^user_id),
         changed_ids(sides, :category_id) ++ changed_ids(sides, :counterpart_category_id)
       )
 

@@ -305,11 +305,26 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       assert_raise AccessError, fn -> BudgetLink.account_choices(ben) end
       assert BudgetLink.category_mapping(scope_of(h.anna))[h.food]
     end
+
+    test "is the one whose budget the budget's questions are about", %{h: h} = context do
+      expense = create!(equal(h, "Markt", 1000, "2026-10-12", h.ben, [h.anna, h.ben]))
+      %Transaction{id: id} = transaction(expense)
+      owner = budget_scope()
+      ben = scope_of(h.ben)
+
+      assert BudgetLink.in_use?(owner)
+      refute BudgetLink.in_use?(ben)
+      assert BudgetLink.expense_ids(owner, [id]) == %{id => expense.id}
+      assert BudgetLink.expense_ids(ben, [id]) == %{}
+
+      :ok = BudgetLink.recategorize(ben, context.groceries, context.treats)
+      assert BudgetLink.category_mapping(scope_of(h.anna))[h.food] == context.groceries
+    end
   end
 
   describe "the category mapping" do
     test "refuses internal and unknown budget categories", %{h: h} do
-      ready_to_assign = Categories.ready_to_assign!()
+      ready_to_assign = Categories.ready_to_assign!(budget_scope())
 
       assert {:error, _message} =
                BudgetLink.put_category_mapping(scope_of(h.anna), %{
@@ -335,7 +350,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       groceries = Repo.get!(Category, context.groceries)
       treats = Repo.get!(Category, context.treats)
 
-      {:ok, _deleted} = Categories.delete_category(groceries, treats)
+      {:ok, _deleted} = Categories.delete_category(budget_scope(), groceries, treats)
 
       assert BudgetLink.category_mapping(scope_of(h.anna))[h.food] == context.treats
 

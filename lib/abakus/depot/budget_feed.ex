@@ -16,12 +16,16 @@ defmodule Abakus.Depot.BudgetFeed do
   alias Abakus.{Ledger, LocalTime, Names, Repo}
   alias Abakus.Ledger.Account
   alias Abakus.Ledger.Transaction
-  alias Abakus.Users.Scope
+  alias Abakus.Users.{Scope, User}
 
   @payee "Wertänderung"
 
-  @doc "Whether a portfolio has an account in the budget, which a wipe of the budget would drop."
-  def in_use?, do: Repo.exists?(from p in Portfolio, where: not is_nil(p.budget_account_id))
+  @doc "Whether a portfolio of the user has an account in the budget, which a wipe of their budget would drop."
+  def in_use?(%Scope{user: %User{id: user_id}}),
+    do:
+      Repo.exists?(
+        from p in Portfolio, where: p.user_id == ^user_id and not is_nil(p.budget_account_id)
+      )
 
   @doc "The portfolio whose account `account` is, nil for any other account."
   def portfolio(%Account{fed_by: :portfolio, id: id}),

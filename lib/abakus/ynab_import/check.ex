@@ -14,14 +14,17 @@ defmodule Abakus.YnabImport.Check do
   and `categories`, where Uncategorized is nil; categories without an id are not checked.
   """
   def differences(%Scope{} = scope, plan, ids) do
-    month_differences(plan, ids.categories) ++ account_differences(scope, plan, ids.accounts)
+    month_differences(scope, plan, ids.categories) ++
+      account_differences(scope, plan, ids.accounts)
   end
 
-  defp month_differences(plan, categories) do
+  defp month_differences(scope, plan, categories) do
     months = Plan.months(plan)
     from = Plan.date(List.first(months)["month"])
     through = Plan.date(List.last(months)["month"])
-    computed = Categories.budget() |> Budget.months(from, through) |> Map.new(&{&1.month, &1})
+
+    computed =
+      scope |> Categories.budget() |> Budget.months(from, through) |> Map.new(&{&1.month, &1})
 
     Enum.flat_map(months, fn month ->
       abakus = Map.fetch!(computed, Plan.date(month["month"]))

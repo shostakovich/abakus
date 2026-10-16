@@ -24,7 +24,7 @@ defmodule AbakusWeb.RegisterLiveTest do
         date: ~D[2026-10-01],
         amount: 324_000,
         payee_id: employer.id,
-        category_id: Categories.ready_to_assign!().id,
+        category_id: Categories.ready_to_assign!(budget_scope()).id,
         cleared: :cleared,
         memo: "Gehalt Oktober"
       )
@@ -610,10 +610,10 @@ defmodule AbakusWeb.RegisterLiveTest do
         view,
         "#categorise-submit",
         "Diese Buchung ist abgeschlossen. Trotzdem ändern?",
-        with: %{category_id: Categories.ready_to_assign!().id}
+        with: %{category_id: Categories.ready_to_assign!(budget_scope()).id}
       )
 
-      assert reload(c.old).category_id == Categories.ready_to_assign!().id
+      assert reload(c.old).category_id == Categories.ready_to_assign!(budget_scope()).id
     end
   end
 

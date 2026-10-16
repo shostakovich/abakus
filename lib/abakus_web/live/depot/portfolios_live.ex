@@ -486,7 +486,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
         to_form(if(link, do: Ecto.Changeset.change(link), else: BudgetLink.change_link()),
           as: :link
         ),
-      category_options: BudgetLink.category_options()
+      category_options: BudgetLink.category_options(scope)
     )
   end
 

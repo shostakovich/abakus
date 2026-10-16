@@ -38,9 +38,9 @@ defmodule Abakus.Depot.BudgetLink do
   def change_link(attrs \\ %{}),
     do: Link.changeset(%Link{start_date: LocalTime.today()}, attrs)
 
-  @doc "The regular budget categories purchases can be booked in, grouped for a select."
-  def category_options do
-    for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(),
+  @doc "The user's regular budget categories purchases can be booked in, grouped for a select."
+  def category_options(%Scope{} = scope) do
+    for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(scope),
         do: {group.name, Enum.map(categories, &{&1.name, &1.id})}
   end
 
@@ -75,28 +75,37 @@ defmodule Abakus.Depot.BudgetLink do
     |> Repo.update()
   end
 
-  defp validate_category(changeset) do
+  defp validate_category(%Changeset{data: %Link{user_id: user_id}} = changeset) do
     Changeset.validate_change(changeset, :category_id, fn :category_id, id ->
-      if Repo.exists?(from c in Category, where: c.id == ^id and not c.internal),
-        do: [],
-        else: [category_id: "ist keine Kategorie des Budgets"]
+      if Repo.exists?(
+           from c in Category, where: c.id == ^id and c.user_id == ^user_id and not c.internal
+         ),
+         do: [],
+         else: [category_id: "ist keine Kategorie des Budgets"]
     end)
   end
 
-  @doc "Whether anything is linked, which a wipe of the budget would break."
-  def in_use?, do: Repo.exists?(Link) or Repo.exists?(LinkedTransaction)
+  @doc "Whether the user's Depot is linked, which a wipe of their budget would break."
+  def in_use?(%Scope{user: %User{id: user_id}}),
+    do:
+      Repo.exists?(where(Link, user_id: ^user_id)) or
+        Repo.exists?(where(LinkedTransaction, user_id: ^user_id))
 
-  @doc "Moves the link's category from one budget category to another, as deleting `from_id` does."
-  def recategorize(from_id, to_id) do
-    Repo.update_all(where(Link, category_id: ^from_id), set: [category_id: to_id])
+  @doc "Moves the user's link's category from one budget category to another, as deleting `from_id` does."
+  def recategorize(%Scope{user: %User{id: user_id}}, from_id, to_id) do
+    Repo.update_all(where(Link, user_id: ^user_id, category_id: ^from_id),
+      set: [category_id: to_id]
+    )
+
     :ok
   end
 
-  @doc "Which of `transaction_ids` the Depot wrote as linked transactions or their transfer counterparts."
-  def linked_ids(transaction_ids) do
+  @doc "Which of `transaction_ids` the Depot wrote as the user's linked transactions or their transfer counterparts."
+  def linked_ids(%Scope{user: %User{id: user_id}}, transaction_ids) do
     Repo.all(
       from l in LinkedTransaction,
         join: t in assoc(l, :transaction),
+        where: l.user_id == ^user_id,
         where: t.id in ^transaction_ids or t.transfer_transaction_id in ^transaction_ids,
         select: [t.id, t.transfer_transaction_id]
     )
@@ -206,7 +215,11 @@ defmodule Abakus.Depot.BudgetLink do
     |> Map.take([:account_id, :amount, :date, :memo])
     |> Map.merge(payee_attrs(scope, wanted.payee))
     |> Map.merge(%{
-      category_id: if(wanted.amount < 0, do: link.category_id, else: ready_to_assign_id()),
+      category_id:
+        if(wanted.amount < 0,
+          do: link.category_id,
+          else: Categories.ready_to_assign!(scope).id
+        ),
       cleared: :uncleared,
       source: :depot
     })
@@ -220,8 +233,6 @@ defmodule Abakus.Depot.BudgetLink do
       _none -> %{payee_name: name}
     end
   end
-
-  defp ready_to_assign_id, do: Categories.ready_to_assign!().id
 
   defp wanted_by_depot_transaction(%Link{} = link) do
     context = context(link.user_id)

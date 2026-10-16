@@ -114,7 +114,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
 
     assert %Transaction{approved: true, cleared: :reconciled} = adjustment
     assert adjustment.payee.name == "Ausgleichsbuchung"
-    assert adjustment.category_id == Categories.ready_to_assign!().id
+    assert adjustment.category_id == Categories.ready_to_assign!(budget_scope()).id
     assert has_element?(view, "#balance-cleared", "150,42 €")
     assert has_element?(view, "#balance-working", "150,42 €")
     assert has_element?(view, "#tx-#{adjustment.id}", "Ausgleichsbuchung")

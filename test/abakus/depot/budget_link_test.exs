@@ -159,7 +159,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
     book(c, "dividend", %{"gross" => "42,17", "shares" => "9"})
 
     assert [_outflow, %Transaction{amount: 4_217, approved: false} = inflow] = register(c.giro)
-    assert inflow.category_id == Categories.ready_to_assign!().id
+    assert inflow.category_id == Categories.ready_to_assign!(budget_scope()).id
     assert inflow.payee.name == "Welt-ETF"
     assert inflow.transfer_transaction_id == nil
   end
@@ -171,7 +171,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
     book(c, "sale", %{"shares" => "4", "price" => "100"})
 
     assert [_outflow, %Transaction{amount: 40_000} = inflow] = register(c.giro)
-    assert inflow.category_id == Categories.ready_to_assign!().id
+    assert inflow.category_id == Categories.ready_to_assign!(budget_scope()).id
     assert inflow.payee.transfer_account_id == c.tracking.id
     assert Ledger.balance(budget_scope(), c.tracking, @day) == 50_000
   end
@@ -340,7 +340,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
 
       assert {:error, :not_budget_owner} = BudgetLink.switch_on(member, attrs)
 
-      internal = Categories.ready_to_assign!()
+      internal = Categories.ready_to_assign!(budget_scope())
 
       assert {:error, %Ecto.Changeset{errors: [category_id: _]}} =
                BudgetLink.switch_on(c.owner, %{attrs | category_id: internal.id})
@@ -349,11 +349,38 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert {:error, :linked} = BudgetLink.switch_on(c.owner, attrs)
     end
 
+    test "sees only the user's own budget", c do
+      member = user_scope_fixture()
+      {:ok, group} = Categories.create_category_group(member, %{name: "Eigenes"})
+
+      {:ok, own} =
+        Categories.create_category(member, %{name: "Investieren", category_group_id: group.id})
+
+      link = switch_on(c)
+      purchase(c, 2)
+      ids = Repo.all(from l in LinkedTransaction, select: l.transaction_id)
+      assert ids != []
+
+      assert [{_group, [{"Investieren", id}]}] = BudgetLink.category_options(c.owner)
+      assert id == c.investieren.id
+      assert [{"Eigenes", [{"Investieren", own_id}]}] = BudgetLink.category_options(member)
+      assert own_id == own.id
+      assert {:error, %Ecto.Changeset{}} = BudgetLink.change_category(link, own.id)
+
+      assert BudgetLink.in_use?(c.owner)
+      refute BudgetLink.in_use?(member)
+      assert BudgetLink.linked_ids(c.owner, ids) == MapSet.new(ids)
+      assert BudgetLink.linked_ids(member, ids) == MapSet.new()
+
+      :ok = BudgetLink.recategorize(member, c.investieren.id, own.id)
+      assert Repo.reload!(link).category_id == c.investieren.id
+    end
+
     test "deleting the purchase category moves the link to the category it goes into", c do
       link = switch_on(c)
       into = DomainFixtures.category_fixture()
 
-      {:ok, _} = Categories.delete_category(c.investieren, into)
+      {:ok, _} = Categories.delete_category(budget_scope(), c.investieren, into)
 
       assert Repo.reload!(link).category_id == into.id
     end

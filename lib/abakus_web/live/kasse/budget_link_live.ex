@@ -17,7 +17,10 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
 
     {:ok,
      socket
-     |> assign(page_title: "Budget-Verknüpfung", budget_groups: budget_groups())
+     |> assign(
+       page_title: "Budget-Verknüpfung",
+       budget_groups: budget_groups(socket.assigns.current_scope)
+     )
      |> load_link()
      |> load()}
   end
@@ -39,8 +42,8 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
   defp start_date(%Date{} = date), do: Format.date(date)
   defp start_date(nil), do: nil
 
-  defp budget_groups do
-    for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(),
+  defp budget_groups(scope) do
+    for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(scope),
         do: {group.name, Enum.map(categories, &{&1.name, &1.id})}
   end
 

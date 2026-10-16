@@ -195,7 +195,7 @@ defmodule Abakus.Ledger.ReconcileTest do
              } = adjustment
 
       assert adjustment.payee.name == "Ausgleichsbuchung"
-      assert adjustment.category_id == Categories.ready_to_assign!().id
+      assert adjustment.category_id == Categories.ready_to_assign!(budget_scope()).id
       assert reload(transaction).cleared == :reconciled
       assert reload(open).cleared == :uncleared
       assert Ledger.cleared_balance(budget_scope(), giro, ~D[2026-10-08]) == 1_042

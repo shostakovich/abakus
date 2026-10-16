@@ -490,7 +490,7 @@ defmodule Abakus.Depot.PPImportTest do
 
     assert summary.portfolios.deleted == 2
     assert Enum.all?(accounts, &Repo.reload!(&1).closed)
-    refute BudgetFeed.in_use?()
+    refute BudgetFeed.in_use?(budget_scope())
   end
 
   test "keeps a security PP recreated under a new UUID", %{scope: scope, client: client} do

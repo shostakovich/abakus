@@ -17,8 +17,8 @@ defmodule Abakus.YnabImport do
   alias Abakus.Users.Scope
   alias Abakus.YnabImport.{Check, Client, Loader, Report, Status, Unsupported}
 
-  @doc "What the last import brought over and when (`Status`), or nil when nothing came from YNAB."
-  defdelegate status, to: Status, as: :read
+  @doc "What the last import brought over into the user's budget and when (`Status`), or nil when nothing came."
+  defdelegate status(scope), to: Status, as: :read
 
   @doc "The personal access token from `YNAB_TOKEN`."
   def token do
@@ -83,7 +83,7 @@ defmodule Abakus.YnabImport do
   defp load(owner, plan) do
     if Repo.exists?(
          from t in Transaction, where: t.user_id == ^owner.user.id and t.source != :ynab
-       ) or BudgetLink.in_use?() or BudgetFeed.in_use?() or DepotLink.in_use?() do
+       ) or BudgetLink.in_use?(owner) or BudgetFeed.in_use?(owner) or DepotLink.in_use?(owner) do
       {:error, :own_data}
     else
       Loader.wipe(owner)

@@ -7,7 +7,16 @@ defmodule Abakus.YnabImportTest do
   alias Abakus.Categories.{Assignment, Category, CategoryGroup, TargetSnooze, TargetVersion}
   alias Abakus.Depot.{BudgetFeed, PortfoliosFixtures}
   alias Abakus.Kasse.BudgetLink
-  alias Abakus.Ledger.{Account, BankBalance, Payee, Transaction}
+
+  alias Abakus.Ledger.{
+    Account,
+    BankBalance,
+    Payee,
+    Subtransaction,
+    Transaction,
+    TransactionOrigin
+  }
+
   alias Abakus.Users.Scope
   alias Abakus.YnabImport.Report
 
@@ -40,9 +49,14 @@ defmodule Abakus.YnabImportTest do
              )
 
       # Entertainment's snoozed October is still underfunded, in YNAB as in Abakus.
-      assert Categories.target_snoozed?(category("🍿 Entertainment"), ~D[2026-10-01])
-      assert Categories.target_snoozed?(category("🛒 Groceries"), ~D[2026-10-01])
-      refute Categories.target_snoozed?(category("🛒 Groceries"), ~D[2026-11-01])
+      assert Categories.target_snoozed?(
+               budget_scope(),
+               category("🍿 Entertainment"),
+               ~D[2026-10-01]
+             )
+
+      assert Categories.target_snoozed?(budget_scope(), category("🛒 Groceries"), ~D[2026-10-01])
+      refute Categories.target_snoozed?(budget_scope(), category("🛒 Groceries"), ~D[2026-11-01])
       assert category("🚘 Transportation").hidden
     end
 
@@ -74,7 +88,7 @@ defmodule Abakus.YnabImportTest do
       assert {depot.kind, depot.note, depot.fed_by} == {:tracking, "ETF-Sparplan", nil}
       assert {bargeld.kind, bargeld.closed, bargeld.note} == {:cash, true, "Aufgelöst"}
 
-      groups = Categories.list_category_groups()
+      groups = Categories.list_category_groups(budget_scope())
 
       assert Enum.map(groups, &{&1.name, &1.hidden, Enum.map(&1.categories, fn c -> c.name end)}) ==
                [
@@ -93,10 +107,10 @@ defmodule Abakus.YnabImportTest do
       groceries = category("🛒 Lebensmittel")
 
       assert %{amount: 30_000, set_aside: false} =
-               Categories.target_for(groceries, ~D[2026-09-01])
+               Categories.target_for(budget_scope(), groceries, ~D[2026-09-01])
 
       assert %{amount: 40_000, set_aside: false} =
-               Categories.target_for(groceries, ~D[2026-10-01])
+               Categories.target_for(budget_scope(), groceries, ~D[2026-10-01])
 
       assert %{
                cadence: :by_date,
@@ -104,14 +118,14 @@ defmodule Abakus.YnabImportTest do
                due_on: ~D[2026-12-15],
                repeats_yearly: true,
                set_aside: true
-             } = Categories.target_for(category("⚡ Strom"), ~D[2026-08-01])
+             } = Categories.target_for(budget_scope(), category("⚡ Strom"), ~D[2026-08-01])
 
       assert %{cadence: :by_date, amount: 2_000, due_on: ~D[2026-09-20], repeats_yearly: false} =
-               Categories.target_for(category("🎁 Geschenke"), ~D[2026-10-01])
+               Categories.target_for(budget_scope(), category("🎁 Geschenke"), ~D[2026-10-01])
 
-      assert Categories.target_snoozed?(category("🏋️ Sport"), ~D[2026-09-01])
-      refute Categories.target_snoozed?(category("🏋️ Sport"), ~D[2026-10-01])
-      assert Categories.target_for(category("📈 Sparplan"), ~D[2026-10-01]) == nil
+      assert Categories.target_snoozed?(budget_scope(), category("🏋️ Sport"), ~D[2026-09-01])
+      refute Categories.target_snoozed?(budget_scope(), category("🏋️ Sport"), ~D[2026-10-01])
+      assert Categories.target_for(budget_scope(), category("📈 Sparplan"), ~D[2026-10-01]) == nil
     end
 
     test "books transfers, splits and their counterparts with YNAB's states and ids" do
@@ -150,6 +164,58 @@ defmodule Abakus.YnabImportTest do
 
       assert {:ok, %Report{differences: []}} = YnabImport.import_plan(Scope.system(), @plan)
       assert content() == first
+    end
+
+    test "writes the owner's budget with their user and leaves another user's alone" do
+      other = UsersFixtures.user_scope_fixture()
+      {:ok, group} = Categories.create_category_group(other, %{name: "Eigenes"})
+      {:ok, own} = Categories.create_category(other, %{name: "Kino", category_group_id: group.id})
+      {:ok, _assignment} = Categories.assign(other, own, ~D[2026-09-01], 100)
+      {:ok, account} = Ledger.create_account(other, %{name: "Giro", kind: :checking})
+
+      {:ok, _target} =
+        Categories.set_target(other, own, %{
+          from_month: ~D[2026-09-01],
+          cadence: :monthly,
+          amount: 100
+        })
+
+      {:ok, split} =
+        Ledger.create_transaction(other, %{
+          account_id: account.id,
+          date: ~D[2026-09-02],
+          amount: -300,
+          payee_name: "Kino am Markt",
+          subtransactions: [%{amount: -100, category_id: own.id}, %{amount: -200}]
+        })
+
+      {:ok, _origin} = Ledger.add_origin(other, split, :file, "FITID1")
+
+      {:ok, _balance} =
+        Ledger.put_bank_balance(other, account, %{
+          source: :file,
+          date: ~D[2026-09-02],
+          amount: -300
+        })
+
+      before = rows_of(other)
+
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
+
+      assert rows_of(other) == before
+
+      users = Enum.sort([budget_scope().user.id, other.user.id])
+
+      for schema <- [CategoryGroup, Category, Assignment, TargetVersion],
+          do: assert(user_ids(schema) == users, inspect(schema))
+
+      assert user_ids(TargetSnooze) == [budget_scope().user.id]
+
+      assert [%{categories: [%{id: id}]}] = Categories.list_category_groups(other)
+      assert id == own.id
+      assert Categories.budget(other).assigned == %{{own.id, ~D[2026-09-01]} => 100}
+      assert [%Account{name: "Giro"}] = Ledger.list_accounts(other)
     end
 
     test "replaces accounts that have a bank balance" do
@@ -230,7 +296,7 @@ defmodule Abakus.YnabImportTest do
       :ok = BudgetFeed.sync_accounts()
 
       assert YnabImport.import_plan(Scope.system(), @plan) == {:error, :own_data}
-      assert BudgetFeed.in_use?()
+      assert BudgetFeed.in_use?(budget_scope())
     end
 
     test "lists every case Abakus cannot represent and writes nothing" do
@@ -337,6 +403,27 @@ defmodule Abakus.YnabImportTest do
   end
 
   defp category(name), do: Repo.get_by!(Category, name: name)
+
+  defp rows_of(%Scope{user: %{id: user_id}}) do
+    owned =
+      for schema <- [Transaction, TransactionOrigin, BankBalance, Payee, TargetVersion],
+          into: %{},
+          do: {schema, Repo.all(from r in schema, where: r.user_id == ^user_id, select: r.id)}
+
+    subtransactions =
+      Repo.all(
+        from s in Subtransaction,
+          join: t in assoc(s, :transaction),
+          where: t.user_id == ^user_id,
+          select: s.id
+      )
+
+    assert Enum.all?(Map.values(owned), &(&1 != [])) and subtransactions != []
+    Map.put(owned, Subtransaction, subtransactions)
+  end
+
+  defp user_ids(schema),
+    do: Repo.all(from r in schema, distinct: true, select: r.user_id, order_by: r.user_id)
 
   defp booking(account, date) do
     Repo.one!(

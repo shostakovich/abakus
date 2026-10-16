@@ -102,7 +102,8 @@ Accepted, 2026-10-15
 
 ## 0007. The budget has one owner
 
-Accepted, 2026-10-15. Replaces "domain tables have no user: all users see everything" from the spec.
+Accepted, 2026-10-15; partly superseded by 0019, 2026-10-16. Replaces "domain tables have no user: all users see
+everything" from the spec.
 
 - **Context:** The Kasse brings in a member who shares expenses but must not see the budget.
 - **Decision:** Exactly one user owns the budget, set by the invite; only that user sees the Budget area. A per-user

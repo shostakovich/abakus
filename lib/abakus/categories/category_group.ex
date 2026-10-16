@@ -14,6 +14,7 @@ defmodule Abakus.Categories.CategoryGroup do
     field :position, :integer, default: 0
     field :note, :string
 
+    belongs_to :user, Abakus.Users.User
     has_many :categories, Category
 
     timestamps()
@@ -22,7 +23,7 @@ defmodule Abakus.Categories.CategoryGroup do
   def changeset(group, attrs) do
     group
     |> cast(attrs, [:name, :hidden, :position, :note])
-    |> validate_required([:name])
+    |> validate_required([:user_id, :name])
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_not_internal()
   end

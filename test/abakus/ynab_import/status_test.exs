@@ -20,14 +20,14 @@ defmodule Abakus.YnabImport.StatusTest do
   test "is nil without anything from YNAB" do
     transaction_fixture()
 
-    assert YnabImport.status() == nil
+    assert YnabImport.status(budget_scope()) == nil
   end
 
   test "counts what the import brought over and dates it by its transactions' origins" do
     {:ok, report} = YnabImport.import_plan(Scope.system(), @plan)
     imported_at = Repo.one(from o in TransactionOrigin, select: max(o.inserted_at))
 
-    assert %Status{} = status = YnabImport.status()
+    assert %Status{} = status = YnabImport.status(budget_scope())
     assert status.imported_at == imported_at
 
     assert Map.take(status, [:accounts, :categories, :payees, :transactions]) ==
@@ -37,22 +37,28 @@ defmodule Abakus.YnabImport.StatusTest do
     assert status.first_month == ~D[2026-08-01]
   end
 
+  test "is the user's: another user's budget has nothing from YNAB" do
+    {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
+
+    assert YnabImport.status(Abakus.UsersFixtures.user_scope_fixture()) == nil
+  end
+
   test "leaves out what was added in Abakus afterwards" do
     {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
-    before = YnabImport.status()
+    before = YnabImport.status(budget_scope())
 
     account = account_fixture()
     payee = payee_fixture()
     category = category_fixture()
-    {:ok, _assignment} = Categories.assign(category, ~D[2020-01-01], 1_000)
+    {:ok, _assignment} = Categories.assign(budget_scope(), category, ~D[2020-01-01], 1_000)
     transaction_fixture(account_id: account.id, payee_id: payee.id, source: :api)
 
-    assert YnabImport.status() == before
+    assert YnabImport.status(budget_scope()) == before
   end
 
   test "stays put when an imported transaction becomes a transfer to a later account" do
     {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
-    before = YnabImport.status()
+    before = YnabImport.status(budget_scope())
 
     account = account_fixture()
 
@@ -76,6 +82,6 @@ defmodule Abakus.YnabImport.StatusTest do
              from t in Transaction, where: t.account_id == ^account.id and t.source == :ynab
            )
 
-    assert YnabImport.status() == before
+    assert YnabImport.status(budget_scope()) == before
   end
 end

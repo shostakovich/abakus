@@ -50,13 +50,14 @@ defmodule Abakus.YnabImport.Loader do
     Repo.update_all(subtransactions, set: [transfer_transaction_id: nil])
     Repo.delete_all(subtransactions)
 
-    for schema <- [TransactionOrigin, Transaction, Payee, BankBalance, Account],
+    for schema <-
+          [TransactionOrigin, Transaction, Payee, BankBalance, Account, Assignment] ++
+            [TargetSnooze, TargetVersion],
         do: Repo.delete_all(from r in schema, where: r.user_id == ^user_id)
 
-    for schema <- [Assignment, TargetSnooze, TargetVersion], do: Repo.delete_all(schema)
+    for schema <- [Category, CategoryGroup],
+        do: Repo.delete_all(from r in schema, where: r.user_id == ^user_id and not r.internal)
 
-    Repo.delete_all(from c in Category, where: not c.internal)
-    Repo.delete_all(from g in CategoryGroup, where: not g.internal)
     :ok
   end
 
@@ -67,10 +68,10 @@ defmodule Abakus.YnabImport.Loader do
   def load(%Scope{} = owner, plan) do
     accounts = load_accounts(owner, plan)
     {payees, merged} = load_payees(owner, plan, accounts)
-    categories = load_categories(plan)
+    categories = load_categories(owner, plan)
     regular = Map.new(Plan.regular_categories(plan), &{&1["id"], categories[&1["id"]]})
-    load_assignments(plan, regular)
-    load_targets(plan, regular)
+    load_assignments(owner, plan, regular)
+    load_targets(owner, plan, regular)
     load_transactions(owner, plan, %{accounts: accounts, payees: payees, categories: categories})
 
     %{
@@ -152,7 +153,7 @@ defmodule Abakus.YnabImport.Loader do
 
   # Groups only where categories land: YNAB marks every group internal and lists its own empty ones. A hidden
   # category sits in YNAB's hidden group but keeps its original group.
-  defp load_categories(plan) do
+  defp load_categories(owner, plan) do
     by_group =
       plan
       |> Plan.regular_categories()
@@ -162,21 +163,21 @@ defmodule Abakus.YnabImport.Loader do
     |> Plan.category_groups()
     |> Enum.filter(&Map.has_key?(by_group, &1["id"]))
     |> Enum.with_index()
-    |> Enum.reduce(special_categories(plan), fn {group, position}, ids ->
+    |> Enum.reduce(special_categories(owner, plan), fn {group, position}, ids ->
       attrs = %{name: group["name"], hidden: group["hidden"], position: position}
-      saved = ok!(Categories.create_category_group(attrs), "group #{group["name"]}")
+      saved = ok!(Categories.create_category_group(owner, attrs), "group #{group["name"]}")
 
       by_group
       |> Map.fetch!(group["id"])
       |> Enum.with_index()
       |> Enum.reduce(ids, fn {category, position}, ids ->
-        Map.put(ids, category["id"], create_category(category, saved, position).id)
+        Map.put(ids, category["id"], create_category(owner, category, saved, position).id)
       end)
     end)
   end
 
-  defp special_categories(plan) do
-    ready_to_assign = Categories.ready_to_assign!().id
+  defp special_categories(owner, plan) do
+    ready_to_assign = Categories.ready_to_assign!(owner).id
 
     for category <- Plan.categories(plan),
         role = Plan.role(category),
@@ -185,34 +186,34 @@ defmodule Abakus.YnabImport.Loader do
         do: {category["id"], if(role == :ready_to_assign, do: ready_to_assign)}
   end
 
-  defp create_category(category, group, position) do
-    %{
+  defp create_category(owner, category, group, position) do
+    owner
+    |> Categories.create_category(%{
       name: category["name"],
       hidden: category["hidden"],
       note: category["note"],
       position: position,
       category_group_id: group.id
-    }
-    |> Categories.create_category()
+    })
     |> ok!("category #{category["name"]}")
   end
 
-  defp load_assignments(plan, regular) do
+  defp load_assignments(owner, plan, regular) do
     for {month, %{"budgeted" => budgeted} = category} <- Plan.regular_category_months(plan),
         budgeted != 0 do
-      %Category{id: regular[category["id"]]}
-      |> Categories.assign(month, Plan.cents(budgeted))
+      owner
+      |> Categories.assign(%Category{id: regular[category["id"]]}, month, Plan.cents(budgeted))
       |> ok!("assignment")
     end
   end
 
-  defp load_targets(plan, regular) do
+  defp load_targets(owner, plan, regular) do
     for {category_id, versions} <- Targets.versions(plan), version <- versions do
-      ok!(Categories.set_target(%Category{id: regular[category_id]}, version), "target")
+      ok!(Categories.set_target(owner, %Category{id: regular[category_id]}, version), "target")
     end
 
     for {category_id, month} <- Targets.snoozes(plan) do
-      ok!(Categories.snooze_target(%Category{id: regular[category_id]}, month), "snooze")
+      ok!(Categories.snooze_target(owner, %Category{id: regular[category_id]}, month), "snooze")
     end
   end
 
