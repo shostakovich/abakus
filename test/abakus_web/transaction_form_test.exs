@@ -44,7 +44,10 @@ defmodule AbakusWeb.TransactionFormTest do
   end
 
   defp edit(transaction),
-    do: transaction.id |> Ledger.get_transaction!() |> TransactionForm.from_transaction()
+    do:
+      budget_scope()
+      |> Ledger.get_transaction!(transaction.id)
+      |> TransactionForm.from_transaction()
 
   describe "to_attrs/3" do
     test "an outflow with payee, category and memo, approved", c do
@@ -257,7 +260,7 @@ defmodule AbakusWeb.TransactionFormTest do
 
     test "shows a transfer from a tracking account with its counterpart's category", c do
       {:ok, transfer} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.depot.id,
           date: ~D[2026-10-09],
           amount: 5_000,
@@ -304,11 +307,11 @@ defmodule AbakusWeb.TransactionFormTest do
       assert %{"transfer_account_id" => id, "inflow" => "20,00"} = savings
       assert id == "#{c.savings.id}"
 
-      original = Ledger.get_transaction!(split.id)
+      original = Ledger.get_transaction!(budget_scope(), split.id)
       assert {:ok, attrs} = TransactionForm.to_attrs(params, c.accounts, original)
-      {:ok, _split} = Ledger.update_transaction(split, attrs)
+      {:ok, _split} = Ledger.update_transaction(budget_scope(), split, attrs)
 
-      assert [kept, transfer] = Ledger.get_transaction!(split.id).subtransactions
+      assert [kept, transfer] = Ledger.get_transaction!(budget_scope(), split.id).subtransactions
 
       assert {kept.id, kept.payee_id, kept.memo} ==
                {String.to_integer(groceries["id"]), rewe.id, "Wocheneinkauf"}
@@ -332,11 +335,11 @@ defmodule AbakusWeb.TransactionFormTest do
         |> edit()
         |> TransactionForm.pick_payee("1", {:payee, ""})
 
-      original = Ledger.get_transaction!(split.id)
+      original = Ledger.get_transaction!(budget_scope(), split.id)
       assert {:ok, attrs} = TransactionForm.to_attrs(params, c.accounts, original)
-      {:ok, _split} = Ledger.update_transaction(split, attrs)
+      {:ok, _split} = Ledger.update_transaction(budget_scope(), split, attrs)
 
-      assert [_kept, released] = Ledger.get_transaction!(split.id).subtransactions
+      assert [_kept, released] = Ledger.get_transaction!(budget_scope(), split.id).subtransactions
       assert %{payee_id: nil, transfer_transaction_id: nil, amount: 2_000} = released
     end
   end

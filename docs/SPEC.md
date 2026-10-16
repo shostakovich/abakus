@@ -70,8 +70,9 @@ The context is `Abakus.Users` (an "account" is a bank account here):
 Mirrors YNAB so the import is lossless.
 
 Terms: [`CONTEXT.md`](../CONTEXT.md). Two contexts: `Abakus.Ledger` (accounts, payees, transactions) and
-`Abakus.Categories` (groups, categories, assignments, targets); `Abakus.Budget` is the pure math on top. Domain
-tables have no user: the budget is its owner's ([ADR 0007](../DECISIONS.md)).
+`Abakus.Categories` (groups, categories, assignments, targets); `Abakus.Budget` is the pure math on top. The budget
+is its owner's ([ADR 0007](../DECISIONS.md)); the Ledger's tables carry their owner's `user_id`, and the Ledger
+sees only the rows of its caller's user (ADR 0019).
 
 - **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from the Depot,
   `shared_expenses`: the budget owner's shares of the Kasse's expenses; either way the UI hides manual entry, file
@@ -109,12 +110,12 @@ tables have no user: the budget is its owner's ([ADR 0007](../DECISIONS.md)).
   former YNAB-compatible API, `kasse` a share of a Kasse expense, `depot` a value change), matched transaction (see match
   proposals), deleted at (soft delete; deleted transactions cannot be changed, only
   moved with their category into another). The register is what counts: transactions not deleted and no match
-  proposal (`Ledger.in_register/0`).
+  proposal (`Ledger.in_register/1`).
 - **Reconciled lock**: the Ledger refuses any change that alters a reconciled transaction ("ist abgeschlossen"),
   leaving the reconciled state included, whether made on it directly or through a transfer: its counterpart's or a
   split's subtransaction's edit kept in step (amount, date, memo, account, category), released (payee no longer a
   transfer, subtransaction removed, turned into a split) or deleted with it. The caller passes
-  `reconciled: :confirmed` to `update_transaction/3`, `delete_transaction/2`, `accept_match/2` or
+  `reconciled: :confirmed` to `update_transaction/4`, `delete_transaction/3`, `accept_match/3` or
   `recategorize/3` (deleting a category) after asking; the UI asks first.
 - **Transfers**: a transaction or subtransaction is a transfer when its payee is a transfer payee; never to its own
   account, and a split is none as a whole. The Ledger alone creates and keeps the counterpart in the payee's
@@ -122,7 +123,7 @@ tables have no user: the budget is its owner's ([ADR 0007](../DECISIONS.md)).
   flag per side), moves it when payee or account change and removes it when the payee stops being a transfer
   payee. Deleting either side deletes both, deleting a split deletes its subtransactions' counterparts; the
   counterpart of a subtransaction is changed and deleted in its split. Transfers to closed accounts are allowed.
-- **Category rule**, checked by `Ledger.create_transaction/1` and `update_transaction/3` with all accounts
+- **Category rule**, checked by `Ledger.create_transaction/2` and `update_transaction/4` with all accounts
   involved: none in tracking accounts, none for transfers between budget accounts, one on the budget side of a
   transfer between a budget and a tracking account (given as `counterpart_category_id` when that side is the
   counterpart), none on a split; a split's subtransactions are checked whenever its account changes.

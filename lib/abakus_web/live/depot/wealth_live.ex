@@ -307,7 +307,7 @@ defmodule AbakusWeb.Depot.WealthLive do
     today = LocalTime.today()
     %{current_scope: scope, period: period, budget?: budget?} = socket.assigns
     overview = Portfolios.overview(scope, period, today)
-    wealth = wealth(budget?, overview, period, today)
+    wealth = wealth(scope, budget?, overview, period, today)
     change = wealth.net_worth - wealth.net_worth_yesterday
 
     socket
@@ -322,12 +322,12 @@ defmodule AbakusWeb.Depot.WealthLive do
     |> push_chart(wealth.chart)
   end
 
-  defp wealth(false = _budget?, overview, _period, _today), do: overview
+  defp wealth(_scope, false = _budget?, overview, _period, _today), do: overview
 
-  defp wealth(true = _budget?, _overview, period, today) do
-    range = Period.range(period, today, Ledger.first_open_date())
+  defp wealth(scope, true = _budget?, _overview, period, today) do
+    range = Period.range(period, today, Ledger.first_open_date(scope))
     yesterday = Date.add(today, -1)
-    days = Ledger.net_worth(Date.range(Enum.min([range.first, yesterday], Date), today))
+    days = Ledger.net_worth(scope, Date.range(Enum.min([range.first, yesterday], Date), today))
     [{_yesterday, net_worth_yesterday}, {_today, net_worth}] = Enum.take(days, -2)
     chart_days = range |> Period.chart_days() |> MapSet.new()
 

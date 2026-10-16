@@ -48,6 +48,10 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   reads; `Abakus.Kasse.Access` refuses any other. The YNAB pages and the budget link act for the scope's person,
   the YNAB scheduler syncs everybody with the system's. Tests get a person's scope with `scope_of/1` from
   `Abakus.KasseFixtures`.
+- The budget: `Abakus.Ledger` and `Abakus.FileImport` take `%Scope{}` and see only the rows with the user's `user_id`
+  (ADR 0019). The Depot's budget feed and link, the Kasse's budget link and the YNAB import (a task, so
+  `Scope.system()`) write with the budget owner's scope (`Scope.for_budget_owner/0`). Tests get it with
+  `budget_scope/0` from `Abakus.DomainFixtures`.
 - Exchange rates (`Abakus.ExchangeRates`, tables `exchange_rates`, `exchange_rate_runs`) are shared: one daily job
   loads the ECB rates, each area looks them up by its own rule, manual rates are the Kasse's only; its rule and the
   logged changes to manual rates live in `Abakus.Kasse.Rates`. Tests swap the source in `config/test.exs`

@@ -56,7 +56,7 @@ defmodule AbakusWeb.ImportLiveTest do
   end
 
   test "an account fed by another app offers no file import", %{conn: conn} do
-    shared = Enum.find(Ledger.list_accounts(), &(&1.name == "Geteilt"))
+    shared = Enum.find(Ledger.list_accounts(budget_scope()), &(&1.name == "Geteilt"))
     {:ok, view, _html} = live(conn, ~p"/budget/accounts/#{shared}")
 
     refute has_element?(view, "#file-import")
@@ -101,7 +101,7 @@ defmodule AbakusWeb.ImportLiveTest do
     assert has_element?(register, "#register-title", "Girokonto")
 
     assert Enum.all?(
-             Ledger.list_transactions(giro),
+             Ledger.list_transactions(budget_scope(), giro),
              &(not &1.approved and &1.cleared == :cleared)
            )
 
@@ -118,7 +118,7 @@ defmodule AbakusWeb.ImportLiveTest do
 
     {:ok, _register, _html} = import_file(view, conn)
 
-    assert length(Ledger.list_transactions(giro)) == 6
+    assert length(Ledger.list_transactions(budget_scope(), giro)) == 6
 
     {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-10.ofx")
@@ -129,13 +129,16 @@ defmodule AbakusWeb.ImportLiveTest do
     {:ok, register, _html} = import_file(view, conn)
 
     assert render(register) =~ "Keine neuen Buchungen. Banksaldo aus der Datei gemerkt."
-    assert length(Ledger.list_transactions(giro)) == 6
+    assert length(Ledger.list_transactions(budget_scope(), giro)) == 6
   end
 
   test "a linked file account can go into another account, which takes the link",
        %{conn: conn, giro: giro} do
     other = account_fixture(name: "Zweitkonto")
-    {:ok, _giro} = Ledger.link_ofx_account(giro, "10020030", "DE02100200300000004711")
+
+    {:ok, _giro} =
+      Ledger.link_ofx_account(budget_scope(), giro, "10020030", "DE02100200300000004711")
+
     {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
 
@@ -149,9 +152,11 @@ defmodule AbakusWeb.ImportLiveTest do
     {:ok, register, _html} = import_file(view, conn)
 
     assert render(register) =~ "4 Buchungen importiert, zur Bestätigung in Zweitkonto."
-    assert length(Ledger.list_transactions(other)) == 4
-    assert Ledger.list_transactions(giro) == []
-    assert Ledger.get_account_by_ofx("10020030", "DE02100200300000004711").id == other.id
+    assert length(Ledger.list_transactions(budget_scope(), other)) == 4
+    assert Ledger.list_transactions(budget_scope(), giro) == []
+
+    assert Ledger.get_account_by_ofx(budget_scope(), "10020030", "DE02100200300000004711").id ==
+             other.id
   end
 
   test "the preview shows match proposals and what lies before the last reconcile; the register decides them",
@@ -182,7 +187,7 @@ defmodule AbakusWeb.ImportLiveTest do
     assert render(register) =~
              "3 Buchungen importiert, 1 davon passt zu einer vorhandenen Buchung, zur Bestätigung in 💶 Girokonto."
 
-    [proposal] = Ledger.list_match_proposals(giro)
+    [proposal] = Ledger.list_match_proposals(budget_scope(), giro)
     assert proposal.matched_transaction_id == bakery.id
     assert has_element?(register, "#proposal-#{proposal.id}", "Bäckerei Korn")
 
@@ -195,7 +200,7 @@ defmodule AbakusWeb.ImportLiveTest do
 
   test "a match with a transfer names the other account as the register does",
        %{conn: conn, giro: giro} do
-    depot = Enum.find(Ledger.list_accounts(), &(&1.name == "Depot"))
+    depot = Enum.find(Ledger.list_accounts(budget_scope()), &(&1.name == "Depot"))
 
     transaction_fixture(
       account_id: giro.id,
@@ -244,8 +249,8 @@ defmodule AbakusWeb.ImportLiveTest do
 
     assert render(register) =~ "2 Buchungen importiert. Banksaldo aus der Datei gemerkt."
     assert has_element?(register, "#register-title", "Alle Konten")
-    assert [%{amount: -2_340}] = Ledger.list_transactions(giro)
-    assert [%{amount: 5_000}] = Ledger.list_transactions(savings)
+    assert [%{amount: -2_340}] = Ledger.list_transactions(budget_scope(), giro)
+    assert [%{amount: 5_000}] = Ledger.list_transactions(budget_scope(), savings)
   end
 
   test "a file over 5 MB says so", %{conn: conn} do
@@ -281,11 +286,11 @@ defmodule AbakusWeb.ImportLiveTest do
     view |> element("#import-discard") |> render_click()
 
     refute has_element?(view, "#import-preview")
-    assert Ledger.list_transactions(:all) == []
+    assert Ledger.list_transactions(budget_scope(), :all) == []
   end
 
   test "an account that is not offered cannot be chosen", %{conn: conn} do
-    shared = Enum.find(Ledger.list_accounts(), &(&1.name == "Geteilt"))
+    shared = Enum.find(Ledger.list_accounts(budget_scope()), &(&1.name == "Geteilt"))
     {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
 
@@ -293,19 +298,19 @@ defmodule AbakusWeb.ImportLiveTest do
     render_click(view, "import", %{})
 
     assert has_element?(view, "#import-submit[disabled]")
-    assert Ledger.list_transactions(:all) == []
+    assert Ledger.list_transactions(budget_scope(), :all) == []
   end
 
   test "a refused import names the transaction and keeps the preview", %{conn: conn, giro: giro} do
     {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
     view |> form("#statement-0-form", %{index: "0", account_id: giro.id}) |> render_change()
-    {:ok, _giro} = Ledger.update_account(giro, %{closed: true})
+    {:ok, _giro} = Ledger.update_account(budget_scope(), giro, %{closed: true})
 
     view |> element("#import-submit") |> render_click()
 
     assert render(view) =~ "Nicht importiert: 💶 Girokonto nimmt keinen Datei-Import."
     assert has_element?(view, "#import-preview")
-    assert Ledger.list_transactions(:all) == []
+    assert Ledger.list_transactions(budget_scope(), :all) == []
   end
 end

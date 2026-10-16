@@ -8,6 +8,7 @@ defmodule Abakus.YnabImportTest do
   alias Abakus.Depot.{BudgetFeed, PortfoliosFixtures}
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.{Account, BankBalance, Payee, Transaction}
+  alias Abakus.Users.Scope
   alias Abakus.YnabImport.Report
 
   @fixture Path.expand("../fixtures/ynab/plan.json", __DIR__)
@@ -17,14 +18,20 @@ defmodule Abakus.YnabImportTest do
   @test_plan Path.expand("../fixtures/ynab/test_plan.json", __DIR__)
   @external_resource @test_plan
 
-  describe "import_plan/1" do
+  # The budget owner is Anna, should a test bring in the Kasse's household.
+  setup do
+    UsersFixtures.user_fixture(%{email: "anna@example.com"})
+    :ok
+  end
+
+  describe "import_plan/2" do
     test "matches the numbers of YNAB's own export of a test plan" do
       plan = @test_plan |> File.read!() |> JSON.decode!() |> Map.fetch!("plan")
 
       assert {:ok, %Report{differences: [], merged_payees: [{"REWE", ["Rewe"]}]}} =
-               YnabImport.import_plan(plan)
+               YnabImport.import_plan(Scope.system(), plan)
 
-      assert [giro, depot, tagesgeld] = Ledger.list_accounts()
+      assert [giro, depot, tagesgeld] = Ledger.list_accounts(budget_scope())
       assert giro.last_reconciled_at == ~U[2026-10-09 17:09:56.000000Z]
       assert {depot.kind, tagesgeld.closed} == {:tracking, true}
 
@@ -40,7 +47,7 @@ defmodule Abakus.YnabImportTest do
     end
 
     test "loads the plan, and every month, category and account matches YNAB" do
-      assert {:ok, %Report{} = report} = YnabImport.import_plan(@plan)
+      assert {:ok, %Report{} = report} = YnabImport.import_plan(Scope.system(), @plan)
 
       assert report.differences == []
       assert report.plan == "Testhaushalt"
@@ -49,17 +56,20 @@ defmodule Abakus.YnabImportTest do
     end
 
     test "maps accounts, groups and categories in YNAB's order" do
-      {:ok, _report} = YnabImport.import_plan(@plan)
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
 
-      assert [giro, tagesgeld, depot, bargeld] = Ledger.list_accounts()
+      assert [giro, tagesgeld, depot, bargeld] = Ledger.list_accounts(budget_scope())
       assert {giro.name, giro.kind, giro.position} == {"💳 Girokonto", :checking, 0}
       assert giro.last_reconciled_at == ~U[2026-08-31 18:00:00.000000Z]
 
       plan =
         put_in(@plan, ["accounts", Access.at(0), "last_reconciled_at"], "2026-08-31T18:00:00.000")
 
-      {:ok, _report} = YnabImport.import_plan(plan)
-      assert hd(Ledger.list_accounts()).last_reconciled_at == ~U[2026-08-31 18:00:00.000000Z]
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), plan)
+
+      assert hd(Ledger.list_accounts(budget_scope())).last_reconciled_at ==
+               ~U[2026-08-31 18:00:00.000000Z]
+
       assert {tagesgeld.kind, tagesgeld.closed} == {:savings, false}
       assert {depot.kind, depot.note, depot.fed_by} == {:tracking, "ETF-Sparplan", nil}
       assert {bargeld.kind, bargeld.closed, bargeld.note} == {:cash, true, "Aufgelöst"}
@@ -78,7 +88,7 @@ defmodule Abakus.YnabImportTest do
     end
 
     test "derives target versions and snoozes from the months" do
-      {:ok, _report} = YnabImport.import_plan(@plan)
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
 
       groceries = category("🛒 Lebensmittel")
 
@@ -105,8 +115,8 @@ defmodule Abakus.YnabImportTest do
     end
 
     test "books transfers, splits and their counterparts with YNAB's states and ids" do
-      {:ok, _report} = YnabImport.import_plan(@plan)
-      [giro, tagesgeld, depot, _bargeld] = Ledger.list_accounts()
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
+      [giro, tagesgeld, depot, _bargeld] = Ledger.list_accounts(budget_scope())
 
       saving = booking(giro, ~D[2026-09-02])
       assert {saving.amount, saving.cleared, saving.memo} == {-20_000, :cleared, "Sparen"}
@@ -135,22 +145,22 @@ defmodule Abakus.YnabImportTest do
     end
 
     test "a second run gives the same content and a clean check" do
-      {:ok, _report} = YnabImport.import_plan(@plan)
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
       first = content()
 
-      assert {:ok, %Report{differences: []}} = YnabImport.import_plan(@plan)
+      assert {:ok, %Report{differences: []}} = YnabImport.import_plan(Scope.system(), @plan)
       assert content() == first
     end
 
     test "replaces accounts that have a bank balance" do
       {:ok, _balance} =
-        Ledger.put_bank_balance(account_fixture(), %{
+        Ledger.put_bank_balance(budget_scope(), account_fixture(), %{
           amount: 1,
           date: ~D[2026-10-07],
           source: :file
         })
 
-      assert {:ok, %Report{}} = YnabImport.import_plan(@plan)
+      assert {:ok, %Report{}} = YnabImport.import_plan(Scope.system(), @plan)
       assert Repo.aggregate(BankBalance, :count) == 0
     end
 
@@ -164,7 +174,8 @@ defmodule Abakus.YnabImportTest do
         )
         |> update_in(["accounts", Access.at(1), "cleared_balance"], &(&1 + 10))
 
-      assert {:ok, %Report{differences: differences}} = YnabImport.import_plan(plan)
+      assert {:ok, %Report{differences: differences}} =
+               YnabImport.import_plan(Scope.system(), plan)
 
       assert differences == [
                %{
@@ -181,15 +192,15 @@ defmodule Abakus.YnabImportTest do
                }
              ]
 
-      assert length(Ledger.list_accounts()) == 4
+      assert length(Ledger.list_accounts(budget_scope())) == 4
     end
 
     test "refuses once a transaction did not come from YNAB, even a deleted one" do
       own = transaction_fixture()
-      {:ok, _deleted} = Ledger.delete_transaction(own)
+      {:ok, _deleted} = Ledger.delete_transaction(budget_scope(), own)
 
-      assert YnabImport.import_plan(@plan) == {:error, :own_data}
-      assert [%Account{}] = Ledger.list_accounts()
+      assert YnabImport.import_plan(Scope.system(), @plan) == {:error, :own_data}
+      assert [%Account{}] = Ledger.list_accounts(budget_scope())
     end
 
     test "refuses once the Kasse is linked to the budget" do
@@ -197,11 +208,11 @@ defmodule Abakus.YnabImportTest do
       %{anna: anna} = KasseFixtures.household()
       {:ok, _linked} = BudgetLink.switch_on(KasseFixtures.scope_of(anna), account.id)
 
-      assert YnabImport.import_plan(@plan) == {:error, :own_data}
+      assert YnabImport.import_plan(Scope.system(), @plan) == {:error, :own_data}
     end
 
     test "refuses once a Kasse category is mapped to the budget, which it would drop" do
-      {:ok, _report} = YnabImport.import_plan(@plan)
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
       %{anna: anna, food: food} = KasseFixtures.household()
 
       {:ok, _mapping} =
@@ -209,21 +220,21 @@ defmodule Abakus.YnabImportTest do
           food => category("🛒 Lebensmittel").id
         })
 
-      assert YnabImport.import_plan(@plan) == {:error, :own_data}
+      assert YnabImport.import_plan(Scope.system(), @plan) == {:error, :own_data}
       assert BudgetLink.category_mapping(KasseFixtures.scope_of(anna)) != %{}
     end
 
     test "refuses once a portfolio is an account, which it would drop" do
-      {:ok, _report} = YnabImport.import_plan(@plan)
-      PortfoliosFixtures.portfolio_fixture(UsersFixtures.user_scope_fixture())
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
+      PortfoliosFixtures.portfolio_fixture(budget_scope())
       :ok = BudgetFeed.sync_accounts()
 
-      assert YnabImport.import_plan(@plan) == {:error, :own_data}
+      assert YnabImport.import_plan(Scope.system(), @plan) == {:error, :own_data}
       assert BudgetFeed.in_use?()
     end
 
     test "lists every case Abakus cannot represent and writes nothing" do
-      {:ok, _report} = YnabImport.import_plan(@plan)
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
       before = content()
 
       plan =
@@ -233,7 +244,7 @@ defmodule Abakus.YnabImportTest do
         |> update_month_category("2026-09-01", "cat-sport", &Map.put(&1, "goal_cadence", 2))
         |> update_in(["transactions", Access.at(4), "amount"], &(&1 - 1))
 
-      assert {:error, {:unsupported, problems}} = YnabImport.import_plan(plan)
+      assert {:error, {:unsupported, problems}} = YnabImport.import_plan(Scope.system(), plan)
 
       assert problems == [
                "Account “💳 Girokonto” is of type creditCard.",
@@ -246,15 +257,23 @@ defmodule Abakus.YnabImportTest do
     end
 
     test "keeps the budget it had when writing the plan fails" do
-      {:ok, _report} = YnabImport.import_plan(@plan)
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
       before = content()
       reserved = &Map.put(&1, "name", "Inflow: Ready to Assign")
       plan = update_in(@plan, ["categories", Access.filter(&(&1["id"] == "cat-miete"))], reserved)
 
-      assert {:error, {:not_written, message}} = YnabImport.import_plan(plan)
+      assert {:error, {:not_written, message}} = YnabImport.import_plan(Scope.system(), plan)
       assert message =~ "category Inflow: Ready to Assign"
       assert message =~ "ist für „Zu verteilen“ reserviert"
       assert content() == before
+    end
+
+    test "refuses while nobody owns the budget" do
+      Repo.update_all(Abakus.Users.User, set: [budget_owner: false])
+
+      assert YnabImport.import_plan(Scope.system(), @plan) == {:error, :no_budget_owner}
+      assert Repo.aggregate(Account, :count) == 0
+      assert [_line] = YnabImport.error_lines(:no_budget_owner)
     end
   end
 
@@ -263,7 +282,7 @@ defmodule Abakus.YnabImportTest do
       FakeYnab.start(%{"plan-test" => @plan})
 
       assert {:ok, %Report{plan: "Testhaushalt", differences: []}} =
-               YnabImport.run(FakeYnab.token())
+               YnabImport.run(Scope.system(), FakeYnab.token())
     end
 
     test "with several plans, asks for one, and imports the one given" do
@@ -272,24 +291,25 @@ defmodule Abakus.YnabImportTest do
         "plan-b" => %{@plan | "name" => "B"}
       })
 
-      assert YnabImport.run(FakeYnab.token()) ==
+      assert YnabImport.run(Scope.system(), FakeYnab.token()) ==
                {:error, {:choose_plan, [{"plan-a", "A"}, {"plan-b", "B"}]}}
 
-      assert {:ok, %Report{plan: "B"}} = YnabImport.run(FakeYnab.token(), "plan-b")
+      assert {:ok, %Report{plan: "B"}} =
+               YnabImport.run(Scope.system(), FakeYnab.token(), "plan-b")
     end
 
     # A FunctionClauseError would print the token among its arguments.
     test "refuses a plan id that is no string, without fetching" do
-      assert YnabImport.run("secret", ~c"plan-test") == {:error, :bad_plan_id}
-      assert YnabImport.run("secret", "") == {:error, :bad_plan_id}
+      assert YnabImport.run(Scope.system(), "secret", ~c"plan-test") == {:error, :bad_plan_id}
+      assert YnabImport.run(Scope.system(), "secret", "") == {:error, :bad_plan_id}
       refute YnabImport.error_lines(:bad_plan_id) |> Enum.join() |> String.contains?("secret")
     end
 
     test "passes on YNAB's answer when it refuses" do
       FakeYnab.start(%{})
 
-      assert YnabImport.run("wrong") == {:error, {:ynab, 401, "Unauthorized"}}
-      assert YnabImport.run(FakeYnab.token()) == {:error, :no_plans}
+      assert YnabImport.run(Scope.system(), "wrong") == {:error, {:ynab, 401, "Unauthorized"}}
+      assert YnabImport.run(Scope.system(), FakeYnab.token()) == {:error, :no_plans}
     end
   end
 
@@ -320,7 +340,7 @@ defmodule Abakus.YnabImportTest do
 
   defp booking(account, date) do
     Repo.one!(
-      from t in Ledger.in_register(),
+      from t in Ledger.in_register(budget_scope()),
         where: t.account_id == ^account.id and t.date == ^date,
         preload: :subtransactions
     )
@@ -350,7 +370,7 @@ defmodule Abakus.YnabImportTest do
     %{
       accounts:
         Enum.map(
-          Ledger.list_accounts(),
+          Ledger.list_accounts(budget_scope()),
           &Map.take(&1, [:name, :kind, :fed_by, :closed, :note, :position, :last_reconciled_at])
         ),
       groups:

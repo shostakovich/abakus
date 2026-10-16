@@ -50,7 +50,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       )
 
     {:ok, transfer} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: giro.id,
         date: ~D[2026-10-03],
         amount: -20_000,
@@ -176,7 +176,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#new-transaction")
 
       for account <- [c.giro, c.savings],
-          do: {:ok, _} = Ledger.update_account(account, %{closed: true})
+          do: {:ok, _} = Ledger.update_account(budget_scope(), account, %{closed: true})
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       refute has_element?(view, "#new-transaction")
@@ -193,7 +193,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
     test "keeps account, date, amount and payee of the Depot's value change", c do
       {:ok, change} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.depot.id,
           date: ~D[2026-10-09],
           amount: 5_000,
@@ -432,10 +432,10 @@ defmodule AbakusWeb.RegisterLiveTest do
 
   describe "approval" do
     setup c do
-      {:ok, waiting} = Ledger.update_transaction(c.imported, %{approved: false})
+      {:ok, waiting} = Ledger.update_transaction(budget_scope(), c.imported, %{approved: false})
 
       {:ok, uncategorised} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
           date: ~D[2026-10-08],
           amount: -999,
@@ -486,7 +486,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
     test "approves all, match proposals stay open", c do
       {:ok, proposal} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
           date: ~D[2026-10-04],
           amount: -8_743,
@@ -521,7 +521,11 @@ defmodule AbakusWeb.RegisterLiveTest do
     end
 
     test "approve all asks first when a reconciled transaction waits", c do
-      {:ok, _old} = Ledger.update_transaction(c.old, %{approved: false}, reconciled: :confirmed)
+      {:ok, _old} =
+        Ledger.update_transaction(budget_scope(), c.old, %{approved: false},
+          reconciled: :confirmed
+        )
+
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       assert asked(view, "#approve-all").label == "Ändern"
@@ -561,7 +565,11 @@ defmodule AbakusWeb.RegisterLiveTest do
     end
 
     test "approving the selected ones keeps the selection when nothing is approved", c do
-      {:ok, _old} = Ledger.update_transaction(c.old, %{approved: false}, reconciled: :confirmed)
+      {:ok, _old} =
+        Ledger.update_transaction(budget_scope(), c.old, %{approved: false},
+          reconciled: :confirmed
+        )
+
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       view |> element("#tx-#{c.shopping.id}-select") |> render_click()
@@ -612,7 +620,7 @@ defmodule AbakusWeb.RegisterLiveTest do
   describe "match proposals" do
     setup c do
       {:ok, proposal} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
           date: ~D[2026-10-04],
           amount: -8_743,
@@ -623,7 +631,7 @@ defmodule AbakusWeb.RegisterLiveTest do
           matched_transaction_id: c.shopping.id
         })
 
-      {:ok, _origin} = Ledger.add_origin(proposal, :file, "MM-0001")
+      {:ok, _origin} = Ledger.add_origin(budget_scope(), proposal, :file, "MM-0001")
       %{proposal: proposal}
     end
 
@@ -706,7 +714,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
     test "Alle Zuordnungen übernehmen accepts every open proposal", c do
       {:ok, other} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
           date: ~D[2026-10-02],
           amount: 324_000,
@@ -720,7 +728,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       view |> element("#accept-all-matches") |> render_click()
 
-      assert Ledger.list_match_proposals(c.giro) == []
+      assert Ledger.list_match_proposals(budget_scope(), c.giro) == []
       assert reload(c.salary).date == ~D[2026-10-02]
       assert Repo.get(Transaction, other.id) == nil
       assert has_element?(view, "#flash-info", "2 zugeordnet.")
@@ -752,7 +760,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       views =
         Enum.map(buttons, fn _button -> elem(live(c.conn, ~p"/budget/accounts/#{c.giro}"), 1) end)
 
-      {:ok, _} = Ledger.accept_match(c.proposal)
+      {:ok, _} = Ledger.accept_match(budget_scope(), c.proposal)
 
       for {view, button} <- Enum.zip(views, buttons) do
         view |> element(button) |> render_click()
@@ -775,7 +783,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       )
 
       {:ok, proposal} =
-        Ledger.create_transaction(%{
+        Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
           date: ~D[2026-10-05],
           amount: -20_000,

@@ -412,7 +412,7 @@ defmodule AbakusWeb.BudgetLiveTest do
   end
 
   defp income(c, amount, date, payee) do
-    {:ok, payee} = Ledger.create_payee(%{name: payee})
+    {:ok, payee} = Ledger.create_payee(budget_scope(), %{name: payee})
 
     transaction_fixture(
       account_id: c.checking.id,

@@ -1,6 +1,7 @@
 defmodule AbakusWeb.Depot.BudgetLinkTest do
   use AbakusWeb.ConnCase
 
+  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import Phoenix.LiveViewTest
   import Ecto.Query, only: [from: 2]
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
@@ -39,7 +40,9 @@ defmodule AbakusWeb.Depot.BudgetLinkTest do
     {:ok, [_]} =
       Portfolios.book_transaction(c.scope, Portfolios.transaction_choices(c.scope), form)
 
-    Repo.one!(from t in Ledger.in_register(), where: t.account_id == ^c.giro.id, select: t)
+    Repo.one!(
+      from t in Ledger.in_register(budget_scope()), where: t.account_id == ^c.giro.id, select: t
+    )
   end
 
   describe "Einstellungen › Depots" do

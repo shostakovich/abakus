@@ -211,7 +211,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
       edit_category(view, c.movies)
       view |> element("#edit-delete") |> render_click()
-      Ledger.update_transaction(transaction, %{cleared: :reconciled})
+      Ledger.update_transaction(budget_scope(), transaction, %{cleared: :reconciled})
       view |> form("#delete-form") |> render_submit(%{"into" => "#{c.games.id}"})
 
       assert %Category{} = Repo.reload(c.movies)
@@ -336,7 +336,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
       edit_category(view, c.movies)
       view |> element("#edit-delete") |> render_click()
-      Ledger.update_transaction(transaction, %{cleared: :reconciled})
+      Ledger.update_transaction(budget_scope(), transaction, %{cleared: :reconciled})
       view |> form("#delete-form") |> render_submit(%{"into" => "#{c.games.id}"})
 
       assert has_element?(view, ~s|#delete-into-combobox input[name=into][value="#{c.games.id}"]|)

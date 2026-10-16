@@ -190,7 +190,7 @@ defmodule AbakusWeb.SettingsLiveTest do
     end
 
     test "shows when the import ran and what it brought over", %{conn: conn} do
-      {:ok, _report} = YnabImport.import_plan(@plan)
+      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
       %{imported_at: imported_at} = YnabImport.status()
 
       {:ok, view, _html} = live(conn, ~p"/settings/budget/ynab")

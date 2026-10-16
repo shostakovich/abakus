@@ -16,6 +16,7 @@ defmodule Abakus.Ledger.Payee do
     field :name, :string
     field :lookup_key, :string
 
+    belongs_to :user, Abakus.Users.User
     belongs_to :transfer_account, Account
     belongs_to :last_category, Category
 
@@ -26,10 +27,10 @@ defmodule Abakus.Ledger.Payee do
   def changeset(payee, attrs) do
     payee
     |> cast(attrs, [:name, :last_category_id])
-    |> validate_required([:name])
+    |> validate_required([:user_id, :name])
     |> validate_not_transfer()
     |> Names.put_lookup_key()
-    |> unique_constraint(:name, name: :payees_lookup_key_index)
+    |> unique_constraint(:name, name: :payees_user_id_lookup_key_index)
   end
 
   @doc "Names the transfer payee after its account."

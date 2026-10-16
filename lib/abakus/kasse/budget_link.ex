@@ -1,11 +1,12 @@
 defmodule Abakus.Kasse.BudgetLink do
   @moduledoc """
   Expenses linked to the budget (ADR 0006). A linked participant (the budget owner, once switched on) has their
-  share of every expense as a transaction in the account fed by `shared_expenses`, written through the Ledger in
-  the expense's database transaction: minus the share, dated as the expense, the title as payee, the budget category
-  the Kasse category is mapped to, a memo describing the expense, created cleared and unapproved. Reimbursements and
-  expenses without a share of theirs give none. An expense dated before the link's start date gets none unless its
-  marked transaction was adopted, it is entered after the switch or it is moved to a later date.
+  share of every expense as a transaction in the account fed by `shared_expenses`, written through the Ledger with
+  their scope in the expense's database transaction: minus the share, dated as the expense, the title as payee, the
+  budget category the Kasse category is mapped to, a memo describing the expense, created cleared and unapproved.
+  Reimbursements and expenses without a share of theirs give none. An expense dated before the link's start date
+  gets none unless its marked transaction was adopted, it is entered after the switch or it is moved to a later
+  date.
 
   The Kasse leads on what it changes: amount, date and payee follow every change of the expense. The register may
   change category, memo, flag, cleared state and approval; a later Kasse change keeps a category or memo the
@@ -38,14 +39,14 @@ defmodule Abakus.Kasse.BudgetLink do
   @doc "The accounts a participant can be linked to: open budget accounts not fed by another app, in order."
   def account_choices(%Scope{} = scope) do
     owner!(scope)
-    choices()
+    choices(scope)
   end
 
-  defp choices do
+  defp choices(scope) do
     Repo.all(
       from a in Account,
         where:
-          a.kind in ^Account.budget_kinds() and not a.closed and
+          a.user_id == ^scope.user.id and a.kind in ^Account.budget_kinds() and not a.closed and
             (is_nil(a.fed_by) or a.fed_by == :shared_expenses),
         order_by: [a.position, a.id]
     )
@@ -71,7 +72,7 @@ defmodule Abakus.Kasse.BudgetLink do
 
   defp link(scope, participant, account_id) do
     with :ok <- check_linkable(scope, participant),
-         {:ok, account} <- feed(account_id),
+         {:ok, account} <- feed(scope, account_id),
          {:ok, connection} <- Connections.remove(participant.id) do
       %Link{
         participant_id: participant.id,
@@ -79,7 +80,7 @@ defmodule Abakus.Kasse.BudgetLink do
         start_date: connection && connection.start_date
       }
       |> Repo.insert!()
-      |> take_over()
+      |> take_over(scope)
     end
   end
 
@@ -91,21 +92,23 @@ defmodule Abakus.Kasse.BudgetLink do
     end
   end
 
-  defp feed(account_id) do
+  defp feed(scope, account_id) do
     with {:ok, id} <- Abakus.Schema.cast_id(account_id),
-         %Account{} = account <- Enum.find(choices(), &(&1.id == id)) do
+         %Account{} = account <- Enum.find(choices(scope), &(&1.id == id)) do
       Repo.update_all(
-        from(a in Account, where: a.fed_by == :shared_expenses and a.id != ^id),
+        from(a in Account,
+          where: a.user_id == ^scope.user.id and a.fed_by == :shared_expenses and a.id != ^id
+        ),
         set: [fed_by: nil]
       )
 
-      Ledger.update_account(account, %{fed_by: :shared_expenses})
+      Ledger.update_account(scope, account, %{fed_by: :shared_expenses})
     else
       _none -> {:error, :no_account}
     end
   end
 
-  defp take_over(link) do
+  defp take_over(link, scope) do
     marked = marked_transactions(link)
     by_expense = Enum.group_by(marked, &Posting.marker_id(&1.memo))
     none = %{adopted: 0, created: 0, unadoptable: 0}
@@ -113,7 +116,7 @@ defmodule Abakus.Kasse.BudgetLink do
     link.start_date
     |> expenses_to_take_over(Map.keys(by_expense))
     |> Enum.reduce_while({:ok, none}, fn expense, {:ok, counts} ->
-      case take_over_expense(link, expense, Map.get(by_expense, expense.id, [])) do
+      case take_over_expense(scope, link, expense, Map.get(by_expense, expense.id, [])) do
         {:ok, done} -> {:cont, {:ok, Map.merge(counts, done, fn _key, a, b -> a + b end)}}
         {:error, %Changeset{} = changeset} -> {:halt, {:error, refused(changeset)}}
       end
@@ -129,7 +132,7 @@ defmodule Abakus.Kasse.BudgetLink do
 
   # The first plain marked transaction is adopted; the others are left to the owner, and so is an expense whose
   # marked transactions are all splits or transfers, rather than booking its share twice.
-  defp take_over_expense(link, expense, marked) do
+  defp take_over_expense(scope, link, expense, marked) do
     wanted = if !linked_transaction(expense.id, link.participant_id), do: wanted(expense, link)
 
     case {wanted, Enum.find(marked, &plain?/1)} do
@@ -137,13 +140,13 @@ defmodule Abakus.Kasse.BudgetLink do
         {:ok, %{}}
 
       {wanted, nil} when marked == [] ->
-        with :ok <- create(link, expense.id, wanted), do: {:ok, %{created: 1}}
+        with :ok <- create(scope, link, expense.id, wanted), do: {:ok, %{created: 1}}
 
       {_wanted, nil} ->
         {:ok, %{unadoptable: length(marked)}}
 
       {wanted, plain} ->
-        with :ok <- adopt(link, expense.id, plain, wanted),
+        with :ok <- adopt(scope, link, expense.id, plain, wanted),
              do: {:ok, %{adopted: 1, unadoptable: length(marked) - 1}}
     end
   end
@@ -182,7 +185,7 @@ defmodule Abakus.Kasse.BudgetLink do
   defp since_or_marked(query, date, ids), do: where(query, [e], e.date >= ^date or e.id in ^ids)
 
   # The transaction keeps its category, cleared state, approval and flag; the rest follows the expense.
-  defp adopt(link, expense_id, transaction, wanted) do
+  defp adopt(scope, link, expense_id, transaction, wanted) do
     attrs = %{
       amount: wanted.amount,
       date: wanted.date,
@@ -191,7 +194,7 @@ defmodule Abakus.Kasse.BudgetLink do
     }
 
     with {:ok, transaction} <-
-           Ledger.update_transaction(transaction, attrs, reconciled: :confirmed) do
+           Ledger.update_transaction(scope, transaction, attrs, reconciled: :confirmed) do
       insert_linked(link, expense_id, transaction)
     end
   end
@@ -221,15 +224,17 @@ defmodule Abakus.Kasse.BudgetLink do
   `{:error, message}`, in German.
   """
   def expense_written(old, new) do
-    Enum.reduce_while(Repo.all(from l in Link, order_by: l.participant_id), :ok, fn link, :ok ->
-      case write(link, old, new) do
+    links = Repo.all(from l in Link, order_by: l.participant_id, preload: :participant)
+
+    Enum.reduce_while(links, :ok, fn link, :ok ->
+      case write(Scope.for_participant(link.participant), link, old, new) do
         :ok -> {:cont, :ok}
         {:error, %Changeset{} = changeset} -> {:halt, {:error, refused(changeset)}}
       end
     end)
   end
 
-  defp write(link, old, new) do
+  defp write(scope, link, old, new) do
     expense_id = (new || old).id
 
     case {linked_transaction(expense_id, link.participant_id), wanted(new, link)} do
@@ -237,13 +242,15 @@ defmodule Abakus.Kasse.BudgetLink do
         :ok
 
       {nil, wanted} ->
-        if is_nil(old) or started?(link, wanted), do: create(link, expense_id, wanted), else: :ok
+        if is_nil(old) or started?(link, wanted),
+          do: create(scope, link, expense_id, wanted),
+          else: :ok
 
       {linked, nil} ->
-        remove(linked)
+        remove(scope, linked)
 
       {linked, wanted} ->
-        change(linked, wanted(old, link), wanted)
+        change(scope, linked, wanted(old, link), wanted)
     end
   end
 
@@ -296,7 +303,7 @@ defmodule Abakus.Kasse.BudgetLink do
     total <> " · bezahlt von " <> expense.paid_by.name
   end
 
-  defp create(link, expense_id, wanted) do
+  defp create(scope, link, expense_id, wanted) do
     attrs = %{
       account_id: link.account_id,
       date: wanted.date,
@@ -308,7 +315,7 @@ defmodule Abakus.Kasse.BudgetLink do
       source: :kasse
     }
 
-    with {:ok, transaction} <- Ledger.create_transaction(attrs) do
+    with {:ok, transaction} <- Ledger.create_transaction(scope, attrs) do
       insert_linked(link, expense_id, transaction)
     end
   end
@@ -325,14 +332,15 @@ defmodule Abakus.Kasse.BudgetLink do
     :ok
   end
 
-  defp remove(linked) do
-    with {:ok, _deleted} <- Ledger.delete_transaction(linked.transaction, reconciled: :confirmed) do
+  defp remove(scope, linked) do
+    with {:ok, _deleted} <-
+           Ledger.delete_transaction(scope, linked.transaction, reconciled: :confirmed) do
       Repo.delete!(linked)
       :ok
     end
   end
 
-  defp change(linked, old, new) do
+  defp change(scope, linked, old, new) do
     transaction = linked.transaction
     changed? = &(is_nil(old) or Map.fetch!(old, &1) != Map.fetch!(new, &1))
 
@@ -347,12 +355,12 @@ defmodule Abakus.Kasse.BudgetLink do
       |> Enum.filter(&elem(&1, 0))
       |> Map.new(fn {true, field, value} -> {field, value} end)
 
-    if attrs == %{}, do: :ok, else: rewrite(linked, attrs)
+    if attrs == %{}, do: :ok, else: rewrite(scope, linked, attrs)
   end
 
-  defp rewrite(linked, attrs) do
+  defp rewrite(scope, linked, attrs) do
     with {:ok, transaction} <-
-           Ledger.update_transaction(linked.transaction, attrs, reconciled: :confirmed) do
+           Ledger.update_transaction(scope, linked.transaction, attrs, reconciled: :confirmed) do
       written =
         for {field, written} <- [category_id: :written_category_id, memo: :written_memo],
             Map.has_key?(attrs, field),
@@ -484,15 +492,16 @@ defmodule Abakus.Kasse.BudgetLink do
   @doc "The transaction an expense is linked to, with its category, for the budget owner; nil for none."
   def transaction_for(%Scope{} = scope, expense_id) do
     Access.check!(scope)
-    if Scope.budget_owner?(scope), do: linked_to(expense_id)
+    if Scope.budget_owner?(scope), do: linked_to(scope, expense_id)
   end
 
-  defp linked_to(expense_id) do
+  defp linked_to(scope, expense_id) do
     Repo.one(
       from t in Transaction,
         join: l in LinkedTransaction,
         on: l.transaction_id == t.id,
-        where: l.expense_id == ^expense_id and is_nil(t.deleted_at),
+        where:
+          t.user_id == ^scope.user.id and l.expense_id == ^expense_id and is_nil(t.deleted_at),
         order_by: l.participant_id,
         limit: 1,
         preload: :category

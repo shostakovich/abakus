@@ -90,11 +90,22 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       assert transaction.payee.name == "Wocheneinkauf"
     end
 
+    test "lands in the budget owner's budget with their user, whoever enters it", %{h: h} do
+      expense =
+        create!(equal(h, "Wocheneinkauf", 8742, "2026-10-12", h.ben, [h.anna, h.ben]), h.ben)
+
+      %{user_id: user_id, payee: payee} = transaction(expense)
+
+      assert user_id == scope_of(h.anna).user.id
+      assert payee.user_id == user_id
+      assert Ledger.list_transactions(scope_of(h.ben), :all) == []
+    end
+
     test "keeps the account's balance at minus the shares, whoever paid", %{h: h} = context do
       create!(equal(h, "Pizza", 3000, "2026-10-10", h.anna, [h.anna, h.ben]))
       create!(equal(h, "Kino", 2400, "2026-10-11", h.ben, [h.anna, h.ben, h.cleo]))
 
-      assert Ledger.balances()[context.account.id].balance == -2300
+      assert Ledger.balances(budget_scope())[context.account.id].balance == -2300
       assert Balances.balance(scope_of(h.anna)) == 3000 - 2300
     end
 
@@ -127,7 +138,9 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       create!(equal(h, "Wocheneinkauf", 8742, "2026-10-12", h.ben, [h.anna, h.ben]), h.ben)
 
     {:ok, _transaction} =
-      Ledger.update_transaction(transaction(expense), %{category_id: context.treats})
+      Ledger.update_transaction(budget_scope(), transaction(expense), %{
+        category_id: context.treats
+      })
 
     expense = update!(h.ben, expense, %{amount_cents: 9000, original_amount: 9000})
     assert %{amount: -4500, category_id: treats} = transaction(expense)
@@ -139,7 +152,9 @@ defmodule Abakus.Kasse.BudgetLinkTest do
 
   test "a Kasse change keeps a memo the register changed", %{h: h} do
     expense = create!(equal(h, "Markt", 1000, "2026-10-12", h.ben, [h.anna, h.ben]))
-    {:ok, _transaction} = Ledger.update_transaction(transaction(expense), %{memo: "Spargel"})
+
+    {:ok, _transaction} =
+      Ledger.update_transaction(budget_scope(), transaction(expense), %{memo: "Spargel"})
 
     expense = update!(h.ben, expense, %{amount_cents: 2000, original_amount: 2000})
     assert %{amount: -1000, memo: "Spargel"} = transaction(expense)
@@ -154,7 +169,10 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     expense = create!(equal(h, "Markt", 1000, "2026-10-12", h.ben, [h.anna, h.ben]))
 
     {:ok, _transaction} =
-      Ledger.update_transaction(transaction(expense), %{flag: :red, approved: true})
+      Ledger.update_transaction(budget_scope(), transaction(expense), %{
+        flag: :red,
+        approved: true
+      })
 
     update!(h.ben, expense, %{amount_cents: 2000, original_amount: 2000})
 
@@ -197,7 +215,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
 
   test "a transaction deleted beside the Kasse is booked anew on the next change", %{h: h} do
     expense = create!(equal(h, "Kino", 2000, "2026-10-10", h.ben, [h.anna, h.ben]))
-    {:ok, _deleted} = Ledger.delete_transaction(transaction(expense))
+    {:ok, _deleted} = Ledger.delete_transaction(budget_scope(), transaction(expense))
 
     update!(h.ben, expense, %{title: "Kino am Abend"})
     assert %{amount: -1000, deleted_at: nil} = transaction(expense)
@@ -205,7 +223,9 @@ defmodule Abakus.Kasse.BudgetLinkTest do
 
   test "a reconciled transaction follows the Kasse", %{h: h} do
     expense = create!(equal(h, "Kino", 2000, "2026-10-10", h.ben, [h.anna, h.ben]))
-    {:ok, _locked} = Ledger.update_transaction(transaction(expense), %{cleared: :reconciled})
+
+    {:ok, _locked} =
+      Ledger.update_transaction(budget_scope(), transaction(expense), %{cleared: :reconciled})
 
     update!(h.ben, expense, %{amount_cents: 3000, original_amount: 3000})
     assert transaction(expense).amount == -1500

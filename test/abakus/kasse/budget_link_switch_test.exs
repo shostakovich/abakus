@@ -284,7 +284,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     end
 
     test "the account takes no entries and offers no reconcile", c do
-      account = Ledger.get_account!(c.account.id)
+      account = Ledger.get_account!(budget_scope(), c.account.id)
       refute Account.takes_entries?(account)
       refute Account.reconcilable?(account)
     end

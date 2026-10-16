@@ -188,25 +188,26 @@ defmodule AbakusWeb.RegisterLive do
   defp scope(%{"id" => id}), do: {:account, id}
   defp scope(_params), do: :all
 
-  defp fetch_transaction(id) when is_integer(id), do: Ledger.get_transaction(id)
+  defp fetch_transaction(current_scope, id) when is_integer(id),
+    do: Ledger.get_transaction(current_scope, id)
 
-  defp fetch_transaction(id) do
+  defp fetch_transaction(current_scope, id) do
     case Integer.parse(id) do
-      {id, ""} -> Ledger.get_transaction(id)
+      {id, ""} -> Ledger.get_transaction(current_scope, id)
       _other -> nil
     end
   end
 
-  defp editable(nil), do: :error
+  defp editable(_current_scope, nil), do: :error
 
-  defp editable(%{deleted_at: deleted_at, matched_transaction_id: matched})
+  defp editable(_current_scope, %{deleted_at: deleted_at, matched_transaction_id: matched})
        when not is_nil(deleted_at) or not is_nil(matched),
        do: :error
 
-  defp editable(%{transfer_subtransaction: %{transaction_id: split_id}}),
-    do: {:ok, Ledger.get_transaction!(split_id), true}
+  defp editable(current_scope, %{transfer_subtransaction: %{transaction_id: split_id}}),
+    do: {:ok, Ledger.get_transaction!(current_scope, split_id), true}
 
-  defp editable(transaction), do: {:ok, transaction, false}
+  defp editable(_current_scope, transaction), do: {:ok, transaction, false}
 
   defp load(%{assigns: %{scope: scope}} = socket, scope), do: socket
 
@@ -218,7 +219,7 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp load(socket, {:account, id} = scope) do
-    account = Ledger.get_account!(id)
+    account = Ledger.get_account!(socket.assigns.current_scope, id)
 
     socket
     |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
@@ -228,11 +229,12 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp load_transactions(socket) do
-    scope = socket.assigns.account || :all
+    current_scope = socket.assigns.current_scope
+    register = socket.assigns.account || :all
 
     assign(socket,
-      transactions: Ledger.list_transactions(scope),
-      proposals: Ledger.list_match_proposals(scope)
+      transactions: Ledger.list_transactions(current_scope, register),
+      proposals: Ledger.list_match_proposals(current_scope, register)
     )
   end
 
@@ -315,6 +317,7 @@ defmodule AbakusWeb.RegisterLive do
   def handle_event("toggle_cleared", %{"id" => id} = params, socket) do
     change(socket, id, fn transaction ->
       Ledger.update_transaction(
+        socket.assigns.current_scope,
         transaction,
         %{cleared: toggled(transaction.cleared)},
         confirmed(params)
@@ -323,7 +326,16 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   def handle_event("approve", %{"id" => id} = params, socket) do
-    change(socket, id, &Ledger.update_transaction(&1, %{approved: true}, confirmed(params)))
+    change(
+      socket,
+      id,
+      &Ledger.update_transaction(
+        socket.assigns.current_scope,
+        &1,
+        %{approved: true},
+        confirmed(params)
+      )
+    )
   end
 
   def handle_event("approve_all", params, socket) do
@@ -331,11 +343,21 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   def handle_event("accept_match", %{"id" => id} = params, socket) do
-    decide(socket, id, &Ledger.accept_match(&1, confirmed(params)), "Zugeordnet.")
+    decide(
+      socket,
+      id,
+      &Ledger.accept_match(socket.assigns.current_scope, &1, confirmed(params)),
+      "Zugeordnet."
+    )
   end
 
   def handle_event("reject_match", %{"id" => id}, socket) do
-    decide(socket, id, &Ledger.reject_match/1, "Getrennt und als eigene Buchung bestätigt.")
+    decide(
+      socket,
+      id,
+      &Ledger.reject_match(socket.assigns.current_scope, &1),
+      "Getrennt und als eigene Buchung bestätigt."
+    )
   end
 
   def handle_event("accept_all_matches", params, socket) do
@@ -343,7 +365,7 @@ defmodule AbakusWeb.RegisterLive do
 
     socket
     |> saved(
-      Ledger.accept_matches(proposals, confirmed(params)),
+      Ledger.accept_matches(socket.assigns.current_scope, proposals, confirmed(params)),
       "#{length(proposals)} zugeordnet."
     )
     |> noreply()
@@ -405,7 +427,11 @@ defmodule AbakusWeb.RegisterLive do
         {:noreply, socket}
 
       transactions ->
-        transactions = Enum.uniq_by(Enum.map(transactions, &deletable/1), & &1.id)
+        transactions =
+          transactions
+          |> Enum.map(&deletable(socket.assigns.current_scope, &1))
+          |> Enum.uniq_by(& &1.id)
+
         delete(socket, transactions, params)
     end
   end
@@ -441,7 +467,15 @@ defmodule AbakusWeb.RegisterLive do
       when flag in ["" | @flags] do
     socket
     |> assign(:flag_menu, nil)
-    |> change(id, &Ledger.update_transaction(&1, %{flag: blank_to_nil(flag)}, confirmed(params)))
+    |> change(
+      id,
+      &Ledger.update_transaction(
+        socket.assigns.current_scope,
+        &1,
+        %{flag: blank_to_nil(flag)},
+        confirmed(params)
+      )
+    )
   end
 
   def handle_event("set_flag", _params, socket), do: {:noreply, socket}
@@ -452,7 +486,7 @@ defmodule AbakusWeb.RegisterLive do
         %{assigns: %{account: %Account{} = account}} = socket
       ) do
     if Account.reconcilable?(account),
-      do: {:noreply, assign(socket, :reconcile, ask(account, socket.assigns.today))},
+      do: {:noreply, assign(socket, :reconcile, ask(socket, account))},
       else: {:noreply, socket}
   end
 
@@ -502,24 +536,27 @@ defmodule AbakusWeb.RegisterLive do
 
   # The popover's question: about the newest bank balance and the cleared balance up to its date, else about the
   # cleared balance as it is today.
-  defp ask(account, today) do
+  defp ask(socket, account) do
+    %{current_scope: current_scope, today: today} = socket.assigns
+
     bank =
-      case Ledger.latest_bank_balance(account) do
-        nil -> Reconcile.bank(Ledger.cleared_balance(account, today), today)
+      case Ledger.latest_bank_balance(current_scope, account) do
+        nil -> Reconcile.bank(Ledger.cleared_balance(current_scope, account, today), today)
         stored -> Reconcile.bank(stored)
       end
 
-    account |> reconcile_mode(bank) |> Map.merge(%{step: :ask, error: nil})
+    current_scope |> reconcile_mode(account, bank) |> Map.merge(%{step: :ask, error: nil})
   end
 
   defp start_reconciling(socket, bank) do
-    assign(socket, reconcile: nil, reconciling: reconcile_mode(socket.assigns.account, bank))
+    %{current_scope: current_scope, account: account} = socket.assigns
+    assign(socket, reconcile: nil, reconciling: reconcile_mode(current_scope, account, bank))
   end
 
   defp reconcile(socket, bank, opts) do
     socket = assign(socket, reconcile: nil)
 
-    case Ledger.reconcile(socket.assigns.account, bank, opts) do
+    case Ledger.reconcile(socket.assigns.current_scope, socket.assigns.account, bank, opts) do
       {:ok, result} ->
         socket |> assign(:reconciling, nil) |> saved({:ok, result}, Reconcile.done_text(result))
 
@@ -533,7 +570,12 @@ defmodule AbakusWeb.RegisterLive do
 
   defp delete(socket, transactions, params) do
     with nil <- refused_delete(transactions),
-         {:ok, deleted} <- Ledger.delete_transactions(transactions, confirmed(params)) do
+         {:ok, deleted} <-
+           Ledger.delete_transactions(
+             socket.assigns.current_scope,
+             transactions,
+             confirmed(params)
+           ) do
       socket
       |> assign(:selected, MapSet.new())
       |> saved({:ok, deleted}, deleted_text(length(deleted)))
@@ -567,18 +609,20 @@ defmodule AbakusWeb.RegisterLive do
   defp deleted_text(count), do: "#{count} Buchungen gelöscht."
 
   # The counterpart of a split's transfer goes with its split, as it is edited there.
-  defp deletable(%Transaction{transfer_subtransaction_id: id} = transaction)
+  defp deletable(current_scope, %Transaction{transfer_subtransaction_id: id} = transaction)
        when not is_nil(id) do
     %{transfer_subtransaction: %{transaction_id: split_id}} =
-      Ledger.get_transaction!(transaction.id)
+      Ledger.get_transaction!(current_scope, transaction.id)
 
     %Transaction{id: split_id}
   end
 
-  defp deletable(transaction), do: transaction
+  defp deletable(_current_scope, transaction), do: transaction
 
   defp open_editor(socket, id, layout, field) do
-    case editable(fetch_transaction(id)) do
+    current_scope = socket.assigns.current_scope
+
+    case editable(current_scope, fetch_transaction(current_scope, id)) do
       {:ok, transaction, split_of} ->
         row_id = if is_integer(id), do: id, else: String.to_integer(id)
 
@@ -608,6 +652,7 @@ defmodule AbakusWeb.RegisterLive do
       layout: layout,
       assigns: %{
         id: "tx-editor",
+        current_scope: assigns.current_scope,
         transaction: transaction,
         split_of: split_of,
         layout: layout,
@@ -646,7 +691,14 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp approve(socket, transactions, params, approved, note \\ "") do
-    result = Ledger.update_transactions(transactions, %{approved: true}, confirmed(params))
+    result =
+      Ledger.update_transactions(
+        socket.assigns.current_scope,
+        transactions,
+        %{approved: true},
+        confirmed(params)
+      )
+
     socket = if match?({:ok, _}, result), do: approved.(socket), else: socket
     socket |> saved(result, "#{length(transactions)} bestätigt.#{note}") |> noreply()
   end
@@ -674,7 +726,12 @@ defmodule AbakusWeb.RegisterLive do
 
       transactions ->
         result =
-          Ledger.update_transactions(transactions, %{category_id: category_id}, confirmed(params))
+          Ledger.update_transactions(
+            socket.assigns.current_scope,
+            transactions,
+            %{category_id: category_id},
+            confirmed(params)
+          )
 
         socket |> saved(result, "#{length(transactions)} kategorisiert.") |> noreply()
     end
@@ -697,18 +754,20 @@ defmodule AbakusWeb.RegisterLive do
 
   defp refresh(socket) do
     socket
-    |> assign(:account_groups, AccountGroups.load())
+    |> assign(:account_groups, AccountGroups.load(socket.assigns.current_scope))
     |> load_transactions()
     |> assign_rows()
-    |> update(:reconciling, &follow_cleared(&1, socket.assigns.account))
+    |> update(:reconciling, &follow_cleared(&1, socket.assigns))
   end
 
   # Reconcile mode's cleared balance follows every change.
-  defp follow_cleared(nil, _account), do: nil
-  defp follow_cleared(%{bank: bank}, account), do: reconcile_mode(account, bank)
+  defp follow_cleared(nil, _assigns), do: nil
 
-  defp reconcile_mode(account, bank),
-    do: %{bank: bank, cleared: Ledger.cleared_balance(account, bank.through)}
+  defp follow_cleared(%{bank: bank}, assigns),
+    do: reconcile_mode(assigns.current_scope, assigns.account, bank)
+
+  defp reconcile_mode(current_scope, account, bank),
+    do: %{bank: bank, cleared: Ledger.cleared_balance(current_scope, account, bank.through)}
 
   defp noreply(socket), do: {:noreply, socket}
 

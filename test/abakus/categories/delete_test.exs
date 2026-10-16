@@ -77,7 +77,7 @@ defmodule Abakus.Categories.DeleteTest do
         )
 
       deleted = transaction_fixture(account_id: c.checking.id, category_id: c.movies.id)
-      {:ok, _deleted} = Ledger.delete_transaction(deleted)
+      {:ok, _deleted} = Ledger.delete_transaction(budget_scope(), deleted)
 
       Categories.set_target(c.movies, %{from_month: @october, cadence: :monthly, amount: 2_000})
       Categories.snooze_target(c.movies, @october)
@@ -162,7 +162,8 @@ defmodule Abakus.Categories.DeleteTest do
     end
 
     test "a deleted reconciled transaction does not count", c do
-      {:ok, _deleted} = Ledger.delete_transaction(c.transaction, reconciled: :confirmed)
+      {:ok, _deleted} =
+        Ledger.delete_transaction(budget_scope(), c.transaction, reconciled: :confirmed)
 
       refute Categories.reconciled_transactions?(c.movies)
       assert {:ok, _category} = Categories.delete_category(c.movies, c.leisure)

@@ -140,7 +140,8 @@ defmodule Abakus.Release do
   def import_ynab(plan_id \\ nil) do
     start_without_server()
 
-    result = with {:ok, token} <- YnabImport.token(), do: YnabImport.run(token, plan_id)
+    result =
+      with {:ok, token} <- YnabImport.token(), do: YnabImport.run(Scope.system(), token, plan_id)
 
     case result do
       {:ok, report} ->

@@ -34,6 +34,7 @@ defmodule Abakus.Ledger.Transaction do
     # The category of the counterpart when it is the budget side of a transfer from a tracking account.
     field :counterpart_category_id, :id, virtual: true
 
+    belongs_to :user, Abakus.Users.User
     belongs_to :account, Account
     belongs_to :payee, Payee
     belongs_to :category, Category
@@ -76,7 +77,7 @@ defmodule Abakus.Ledger.Transaction do
   def changeset(transaction, attrs) do
     transaction
     |> cast(attrs, @fields ++ create_fields(transaction))
-    |> validate_required([:account_id, :date, :amount, :cleared, :approved, :source])
+    |> validate_required([:user_id, :account_id, :date, :amount, :cleared, :approved, :source])
     |> Amount.validate()
     |> cast_assoc(:subtransactions, with: &Subtransaction.changeset/3)
     |> validate_split()

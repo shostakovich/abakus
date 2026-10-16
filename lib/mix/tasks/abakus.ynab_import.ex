@@ -10,6 +10,7 @@ defmodule Mix.Tasks.Abakus.YnabImport do
   """
   use Mix.Task
 
+  alias Abakus.Users.Scope
   alias Abakus.YnabImport
   alias Abakus.YnabImport.Report
 
@@ -17,7 +18,9 @@ defmodule Mix.Tasks.Abakus.YnabImport do
 
   @impl true
   def run(args) when length(args) <= 1 do
-    result = with {:ok, token} <- YnabImport.token(), do: YnabImport.run(token, List.first(args))
+    result =
+      with {:ok, token} <- YnabImport.token(),
+           do: YnabImport.run(Scope.system(), token, List.first(args))
 
     case result do
       {:ok, report} ->

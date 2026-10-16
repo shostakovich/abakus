@@ -151,7 +151,7 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       submit(view, %{name: "🐷 Sparschwein", kind: "cash", note: "Im Regal"})
 
-      assert [account] = Ledger.list_accounts()
+      assert [account] = Ledger.list_accounts(budget_scope())
       assert %{name: "🐷 Sparschwein", kind: :cash, note: "Im Regal", closed: false} = account
 
       path = ~p"/budget/accounts/#{account}"
@@ -165,7 +165,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
 
       submit(view, %{name: "Giro", kind: "checking"})
-      assert [account] = Ledger.list_accounts()
+      assert [account] = Ledger.list_accounts(budget_scope())
       path = ~p"/budget/accounts/#{account}"
       assert {^path, _flash} = assert_redirect(view)
     end
@@ -176,7 +176,7 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       assert submit(view, %{name: " "}) =~ "Muss ausgefüllt werden"
       assert has_element?(view, "#account-dialog")
-      assert Ledger.list_accounts() == []
+      assert Ledger.list_accounts(budget_scope()) == []
     end
 
     test "takes only name, kind and note from the form", %{conn: conn} do
@@ -189,7 +189,7 @@ defmodule AbakusWeb.AccountsLiveTest do
         "account" => %{"name" => "Giro", "kind" => "checking", "closed" => "true"}
       })
 
-      assert [%{closed: false}] = Ledger.list_accounts()
+      assert [%{closed: false}] = Ledger.list_accounts(budget_scope())
     end
 
     test "cancelling closes the form and adds nothing", %{conn: conn} do
@@ -203,7 +203,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       render_keydown(view, "close_account_dialog", %{"key" => "Escape"})
       refute has_element?(view, "#account-dialog")
 
-      assert Ledger.list_accounts() == []
+      assert Ledger.list_accounts(budget_scope()) == []
     end
   end
 
@@ -219,7 +219,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       submit(view, %{name: "🏦 Gemeinschaftskonto", kind: "savings", note: "Für beide"})
 
       assert %{name: "🏦 Gemeinschaftskonto", kind: :savings, note: "Für beide"} =
-               Ledger.get_account!(account.id)
+               Ledger.get_account!(budget_scope(), account.id)
 
       assert_patch(view, ~p"/budget/accounts/#{account}")
       refute has_element?(view, "#account-dialog")
@@ -261,7 +261,7 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       assert submit(view, %{name: ""}) =~ "Muss ausgefüllt werden"
       assert has_element?(view, "#account-dialog")
-      assert Ledger.get_account!(account.id).name == "Giro"
+      assert Ledger.get_account!(budget_scope(), account.id).name == "Giro"
     end
 
     test "an unknown account opens nothing", %{conn: conn} do
@@ -281,7 +281,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       refute has_element?(view, "#reopen-account")
       confirm_click(view, "#close-account")
 
-      assert Ledger.get_account!(account.id).closed
+      assert Ledger.get_account!(budget_scope(), account.id).closed
       assert_patch(view, ~p"/budget/accounts/#{account}")
       refute has_element?(view, "#account-dialog")
       assert has_element?(view, "#flash-info", "Konto geschlossen")
@@ -293,7 +293,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       refute has_element?(view, "#close-account")
       view |> element("#reopen-account") |> render_click()
 
-      refute Ledger.get_account!(account.id).closed
+      refute Ledger.get_account!(budget_scope(), account.id).closed
       assert has_element?(view, "#flash-info", "Konto wieder geöffnet")
       assert has_element?(view, "#side-account-#{account.id}-sidebar")
     end

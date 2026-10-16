@@ -960,7 +960,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   defp load(socket, key) do
     %{transaction: transaction, accounts: accounts} = socket.assigns
-    payees = Ledger.list_payees()
+    payees = Ledger.list_payees(socket.assigns.current_scope)
 
     assign(socket,
       loaded: {key},
@@ -1059,7 +1059,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
     with {:ok, attrs} <- TransactionForm.to_attrs(params, accounts, original),
          {:ok, attrs} <- register_fields(attrs, socket.assigns),
-         {:ok, _transaction} <- write(original, attrs, confirmed(event)) do
+         {:ok, _transaction} <-
+           write(socket.assigns.current_scope, original, attrs, confirmed(event)) do
       {:noreply, done(socket, if(original, do: "Gespeichert.", else: "Gebucht."))}
     else
       {:error, error} -> {:noreply, assign(socket, params: params, error: error_message(error))}
@@ -1073,7 +1074,9 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     do: {:noreply, assign(socket, :error, @depot_delete)}
 
   def handle_event("delete", event, socket) do
-    case Ledger.delete_transaction(socket.assigns.transaction, confirmed(event)) do
+    %{current_scope: current_scope, transaction: transaction} = socket.assigns
+
+    case Ledger.delete_transaction(current_scope, transaction, confirmed(event)) do
       {:ok, _transaction} -> {:noreply, done(socket, "Buchung gelöscht.")}
       {:error, changeset} -> {:noreply, assign(socket, :error, error_message(changeset))}
     end
@@ -1119,7 +1122,9 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
           socket,
           params,
           side,
-          params |> transfer_category(side, accounts) |> suggest_offered(socket)
+          socket.assigns.current_scope
+          |> transfer_category(params, side, accounts)
+          |> suggest_offered(socket)
         )
 
       %{"payee_pick" => "p:" <> name} ->
@@ -1192,10 +1197,10 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     end
   end
 
-  defp transfer_category(params, side, accounts) do
+  defp transfer_category(current_scope, params, side, accounts) do
     case TransactionForm.crossing(params, side, accounts) do
       {budget, tracking} ->
-        Ledger.last_transfer_category_id(budget.id, tracking.transfer_payee.id)
+        Ledger.last_transfer_category_id(current_scope, budget.id, tracking.transfer_payee.id)
 
       nil ->
         nil
@@ -1218,8 +1223,11 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   defp register_fields(attrs, _assigns),
     do: {:ok, Map.take(attrs, BudgetLink.register_fields())}
 
-  defp write(nil, attrs, _opts), do: Ledger.create_transaction(attrs)
-  defp write(original, attrs, opts), do: Ledger.update_transaction(original, attrs, opts)
+  defp write(current_scope, nil, attrs, _opts),
+    do: Ledger.create_transaction(current_scope, attrs)
+
+  defp write(current_scope, original, attrs, opts),
+    do: Ledger.update_transaction(current_scope, original, attrs, opts)
 
   @doc "The Ledger's opts for an event: `reconciled: :confirmed` once the browser asked about a reconciled change."
   def confirmed(%{"reconciled" => "confirmed"}), do: [reconciled: :confirmed]

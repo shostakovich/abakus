@@ -21,7 +21,7 @@ defmodule Abakus.Categories.BudgetTest do
 
   defp budget_balance do
     Repo.one(
-      from t in Ledger.in_register(),
+      from t in Ledger.in_register(budget_scope()),
         join: a in assoc(t, :account),
         where: a.kind != :tracking,
         select: sum(t.amount)
@@ -106,7 +106,11 @@ defmodule Abakus.Categories.BudgetTest do
         %{amount: -1_000, category_id: groceries.id}
       ])
 
-      {:ok, _} = Ledger.delete_transaction(split.(-700, [%{amount: -300}, %{amount: -400}]))
+      {:ok, _} =
+        Ledger.delete_transaction(
+          budget_scope(),
+          split.(-700, [%{amount: -300}, %{amount: -400}])
+        )
 
       transaction_fixture(
         account_id: depot.id,
@@ -162,7 +166,7 @@ defmodule Abakus.Categories.BudgetTest do
       transaction_fixture(account_id: c.checking.id, payee_id: savings.transfer_payee.id)
       transaction_fixture(account_id: depot.id, amount: 100_000)
       deleted = transaction_fixture(account_id: c.checking.id, category_id: groceries.id)
-      {:ok, _} = Ledger.delete_transaction(deleted)
+      {:ok, _} = Ledger.delete_transaction(budget_scope(), deleted)
       manual = transaction_fixture(account_id: c.checking.id, category_id: groceries.id)
 
       transaction_fixture(
@@ -256,7 +260,7 @@ defmodule Abakus.Categories.BudgetTest do
           amount: 1_000
         )
 
-      Ledger.delete_transaction(deleted)
+      Ledger.delete_transaction(budget_scope(), deleted)
       depot = account_fixture(kind: :tracking)
       transaction_fixture(account_id: depot.id, payee_id: employer.id, amount: 5_000)
 

@@ -1,6 +1,7 @@
 defmodule Abakus.ReleaseTest do
   use Abakus.DataCase
 
+  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import ExUnit.CaptureIO
   import Abakus.UsersFixtures
 
@@ -125,6 +126,7 @@ defmodule Abakus.ReleaseTest do
 
   describe "the YNAB import" do
     setup do
+      budget_scope()
       FakeYnab.start(%{"plan-test" => @plan})
       previous = System.get_env("YNAB_TOKEN")
       System.put_env("YNAB_TOKEN", FakeYnab.token())
@@ -154,7 +156,7 @@ defmodule Abakus.ReleaseTest do
       assert_received {:mix_shell, :info,
                        ["  2026-08, Ready to Assign: YNAB 2770.01, Abakus 2770.00"]}
 
-      assert length(Abakus.Ledger.list_accounts()) == 4
+      assert length(Abakus.Ledger.list_accounts(budget_scope())) == 4
     end
 
     test "mix abakus.ynab_import prints the report, and fails on errors" do

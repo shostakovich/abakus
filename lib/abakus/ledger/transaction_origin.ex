@@ -17,15 +17,16 @@ defmodule Abakus.Ledger.TransactionOrigin do
 
     belongs_to :transaction, Transaction
     belongs_to :account, Account
+    belongs_to :user, Abakus.Users.User
 
     timestamps()
   end
 
-  @doc "Changeset for an origin whose `transaction_id` and `account_id` are set."
+  @doc "Changeset for an origin whose `transaction_id`, `account_id` and `user_id` are set."
   def changeset(origin, attrs) do
     origin
     |> cast(attrs, [:source, :external_id])
-    |> validate_required([:transaction_id, :account_id, :source, :external_id])
+    |> validate_required([:transaction_id, :account_id, :user_id, :source, :external_id])
     |> unique_constraint([:account_id, :source, :external_id], error_key: :external_id)
   end
 end

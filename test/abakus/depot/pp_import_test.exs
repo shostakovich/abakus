@@ -1,6 +1,7 @@
 defmodule Abakus.Depot.PPImportTest do
   use Abakus.DataCase
 
+  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import Abakus.Depot.SecuritiesFixtures, only: [security_fixture: 1]
   import Abakus.UsersFixtures
 
@@ -227,14 +228,18 @@ defmodule Abakus.Depot.PPImportTest do
 
     defp in_giro(giro),
       do:
-        Repo.all(from t in Ledger.in_register(), where: t.account_id == ^giro.id, order_by: t.id)
+        Repo.all(
+          from t in Ledger.in_register(budget_scope()),
+            where: t.account_id == ^giro.id,
+            order_by: t.id
+        )
 
     defp first_buy(client), do: Enum.find(client.transactions, &(&1.note == "Erstkauf"))
 
     test "a re-import changes a linked transaction's amount and keeps its category", c do
       [outflow | _] = Enum.filter(in_giro(c.giro), &(&1.amount == -100_550))
       other = DomainFixtures.category_fixture()
-      {:ok, _} = Ledger.update_transaction(outflow, %{category_id: other.id})
+      {:ok, _} = Ledger.update_transaction(budget_scope(), outflow, %{category_id: other.id})
 
       buy = first_buy(c.client)
 

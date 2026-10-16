@@ -56,9 +56,12 @@ defmodule Abakus.Ledger.Matches do
   def validate(changeset) do
     case Changeset.get_change(changeset, :matched_transaction_id) do
       nil -> validate_locked(changeset)
-      id -> changeset |> validate_source() |> validate_target(Repo.get(Transaction, id))
+      id -> changeset |> validate_source() |> validate_target(target(changeset, id))
     end
   end
+
+  defp target(changeset, id),
+    do: Repo.get_by(Transaction, id: id, user_id: Changeset.get_field(changeset, :user_id))
 
   defp validate_source(changeset) do
     if Changeset.get_field(changeset, :source) in [:file, :bank],

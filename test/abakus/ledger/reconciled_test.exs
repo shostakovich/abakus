@@ -21,13 +21,13 @@ defmodule Abakus.Ledger.ReconciledTest do
   defp counterpart(%{transfer_transaction_id: id}), do: Repo.get!(Transaction, id)
 
   defp reconcile(transaction) do
-    {:ok, _} = Ledger.update_transaction(transaction, %{cleared: :reconciled})
+    {:ok, _} = Ledger.update_transaction(budget_scope(), transaction, %{cleared: :reconciled})
     reload(transaction)
   end
 
   defp transfer(c) do
     {:ok, outflow} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: c.checking.id,
         payee_id: c.savings.transfer_payee.id,
         date: ~D[2026-10-09],
@@ -40,7 +40,7 @@ defmodule Abakus.Ledger.ReconciledTest do
 
   defp split(c) do
     {:ok, split} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: c.checking.id,
         date: ~D[2026-10-09],
         amount: -1_250,
@@ -60,24 +60,28 @@ defmodule Abakus.Ledger.ReconciledTest do
       transaction = reconcile(transaction_fixture(account_id: c.checking.id, memo: "Miete"))
 
       for attrs <- [%{memo: "Pacht"}, %{amount: 1}, %{flag: :red}, %{account_id: c.cash.id}] do
-        assert {:error, changeset} = Ledger.update_transaction(transaction, attrs)
+        assert {:error, changeset} = Ledger.update_transaction(budget_scope(), transaction, attrs)
         assert %{cleared: ["ist abgeschlossen"]} = errors_on(changeset)
       end
 
       assert reload(transaction).memo == "Miete"
 
       assert {:ok, %Transaction{memo: "Pacht", cleared: :reconciled}} =
-               Ledger.update_transaction(transaction, %{memo: "Pacht"}, reconciled: :confirmed)
+               Ledger.update_transaction(budget_scope(), transaction, %{memo: "Pacht"},
+                 reconciled: :confirmed
+               )
     end
 
     test "leaves the reconciled state only when confirmed", c do
       transaction = reconcile(transaction_fixture(account_id: c.checking.id))
 
-      assert {:error, changeset} = Ledger.update_transaction(transaction, %{cleared: :cleared})
+      assert {:error, changeset} =
+               Ledger.update_transaction(budget_scope(), transaction, %{cleared: :cleared})
+
       assert %{cleared: ["ist abgeschlossen"]} = errors_on(changeset)
 
       assert {:ok, %Transaction{cleared: :cleared}} =
-               Ledger.update_transaction(transaction, %{cleared: :cleared},
+               Ledger.update_transaction(budget_scope(), transaction, %{cleared: :cleared},
                  reconciled: :confirmed
                )
     end
@@ -85,18 +89,18 @@ defmodule Abakus.Ledger.ReconciledTest do
     test "takes an update that changes nothing", c do
       transaction = reconcile(transaction_fixture(account_id: c.checking.id, memo: "Miete"))
 
-      assert {:ok, _} = Ledger.update_transaction(transaction, %{memo: "Miete"})
+      assert {:ok, _} = Ledger.update_transaction(budget_scope(), transaction, %{memo: "Miete"})
     end
 
     test "is deleted only when confirmed", c do
       transaction = reconcile(transaction_fixture(account_id: c.checking.id))
 
-      assert {:error, changeset} = Ledger.delete_transaction(transaction)
+      assert {:error, changeset} = Ledger.delete_transaction(budget_scope(), transaction)
       assert %{cleared: ["ist abgeschlossen"]} = errors_on(changeset)
       refute reload(transaction).deleted_at
 
       assert {:ok, %Transaction{deleted_at: %DateTime{}}} =
-               Ledger.delete_transaction(transaction, reconciled: :confirmed)
+               Ledger.delete_transaction(budget_scope(), transaction, reconciled: :confirmed)
     end
   end
 
@@ -109,7 +113,7 @@ defmodule Abakus.Ledger.ReconciledTest do
             {%{date: ~D[2026-10-01]}, :date},
             {%{memo: "Rest"}, :memo}
           ] do
-        assert {:error, changeset} = Ledger.update_transaction(outflow, attrs)
+        assert {:error, changeset} = Ledger.update_transaction(budget_scope(), outflow, attrs)
         assert %{^field => [@counterpart]} = errors_on(changeset)
       end
 
@@ -117,7 +121,9 @@ defmodule Abakus.Ledger.ReconciledTest do
       assert reload(outflow).amount == -1_250
 
       assert {:ok, _} =
-               Ledger.update_transaction(outflow, %{amount: -5_000}, reconciled: :confirmed)
+               Ledger.update_transaction(budget_scope(), outflow, %{amount: -5_000},
+                 reconciled: :confirmed
+               )
 
       assert %Transaction{amount: 5_000, cleared: :reconciled} = reload(inflow)
     end
@@ -125,7 +131,9 @@ defmodule Abakus.Ledger.ReconciledTest do
     test "is changed from its own side's fields only", c do
       %{outflow: outflow, inflow: inflow} = transfer(c)
 
-      assert {:ok, _} = Ledger.update_transaction(outflow, %{cleared: :cleared, flag: :red})
+      assert {:ok, _} =
+               Ledger.update_transaction(budget_scope(), outflow, %{cleared: :cleared, flag: :red})
+
       assert reload(inflow) == inflow
     end
 
@@ -133,12 +141,12 @@ defmodule Abakus.Ledger.ReconciledTest do
       %{outflow: outflow, inflow: inflow} = transfer(c)
 
       assert {:error, changeset} =
-               Ledger.update_transaction(outflow, %{payee_id: payee_fixture().id})
+               Ledger.update_transaction(budget_scope(), outflow, %{payee_id: payee_fixture().id})
 
       assert %{payee_id: [@counterpart]} = errors_on(changeset)
 
       assert {:error, changeset} =
-               Ledger.update_transaction(outflow, %{
+               Ledger.update_transaction(budget_scope(), outflow, %{
                  payee_id: nil,
                  subtransactions: [%{amount: -1_000}, %{amount: -250}]
                })
@@ -148,7 +156,7 @@ defmodule Abakus.Ledger.ReconciledTest do
       assert reload(outflow).payee_id == c.savings.transfer_payee.id
 
       assert {:ok, _} =
-               Ledger.update_transaction(outflow, %{payee_id: payee_fixture().id},
+               Ledger.update_transaction(budget_scope(), outflow, %{payee_id: payee_fixture().id},
                  reconciled: :confirmed
                )
 
@@ -159,16 +167,23 @@ defmodule Abakus.Ledger.ReconciledTest do
       %{outflow: outflow, inflow: inflow} = transfer(c)
 
       assert {:error, changeset} =
-               Ledger.update_transaction(outflow, %{payee_id: c.cash.transfer_payee.id})
+               Ledger.update_transaction(budget_scope(), outflow, %{
+                 payee_id: c.cash.transfer_payee.id
+               })
 
       assert %{payee_id: [@counterpart]} = errors_on(changeset)
 
-      assert {:error, changeset} = Ledger.update_transaction(outflow, %{account_id: c.cash.id})
+      assert {:error, changeset} =
+               Ledger.update_transaction(budget_scope(), outflow, %{account_id: c.cash.id})
+
       assert %{account_id: [@counterpart]} = errors_on(changeset)
       assert reload(inflow) == inflow
 
       assert {:ok, _} =
-               Ledger.update_transaction(outflow, %{payee_id: c.cash.transfer_payee.id},
+               Ledger.update_transaction(
+                 budget_scope(),
+                 outflow,
+                 %{payee_id: c.cash.transfer_payee.id},
                  reconciled: :confirmed
                )
 
@@ -178,12 +193,12 @@ defmodule Abakus.Ledger.ReconciledTest do
     test "is not deleted with its other side unless confirmed", c do
       %{outflow: outflow, inflow: inflow} = transfer(c)
 
-      assert {:error, changeset} = Ledger.delete_transaction(outflow)
+      assert {:error, changeset} = Ledger.delete_transaction(budget_scope(), outflow)
       assert %{transfer_transaction_id: [@counterpart]} = errors_on(changeset)
       refute reload(outflow).deleted_at
       refute reload(inflow).deleted_at
 
-      assert {:ok, _} = Ledger.delete_transaction(outflow, reconciled: :confirmed)
+      assert {:ok, _} = Ledger.delete_transaction(budget_scope(), outflow, reconciled: :confirmed)
       assert reload(inflow).deleted_at
     end
 
@@ -192,9 +207,11 @@ defmodule Abakus.Ledger.ReconciledTest do
       reconcile(outflow)
 
       {:ok, inflow} =
-        Ledger.update_transaction(inflow, %{cleared: :cleared}, reconciled: :confirmed)
+        Ledger.update_transaction(budget_scope(), inflow, %{cleared: :cleared},
+          reconciled: :confirmed
+        )
 
-      assert {:error, changeset} = Ledger.update_transaction(inflow, %{amount: 1})
+      assert {:error, changeset} = Ledger.update_transaction(budget_scope(), inflow, %{amount: 1})
       assert %{amount: [@counterpart]} = errors_on(changeset)
       assert reload(outflow).amount == -1_250
     end
@@ -209,7 +226,7 @@ defmodule Abakus.Ledger.ReconciledTest do
       end
 
       assert {:error, changeset} =
-               Ledger.update_transaction(split, %{
+               Ledger.update_transaction(budget_scope(), split, %{
                  amount: -1_300,
                  subtransactions: subtransactions.(%{amount: -300})
                })
@@ -217,18 +234,22 @@ defmodule Abakus.Ledger.ReconciledTest do
       assert %{subtransactions: [@counterpart]} = errors_on(changeset)
 
       assert {:error, changeset} =
-               Ledger.update_transaction(split, %{
+               Ledger.update_transaction(budget_scope(), split, %{
                  subtransactions: subtransactions.(%{memo: "Rest"})
                })
 
       assert %{subtransactions: [@counterpart]} = errors_on(changeset)
 
-      assert {:error, changeset} = Ledger.update_transaction(split, %{date: ~D[2026-10-01]})
+      assert {:error, changeset} =
+               Ledger.update_transaction(budget_scope(), split, %{date: ~D[2026-10-01]})
+
       assert %{date: [@counterpart]} = errors_on(changeset)
       assert reload(inflow) == inflow
 
       assert {:ok, _} =
-               Ledger.update_transaction(split, %{date: ~D[2026-10-01]}, reconciled: :confirmed)
+               Ledger.update_transaction(budget_scope(), split, %{date: ~D[2026-10-01]},
+                 reconciled: :confirmed
+               )
 
       assert reload(inflow).date == ~D[2026-10-01]
     end
@@ -242,7 +263,9 @@ defmodule Abakus.Ledger.ReconciledTest do
             [%{id: groceries.id}, %{id: to_savings.id, payee_id: c.cash.transfer_payee.id}]
           ] do
         assert {:error, changeset} =
-                 Ledger.update_transaction(split, %{subtransactions: subtransactions})
+                 Ledger.update_transaction(budget_scope(), split, %{
+                   subtransactions: subtransactions
+                 })
 
         assert %{subtransactions: [@counterpart]} = errors_on(changeset)
       end
@@ -251,6 +274,7 @@ defmodule Abakus.Ledger.ReconciledTest do
 
       assert {:ok, _} =
                Ledger.update_transaction(
+                 budget_scope(),
                  split,
                  %{subtransactions: [%{id: groceries.id}, %{amount: -250}]},
                  reconciled: :confirmed
@@ -262,11 +286,11 @@ defmodule Abakus.Ledger.ReconciledTest do
     test "is not deleted with its split unless confirmed", c do
       %{split: split, inflow: inflow} = split(c)
 
-      assert {:error, changeset} = Ledger.delete_transaction(split)
+      assert {:error, changeset} = Ledger.delete_transaction(budget_scope(), split)
       assert %{subtransactions: [@counterpart]} = errors_on(changeset)
       refute reload(inflow).deleted_at
 
-      assert {:ok, _} = Ledger.delete_transaction(split, reconciled: :confirmed)
+      assert {:ok, _} = Ledger.delete_transaction(budget_scope(), split, reconciled: :confirmed)
       assert reload(inflow).deleted_at
     end
   end
@@ -275,7 +299,7 @@ defmodule Abakus.Ledger.ReconciledTest do
     %{outflow: outflow, inflow: inflow} = transfer(c)
 
     {:ok, proposal} =
-      Ledger.create_transaction(%{
+      Ledger.create_transaction(budget_scope(), %{
         account_id: c.checking.id,
         date: ~D[2026-10-07],
         amount: -1_250,
@@ -283,11 +307,11 @@ defmodule Abakus.Ledger.ReconciledTest do
         matched_transaction_id: outflow.id
       })
 
-    assert {:error, changeset} = Ledger.accept_match(proposal)
+    assert {:error, changeset} = Ledger.accept_match(budget_scope(), proposal)
     assert %{date: [@counterpart]} = errors_on(changeset)
     assert reload(inflow) == inflow
 
-    assert {:ok, _} = Ledger.accept_match(proposal, reconciled: :confirmed)
+    assert {:ok, _} = Ledger.accept_match(budget_scope(), proposal, reconciled: :confirmed)
     assert reload(inflow).date == ~D[2026-10-07]
   end
 

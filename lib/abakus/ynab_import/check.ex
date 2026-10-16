@@ -6,14 +6,15 @@ defmodule Abakus.YnabImport.Check do
   """
 
   alias Abakus.{Budget, Categories, Ledger}
+  alias Abakus.Users.Scope
   alias Abakus.YnabImport.Plan
 
   @doc """
   The differences as `%{where, field, ynab, abakus}`, months first. `ids` maps YNAB ids to Abakus ids: `accounts`,
   and `categories`, where Uncategorized is nil; categories without an id are not checked.
   """
-  def differences(plan, ids) do
-    month_differences(plan, ids.categories) ++ account_differences(plan, ids.accounts)
+  def differences(%Scope{} = scope, plan, ids) do
+    month_differences(plan, ids.categories) ++ account_differences(scope, plan, ids.accounts)
   end
 
   defp month_differences(plan, categories) do
@@ -60,8 +61,8 @@ defmodule Abakus.YnabImport.Check do
   defp row(month, {:ok, id}), do: Enum.find(month.categories, &(&1.category_id == id))
   defp row(_month, :error), do: nil
 
-  defp account_differences(plan, accounts) do
-    balances = Ledger.balances()
+  defp account_differences(scope, plan, accounts) do
+    balances = Ledger.balances(scope)
 
     Enum.flat_map(Plan.accounts(plan), fn account ->
       abakus = Map.get(balances, accounts[account["id"]], %{balance: 0, cleared: 0, uncleared: 0})

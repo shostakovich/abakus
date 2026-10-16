@@ -998,7 +998,7 @@ defmodule Abakus.Depot.Portfolios do
       | Enum.map(rest, &insert_transaction(scope, &1))
     ]
 
-    with :ok <- BudgetLink.sync(scope.user.id), do: {:ok, transactions}
+    with :ok <- BudgetLink.sync(scope), do: {:ok, transactions}
   end
 
   defp claim_ready_receipt(scope, receipt) do
@@ -1073,7 +1073,7 @@ defmodule Abakus.Depot.Portfolios do
 
       unused = if receipt_id, do: drop_unused_receipt(transaction.receipt_id)
 
-      with :ok <- BudgetLink.sync(scope.user.id),
+      with :ok <- BudgetLink.sync(scope),
            do: {:ok, {get_transaction(scope, transaction.id), unused}}
     end
   end
@@ -1104,7 +1104,7 @@ defmodule Abakus.Depot.Portfolios do
   defp remove_transaction(scope, transaction) do
     Repo.delete!(transaction, allow_stale: true)
     unused = drop_unused_receipt(transaction.receipt_id)
-    with :ok <- BudgetLink.sync(scope.user.id), do: {:ok, unused}
+    with :ok <- BudgetLink.sync(scope), do: {:ok, unused}
   end
 
   defp check_editable(%Scope{user: %{id: user_id}}, %Transaction{user_id: user_id} = transaction) do

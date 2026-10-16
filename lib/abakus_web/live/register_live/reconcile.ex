@@ -6,7 +6,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
   or to search the difference. Both lead to reconcile mode, whose bar shows the difference as the cleared state
   changes, until it is finished (with an adjustment for what is left) or cancelled.
 
-  The bank's balance the account is reconciled against is kept as `Abakus.Ledger.reconcile/3` takes it, with its
+  The bank's balance the account is reconciled against is kept as `Abakus.Ledger.reconcile/4` takes it, with its
   source: a stored bank balance counts up to its date, a balance entered by hand up to today.
   """
   use AbakusWeb, :html

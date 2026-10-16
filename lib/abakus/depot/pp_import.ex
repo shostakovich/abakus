@@ -40,12 +40,12 @@ defmodule Abakus.Depot.PPImport do
   end
 
   @doc "Imports a file already parsed by `Abakus.Depot.PPImport.Reader`."
-  def import_client(%Scope{user: user}, client) do
+  def import_client(%Scope{user: user} = scope, client) do
     # A large file takes longer than the default 15 s checkout timeout.
     Repo.transact(
       fn ->
         summary = do_import(user.id, client)
-        with :ok <- BudgetLink.sync(user.id), do: {:ok, summary}
+        with :ok <- BudgetLink.sync(scope), do: {:ok, summary}
       end,
       timeout: :timer.minutes(5)
     )

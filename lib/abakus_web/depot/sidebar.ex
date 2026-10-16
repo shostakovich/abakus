@@ -61,7 +61,7 @@ defmodule AbakusWeb.Depot.Sidebar do
 
   defp reload_account_groups(%{assigns: %{account_groups: _groups}} = socket) do
     if Areas.allowed?(socket.assigns.current_scope, :budget),
-      do: assign(socket, :account_groups, AccountGroups.load()),
+      do: assign(socket, :account_groups, AccountGroups.load(socket.assigns.current_scope)),
       else: socket
   end
 

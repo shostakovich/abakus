@@ -4,6 +4,7 @@ defmodule Abakus.YnabImport do
   replaces the whole budget with it (DECISIONS.md, ADR 0002) and checks Abakus's numbers against
   YNAB's. Data Abakus cannot represent stops it before anything is written (`Unsupported`); so does any
   transaction that did not come from YNAB, as the budget then holds data of its own, and the Kasse's link or category mapping to it.
+  It is a task, so it takes the system scope, and writes the budget owner's budget with their scope.
   """
 
   import Ecto.Query
@@ -13,6 +14,7 @@ defmodule Abakus.YnabImport do
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.Transaction
   alias Abakus.Repo
+  alias Abakus.Users.Scope
   alias Abakus.YnabImport.{Check, Client, Loader, Report, Status, Unsupported}
 
   @doc "What the last import brought over and when (`Status`), or nil when nothing came from YNAB."
@@ -27,10 +29,10 @@ defmodule Abakus.YnabImport do
   end
 
   @doc "Fetches the plan `plan_id`, or the token's only plan, and imports it."
-  def run(token, plan_id \\ nil) do
+  def run(%Scope{system: true} = scope, token, plan_id \\ nil) do
     with {:ok, id} <- plan_id(token, plan_id),
          {:ok, plan} <- Client.plan(token, id) do
-      import_plan(plan)
+      import_plan(scope, plan)
     end
   end
 
@@ -48,34 +50,44 @@ defmodule Abakus.YnabImport do
   defp plan_id(_token, _id), do: {:error, :bad_plan_id}
 
   @doc "Replaces the budget with the plan (an export's `data.plan`) and checks it; returns a `Report`."
-  def import_plan(plan) do
-    case Unsupported.problems(plan) do
-      [] -> replace(plan)
-      problems -> {:error, {:unsupported, problems}}
+  def import_plan(%Scope{system: true}, plan) do
+    with {:ok, owner} <- budget_owner() do
+      case Unsupported.problems(plan) do
+        [] -> replace(owner, plan)
+        problems -> {:error, {:unsupported, problems}}
+      end
     end
   end
 
-  defp replace(plan) do
-    with {:ok, loaded} <- Repo.transact(fn -> load(plan) end) do
+  defp budget_owner do
+    case Scope.for_budget_owner() do
+      nil -> {:error, :no_budget_owner}
+      owner -> {:ok, owner}
+    end
+  end
+
+  defp replace(owner, plan) do
+    with {:ok, loaded} <- Repo.transact(fn -> load(owner, plan) end) do
       {:ok,
        %Report{
          plan: plan["name"],
          counts: loaded.counts,
          merged_payees: loaded.merged_payees,
-         differences: Check.differences(plan, loaded)
+         differences: Check.differences(owner, plan, loaded)
        }}
     end
   rescue
     error in Loader.WriteError -> {:error, {:not_written, error.message}}
   end
 
-  defp load(plan) do
-    if Repo.exists?(from t in Transaction, where: t.source != :ynab) or BudgetLink.in_use?() or
-         BudgetFeed.in_use?() or DepotLink.in_use?() do
+  defp load(owner, plan) do
+    if Repo.exists?(
+         from t in Transaction, where: t.user_id == ^owner.user.id and t.source != :ynab
+       ) or BudgetLink.in_use?() or BudgetFeed.in_use?() or DepotLink.in_use?() do
       {:error, :own_data}
     else
-      Loader.wipe()
-      {:ok, Loader.load(plan)}
+      Loader.wipe(owner)
+      {:ok, Loader.load(owner, plan)}
     end
   end
 
@@ -101,6 +113,9 @@ defmodule Abakus.YnabImport do
     do: ["Abakus refused part of the plan, so the budget stays as it was: #{message}"]
 
   def error_lines(:no_plans), do: ["The token sees no plans."]
+
+  def error_lines(:no_budget_owner),
+    do: ["Nobody owns the budget yet; invite the first user before importing."]
 
   def error_lines(:bad_plan_id),
     do: [~s{Pass the plan's id as a string, such as import_ynab("…").}]
