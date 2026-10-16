@@ -459,6 +459,7 @@ defmodule Abakus.Depot.MarketDataTest do
       assert {:error, :unreachable} = MarketData.lookup_isin("IE00BKM4GZ66")
       assert MarketData.lookup_error(:unreachable) == "Yahoo ist nicht erreichbar."
       assert MarketData.lookup_error(:timeout) == "Yahoo ist nicht erreichbar."
+      assert MarketData.lookup_error(:too_large) == "Yahoo liefert eine zu große Antwort."
     end
   end
 

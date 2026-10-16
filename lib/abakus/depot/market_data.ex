@@ -280,6 +280,7 @@ defmodule Abakus.Depot.MarketData do
     do: "#{source} ist nicht erreichbar."
 
   defp source_error(source, {:http_status, status}), do: "#{source} antwortet mit HTTP #{status}."
+  defp source_error(source, :too_large), do: "#{source} liefert eine zu große Antwort."
   defp source_error(source, :invalid_response), do: "#{source} liefert eine unerwartete Antwort."
 
   defp price_feed, do: config(:price_feed)

@@ -5,7 +5,7 @@ defmodule Abakus.Kasse.Ynab.Client do
   never an empty list.
   """
 
-  alias Abakus.Kasse.HTTP
+  alias Abakus.HTTP
   alias Abakus.Kasse.Ynab.Error
 
   @timeout 30_000
@@ -152,10 +152,10 @@ defmodule Abakus.Kasse.Ynab.Client do
   defp request(token, method, path, body) do
     headers = [{"authorization", "Bearer " <> token}, {"accept", "application/json"}]
 
-    case HTTP.request(method, base_url() <> path, headers, body,
-           timeout: @timeout,
-           max_body: @max_body
-         ) do
+    opts = [headers: headers, timeout: @timeout, max_body: @max_body]
+    opts = if is_nil(body), do: opts, else: [{:json, body} | opts]
+
+    case HTTP.request(method, base_url() <> path, opts) do
       {:ok, status, _headers, data} when status in 200..299 ->
         {:ok, data}
 
@@ -169,8 +169,7 @@ defmodule Abakus.Kasse.Ynab.Client do
 
   defp describe(:timeout), do: "Zeitüberschreitung"
   defp describe(:too_large), do: "Antwort zu groß"
-  defp describe({:failed_connect, _details}), do: "keine Verbindung"
-  defp describe(reason), do: inspect(reason)
+  defp describe(:unreachable), do: "keine Verbindung"
 
   defp detail(body) do
     case JSON.decode(body) do

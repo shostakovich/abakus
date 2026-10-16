@@ -6,7 +6,7 @@ defmodule Abakus.Depot.MarketData.DivvyDiary do
   @behaviour Abakus.Depot.MarketData.SymbolSource
 
   alias Abakus.Depot.MarketData.DivvyDiary.Response
-  alias Abakus.Depot.MarketData.HTTP
+  alias Abakus.HTTP
 
   @url "https://api.divvydiary.com/symbols/"
 
@@ -17,7 +17,7 @@ defmodule Abakus.Depot.MarketData.DivvyDiary do
   def symbol(isin) do
     url = @url <> URI.encode(isin, &URI.char_unreserved?/1)
 
-    case HTTP.get(url, [], [{"x-api-key", api_key()}]) do
+    case HTTP.get(url, headers: [{"x-api-key", api_key()}]) do
       {:ok, 200, body} -> parse(body)
       {:ok, 404, _body} -> {:error, :not_found}
       {:ok, status, _body} -> {:error, {:http_status, status}}

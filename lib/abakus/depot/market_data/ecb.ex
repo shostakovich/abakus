@@ -2,7 +2,7 @@ defmodule Abakus.Depot.MarketData.ECB do
   @moduledoc "Daily reference rates of all currencies from the ECB Data Portal, in one request."
   @behaviour Abakus.Depot.MarketData.RateSource
 
-  alias Abakus.Depot.MarketData.HTTP
+  alias Abakus.HTTP
 
   @url "https://data-api.ecb.europa.eu/service/data/EXR/D..EUR.SP00.A"
 
@@ -11,7 +11,7 @@ defmodule Abakus.Depot.MarketData.ECB do
   def rates(from) do
     params = [format: "csvdata", detail: "dataonly", startPeriod: Date.to_iso8601(from)]
 
-    case HTTP.get(@url, params) do
+    case HTTP.get(@url, params: params, follow_redirects: true) do
       {:ok, 200, body} -> parse(body)
       {:ok, 404, _body} -> {:ok, []}
       {:ok, status, _body} -> {:error, {:http_status, status}}

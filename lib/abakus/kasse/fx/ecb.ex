@@ -5,7 +5,8 @@ defmodule Abakus.Kasse.Fx.Ecb do
   fails instead of yielding its first rates.
   """
 
-  alias Abakus.Kasse.{HTTP, Money}
+  alias Abakus.HTTP
+  alias Abakus.Kasse.Money
 
   @recent "eurofxref-hist-90d.xml"
   @history "eurofxref-hist.xml"
@@ -23,7 +24,7 @@ defmodule Abakus.Kasse.Fx.Ecb do
   @doc "Downloads and parses `file` from `base_url`; an error is a reason in English."
   @spec download(String.t(), String.t()) :: {:ok, [rate()]} | {:error, String.t()}
   def download(base_url, file) do
-    case HTTP.get(base_url <> file, [{"user-agent", @user_agent}]) do
+    case HTTP.get(base_url <> file, headers: [{"user-agent", @user_agent}]) do
       {:ok, 200, body} -> parse(body)
       {:ok, status, _body} -> {:error, "HTTP status #{status}"}
       {:error, reason} -> {:error, describe(reason)}
@@ -32,8 +33,7 @@ defmodule Abakus.Kasse.Fx.Ecb do
 
   defp describe(:timeout), do: "timeout"
   defp describe(:too_large), do: "file too large"
-  defp describe({:failed_connect, _details}), do: "no connection"
-  defp describe(reason), do: inspect(reason)
+  defp describe(:unreachable), do: "no connection"
 
   @doc "The rates of every day in the file; currencies or rates the ECB does not have are left out."
   @spec parse(binary()) :: {:ok, [rate()]} | {:error, String.t()}

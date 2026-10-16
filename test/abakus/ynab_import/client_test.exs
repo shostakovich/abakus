@@ -25,6 +25,6 @@ defmodule Abakus.YnabImport.ClientTest do
 
   test "an unreachable YNAB gives the reason" do
     Application.put_env(:abakus, Client, base_url: "http://127.0.0.1:1/v1")
-    assert {:error, {:ynab, {:failed_connect, _details}}} = Client.plans(FakeYnab.token())
+    assert Client.plans(FakeYnab.token()) == {:error, {:ynab, :unreachable}}
   end
 end

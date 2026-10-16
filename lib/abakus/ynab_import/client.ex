@@ -1,13 +1,15 @@
 defmodule Abakus.YnabImport.Client do
   @moduledoc """
   YNAB's API as far as the import needs it, with a personal access token; the base URL is configurable for tests.
-  Uses OTP's `:httpc` with certificate verification, as the import makes only a couple of requests.
   """
+
+  alias Abakus.HTTP
 
   @default_url "https://api.ynab.com/v1"
 
-  # A whole plan's export takes YNAB a while.
+  # A whole plan's export is large and takes YNAB a while.
   @timeout 120_000
+  @max_body 256 * 1024 * 1024
 
   @doc "The plans the token can see, as YNAB lists them (`id`, `name`, ...)."
   def plans(token) do
@@ -21,45 +23,13 @@ defmodule Abakus.YnabImport.Client do
   end
 
   defp get(token, path) do
-    url = base_url() <> path
+    headers = [{"authorization", "Bearer " <> token}, {"accept", "application/json"}]
 
-    headers = [
-      {~c"authorization", ~c"Bearer " ++ String.to_charlist(token)},
-      {~c"accept", ~c"application/json"}
-    ]
-
-    case :httpc.request(:get, {String.to_charlist(url), headers}, http_options(url),
-           body_format: :binary
-         ) do
-      {:ok, {{_version, 200, _reason}, _headers, body}} ->
-        {:ok, JSON.decode!(body)["data"]}
-
-      {:ok, {{_version, status, _reason}, _headers, body}} ->
-        {:error, {:ynab, status, detail(body)}}
-
-      {:error, reason} ->
-        {:error, {:ynab, reason}}
+    case HTTP.get(base_url() <> path, headers: headers, timeout: @timeout, max_body: @max_body) do
+      {:ok, 200, body} -> {:ok, JSON.decode!(body)["data"]}
+      {:ok, status, body} -> {:error, {:ynab, status, detail(body)}}
+      {:error, reason} -> {:error, {:ynab, reason}}
     end
-  end
-
-  defp http_options(url) do
-    ssl =
-      if String.starts_with?(url, "https:") do
-        host = url |> URI.parse() |> Map.fetch!(:host) |> String.to_charlist()
-
-        [
-          verify: :verify_peer,
-          cacerts: :public_key.cacerts_get(),
-          server_name_indication: host,
-          customize_hostname_check: [
-            match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
-          ]
-        ]
-      else
-        []
-      end
-
-    [timeout: @timeout, connect_timeout: 15_000, ssl: ssl]
   end
 
   defp detail(body) do

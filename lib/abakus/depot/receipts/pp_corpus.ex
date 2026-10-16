@@ -12,7 +12,7 @@ defmodule Abakus.Depot.Receipts.PPCorpus do
   placeholders, so price, depot number and reference are not scored.
   """
 
-  alias Abakus.Depot.MarketData.HTTP
+  alias Abakus.HTTP
 
   @repo "https://api.github.com/repos/portfolio-performance/portfolio/contents/"
   @dir "name.abuchen.portfolio.tests/src/name/abuchen/portfolio/datatransfer/pdf/"
@@ -71,7 +71,7 @@ defmodule Abakus.Depot.Receipts.PPCorpus do
   end
 
   defp get_json(url, params) do
-    case HTTP.get(url, params) do
+    case HTTP.get(url, params: params, follow_redirects: true) do
       {:ok, 200, body} -> JSON.decode(body)
       {:ok, status, _body} -> {:error, {:http_status, status}}
       {:error, reason} -> {:error, reason}
@@ -79,7 +79,7 @@ defmodule Abakus.Depot.Receipts.PPCorpus do
   end
 
   defp download(url) do
-    case HTTP.get(url, []) do
+    case HTTP.get(url, follow_redirects: true) do
       {:ok, 200, body} -> {:ok, body}
       {:ok, status, _body} -> {:error, {:http_status, status}}
       {:error, reason} -> {:error, reason}

@@ -5,7 +5,7 @@ defmodule Abakus.Depot.Receipts.PaperlessAPI do
   """
   @behaviour Abakus.Depot.Receipts.Paperless
 
-  alias Abakus.Depot.MarketData.HTTP
+  alias Abakus.HTTP
 
   @page_size 100
 
@@ -58,7 +58,10 @@ defmodule Abakus.Depot.Receipts.PaperlessAPI do
         parameters: %{add_tags: [to_id], remove_tags: List.wrap(from_id)}
       }
 
-      case HTTP.post_json(url(connection, "documents/bulk_edit/"), body, headers(connection)) do
+      case HTTP.post(url(connection, "documents/bulk_edit/"),
+             json: body,
+             headers: headers(connection)
+           ) do
         {:ok, 200, _body} -> :ok
         {:ok, status, _body} -> {:error, {:http_status, status}}
         {:error, reason} -> {:error, reason}
@@ -78,7 +81,7 @@ defmodule Abakus.Depot.Receipts.PaperlessAPI do
     body = %{name: name, matching_algorithm: 0}
 
     with {:ok, 201, response} <-
-           HTTP.post_json(url(connection, "tags/"), body, headers(connection)),
+           HTTP.post(url(connection, "tags/"), json: body, headers: headers(connection)),
          {:ok, %{"id" => id}} <- JSON.decode(response) do
       {:ok, id}
     else
@@ -108,7 +111,7 @@ defmodule Abakus.Depot.Receipts.PaperlessAPI do
   end
 
   defp get(connection, path, params) do
-    case HTTP.get(url(connection, path), params, headers(connection)) do
+    case HTTP.get(url(connection, path), params: params, headers: headers(connection)) do
       {:ok, 200, body} -> {:ok, body}
       {:ok, status, _body} -> {:error, {:http_status, status}}
       {:error, reason} -> {:error, reason}

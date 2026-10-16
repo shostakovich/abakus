@@ -8,7 +8,7 @@ defmodule Abakus.Depot.MarketData.Yahoo do
   @behaviour Abakus.Depot.MarketData.PriceFeed
   @behaviour Abakus.Depot.MarketData.SymbolSearch
 
-  alias Abakus.Depot.MarketData.HTTP
+  alias Abakus.HTTP
 
   @url "https://query1.finance.yahoo.com/v8/finance/chart/"
   @search_url "https://query1.finance.yahoo.com/v1/finance/search"
@@ -21,7 +21,10 @@ defmodule Abakus.Depot.MarketData.Yahoo do
   def chart(symbol, from, now) do
     params = [period1: period_start(from), period2: DateTime.to_unix(now), interval: "1d"]
 
-    case HTTP.get(@url <> URI.encode(symbol, &URI.char_unreserved?/1), params) do
+    case HTTP.get(@url <> URI.encode(symbol, &URI.char_unreserved?/1),
+           params: params,
+           follow_redirects: true
+         ) do
       {:ok, 200, body} -> parse(body, now)
       {:ok, 404, _body} -> {:error, :not_found}
       {:ok, status, _body} -> {:error, {:http_status, status}}
@@ -97,7 +100,10 @@ defmodule Abakus.Depot.MarketData.Yahoo do
 
   @impl Abakus.Depot.MarketData.SymbolSearch
   def search(query) do
-    case HTTP.get(@search_url, q: query, quotesCount: 20, newsCount: 0, listsCount: 0) do
+    case HTTP.get(@search_url,
+           params: [q: query, quotesCount: 20, newsCount: 0, listsCount: 0],
+           follow_redirects: true
+         ) do
       {:ok, 200, body} -> parse_search(body)
       {:ok, status, _body} -> {:error, {:http_status, status}}
       {:error, reason} -> {:error, reason}
