@@ -35,6 +35,11 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   `test/abakus/web_authn_test.exs` using `FakeAuthenticator`; a new check gets one too.
 - Every page needs a session; `test/abakus_web/router_test.exs` lists the public ones. The CSP allows no inline
   script without `nonce={@csp_nonce}` and no inline `style` attributes.
+- Amounts in every area: `Abakus.Money` reads what is typed (`parse/2`, the Depot's `parse_number/1`) and writes
+  field values (`amount/2`; the Depot's numbers `Abakus.Format.decimal/2`; both read back unchanged) and shown
+  amounts (`euros/2`, `money/2`). MCP output, CSV exports and the YNAB memo keep their own formats. Dates, times,
+  counts, percentages and other numbers are written by `Abakus.Format` (on `Setzkasten.Format`); what only the
+  Depot shows, such as prices, fund sizes and TERs, by `AbakusWeb.Depot.Format`.
 - The Kasse (`Abakus.Kasse`, `AbakusWeb.Kasse`, tables `kasse_…`): money is integer cents, local time is the
   host's `TZ` (`Abakus.LocalTime`, no time zone database). Its jobs and the backup run in the release;
   `config/test.exs` turns them off (`jobs: false`), and tests fake YNAB with a Bandit stub

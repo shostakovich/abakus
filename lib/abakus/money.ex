@@ -257,8 +257,8 @@ defmodule Abakus.Money do
   def format_basis_points(points), do: format_minor(points, 2) <> " %"
 
   @doc """
-  `value` in units of 10^-decimals without grouping, as MCP output and CSV exports write it.
-  Option `:separator` (default `","`).
+  `value` in units of 10^-decimals without grouping, as MCP output, CSV exports and Kasse
+  percentages write it. Option `:separator` (default `","`).
   """
   @spec format_minor(integer(), non_neg_integer(), keyword()) :: String.t()
   def format_minor(value, decimals, opts \\ []) do
