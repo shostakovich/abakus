@@ -8,16 +8,7 @@ defmodule Abakus.Ledger.MigrationTest do
   @tables ~w(accounts payees transactions bank_balances transaction_origins)
 
   setup %{tmp_dir: dir} do
-    path = Path.join(dir, "abakus.sqlite3")
-
-    repo =
-      start_supervised!(
-        {Repo, name: nil, database: path, pool: DBConnection.ConnectionPool, pool_size: 1},
-        id: {Repo, path}
-      )
-
-    Repo.put_dynamic_repo(repo)
-    on_exit(fn -> Repo.put_dynamic_repo(Repo) end)
+    repo = TestMigrations.start_repo!(dir)
     TestMigrations.run!(repo, to: @before)
     %{repo: repo}
   end

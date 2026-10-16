@@ -9,16 +9,7 @@ defmodule Abakus.Categories.MigrationTest do
   @now "'2026-10-01T10:00:00.000000Z'"
 
   setup %{tmp_dir: dir} do
-    path = Path.join(dir, "abakus.sqlite3")
-
-    repo =
-      start_supervised!(
-        {Repo, name: nil, database: path, pool: DBConnection.ConnectionPool, pool_size: 1},
-        id: {Repo, path}
-      )
-
-    Repo.put_dynamic_repo(repo)
-    on_exit(fn -> Repo.put_dynamic_repo(Repo) end)
+    repo = TestMigrations.start_repo!(dir)
     TestMigrations.run!(repo, to: @before)
     %{repo: repo}
   end
