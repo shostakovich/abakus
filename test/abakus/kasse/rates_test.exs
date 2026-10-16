@@ -8,6 +8,7 @@ defmodule Abakus.Kasse.RatesTest do
   alias Abakus.ExchangeRates.ExchangeRate
   alias Abakus.Kasse.{Expenses, Rates}
   alias Abakus.Money
+  alias Abakus.Users.Scope
 
   @today ~D[2026-10-02]
 
@@ -150,10 +151,10 @@ defmodule Abakus.Kasse.RatesTest do
   test "a foreign expense saved now has the euro amount of the rate parsed from the ECB's text" do
     h = household()
     ecb!("JPY", ~D[2026-09-30], "158.37")
-    form = Expenses.new_form(today: @today, participant_id: h.anna)
+    form = Expenses.new_form(Scope.system(), today: @today, participant_id: h.anna)
     form = %{form | title: "Ramen", amount: "12345", currency: "JPY", category_id: h.food}
 
-    {:ok, expense} = Expenses.save_form(nil, form, nil, today: @today)
+    {:ok, expense} = Expenses.save_form(Scope.system(), form, nil, today: @today)
 
     assert {expense.fx_rate, expense.fx_source} == {String.to_float("158.37"), :ecb}
 

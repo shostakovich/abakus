@@ -10,6 +10,7 @@ defmodule Abakus.Kasse.RecurringTest do
   alias Abakus.Kasse.{Activities, Dates, Expenses, Recurring}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Recurring.RecurringExpense
+  alias Abakus.Users.Scope
 
   setup do
     %{h: household()}
@@ -33,12 +34,15 @@ defmodule Abakus.Kasse.RecurringTest do
 
   defp rule(attrs, frequency, today \\ ~D[2026-01-01]) do
     expense = create!(attrs)
-    {:ok, rule, _created} = Recurring.create_rule(nil, expense, frequency, today: today)
+
+    {:ok, rule, _created} =
+      Recurring.create_rule(Scope.system(), expense, frequency, today: today)
+
     rule
   end
 
   defp catch_up(today, opts \\ []),
-    do: Recurring.catch_up([today: Date.from_iso8601!(today)] ++ opts)
+    do: Recurring.catch_up(Scope.system(), [today: Date.from_iso8601!(today)] ++ opts)
 
   defp occurrences(rule) do
     Repo.all(
@@ -58,7 +62,8 @@ defmodule Abakus.Kasse.RecurringTest do
     |> Enum.map_join(" ", &Date.to_iso8601(&1.date))
   end
 
-  defp next_date(rule), do: Date.to_iso8601(Recurring.get_rule!(rule.id).next_date)
+  defp next_date(rule),
+    do: Date.to_iso8601(Recurring.get_rule!(Scope.system(), rule.id).next_date)
 
   defp ecb!(currency, date, rate),
     do:
@@ -77,7 +82,7 @@ defmodule Abakus.Kasse.RecurringTest do
         h |> expense("Miete", "2026-01-31", 100_000) |> Map.put(:notes, "Januar") |> create!()
 
       {:ok, rule, created} =
-        Recurring.create_rule(h.anna, expense, :monthly, today: ~D[2026-02-01])
+        Recurring.create_rule(scope_of(h.anna), expense, :monthly, today: ~D[2026-02-01])
 
       %{expense: expense, rule: rule, created: created}
     end
@@ -92,13 +97,13 @@ defmodule Abakus.Kasse.RecurringTest do
                active: true,
                created_by_id: anna,
                frequency: :monthly
-             } = Recurring.get_rule!(rule.id)
+             } = Recurring.get_rule!(Scope.system(), rule.id)
 
       assert anna == h.anna
     end
 
     test "keeps the expense as the template, without its date", %{rule: rule} do
-      template = Recurring.get_rule!(rule.id).template
+      template = Recurring.get_rule!(Scope.system(), rule.id).template
 
       assert {template.title, template.amount_cents, template.notes, length(template.parts),
               template.original_currency} ==
@@ -115,13 +120,13 @@ defmodule Abakus.Kasse.RecurringTest do
       created: created
     } do
       assert created == 0
-      assert Expenses.get_expense!(expense.id).recurring_expense_id == rule.id
+      assert Expenses.get_expense!(Scope.system(), expense.id).recurring_expense_id == rule.id
 
       # As after a crash before the next date advanced.
       Repo.update_all(where(RecurringExpense, id: ^rule.id), set: [next_date: expense.date])
 
       assert {:error, %Ecto.Changeset{}} =
-               Expenses.create_expense(nil, expense(h, "Miete", "2026-01-31", 100_000),
+               Expenses.create_expense(Scope.system(), expense(h, "Miete", "2026-01-31", 100_000),
                  recurring_expense_id: rule.id
                )
     end
@@ -130,16 +135,17 @@ defmodule Abakus.Kasse.RecurringTest do
       h: h,
       expense: expense
     } do
-      assert Recurring.create_rule(h.anna, expense, :weekly) == {:error, :already_recurring}
+      assert Recurring.create_rule(scope_of(h.anna), expense, :weekly) ==
+               {:error, :already_recurring}
 
       other = create!(expense(h, "Kino", "2026-01-31", 1000))
-      {:ok, _deleted} = Expenses.delete_expense(nil, other)
-      assert Recurring.create_rule(h.anna, other, :weekly) == {:error, :not_found}
+      {:ok, _deleted} = Expenses.delete_expense(Scope.system(), other)
+      assert Recurring.create_rule(scope_of(h.anna), other, :weekly) == {:error, :not_found}
     end
 
     test "logs the new rule with the expense", %{h: h, expense: expense} do
       assert [%{action: :recurring_created, actor_id: anna, details: details} | _] =
-               Activities.list_activities(expense_id: expense.id)
+               Activities.list_activities(Scope.system(), expense_id: expense.id)
 
       assert anna == h.anna
 
@@ -157,7 +163,9 @@ defmodule Abakus.Kasse.RecurringTest do
   test "creating a rule catches up the occurrences since the expense", %{h: h} do
     expense = create!(expense(h, "Putzen", "2026-09-01", 4000))
 
-    assert {:ok, rule, 4} = Recurring.create_rule(h.anna, expense, :weekly, today: ~D[2026-10-02])
+    assert {:ok, rule, 4} =
+             Recurring.create_rule(scope_of(h.anna), expense, :weekly, today: ~D[2026-10-02])
+
     assert dates(rule) == "2026-09-01 2026-09-08 2026-09-15 2026-09-22 2026-09-29"
   end
 
@@ -167,7 +175,7 @@ defmodule Abakus.Kasse.RecurringTest do
     end
 
     test "makes a paused rule no longer due", %{rule: rule} do
-      {:ok, _rule} = Recurring.pause_rule(nil, rule, today: ~D[2026-01-10])
+      {:ok, _rule} = Recurring.pause_rule(Scope.system(), rule, today: ~D[2026-01-10])
 
       assert catch_up("2026-03-01") == {:ok, 0}
       assert next_date(rule) == "2026-01-12"
@@ -176,24 +184,24 @@ defmodule Abakus.Kasse.RecurringTest do
     test "continues with the next occurrence after the resume day, without catching up", %{
       rule: rule
     } do
-      {:ok, rule} = Recurring.pause_rule(nil, rule, today: ~D[2026-01-10])
+      {:ok, rule} = Recurring.pause_rule(Scope.system(), rule, today: ~D[2026-01-10])
 
       assert {:ok, %{active: true, next_date: ~D[2026-03-09]}, 0} =
-               Recurring.resume_rule(nil, rule, today: ~D[2026-03-04])
+               Recurring.resume_rule(Scope.system(), rule, today: ~D[2026-03-04])
     end
 
     test "counts the occurrence of the resume day itself", %{rule: rule} do
-      {:ok, rule} = Recurring.pause_rule(nil, rule, today: ~D[2026-03-05])
+      {:ok, rule} = Recurring.pause_rule(Scope.system(), rule, today: ~D[2026-03-05])
 
       assert {:ok, %{next_date: ~D[2026-03-16]}, 1} =
-               Recurring.resume_rule(nil, rule, today: ~D[2026-03-16])
+               Recurring.resume_rule(Scope.system(), rule, today: ~D[2026-03-16])
 
       assert dates(rule) == "2026-01-05 2026-03-16"
     end
 
     test "logs both changes", %{rule: rule} do
-      {:ok, rule} = Recurring.pause_rule(nil, rule, today: ~D[2026-01-10])
-      {:ok, _rule, _created} = Recurring.resume_rule(nil, rule, today: ~D[2026-01-10])
+      {:ok, rule} = Recurring.pause_rule(Scope.system(), rule, today: ~D[2026-01-10])
+      {:ok, _rule, _created} = Recurring.resume_rule(Scope.system(), rule, today: ~D[2026-01-10])
 
       assert Enum.take(activity_texts(), 2) == [
                "Wiederholung „Kino“ (wöchentlich) fortgesetzt",
@@ -202,16 +210,16 @@ defmodule Abakus.Kasse.RecurringTest do
     end
 
     test "refuse a rule that is gone", %{rule: rule} do
-      {:ok, _deleted} = Recurring.delete_rule(nil, rule)
+      {:ok, _deleted} = Recurring.delete_rule(Scope.system(), rule)
 
-      assert Recurring.pause_rule(nil, rule) == {:error, :not_found}
-      assert Recurring.resume_rule(nil, rule) == {:error, :not_found}
+      assert Recurring.pause_rule(Scope.system(), rule) == {:error, :not_found}
+      assert Recurring.resume_rule(Scope.system(), rule) == {:error, :not_found}
     end
 
     test "a paused rule gets no occurrences", %{h: h, rule: rule} do
-      {:ok, _rule} = Recurring.pause_rule(nil, rule)
+      {:ok, _rule} = Recurring.pause_rule(Scope.system(), rule)
 
-      assert Expenses.create_expense(nil, expense(h, "Kino", "2026-03-23", 2000),
+      assert Expenses.create_expense(Scope.system(), expense(h, "Kino", "2026-03-23", 2000),
                recurring_expense_id: rule.id
              ) ==
                {:error, :rule_changed}
@@ -223,15 +231,15 @@ defmodule Abakus.Kasse.RecurringTest do
       expense = create!(expense(h, "Kino", "2026-01-05", 2000))
 
       {:ok, rule, _created} =
-        Recurring.create_rule(h.anna, expense, :weekly, today: ~D[2026-01-05])
+        Recurring.create_rule(scope_of(h.anna), expense, :weekly, today: ~D[2026-01-05])
 
-      {:ok, _deleted} = Recurring.delete_rule(h.ben, rule)
+      {:ok, _deleted} = Recurring.delete_rule(scope_of(h.ben), rule)
       %{expense: expense, rule: rule}
     end
 
     test "logs the end of the rule", %{h: h} do
       assert [%{action: :recurring_deleted, actor_id: ben, expense_id: nil, details: details} | _] =
-               Activities.list_activities()
+               Activities.list_activities(Scope.system())
 
       assert ben == h.ben
 
@@ -240,17 +248,18 @@ defmodule Abakus.Kasse.RecurringTest do
     end
 
     test "keeps the created expenses and detaches them from the rule", %{expense: expense} do
-      assert %{deleted_at: nil, recurring_expense_id: nil} = Expenses.get_expense!(expense.id)
+      assert %{deleted_at: nil, recurring_expense_id: nil} =
+               Expenses.get_expense!(Scope.system(), expense.id)
     end
 
     test "refuses occurrences and further changes", %{h: h, rule: rule} do
-      assert Expenses.create_expense(nil, expense(h, "Kino", "2026-03-23", 2000),
+      assert Expenses.create_expense(Scope.system(), expense(h, "Kino", "2026-03-23", 2000),
                recurring_expense_id: rule.id
              ) ==
                {:error, :rule_changed}
 
-      assert Recurring.get_rule(rule.id) == nil
-      assert Recurring.delete_rule(h.ben, rule) == {:error, :not_found}
+      assert Recurring.get_rule(Scope.system(), rule.id) == nil
+      assert Recurring.delete_rule(scope_of(h.ben), rule) == {:error, :not_found}
     end
   end
 
@@ -258,14 +267,17 @@ defmodule Abakus.Kasse.RecurringTest do
     setup %{h: h} do
       rule = rule(expense(h, "Strom", "2026-01-15", 5000), :monthly)
       latest = equal(h, "Strom", 6000, "2026-02-15", h.anna, [h.anna, h.ben, h.cleo])
-      {:ok, second} = Expenses.create_expense(nil, latest, recurring_expense_id: rule.id)
+
+      {:ok, second} =
+        Expenses.create_expense(Scope.system(), latest, recurring_expense_id: rule.id)
+
       %{rule: rule, second: second}
     end
 
     test "takes amount and split of the newest occurrence", %{rule: rule} do
-      assert {:ok, _rule} = Recurring.refresh_template(nil, rule)
+      assert {:ok, _rule} = Recurring.refresh_template(Scope.system(), rule)
 
-      template = Recurring.get_rule!(rule.id).template
+      template = Recurring.get_rule!(Scope.system(), rule.id).template
       assert {template.amount_cents, length(template.parts)} == {6000, 3}
 
       assert hd(activity_texts()) ==
@@ -274,10 +286,10 @@ defmodule Abakus.Kasse.RecurringTest do
 
     test "does not count deleted occurrences", %{rule: rule, second: second} do
       for expense <- occurrences(rule),
-          do: {:ok, _deleted} = Expenses.delete_expense(nil, expense)
+          do: {:ok, _deleted} = Expenses.delete_expense(Scope.system(), expense)
 
       assert second.id in Enum.map(Repo.all(Expense), & &1.id)
-      assert Recurring.refresh_template(nil, rule) == {:error, :no_occurrence}
+      assert Recurring.refresh_template(Scope.system(), rule) == {:error, :no_occurrence}
     end
   end
 
@@ -285,9 +297,13 @@ defmodule Abakus.Kasse.RecurringTest do
     later = rule(expense(h, "Strom", "2026-01-20", 5000), :monthly)
     sooner = rule(expense(h, "Miete", "2026-01-10", 5000), :monthly)
     paused = rule(expense(h, "Kino", "2026-01-01", 5000), :monthly)
-    {:ok, _rule} = Recurring.pause_rule(nil, paused)
+    {:ok, _rule} = Recurring.pause_rule(Scope.system(), paused)
 
-    assert Enum.map(Recurring.list_rules(), & &1.id) == [sooner.id, later.id, paused.id]
+    assert Enum.map(Recurring.list_rules(Scope.system()), & &1.id) == [
+             sooner.id,
+             later.id,
+             paused.id
+           ]
   end
 
   describe "catching up" do
@@ -314,7 +330,8 @@ defmodule Abakus.Kasse.RecurringTest do
                  {"Miete", 100_000, 2, h.anna}
       end
 
-      assert [%{action: :expense_created, actor_id: nil} | _] = Activities.list_activities()
+      assert [%{action: :expense_created, actor_id: nil} | _] =
+               Activities.list_activities(Scope.system())
     end
 
     test "moves a yearly expense of 29 February to the 28th in other years", %{h: h} do
@@ -335,7 +352,7 @@ defmodule Abakus.Kasse.RecurringTest do
       rule = rule(expense(h, "Strom", "2026-01-15", 5000), :monthly)
 
       {:ok, _crashed} =
-        Expenses.create_expense(nil, expense(h, "Strom", "2026-02-15", 5000),
+        Expenses.create_expense(Scope.system(), expense(h, "Strom", "2026-02-15", 5000),
           recurring_expense_id: rule.id
         )
 
@@ -355,10 +372,10 @@ defmodule Abakus.Kasse.RecurringTest do
 
     test "does not catch up the occurrences of a paused rule once it is resumed", %{h: h} do
       rule = rule(expense(h, "Kino", "2026-01-10", 2000), :monthly)
-      {:ok, rule} = Recurring.pause_rule(nil, rule, today: ~D[2026-01-20])
+      {:ok, rule} = Recurring.pause_rule(Scope.system(), rule, today: ~D[2026-01-20])
       assert catch_up("2026-05-01") == {:ok, 0}
 
-      {:ok, _rule, 0} = Recurring.resume_rule(nil, rule, today: ~D[2026-05-01])
+      {:ok, _rule, 0} = Recurring.resume_rule(Scope.system(), rule, today: ~D[2026-05-01])
       assert catch_up("2026-05-01") == {:ok, 0}
       assert catch_up("2026-05-10") == {:ok, 1}
       assert dates(rule) == "2026-01-10 2026-05-10"
@@ -377,10 +394,12 @@ defmodule Abakus.Kasse.RecurringTest do
       other = rule(expense(h, "Strom", "2026-08-02", 5000), :monthly, ~D[2026-08-02])
       rent = rule(expense(h, "Miete", "2026-08-31", 100_000), :monthly, ~D[2026-08-31])
 
-      assert Recurring.catch_up_rule(rent.id, today: ~D[2026-10-02]) == {:ok, 1}
+      assert Recurring.catch_up_rule(Scope.system(), rent.id, today: ~D[2026-10-02]) == {:ok, 1}
       assert dates(other) == "2026-08-02"
       assert titled("Miete") == "2026-08-31 2026-09-30"
-      assert Recurring.catch_up_rule(rent.id + 100, today: ~D[2026-10-02]) == {:ok, 0}
+
+      assert Recurring.catch_up_rule(Scope.system(), rent.id + 100, today: ~D[2026-10-02]) ==
+               {:ok, 0}
     end
   end
 
@@ -445,7 +464,7 @@ defmodule Abakus.Kasse.RecurringTest do
       create!(expense(h, "Mieten", "2026-03-31", 100_000))
       create!(%{expense(h, "Miete", "2026-03-31", 100_000) | paid_by_id: h.ben})
       deleted = create!(expense(h, "Miete", "2026-04-30", 100_000))
-      {:ok, _deleted} = Expenses.delete_expense(nil, deleted)
+      {:ok, _deleted} = Expenses.delete_expense(Scope.system(), deleted)
 
       assert catch_up("2026-05-15") == {:ok, 2}
       assert dates(rule) == "2026-01-31 2026-03-31 2026-04-30"
@@ -463,20 +482,23 @@ defmodule Abakus.Kasse.RecurringTest do
 
     test "of a deleted rule are skipped when the expense becomes a rule again", %{h: h} do
       expense = create!(expense(h, "Miete", "2026-01-31", 100_000))
-      {:ok, rule, 0} = Recurring.create_rule(nil, expense, :monthly, today: ~D[2026-01-31])
-      assert catch_up("2026-05-15") == {:ok, 3}
-      {:ok, _deleted} = Recurring.delete_rule(nil, rule)
 
-      expense = Expenses.get_expense!(expense.id)
+      {:ok, rule, 0} =
+        Recurring.create_rule(Scope.system(), expense, :monthly, today: ~D[2026-01-31])
+
+      assert catch_up("2026-05-15") == {:ok, 3}
+      {:ok, _deleted} = Recurring.delete_rule(Scope.system(), rule)
+
+      expense = Expenses.get_expense!(Scope.system(), expense.id)
 
       assert %{missed: 8, existing: 3} =
                Enum.find(
-                 Recurring.previews(expense, today: ~D[2026-10-02]),
+                 Recurring.previews(Scope.system(), expense, today: ~D[2026-10-02]),
                  &(&1.frequency == :monthly)
                )
 
       assert {:ok, _rule, 5} =
-               Recurring.create_rule(nil, expense, :monthly, today: ~D[2026-10-02])
+               Recurring.create_rule(Scope.system(), expense, :monthly, today: ~D[2026-10-02])
 
       assert titled("Miete") ==
                "2026-01-31 2026-02-28 2026-03-31 2026-04-30 2026-05-31 2026-06-30 2026-07-31 2026-08-31 2026-09-30"
@@ -511,7 +533,9 @@ defmodule Abakus.Kasse.RecurringTest do
     end
 
     test "stops without an error when it is paused", %{rule: rule} do
-      assert while_looking_up_the_rate(fn -> {:ok, _rule} = Recurring.pause_rule(nil, rule) end) ==
+      assert while_looking_up_the_rate(fn ->
+               {:ok, _rule} = Recurring.pause_rule(Scope.system(), rule)
+             end) ==
                {:ok, 0}
 
       assert dates(rule) == "2026-01-05"
@@ -522,8 +546,8 @@ defmodule Abakus.Kasse.RecurringTest do
       today = ~D[2026-05-10]
 
       resume = fn ->
-        {:ok, paused} = Recurring.pause_rule(nil, rule, today: today)
-        {:ok, _resumed, 0} = Recurring.resume_rule(nil, paused, today: today)
+        {:ok, paused} = Recurring.pause_rule(Scope.system(), rule, today: today)
+        {:ok, _resumed, 0} = Recurring.resume_rule(Scope.system(), paused, today: today)
       end
 
       assert while_looking_up_the_rate(resume) == {:ok, 0}
@@ -532,7 +556,9 @@ defmodule Abakus.Kasse.RecurringTest do
     end
 
     test "stops without an error when it is deleted", %{rule: rule} do
-      assert while_looking_up_the_rate(fn -> {:ok, _rule} = Recurring.delete_rule(nil, rule) end) ==
+      assert while_looking_up_the_rate(fn ->
+               {:ok, _rule} = Recurring.delete_rule(Scope.system(), rule)
+             end) ==
                {:ok, 0}
 
       assert titled("Cloud") == "2026-01-05"
@@ -547,14 +573,14 @@ defmodule Abakus.Kasse.RecurringTest do
                %{frequency: :weekly, next_date: ~D[2000-01-10], missed: 1001, existing: 0},
                %{frequency: :monthly, next_date: ~D[2000-02-03], missed: 320, existing: 0},
                %{frequency: :yearly, next_date: ~D[2001-01-03], missed: 26, existing: 0}
-             ] = Recurring.previews(expense, today: ~D[2026-10-02])
+             ] = Recurring.previews(Scope.system(), expense, today: ~D[2026-10-02])
     end
 
     test "count nothing for an expense from today", %{h: h} do
       expense = create!(expense(h, "Putzen", "2026-10-02", 100))
 
       assert [%{missed: 0, existing: 0, next_date: ~D[2026-10-09]} | _] =
-               Recurring.previews(expense, today: ~D[2026-10-02])
+               Recurring.previews(Scope.system(), expense, today: ~D[2026-10-02])
     end
   end
 end

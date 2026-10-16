@@ -1,5 +1,8 @@
 defmodule Abakus.MCP.ReadTools do
-  @moduledoc "The read tools of `Abakus.MCP.Tools`; each takes the decoded arguments."
+  @moduledoc """
+  The read tools of `Abakus.MCP.Tools`; each takes the decoded arguments. They read with the
+  system's scope: the MCP speaks for the group, not for a signed-in person (ADR 0019).
+  """
 
   alias Abakus.Kasse.{
     Activities,
@@ -14,6 +17,7 @@ defmodule Abakus.MCP.ReadTools do
 
   alias Abakus.{LocalTime, MCP, Repo, Schema}
   alias Abakus.MCP.{Directory, Output, SqlSandbox, ToolError, Tools}
+  alias Abakus.Users.Scope
 
   @no_category "No category"
   @balance_note "Positive balance = is owed money, negative = owes money. settlements: the transfers " <>
@@ -23,7 +27,7 @@ defmodule Abakus.MCP.ReadTools do
 
   @doc "Balances and the transfers that settle them."
   def balances(_args, _opts) do
-    balances = Balances.balances()
+    balances = Balances.balances(Scope.system())
     directory = Directory.load()
 
     entries =
@@ -58,7 +62,7 @@ defmodule Abakus.MCP.ReadTools do
     today = today(opts)
     if from, do: check_periods!(length(Periods.labels(unit, from, earlier(to, today))))
 
-    history = Balances.history(unit, from: from, to: to, today: today)
+    history = Balances.history(Scope.system(), unit, from: from, to: to, today: today)
     check_periods!(length(history.periods))
 
     {rows, _ever} =
@@ -112,6 +116,7 @@ defmodule Abakus.MCP.ReadTools do
 
     matches =
       Expenses.list_expenses(
+        Scope.system(),
         [
           text: args.text,
           from: from,
@@ -192,7 +197,7 @@ defmodule Abakus.MCP.ReadTools do
       text: args.text
     }
 
-    found = Statistics.rows(filter)
+    found = Statistics.rows(Scope.system(), filter)
     rows = if Statistics.time?(group), do: Statistics.fill_gaps(found, filter, today), else: found
     total = rows |> Enum.map(& &1.amount_cents) |> Enum.sum()
 
@@ -268,7 +273,7 @@ defmodule Abakus.MCP.ReadTools do
 
     previous_rows =
       if previous_filter.from || previous_filter.to,
-        do: Statistics.rows(previous_filter),
+        do: Statistics.rows(Scope.system(), previous_filter),
         else: found
 
     window = if time_keyed?, do: Statistics.period_window(filter, found, today)
@@ -330,7 +335,7 @@ defmodule Abakus.MCP.ReadTools do
     limit = limit!(args.limit, 50)
 
     entries =
-      Activities.list_activities(
+      Activities.list_activities(Scope.system(),
         expense_id: args.expense_id,
         actor_id: actor && actor.id,
         action: args.action,

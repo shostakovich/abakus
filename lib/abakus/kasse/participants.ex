@@ -133,7 +133,7 @@ defmodule Abakus.Kasse.Participants do
   """
   def archive_participant(actor_id, %Participant{} = participant) do
     Repo.transact(fn ->
-      case Balances.balance(participant.id) do
+      case Balances.balance_of(participant.id) do
         0 ->
           set_archived(actor_id, participant, DateTime.utc_now(), "archiviert")
 

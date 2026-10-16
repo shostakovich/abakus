@@ -12,6 +12,7 @@ defmodule Abakus.Kasse.Ynab.Sync do
   alias Abakus.Kasse.{Expenses, Ynab}
   alias Abakus.Kasse.Ynab.{Connection, Connections, Error, Result, Run, Want}
   alias Abakus.Schema
+  alias Abakus.Users.Scope
 
   @retry_delay 5 * 60
   @max_backoff 60 * 60
@@ -191,7 +192,7 @@ defmodule Abakus.Kasse.Ynab.Sync do
 
     selection
     |> Ynab.Selection.postings(
-      Expenses.list_expenses(participant_id: participant_id),
+      Expenses.list_expenses(Scope.system(), participant_id: participant_id),
       participant_id
     )
     |> Map.new(fn posting ->

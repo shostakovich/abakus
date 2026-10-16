@@ -281,7 +281,7 @@ defmodule Abakus.Kasse.Ynab do
         ),
       synced: synced,
       problems: problems,
-      balance: Balances.balance(participant_id)
+      balance: Balances.balance_of(participant_id)
     }
   end
 

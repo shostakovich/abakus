@@ -9,6 +9,7 @@ defmodule Abakus.Kasse.ImportTest do
   alias Abakus.Kasse.Ynab.{Connections, Sync, Transactions}
   alias Abakus.Repo
   alias Abakus.Users
+  alias Abakus.Users.Scope
 
   @moduletag :tmp_dir
 
@@ -57,15 +58,15 @@ defmodule Abakus.Kasse.ImportTest do
              ]
 
     assert Settings.group_name() == "WG Sonnenblick"
-    assert Enum.map(Expenses.list_expenses(), & &1.id) == [15, 12, 9, 7]
-    assert Expenses.get_expense!(13).deleted_at
+    assert Enum.map(Expenses.list_expenses(Scope.system()), & &1.id) == [15, 12, 9, 7]
+    assert Expenses.get_expense!(Scope.system(), 13).deleted_at
     assert Expenses.next_id() == 16
   end
 
   test "keeps shares, foreign amounts and recurring rules", %{path: path} do
     import!(path)
 
-    diner = Expenses.get_expense!(15)
+    diner = Expenses.get_expense!(Scope.system(), 15)
 
     assert {diner.amount_cents, diner.original_amount, diner.original_currency} ==
              {4450, 5000, "USD"}
@@ -75,9 +76,9 @@ defmodule Abakus.Kasse.ImportTest do
     assert for(s <- diner.shares, do: {s.participant_id, s.weight, s.amount_cents}) ==
              [{1, 2, 2967}, {2, 1, 1483}]
 
-    assert Expenses.get_expense!(12).reimbursement
+    assert Expenses.get_expense!(Scope.system(), 12).reimbursement
 
-    assert [rule] = Recurring.list_rules()
+    assert [rule] = Recurring.list_rules(Scope.system())
 
     assert {rule.id, rule.frequency, rule.next_date, rule.created_by_id} ==
              {3, :monthly, ~D[2026-11-01], 1}
@@ -89,7 +90,7 @@ defmodule Abakus.Kasse.ImportTest do
              {2, 4000}
            ]
 
-    assert Expenses.get_expense!(9).recurring_expense_id == 3
+    assert Expenses.get_expense!(Scope.system(), 9).recurring_expense_id == 3
 
     assert [%{currency: "USD", date: ~D[2026-10-01], rate: rate}] =
              ExchangeRates.list_manual_rates()
@@ -101,7 +102,7 @@ defmodule Abakus.Kasse.ImportTest do
   test "keeps the activity log with its authors and changes", %{path: path} do
     import!(path)
 
-    entries = Activities.list_activities()
+    entries = Activities.list_activities(Scope.system())
     assert Enum.map(entries, & &1.id) == [32, 31, 30, 1]
 
     [update, deletion | _] = entries

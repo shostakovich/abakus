@@ -1,13 +1,16 @@
 defmodule Abakus.Kasse.Activities do
   @moduledoc """
   The activity log: expenses created, changed and deleted, and changes to the settings. Entries
-  are written in the transaction of the change they describe.
+  are written in the transaction of the change they describe, by the Kasse's own modules with
+  the id of the person acting (nil for the system); reads take the caller's scope.
   """
 
   import Ecto.Query
 
+  alias Abakus.Kasse.Access
   alias Abakus.Kasse.Activities.{Activity, Details}
   alias Abakus.Repo
+  alias Abakus.Users.Scope
 
   @doc "Logs a change to the settings (people, categories, rates, …) described by `text`."
   def log_settings(actor_id, text), do: log(actor_id, :settings_updated, nil, %{text: text})
@@ -30,7 +33,9 @@ defmodule Abakus.Kasse.Activities do
   entries before it, for paging), `:expense_id` (the history of one expense), `:actor_id`,
   `:action`, and `:since` and `:until`, UTC moments (from inclusive, until exclusive).
   """
-  def list_activities(opts \\ []) do
+  def list_activities(%Scope{} = scope, opts \\ []) do
+    Access.check!(scope)
+
     Activity
     |> order_by(desc: :id)
     |> limit(^Keyword.get(opts, :limit, 50))
@@ -51,7 +56,8 @@ defmodule Abakus.Kasse.Activities do
   defp filter_by({:limit, _limit}, query), do: query
 
   @doc "The actions that occur in the log, sorted."
-  def list_actions do
+  def list_actions(%Scope{} = scope) do
+    Access.check!(scope)
     Repo.all(from a in Activity, distinct: true, select: a.action, order_by: a.action)
   end
 

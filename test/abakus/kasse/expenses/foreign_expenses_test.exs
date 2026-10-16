@@ -5,6 +5,7 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
 
   alias Abakus.Kasse.{Activities, Expenses}
   alias Abakus.Kasse.Expenses.Expense
+  alias Abakus.Users.Scope
 
   setup do
     %{h: household()}
@@ -14,7 +15,7 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
 
   defp changes(expense) do
     [%{action: :expense_updated, details: details}] =
-      Activities.list_activities(expense_id: expense.id, limit: 1)
+      Activities.list_activities(Scope.system(), expense_id: expense.id, limit: 1)
 
     Map.new(details.changes, &{&1.field, {&1.old, &1.new}})
   end
@@ -44,7 +45,10 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
     assert share(expense, h.anna) + share(expense, h.ben) == 9240
 
     {:ok, updated} =
-      Expenses.update_expense(h.ben, expense, %{Expenses.input(expense) | amount_cents: 1})
+      Expenses.update_expense(scope_of(h.ben), expense, %{
+        Expenses.input(expense)
+        | amount_cents: 1
+      })
 
     assert updated.amount_cents == 9240
   end
@@ -96,9 +100,9 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
     end
 
     test "logs nothing when it is saved unchanged", %{h: h, expense: expense} do
-      {:ok, _same} = Expenses.update_expense(h.anna, expense, Expenses.input(expense))
+      {:ok, _same} = Expenses.update_expense(scope_of(h.anna), expense, Expenses.input(expense))
 
-      assert length(Activities.list_activities(expense_id: expense.id)) == 1
+      assert length(Activities.list_activities(Scope.system(), expense_id: expense.id)) == 1
     end
 
     test "keeps the weights and changes the euro shares when the rate changes", %{
@@ -106,7 +110,10 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
       expense: expense
     } do
       {:ok, updated} =
-        Expenses.update_expense(h.anna, expense, %{Expenses.input(expense) | fx_rate: 1.25})
+        Expenses.update_expense(scope_of(h.anna), expense, %{
+          Expenses.input(expense)
+          | fx_rate: 1.25
+        })
 
       assert {updated.amount_cents, share(updated, h.cleo), Enum.at(updated.shares, 2).weight} ==
                {800, 267, 334}
@@ -116,7 +123,7 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
       [anna, ben, cleo] = Expenses.input(expense).parts
 
       {:ok, _updated} =
-        Expenses.update_expense(h.anna, expense, %{
+        Expenses.update_expense(scope_of(h.anna), expense, %{
           Expenses.input(expense)
           | fx_rate: 1.25,
             parts: [%{anna | weight: 433}, ben, %{cleo | weight: 234}]
@@ -133,7 +140,7 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
       [anna | rest] = Expenses.input(expense).parts
 
       assert {:error, changeset} =
-               Expenses.update_expense(h.anna, expense, %{
+               Expenses.update_expense(scope_of(h.anna), expense, %{
                  Expenses.input(expense)
                  | parts: [%{anna | weight: 300} | rest]
                })
@@ -147,7 +154,7 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
 
     test "refuses a rate that converts the amount to 0 €", %{h: h, expense: expense} do
       assert {:error, changeset} =
-               Expenses.update_expense(h.anna, expense, %{
+               Expenses.update_expense(scope_of(h.anna), expense, %{
                  Expenses.input(expense)
                  | fx_rate: 1.0e9
                })
@@ -176,14 +183,16 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
       attrs: attrs,
       expense: expense
     } do
-      {:ok, updated} = Expenses.update_expense(h.anna, expense, %{attrs | fx_rate: 1.2501})
+      {:ok, updated} =
+        Expenses.update_expense(scope_of(h.anna), expense, %{attrs | fx_rate: 1.2501})
 
       assert updated.fx_rate == 1.2501
       assert changes(expense)["Kurs"] == {"1 € = 1,25 USD (EZB)", "1 € = 1,2501 USD (EZB)"}
     end
 
     test "stores and logs a changed rate source", %{h: h, attrs: attrs, expense: expense} do
-      {:ok, updated} = Expenses.update_expense(h.anna, expense, %{attrs | fx_source: :manual})
+      {:ok, updated} =
+        Expenses.update_expense(scope_of(h.anna), expense, %{attrs | fx_source: :manual})
 
       assert updated.fx_source == :manual
       assert changes(expense)["Kurs"] == {"1 € = 1,25 USD (EZB)", "1 € = 1,25 USD (manuell)"}
@@ -195,7 +204,7 @@ defmodule Abakus.Kasse.Expenses.ForeignExpensesTest do
       expense: expense
     } do
       parts = [%{participant_id: h.anna, weight: 2}, %{participant_id: h.ben, weight: 2}]
-      {:ok, updated} = Expenses.update_expense(h.anna, expense, %{attrs | parts: parts})
+      {:ok, updated} = Expenses.update_expense(scope_of(h.anna), expense, %{attrs | parts: parts})
 
       assert hd(updated.shares).weight == 2
       assert changes(expense) == %{"Anteile" => {"Anna 1, Ben 1", "Anna 2, Ben 2"}}

@@ -3,10 +3,11 @@ defmodule Abakus.Kasse.Recurring.JobTest do
 
   import Abakus.KasseFixtures
 
-  alias Abakus.Kasse.{Expenses, Recurring}
+  alias Abakus.Kasse.{Activities, Expenses, Recurring}
   alias Abakus.Kasse.Recurring.Job
+  alias Abakus.Users.Scope
 
-  test "catches up at boot" do
+  test "catches up at boot, as the system" do
     h = household()
 
     expense =
@@ -16,14 +17,23 @@ defmodule Abakus.Kasse.Recurring.JobTest do
         ])
       )
 
-    {:ok, rule, 0} = Recurring.create_rule(nil, expense, :weekly, today: expense.date)
-    Expenses.subscribe()
+    {:ok, rule, 0} =
+      Recurring.create_rule(scope_of(h.anna), expense, :weekly, today: expense.date)
+
+    Expenses.subscribe(Scope.system())
 
     start_supervised!(Job)
     :sys.get_state(Job)
 
     assert_received {:expenses_changed, _ids}
-    refute Date.before?(Recurring.get_rule!(rule.id).next_date, Date.utc_today())
+    refute Date.before?(Recurring.get_rule!(Scope.system(), rule.id).next_date, Date.utc_today())
+
+    assert [_ | _] =
+             occurrences =
+             Activities.list_activities(Scope.system(), action: :expense_created)
+             |> Enum.reject(&(&1.expense_id == expense.id))
+
+    assert Enum.all?(occurrences, &is_nil(&1.actor_id))
   end
 
   describe "next_tick/3" do

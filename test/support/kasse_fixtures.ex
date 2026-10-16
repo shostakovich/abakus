@@ -6,6 +6,7 @@ defmodule Abakus.KasseFixtures do
   """
 
   alias Abakus.Kasse.{Categories, Expenses, Participants}
+  alias Abakus.Users.Scope
 
   def household do
     [anna, ben, cleo] =
@@ -73,8 +74,14 @@ defmodule Abakus.KasseFixtures do
     path
   end
 
+  @doc "The scope of the person with `participant_id`, as if they were signed in."
+  def scope_of(participant_id),
+    do: participant_id |> Participants.get_participant!() |> Scope.for_participant()
+
+  @doc "An expense created by the person with `actor_id`, or by the system without one."
   def create!(attrs, actor_id \\ nil) do
-    {:ok, expense} = Expenses.create_expense(actor_id, attrs)
+    scope = if actor_id, do: scope_of(actor_id), else: Scope.system()
+    {:ok, expense} = Expenses.create_expense(scope, attrs)
     expense
   end
 end

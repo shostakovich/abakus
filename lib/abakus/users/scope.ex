@@ -6,9 +6,13 @@ defmodule Abakus.Users.Scope do
 
   alias Abakus.Depot.Portfolios
   alias Abakus.Kasse.Participants
+  alias Abakus.Kasse.Participants.Participant
+  alias Abakus.Repo
   alias Abakus.Users.User
 
   defstruct user: nil, participant: nil, depot: false, system: false
+
+  @type t :: %__MODULE__{}
 
   def for_user(user, participant \\ nil)
   def for_user(%User{} = user, participant), do: %__MODULE__{user: user, participant: participant}
@@ -19,6 +23,10 @@ defmodule Abakus.Users.Scope do
     do: %{for_user(user, Participants.for_user(user)) | depot: Portfolios.any?(user)}
 
   def load(nil), do: nil
+
+  @doc "The scope of a person of the Kasse with their user, as if they were signed in."
+  def for_participant(%Participant{} = participant),
+    do: for_user(Repo.preload(participant, :user).user, participant)
 
   @doc "The scope of callers without a person: jobs, release and mix tasks, and MCP reads."
   def system, do: %__MODULE__{system: true}

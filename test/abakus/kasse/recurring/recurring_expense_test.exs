@@ -6,6 +6,7 @@ defmodule Abakus.Kasse.Recurring.RecurringExpenseTest do
   alias Abakus.Kasse.Expenses
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Recurring.RecurringExpense
+  alias Abakus.Users.Scope
 
   test "keeps the input of an expense as its template" do
     h = household()
@@ -52,7 +53,7 @@ defmodule Abakus.Kasse.Recurring.RecurringExpenseTest do
 
     assert {:ok, _occurrence} =
              Expenses.create_expense(
-               nil,
+               Scope.system(),
                Map.put(Map.from_struct(template), :date, ~D[2026-02-28])
              )
   end

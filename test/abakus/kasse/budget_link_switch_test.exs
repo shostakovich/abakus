@@ -11,6 +11,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
   alias Abakus.Kasse.Ynab.Posting
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
+  alias Abakus.Users.Scope
 
   @start ~D[2026-03-01]
 
@@ -85,7 +86,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       _twice = imported!(c, weekly)
       older_ynab = imported!(c, older)
       gone_ynab = imported!(c, gone)
-      {:ok, _deleted} = Expenses.delete_expense(c.h.ben, gone)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), gone)
 
       Repo.insert!(%Ynab.Transaction{
         expense_id: weekly.id,
@@ -129,7 +130,9 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       assert Repo.all(Ynab.Connection) == []
       assert Repo.all(Ynab.CategoryMapping) == []
       assert Repo.all(Ynab.Transaction) == []
-      assert hd(Activities.list_activities()).details.text == "YNAB-Verbindung entfernt"
+
+      assert hd(Activities.list_activities(Scope.system())).details.text ==
+               "YNAB-Verbindung entfernt"
     end
 
     test "leaves a split or a transfer with the marker as it is and books its expense not twice",
@@ -199,12 +202,12 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
           date: ~D[2026-02-10]
         })
 
-      {:ok, older} = Expenses.update_expense(c.h.ben, older, changed)
+      {:ok, older} = Expenses.update_expense(scope_of(c.h.ben), older, changed)
 
       assert %{id: id, amount: -3000, date: ~D[2026-02-10], category_id: treats} = linked(older)
       assert {id, treats} == {older_ynab.id, c.treats}
 
-      {:ok, _deleted} = Expenses.delete_expense(c.h.ben, older)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), older)
       assert Repo.reload!(older_ynab).deleted_at
     end
 
@@ -260,7 +263,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
 
     test "an older expense gets no transaction when it changes", c do
       changed = Map.merge(Expenses.input(c.older), %{amount_cents: 6000, original_amount: 6000})
-      {:ok, older} = Expenses.update_expense(c.h.ben, c.older, changed)
+      {:ok, older} = Expenses.update_expense(scope_of(c.h.ben), c.older, changed)
 
       assert linked(older) == nil
     end
@@ -268,7 +271,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     test "an older expense gets one once moved after the start date", c do
       {:ok, older} =
         Expenses.update_expense(
-          c.h.ben,
+          scope_of(c.h.ben),
           c.older,
           Map.put(Expenses.input(c.older), :date, ~D[2026-03-02])
         )

@@ -9,6 +9,7 @@ defmodule Abakus.Kasse.Recurring.Job do
   require Logger
 
   alias Abakus.Kasse.Recurring
+  alias Abakus.Users.Scope
 
   @every :timer.hours(1)
 
@@ -30,7 +31,7 @@ defmodule Abakus.Kasse.Recurring.Job do
 
   # A crash would restart the job, which would run again at once.
   defp run do
-    case Recurring.catch_up() do
+    case Recurring.catch_up(Scope.system()) do
       {:ok, 0} ->
         :ok
 

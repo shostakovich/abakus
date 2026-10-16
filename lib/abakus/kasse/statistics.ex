@@ -6,11 +6,13 @@ defmodule Abakus.Kasse.Statistics do
   A filter is a map with `:group_by` and optionally `:from`, `:to` (dates, inclusive),
   `:participant_id` (only that person's shares count), `:category_id`, `:without_category` and
   `:text` (terms in the title or notes, any of which matches). Grouped by person, `amount_cents`
-  is the person's share and `paid_cents` what they paid.
+  is the person's share and `paid_cents` what they paid. Only `rows/2` reads expenses and takes the caller's
+  scope.
   """
 
-  alias Abakus.Kasse.{Expenses, Periods}
+  alias Abakus.Kasse.{Access, Expenses, Periods}
   alias Abakus.Repo
+  alias Abakus.Users.Scope
 
   @groups [:category, :title, :year, :month, :week, :person, :category_month]
   @no_category "No category"
@@ -57,8 +59,13 @@ defmodule Abakus.Kasse.Statistics do
   The rows of a filter: by amount for categories and titles, by period for time groupings, by
   share for people.
   """
-  @spec rows(map()) :: [row()]
-  def rows(%{group_by: :person} = filter) do
+  @spec rows(Scope.t(), map()) :: [row()]
+  def rows(%Scope{} = scope, filter) do
+    Access.check!(scope)
+    grouped(filter)
+  end
+
+  defp grouped(%{group_by: :person} = filter) do
     {conditions, args} = conditions(filter)
 
     sql = """
@@ -84,7 +91,7 @@ defmodule Abakus.Kasse.Statistics do
     end)
   end
 
-  def rows(%{group_by: group} = filter) do
+  defp grouped(%{group_by: group} = filter) do
     {conditions, args} = conditions(filter)
     period = period_sql(group)
 

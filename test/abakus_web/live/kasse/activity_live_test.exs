@@ -9,6 +9,7 @@ defmodule AbakusWeb.Kasse.ActivityLiveTest do
 
   alias Abakus.Kasse.{Activities, Expenses}
   alias Abakus.Kasse.Activities.Activity
+  alias Abakus.Users.Scope
 
   setup %{conn: conn} do
     h = household()
@@ -24,7 +25,10 @@ defmodule AbakusWeb.Kasse.ActivityLiveTest do
     expense = create!(equal(h, "Einkauf", 1234, "2026-10-01", h.anna, [h.anna, h.ben]), h.anna)
 
     {:ok, _expense} =
-      Expenses.update_expense(h.ben, expense, %{Expenses.input(expense) | title: "Einkauf groß"})
+      Expenses.update_expense(scope_of(h.ben), expense, %{
+        Expenses.input(expense)
+        | title: "Einkauf groß"
+      })
 
     for activity <- Repo.all(Activity),
         activity.action == :settings_updated,
@@ -65,10 +69,15 @@ defmodule AbakusWeb.Kasse.ActivityLiveTest do
 
     expense = create!(equal(h, "Kino", 2400, "2026-10-01", h.ben, [h.anna, h.ben]), h.ben)
 
-    assert has_element?(view, "#activity-#{hd(Activities.list_activities(limit: 1)).id}", "Kino")
+    assert has_element?(
+             view,
+             "#activity-#{hd(Activities.list_activities(Scope.system(), limit: 1)).id}",
+             "Kino"
+           )
+
     assert texts(view, "#activities > li[id^=group-]") == ["Heute"]
 
-    {:ok, _deleted} = Expenses.delete_expense(h.anna, expense)
+    {:ok, _deleted} = Expenses.delete_expense(scope_of(h.anna), expense)
 
     assert [deleted, _created | _settings] =
              texts(view, "#activities > li[id^=activity-] .list-col-grow")

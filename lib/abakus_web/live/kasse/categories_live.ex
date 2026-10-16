@@ -19,7 +19,7 @@ defmodule AbakusWeb.Kasse.CategoriesLive do
   end
 
   defp load(socket) do
-    counts = Expenses.count_by_category()
+    counts = Expenses.count_by_category(socket.assigns.current_scope)
 
     {archived, active} =
       Categories.list_categories(:all)

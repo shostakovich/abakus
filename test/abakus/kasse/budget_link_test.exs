@@ -14,6 +14,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Ledger.Transaction
   alias Abakus.MCP.Tools
+  alias Abakus.Users.Scope
 
   setup do
     h = household()
@@ -57,7 +58,11 @@ defmodule Abakus.Kasse.BudgetLinkTest do
 
   defp update!(actor, expense, changes) do
     {:ok, expense} =
-      Expenses.update_expense(actor, expense, Map.merge(Expenses.input(expense), changes))
+      Expenses.update_expense(
+        scope_of(actor),
+        expense,
+        Map.merge(Expenses.input(expense), changes)
+      )
 
     expense
   end
@@ -89,7 +94,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       create!(equal(h, "Kino", 2400, "2026-10-11", h.ben, [h.anna, h.ben, h.cleo]))
 
       assert Ledger.balances()[context.account.id].balance == -2300
-      assert Balances.balance(h.anna) == 3000 - 2300
+      assert Balances.balance(scope_of(h.anna)) == 3000 - 2300
     end
 
     test "names the foreign amount in the memo", %{h: h} do
@@ -160,7 +165,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     expense = create!(equal(h, "Pizza", 3000, "2026-10-10", h.anna, [h.anna, h.ben]))
     transaction = transaction(expense)
 
-    {:ok, _deleted} = Expenses.delete_expense(h.ben, expense)
+    {:ok, _deleted} = Expenses.delete_expense(scope_of(h.ben), expense)
 
     assert Repo.reload!(transaction).deleted_at
     assert live_transactions(context.account) == []
@@ -211,9 +216,10 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       |> equal("Miete", 120_000, "2026-08-01", h.ben, [h.anna, h.ben])
       |> create!()
 
-    {:ok, rule, _created} = Recurring.create_rule(nil, rent, :monthly, today: ~D[2026-08-01])
+    {:ok, rule, _created} =
+      Recurring.create_rule(Scope.system(), rent, :monthly, today: ~D[2026-08-01])
 
-    assert Recurring.catch_up(today: ~D[2026-09-01]) == {:ok, 1}
+    assert Recurring.catch_up(Scope.system(), today: ~D[2026-09-01]) == {:ok, 1}
 
     occurrence =
       Repo.get_by!(Expense,
@@ -242,7 +248,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     id = JSON.decode!(text)["created"]["id"]
 
     assert %{amount: -1000, category_id: groceries} =
-             transaction(Expenses.get_expense!(id))
+             transaction(Expenses.get_expense!(Scope.system(), id))
 
     assert groceries == context.groceries
   end

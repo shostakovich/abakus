@@ -9,6 +9,7 @@ defmodule Abakus.Kasse.ParticipantsTest do
 
   alias Abakus.Kasse.{Activities, Expenses, Participants}
   alias Abakus.Kasse.Participants.Participant
+  alias Abakus.Users.Scope
   alias Abakus.Users.User
 
   defp add(attrs),
@@ -138,7 +139,7 @@ defmodule Abakus.Kasse.ParticipantsTest do
     assert errors_on(changeset) == %{name: ["„ANNA“ gibt es schon."]}
     assert {:ok, _same} = Participants.rename_participant(anna.id, benedikt, %{name: "Benedikt"})
 
-    assert [%{actor_id: actor_id} | _] = Activities.list_activities()
+    assert [%{actor_id: actor_id} | _] = Activities.list_activities(Scope.system())
     assert actor_id == anna.id
     assert List.last(activity_texts(:oldest_first)) == "Person „Ben“ umbenannt in „Benedikt“"
     assert length(activity_texts(:oldest_first)) == 3
@@ -190,7 +191,7 @@ defmodule Abakus.Kasse.ParticipantsTest do
     assert {:ok, _cleo} =
              Participants.archive_participant(nil, Participants.get_participant!(h.cleo))
 
-    {:ok, _deleted} = Expenses.delete_expense(h.anna, expense)
+    {:ok, _deleted} = Expenses.delete_expense(scope_of(h.anna), expense)
     assert {:ok, _ben} = Participants.archive_participant(nil, ben)
   end
 end

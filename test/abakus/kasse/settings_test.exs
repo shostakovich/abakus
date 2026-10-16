@@ -4,6 +4,7 @@ defmodule Abakus.Kasse.SettingsTest do
   import Abakus.KasseFixtures
 
   alias Abakus.Kasse.{Activities, Settings}
+  alias Abakus.Users.Scope
 
   test "the group is called Kasse on a new database" do
     assert Settings.group_name() == "Kasse"
@@ -22,7 +23,7 @@ defmodule Abakus.Kasse.SettingsTest do
              }
              | _
            ] =
-             Activities.list_activities()
+             Activities.list_activities(Scope.system())
 
     assert actor_id == anna.id
   end
@@ -32,6 +33,6 @@ defmodule Abakus.Kasse.SettingsTest do
     assert {:error, changeset} = Settings.update_settings(nil, %{group_name: "  "})
 
     assert errors_on(changeset) == %{group_name: ["Bitte einen Namen für die Gruppe angeben."]}
-    assert Activities.list_activities() == []
+    assert Activities.list_activities(Scope.system()) == []
   end
 end

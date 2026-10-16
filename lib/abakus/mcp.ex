@@ -12,6 +12,7 @@ defmodule Abakus.MCP do
   alias Abakus.Kasse.{Activities, Expenses}
   alias Abakus.LocalTime
   alias Abakus.MCP.Tools
+  alias Abakus.Users.Scope
 
   @version "2026-07-28"
   @meta_version "io.modelcontextprotocol/protocolVersion"
@@ -274,8 +275,8 @@ defmodule Abakus.MCP do
   end
 
   defp overview do
-    o = Expenses.overview()
-    actions = Activities.list_actions()
+    o = Expenses.overview(Scope.system())
+    actions = Activities.list_actions(Scope.system())
 
     data =
       if o.first_date do

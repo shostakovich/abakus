@@ -12,6 +12,7 @@ defmodule Abakus.Kasse.Ynab.Scheduler do
 
   alias Abakus.Kasse.Expenses
   alias Abakus.Kasse.Ynab.Sync
+  alias Abakus.Users.Scope
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -42,7 +43,7 @@ defmodule Abakus.Kasse.Ynab.Scheduler do
 
   @impl true
   def init(opts) do
-    Expenses.subscribe()
+    Expenses.subscribe(Scope.system())
 
     state = %{
       debounce: Keyword.get(opts, :debounce, :timer.seconds(5)),

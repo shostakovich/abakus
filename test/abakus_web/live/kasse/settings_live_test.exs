@@ -6,6 +6,7 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
   import Phoenix.LiveViewTest
 
   alias Abakus.Kasse.{Activities, Settings}
+  alias Abakus.Users.Scope
 
   setup %{conn: conn} do
     anna = person!("Anna")
@@ -16,7 +17,12 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
     do: view |> form("#settings-form", settings: %{group_name: name}) |> render_submit()
 
   defp renames,
-    do: for(a <- Activities.list_activities(), a.details.text =~ "Gruppe", do: a.details.text)
+    do:
+      for(
+        a <- Activities.list_activities(Scope.system()),
+        a.details.text =~ "Gruppe",
+        do: a.details.text
+      )
 
   test "is the Kasse's first section of the settings, no longer in the Kasse's navigation", %{
     conn: conn
@@ -51,7 +57,7 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
     save(view, "WG Süd")
 
     assert renames() == ["Gruppe umbenannt: „Kasse“ → „WG Süd“"]
-    assert hd(Activities.list_activities()).actor_id == anna.id
+    assert hd(Activities.list_activities(Scope.system())).actor_id == anna.id
   end
 
   test "an empty or long name stays in the field with its error", %{conn: conn} do

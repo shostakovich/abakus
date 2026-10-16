@@ -10,6 +10,7 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Ynab.{Connections, Error, Result, Scheduler, Sync, Transactions}
   alias Abakus.LocalTime
+  alias Abakus.Users.Scope
 
   @now ~U[2026-10-02 12:00:00.000000Z]
   @transactions "/v1/plans/plan-1/transactions"
@@ -59,12 +60,16 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
   end
 
   defp edit(h, id, fun) do
-    expense = Expenses.get_expense!(id)
-    {:ok, _expense} = Expenses.update_expense(h.anna, expense, fun.(Expenses.input(expense)))
+    expense = Expenses.get_expense!(Scope.system(), id)
+
+    {:ok, _expense} =
+      Expenses.update_expense(scope_of(h.anna), expense, fun.(Expenses.input(expense)))
   end
 
   defp delete(h, id),
-    do: {:ok, _deleted} = Expenses.delete_expense(h.anna, Expenses.get_expense!(id))
+    do:
+      {:ok, _deleted} =
+        Expenses.delete_expense(scope_of(h.anna), Expenses.get_expense!(Scope.system(), id))
 
   defp sync(h, opts \\ []),
     do: Sync.sync_person(h.anna, Keyword.get(opts, :full, false), now: opts[:now] || @now)

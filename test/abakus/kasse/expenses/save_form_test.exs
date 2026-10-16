@@ -6,6 +6,7 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
   alias Abakus.ExchangeRates
   alias Abakus.Kasse.Expenses
   alias Abakus.Kasse.Expenses.Expense
+  alias Abakus.Users.Scope
   alias Ecto.Changeset
 
   @today ~D[2026-10-01]
@@ -13,11 +14,12 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
   setup do
     h = household()
     ExchangeRates.store([{"USD", ~D[2026-09-30], Decimal.new("1.2")}])
-    form = Expenses.new_form(today: @today, participant_id: h.anna)
+    form = Expenses.new_form(Scope.system(), today: @today, participant_id: h.anna)
     %{h: h, form: %{form | title: "Mein Titel", amount: "30,00", category_id: h.food}}
   end
 
-  defp save(form, existing \\ nil), do: Expenses.save_form(nil, form, existing, today: @today)
+  defp save(form, existing \\ nil),
+    do: Expenses.save_form(Scope.system(), form, existing, today: @today)
 
   defp error(form, existing \\ nil) do
     {:error, changeset} = save(form, existing)
@@ -43,7 +45,7 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
     assert error(%{form | paid_by_id: nil}) == "Bitte angeben, wer bezahlt hat."
     assert error(%{form | paid_by_id: 99}) == "Unbekannte Person in der Ausgabe."
     assert error(%{form | category_id: 99}) == "Unbekannte Kategorie."
-    assert Expenses.list_expenses() == []
+    assert Expenses.list_expenses(Scope.system()) == []
   end
 
   test "refuses split rules", %{h: h, form: form} do
@@ -104,7 +106,7 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
       expense =
         create!(foreign(h, "Einkauf USA", 1080, "USD", 1.08, "2026-09-30", h.anna, [h.anna]))
 
-      form = %{Expenses.edit_form(expense) | title: "Einkauf in den USA"}
+      form = %{Expenses.edit_form(Scope.system(), expense) | title: "Einkauf in den USA"}
 
       assert {:ok, saved} = save(form, expense)
 
@@ -150,7 +152,7 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
 
   test "updates an expense from its form and refuses a deleted one", %{h: h} do
     expense = create!(equal(h, "Gleich 1", 1000, "2026-10-01", h.anna, [h.anna, h.ben, h.cleo]))
-    form = Expenses.edit_form(expense)
+    form = Expenses.edit_form(Scope.system(), expense)
     assert form.rows |> Enum.map(& &1.selected) == [true, true, true]
 
     form = %{
@@ -177,7 +179,7 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
     assert {Expense.share_of(saved, h.anna), Expense.share_of(saved, h.ben), saved.date} ==
              {1500, 3000, ~D[2026-10-02]}
 
-    {:ok, _deleted} = Expenses.delete_expense(nil, saved)
+    {:ok, _deleted} = Expenses.delete_expense(Scope.system(), saved)
     assert save(form, saved) == {:error, :deleted}
   end
 
@@ -188,26 +190,27 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
     next = Expenses.next_id()
     lucky = Enum.at([h.anna, h.ben, h.cleo], rem(next, 3))
 
-    assert Expenses.preview_form(%{form | amount: "10"}).shares[lucky] == 334
+    assert Expenses.preview_form(Scope.system(), %{form | amount: "10"}).shares[lucky] == 334
 
     expense = create!(equal(h, "Kino", 1000, "2026-10-01", h.anna, [h.anna, h.ben, h.cleo]))
-    form = Expenses.edit_form(expense)
+    form = Expenses.edit_form(Scope.system(), expense)
 
-    assert Expenses.preview_form(form).shares ==
+    assert Expenses.preview_form(Scope.system(), form).shares ==
              Map.new(expense.shares, &{&1.participant_id, &1.amount_cents})
   end
 
   test "looks the rate of the form up", %{form: form} do
     assert %{rate: "1,2", rate_source: :ecb} =
              %{form | currency: "USD"}
-             |> Expenses.lookup_form_rate(today: @today)
+             |> then(&Expenses.lookup_form_rate(Scope.system(), &1, today: @today))
              |> Changeset.apply_changes()
 
     assert %{rate: "", rate_hint: "Kein Kurs verfügbar. Kurs bitte von Hand eintragen."} =
              %{form | currency: "CHF"}
-             |> Expenses.lookup_form_rate(today: @today)
+             |> then(&Expenses.lookup_form_rate(Scope.system(), &1, today: @today))
              |> Changeset.apply_changes()
 
-    assert Expenses.lookup_form_rate(%{form | currency: "USD", date: "morgen"}).changes == %{}
+    assert Expenses.lookup_form_rate(Scope.system(), %{form | currency: "USD", date: "morgen"}).changes ==
+             %{}
   end
 end

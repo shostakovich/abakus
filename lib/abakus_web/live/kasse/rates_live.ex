@@ -23,7 +23,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
       manual: ExchangeRates.list_manual_rates(),
       stats: ExchangeRates.ecb_stats(),
       latest: ExchangeRates.latest_ecb_rates(),
-      used: Expenses.recent_foreign_rates(10),
+      used: Expenses.recent_foreign_rates(socket.assigns.current_scope, 10),
       currencies: ExchangeRates.list_currencies()
     )
   end

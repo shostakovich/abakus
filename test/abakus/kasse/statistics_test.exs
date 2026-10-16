@@ -4,6 +4,7 @@ defmodule Abakus.Kasse.StatisticsTest do
   import Abakus.KasseFixtures
 
   alias Abakus.Kasse.{Expenses, Statistics}
+  alias Abakus.Users.Scope
 
   test "counts the expenses the expense search finds" do
     h = household()
@@ -26,8 +27,8 @@ defmodule Abakus.Kasse.StatisticsTest do
           [without_category: true],
           [category_id: h.food, from: ~D[2026-09-02]]
         ] do
-      found = Expenses.list_expenses(filters)
-      [total] = Statistics.rows(Map.new([group_by: :year] ++ filters))
+      found = Expenses.list_expenses(Scope.system(), filters)
+      [total] = Statistics.rows(Scope.system(), Map.new([group_by: :year] ++ filters))
 
       assert {total.count, total.amount_cents} ==
                {length(found), found |> Enum.map(& &1.amount_cents) |> Enum.sum()},

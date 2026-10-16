@@ -7,6 +7,7 @@ defmodule Abakus.Kasse.YnabTest do
 
   alias Abakus.Kasse.{Activities, Categories, FakeYnab, Ynab}
   alias Abakus.Kasse.Ynab.{Connections, Run, Sync, Transactions}
+  alias Abakus.Users.Scope
 
   @target "plan-1|acc-geteilt"
 
@@ -16,7 +17,7 @@ defmodule Abakus.Kasse.YnabTest do
 
   defp requests(fake), do: FakeYnab.take_requests(fake)
   defp connection(h), do: Connections.get(h.anna)
-  defp last_activity, do: hd(Activities.list_activities(limit: 1)).details.text
+  defp last_activity, do: hd(Activities.list_activities(Scope.system(), limit: 1)).details.text
 
   defp connect(h) do
     {:ok, "Token gespeichert."} = Ynab.save_token(h.anna, FakeYnab.token())
@@ -81,7 +82,7 @@ defmodule Abakus.Kasse.YnabTest do
                connection(h)
 
       assert last_activity() == "YNAB verbunden (Token gesetzt)"
-      assert hd(Activities.list_activities(limit: 1)).actor_id == h.anna
+      assert hd(Activities.list_activities(Scope.system(), limit: 1)).actor_id == h.anna
     end
 
     test "resets plan and account when the new token cannot reach the plan", %{h: h} do

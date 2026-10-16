@@ -10,7 +10,7 @@ defmodule AbakusWeb.Kasse.BalancesLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Expenses.subscribe()
+    if connected?(socket), do: Expenses.subscribe(socket.assigns.current_scope)
     {:ok, socket |> assign(page_title: "Salden") |> load()}
   end
 
@@ -18,7 +18,7 @@ defmodule AbakusWeb.Kasse.BalancesLive do
   def handle_info({:expenses_changed, _ids}, socket), do: {:noreply, load(socket)}
 
   defp load(socket) do
-    balances = Balances.balances()
+    balances = Balances.balances(socket.assigns.current_scope)
     people = Participants.list_participants(:all)
     by_id = Map.new(people, &{&1.id, &1})
 

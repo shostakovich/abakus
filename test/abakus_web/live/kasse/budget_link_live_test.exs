@@ -162,7 +162,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
         })
       end
 
-      {:ok, _deleted} = Expenses.delete_expense(c.h.ben, gone)
+      {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), gone)
       {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
 
       Confirm.confirm_click(view, "#budget-link-submit", "Mit Budget verknüpfen?")

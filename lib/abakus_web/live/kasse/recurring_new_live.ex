@@ -16,14 +16,19 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
     socket = assign(socket, page_title: "Wiederkehrende Ausgabe anlegen")
 
     case params["expense_id"] do
-      blank when blank in [nil, ""] -> {:ok, assign(socket, expense: nil)}
-      id -> {:ok, socket |> assign(expense: fetch_expense(id)) |> assign_choice("monthly", [])}
+      blank when blank in [nil, ""] ->
+        {:ok, assign(socket, expense: nil)}
+
+      id ->
+        {:ok,
+         socket |> assign(expense: fetch_expense(socket, id)) |> assign_choice("monthly", [])}
     end
   end
 
-  defp fetch_expense(id) do
+  defp fetch_expense(socket, id) do
     with {:ok, id} <- Abakus.Schema.cast_id(id),
-         %Expense{deleted_at: nil} = expense <- Expenses.get_expense(id) do
+         %Expense{deleted_at: nil} = expense <-
+           Expenses.get_expense(socket.assigns.current_scope, id) do
       expense
     else
       _missing -> raise AbakusWeb.NotFoundError
@@ -32,7 +37,7 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
 
   defp assign_choice(socket, frequency, errors) do
     assign(socket,
-      previews: Recurring.previews(socket.assigns.expense),
+      previews: Recurring.previews(socket.assigns.current_scope, socket.assigns.expense),
       form: to_form(%{"frequency" => frequency}, as: :recurring, errors: errors)
     )
   end
@@ -43,11 +48,11 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
 
   def handle_event("create", params, socket) do
     frequency = get_in(params, ["recurring", "frequency"]) || ""
-    %{current_participant: me, expense: expense} = socket.assigns
+    %{current_scope: scope, expense: expense} = socket.assigns
 
     case Map.fetch(@frequencies, frequency) do
       {:ok, frequency} ->
-        create(socket, Recurring.create_rule(me.id, expense, frequency), frequency)
+        create(socket, Recurring.create_rule(scope, expense, frequency), frequency)
 
       :error ->
         errors = [frequency: {"Bitte eine Häufigkeit wählen.", []}]
@@ -70,7 +75,9 @@ defmodule AbakusWeb.Kasse.RecurringNewLive do
     {:noreply,
      socket
      |> put_flash(:error, "Diese Ausgabe gehört schon zu einer wiederkehrenden Ausgabe.")
-     |> assign(expense: Expenses.get_expense(socket.assigns.expense.id))}
+     |> assign(
+       expense: Expenses.get_expense(socket.assigns.current_scope, socket.assigns.expense.id)
+     )}
   end
 
   defp create(socket, {:error, :not_found}, _frequency) do

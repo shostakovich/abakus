@@ -21,7 +21,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   def mount(params, _session, socket) do
     socket =
       assign(socket,
-        suggestions: Expenses.category_suggestions(),
+        suggestions: Expenses.category_suggestions(socket.assigns.current_scope),
         people: Participants.list_participants(:all),
         categories: Categories.list_categories(:all),
         errors: [],
@@ -51,7 +51,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
     end
 
     data =
-      Expenses.new_form(
+      Expenses.new_form(socket.assigns.current_scope,
         today: LocalTime.today(),
         participant_id: socket.assigns.current_participant.id,
         reimbursement: params["reimbursement"] in ["1", "true"],
@@ -71,15 +71,17 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   end
 
   defp start(socket, :edit, %{"id" => id}) do
+    scope = socket.assigns.current_scope
+
     with {:ok, id} <- Abakus.Schema.cast_id(id),
-         %Expense{} = expense <- Expenses.get_expense(id) do
+         %Expense{} = expense <- Expenses.get_expense(scope, id) do
       assign(socket,
         page_title: expense.title,
         expense: expense,
         deleted?: Expense.deleted?(expense),
-        data: Expenses.edit_form(expense),
-        history: Activities.list_activities(expense_id: expense.id),
-        booking: booking(socket.assigns.current_scope, expense)
+        data: Expenses.edit_form(scope, expense),
+        history: Activities.list_activities(scope, expense_id: expense.id),
+        booking: booking(scope, expense)
       )
     else
       _missing -> raise AbakusWeb.NotFoundError
@@ -117,9 +119,9 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
 
   def handle_event("save", %{"expense" => params}, socket) do
     data = socket |> changeset(params) |> Changeset.apply_changes()
-    %{current_participant: me, expense: expense} = socket.assigns
+    %{current_scope: scope, expense: expense} = socket.assigns
 
-    case Expenses.save_form(me.id, data, expense) do
+    case Expenses.save_form(scope, data, expense) do
       {:ok, saved} ->
         kind = if saved.reimbursement, do: "Rückzahlung", else: "Ausgabe"
         verb = if expense, do: "gespeichert", else: "angelegt"
@@ -153,9 +155,9 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   end
 
   def handle_event("delete", _params, socket) do
-    %{current_participant: me, expense: expense} = socket.assigns
+    %{current_scope: scope, expense: expense} = socket.assigns
 
-    case Expenses.delete_expense(me.id, expense) do
+    case Expenses.delete_expense(scope, expense) do
       {:ok, deleted} ->
         {:noreply,
          socket
@@ -177,7 +179,8 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
     do: Form.changeset(socket.assigns.data, params, suggestions: socket.assigns.suggestions)
 
   defp lookup_rate(socket) do
-    data = socket.assigns.data |> Expenses.lookup_form_rate() |> Changeset.apply_changes()
+    %{current_scope: scope, data: data} = socket.assigns
+    data = scope |> Expenses.lookup_form_rate(data) |> Changeset.apply_changes()
     assign(socket, data: data)
   end
 
@@ -217,7 +220,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
     assign(socket,
       form: form,
       rows: FormData.to_form(changeset, form, :rows, []),
-      preview: Expenses.preview_form(data),
+      preview: Expenses.preview_form(socket.assigns.current_scope, data),
       foreign?: code not in ["", "EUR"],
       unit: unit,
       unit_label: unit_label(data, unit),

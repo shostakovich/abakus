@@ -20,8 +20,8 @@ defmodule AbakusWeb.Kasse.ParticipantsLive do
   end
 
   defp load(socket) do
-    counts = Expenses.count_by_participant()
-    balances = Balances.balances()
+    counts = Expenses.count_by_participant(socket.assigns.current_scope)
+    balances = Balances.balances(socket.assigns.current_scope)
 
     {archived, active} =
       Participants.list_participants(:all)

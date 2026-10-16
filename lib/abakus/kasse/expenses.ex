@@ -4,13 +4,13 @@ defmodule Abakus.Kasse.Expenses do
   activity entry; afterwards `{:expenses_changed, ids}` goes out on the topic `"kasse:expenses"`.
 
   An expense input is a map as `input/1` returns it; `Abakus.Kasse.Expenses.Expense.changeset/2`
-  checks it.
+  checks it. The functions take the caller's scope, which `Abakus.Kasse.Access` checks.
   """
 
   import Ecto.Query
 
   alias Abakus.Format
-  alias Abakus.Kasse.{Activities, BudgetLink, Dates, Participants, Rates, Suggestions}
+  alias Abakus.Kasse.{Access, Activities, BudgetLink, Dates, Participants, Rates, Suggestions}
   alias Abakus.Kasse.Activities.Changes
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Kasse.Expenses.{Expense, ExpenseShare, Form}
@@ -18,6 +18,7 @@ defmodule Abakus.Kasse.Expenses do
   alias Abakus.Kasse.Recurring.RecurringExpense
   alias Abakus.Money
   alias Abakus.Repo
+  alias Abakus.Users.Scope
   alias Ecto.Changeset
   alias Phoenix.PubSub
 
@@ -25,15 +26,27 @@ defmodule Abakus.Kasse.Expenses do
   @preloads [:category, :paid_by, :shares]
 
   @doc "Subscribes the caller to `{:expenses_changed, ids}`."
-  def subscribe, do: PubSub.subscribe(Abakus.PubSub, @topic)
+  def subscribe(%Scope{} = scope) do
+    Access.check!(scope)
+    PubSub.subscribe(Abakus.PubSub, @topic)
+  end
 
   defp broadcast(ids), do: PubSub.broadcast(Abakus.PubSub, @topic, {:expenses_changed, ids})
 
   @doc "The expense with `id`, deleted ones too, with category, payer and shares; or nil."
-  def get_expense(id), do: Expense |> Repo.get(id) |> Repo.preload(@preloads)
+  def get_expense(%Scope{} = scope, id) do
+    Access.check!(scope)
+    fetch(id)
+  end
 
-  @doc "The expense with `id` as `get_expense/1`; raises if there is none."
-  def get_expense!(id), do: Expense |> Repo.get!(id) |> Repo.preload(@preloads)
+  @doc "The expense with `id` as `get_expense/2`; raises if there is none."
+  def get_expense!(%Scope{} = scope, id) do
+    Access.check!(scope)
+    fetch!(id)
+  end
+
+  defp fetch(id), do: Expense |> Repo.get(id) |> Repo.preload(@preloads)
+  defp fetch!(id), do: Expense |> Repo.get!(id) |> Repo.preload(@preloads)
 
   @doc """
   The live expenses, newest first (by date, then id), with category, payer and shares.
@@ -45,7 +58,9 @@ defmodule Abakus.Kasse.Expenses do
   (`:date_desc`, `:date_asc`, `:amount_desc`, `:amount_asc`), `:limit` and `:after`, the
   `{date, id}` of the last expense of the page before.
   """
-  def list_expenses(filters \\ [], opts \\ []) do
+  def list_expenses(%Scope{} = scope, filters \\ [], opts \\ []) do
+    Access.check!(scope)
+
     from(e in Expense, as: :expense, where: is_nil(e.deleted_at))
     |> filter(filters)
     |> after_cursor(opts[:after])
@@ -56,7 +71,7 @@ defmodule Abakus.Kasse.Expenses do
   end
 
   @doc """
-  The ids of the live expenses that `filters` match (as `list_expenses/2`) as SQL with its
+  The ids of the live expenses that `filters` match (as `list_expenses/3`) as SQL with its
   arguments, so that a query of its own filters them the same way: `e.id IN (…)`.
   """
   def filter_sql(filters) do
@@ -141,7 +156,8 @@ defmodule Abakus.Kasse.Expenses do
   `:recurring_expense_id`, the rule it is an occurrence of; `{:error, :rule_changed}` when that
   rule is paused, gone or no longer due on the expense's date.
   """
-  def create_expense(actor_id, attrs, opts \\ []) do
+  def create_expense(%Scope{} = scope, attrs, opts \\ []) do
+    actor_id = Access.actor_id!(scope)
     rule_id = opts[:recurring_expense_id]
     changeset = Expense.changeset(%Expense{recurring_expense_id: rule_id}, attrs)
 
@@ -178,7 +194,9 @@ defmodule Abakus.Kasse.Expenses do
   Saves a new input for a live expense. Saved unchanged, nothing is written: no time stamp, no
   activity entry, no broadcast. A deleted expense gives `{:error, :deleted}`.
   """
-  def update_expense(actor_id, %Expense{id: id}, attrs) do
+  def update_expense(%Scope{} = scope, %Expense{id: id}, attrs) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       with {:ok, old} <- fetch_live(id),
            {:ok, changeset} <- validate_references(Expense.changeset(old, attrs), :update),
@@ -209,7 +227,9 @@ defmodule Abakus.Kasse.Expenses do
   end
 
   @doc "Deletes a live expense softly; it stays readable but out of lists and balances."
-  def delete_expense(actor_id, %Expense{id: id}) do
+  def delete_expense(%Scope{} = scope, %Expense{id: id}) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       with {:ok, old} <- fetch_live(id),
            changeset = Changeset.change(old, deleted_at: DateTime.utc_now()),
@@ -239,7 +259,7 @@ defmodule Abakus.Kasse.Expenses do
   end
 
   defp fetch_live(id) do
-    case get_expense(id) do
+    case fetch(id) do
       nil -> {:error, :not_found}
       %Expense{deleted_at: nil} = expense -> {:ok, expense}
       %Expense{} -> {:error, :deleted}
@@ -248,7 +268,7 @@ defmodule Abakus.Kasse.Expenses do
 
   defp committed({:ok, {expense, changed?}}) do
     if changed?, do: broadcast([expense.id])
-    {:ok, get_expense!(expense.id)}
+    {:ok, fetch!(expense.id)}
   end
 
   defp committed({:error, _reason} = error), do: error
@@ -295,18 +315,28 @@ defmodule Abakus.Kasse.Expenses do
   defp category_names, do: Map.new(Repo.all(from c in Category, select: {c.id, c.name}))
 
   @doc "A blank expense form with everybody; options as `Abakus.Kasse.Expenses.Form.new/2`."
-  def new_form(opts), do: Form.new(Participants.list_participants(:all), opts)
+  def new_form(%Scope{} = scope, opts) do
+    Access.check!(scope)
+    Form.new(Participants.list_participants(:all), opts)
+  end
 
   @doc "The form of a saved expense."
-  def edit_form(%Expense{} = expense),
-    do: Form.from_expense(expense, Participants.list_participants(:all))
+  def edit_form(%Scope{} = scope, %Expense{} = expense) do
+    Access.check!(scope)
+    Form.from_expense(expense, Participants.list_participants(:all))
+  end
 
   @doc "The split preview of a form; a new expense splits by the id it will get."
-  def preview_form(%Form{} = form), do: Form.preview(form, form.expense_id || next_id())
+  def preview_form(%Scope{} = scope, %Form{} = form) do
+    Access.check!(scope)
+    Form.preview(form, form.expense_id || next_id())
+  end
 
   @doc "The rates of the newest live expenses in another currency than euros, newest first."
-  @spec recent_foreign_rates(pos_integer()) :: [map()]
-  def recent_foreign_rates(limit \\ 10) do
+  @spec recent_foreign_rates(Scope.t(), pos_integer()) :: [map()]
+  def recent_foreign_rates(%Scope{} = scope, limit \\ 10) do
+    Access.check!(scope)
+
     Repo.all(
       from e in Expense,
         where: is_nil(e.deleted_at) and e.original_currency != "EUR",
@@ -324,7 +354,9 @@ defmodule Abakus.Kasse.Expenses do
   end
 
   @doc "Looks up the rate of the form's currency on its date. Option `:today`."
-  def lookup_form_rate(%Form{} = form, opts \\ []) do
+  def lookup_form_rate(%Scope{} = scope, %Form{} = form, opts \\ []) do
+    Access.check!(scope)
+
     with {:ok, date} <- Dates.parse(form.date),
          currency = Form.currency_code(form),
          true <- Money.valid_currency?(currency) and currency != "EUR" do
@@ -340,13 +372,15 @@ defmodule Abakus.Kasse.Expenses do
   are those saved; any other rate counts as manual. Errors come back on the form. Option
   `:today`.
   """
-  def save_form(actor_id, %Form{} = form, existing \\ nil, opts \\ []) do
+  def save_form(%Scope{} = scope, %Form{} = form, existing \\ nil, opts \\ []) do
+    Access.check!(scope)
+
     with {:ok, input} <- Form.input(form),
          {:ok, form, input} <- resolve_rate(form, input, existing, opts) do
       result =
         if existing,
-          do: update_expense(actor_id, existing, input),
-          else: create_expense(actor_id, input)
+          do: update_expense(scope, existing, input),
+          else: create_expense(scope, input)
 
       case result do
         {:error, %Changeset{} = changeset} -> {:error, Form.put_errors(form, changeset)}
@@ -410,7 +444,8 @@ defmodule Abakus.Kasse.Expenses do
   same title regardless of case, or for a reimbursement the same recipient. Nil for none or an
   invalid input.
   """
-  def find_duplicate(attrs) do
+  def find_duplicate(%Scope{} = scope, attrs) do
+    Access.check!(scope)
     changeset = Expense.changeset(%Expense{}, attrs)
 
     if changeset.valid? do
@@ -454,10 +489,15 @@ defmodule Abakus.Kasse.Expenses do
   end
 
   @doc "The category suggestions learned from `category_history/0`."
-  def category_suggestions, do: Suggestions.build(category_history())
+  def category_suggestions(%Scope{} = scope) do
+    Access.check!(scope)
+    Suggestions.build(category_history())
+  end
 
   @doc "The number of live expenses each person paid or shares, by participant id."
-  def count_by_participant do
+  def count_by_participant(%Scope{} = scope) do
+    Access.check!(scope)
+
     paid =
       from e in Expense,
         where: is_nil(e.deleted_at),
@@ -481,7 +521,9 @@ defmodule Abakus.Kasse.Expenses do
   An overview of the live entries: the number of expenses and reimbursements, the expenses
   without category, and the first and last date (nil without entries).
   """
-  def overview do
+  def overview(%Scope{} = scope) do
+    Access.check!(scope)
+
     Repo.one(
       from e in Expense,
         where: is_nil(e.deleted_at),
@@ -497,7 +539,9 @@ defmodule Abakus.Kasse.Expenses do
   end
 
   @doc "The number of live expenses in each category, by category id."
-  def count_by_category do
+  def count_by_category(%Scope{} = scope) do
+    Access.check!(scope)
+
     Repo.all(
       from e in Expense,
         where: is_nil(e.deleted_at) and not is_nil(e.category_id),
