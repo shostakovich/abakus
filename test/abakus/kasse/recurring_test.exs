@@ -6,11 +6,9 @@ defmodule Abakus.Kasse.RecurringTest do
   import Abakus.Kasse.ActivityTexts
   import Abakus.KasseFixtures
 
-  alias Abakus.LocalTime
-
-  alias Abakus.Kasse.{Activities, Dates, Expenses, FakeEcb, Fx, Recurring}
+  alias Abakus.ExchangeRates
+  alias Abakus.Kasse.{Activities, Dates, Expenses, Recurring}
   alias Abakus.Kasse.Expenses.Expense
-  alias Abakus.Kasse.Fx.Loader
   alias Abakus.Kasse.Recurring.RecurringExpense
 
   setup do
@@ -64,7 +62,9 @@ defmodule Abakus.Kasse.RecurringTest do
 
   defp ecb!(currency, date, rate),
     do:
-      :ok = Fx.save_ecb_rates([%{currency: currency, date: Date.from_iso8601!(date), rate: rate}])
+      ExchangeRates.store([
+        {currency, Date.from_iso8601!(date), Decimal.from_float(rate)}
+      ])
 
   test "names the frequencies" do
     assert Enum.map(Recurring.frequencies(), &Recurring.frequency_label/1) ==
@@ -435,32 +435,6 @@ defmodule Abakus.Kasse.RecurringTest do
 
       assert Enum.map(got.shares, & &1.weight) == [6000, 4000]
     end
-
-    test "wait while the ECB rates cannot be loaded and catch up with the day's rate later", %{
-      h: h
-    } do
-      rule = rule(cloud(h), :monthly)
-      ecb = FakeEcb.start(~D[2026-03-05])
-      FakeEcb.put(ecb, :failure, 500)
-      clock = fn -> LocalTime.to_utc(~N[2026-03-05 18:00:00]) end
-      loader = start_supervised!({Loader, name: nil, base_url: ecb.url, clock: clock})
-
-      assert {:error, 0, [reason]} = catch_up("2026-03-05", loader: loader)
-
-      assert reason =~
-               ~s[recurring expense #{rule.id} ("Cloud"): rate for USD on 2026-02-05 not available]
-
-      assert next_date(rule) == "2026-02-05"
-      assert dates(rule) == "2026-01-05"
-
-      stop_supervised!(Loader)
-      FakeEcb.put(ecb, :failure, nil)
-      loader = start_supervised!({Loader, name: nil, base_url: ecb.url, clock: clock})
-
-      assert catch_up("2026-03-05", loader: loader) == {:ok, 2}
-      rates = for %{fx_rate: rate} <- tl(occurrences(rule)), do: rate
-      assert rates == [FakeEcb.rate!("USD", ~D[2026-02-05]), FakeEcb.rate!("USD", ~D[2026-03-05])]
-    end
   end
 
   describe "occurrences for which an equal expense exists" do
@@ -511,37 +485,40 @@ defmodule Abakus.Kasse.RecurringTest do
 
   describe "a rule changed during its catch-up" do
     setup %{h: h} do
-      ecb = FakeEcb.start(~D[2026-05-10])
-      clock = fn -> LocalTime.to_utc(~N[2026-05-10 18:00:00]) end
-      loader = start_supervised!({Loader, name: nil, base_url: ecb.url, clock: clock})
-      %{rule: rule(cloud(h), :monthly), ecb: ecb, loader: loader}
+      %{rule: rule(cloud(h), :monthly)}
     end
 
-    defp while_loading(%{ecb: ecb, loader: loader}, change) do
-      FakeEcb.block(ecb)
-      run = Task.async(fn -> catch_up("2026-05-10", loader: loader) end)
-      wait_until(fn -> FakeEcb.requests(ecb) != [] end)
-      change.()
-      FakeEcb.release(ecb)
-      Task.await(run)
+    # The change lands between the rate lookup of the first occurrence and its insert.
+    defp while_looking_up_the_rate(change) do
+      handler = make_ref()
+
+      :telemetry.attach(
+        handler,
+        [:abakus, :repo, :query],
+        fn
+          _event, _measurements, %{source: "exchange_rates"}, _config ->
+            :telemetry.detach(handler)
+            change.()
+
+          _event, _measurements, _metadata, _config ->
+            :ok
+        end,
+        nil
+      )
+
+      on_exit(fn -> :telemetry.detach(handler) end)
+      catch_up("2026-05-10")
     end
 
-    defp wait_until(done?) do
-      unless done?.() do
-        Process.sleep(10)
-        wait_until(done?)
-      end
-    end
-
-    test "stops without an error when it is paused", %{rule: rule} = context do
-      assert while_loading(context, fn -> {:ok, _rule} = Recurring.pause_rule(nil, rule) end) ==
+    test "stops without an error when it is paused", %{rule: rule} do
+      assert while_looking_up_the_rate(fn -> {:ok, _rule} = Recurring.pause_rule(nil, rule) end) ==
                {:ok, 0}
 
       assert dates(rule) == "2026-01-05"
       assert next_date(rule) == "2026-02-05"
     end
 
-    test "skips what a pause and resume meanwhile skipped", %{rule: rule} = context do
+    test "skips what a pause and resume meanwhile skipped", %{rule: rule} do
       today = ~D[2026-05-10]
 
       resume = fn ->
@@ -549,13 +526,13 @@ defmodule Abakus.Kasse.RecurringTest do
         {:ok, _resumed, 0} = Recurring.resume_rule(nil, paused, today: today)
       end
 
-      assert while_loading(context, resume) == {:ok, 0}
+      assert while_looking_up_the_rate(resume) == {:ok, 0}
       assert dates(rule) == "2026-01-05"
       assert next_date(rule) == "2026-06-05"
     end
 
-    test "stops without an error when it is deleted", %{rule: rule} = context do
-      assert while_loading(context, fn -> {:ok, _rule} = Recurring.delete_rule(nil, rule) end) ==
+    test "stops without an error when it is deleted", %{rule: rule} do
+      assert while_looking_up_the_rate(fn -> {:ok, _rule} = Recurring.delete_rule(nil, rule) end) ==
                {:ok, 0}
 
       assert titled("Cloud") == "2026-01-05"

@@ -11,7 +11,7 @@ defmodule Abakus.MCP.SqlSandbox do
   alias Exqlite.Sqlite3
 
   @exposed ~w(kasse_participants kasse_categories kasse_expenses kasse_expense_shares kasse_recurring_expenses
-               kasse_activities kasse_fx_rates kasse_settings)
+               kasse_activities kasse_settings exchange_rates)
   @max_query 100_000
   @max_cell 2000
   # Enough bytes for 2000 characters of up to four bytes each.

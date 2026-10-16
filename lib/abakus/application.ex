@@ -16,7 +16,6 @@ defmodule Abakus.Application do
         # Sends sign-in links in the background; a flood of requests is dropped.
         {Task.Supervisor, name: Abakus.TaskSupervisor, max_children: 50},
         {Task.Supervisor, name: Abakus.Depot.TaskSupervisor},
-        Abakus.Kasse.Fx.Loader,
         Abakus.Kasse.Ynab.Cache,
         Abakus.Depot.Receipts.Recognition,
         AbakusWeb.Endpoint
@@ -29,7 +28,6 @@ defmodule Abakus.Application do
     if Application.fetch_env!(:abakus, :jobs),
       do: [
         Abakus.ExchangeRates.Job,
-        Abakus.Kasse.Fx.RefreshJob,
         Abakus.Kasse.Recurring.Job,
         Abakus.Backup.Job,
         Abakus.Kasse.Ynab.Scheduler,

@@ -23,10 +23,11 @@ Tables:
   original_currency, fx_rate, fx_source, parts [{participant_id, weight}].
 - kasse_activities: change log (inserted_at, actor_id NULL = system, action expense_created|expense_updated|expense_deleted|settings_updated|recurring_created|recurring_deleted,
   expense_id, details = JSON with only the keys that apply: title, amount_cents, changes [{field, old, new}] and text, in German as shown in the app).
-- kasse_fx_rates: exchange rates per currency, source ('ecb' or 'manual') and date (foreign currency per 1 EUR).
-  A day can have both an ECB and a manual rate; the most recent manual rate on or before a date takes precedence over the ECB rate.
+- exchange_rates: exchange rates per currency, source ('ecb' or 'manual') and date (foreign currency per 1 EUR, rate as a decimal).
+  A day can have both an ECB and a manual rate; the Kasse takes the most recent manual rate on or before a date, otherwise the ECB rate
+  of that day or of up to ten days before.
 - kasse_settings: the settings of the group (a single row, group_name).
-YNAB tables (credentials) are not visible via MCP, nor is anything outside the Kasse (kasse_participants.user_id refers to the sign-in).
+YNAB tables (credentials) are not visible via MCP, nor is anything outside the Kasse but exchange_rates (kasse_participants.user_id refers to the sign-in).
 
 Balance of a person = sum of amount_cents of the expenses they paid (paid_by_id) − sum of their shares in kasse_expense_shares
 (only deleted_at IS NULL, reimbursements included). Positive = is owed money.

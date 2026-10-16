@@ -4,7 +4,6 @@ defmodule Abakus.Kasse.Expenses.FormTest do
   import Ecto.Changeset, only: [apply_changes: 1, get_field: 2]
 
   alias Abakus.Kasse.Expenses.{Expense, ExpenseShare, Form}
-  alias Abakus.Kasse.Fx.Rate
   alias Abakus.Kasse.Suggestions
 
   @anna %{id: 1, name: "Anna", archived_at: nil}
@@ -303,12 +302,12 @@ defmodule Abakus.Kasse.Expenses.FormTest do
 
       assert %{rate: "1,0912", rate_source: :ecb, rate_hint: "EZB-Kurs vom 30.09.2026."} =
                form
-               |> Form.put_rate({:ok, %Rate{rate: 1.0912, source: :ecb, date: ~D[2026-09-30]}})
+               |> Form.put_rate({:ok, %{rate: 1.0912, source: :ecb, date: ~D[2026-09-30]}})
                |> apply_changes()
 
       assert %{rate_hint: "Manueller Kurs vom 01.09.2026."} =
                form
-               |> Form.put_rate({:ok, %Rate{rate: 1.2, source: :manual, date: ~D[2026-09-01]}})
+               |> Form.put_rate({:ok, %{rate: 1.2, source: :manual, date: ~D[2026-09-01]}})
                |> apply_changes()
 
       assert %{

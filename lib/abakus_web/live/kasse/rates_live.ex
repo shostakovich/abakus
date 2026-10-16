@@ -1,14 +1,13 @@
 defmodule AbakusWeb.Kasse.RatesLive do
   @moduledoc """
-  Exchange rates: the manual ones (add, delete), what the ECB cache holds with the newest day's
-  rates and a refresh, and the rates of the newest expenses in another currency. The refresh
+  Exchange rates: the manual ones (add, delete), the stored ECB rates with the newest day's and a
+  load of the shared rates, and the rates of the newest expenses in another currency. The load
   downloads from the ECB, so it runs in the background.
   """
   use AbakusWeb, :kasse_live_view
 
-  alias Abakus.LocalTime
-
-  alias Abakus.Kasse.{Dates, Fx, Money}
+  alias Abakus.{ExchangeRates, LocalTime}
+  alias Abakus.Kasse.{Dates, Expenses, Money, Rates}
 
   @impl true
   def mount(_params, _session, socket) do
@@ -21,11 +20,11 @@ defmodule AbakusWeb.Kasse.RatesLive do
 
   defp load(socket) do
     assign(socket,
-      manual: Fx.list_manual_rates(),
-      stats: Fx.ecb_stats(),
-      latest: Fx.latest_ecb_rates(),
-      used: Fx.recent_expense_rates(10),
-      currencies: Fx.list_currencies()
+      manual: ExchangeRates.list_manual_rates(),
+      stats: ExchangeRates.ecb_stats(),
+      latest: ExchangeRates.latest_ecb_rates(),
+      used: Expenses.recent_foreign_rates(10),
+      currencies: ExchangeRates.list_currencies()
     )
   end
 
@@ -46,7 +45,8 @@ defmodule AbakusWeb.Kasse.RatesLive do
     params = typed(params)
 
     with {:ok, attrs} <- read(params),
-         {:ok, rate} <- Fx.put_manual_rate(socket.assigns.current_participant.id, attrs) do
+         {:ok, rate} <-
+           Rates.put_manual_rate(socket.assigns.current_participant.id, attrs) do
       {:noreply,
        socket
        |> put_flash(:info, "Kurs für #{rate.currency} gespeichert.")
@@ -62,7 +62,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
     me = socket.assigns.current_participant.id
 
     with {:ok, date} <- Date.from_iso8601(date),
-         {:ok, _activity} <- Fx.delete_manual_rate(me, currency, date) do
+         {:ok, _activity} <- Rates.delete_manual_rate(me, currency, date) do
       {:noreply, socket |> put_flash(:info, "Manueller Kurs für #{currency} gelöscht.") |> load()}
     else
       _missing ->
@@ -73,7 +73,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
 
   def handle_event("refresh", _params, socket) do
     {:noreply,
-     socket |> assign(refreshing: true) |> start_async(:refresh, fn -> Fx.refresh() end)}
+     socket |> assign(refreshing: true) |> start_async(:refresh, fn -> ExchangeRates.load() end)}
   end
 
   @impl true
@@ -81,17 +81,21 @@ defmodule AbakusWeb.Kasse.RatesLive do
     socket = assign(socket, refreshing: false)
 
     case result do
-      {:ok, {:ok, day}} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "EZB-Kurse aktualisiert (Stand #{Format.date(day)}).")
-         |> load()}
+      {:ok, :ok} ->
+        {:noreply, socket |> put_flash(:info, loaded_message()) |> load()}
 
       {:ok, {:error, message}} ->
         {:noreply, put_flash(socket, :error, message)}
 
       {:exit, _reason} ->
-        {:noreply, put_flash(socket, :error, Fx.unavailable_message("Abbruch"))}
+        {:noreply, put_flash(socket, :error, "Die EZB-Kurse ließen sich nicht laden.")}
+    end
+  end
+
+  defp loaded_message do
+    case ExchangeRates.last_date() do
+      nil -> "Die EZB liefert noch keine Kurse."
+      day -> "EZB-Kurse aktualisiert (Stand #{Format.date(day)})."
     end
   end
 
@@ -104,7 +108,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
     unread =
       for {field, {:error, message}} <- [date: date, rate: rate], do: {field, {message, []}}
 
-    checked = Fx.change_manual_rate(attrs).errors
+    checked = ExchangeRates.change_manual_rate(attrs).errors
     errors = unread ++ Keyword.drop(checked, Keyword.keys(unread))
 
     if errors == [], do: {:ok, attrs}, else: {:error, errors}
@@ -154,7 +158,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
             <:col :let={rate} label="Währung">{rate.currency}</:col>
             <:col :let={rate} label="Gültig ab" align={:end}>{Format.date(rate.date)}</:col>
             <:col :let={rate} label="1 € =" align={:end}>
-              {Money.format_rate(rate.rate)} {rate.currency}
+              {Money.format_rate(Decimal.to_float(rate.rate))} {rate.currency}
             </:col>
             <:col :let={rate} class="w-12">
               <.button
@@ -229,11 +233,11 @@ defmodule AbakusWeb.Kasse.RatesLive do
           <.section_heading id="rates-ecb">EZB-Referenzkurse</.section_heading>
           <p id="rates-stats" class="max-w-prose text-sm text-base-content/70">
             <%= if @stats.count > 0 do %>
-              Zwischengespeichert: {@stats.count} Kurse für {@stats.currencies} Währungen vom {Format.date(
+              Gespeichert: {@stats.count} Kurse für {@stats.currencies} Währungen vom {Format.date(
                 @stats.from
               )} bis {Format.date(@stats.to)}.
             <% else %>
-              Noch keine EZB-Kurse zwischengespeichert – sie werden bei Bedarf automatisch geladen.
+              Noch keine EZB-Kurse gespeichert.
             <% end %>
             Neue Kurse werden täglich um 17 Uhr automatisch abgerufen.
           </p>
@@ -258,7 +262,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
               {Format.date(rate.date)}
             </:col>
             <:col :let={rate} label="1 € =" align={:end}>
-              {Money.format_rate(rate.rate)} {rate.currency}
+              {Money.format_rate(Decimal.to_float(rate.rate))} {rate.currency}
             </:col>
           </.table>
         </section>

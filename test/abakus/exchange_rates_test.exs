@@ -152,4 +152,63 @@ defmodule Abakus.ExchangeRatesTest do
     assert ExchangeRates.latest("JPY") == nil
     assert ExchangeRates.last_date() == ~D[2026-10-01]
   end
+
+  describe "the stored rates" do
+    test "are described for the rates page" do
+      ExchangeRates.store([
+        rate("USD", ~D[2026-09-29], "1.10"),
+        rate("USD", ~D[2026-09-30], "1.111"),
+        rate("GBP", ~D[2026-09-30], "0.85"),
+        rate("CHF", ~D[2026-09-30], "0.94")
+      ])
+
+      manual("XYZ", ~D[2026-09-01], "4.5")
+
+      assert ExchangeRates.ecb_stats() == %{
+               count: 4,
+               currencies: 3,
+               from: ~D[2026-09-29],
+               to: ~D[2026-09-30]
+             }
+
+      assert Enum.map(ExchangeRates.latest_ecb_rates(), &{&1.currency, &1.rate}) ==
+               [
+                 {"CHF", Decimal.new("0.94")},
+                 {"GBP", Decimal.new("0.85")},
+                 {"USD", Decimal.new("1.111")}
+               ]
+
+      assert ExchangeRates.list_currencies() == ["CHF", "GBP", "USD", "XYZ"]
+    end
+
+    test "are empty without any" do
+      assert ExchangeRates.ecb_stats() == %{count: 0, currencies: 0, from: nil, to: nil}
+      assert ExchangeRates.latest_ecb_rates() == []
+    end
+  end
+
+  describe "manual rates" do
+    test "are stored, found as the newest of their source and deleted" do
+      ExchangeRates.store([rate("USD", ~D[2026-09-30], "1.11")])
+
+      assert {:ok, %ExchangeRate{currency: "USD", source: :manual}} =
+               ExchangeRates.put_manual_rate(%{
+                 currency: " usd ",
+                 date: ~D[2026-09-20],
+                 rate: 1.2
+               })
+
+      assert %{source: :manual, date: ~D[2026-09-20]} =
+               ExchangeRates.newest("USD", :manual, ~D[2026-10-02])
+
+      assert %{source: :ecb} = ExchangeRates.newest("USD", :ecb, ~D[2026-10-02])
+
+      assert ExchangeRates.newest("USD", :ecb, ~D[2026-10-12], not_before: ~D[2026-10-01]) ==
+               nil
+
+      assert ExchangeRates.delete_manual_rate("usd", ~D[2026-09-20]) == :ok
+      assert ExchangeRates.delete_manual_rate("USD", ~D[2026-09-20]) == {:error, :not_found}
+      assert ExchangeRates.list_manual_rates() == []
+    end
+  end
 end

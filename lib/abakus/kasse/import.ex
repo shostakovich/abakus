@@ -2,12 +2,13 @@ defmodule Abakus.Kasse.Import do
   @moduledoc """
   Brings the database file of the former shared-expenses app into the empty Kasse, once, keeping every id: people,
   categories (replacing the seeded ones), the group's name, recurring expenses, expenses with their shares, the
-  activity log, exchange rates and each person's YNAB connection, category mapping and synced transactions.
+  activity log, manual exchange rates and each person's YNAB connection, category mapping and synced transactions.
 
   Each person becomes the user with the email address given for their name: an existing user, or a new one who gets
   no mail and asks for a sign-in link on the sign-in page. Abakus needs a user first, the budget owner.
   """
 
+  alias Abakus.ExchangeRates.ExchangeRate
   alias Abakus.Repo
   alias Abakus.Users
   alias Abakus.Users.User
@@ -72,6 +73,8 @@ defmodule Abakus.Kasse.Import do
       end
     end
   end
+
+  defp columns("fx_rates"), do: ~w(currency source date rate)
 
   defp columns(table) do
     %{rows: rows} = Repo.query!("SELECT name FROM pragma_table_info(?)", ["kasse_" <> table])
@@ -153,9 +156,18 @@ defmodule Abakus.Kasse.Import do
 
   defp atoms(row), do: Map.new(row, fn {column, value} -> {String.to_atom(column), value} end)
 
-  # The Kasse may have fetched ECB rates before the import; the old app's are the same or entered by hand.
+  # The old app's ECB rates are left to the shared daily load.
   defp insert("fx_rates", rows) do
-    Repo.insert_all("kasse_fx_rates", rows,
+    Repo.insert_all(
+      ExchangeRate,
+      for %{source: "manual"} = row <- rows do
+        %{
+          currency: row.currency,
+          date: Date.from_iso8601!(row.date),
+          source: :manual,
+          rate: Decimal.from_float(row.rate)
+        }
+      end,
       on_conflict: {:replace, [:rate]},
       conflict_target: [:currency, :source, :date]
     )

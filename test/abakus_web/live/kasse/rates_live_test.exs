@@ -9,10 +9,9 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
   import Abakus.KasseFixtures
   import AbakusWeb.PageText
 
-  alias Abakus.LocalTime
-
-  alias Abakus.Kasse.{FakeEcb, Fx}
-  alias Abakus.Kasse.Fx.{Loader, Rate}
+  alias Abakus.{ExchangeRates, FakeExchangeRateSource, LocalTime}
+  alias Abakus.ExchangeRates.ExchangeRate
+  alias Abakus.Kasse.Rates
 
   setup %{conn: conn} do
     h = household()
@@ -22,15 +21,14 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
   defp save(view, params),
     do: view |> form("#rate-form", rate: params) |> render_submit()
 
-  test "an empty cache and no manual rates", %{conn: conn} do
+  test "no ECB and no manual rates", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     assert page_title(view) == "Wechselkurse · Abakus"
     assert texts(view, "main") |> hd() =~ "Noch keine manuellen Kurse."
 
     assert texts(view, "#rates-stats") == [
-             "Noch keine EZB-Kurse zwischengespeichert – sie werden bei Bedarf automatisch geladen. " <>
-               "Neue Kurse werden täglich um 17 Uhr automatisch abgerufen."
+             "Noch keine EZB-Kurse gespeichert. Neue Kurse werden täglich um 17 Uhr automatisch abgerufen."
            ]
 
     assert has_element?(view, "#rate_date[value='#{Date.to_iso8601(LocalTime.today())}']")
@@ -71,7 +69,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
 
     assert flash(view, :info) == "Manueller Kurs für USD gelöscht."
     refute has_element?(view, "#manual-rates")
-    assert Fx.list_manual_rates() == []
+    assert ExchangeRates.list_manual_rates() == []
   end
 
   test "keeps the typed values with the errors", %{conn: conn} do
@@ -94,13 +92,15 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
              ["Bitte einen dreistelligen Währungscode angeben (z. B. USD)."]
 
     assert texts(view, "#rate_rate-error-0") == ["Der Kurs muss größer als 0 sein."]
-    assert Fx.list_manual_rates() == []
+    assert ExchangeRates.list_manual_rates() == []
   end
 
   test "a rate deleted meanwhile", %{conn: conn, h: h} do
-    {:ok, _rate} = Fx.put_manual_rate(h.ben, %{currency: "CHF", date: ~D[2026-09-01], rate: 0.95})
+    {:ok, _rate} =
+      Rates.put_manual_rate(h.ben, %{currency: "CHF", date: ~D[2026-09-01], rate: 0.95})
+
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
-    {:ok, _activity} = Fx.delete_manual_rate(h.ben, "CHF", ~D[2026-09-01])
+    {:ok, _activity} = Rates.delete_manual_rate(h.ben, "CHF", ~D[2026-09-01])
 
     confirm_click(view, "#manual-CHF-2026-09-01-delete")
 
@@ -108,13 +108,12 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
     refute has_element?(view, "#manual-rates")
   end
 
-  test "the ECB cache, its newest day and the rates of recent expenses", %{conn: conn, h: h} do
-    :ok =
-      Fx.save_ecb_rates([
-        %{currency: "USD", date: ~D[2026-09-30], rate: 1.0912},
-        %{currency: "USD", date: ~D[2026-10-01], rate: 1.1195},
-        %{currency: "JPY", date: ~D[2026-10-01], rate: 177.39}
-      ])
+  test "the ECB rates, their newest day and the rates of recent expenses", %{conn: conn, h: h} do
+    ExchangeRates.store([
+      {"USD", ~D[2026-09-30], Decimal.new("1.0912")},
+      {"USD", ~D[2026-10-01], Decimal.new("1.1195")},
+      {"JPY", ~D[2026-10-01], Decimal.new("177.39")}
+    ])
 
     usd = foreign(h, "Diner", 4200, "USD", 1.1195, "2026-10-01", h.anna, [h.anna, h.ben])
     expense = create!(usd)
@@ -122,7 +121,7 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     assert texts(view, "#rates-stats") |> hd() =~
-             "Zwischengespeichert: 3 Kurse für 2 Währungen vom 30.09.2026 bis 01.10.2026."
+             "Gespeichert: 3 Kurse für 2 Währungen vom 30.09.2026 bis 01.10.2026."
 
     assert texts(view, "#ecb-rates tr") ==
              ["JPY 01.10.2026 177,39 JPY", "USD 01.10.2026 1,1195 USD"]
@@ -133,34 +132,51 @@ defmodule AbakusWeb.Kasse.RatesLiveTest do
     assert has_element?(view, ~s(#used-rates a[href="/kasse/expenses/#{expense.id}"]))
   end
 
-  test "refreshing the ECB rates in the background reports a failure", %{conn: conn} do
+  test "loading the ECB rates in the background reports a failure", %{conn: conn} do
+    FakeExchangeRateSource.stub(fn _from -> {:error, :timeout} end)
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     view |> element("#rates-refresh") |> render_click()
     render_async(view)
 
-    assert flash(view, :error) =~ "Die EZB-Kurse konnten nicht geladen werden"
+    assert flash(view, :error) == "Die EZB ist nicht erreichbar."
     refute has_element?(view, "#rates-refresh[aria-busy]")
-    assert Abakus.Repo.aggregate(Rate, :count) == 0
+    assert Abakus.Repo.aggregate(ExchangeRate, :count) == 0
   end
 
-  test "refreshing loads the newest ECB rates", %{conn: conn} do
-    ecb = FakeEcb.start(~D[2026-10-01])
-    :ok = Supervisor.terminate_child(Abakus.Supervisor, Loader)
-    on_exit(fn -> Supervisor.restart_child(Abakus.Supervisor, Loader) end)
+  test "loading runs the shared load of the ECB rates", %{conn: conn} do
+    test = self()
 
-    start_supervised!(
-      {Loader, base_url: ecb.url, clock: fn -> LocalTime.to_utc(~N[2026-10-02 12:00:00]) end},
-      id: :test_loader
-    )
+    FakeExchangeRateSource.stub(fn _from ->
+      send(test, {:loading, self()})
+
+      receive do
+        :go -> :ok
+      end
+
+      {:ok,
+       [
+         {"USD", ~D[2026-10-01], Decimal.new("1.1195")},
+         {"JPY", ~D[2026-10-01], Decimal.new("177.39")}
+       ]}
+    end)
 
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/rates")
 
     view |> element("#rates-refresh") |> render_click()
+    assert_receive {:loading, loader}
     assert has_element?(view, "#rates-refresh[aria-busy]")
+    send(loader, :go)
     render_async(view)
 
+    assert_received {:rates, ~D[1999-01-04]}
     assert flash(view, :info) == "EZB-Kurse aktualisiert (Stand 01.10.2026)."
-    assert texts(view, "#ecb-rates tr") |> length() == 10
+
+    assert texts(view, "#ecb-rates tr") == [
+             "JPY 01.10.2026 177,39 JPY",
+             "USD 01.10.2026 1,1195 USD"
+           ]
+
+    assert %{error: nil} = ExchangeRates.last_run()
   end
 end

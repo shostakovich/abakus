@@ -3,17 +3,16 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
 
   import Abakus.KasseFixtures
 
-  alias Abakus.Kasse.{Expenses, FakeEcb}
+  alias Abakus.ExchangeRates
+  alias Abakus.Kasse.Expenses
   alias Abakus.Kasse.Expenses.Expense
-  alias Abakus.Kasse.Fx.{Loader, Rate}
-  alias Abakus.LocalTime
   alias Ecto.Changeset
 
   @today ~D[2026-10-01]
 
   setup do
     h = household()
-    Repo.insert!(%Rate{currency: "USD", source: :ecb, date: ~D[2026-09-30], rate: 1.2})
+    ExchangeRates.store([{"USD", ~D[2026-09-30], Decimal.new("1.2")}])
     form = Expenses.new_form(today: @today, participant_id: h.anna)
     %{h: h, form: %{form | title: "Mein Titel", amount: "30,00", category_id: h.food}}
   end
@@ -134,24 +133,6 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
 
       assert {Changeset.get_field(changeset, :rate), Changeset.get_field(changeset, :rate_source)} ==
                {"", nil}
-    end
-
-    @tag :capture_log
-    test "is refused the same way while the ECB rates cannot be loaded", %{form: form} do
-      ecb = FakeEcb.start(~D[2026-10-01])
-      FakeEcb.put(ecb, :failure, 500)
-      clock = fn -> LocalTime.to_utc(~N[2026-10-01 18:00:00]) end
-      loader = start_supervised!({Loader, name: nil, base_url: ecb.url, clock: clock})
-      form = %{form | currency: "CHF", amount: "1000", rate: ""}
-
-      assert {:error, changeset} =
-               Expenses.save_form(nil, form, nil, today: @today, loader: loader)
-
-      assert errors_on(changeset) == %{
-               rate: [
-                 "Für CHF ist am 01.10.2026 kein Wechselkurs verfügbar. Kurs bitte von Hand eintragen."
-               ]
-             }
     end
 
     test "shows the looked-up rate when another error follows", %{usd: usd} do

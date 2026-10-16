@@ -348,8 +348,8 @@ defmodule Abakus.Kasse.Expenses.Form do
   defp format_percent(points), do: Money.format_minor(points, 2)
 
   @doc """
-  Puts a looked-up rate (see `Abakus.Kasse.Fx.rate/3`) into the form, or clears it when there is
-  none.
+  Puts a looked-up rate (see `Abakus.Kasse.Rates.rate/3`) into the form, or clears it when there
+  is none.
   """
   def put_rate(%__MODULE__{} = form, {:ok, rate}) do
     hint = if rate.source == :manual, do: "Manueller Kurs", else: "EZB-Kurs"

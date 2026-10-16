@@ -553,4 +553,37 @@ defmodule Abakus.Kasse.ExpensesTest do
     assert Expenses.category_history() == [{"Kino", other.id}, {"Kaufland", h.food}]
     assert Expenses.category_suggestions().titles == %{"kino" => other.id, "kaufland" => h.food}
   end
+
+  test "lists the rates of the newest foreign expenses", %{h: h} do
+    usd = create!(foreign(h, "Hotel", 10_000, "USD", 1.1, "2026-09-30", h.anna, [h.anna]))
+    create!(equal(h, "Kino", 1000, "2026-10-01", h.anna, [h.anna]))
+    chf = create!(foreign(h, "Bahn", 5000, "CHF", 0.94, "2026-09-29", h.anna, [h.anna]))
+
+    {:ok, _deleted} =
+      Expenses.delete_expense(
+        nil,
+        create!(foreign(h, "Weg", 100, "GBP", 0.8, "2026-10-01", h.anna, [h.anna]))
+      )
+
+    assert Expenses.recent_foreign_rates() == [
+             %{
+               expense_id: usd.id,
+               title: "Hotel",
+               currency: "USD",
+               date: ~D[2026-09-30],
+               rate: 1.1,
+               source: :ecb
+             },
+             %{
+               expense_id: chf.id,
+               title: "Bahn",
+               currency: "CHF",
+               date: ~D[2026-09-29],
+               rate: 0.94,
+               source: :ecb
+             }
+           ]
+
+    assert length(Expenses.recent_foreign_rates(1)) == 1
+  end
 end

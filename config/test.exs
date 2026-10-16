@@ -11,7 +11,6 @@ config :abakus, Abakus.Repo,
 config :abakus, :backup_dir, Path.join(Path.dirname(database), "backups")
 
 config :abakus, jobs: false
-config :abakus, Abakus.Kasse.Fx.Ecb, base_url: nil
 
 config :abakus, Abakus.ExchangeRates, source: Abakus.FakeExchangeRateSource
 
