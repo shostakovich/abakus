@@ -28,6 +28,7 @@ defmodule Abakus.Application do
   defp jobs do
     if Application.fetch_env!(:abakus, :jobs),
       do: [
+        Abakus.ExchangeRates.Job,
         Abakus.Kasse.Fx.RefreshJob,
         Abakus.Kasse.Recurring.Job,
         Abakus.Backup.Job,

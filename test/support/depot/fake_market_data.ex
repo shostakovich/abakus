@@ -58,28 +58,6 @@ defmodule Abakus.Depot.FakeSymbolSearch do
   end
 end
 
-defmodule Abakus.Depot.FakeRateSource do
-  @moduledoc "The rate source in tests, like `Abakus.Depot.FakePriceFeed`; reports `{:rates, from}`."
-  @behaviour Abakus.Depot.MarketData.RateSource
-
-  def stub(fun) do
-    Application.put_env(:abakus, __MODULE__, {self(), fun})
-    ExUnit.Callbacks.on_exit(fn -> Application.delete_env(:abakus, __MODULE__) end)
-  end
-
-  @impl true
-  def rates(from) do
-    case Application.get_env(:abakus, __MODULE__) do
-      {test, fun} ->
-        send(test, {:rates, from})
-        fun.(from)
-
-      nil ->
-        {:ok, []}
-    end
-  end
-end
-
 defmodule Abakus.Depot.FakeSymbolSource do
   @moduledoc """
   The symbol source in tests, like `Abakus.Depot.FakePriceFeed`; reports `{:symbol, isin}`.

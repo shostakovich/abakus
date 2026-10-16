@@ -3,8 +3,8 @@ defmodule AbakusWeb.Depot.SecurityLive do
 
   import AbakusWeb.Depot.{AllocationComponents, DividendComponents}
 
-  alias Abakus.Depot.{ExchangeRates, MarketData, Portfolios, Securities}
-  alias Abakus.LocalTime
+  alias Abakus.Depot.{MarketData, Portfolios, Securities}
+  alias Abakus.{ExchangeRates, LocalTime}
   alias AbakusWeb.Depot.{AttributeValue, Format, Periods}
 
   # URL parameter, period, button label and its accessible name; the first is the default.

@@ -4,9 +4,9 @@ defmodule AbakusWeb.Depot.SecuritiesLiveTest do
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
 
-  alias Abakus.Depot.{ExchangeRates, FakePriceFeed, MarketData}
+  alias Abakus.Depot.FakePriceFeed
   alias Abakus.Depot.Settings
-  alias Abakus.Repo
+  alias Abakus.{ExchangeRates, FakeExchangeRateSource, Repo}
 
   setup :register_and_log_in_user
 
@@ -78,17 +78,27 @@ defmodule AbakusWeb.Depot.SecuritiesLiveTest do
   test "shows until when exchange rates are stored and the last error", %{conn: conn} do
     ExchangeRates.store([{"USD", ~D[2026-10-08], Decimal.new("1.1186")}])
 
-    Repo.insert!(%MarketData.JobRun{
-      name: "daily",
-      ran_at: fresh(),
-      error: "Die EZB ist nicht erreichbar."
-    })
+    Repo.insert!(%ExchangeRates.Run{ran_at: fresh(), error: "Die EZB ist nicht erreichbar."})
 
     {:ok, lv, _html} = live(conn, ~p"/depot/securities")
 
     rates = lv |> element("#exchange-rates") |> render()
     assert rates =~ "08.10.2026"
     assert rates =~ "Die EZB ist nicht erreichbar."
+  end
+
+  test "a load of the exchange rates updates the page", %{conn: conn} do
+    {:ok, lv, _html} = live(conn, ~p"/depot/securities")
+
+    FakeExchangeRateSource.stub(fn _from ->
+      {:ok, [{"USD", ~D[2026-10-08], Decimal.new("1.1186")}]}
+    end)
+
+    :ok = ExchangeRates.load()
+    # The sidebar passes the news on as a message of its own, handled after this render.
+    render(lv)
+
+    assert lv |> element("#exchange-rates") |> render() =~ "08.10.2026"
   end
 
   test "opening the page refreshes stale quotes, not fresh ones", %{conn: conn} do

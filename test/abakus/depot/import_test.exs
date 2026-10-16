@@ -3,10 +3,11 @@ defmodule Abakus.Depot.ImportTest do
 
   import Swoosh.TestAssertions
 
-  alias Abakus.Depot.{ExchangeRates, Import, Portfolios, PortfoliosFixtures, Receipts}
+  alias Abakus.Depot.{Import, Portfolios, PortfoliosFixtures, Receipts}
   alias Abakus.Depot.{Securities, Settings, Taxonomies}
 
   alias Abakus.Depot.Securities.{AttributeType, Composition, DivvyDiaryDividend, PPSecurityLink}
+  alias Abakus.ExchangeRates
   alias Abakus.Repo
   alias Abakus.Users
   alias Abakus.Users.Scope

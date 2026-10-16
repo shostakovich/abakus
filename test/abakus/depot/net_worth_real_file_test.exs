@@ -13,8 +13,9 @@ defmodule Abakus.Depot.NetWorthRealFileTest do
 
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{ExchangeRates, Portfolios, PPImport}
-  alias Abakus.Depot.MarketData.ECB
+  alias Abakus.Depot.{Portfolios, PPImport}
+  alias Abakus.ExchangeRates
+  alias Abakus.ExchangeRates.ECB
 
   @moduletag :pp_net_worth
   @moduletag timeout: :infinity

@@ -16,7 +16,6 @@ defmodule Abakus.Depot.Portfolios do
     Costs,
     Distributions,
     Dividends,
-    ExchangeRates,
     Performance,
     Period,
     PriceChart,
@@ -42,6 +41,7 @@ defmodule Abakus.Depot.Portfolios do
 
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Valuation.{Filter, Market, PurchaseValue}
+  alias Abakus.ExchangeRates
   alias Abakus.Repo
   alias Abakus.Users.{Scope, User}
 

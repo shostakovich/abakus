@@ -15,8 +15,9 @@ defmodule Abakus.Depot.YearlyTTWRORRealFileTest do
 
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{ExchangeRates, Portfolios, PPImport}
-  alias Abakus.Depot.MarketData.ECB
+  alias Abakus.Depot.{Portfolios, PPImport}
+  alias Abakus.ExchangeRates
+  alias Abakus.ExchangeRates.ECB
   alias Abakus.LocalTime
 
   @moduletag :pp_yearly_ttwror

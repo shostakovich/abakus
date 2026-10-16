@@ -3,7 +3,8 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
 
   import Ecto.Changeset, only: [change: 1]
 
-  alias Abakus.Depot.{ExchangeRates, MarketData, Securities, Settings}
+  alias Abakus.Depot.{MarketData, Securities, Settings}
+  alias Abakus.ExchangeRates
   alias AbakusWeb.Depot.Format
 
   @feeds [{"Yahoo", "yahoo"}, {"Portfolio Performance", "manual"}]
@@ -81,16 +82,16 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
           <.section_heading id="exchange-rates-title">Wechselkurse</.section_heading>
           <p class="max-w-prose text-sm">
             <%= if @rates_until do %>
-              EZB-Referenzkurse bis {Format.date(@rates_until)}, täglich um 18:00 aktualisiert.
+              EZB-Referenzkurse bis {Format.date(@rates_until)}, täglich um 17:00 aktualisiert.
             <% else %>
-              Noch keine Wechselkurse; sie kommen mit dem nächsten Abruf um 18:00.
+              Noch keine Wechselkurse; sie kommen mit dem nächsten Abruf um 17:00.
             <% end %>
           </p>
           <p
-            :if={@last_run && @last_run.error}
+            :if={@rates_run && @rates_run.error}
             class="mt-2 flex items-center gap-1.5 text-sm text-error-ink"
           >
-            <.icon name="circle-alert" class="shrink-0" />{@last_run.error}
+            <.icon name="circle-alert" class="shrink-0" />{@rates_run.error}
           </p>
         </section>
 
@@ -254,7 +255,7 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
       benchmark_form: to_form(%{"benchmark_id" => benchmark && benchmark.id}, as: :benchmark)
     )
     |> update(:feed_forms, &add_missing(&1, securities, fn s -> feed_form(s, change(s)) end))
-    |> assign(rates_until: ExchangeRates.last_date(), last_run: MarketData.last_run())
+    |> assign(rates_until: ExchangeRates.last_date(), rates_run: ExchangeRates.last_run())
   end
 
   defp add_missing(forms, securities, new_form),

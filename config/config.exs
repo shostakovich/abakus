@@ -27,10 +27,11 @@ config :abakus,
 config :abakus, Abakus.Kasse.Fx.Ecb, base_url: "https://www.ecb.europa.eu/stats/eurofxref/"
 config :abakus, Abakus.Kasse.Ynab.Client, base_url: "https://api.ynab.com/v1"
 
+config :abakus, Abakus.ExchangeRates, source: Abakus.ExchangeRates.ECB
+
 config :abakus, Abakus.Depot.MarketData,
   price_feed: Abakus.Depot.MarketData.Yahoo,
   symbol_search: Abakus.Depot.MarketData.Yahoo,
-  rate_source: Abakus.Depot.MarketData.ECB,
   symbol_source: Abakus.Depot.MarketData.DivvyDiary
 
 config :abakus, Abakus.Depot.Receipts,

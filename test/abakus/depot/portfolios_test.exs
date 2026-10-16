@@ -4,10 +4,12 @@ defmodule Abakus.Depot.PortfoliosTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures, TaxonomiesFixtures}
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{ExchangeRates, Portfolios}
   alias Abakus.Depot.Performance.IRR
+  alias Abakus.Depot.Portfolios
   alias Abakus.Depot.Portfolios.TransactionUnit
   alias Abakus.Depot.Settings
+  alias Abakus.ExchangeRates
+  alias Abakus.ExchangeRates.ExchangeRate
 
   @friday ~D[2026-10-02]
   @saturday ~D[2026-10-03]
@@ -1014,6 +1016,23 @@ defmodule Abakus.Depot.PortfoliosTest do
       security = security_fixture(quote_feed: :manual, currency: "USD")
       price_fixture(security, @friday, price(110), :pp)
       ExchangeRates.store([{"USD", @friday, Decimal.new("1.10")}])
+      deliver(ctx.scope, ctx.portfolio, security, @friday, 10)
+
+      assert Portfolios.net_worth(ctx.scope, [@friday]) == %{@friday => money(1_000)}
+    end
+
+    test "ignores manual rates", ctx do
+      security = security_fixture(quote_feed: :manual, currency: "USD")
+      price_fixture(security, @friday, price(110), :pp)
+      ExchangeRates.store([{"USD", ~D[2026-10-01], Decimal.new("1.10")}])
+
+      Repo.insert!(%ExchangeRate{
+        currency: "USD",
+        date: @friday,
+        source: :manual,
+        rate: Decimal.new("2.20")
+      })
+
       deliver(ctx.scope, ctx.portfolio, security, @friday, 10)
 
       assert Portfolios.net_worth(ctx.scope, [@friday]) == %{@friday => money(1_000)}
