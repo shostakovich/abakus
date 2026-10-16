@@ -174,3 +174,50 @@ Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
 - **Consequences:** No server state to lose and no older protocol versions to support; clients that do not speak
   2026-07-28 cannot connect. A query can never change or lock the real database or see the YNAB tokens, users or the
   budget, at the cost of copying the data per query. The budget's tools join the same endpoint and its rules.
+
+## 0013. One Depot transaction per business event
+
+Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
+
+- **Context:** Portfolio Performance keeps a purchase in memory as two linked entries (portfolio and account), but its
+  file stores it as one transaction with `other*` fields.
+- **Decision:** The Depot follows the file: one transaction with a portfolio side, an account side or both;
+  calculations that need a per-side view derive it.
+- **Consequences:** The import maps one record to one record, both sides can never drift apart, and the booking form
+  edits one thing. Unlike the budget's transfers, there is no pair of transactions to keep in step.
+
+## 0014. Depot holdings are computed on every request
+
+Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
+
+- **Context:** The overview, holdings and charts need holdings and values for any date. A household has at most a few
+  thousand Depot transactions and a handful of securities, and a booking, an import or a price fix can change any
+  past date.
+- **Decision:** A pure module computes holdings and values from transactions and prices on every request; no stored
+  daily snapshots.
+- **Consequences:** Nothing to invalidate or rebuild after a change. Every page load repeats the work, so a much
+  longer history would need caching or snapshots later.
+
+## 0015. Depot receipts are recognised locally from their text
+
+Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
+
+- **Context:** Bank receipts carry account numbers and amounts, and they should stay on the home server.
+- **Decision:** The Depot sends a receipt's text (Paperless' `content`, else `pdftotext`) to any OpenAI-compatible
+  chat API with a JSON schema, such as Ollama on the home server (`RECEIPT_MODEL_URL`, `RECEIPT_MODEL`,
+  `RECEIPT_MODEL_KEY`); not a hosted model with the PDF.
+- **Consequences:** No receipt needs to leave the house and any local or hosted model fits. Scanned receipts without a
+  text layer depend on Paperless' OCR, a CPU-bound model takes about a minute per receipt, and the image needs
+  poppler-utils. Without a model a receipt opens an empty form.
+
+## 0016. Paperless access per user
+
+Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
+
+- **Context:** Receipts belong to the user whose portfolio they concern; other users may have their own Paperless
+  instance or none.
+- **Decision:** Each user enters Paperless URL, token and tag in their Depot settings (`depot_settings`); not one
+  global connection in the environment.
+- **Consequences:** Ownership is clear without guessing from depot numbers, and nothing needs a redeploy. The token
+  lives in the database, so a database backup grants access to Paperless. Any user with a portfolio can make the
+  server call the URL they enter, which is acceptable for a self-hosted app with invited users only.

@@ -99,9 +99,10 @@ An account whose value is only tracked, outside the budget, e.g. a securities de
 _Avoid_: Off-budget account, investment account
 
 **Fed account**:
-An account another app or area keeps up to date (`portfolio`: its value comes from a portfolio app;
-`shared_expenses`: its transactions are the budget owner's shares of Kasse expenses), so the UI offers no manual
-entry or file import for it; the Ledger still accepts both.
+An account another area keeps up to date (`portfolio`: a tracking account whose value comes from the budget
+owner's portfolios and Verrechnungskonten in the Depot, see value change; `shared_expenses`: its transactions are
+the budget owner's shares of Kasse expenses), so the UI offers no manual entry, file import or reconciling for it,
+as its balance is the other area's; the Ledger still accepts entries.
 _Avoid_: Synced account, linked account (that is bank sync)
 
 **Reconcile**:
@@ -216,8 +217,8 @@ The one user who owns the budget, the first one invited; only they see the Budge
 _Avoid_: Admin, budget user
 
 **Area**:
-A part of the app with its own pages under its path, its sidebar section and its dock: Budget and Kasse. `/` opens
-the area used last. UI "Bereich".
+A part of the app with its own pages under its path, its sidebar section and its dock: Budget, Kasse and Depot. `/`
+opens the area used last. UI "Bereich".
 _Avoid_: Module, app, section (that is the sidebar's)
 
 ## Kasse
@@ -307,3 +308,122 @@ _Avoid_: Synced transaction, mirror
 Until the switch to Abakus, each participant's share of every expense written into an account of their own YNAB plan,
 in the YNAB category mapped to the Kasse category; reimbursements stay out. UI "YNAB".
 _Avoid_: YNAB import (that brings the budget over), YNAB export
+
+## Depot
+
+Each user's portfolios: what they hold, what it is worth, what it paid and how it performed. Code lives in
+`Abakus.Depot` and `AbakusWeb.Depot`, tables start with `depot_`. Terms that the budget uses too (account,
+transaction, assignment, category) mean the Depot's here and are qualified in code (`Abakus.Depot.Portfolios.Account`,
+`Abakus.Depot.Taxonomies.Assignment`). Portfolios, Verrechnungskonten, transactions, savings plans and taxonomies
+belong to one user, who alone sees them; securities, prices, exchange rates and compositions are shared by all.
+
+**Depot**:
+The area of the portfolios; a user sees it once they have a portfolio, created or imported under Einstellungen. UI
+"Depot".
+_Avoid_: Portfolio app, investments
+
+**Security**:
+A tradable instrument (ETF, fund, share) identified by its ISIN, with its own price history from Yahoo or the PP
+import; on one day a price from the import wins over Yahoo's. Nobody enters prices by hand: prices are shared and
+feed the value change, so one user's price would move the budget. UI "Wertpapier".
+_Avoid_: Asset, instrument, position
+
+**Portfolio**:
+A securities account at a bank; it holds shares of securities. UI "Depot".
+_Avoid_: Securities account; Depot in code (that is the area)
+
+**Depot number**:
+The number the bank gives a portfolio, as its documents print it; only its digits count when comparing. UI
+"Depotnummer".
+
+**Verrechnungskonto**:
+A cash account of the Depot in one currency; it exists on its own, not as part of a portfolio. The one a portfolio's
+purchases, sales and dividends settle against by default is its reference account; several portfolios may share one.
+Code: `Abakus.Depot.Portfolios.Account`. UI "Verrechnungskonto", the reference account "Referenzkonto" where it is one.
+_Avoid_: Account unqualified in code (that is the budget's), cash account
+
+**Holding**:
+The shares of one security in one portfolio on a date, with their value and purchase value. UI "Position"; the
+holdings screen is "Bestand".
+_Avoid_: Position in code
+
+**Net worth**:
+The value of all of a user's holdings plus the balances of their Verrechnungskonten on a date, in euros. UI
+"Vermögen".
+
+**Invested capital**:
+What came in from outside up to a date: deposits − removals + inbound deliveries − outbound deliveries, as in
+Portfolio Performance; a purchase from a Verrechnungskonto moves money inside and changes nothing. UI "Investiert".
+
+**Purchase value**:
+What the shares of a holding cost by FIFO, including the fees and taxes of their purchases; the gain is the value
+minus the purchase value. UI "Einstand".
+
+**Distribution**:
+What a security paid per share on a payment date, from the user's dividend transactions, gross. UI "Ausschüttung".
+
+**Benchmark**:
+The security a user compares their portfolios with, kept in their Depot settings; each user picks their own, or
+none. UI "Benchmark".
+
+**Shadow portfolio**:
+What the user's money would be worth in the benchmark: it starts with the net worth of the chart's first day, and
+every deposit, removal or delivery buys or sells benchmark shares that day. UI "Schattendepot".
+
+**Dividend**:
+What a user receives or will receive for their shares of a security on a pay date: booked, announced by DivvyDiary,
+or a forecast from the last 12 months' distributions; its net is the gross minus taxes and fees. UI "Dividende",
+"angekündigt", "Prognose", "Netto".
+_Avoid_: Payment
+
+**Depot transaction**:
+One business event, such as a purchase, a dividend or a transfer, with a portfolio side, an account side or both
+(ADR 0013); its units are gross value, fee and tax. Code: `Abakus.Depot.Portfolios.Transaction`. UI "Buchung".
+_Avoid_: Transaction unqualified in code (that is the budget's), entry
+
+**Value change**:
+The daily transaction, after the price job, in a tracking account fed by `portfolio`: the difference between what
+the portfolios and Verrechnungskonten feeding it are worth and its balance, approved and cleared; none without a
+difference. One per day: another run that day amends it, and deletes it once nothing differs. Nothing else writes
+to the account, and it cannot be reconciled. Each of the budget owner's portfolios and Verrechnungskonten feeds at
+most one account, picked under Einstellungen › Depots. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its
+payee).
+_Avoid_: Revaluation, market value adjustment
+
+**Receipt**:
+A bank's PDF for a Depot transaction, such as a purchase confirmation or a dividend statement, uploaded or taken from
+the user's Paperless; it stays attached to the transaction booked from it. Its file is stored once, by its SHA-256,
+in `receipts/` next to the database. Code: `Abakus.Depot.Portfolios.Receipt`. UI "Beleg".
+_Avoid_: Document, statement
+
+**Inbox**:
+A user's receipts waiting for them to confirm, correct or discard what a language model recognised in them (ADR
+0015); nothing is booked without confirmation. Code: `Abakus.Depot.Receipts`. UI "Eingang", on "Buchungen".
+
+**Receipt intake**:
+Where a user's receipts come from besides uploads: their own Paperless-ngx, polled every 15 minutes for documents
+with their tag (ADR 0016), kept in their Depot settings. UI "Belegeingang".
+
+**PP import**:
+Reads a Portfolio Performance file into the user's Depot, again and again: objects are matched by their PP UUID,
+those missing from the file go, what was entered in the Depot stays. Open before the first portfolio, so a file can
+start the Depot. Code: `Abakus.Depot.PPImport`. UI "PP-Import".
+
+**Savings plan**:
+A recurring purchase, deposit, removal or interest payment with a start, an interval and an amount, as Portfolio
+Performance keeps it; the PP import brings it over and keeps it, but no screen shows it and it books nothing. UI
+"Sparplan" (the import's summary).
+
+**Taxonomy**:
+A user's named tree of classifications with target weights, such as regions or asset classes; securities and
+Verrechnungskonten are assigned to its classifications with weights. UI "Klassifizierung", a classification
+"Kategorie", an assignment "Zuordnung".
+_Avoid_: Category or Assignment unqualified in code (those are the budget's)
+
+**Composition**:
+A fund's shares per country and per sector, as DivvyDiary reports them; not set by the user. UI "Zusammensetzung".
+_Avoid_: Look-through
+
+**Allocation**:
+The shares of the shown securities' value per region or sector, or of the assigned value per top-level
+classification, against its target weight. UI "Aufteilung".

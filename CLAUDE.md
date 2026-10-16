@@ -40,6 +40,11 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   `config/test.exs` turns them off (`jobs: false`), and tests fake the ECB and YNAB with Bandit stubs
   (`Abakus.Kasse.FakeEcb`, `Abakus.Kasse.FakeYnab`). The YNAB sync's fingerprint and memo stay byte-identical
   (ADR 0011).
+- The Depot (`Abakus.Depot`, `AbakusWeb.Depot`, tables `depot_…`): context functions take `%Scope{}` and see only
+  the user's own data, except securities, prices, exchange rates and compositions, which all share. Outside
+  services are behaviours swapped in `config/test.exs` (`Abakus.Depot.Fake…`); `:pdftotext` tests need poppler.
+  Receipt files live in `receipts/` next to the database. `Abakus.Depot.BudgetFeed` is the only writer to accounts
+  fed by `portfolio`.
 - MCP (`Abakus.MCP`, `AbakusWeb.MCPPlug`, docs/MCP.md) lives outside the sign-in at `/mcp/<MCP_SECRET>`; tests go
   through `AbakusWeb.MCPCase`.
 - Dependencies: few and mature, each with a reason.
