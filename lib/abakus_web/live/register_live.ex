@@ -7,7 +7,8 @@ defmodule AbakusWeb.RegisterLive do
   Here transactions are approved (one, the selected or all), categorised (the selected), flagged and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
-  no manual entry.
+  no manual entry; the one fed by shared expenses offers no reconcile either, and its transactions linked to Kasse
+  expenses are deleted only with their expense.
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
   the transaction they match: "Zuordnen" merges them, "Trennen" keeps the import as a transaction of its own, and
@@ -27,6 +28,7 @@ defmodule AbakusWeb.RegisterLive do
   """
   use AbakusWeb, :live_view
 
+  alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
@@ -43,6 +45,8 @@ defmodule AbakusWeb.RegisterLive do
     <Layouts.app
       flash={@flash}
       current_scope={@current_scope}
+      areas={@areas}
+      area={@area}
       current={if @account, do: :accounts, else: :all_accounts}
       account_id={@account && @account.id}
       width={:full}
@@ -56,7 +60,7 @@ defmodule AbakusWeb.RegisterLive do
         <div class="flex items-start md:block">
           <.link
             id="register-back"
-            navigate={~p"/accounts"}
+            navigate={~p"/budget/accounts"}
             class="btn btn-ghost btn-sm -ms-3 max-md:btn-square max-md:-ms-2"
           >
             <.icon name="chevron-left" /><span class="max-md:sr-only">Konten</span>
@@ -81,7 +85,10 @@ defmodule AbakusWeb.RegisterLive do
                 phx-click="open_account_dialog"
                 phx-value-id={@account.id}
               />
-              <Reconcile.editor :if={@account && !@reconciling} state={@reconcile} />
+              <Reconcile.editor
+                :if={@account && Account.reconcilable?(@account) && !@reconciling}
+                state={@reconcile}
+              />
             </:actions>
           </.header>
         </div>
@@ -387,20 +394,7 @@ defmodule AbakusWeb.RegisterLive do
 
       transactions ->
         transactions = Enum.uniq_by(Enum.map(transactions, &deletable/1), & &1.id)
-
-        case Ledger.delete_transactions(transactions, confirmed(params)) do
-          {:ok, deleted} ->
-            socket
-            |> assign(:selected, MapSet.new())
-            |> saved({:ok, deleted}, deleted_text(length(deleted)))
-            |> noreply()
-
-          {:error, changeset} ->
-            socket
-            |> put_flash(:error, "Nicht gelöscht: #{TransactionEditor.error_message(changeset)}")
-            |> refresh()
-            |> noreply()
-        end
+        delete(socket, transactions, params)
     end
   end
 
@@ -444,8 +438,11 @@ defmodule AbakusWeb.RegisterLive do
         "reconcile_open",
         _params,
         %{assigns: %{account: %Account{} = account}} = socket
-      ),
-      do: {:noreply, assign(socket, :reconcile, ask(account, socket.assigns.today))}
+      ) do
+    if Account.reconcilable?(account),
+      do: {:noreply, assign(socket, :reconcile, ask(account, socket.assigns.today))},
+      else: {:noreply, socket}
+  end
 
   def handle_event("reconcile_close", _params, socket),
     do: {:noreply, assign(socket, :reconcile, nil)}
@@ -522,6 +519,27 @@ defmodule AbakusWeb.RegisterLive do
     end
   end
 
+  defp delete(socket, transactions, params) do
+    if BudgetLink.expense_ids(Enum.map(transactions, & &1.id)) != %{} do
+      {:noreply,
+       put_flash(socket, :error, "Nicht gelöscht: #{TransactionEditor.linked_delete()}")}
+    else
+      case Ledger.delete_transactions(transactions, confirmed(params)) do
+        {:ok, deleted} ->
+          socket
+          |> assign(:selected, MapSet.new())
+          |> saved({:ok, deleted}, deleted_text(length(deleted)))
+          |> noreply()
+
+        {:error, changeset} ->
+          socket
+          |> put_flash(:error, "Nicht gelöscht: #{TransactionEditor.error_message(changeset)}")
+          |> refresh()
+          |> noreply()
+      end
+    end
+  end
+
   defp deleted_text(1), do: "Buchung gelöscht."
   defp deleted_text(count), do: "#{count} Buchungen gelöscht."
 
@@ -574,7 +592,8 @@ defmodule AbakusWeb.RegisterLive do
         account: assigns.account,
         accounts: assigns.accounts,
         columns: assigns.columns,
-        today: assigns.today
+        today: assigns.today,
+        expense_id: transaction && BudgetLink.expense_ids([transaction.id])[transaction.id]
       }
     }
   end
@@ -703,7 +722,11 @@ defmodule AbakusWeb.RegisterLive do
       ]
       |> Enum.filter(fn {_key, value} -> value end)
 
-    base = if assigns.account, do: ~p"/accounts/#{assigns.account}", else: ~p"/accounts/all"
+    base =
+      if assigns.account,
+        do: ~p"/budget/accounts/#{assigns.account}",
+        else: ~p"/budget/accounts/all"
+
     if params == [], do: base, else: base <> "?" <> Query.encode(params)
   end
 end

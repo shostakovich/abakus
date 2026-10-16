@@ -259,21 +259,12 @@ defmodule Abakus.Ledger do
   @doc """
   The account's transactions, or with `:all` every account's, newest first, with payee, category (and its group)
   and subtransactions; without deleted ones and match proposals, which count nowhere (see
-  `list_match_proposals/1`). With `since: date`, only those dated on or after it.
+  `list_match_proposals/1`).
   """
-  def list_transactions(account, opts \\ [])
+  def list_transactions(%Account{id: account_id}),
+    do: list_register(from(t in in_register(), where: t.account_id == ^account_id))
 
-  def list_transactions(%Account{id: account_id}, opts),
-    do: list_register(from(t in in_register(), where: t.account_id == ^account_id), opts)
-
-  def list_transactions(:all, opts), do: list_register(in_register(), opts)
-
-  defp list_register(query, opts) do
-    case Keyword.get(opts, :since) do
-      nil -> list_register(query)
-      since -> list_register(from t in query, where: t.date >= ^since)
-    end
-  end
+  def list_transactions(:all), do: list_register(in_register())
 
   defp list_register(query) do
     Repo.all(
@@ -421,12 +412,6 @@ defmodule Abakus.Ledger do
       :transfer_subtransaction,
       subtransactions: [:payee, :transfer_transaction]
     ])
-  end
-
-  @doc "The transactions with these ids by id, with their payees; deleted ones and match proposals included."
-  def get_transactions(ids) do
-    Repo.all(from t in Transaction, where: t.id in ^ids, preload: :payee)
-    |> Map.new(&{&1.id, &1})
   end
 
   @doc "Transactions in the register, which count for listings and balances: not deleted and no match proposal."
@@ -582,7 +567,7 @@ defmodule Abakus.Ledger do
   @doc """
   Creates a transaction, with subtransactions for a split. Checks the references and the rules for the accounts
   involved (`Transaction.validate_accounts/4`) and keeps the counterparts of transfers (`Abakus.Ledger.Transfers`).
-  Approval defaults by source: manual entries are approved, imports and API entries are not. Categories are
+  Approval defaults by source: manual entries are approved, imports and the Kasse's are not. Categories are
   remembered as their payees' last categories.
 
   Instead of `payee_id`, `payee_name` names the payee, also in a subtransaction: the regular payee with that lookup
@@ -597,11 +582,6 @@ defmodule Abakus.Ledger do
         |> write(&Repo.insert/1, [])
       end
     end)
-  end
-
-  @doc "Creates several transactions with `create_transaction/1`, all or none: the first refusal stops."
-  def create_transactions(attrs_list) do
-    Repo.transact(fn -> all_or_none(attrs_list, &create_transaction/1) end)
   end
 
   defp put_payee_by_name(attrs) do
@@ -683,22 +663,6 @@ defmodule Abakus.Ledger do
   def update_transactions(transactions, attrs, opts \\ []) do
     Repo.transact(fn -> all_or_none(transactions, &update_transaction(&1, attrs, opts)) end)
   end
-
-  @doc """
-  Updates each transaction with its own attrs (`{transaction, attrs}` pairs) with `update_transaction/3`, all or
-  none: the first refusal stops and returns its changeset.
-  """
-  def update_each_transaction(changes, opts \\ []) do
-    Repo.transact(fn ->
-      all_or_none(changes, fn {transaction, attrs} ->
-        update_transaction(transaction, attrs, opts)
-      end)
-    end)
-  end
-
-  @doc "Whether a refused change was refused because it alters a reconciled transaction or counterpart."
-  def refused_as_reconciled?(%Changeset{errors: errors}),
-    do: Enum.any?(errors, fn {_field, {_message, opts}} -> opts[:reconciled] == true end)
 
   # Applies `fun` to each item until one is refused, inside the caller's database transaction.
   defp all_or_none(transactions, fun) do

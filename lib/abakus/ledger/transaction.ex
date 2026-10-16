@@ -24,7 +24,11 @@ defmodule Abakus.Ledger.Transaction do
     field :cleared, Ecto.Enum, values: [:uncleared, :cleared, :reconciled], default: :uncleared
     field :approved, :boolean, default: false
     field :flag, Ecto.Enum, values: [:red, :orange, :yellow, :green, :blue, :purple]
-    field :source, Ecto.Enum, values: [:manual, :ynab, :file, :bank, :api], default: :manual
+
+    field :source, Ecto.Enum,
+      values: [:manual, :ynab, :file, :bank, :api, :kasse],
+      default: :manual
+
     field :deleted_at, :utc_datetime_usec
 
     # The category of the counterpart when it is the budget side of a transfer from a tracking account.

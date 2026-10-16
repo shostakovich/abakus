@@ -2,7 +2,7 @@ defmodule Abakus.YnabImport.Status do
   @moduledoc """
   What the last YNAB import brought over and when, read from the data; nothing is stored for it. The import writes
   its transactions last, each with its YNAB id as an origin, so the newest of those origins dates it, and what was
-  created up to then came with it: a re-import replaces the whole budget (docs/adr/0002-ynab-reimport-replaces.md),
+  created up to then came with it: a re-import replaces the whole budget (DECISIONS.md, ADR 0002),
   so nothing older is left. Only the import adds YNAB origins; a counterpart created later copies the transaction's
   source, so the transactions' source would not do.
   """

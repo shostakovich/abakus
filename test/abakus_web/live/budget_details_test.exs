@@ -158,7 +158,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       {:ok, view, _html} =
         c.conn
         |> put_connect_params(%{"today" => "2026-10-10"})
-        |> live(~p"/?month=2026-09")
+        |> live(~p"/budget?month=2026-09")
 
       assert has_element?(view, "#ready-2026-09", "50,00")
       refute has_element?(view, "#distribute-2026-09")
@@ -643,7 +643,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
     conn
     |> put_connect_params(%{"today" => "2026-10-10", "fit" => fit})
-    |> live(~p"/")
+    |> live(~p"/budget")
   end
 
   defp monthly(category, amount, from \\ @october) do

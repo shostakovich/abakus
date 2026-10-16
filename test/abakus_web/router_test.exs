@@ -8,7 +8,9 @@ defmodule AbakusWeb.RouterTest do
     {:get, "/users/log-in/:token"},
     {:post, "/users/log-in"},
     {:post, "/users/passkeys/options"},
-    {:delete, "/users/log-out"}
+    {:delete, "/users/log-out"},
+    # The MCP checks its callers itself: secret path, allowed addresses, no browsers.
+    {:*, "/mcp"}
   ]
 
   defp public?(%{verb: verb, path: path}) do
@@ -25,20 +27,18 @@ defmodule AbakusWeb.RouterTest do
     for %{verb: verb, path: path} <- routes do
       # Fill in route parameters such as `:token`.
       concrete = String.replace(path, ~r"[:*]\w+", "x")
-      method = if verb == :*, do: "GET", else: verb |> to_string() |> String.upcase()
+      method = verb |> to_string() |> String.upcase()
       conn = dispatch(build_conn(), @endpoint, method, concrete, nil)
 
       assert turned_away?(conn), "#{method} #{path} answered #{conn.status} without a session"
     end
   end
 
-  # Pages redirect to the sign-in page; the JSON endpoints of the passkey hooks answer 401, the API asks for its
-  # token in YNAB's format.
+  # Pages redirect to the sign-in page; the JSON endpoints of the passkey hooks answer 401.
   defp turned_away?(conn) do
-    case {conn.status, conn.path_info} do
-      {302, _path} -> get_resp_header(conn, "location") == [~p"/users/log-in"]
-      {401, ["api" | _]} -> match?(%{"error" => %{"id" => "401"}}, JSON.decode!(conn.resp_body))
-      {401, _path} -> JSON.decode!(conn.resp_body) == %{"error" => "session"}
+    case conn.status do
+      302 -> get_resp_header(conn, "location") == [~p"/users/log-in"]
+      401 -> JSON.decode!(conn.resp_body) == %{"error" => "session"}
       _other -> false
     end
   end

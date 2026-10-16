@@ -12,6 +12,7 @@ defmodule Abakus.Categories do
   }
 
   alias Abakus.{Budget, Ledger, Names, References, Repo}
+  alias Abakus.Kasse.BudgetLink
   alias Ecto.Changeset
 
   @doc """
@@ -121,7 +122,8 @@ defmodule Abakus.Categories do
 
   @doc """
   Deletes a category and moves everything it has into the regular category `into`: its transactions, split lines and
-  payees' last categories (`Abakus.Ledger.recategorize/3`), and its assignments, added to those of `into` per month.
+  payees' last categories (`Abakus.Ledger.recategorize/3`), the Kasse categories mapped to it
+  (`Abakus.Kasse.BudgetLink.recategorize/2`), and its assignments, added to those of `into` per month.
   Its targets and snoozes go. Reconciled transactions change too, so they need `reconciled: :confirmed`
   (see `reconciled_transactions?/1`).
   """
@@ -130,6 +132,7 @@ defmodule Abakus.Categories do
       with {:ok, category} <- deletable(id),
            {:ok, into} <- target(into_id, id),
            :ok <- Ledger.recategorize(category.id, into.id, opts),
+           :ok <- BudgetLink.recategorize(category.id, into.id),
            :ok <- move_assignments(category, into) do
         Repo.delete_all(from v in TargetVersion, where: v.category_id == ^id)
         Repo.delete_all(from s in TargetSnooze, where: s.category_id == ^id)

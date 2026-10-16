@@ -32,13 +32,18 @@ defmodule AbakusWeb.ImportLiveTest do
   end
 
   test "the sidebar and the register lead to the import", %{conn: conn, giro: giro} do
-    {:ok, view, _html} = live(conn, ~p"/accounts/#{giro}")
+    {:ok, view, _html} = live(conn, ~p"/budget/accounts/#{giro}")
 
     assert has_element?(view, "#side-import-sidebar", "Import & Sync")
-    assert has_element?(view, ~s|#app-shell > nav[aria-label=Hauptnavigation] a[href="/import"]|)
-    assert has_element?(view, ~s|#file-import[href="/import"]|, "Datei-Import")
 
-    {:ok, view, _html} = live(conn, ~p"/import")
+    assert has_element?(
+             view,
+             ~s|#app-shell > nav[aria-label=Hauptnavigation] a[href="/budget/import"]|
+           )
+
+    assert has_element?(view, ~s|#file-import[href="/budget/import"]|, "Datei-Import")
+
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
 
     assert has_element?(view, "h1", "Import & Sync")
     assert has_element?(view, "#side-import-sidebar[aria-current=page]")
@@ -48,14 +53,14 @@ defmodule AbakusWeb.ImportLiveTest do
 
   test "an account fed by another app offers no file import", %{conn: conn} do
     shared = Enum.find(Ledger.list_accounts(), &(&1.name == "Geteilt"))
-    {:ok, view, _html} = live(conn, ~p"/accounts/#{shared}")
+    {:ok, view, _html} = live(conn, ~p"/budget/accounts/#{shared}")
 
     refute has_element?(view, "#file-import")
   end
 
   test "a fictional export imports without duplicates; an overlapping one adds only what is new",
        %{conn: conn, giro: giro} do
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
 
     upload(view, "girokonto_2026-09.ofx")
 
@@ -96,7 +101,7 @@ defmodule AbakusWeb.ImportLiveTest do
              &(not &1.approved and &1.cleared == :cleared)
            )
 
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-10.ofx")
 
     # The file's account is known now.
@@ -111,7 +116,7 @@ defmodule AbakusWeb.ImportLiveTest do
 
     assert length(Ledger.list_transactions(giro)) == 6
 
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-10.ofx")
 
     assert has_element?(view, "#statement-0-new", "0 neu")
@@ -127,7 +132,7 @@ defmodule AbakusWeb.ImportLiveTest do
        %{conn: conn, giro: giro} do
     other = account_fixture(name: "Zweitkonto")
     {:ok, _giro} = Ledger.link_ofx_account(giro, "10020030", "DE02100200300000004711")
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
 
     assert has_element?(view, "#statement-0-account option[selected]", "💶 Girokonto")
@@ -157,7 +162,7 @@ defmodule AbakusWeb.ImportLiveTest do
         payee_id: payee_fixture(name: "Bäcker").id
       )
 
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
     view |> form("#statement-0-form", %{index: "0", account_id: giro.id}) |> render_change()
 
@@ -196,7 +201,7 @@ defmodule AbakusWeb.ImportLiveTest do
       category_id: category_fixture().id
     )
 
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
     view |> form("#statement-0-form", %{index: "0", account_id: giro.id}) |> render_change()
 
@@ -210,7 +215,7 @@ defmodule AbakusWeb.ImportLiveTest do
   test "a file with two statements asks for an account each and leads to all accounts",
        %{conn: conn, giro: giro} do
     savings = account_fixture(name: "Tagesgeld", kind: :savings)
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "zwei_konten.ofx")
 
     assert has_element?(view, "#import-preview", "2 Buchungen\u2060\u00A0· 02.10.2026–05.10.2026")
@@ -240,7 +245,7 @@ defmodule AbakusWeb.ImportLiveTest do
   end
 
   test "a file over 5 MB says so", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
 
     view
     |> file_input("#import-form", :file, [
@@ -253,7 +258,7 @@ defmodule AbakusWeb.ImportLiveTest do
   end
 
   test "a file that is no OFX says so", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
 
     view
     |> file_input("#import-form", :file, [
@@ -266,7 +271,7 @@ defmodule AbakusWeb.ImportLiveTest do
   end
 
   test "discarding the preview imports nothing", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
 
     view |> element("#import-discard") |> render_click()
@@ -277,7 +282,7 @@ defmodule AbakusWeb.ImportLiveTest do
 
   test "an account that is not offered cannot be chosen", %{conn: conn} do
     shared = Enum.find(Ledger.list_accounts(), &(&1.name == "Geteilt"))
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
 
     render_change(view, "choose_account", %{"index" => "0", "account_id" => "#{shared.id}"})
@@ -288,7 +293,7 @@ defmodule AbakusWeb.ImportLiveTest do
   end
 
   test "a refused import names the transaction and keeps the preview", %{conn: conn, giro: giro} do
-    {:ok, view, _html} = live(conn, ~p"/import")
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-09.ofx")
     view |> form("#statement-0-form", %{index: "0", account_id: giro.id}) |> render_change()
     {:ok, _giro} = Ledger.update_account(giro, %{closed: true})

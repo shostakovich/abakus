@@ -23,7 +23,7 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   @feeds %{
     portfolio: "Wert kommt aus der Depot-App",
-    shared_expenses: "Buchungen kommen aus der Ausgaben-App"
+    shared_expenses: "Buchungen kommen aus der Kasse"
   }
 
   attr :transactions, :list, required: true, doc: "the unapproved ones in the register"
@@ -275,7 +275,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         size={:sm}
         icon="file-text"
         class="max-md:hidden"
-        navigate={~p"/import"}
+        navigate={~p"/budget/import"}
       >
         Datei-Import
       </.button>
@@ -332,7 +332,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             :if={@manual}
             id="file-import-item"
             icon="file-text"
-            navigate={~p"/import"}
+            navigate={~p"/budget/import"}
             class="md:hidden"
           >
             Datei-Import

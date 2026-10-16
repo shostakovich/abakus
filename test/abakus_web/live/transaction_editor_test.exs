@@ -35,7 +35,7 @@ defmodule AbakusWeb.TransactionEditorTest do
   end
 
   defp open_new(c, account) do
-    {:ok, view, _html} = live(c.conn, ~p"/accounts/#{account}")
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{account}")
     view |> element("#new-transaction") |> render_click()
     assert has_element?(view, "tbody#tx-editor")
     view
@@ -179,7 +179,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "the phone opens a sheet, amount first, whose sign makes an inflow", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       view |> element("#new-transaction-fab") |> render_click()
       assert has_element?(view, "#tx-editor .app-sheet #tx-amount[name='transaction[outflow]']")
@@ -193,7 +193,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "from all accounts it books in the first budget account, or the one picked", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       view |> element("#new-transaction") |> render_click()
 
       assert has_element?(view, ~s|#tx-account option[selected][value="#{c.giro.id}"]|)
@@ -206,17 +206,17 @@ defmodule AbakusWeb.TransactionEditorTest do
       closed = account_fixture(name: "Alt", closed: true)
 
       for account <- [shared, closed] do
-        {:ok, view, _html} = live(c.conn, ~p"/accounts/#{account}")
+        {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{account}")
         refute has_element?(view, "#new-transaction")
         refute has_element?(view, "#new-transaction-fab")
         render_click(view, "new", %{"layout" => "row"})
         refute has_element?(view, "#tx-editor")
       end
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.depot}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.depot}")
       assert has_element?(view, "#new-transaction")
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       view |> element("#new-transaction") |> render_click()
       refute has_element?(view, ~s|#tx-account option[value="#{shared.id}"]|)
       refute has_element?(view, ~s|#tx-account option[value="#{closed.id}"]|)
@@ -327,7 +327,7 @@ defmodule AbakusWeb.TransactionEditorTest do
           payee_id: c.savings.transfer_payee.id
         })
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.savings}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.savings}")
       open_edit(view, %{id: transfer.transfer_transaction_id})
 
       assert has_element?(view, ~s|#tx-payee[value="↔ 💶 Girokonto"]|)
@@ -365,7 +365,7 @@ defmodule AbakusWeb.TransactionEditorTest do
           ]
         )
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       open_edit(view, split)
 
       refute has_element?(view, "#tx-sub-0-payee")
@@ -448,7 +448,7 @@ defmodule AbakusWeb.TransactionEditorTest do
           ]
         )
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       open_edit(view, split)
 
       assert has_element?(view, ~s|#tx-sub-0-payee[value="Rewe"]|)
@@ -476,7 +476,7 @@ defmodule AbakusWeb.TransactionEditorTest do
           ]
         )
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       open_edit(view, split)
       submit(view, %{account_id: c.depot.id})
 
@@ -498,7 +498,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       counterpart =
         Enum.at(Ledger.get_transaction!(split.id).subtransactions, 1).transfer_transaction_id
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.savings}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.savings}")
       open_edit(view, %{id: counterpart})
 
       assert has_element?(view, "#tx-split-of", "💶 Girokonto")
@@ -536,7 +536,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "a click selects the row, a click into a cell opens it there; saving approves", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}?filter=unapproved")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
 
       view |> element("#tx-#{c.shopping.id} td.app-out") |> render_click()
       assert has_element?(view, "tbody#tx-#{c.shopping.id}-rows.is-selected")
@@ -559,7 +559,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "the edited row keeps one line, with Save and Cancel where approve and C stand", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       assert has_element?(view, "#tx-#{c.shopping.id} td.app-ok-col #tx-#{c.shopping.id}-approve")
 
       open_edit(view, c.shopping)
@@ -577,7 +577,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "only one row is edited at a time", c do
       other = transaction_fixture(account_id: c.giro.id, amount: -100)
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       open_edit(view, c.shopping)
 
       render_click(view, "row_click", %{"id" => "#{other.id}", "field" => "memo"})
@@ -587,7 +587,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "a search that hides the edited row ends the edit", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       open_edit(view, c.shopping)
 
       view |> form("#register-search", q: "nichts davon") |> render_change()
@@ -598,7 +598,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "the phone opens the card in a sheet", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       view |> element("#tx-card-#{c.shopping.id} button", "Frischmarkt") |> render_click()
 
       assert has_element?(view, "#tx-editor .app-sheet")
@@ -610,7 +610,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "deletes from the selection bar after asking", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       view |> element("#tx-#{c.shopping.id}-select") |> render_click()
       confirm_click(view, "#delete-selected", "Buchung löschen?")
@@ -635,7 +635,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       counterpart =
         Enum.at(Ledger.get_transaction!(split.id).subtransactions, 1).transfer_transaction_id
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       view |> element("#tx-#{split.id}-select") |> render_click()
       view |> element("#tx-#{counterpart}-select") |> render_click()
       confirm_click(view, "#delete-selected", "2 Buchungen löschen?")
@@ -647,7 +647,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "a reconciled transaction asks before it is changed or deleted", c do
       {:ok, old} = Ledger.update_transaction(c.shopping, %{cleared: :reconciled})
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       open_edit(view, old)
       assert asked(view, "#tx-save").text == "Der abgeglichene Saldo kann sich dadurch ändern."
@@ -684,7 +684,7 @@ defmodule AbakusWeb.TransactionEditorTest do
           cleared: :reconciled
         })
 
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       view |> element("#tx-#{transfer.id}-select") |> render_click()
       assert asked(view, "#delete-selected").question =~ "abgeschlossen"
 
@@ -695,7 +695,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "a deleted transaction is not found", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       {:ok, _deleted} = Ledger.delete_transaction(c.shopping)
 
       render_click(view, "edit", %{"id" => "#{c.shopping.id}"})
@@ -705,7 +705,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "a transaction that never was is not found either", c do
-      {:ok, view, _html} = live(c.conn, ~p"/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       for id <- ["#{c.shopping.id + 1_000}", "x"] do
         render_click(view, "edit", %{"id" => id})

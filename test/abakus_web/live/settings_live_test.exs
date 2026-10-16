@@ -11,7 +11,7 @@ defmodule AbakusWeb.SettingsLiveTest do
   @plan @fixture |> File.read!() |> JSON.decode!() |> Map.fetch!("plan")
 
   @sections [
-    {"Zugang & API", "/settings/access"},
+    {"Zugang", "/settings/access"},
     {"Aussehen", "/settings/appearance"},
     {"YNAB-Import", "/settings/ynab"}
   ]
@@ -20,7 +20,7 @@ defmodule AbakusWeb.SettingsLiveTest do
 
   describe "section navigation" do
     @tag signed_in_minutes_ago: 11
-    test "the overview and the sections beside Zugang & API need no recent sign-in", %{
+    test "the overview and the sections beside Zugang need no recent sign-in", %{
       conn: conn
     } do
       for path <- [~p"/settings/appearance", ~p"/settings/ynab"],
@@ -55,12 +55,12 @@ defmodule AbakusWeb.SettingsLiveTest do
       end
     end
 
-    test "Zugang & API holds passkeys, email and tokens; Aussehen the theme", %{conn: conn} do
+    test "Zugang holds passkeys and email; Aussehen the theme", %{conn: conn} do
       {:ok, access, _html} = live(conn, ~p"/settings/access")
 
       assert has_element?(access, "#passkeys")
       assert has_element?(access, "#email-form")
-      assert has_element?(access, "#api-tokens")
+      refute has_element?(access, "#api-tokens")
       refute has_element?(access, "#theme-toggle")
 
       {:ok, appearance, _html} = live(conn, ~p"/settings/appearance")

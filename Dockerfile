@@ -51,9 +51,11 @@ RUN apt-get update -qq && \
     apt-get install --no-install-recommends -y libstdc++6 openssl libncurses6 ca-certificates tzdata curl sqlite3 && \
     rm -rf /var/lib/apt/lists/*
 
+# The Kasse's dates and its jobs follow the local time.
 ENV LANG=C.UTF-8 \
     MIX_ENV="prod" \
     PORT=4000 \
+    TZ=Europe/Berlin \
     DATABASE_PATH=/app/data/abakus.sqlite3
 
 WORKDIR /app

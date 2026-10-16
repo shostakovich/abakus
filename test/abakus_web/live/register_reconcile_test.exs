@@ -21,7 +21,9 @@ defmodule AbakusWeb.RegisterReconcileTest do
 
   defp open(conn, account) do
     {:ok, view, _html} =
-      conn |> put_connect_params(%{"today" => "2026-10-10"}) |> live(~p"/accounts/#{account}")
+      conn
+      |> put_connect_params(%{"today" => "2026-10-10"})
+      |> live(~p"/budget/accounts/#{account}")
 
     view |> element("#reconcile-open") |> render_click()
     view
@@ -169,7 +171,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
     view |> form("#register-search", %{q: "nichts"}) |> render_change()
     assert has_element?(view, "#reconcile-difference", "−10,00 €")
 
-    render_patch(view, ~p"/accounts/#{savings}")
+    render_patch(view, ~p"/budget/accounts/#{savings}")
     refute has_element?(view, "#reconcile-banner")
   end
 
@@ -218,7 +220,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
   end
 
   test "all accounts offer no reconcile", c do
-    {:ok, view, _html} = live(c.conn, ~p"/accounts/all")
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
     refute has_element?(view, "#reconcile-open")
   end
 end

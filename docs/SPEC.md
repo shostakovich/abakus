@@ -1,8 +1,8 @@
 # Abakus — spec
 
 Self-hosted envelope budgeting for one household. Replaces YNAB (and Actual Budget) with only the features the
-owner uses: YNAB's budgeting rules, Actual's multi-month view, reconciling, file import, bank sync, a
-YNAB-compatible API and MCP. Open source, benevolent dictator: no PRs, forks welcome.
+owner uses: YNAB's budgeting rules, Actual's multi-month view, reconciling, file import, bank sync and MCP. Open
+source, benevolent dictator: no PRs, forks welcome.
 
 ## Scope
 
@@ -13,7 +13,7 @@ YNAB-compatible API and MCP. Open source, benevolent dictator: no PRs, forks wel
 
 Not in scope for now: reports beyond the budget view, payee rename rules, multiple budgets, other currencies,
 investment tracking (that is a separate portfolio app). No scheduled transactions: the only recurring one (rent)
-comes from a shared-expenses app's recurring expenses through the API.
+comes from the shared expenses' recurring expenses (#43).
 
 ## Stack
 
@@ -31,18 +31,23 @@ The context is `Abakus.Users` (an "account" is a bank account here):
 
 - `phx.gen.auth` magic link as base and recovery; no passwords, no sign-up. An invite creates the user and
   mails a sign-in link at once: `mix abakus.invite EMAIL`, in the container
-  `bin/abakus eval 'Abakus.Release.invite("EMAIL")'`
+  `bin/abakus eval 'Abakus.Release.invite("EMAIL")'`. The first user invited owns the budget
+  ([ADR 0007](../DECISIONS.md))
+- Areas: each has its pages under its path (the Budget under `/budget`, the Kasse under `/kasse`), its section in
+  the sidebar and its dock on phones; a user sees only the areas they may use (the Budget: its owner; the Kasse:
+  its active participants, [ADR 0008](../DECISIONS.md)), and anyone else gets 404 on their pages. With one area the brand is its name; with more, the title in the top bar switches the area. `/` opens
+  the area used last, kept in the session
 - Passkeys implemented in-house with `:crypto`, `:public_key`, `JSON`; attestation `none`; discoverable
   credentials; relying party id = the configured host (`PHX_HOST`); challenges are valid 5 minutes, one open
   per session, dropped from the session on any attempt. A sign-in challenge travels in the signed session, so
   anonymous requests store nothing; a challenge that signed someone in is recorded (as a hash, in ETS) until
   it expires and refused again, failed attempts record nothing. A registration challenge stays on the server;
-  at most 1 000 are open at a time, beyond that the server asks to try again. Changing passkeys, API tokens or
+  at most 1 000 are open at a time, beyond that the server asks to try again. Changing passkeys or
   the email needs a sign-in within 10 minutes, which sends the user back to the settings afterwards; signing in
   again keeps open tabs working. A new passkey is announced by mail
 - Tests fake the authenticator with `:crypto` and break every check once
-- Public internet: nothing is reachable without a session except `/up`, `/api/v1` (bearer token) and
-  `/mcp/<secret>` (a test walks all routes)
+- Public internet: nothing is reachable without a session except `/up` and `/mcp/<secret>` (a test walks all
+  routes)
 - Magic link requests: at most 3 per address (trimmed, lower case) per 15 minutes, the validity of a link, and
   30 in total per hour, sliding windows in ETS. Unknown addresses count in a bucket of their own (30 per hour),
   so they cannot lock users out. Over a limit no mail goes out, the page answers the same and the log gets a
@@ -57,22 +62,22 @@ The context is `Abakus.Users` (an "account" is a bank account here):
 
 ## Domain
 
-Mirrors YNAB so the import is lossless and the API can speak YNAB's format.
+Mirrors YNAB so the import is lossless.
 
 Terms: [`CONTEXT.md`](../CONTEXT.md). Two contexts: `Abakus.Ledger` (accounts, payees, transactions) and
 `Abakus.Categories` (groups, categories, assignments, targets); `Abakus.Budget` is the pure math on top. Domain
-tables have no user: all users see everything.
+tables have no user: the budget is its owner's ([ADR 0007](../DECISIONS.md)).
 
 - **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from a portfolio app,
-  `shared_expenses`: transactions from a shared-expenses app; filled via the API, so the UI hides manual entry and
-  file import for it; the Ledger accepts both), closed, note, position, last reconciled at, the file's account it
+  `shared_expenses`: the budget owner's shares of the Kasse's expenses, so the UI hides manual entry, file import
+  and reconcile for it; the Ledger accepts both), closed, note, position, last reconciled at, the file's account it
   takes imports from (`BANKID`, `ACCTID`). Budget account = not tracking (derived; a kind never crosses that line).
   No credit cards or loans. Closed, never deleted.
 - **Payee**: name, transfer account, last used category. Each account has a transfer payee "Transfer : <account
   name>" as in YNAB, created and renamed with the account. Other payees are unique by lookup key.
 - **Category group** and **category**: name, hidden (from YNAB, for the import and its check; the budget ignores
   it), position (new ones go to the end), note, internal. A category is deleted only into another, which takes over
-  everything it has; a group only when it is empty ([ADR 0003](adr/0003-categories-deleted-with-a-transfer.md)).
+  everything it has; a group only when it is empty ([ADR 0003](../DECISIONS.md)).
   Lookup keys of categories are not unique (an old "Urlaub" next to "🏖️ Urlaub"); groups have none. A migration
   creates YNAB's internal group "Internal Master Category" with "Inflow: Ready to Assign" (UI "Zu verteilen");
   internal ones are not listed, not editable and take no assignments or targets. Ready to Assign's lookup key is
@@ -93,10 +98,11 @@ tables have no user: all users see everything.
   changing a target keeps past months.
 - **Target snooze**: category, month; one per category and month (snoozing again returns the one there is)
 - **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
-  `reconciled`), approved (manual entries by default, imports and API entries not), flag (red, orange, yellow,
+  `reconciled`), approved (manual entries by default, imports not), flag (red, orange, yellow,
   green, blue, purple), transfer counterpart (a transaction, or for a split's transfer its subtransaction), source
-  (`manual`, `ynab`, `file`, `bank`, `api`: where it was created, set once), matched transaction (see match
-  proposals), deleted at (soft delete, the API reports deletions; deleted transactions cannot be changed, only
+  (`manual`, `ynab`, `file`, `bank`, `api`, `kasse`: where it was created, set once; `api` from the former
+  YNAB-compatible API, `kasse` a share of a Kasse expense), matched transaction (see match
+  proposals), deleted at (soft delete; deleted transactions cannot be changed, only
   moved with their category into another). The register is what counts: transactions not deleted and no match
   proposal (`Ledger.in_register/0`).
 - **Reconciled lock**: the Ledger refuses any change that alters a reconciled transaction ("ist abgeschlossen"),
@@ -104,7 +110,7 @@ tables have no user: all users see everything.
   split's subtransaction's edit kept in step (amount, date, memo, account, category), released (payee no longer a
   transfer, subtransaction removed, turned into a split) or deleted with it. The caller passes
   `reconciled: :confirmed` to `update_transaction/3`, `delete_transaction/2`, `accept_match/2` or
-  `recategorize/3` (deleting a category) after asking; the UI asks first, the API does not pass it and answers 409.
+  `recategorize/3` (deleting a category) after asking; the UI asks first.
 - **Transfers**: a transaction or subtransaction is a transfer when its payee is a transfer payee; never to its own
   account, and a split is none as a whole. The Ledger alone creates and keeps the counterpart in the payee's
   account (amount negated, same date and memo, payee = the other account's transfer payee; cleared, approved and
@@ -128,7 +134,7 @@ tables have no user: all users see everything.
   unapproved; a deleted proposal proposes nothing.
 - **Transaction origin**: transaction, account, source, external id; unique per account, source and external id
   (FITID, provider or YNAB id). A transaction matched to an import keeps the import's origin, so re-imports
-  dedupe ([ADR 0001](adr/0001-transaction-origins.md)); origins move with their transaction to another account.
+  dedupe ([ADR 0001](../DECISIONS.md)); origins move with their transaction to another account.
   Moving a transaction, or a counterpart, into an account that has one of its external ids from the same source
   already is refused.
 - References are restricted: nothing that history points to can be deleted, except a category moved into another
@@ -138,11 +144,9 @@ tables have no user: all users see everything.
   account, source and date. Reconciling offers the latest.
 - **Bank connection**: provider, bank, session id, valid until, linked accounts (provider account id → account),
   last sync, last error
-- **API token**: name, SHA-256 of the token, created at, last used at
 - **User**, **passkey**, **user token** (`phx.gen.auth` plus passkeys, see Login)
 
-Amounts are integers in cents. The API converts to and from YNAB milliunits (× 10) and rejects amounts that are
-not whole cents.
+Amounts are integers in cents.
 
 ## Budget rules
 
@@ -211,54 +215,28 @@ same source; across sources (and against manual entries) a match is proposed, ne
     is one redirect
   - The bank balance is stored per sync and offered when reconciling
 
-## API (YNAB-compatible subset)
-
-Exactly what the existing YNAB API clients (a shared-expenses app) use today, so they only need a new base URL
-and token. Same paths, field names, milliunits, envelopes (`{"data": …}`) and error format
-(`{"error": {"id", "name", "detail"}}`) as YNAB API v1 with "plans".
-
-- Auth: `Authorization: Bearer <token>`; tokens (`abk_…`, shown once) are created and revoked in the settings,
-  stored as SHA-256 with name, created at and last used at; revoking takes effect with the next request
-- IDs: the budget is the one plan with the fixed id `abakus`; everything else has its Abakus id as a string. YNAB
-  ids are not translated: the client finds its transactions again by the marker in its memos
-- `GET /api/v1/plans?include_accounts=true` — the one budget with its accounts (always included)
-- `GET /api/v1/plans/{plan_id}/categories`
-- `GET /api/v1/plans/{plan_id}/accounts/{account_id}`
-- `GET /api/v1/plans/{plan_id}/accounts/{account_id}/transactions` (optional `since_date`; like YNAB without
-  deleted ones)
-- `POST /api/v1/plans/{plan_id}/transactions` with `{"transactions": […]}`
-- `PATCH /api/v1/plans/{plan_id}/transactions` with `{"transactions": […]}` (by `id`)
-- `DELETE /api/v1/plans/{plan_id}/transactions/{transaction_id}`
-- Transaction fields: `id`, `date`, `amount`, `payee_name`, `memo`, `account_id`, `category_id`, `cleared`,
-  `approved`, `deleted`; all but `id` and `deleted` are writable, any other field (splits, flags, `import_id`) is
-  refused (400), as are amounts that are not whole cents. Writes are all or none. A change the Ledger refuses as
-  altering a reconciled transaction or counterpart answers 409; a PATCH of a deleted transaction returns it
-  unchanged; match proposals are not known to the API. Errors: 400 `bad_request`, 401 `not_authorized`, 404.2
-  `resource_not_found`, 409 `conflict`, details in German
-- Accounts carry YNAB's `balance`, `cleared_balance` and `uncleared_balance`; tracking accounts are `otherAsset`.
-  Categories list the internal group with Ready to Assign first; none is `hidden` (ADR 0003)
-- Contract: the client's own fake YNAB server describes what it expects; Abakus has request specs for the same
-  cases. Other YNAB endpoints only when a client needs them (e.g. a portfolio app's FI forecast).
-
 ## Tracking accounts
 
-Only used for the portfolios (securities accounts and their cash accounts). Their value comes from a portfolio app
-through the same API, the way YNAB tools post market values:
+Only used for the portfolios (securities accounts and their cash accounts). Their value will be booked by the Depot
+area inside Abakus (#44), the way YNAB tools post market values:
 
 - Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus
-- The portfolio app reads the account (`balance`) and posts the difference to its own value as one transaction,
+- The Depot area books the difference between the account's balance and the portfolio's value as one transaction,
   payee "Wertänderung", approved and cleared; nothing else changes the account
 - Accounts that no aggregator reaches (e.g. a broker's settlement account) are covered this way too
-- Until the portfolio app does this, the values imported from YNAB stay and can be adjusted by hand
+- Until the Depot area does this, the values imported from YNAB stay and can be adjusted by hand
 
 ## MCP
 
-At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as entered.
+At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as entered; access, protocol and tools in
+[MCP.md](MCP.md) ([ADR 0012](../DECISIONS.md)).
 
-- Read: `accounts` (balances, cleared, last reconciled), `budget` (RTA and per category for one or more months),
+- Kasse (since the move): `balances`, `balance_history`, `search_expenses`, `statistics`, `activity`, `schema`,
+  `sql_query`; writes `create_expense` and `create_reimbursement`
+- Budget, read (v2): `accounts` (balances, cleared, last reconciled), `budget` (RTA and per category for one or more months),
   `search_transactions`, `statistics` (spending by category, payee, month; previous year comparison),
   `schema`, `sql_query` (`SELECT`/`WITH`, ≤ 500 rows, 2 s)
-- Write: `create_transaction` (unapproved, so it shows up for review). Nothing is changed or deleted via MCP.
+- Budget, write (v2): `create_transaction` (unapproved, so it shows up for review). Nothing is changed or deleted via MCP.
 
 ## YNAB import
 
@@ -266,7 +244,7 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   categories with targets (`goal_*` fields), assignments per month, all transactions with splits and transfers,
   cleared and reconciled state, flags; all from one request for the plan's export (`/plans/{plan_id}`)
 - Repeatable until the switch: a re-import replaces the whole budget
-  ([ADR 0002](adr/0002-ynab-reimport-replaces.md)); the run reports what differs from YNAB's numbers
+  ([ADR 0002](../DECISIONS.md)); the run reports what differs from YNAB's numbers
 - The API keeps no target history: months before a target's creation month show it too but ask nothing, so a
   target starts in its creation month; payees with the same lookup key are merged; data Abakus cannot represent
   (credit cards, loans, targets other than monthly, yearly or by a date without repeat, amounts that are not
@@ -280,9 +258,14 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 - **Konten**: account list, register, reconcile
 - **Buchung**: transaction form (FAB on phones)
 - **Import & Sync**: file import with preview, bank connections with consent expiry
-- **Mehr**: the settings in three sections: Zugang & API (passkeys, email, API tokens), Aussehen (theme, per
-  device) and YNAB-Import (what the import brought over); MCP joins them in v2. Categories and groups are edited
-  in the budget
+- **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement, Aktivität, and Gruppe: the
+  group's name, Teilnehmer (adding one invites their user), Kategorien, wiederkehrende Ausgaben, Wechselkurse,
+  Budget (the budget owner's only: switching the link on, its account and which budget category each Kasse
+  category's shares land in), YNAB (each participant's own sync to YNAB, until they are linked) and the CSV/JSON
+  export
+- **Mehr**: the settings in three sections: Zugang (passkeys, email), Aussehen (theme, per device) and
+  YNAB-Import (what the import brought over; the budget owner's only). Categories and groups
+  are edited in the budget
 
 State that should survive a reload (screen, month, account, filters) lives in the URL; the number of months
 follows the window.
@@ -298,15 +281,15 @@ follows the window.
 4. Budget view, desktop and phone
 5. Accounts, register, transaction form, splits, transfers, reconcile
 6. OFX/QFX import with matching and approval
-7. YNAB-compatible API; the existing YNAB API clients switched to Abakus
+7. The shared expenses move into Abakus and are linked to the budget (#43)
 
 Acceptance: after importing the owner's YNAB budget, every month since the start shows the same RTA and the same
 assigned, activity, available and underfunded per category as YNAB; account balances match; an OFX/QFX
-export imports without duplicates; the existing YNAB API clients' sync runs against Abakus.
+export imports without duplicates; the shared expenses reach the budget without a sync.
 
 ### v2 — bank sync and MCP
 
-Enable Banking connections, scheduled sync, consent reminders by mail, bank balance in reconcile; MCP endpoint.
+Enable Banking connections, scheduled sync, consent reminders by mail, bank balance in reconcile; the budget's MCP tools.
 
 ### v3 — offline entry
 
@@ -315,11 +298,15 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
 
 ## Operations
 
-- One container; all data (the SQLite database) lives in the data volume at `/app/data`; backups are the
+- One container; all data (the SQLite database) lives in the data volume at `/app/data`; every night at 03:00 a
+  copy (`VACUUM INTO`) goes to `/app/data/backups`, the newest seven are kept; copies elsewhere are the
   operator's job
+- Jobs in the release: the ECB rates (daily at 17:00), recurring expenses (hourly), the Kasse's YNAB sync (shortly
+  after a change and hourly) and the backup, at the host's
+  local time (`TZ`, `Europe/Berlin` in the image); `jobs: false` turns them off in tests
 - Runs behind the operator's HTTPS reverse proxy, which sets `X-Forwarded-Proto`
 - Config via env: `PHX_HOST` (required: the public host, also the passkey relying party id), `SECRET_KEY_BASE`,
-  SMTP, `MCP_SECRET`, `YNAB_TOKEN` (import only), `ENABLE_BANKING_APP_ID` and the private key as a read-only
+  SMTP, `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES`, `YNAB_TOKEN` (import only), `ENABLE_BANKING_APP_ID` and the private key as a read-only
   mounted file (v2)
 - `/up` checks the DB and, from v2, that no bank connection has failed for more than a day
 

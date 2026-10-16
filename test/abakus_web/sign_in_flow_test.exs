@@ -40,6 +40,8 @@ defmodule AbakusWeb.SignInFlowTest do
     assert redirected_to(conn) == ~p"/"
 
     conn = get(conn, ~p"/")
+    assert redirected_to(conn) == ~p"/budget"
+    conn = get(recycle(conn), ~p"/budget")
     assert html_response(conn, 200) =~ "Budget"
     assert {user, _inserted_at} = Users.get_user_by_session_token(get_session(conn, :user_token))
     assert user.email == "neu@example.com"
@@ -47,7 +49,7 @@ defmodule AbakusWeb.SignInFlowTest do
 
   test "a tab rendered before the same user signs in again still connects" do
     user = user_fixture()
-    tab = build_conn() |> log_in_user(user) |> get(~p"/")
+    tab = build_conn() |> log_in_user(user) |> get(~p"/budget")
     old_topic = "users_sessions:#{Base.url_encode64(get_session(tab, :user_token))}"
     AbakusWeb.Endpoint.subscribe(old_topic)
 

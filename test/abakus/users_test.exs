@@ -78,6 +78,23 @@ defmodule Abakus.UsersTest do
       assert byte_size(user.passkey_handle) == 16
       refute inspect(user) =~ "passkey_handle: <<"
     end
+
+    test "makes the first user the budget owner, and only that one" do
+      {:ok, first} = Users.create_user(valid_user_attributes())
+      {:ok, second} = Users.create_user(valid_user_attributes())
+
+      assert first.budget_owner
+      refute second.budget_owner
+    end
+
+    test "allows no second budget owner" do
+      {:ok, _owner} = Users.create_user(valid_user_attributes())
+
+      changeset = User.create_changeset(%User{}, valid_user_attributes(), true)
+
+      assert {:error, changeset} = Repo.insert(changeset)
+      assert "hat schon jemand" in errors_on(changeset).budget_owner
+    end
   end
 
   describe "sudo_mode?/2" do

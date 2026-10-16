@@ -1,12 +1,12 @@
 defmodule AbakusWeb.SettingsLive.Components do
   @moduledoc """
   The frame of the settings: the overview lists the sections; a section shows them as tabs from `lg` and below
-  it a way back to the overview. The links load the page, since Zugang & API sits behind the sudo plug.
+  it a way back to the overview. The links load the page, since Zugang sits behind the sudo plug.
   """
   use AbakusWeb, :html
 
   @sections [
-    {:access, "Zugang & API", "key-round", "Passkeys, E-Mail, API-Tokens"},
+    {:access, "Zugang", "key-round", "Passkeys und E-Mail"},
     {:appearance, "Aussehen", "palette", "Hell, Dunkel oder System"},
     {:ynab, "YNAB-Import", "history", "Was aus YNAB übernommen wurde"}
   ]
@@ -14,18 +14,22 @@ defmodule AbakusWeb.SettingsLive.Components do
   attr :section, :atom, values: [nil | Enum.map(@sections, &elem(&1, 0))], required: true
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
+  attr :areas, :list, required: true
+  attr :area, :atom, required: true
   attr :account_groups, :list, required: true
   attr :account_dialog, :map, required: true
   slot :inner_block
 
   def page(assigns) do
-    assigns = assign(assigns, :sections, @sections)
+    assigns = assign(assigns, :sections, sections(assigns.current_scope))
 
     ~H"""
     <Layouts.app
       flash={@flash}
       current_scope={@current_scope}
       current={:settings}
+      areas={@areas}
+      area={@area}
       width={:narrow}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
@@ -56,6 +60,12 @@ defmodule AbakusWeb.SettingsLive.Components do
       {render_slot(@inner_block)}
     </Layouts.app>
     """
+  end
+
+  # YNAB-Import belongs to the Budget.
+  defp sections(scope) do
+    budget? = AbakusWeb.Areas.allowed?(scope, :budget)
+    Enum.filter(@sections, fn {key, _label, _icon, _hint} -> key != :ynab or budget? end)
   end
 
   @doc "The section's name, e.g. for the page title."

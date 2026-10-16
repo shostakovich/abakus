@@ -1,6 +1,8 @@
 defmodule AbakusWeb.LayoutsTest do
   use AbakusWeb.ConnCase
 
+  alias Abakus.Users.{Scope, User}
+
   test "the root layout links the manifest, sets theme colours and the theme before the stylesheet",
        %{conn: conn} do
     html = conn |> get(~p"/users/log-in") |> html_response(200)
@@ -48,16 +50,18 @@ defmodule AbakusWeb.LayoutsTest do
     assert get_resp_header(conn, "content-type") == ["font/woff2"]
   end
 
-  test "links on the settings pages load the page, so the sudo plug runs for Zugang & API" do
+  test "links within the Budget navigate; links into and out of the settings load the page" do
     user = Abakus.UsersFixtures.user_fixture()
     conn = log_in_user(build_conn(), user)
 
-    budget = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
+    budget = conn |> get(~p"/budget") |> html_response(200) |> LazyHTML.from_document()
     settings_links = budget |> LazyHTML.query(~s|a[href="/settings"]|) |> Enum.to_list()
+    budget_links = budget |> LazyHTML.query(~s|a[href="/budget/accounts/all"]|) |> Enum.to_list()
 
-    # The overview shares the budget's live_session.
     assert settings_links != []
-    assert Enum.all?(settings_links, &(LazyHTML.attribute(&1, "data-phx-link") != []))
+    assert Enum.all?(settings_links, &(LazyHTML.attribute(&1, "data-phx-link") == []))
+    assert budget_links != []
+    assert Enum.all?(budget_links, &(LazyHTML.attribute(&1, "data-phx-link") != []))
     assert budget |> LazyHTML.query(~s|a[href="/settings/access"]|) |> Enum.empty?()
 
     for path <- [
@@ -70,6 +74,71 @@ defmodule AbakusWeb.LayoutsTest do
 
       assert page |> LazyHTML.query(~s|a[href="/settings/access"]|) |> Enum.any?()
       assert page |> LazyHTML.query("a[data-phx-link]") |> Enum.empty?()
+    end
+  end
+
+  describe "with more than one area" do
+    import Phoenix.Component, only: [sigil_H: 2]
+    import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
+
+    @areas [
+      %{key: :budget, label: "Budget", icon: "wallet", path: "/budget"},
+      %{key: :kasse, label: "Kasse", icon: "history", path: "/kasse"}
+    ]
+
+    defp app_with_areas(area) do
+      assigns = %{
+        areas: @areas,
+        area: area,
+        scope: Scope.for_user(%User{email: "kim@example.com"})
+      }
+
+      ~H"""
+      <AbakusWeb.Layouts.app flash={%{}} current_scope={@scope} areas={@areas} area={@area}>
+        Inhalt
+      </AbakusWeb.Layouts.app>
+      """
+      |> rendered_to_string()
+      |> LazyHTML.from_fragment()
+    end
+
+    defp texts(html, selector), do: html |> LazyHTML.query(selector) |> Enum.map(&LazyHTML.text/1)
+
+    test "the sidebar groups the entries by area under the brand Abakus" do
+      html = app_with_areas(:kasse)
+
+      assert texts(html, "#app-shell-sidebar-full .menu-title") |> Enum.map(&String.trim/1) == [
+               "Budget",
+               "Kasse"
+             ]
+
+      assert html |> texts("#app-shell-sidebar-full") |> hd() =~ "Abakus"
+    end
+
+    test "the top bar's title switches the area" do
+      html = app_with_areas(:kasse)
+
+      assert html |> texts("header #area-switcher summary") |> hd() =~ "Kasse"
+
+      assert html
+             |> LazyHTML.query("#area-switcher li a")
+             |> Enum.map(
+               &{LazyHTML.attribute(&1, "href"), LazyHTML.attribute(&1, "aria-current")}
+             ) ==
+               [{["/budget"], []}, {["/kasse"], ["page"]}]
+    end
+
+    test "the dock holds only the current area's entries" do
+      dock = fn area ->
+        area
+        |> app_with_areas()
+        |> LazyHTML.query(".dock a")
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "href"))
+      end
+
+      assert dock.(:kasse) == ["/kasse", "/kasse/balances", "/kasse/activity", "/kasse/settings"]
+      assert "/budget" in dock.(:budget)
+      refute "/kasse" in dock.(:budget)
     end
   end
 

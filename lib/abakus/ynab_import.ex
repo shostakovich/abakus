@@ -1,13 +1,14 @@
 defmodule Abakus.YnabImport do
   @moduledoc """
   The import from YNAB (docs/SPEC.md, "YNAB import"): fetches a plan's export with a personal access token,
-  replaces the whole budget with it (docs/adr/0002-ynab-reimport-replaces.md) and checks Abakus's numbers against
+  replaces the whole budget with it (DECISIONS.md, ADR 0002) and checks Abakus's numbers against
   YNAB's. Data Abakus cannot represent stops it before anything is written (`Unsupported`); so does any
-  transaction that did not come from YNAB, as the budget then holds data of its own.
+  transaction that did not come from YNAB, as the budget then holds data of its own, and the Kasse's link or category mapping to it.
   """
 
   import Ecto.Query
 
+  alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.Transaction
   alias Abakus.Repo
   alias Abakus.YnabImport.{Check, Client, Loader, Report, Status, Unsupported}
@@ -67,7 +68,7 @@ defmodule Abakus.YnabImport do
   end
 
   defp load(plan) do
-    if Repo.exists?(from t in Transaction, where: t.source != :ynab) do
+    if Repo.exists?(from t in Transaction, where: t.source != :ynab) or BudgetLink.in_use?() do
       {:error, :own_data}
     else
       Loader.wipe()
@@ -78,7 +79,7 @@ defmodule Abakus.YnabImport do
   @doc "Why an import did not run, as lines for the operator."
   def error_lines(:own_data),
     do: [
-      "Abakus holds transactions that did not come from YNAB; an import would delete them, so it stops."
+      "Abakus holds transactions that did not come from YNAB, or the Kasse is linked to the budget or maps its categories to it; an import would delete them, so it stops."
     ]
 
   def error_lines({:unsupported, problems}),

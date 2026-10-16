@@ -37,6 +37,16 @@ defmodule AbakusWeb do
     end
   end
 
+  def kasse_live_view do
+    quote do
+      unquote(live_view())
+
+      import AbakusWeb.Kasse.Components
+
+      alias Setzkasten.Format
+    end
+  end
+
   def live_component do
     quote do
       use Phoenix.LiveComponent

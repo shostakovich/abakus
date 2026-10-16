@@ -3,7 +3,7 @@
 Self-hosted envelope budgeting; scope, domain and phases in [`docs/SPEC.md`](docs/SPEC.md), UI direction in
 [`docs/UI.md`](docs/UI.md). UI text is German; code, comments and docs English, sparse comments.
 
-Domain terms are in [`CONTEXT.md`](CONTEXT.md) (use them in code), decisions in `docs/adr/`.
+Domain terms are in [`CONTEXT.md`](CONTEXT.md) (use them in code), decisions in [`DECISIONS.md`](DECISIONS.md).
 
 ## Validation
 
@@ -35,4 +35,11 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   `test/abakus/web_authn_test.exs` using `FakeAuthenticator`; a new check gets one too.
 - Every page needs a session; `test/abakus_web/router_test.exs` lists the public ones. The CSP allows no inline
   script without `nonce={@csp_nonce}` and no inline `style` attributes.
+- The Kasse (`Abakus.Kasse`, `AbakusWeb.Kasse`, tables `kasse_…`): money is integer cents, local time is the
+  host's `TZ` (`Abakus.LocalTime`, no time zone database). Its jobs and the backup run in the release;
+  `config/test.exs` turns them off (`jobs: false`), and tests fake the ECB and YNAB with Bandit stubs
+  (`Abakus.Kasse.FakeEcb`, `Abakus.Kasse.FakeYnab`). The YNAB sync's fingerprint and memo stay byte-identical
+  (ADR 0011).
+- MCP (`Abakus.MCP`, `AbakusWeb.MCPPlug`, docs/MCP.md) lives outside the sign-in at `/mcp/<MCP_SECRET>`; tests go
+  through `AbakusWeb.MCPCase`.
 - Dependencies: few and mature, each with a reason.

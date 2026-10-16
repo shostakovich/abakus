@@ -51,7 +51,9 @@ defmodule AbakusWeb.Endpoint do
              json_decoder: Phoenix.json_library()
            )
 
-  plug :api_format
+  # The MCP plug reads its body itself, after checking the client.
+  @unparsed Plug.Parsers.init(parsers: [], pass: ["*/*"])
+
   plug :parse_body
 
   plug Plug.MethodOverride
@@ -60,22 +62,21 @@ defmodule AbakusWeb.Endpoint do
   plug AbakusWeb.Router
 
   @doc false
-  # Health checks poll /up and would flood the log; the paths of mailed links hold their token.
+  # Health checks poll /up and would flood the log; the paths of mailed links and of the MCP hold a secret.
   def log_level(%Plug.Conn{path_info: ["up"]}), do: false
+  def log_level(%Plug.Conn{path_info: ["mcp" | _rest]}), do: false
   def log_level(%Plug.Conn{path_info: ["users", "log-in", _token]}), do: false
   def log_level(%Plug.Conn{path_info: ["users", "settings", "confirm-email", _token]}), do: false
   def log_level(_conn), do: :info
-
-  # The API answers JSON, also to a request without an Accept header whose body is no JSON.
-  defp api_format(%Plug.Conn{path_info: ["api" | _]} = conn, _opts),
-    do: Phoenix.Controller.put_format(conn, "json")
-
-  defp api_format(conn, _opts), do: conn
 
   # Errors of these plugs are wrapped like the router's, so the error page keeps the headers set
   # above.
   defp serve_fonts(conn, _opts), do: keep_headers_on_error(conn, Plug.Static, @fonts)
   defp serve_static(conn, _opts), do: keep_headers_on_error(conn, Plug.Static, @static)
+
+  defp parse_body(%Plug.Conn{path_info: ["mcp" | _rest]} = conn, _opts),
+    do: Plug.Parsers.call(conn, @unparsed)
+
   defp parse_body(conn, _opts), do: keep_headers_on_error(conn, Plug.Parsers, @parsers)
 
   defp keep_headers_on_error(conn, plug, opts) do
