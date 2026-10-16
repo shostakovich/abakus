@@ -43,8 +43,9 @@ Arguments:
 Write tools:
 
 - `create_expense`: `title`, `amount`, `paid_by` (required), `date` (today), `category`, `currency` (EUR), `fx_rate`
-  (the ECB rate of the date), `split` (`equal`, `shares`, `percent`, `amount`), `participants` (for `equal`; all
-  active people by default), `weights` (person → value for the other modes), `notes`, `allow_duplicate`.
+  (the manual rate valid on the date, else the ECB rate), `split` (`equal`, `shares`, `percent`, `amount`),
+  `participants` (for `equal`; all active people by default), `weights` (person → value for the other modes), `notes`,
+  `allow_duplicate`.
 - `create_reimbursement`: `from`, `to`, `amount` (required), `currency`, `fx_rate`, `date`, `notes`,
   `allow_duplicate`; the title is "Rückzahlung".
 - Amounts are strict: digits and a dot, no thousands separator (`"1234.50"`); `"1.234"` is refused.
