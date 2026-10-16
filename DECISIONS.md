@@ -76,7 +76,7 @@ Accepted, 2026-10-13. Replaces felt-css with Bootstrap class names.
 
 ## 0005. Budget, shared expenses and portfolios are one app
 
-Accepted, 2026-10-15
+Accepted, 2026-10-15; partly superseded by 0017, 2026-10-16
 
 - **Context:** The household ran three apps (Abakus, Zipfelkasse, zipfelfolio) with three addresses, sign-ins and
   copies of the same stack; shared expenses and portfolio values only reached the budget through sync APIs.
