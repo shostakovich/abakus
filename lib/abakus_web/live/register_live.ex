@@ -223,7 +223,7 @@ defmodule AbakusWeb.RegisterLive do
 
     socket
     |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
-    |> assign(:portfolio, BudgetFeed.portfolio(account))
+    |> assign(:portfolio, BudgetFeed.portfolio(socket.assigns.current_scope, account))
     |> assign(reconcile: nil, reconciling: nil)
     |> load_transactions()
   end

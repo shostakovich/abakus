@@ -27,11 +27,11 @@ defmodule Abakus.Depot.BudgetFeed do
         from p in Portfolio, where: p.user_id == ^user_id and not is_nil(p.budget_account_id)
       )
 
-  @doc "The portfolio whose account `account` is, nil for any other account."
-  def portfolio(%Account{fed_by: :portfolio, id: id}),
-    do: Repo.get_by(Portfolio, budget_account_id: id)
+  @doc "The user's portfolio whose account `account` is, nil for any other account."
+  def portfolio(%Scope{user: %User{id: user_id}}, %Account{fed_by: :portfolio, id: id}),
+    do: Repo.get_by(Portfolio, budget_account_id: id, user_id: user_id)
 
-  def portfolio(%Account{}), do: nil
+  def portfolio(%Scope{}, %Account{}), do: nil
 
   @doc """
   Opens the tracking account of a portfolio of the budget owner, named after it, and returns the portfolio with

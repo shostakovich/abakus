@@ -187,8 +187,9 @@ defmodule Abakus.Depot.BudgetFeedTest do
       :ok = BudgetFeed.sync_accounts()
       account = account_of(c.portfolio)
 
-      assert BudgetFeed.portfolio(account).id == c.portfolio.id
-      assert BudgetFeed.portfolio(DomainFixtures.account_fixture(name: "Giro")) == nil
+      assert BudgetFeed.portfolio(c.owner, account).id == c.portfolio.id
+      assert BudgetFeed.portfolio(user_scope_fixture(), account) == nil
+      assert BudgetFeed.portfolio(c.owner, DomainFixtures.account_fixture(name: "Giro")) == nil
     end
   end
 
