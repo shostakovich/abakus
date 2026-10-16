@@ -98,7 +98,7 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
           <.section_heading id="active-securities-title" count={length(@active)}>
             Aktive Wertpapiere
           </.section_heading>
-          <.empty_state :if={@active == []} icon="layers">
+          <.empty_state :if={@active == []} plush="layers" icon="layers">
             Noch keine Wertpapiere. Lege eines beim Erfassen einer Buchung per ISIN an oder übernimm
             sie aus Portfolio Performance.
             <:action>

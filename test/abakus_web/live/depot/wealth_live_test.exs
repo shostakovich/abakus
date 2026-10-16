@@ -372,10 +372,16 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       )
     end
 
-    test "lists each portfolio with its securities' value and TTWROR since 1 January", ctx do
+    test "lists each portfolio with the briefcase, its securities' value and TTWROR since 1 January",
+         ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
 
       row = lv |> element("#portfolio-#{ctx.portfolio.id}") |> render()
+
+      assert has_element?(
+               lv,
+               "#portfolio-#{ctx.portfolio.id} img[src^='/images/plush/briefcase']"
+             )
 
       assert row =~ "Langfristig"
       assert row =~ "1\u00A0Wertpapier\u2060\u00A0· Cash\u00A0240,00\u00A0€"

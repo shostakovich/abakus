@@ -17,8 +17,8 @@ defmodule AbakusWeb.SettingsNav do
     do: Phoenix.Component.assign(socket, :settings_groups, groups(socket.assigns.current_scope))
 
   @doc """
-  The groups the scope's user sees, each `{label, entries}`; an entry has `key`, `label`, `icon`, `path` and the
-  `live_session` it opens in, since only links within one navigate.
+  The groups the scope's user sees, each `{label, entries}`; an entry has `key`, `label`, `plush`, `icon` (Lucide,
+  where the plush has no image), `path` and the `live_session` it opens in, since only links within one navigate.
   """
   def groups(scope) do
     [
@@ -30,8 +30,11 @@ defmodule AbakusWeb.SettingsNav do
     |> Enum.filter(& &1)
   end
 
-  defp access,
-    do: entry(:access, "Zugang", "key-round", ~p"/settings/access", :require_sudo_mode)
+  defp access do
+    :access
+    |> entry("Zugang", "key", ~p"/settings/access", :require_sudo_mode)
+    |> Map.put(:icon, "key-round")
+  end
 
   defp appearance, do: entry(:appearance, "Aussehen", "palette", ~p"/settings/appearance")
 
@@ -68,8 +71,15 @@ defmodule AbakusWeb.SettingsNav do
     |> Enum.filter(& &1)
   end
 
-  defp kasse_entry(key, label, icon, path), do: entry(key, label, icon, path, :kasse_settings)
+  defp kasse_entry(key, label, plush, path), do: entry(key, label, plush, path, :kasse_settings)
 
-  defp entry(key, label, icon, path, live_session \\ :settings),
-    do: %{key: key, label: label, icon: icon, path: path, live_session: live_session}
+  defp entry(key, label, plush, path, live_session \\ :settings),
+    do: %{
+      key: key,
+      label: label,
+      plush: plush,
+      icon: plush,
+      path: path,
+      live_session: live_session
+    }
 end

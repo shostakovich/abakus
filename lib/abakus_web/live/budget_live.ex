@@ -148,7 +148,12 @@ defmodule AbakusWeb.BudgetLive do
             <tbody :if={@rows.groups == [] and is_nil(@rows.uncategorised)}>
               <tr>
                 <td colspan={1 + 3 * length(@months)} class="app-empty">
-                  <.empty_state id="budget-empty" icon="wallet" title="Noch keine Kategorien">
+                  <.empty_state
+                    id="budget-empty"
+                    plush="wallet"
+                    icon="wallet"
+                    title="Noch keine Kategorien"
+                  >
                     Lege eine Gruppe an und darin die Kategorien, auf die du dein Geld verteilst.
                     <:action>
                       <.button icon="plus" phx-click="edit_open" phx-value-edit="new_group">

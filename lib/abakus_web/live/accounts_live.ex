@@ -46,7 +46,7 @@ defmodule AbakusWeb.AccountsLive do
       </:actions>
     </.header>
 
-    <.empty_state :if={@groups == []} icon="landmark" title="Noch keine Konten">
+    <.empty_state :if={@groups == []} plush="landmark" icon="landmark" title="Noch keine Konten">
       Lege ein Konto an, um Buchungen zu erfassen oder zu importieren.
       <:action>
         <.button id="add-account" variant={:primary} icon="plus" phx-click="open_account_dialog">

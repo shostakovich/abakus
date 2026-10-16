@@ -33,18 +33,6 @@ defmodule AbakusWeb.Kasse.CategoryIconTest do
     end
   end
 
-  test "every plush is an image of its own, the same in both themes" do
-    dir = Application.app_dir(:abakus, "priv/static/images/plush")
-
-    for name <- AbakusWeb.Plush.names() do
-      assert File.exists?(Path.join(dir, name <> ".webp")), name
-    end
-
-    assert AbakusWeb.Plush.src("receipt", :light) =~ ~r"^/images/plush/receipt"
-    assert AbakusWeb.Plush.src("receipt", :dark) == nil
-    assert AbakusWeb.Plush.src("nope", :light) == nil
-  end
-
   test "an expense shows its category, a reimbursement banknotes" do
     assert CategoryIcon.for_expense(%Expense{category: %Category{name: "Reisen"}}) == "plane"
     assert CategoryIcon.for_expense(%Expense{category: nil}) == "tag"

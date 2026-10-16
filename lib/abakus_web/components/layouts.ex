@@ -60,8 +60,9 @@ defmodule AbakusWeb.Layouts do
   Finanzen: Budget, Vermögen, Alle Konten, Alle Depots and Import & Sync with the receipts waiting in the inbox,
   the open budget and tracking accounts with their balance and how many transactions wait for approval, then the
   section Depots with the active portfolios and their values, each shown with the leading emoji of its account in
-  the budget; a user without the budget sees only Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of the
-  icon rail and the dock.
+  the budget, else the briefcase; a user without the budget sees only Vermögen, Alle Depots, Import & Sync and
+  Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of the icon rail and the dock.
+  Entries show plush images, the Lucide icon only where a plush has no image.
 
   With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
   brand is a menu that switches the area. On phones the dock holds the current area's pages; its "Mehr" opens
@@ -106,6 +107,7 @@ defmodule AbakusWeb.Layouts do
         key={area.key}
         id={"area-#{area.key}"}
         label={area.label}
+        plush={area.plush}
         icon={area.icon}
         href={area.path}
       />
@@ -114,6 +116,7 @@ defmodule AbakusWeb.Layouts do
         key={:budget}
         id="side-budget"
         label="Budget"
+        plush="wallet"
         icon="wallet"
         navigate={navigate(~p"/budget", @current)}
         href={href(~p"/budget", @current)}
@@ -123,6 +126,7 @@ defmodule AbakusWeb.Layouts do
         key={:depot_wealth}
         id="side-depot-wealth"
         label="Vermögen"
+        plush="trending-up"
         icon="trending-up"
         navigate={navigate(~p"/depot", @current)}
         href={href(~p"/depot", @current)}
@@ -132,6 +136,7 @@ defmodule AbakusWeb.Layouts do
         key={:all_accounts}
         id="side-all-accounts"
         label="Alle Konten"
+        plush="landmark"
         icon="landmark"
         navigate={navigate(~p"/budget/accounts/all", @current)}
         href={href(~p"/budget/accounts/all", @current)}
@@ -141,6 +146,7 @@ defmodule AbakusWeb.Layouts do
         key={:depots}
         id="side-depots"
         label="Alle Depots"
+        plush="briefcase"
         icon="chart-pie"
         navigate={navigate(~p"/depot/holdings", @current)}
         href={href(~p"/depot/holdings", @current)}
@@ -150,6 +156,7 @@ defmodule AbakusWeb.Layouts do
         key={:import}
         id="side-import"
         label="Import & Sync"
+        plush="inbox"
         icon="refresh-cw"
         dock={false}
         count={if @inbox > 0, do: @inbox}
@@ -180,6 +187,7 @@ defmodule AbakusWeb.Layouts do
         id={"side-depot-portfolio-#{row.portfolio.id}"}
         label={row.label}
         glyph={row.glyph}
+        plush={if !row.glyph, do: "briefcase"}
         icon={if !row.glyph, do: "chart-pie"}
         amount={row.value}
         section="Depots"
@@ -224,6 +232,7 @@ defmodule AbakusWeb.Layouts do
         key={:settings}
         id="side-settings"
         label="Einstellungen"
+        plush="settings"
         icon="settings"
         dock={false}
         href={~p"/settings"}
@@ -380,6 +389,7 @@ defmodule AbakusWeb.Layouts do
       <:item
         :for={area <- @areas}
         href={area.path}
+        plush={area.plush}
         icon={area.icon}
         active={area.key == @area}
       >
@@ -512,6 +522,7 @@ defmodule AbakusWeb.Layouts do
         key={entry.key}
         id={"settings-#{entry.key |> Atom.to_string() |> String.replace("_", "-")}"}
         label={entry.label}
+        plush={entry.plush}
         icon={entry.icon}
         section={section}
         navigate={if navigate?, do: entry.path}

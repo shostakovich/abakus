@@ -48,7 +48,9 @@ defmodule AbakusWeb.SettingsLive do
       <p class="max-w-prose text-sm text-base-content/70">
         Ein neuer Import ersetzt das ganze Budget. Sobald Abakus eigene Buchungen hat, läuft er nicht mehr.
       </p>
-      <.empty_state :if={!@status} icon="history">Noch nichts aus YNAB übernommen.</.empty_state>
+      <.empty_state :if={!@status} plush="history" icon="history">
+        Noch nichts aus YNAB übernommen.
+      </.empty_state>
       <div :if={@status} class="flex flex-wrap items-center gap-2">
         <.badge tone={:success}>abgeschlossen</.badge>
         <span class="text-sm text-base-content/70">

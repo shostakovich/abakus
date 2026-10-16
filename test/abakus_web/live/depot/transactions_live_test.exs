@@ -85,7 +85,29 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
 
     assert has_element?(lv, "#transactions-empty h2", "Noch keine Buchungen")
-    assert has_element?(lv, "#transactions-empty img[src^='/images/plush/receipt']")
+    assert has_element?(lv, "#transactions-empty img[src^='/images/plush/clipboard-list']")
+  end
+
+  test "shows each booking with the plush of its kind", ctx do
+    plushes =
+      for {type, plush} <- [dividend: "coins", buy: "layers", deposit: "wallet"] do
+        transaction =
+          transaction_fixture(ctx.scope, ~D[2026-10-01],
+            type: type,
+            account_id: ctx.account.id,
+            security_id: if(type != :deposit, do: ctx.security.id),
+            portfolio_id: if(type == :buy, do: ctx.portfolio.id),
+            shares: if(type == :buy, do: shares(1)),
+            amount: money(10)
+          )
+
+        {transaction.id, plush}
+      end
+
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
+
+    for {id, plush} <- plushes,
+        do: assert(has_element?(lv, "#transaction-#{id} img[src^='/images/plush/#{plush}']"))
   end
 
   test "names a foreign currency by its code", ctx do

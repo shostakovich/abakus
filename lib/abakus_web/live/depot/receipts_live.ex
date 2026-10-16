@@ -59,7 +59,7 @@ defmodule AbakusWeb.Depot.ReceiptsLive do
         :if={@inbox == []}
         id="inbox-empty"
         layout={:page}
-        plush="receipt"
+        plush="file-text"
         icon="file-text"
         title="Keine Belege im Eingang"
       >

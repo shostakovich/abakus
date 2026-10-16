@@ -86,7 +86,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
           amount={@amount}
         />
         <%= if @tab != :calendar and @dividends.received == [] do %>
-          <.empty_state icon="coins">Noch keine Dividenden gebucht.</.empty_state>
+          <.empty_state plush="coins" icon="coins">Noch keine Dividenden gebucht.</.empty_state>
         <% else %>
           <.per_month
             :if={@tab == :months}
@@ -181,7 +181,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
     ~H"""
     <div class={["grid items-start gap-x-10 gap-y-8", @chart? && "xl:grid-cols-[3fr_2fr]"]}>
       <section id="calendar" aria-label="Kalender">
-        <.empty_state :if={@groups == []} icon="coins">
+        <.empty_state :if={@groups == []} plush="coins" icon="coins">
           In den nächsten 12 Monaten ist keine Dividende angekündigt oder zu erwarten.
         </.empty_state>
         <.list :if={@groups != []}>
