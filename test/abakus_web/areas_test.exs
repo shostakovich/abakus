@@ -11,7 +11,7 @@ defmodule AbakusWeb.AreasTest do
   alias Abakus.Kasse.Participants
   alias Abakus.Users.Scope
 
-  @pages ["Budget", "Vermögen", "Alle Konten", "Import & Sync", "Depots"] ++
+  @pages ["Budget", "Vermögen", "Alle Konten", "Alle Depots", "Import & Sync"] ++
            ["Ausgaben", "Salden", "Aktivität"]
 
   defp sidebar_labels(view) do
@@ -110,7 +110,6 @@ defmodule AbakusWeb.AreasTest do
       {:ok, view, html} = live(conn, ~p"/settings/appearance")
 
       refute has_element?(view, ~s|a[href^="/budget"]|)
-      refute has_element?(view, "#side-add-account-sidebar")
       refute html =~ "Girokonto"
       refute has_element?(view, "#settings-ynab-import-sidebar")
       assert has_element?(view, ~s|#settings-access-sidebar[href="/settings/access"]|)
@@ -321,11 +320,10 @@ defmodule AbakusWeb.AreasTest do
 
       assert has_element?(view, "header .navbar", "Finanzen")
       refute has_element?(view, ~s|nav[aria-label="Bereich wechseln"]|)
-      assert sidebar_labels(view) == ["Vermögen", "Import & Sync", "Depots"]
+      assert sidebar_labels(view) == ["Vermögen", "Alle Depots", "Import & Sync"]
       assert has_element?(view, sidebar_link("/depot/receipts"), "Import & Sync")
       assert has_element?(view, sidebar_link(~p"/depot/holdings?#{[portfolio: portfolio.id]}"))
       refute has_element?(view, ~s|a[href^="/budget"]|)
-      refute has_element?(view, "#side-add-account-sidebar")
       refute html =~ "Girokonto"
       assert dock_paths(view) == ["/depot", "/depot/holdings"]
     end

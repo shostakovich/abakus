@@ -132,6 +132,17 @@ defmodule Abakus.Depot.BudgetFeedTest do
       assert account_of(c.portfolio).name == "Rente"
     end
 
+    test "keeps the account's leading emoji when it renames it", c do
+      :ok = BudgetFeed.sync_accounts()
+      {:ok, _account} = Ledger.update_account(account_of(c.portfolio), %{name: "📈 Alt"})
+      Repo.update!(change(c.portfolio, name: "Rente"))
+
+      :ok = BudgetFeed.sync_accounts()
+      :ok = BudgetFeed.sync_accounts()
+
+      assert account_of(c.portfolio).name == "📈 Rente"
+    end
+
     test "opens no account for a retired portfolio", c do
       retired = portfolio_fixture(c.owner, %{name: "Alt", retired: true})
 

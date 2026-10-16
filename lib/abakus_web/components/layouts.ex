@@ -57,11 +57,11 @@ defmodule AbakusWeb.Layouts do
   @doc """
   Signed-in pages in Setzkasten's sidebar shell, showing the current area's entries, then the settings.
 
-  Finanzen: Budget, Vermögen, Alle Konten and Import & Sync with the receipts waiting in the inbox, the open
-  budget and tracking accounts with their balance and how many transactions wait for approval, then Depots with
-  the active portfolios and their values, each also an account of the budget owner, and „Konto hinzufügen“; a user
-  without the budget sees only Vermögen, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of
-  the icon rail and the dock.
+  Finanzen: Budget, Vermögen, Alle Konten, Alle Depots and Import & Sync with the receipts waiting in the inbox,
+  the open budget and tracking accounts with their balance and how many transactions wait for approval, then the
+  section Depots with the active portfolios and their values, each shown with the leading emoji of its account in
+  the budget; a user without the budget sees only Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of the
+  icon rail and the dock.
 
   With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
   brand is a menu that switches the area. On phones the dock holds the current area's pages; its "Mehr" opens
@@ -77,12 +77,13 @@ defmodule AbakusWeb.Layouts do
         depot?: finanzen? and Areas.allowed?(assigns.current_scope, :depot),
         kasse?: assigns.area == :kasse,
         groups: if(finanzen?, do: AccountGroups.sidebar(assigns.account_groups), else: []),
-        portfolios:
-          (finanzen? && assigns.depot_sidebar && assigns.depot_sidebar.portfolios) || [],
+        portfolios: portfolio_rows(finanzen?, assigns.depot_sidebar, assigns.account_groups),
         import_path: import_path(assigns.current_scope),
         inbox: inbox(assigns.depot_sidebar),
         nav_key: nav_key(assigns)
       )
+
+    assigns = assign(assigns, :depots_total, Enum.sum_by(assigns.portfolios, & &1.value))
 
     ~H"""
     <.app_shell
@@ -136,6 +137,15 @@ defmodule AbakusWeb.Layouts do
         href={href(~p"/budget/accounts/all", @current)}
       />
       <:nav
+        :if={@depot?}
+        key={:depots}
+        id="side-depots"
+        label="Alle Depots"
+        icon="chart-pie"
+        navigate={navigate(~p"/depot/holdings", @current)}
+        href={href(~p"/depot/holdings", @current)}
+      />
+      <:nav
         :if={@finanzen?}
         key={:import}
         id="side-import"
@@ -165,34 +175,20 @@ defmodule AbakusWeb.Layouts do
         href={href(~p"/budget/accounts/#{row.account}", @current)}
       />
       <:nav
-        :if={@depot?}
-        key={:depots}
-        id="side-depots"
-        label="Depots"
-        icon="briefcase"
-        navigate={navigate(~p"/depot/holdings", @current)}
-        href={href(~p"/depot/holdings", @current)}
-      />
-      <:nav
-        :for={row <- @portfolios}
+        :for={{row, first?} <- Enum.with_index(@portfolios, &{&1, &2 == 0})}
         key={{:depot_portfolio, row.portfolio.id}}
         id={"side-depot-portfolio-#{row.portfolio.id}"}
-        label={Format.portfolio_name(row.portfolio)}
-        icon="briefcase"
+        label={row.label}
+        glyph={row.glyph}
+        icon={if !row.glyph, do: "chart-pie"}
         amount={row.value}
+        section="Depots"
+        section_amount={if first?, do: @depots_total}
         rail={false}
         dock={false}
         parent={:depots}
         navigate={navigate(Components.depots_path(:holdings, row.portfolio.id), @current)}
         href={href(Components.depots_path(:holdings, row.portfolio.id), @current)}
-      />
-      <:nav
-        :if={@budget?}
-        key={:add_account}
-        id="side-add-account"
-        label="Konto hinzufügen"
-        icon="plus"
-        on_click={JS.push("open_account_dialog")}
       />
       <:nav
         :if={@kasse?}
@@ -289,6 +285,22 @@ defmodule AbakusWeb.Layouts do
     for group <- groups, {row, index} <- Enum.with_index(group.rows), do: {group, row, index == 0}
   end
 
+  defp portfolio_rows(true, %{portfolios: rows}, account_groups) do
+    names = Map.new(AccountGroups.rows(account_groups), &{&1.account.id, &1.account.name})
+
+    for row <- rows do
+      name = Format.portfolio_name(row.portfolio)
+      account_name = names[row.portfolio.budget_account_id]
+
+      case account_name && glyph(account_name) do
+        nil -> Map.merge(row, %{label: name, glyph: nil})
+        emoji -> Map.merge(row, %{label: label(name), glyph: emoji})
+      end
+    end
+  end
+
+  defp portfolio_rows(_finanzen?, _sidebar, _account_groups), do: []
+
   defp glyph(name), do: name |> Names.split_emoji() |> elem(0)
 
   defp label(name), do: name |> Names.split_emoji() |> elem(1)
@@ -311,7 +323,7 @@ defmodule AbakusWeb.Layouts do
     end
   end
 
-  # The portfolio the Depots pages show, if the sidebar lists it; a retired one belongs to Depots.
+  # The portfolio the Depots pages show, if the sidebar lists it; a retired one belongs to Alle Depots.
   defp nav_key(%{current: :depots, depot_marked: marked, depot_sidebar: sidebar})
        when marked != nil and sidebar != nil do
     listed = Enum.map(sidebar.portfolios, &{:depot_portfolio, &1.portfolio.id})

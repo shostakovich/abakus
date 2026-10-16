@@ -79,6 +79,14 @@ defmodule AbakusWeb.RegisterLive do
                 reconciling={!!@reconciling}
               />
               <.button
+                :if={!@account}
+                id="add-account"
+                icon="plus"
+                phx-click="open_account_dialog"
+              >
+                Konto hinzufügen
+              </.button>
+              <.button
                 :if={@account}
                 id="edit-account"
                 icon="pencil"

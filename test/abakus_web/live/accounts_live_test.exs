@@ -92,8 +92,7 @@ defmodule AbakusWeb.AccountsLiveTest do
       refute has_element?(view, "#side-account-#{c.old.id}-sidebar")
       refute has_element?(view, "#side-account-#{c.giro.id}-rail")
       refute has_element?(view, "#side-account-#{c.giro.id}-dock")
-      assert has_element?(view, "button#side-add-account-sidebar", "Konto hinzufügen")
-      refute has_element?(view, "#side-add-account-dock")
+      refute has_element?(view, "#side-add-account-sidebar")
 
       for entry <- ~w(budget depot-wealth all-accounts),
           do: assert(has_element?(view, "#side-#{entry}-dock"))
@@ -102,11 +101,6 @@ defmodule AbakusWeb.AccountsLiveTest do
 
       refute has_element?(view, "#side-settings-dock")
       assert has_element?(view, ~s|nav.dock button[aria-haspopup=dialog]|, "Mehr")
-
-      assert has_element?(
-               view,
-               "aside li.menu-title:has(+ li #side-account-#{c.depot.id}-sidebar) ~ li #side-add-account-sidebar"
-             )
 
       {:ok, settings, _html} = live(c.conn, ~p"/settings/access")
 
@@ -163,20 +157,16 @@ defmodule AbakusWeb.AccountsLiveTest do
       assert {^path, %{"info" => "Konto angelegt."}} = assert_redirect(view)
     end
 
-    test "opens from the sidebar over any page", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/budget")
+    test "opens from Alle Konten", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
 
-      view |> element("#side-add-account-sidebar") |> render_click()
+      view |> element("#add-account") |> render_click()
       assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
 
       submit(view, %{name: "Giro", kind: "checking"})
       assert [account] = Ledger.list_accounts()
       path = ~p"/budget/accounts/#{account}"
       assert {^path, _flash} = assert_redirect(view)
-
-      {:ok, transactions, _html} = live(conn, ~p"/budget/accounts/all")
-      transactions |> element("#side-add-account-sidebar") |> render_click()
-      assert has_element?(transactions, "#account-dialog h2", "Konto hinzufügen")
     end
 
     test "shows what is missing", %{conn: conn} do

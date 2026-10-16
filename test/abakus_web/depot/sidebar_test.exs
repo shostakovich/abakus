@@ -4,8 +4,8 @@ defmodule AbakusWeb.Depot.SidebarTest do
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
 
-  alias Abakus.Depot.MarketData
-  alias Abakus.{DomainFixtures, LocalTime, Repo}
+  alias Abakus.Depot.{BudgetFeed, MarketData}
+  alias Abakus.{DomainFixtures, Ledger, LocalTime, Repo}
   alias Abakus.Users.{Scope, User}
 
   setup :register_and_log_in_user_without_budget
@@ -52,7 +52,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
       |> Enum.map(&(&1 |> LazyHTML.text() |> String.split() |> hd()))
 
     assert Enum.drop_while(labels, &(&1 != "Vermögen")) ==
-             ~w(Vermögen Import Depots Aktiv Einstellungen)
+             ~w(Vermögen Alle Import Depots Aktiv Einstellungen)
 
     assert has_element?(lv, "#holdings-portfolio-#{retired.id}")
     refute has_element?(lv, sidebar_link(~p"/depot/holdings?#{[portfolio: retired.id]}"))
@@ -190,9 +190,24 @@ defmodule AbakusWeb.Depot.SidebarTest do
       assert lv |> element(sidebar_link(path)) |> render() =~ "1.100,00"
     end
 
-    test "offers „Konto hinzufügen“ after the portfolios", ctx do
+    test "shows a portfolio with the emoji of its account, under the section Depots", ctx do
       portfolio = portfolio_fixture(ctx.owner, %{name: "Langfristig"})
+      :ok = BudgetFeed.sync_accounts()
+      account = Ledger.get_account!(Repo.reload!(portfolio).budget_account_id)
+      {:ok, _account} = Ledger.update_account(account, %{name: "📈 Langfristig"})
+
       {:ok, lv, _html} = live(ctx.conn, ~p"/budget")
+      row = lv |> element("#side-depot-portfolio-#{portfolio.id}-sidebar") |> render()
+
+      assert row =~ "📈"
+      refute row =~ "📈 Langfristig"
+      assert has_element?(lv, "#app-shell-sidebar-full", "Depots")
+    end
+
+    test "lists the portfolios right after the accounts, and Alle Konten offers „Konto hinzufügen“",
+         ctx do
+      portfolio = portfolio_fixture(ctx.owner, %{name: "Langfristig"})
+      {:ok, lv, _html} = live(ctx.conn, ~p"/budget/accounts/all")
 
       ids =
         lv
@@ -202,13 +217,11 @@ defmodule AbakusWeb.Depot.SidebarTest do
         |> Enum.flat_map(&LazyHTML.attribute(&1, "id"))
         |> Enum.map(&String.replace_suffix(&1, "-sidebar", ""))
 
-      assert Enum.drop_while(ids, &(&1 != "side-depots")) ==
-               [
-                 "side-depots",
-                 "side-depot-portfolio-#{portfolio.id}",
-                 "side-add-account",
-                 "side-settings"
-               ]
+      assert Enum.drop_while(ids, &(not String.starts_with?(&1, "side-depot-portfolio-"))) ==
+               ["side-depot-portfolio-#{portfolio.id}", "side-settings"]
+
+      lv |> element("#add-account") |> render_click()
+      assert has_element?(lv, "#account-dialog h2", "Konto hinzufügen")
     end
 
     test "updates the budget accounts' balances after a Depot booking", ctx do

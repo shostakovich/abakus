@@ -13,7 +13,7 @@ defmodule Abakus.Depot.BudgetFeed do
 
   alias Abakus.Depot.{AccountRoles, Portfolios}
   alias Abakus.Depot.Portfolios.Portfolio
-  alias Abakus.{Ledger, LocalTime, Repo}
+  alias Abakus.{Ledger, LocalTime, Names, Repo}
   alias Abakus.Ledger.Account
   alias Abakus.Ledger.Transaction
   alias Abakus.Users.{Scope, User}
@@ -46,9 +46,9 @@ defmodule Abakus.Depot.BudgetFeed do
 
   @doc """
   Opens the account of every active portfolio of the budget owner without one, names each account after its
-  portfolio and closes the accounts fed by `portfolio` that no portfolio has any more, keeping their history: a
-  last value change dated `date` takes each to 0, as the new accounts get their portfolio's value with the next
-  value change.
+  portfolio, keeping a leading emoji of the account's name, and closes the accounts fed by `portfolio` that no
+  portfolio has any more, keeping their history: a last value change dated `date` takes each to 0, as the new
+  accounts get their portfolio's value with the next value change.
   """
   def sync_accounts(%Date{} = date \\ LocalTime.today()) do
     close_accounts_without_portfolio(date)
@@ -74,11 +74,21 @@ defmodule Abakus.Depot.BudgetFeed do
             from p in Portfolio,
               join: a in Account,
               on: a.id == p.budget_account_id,
-              where: a.name != p.name,
               select: {p, a}
           ),
-        do: {:ok, _account} = Ledger.update_account(account, %{name: portfolio.name})
+        name = account_name(account.name, portfolio.name),
+        name != account.name,
+        do: {:ok, _account} = Ledger.update_account(account, %{name: name})
   end
+
+  defp account_name(current, name) when is_binary(name) do
+    case Names.split_emoji(current) do
+      {nil, _rest} -> name
+      {emoji, _rest} -> "#{emoji} #{name}"
+    end
+  end
+
+  defp account_name(_current, name), do: name
 
   defp close_accounts_without_portfolio(date) do
     tied =
