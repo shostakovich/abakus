@@ -1,0 +1,65 @@
+/* Monthly returns: a cell per month, green up and red down, the stronger the further from zero
+   (data-heat, 0 to 10); ±0,0 grey, months without returns outlined; the year's column set apart. On a
+   phone each year folds into its year with the year's return and two rows of six months, each with
+   its name. */
+.app-heatmap {
+  --heat-up-low: oklch(92.5% .065 145); --heat-up-high: oklch(72% .14 145);
+  --heat-down-low: oklch(92.5% .055 15); --heat-down-high: oklch(69% .15 15);
+  --heat-flat: oklch(93.5% .003 260); --heat-none: color-mix(in oklab, var(--color-base-content) 45%, transparent);
+  --heat-ink: var(--color-base-content);
+}
+/* On a dark page the scale runs from a tint that still stands off the page to a full colour that
+   keeps light text at 4.5:1. */
+.app-heatmap {
+  @variant dark {
+    --heat-up-low: oklch(35% .055 150); --heat-up-high: oklch(47% .125 148);
+    --heat-down-low: oklch(35% .06 20); --heat-down-high: oklch(47% .15 22);
+    --heat-flat: oklch(37% .004 260); --heat-ink: oklch(97% 0 0);
+  }
+}
+.app-heatmap-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: .8125rem; }
+.app-heatmap-table :is(th, td) { padding: 1.5px; }
+.app-heatmap-table th { color: color-mix(in oklab, var(--color-base-content) 70%, transparent); font-size: .75rem; font-weight: 600; text-align: center; }
+.app-heatmap-table thead th { padding-bottom: .25rem; }
+.app-heatmap-table thead th:first-child { width: 2.75rem; }
+.app-heatmap-table thead .app-heatmap-total { font-weight: 700; }
+.app-heatmap-table .app-heatmap-total { width: 4.875rem; padding-left: 1rem; }
+.app-heatmap-table tbody th { padding: 0; color: var(--color-base-content); font-size: .8125rem; text-align: left; }
+.app-heatmap-table abbr { text-decoration: none; cursor: help; }
+.app-heat {
+  --heat: 0; display: flex; align-items: center; justify-content: center; height: 2.625rem; border-radius: .375rem;
+  background: var(--heat-flat); color: var(--heat-ink); font-weight: 600; white-space: nowrap;
+}
+.app-heat-up { background: color-mix(in oklab, var(--heat-up-high) calc(var(--heat) * 100%), var(--heat-up-low)); }
+.app-heat-down { background: color-mix(in oklab, var(--heat-down-high) calc(var(--heat) * 100%), var(--heat-down-low)); }
+.app-heat[data-heat="1"] { --heat: .1; } .app-heat[data-heat="2"] { --heat: .2; } .app-heat[data-heat="3"] { --heat: .3; }
+.app-heat[data-heat="4"] { --heat: .4; } .app-heat[data-heat="5"] { --heat: .5; } .app-heat[data-heat="6"] { --heat: .6; }
+.app-heat[data-heat="7"] { --heat: .7; } .app-heat[data-heat="8"] { --heat: .8; } .app-heat[data-heat="9"] { --heat: .9; }
+.app-heat[data-heat="10"] { --heat: 1; }
+.app-heat.app-heat-none { background: none; border: 1px dashed var(--heat-none); }
+.app-heatmap-total .app-heat { font-weight: 700; }
+.app-heat::before { display: none; content: attr(data-label) / ""; }
+@media (max-width: 39.99rem) {
+  .app-heatmap-table, .app-heatmap-table tbody { display: block; }
+  .app-heatmap-table { margin-top: .25rem; }
+  .app-heatmap-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .app-heatmap-table tr { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .5rem; }
+  .app-heatmap-table tr + tr {
+    margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid color-mix(in oklab, var(--color-base-content) 10%, transparent);
+  }
+  .app-heatmap-table :is(th, td) { padding: 0; }
+  .app-heatmap-table tbody tr > :is(th, .app-heatmap-total) { margin-bottom: .375rem; align-self: baseline; }
+  .app-heatmap-table tbody th { grid-area: 1 / 1 / 2 / 4; font-size: .9375rem; line-height: 1.75rem; }
+  .app-heatmap-table td.app-heatmap-total { grid-area: 1 / 4 / 2 / 7; width: auto; padding-left: 0; line-height: 1.5; }
+  .app-heat { flex-direction: column; gap: 1px; height: 2.5rem; line-height: 1.15; }
+  .app-heat::before { display: block; font-size: .75rem; font-weight: 500; }
+  .app-heat.app-heat-none::before { color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
+  /* The year's return as a paler bar over the last three columns, at most 40 % of the scale. */
+  .app-heatmap-total .app-heat {
+    flex-direction: row; justify-content: space-between; align-items: baseline; gap: .375rem; height: auto;
+    padding: .125rem .625rem; font-size: .9375rem; line-height: 1.5rem;
+  }
+  .app-heatmap-total .app-heat-up { background: color-mix(in oklab, var(--heat-up-high) calc(var(--heat) * 40%), var(--heat-up-low)); }
+  .app-heatmap-total .app-heat-down { background: color-mix(in oklab, var(--heat-down-high) calc(var(--heat) * 40%), var(--heat-down-low)); }
+  .app-heatmap-total .app-heat::before { font-size: .875em; }
+}

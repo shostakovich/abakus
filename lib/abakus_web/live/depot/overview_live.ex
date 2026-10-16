@@ -1,0 +1,310 @@
+defmodule AbakusWeb.Depot.OverviewLive do
+  use AbakusWeb, :depot_live_view
+
+  import AbakusWeb.Depot.DividendComponents
+
+  alias Abakus.Depot.Portfolios
+  alias Abakus.LocalTime
+  alias AbakusWeb.Depot.{Benchmark, Format, Periods, Sidebar}
+
+  on_mount Benchmark
+
+  # URL parameter, period, button label and its accessible name; the first is the default.
+  @periods [
+    {"6m", :six_months, "6\u00A0M", "6 Monate"},
+    {"ytd", :year_to_date, "YTD", "YTD, seit Jahresbeginn"},
+    {"1y", :one_year, "1\u00A0J", "1 Jahr"},
+    {"max", :max, "Max", "Max, seit der ersten Buchung"}
+  ]
+
+  @upcoming_shown 4
+
+  @impl true
+  def render(assigns) do
+    assigns = assign(assigns, :periods, @periods)
+
+    ~H"""
+    <Layouts.depot
+      flash={@flash}
+      current_scope={@current_scope}
+      sidebar={@depot_sidebar}
+      areas={@areas}
+      area={@area}
+      account_groups={@account_groups}
+      account_dialog={@account_dialog}
+      current={:overview}
+    >
+      <.header>
+        Übersicht
+        <:actions>
+          <Benchmark.toggle_button :if={@overview.benchmark} shown={@benchmark_shown} />
+          <.segmented
+            id="period"
+            label="Zeitraum"
+            size={:sm}
+            value={@period}
+            block={:phone}
+            options={Periods.options(@periods, &~p"/depot?#{[period: Periods.param(@periods, &1)]}")}
+          />
+        </:actions>
+      </.header>
+
+      <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <.stat id="net-worth" label="Vermögen" size={:sm}>
+          <.amount value={@overview.net_worth} decimals={0} />
+          <:note><.change_note change={@change} percent={@change_percent} /></:note>
+        </.stat>
+        <.stat
+          id="ttwror"
+          label={join_meta(["TTWROR", period_label(@period)])}
+          value={Format.signed_rate(@overview.ttwror, 2)}
+          tone={sign(Format.signed_rate(@overview.ttwror, 2))}
+          size={:sm}
+        >
+          <:note>
+            <Benchmark.note
+              :if={@benchmark_shown and @overview.benchmark}
+              benchmark={@overview.benchmark}
+            />
+            <span :if={!(@benchmark_shown and @overview.benchmark)}>zeitgewichtet</span>
+          </:note>
+        </.stat>
+        <.stat
+          id="irr"
+          label={join_meta(["IZF", period_label(@period)])}
+          value={Format.signed_rate(@overview.irr, 2)}
+          tone={sign(Format.signed_rate(@overview.irr, 2))}
+          desc={join_meta(["p.\u00A0a.", "geldgewichtet"])}
+          size={:sm}
+        />
+        <.stat id="dividends" label={"Dividenden #{@today.year}"} size={:sm}>
+          <.amount value={@overview.dividends} decimals={0} />
+          <:note>
+            erwartet
+            <.amount
+              value={@overview.dividends + @upcoming_dividends.rest_of_year}
+              decimals={0}
+            /> im Jahr<.meta_sep />brutto
+          </:note>
+        </.stat>
+      </div>
+
+      <.chart_card
+        id="history"
+        title="Wertentwicklung"
+        hook="NetWorthChart"
+        height={:lg}
+        summary={chart_label(@period, @benchmark_shown && @overview.benchmark)}
+        class="mt-4 md:mt-6"
+      >
+        <:legend>
+          <.legend id="history-legend" items={legend_items(@benchmark_shown && @overview.benchmark)} />
+        </:legend>
+      </.chart_card>
+
+      <div class="mt-8 grid gap-x-10 gap-y-8 xl:grid-cols-2">
+        <.upcoming_dividends
+          :if={@upcoming_dividends.upcoming != []}
+          dividends={@upcoming_dividends}
+        />
+        <section
+          :if={@overview.portfolios != []}
+          id="portfolios"
+          aria-labelledby="portfolios-title"
+          class={@upcoming_dividends.upcoming == [] && "xl:col-span-2"}
+        >
+          <.section_heading id="portfolios-title">Depots</.section_heading>
+          <.list>
+            <.list_row
+              :for={entry <- @overview.portfolios}
+              id={"portfolio-#{entry.portfolio.id}"}
+              title={Format.portfolio_name(entry.portfolio)}
+              navigate={Sidebar.portfolio_path(entry.portfolio)}
+              trailing_on_phone={:title}
+            >
+              <:leading><.avatar icon="briefcase" /></:leading>
+              <:meta>{portfolio_note(entry)}</:meta>
+              <:trailing>
+                <div class="text-end">
+                  <.amount value={entry.value} class="font-semibold" />
+                  <div
+                    :if={entry.securities > 0}
+                    class={["text-sm tabular-nums", tone(Format.signed_rate(entry.ttwror, 1))]}
+                  >
+                    {Format.signed_rate(entry.ttwror, 1)} YTD
+                  </div>
+                  <div :if={entry.securities == 0} class="text-sm text-base-content/70">nur Cash</div>
+                </div>
+              </:trailing>
+            </.list_row>
+          </.list>
+        </section>
+      </div>
+    </Layouts.depot>
+    """
+  end
+
+  attr :dividends, :map, required: true, doc: "see `Portfolios.upcoming_dividends/2`"
+
+  defp upcoming_dividends(assigns) do
+    assigns =
+      assign(assigns,
+        shown: Enum.take(assigns.dividends.upcoming, @upcoming_shown),
+        three_months: assigns.dividends.next_three_months
+      )
+
+    ~H"""
+    <section id="upcoming-dividends" aria-labelledby="upcoming-dividends-title">
+      <.section_heading id="upcoming-dividends-title">
+        Nächste Dividenden<span class="font-normal text-base-content/70"><.meta_sep />brutto</span>
+        <:actions>
+          <.button navigate={~p"/depot/dividends?amount=gross"} variant={:ghost} size={:sm}>
+            Kalender<.icon name="chevron-right" />
+          </.button>
+        </:actions>
+      </.section_heading>
+      <.list>
+        <.list_row
+          :for={dividend <- @shown}
+          title={security_title(dividend.security)}
+          navigate={security_path(dividend.security)}
+          data-kind={dividend.kind}
+        >
+          <:leading>
+            <time
+              class="flex w-10 flex-col items-center leading-tight"
+              datetime={Date.to_iso8601(dividend.pay_date)}
+            >
+              <span class="text-xl font-bold tabular-nums">{dividend.pay_date.day}</span>
+              <span class="text-xs text-base-content/70">{Format.month_abbr(dividend.pay_date)}</span>
+            </time>
+          </:leading>
+          <:meta><.kind_tag kind={dividend.kind} /></:meta>
+          <:trailing>
+            <span class="font-semibold tabular-nums whitespace-nowrap">
+              {expected(dividend, :gross, 2)}
+            </span>
+          </:trailing>
+        </.list_row>
+      </.list>
+      <p id="upcoming-dividends-total" class="mt-2 text-sm text-base-content/70">
+        Nächste 3 Monate:
+        <strong class="text-base-content tabular-nums">
+          {expected_total(@three_months, :gross, 0)}
+        </strong>
+      </p>
+    </section>
+    """
+  end
+
+  attr :change, :integer, required: true, doc: "since yesterday, in cents"
+  attr :percent, :any, required: true, doc: "nil when there was nothing yesterday"
+
+  defp change_note(assigns) do
+    ~H"""
+    <span class={tone(Format.signed_euros(@change))}>
+      <.amount value={@change} signed decimals={0} /> heute{percent_note(@percent)}
+    </span>
+    """
+  end
+
+  defp percent_note(nil), do: nil
+  defp percent_note(percent), do: " (#{Format.signed_percent(percent)})"
+
+  defp legend_items(benchmark) do
+    [
+      %{label: "Vermögen", color: 1, marker: :line},
+      %{label: "Investiert", color: 8, marker: :dashed}
+    ] ++
+      if benchmark, do: [Benchmark.legend_item(benchmark.security)], else: []
+  end
+
+  defp period_text(:six_months), do: "der letzten sechs Monate"
+  defp period_text(:year_to_date), do: "seit Jahresbeginn"
+  defp period_text(:one_year), do: "des letzten Jahres"
+  defp period_text(:max), do: "seit der ersten Buchung"
+
+  defp chart_label(period, %{security: security}),
+    do:
+      "Vermögen, investiertes Kapital und Schattendepot in #{security.name} #{period_text(period)}"
+
+  defp chart_label(period, _hidden),
+    do: "Vermögen und investiertes Kapital #{period_text(period)}"
+
+  defp period_label(period), do: Periods.label(@periods, period)
+
+  # Each part stays on one line.
+  defp portfolio_note(%{securities: count, account: account, balance: balance}),
+    do: join_meta([securities(count), account && "Konto\u00A0#{Format.euros(balance, 2)}"])
+
+  defp securities(0), do: "keine\u00A0Wertpapiere"
+  defp securities(1), do: "1\u00A0Wertpapier"
+  defp securities(count), do: "#{count}\u00A0Wertpapiere"
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok, assign(socket, page_title: "Übersicht")}
+  end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    socket
+    |> assign(period: period(params["period"]))
+    |> load_overview()
+    |> load_upcoming_once()
+    |> then(&{:noreply, &1})
+  end
+
+  defp period(param), do: Periods.parse(@periods, param, :six_months)
+
+  @impl true
+  def handle_info(:market_data_updated, socket),
+    do: {:noreply, socket |> load_overview() |> load_upcoming()}
+
+  defp load_overview(socket) do
+    today = LocalTime.today()
+    scope = socket.assigns.current_scope
+    overview = Portfolios.overview(scope, socket.assigns.period, today)
+    change = overview.net_worth - overview.net_worth_yesterday
+
+    socket
+    |> assign(
+      today: today,
+      overview: overview,
+      change: change,
+      change_percent: change_percent(change, overview.net_worth_yesterday)
+    )
+    |> push_chart(overview.chart)
+  end
+
+  defp load_upcoming_once(%{assigns: %{upcoming_dividends: _}} = socket), do: socket
+  defp load_upcoming_once(socket), do: load_upcoming(socket)
+
+  defp load_upcoming(%{assigns: assigns} = socket) do
+    upcoming = Portfolios.upcoming_dividends(assigns.current_scope, assigns.today)
+    assign(socket, upcoming_dividends: upcoming)
+  end
+
+  # Relative to yesterday's net worth, when there was any.
+  defp change_percent(_change, before) when before <= 0, do: nil
+  defp change_percent(change, before), do: Format.percent_of(change, before)
+
+  # The hook draws the chart once connected; amounts in cents.
+  defp push_chart(socket, chart) do
+    if connected?(socket) do
+      push_event(socket, "net-worth-chart", %{
+        dates: Enum.map(chart, & &1.date),
+        net_worth: Enum.map(chart, & &1.net_worth),
+        invested_capital: Enum.map(chart, & &1.invested_capital),
+        benchmark: socket.assigns.overview.benchmark && Enum.map(chart, & &1.benchmark),
+        benchmark_name: benchmark_name(socket.assigns.overview.benchmark),
+        benchmark_shown: socket.assigns.benchmark_shown
+      })
+    else
+      socket
+    end
+  end
+
+  defp benchmark_name(nil), do: nil
+  defp benchmark_name(benchmark), do: Benchmark.short_name(benchmark.security.name)
+end

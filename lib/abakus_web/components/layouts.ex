@@ -4,9 +4,18 @@ defmodule AbakusWeb.Layouts do
 
   alias Abakus.Names
   alias AbakusWeb.AccountGroups
+  alias AbakusWeb.Depot.{Format, Sidebar, TransactionDialog}
 
   @budget_pages [:budget, :accounts, :all_accounts, :import]
   @kasse_pages [:kasse_expenses, :kasse_balances, :kasse_activity, :kasse_settings]
+  @depot_pages [
+    :depot_overview,
+    :depot_holdings,
+    :depot_dividends,
+    :depot_transactions,
+    :depot_performance,
+    :depot_securities
+  ]
 
   embed_templates "layouts/*"
 
@@ -15,7 +24,8 @@ defmodule AbakusWeb.Layouts do
 
   attr :current, :atom,
     default: nil,
-    values: [nil, :budget, :accounts, :all_accounts, :import, :settings] ++ @kasse_pages
+    values:
+      [nil, :budget, :accounts, :all_accounts, :import, :settings] ++ @kasse_pages ++ @depot_pages
 
   attr :areas, :list, required: true, doc: "the areas the user may use, from `AbakusWeb.Areas`"
   attr :area, :atom, required: true, doc: "the current area's key; its entries go into the dock"
@@ -25,6 +35,16 @@ defmodule AbakusWeb.Layouts do
     doc: "from `AbakusWeb.AccountGroups`; the sidebar lists the open ones"
 
   attr :account_id, :integer, default: nil, doc: "the account whose register is shown"
+
+  attr :depot_sidebar, :map,
+    default: nil,
+    doc:
+      "the portfolios and accounts with their values from `AbakusWeb.Depot.Sidebar`, on the Depot's pages"
+
+  attr :depot_marked, :any,
+    default: nil,
+    doc:
+      "on the holdings: the portfolio or account it shows, `{:depot_portfolio, id}` or `{:depot_account, id}`"
 
   attr :account_dialog, :map,
     default: nil,
@@ -43,7 +63,9 @@ defmodule AbakusWeb.Layouts do
 
   The Budget: Budget and all accounts, the open accounts by group with their balance and how many transactions
   wait for approval and "Konto hinzufügen" (not in the icon rail or the dock), then Import & Sync. The Kasse:
-  Ausgaben, Salden, Aktivität and Gruppe (its settings).
+  Ausgaben, Salden, Aktivität and Gruppe (its settings). The Depot: Übersicht, Bestand, Dividenden, Buchungen,
+  Performance and Wertpapiere; on its own pages also „Buchung erfassen“ (in the icon rail too) and the active
+  portfolios and accounts with their values (not in the icon rail or the dock).
 
   With one area the brand is its name; with more, each area's entries start with its name as section title, and
   in the top bar the brand is a menu that switches the area. On phones the dock holds the current area's entries;
@@ -54,10 +76,12 @@ defmodule AbakusWeb.Layouts do
       assign(assigns,
         budget?: Enum.any?(assigns.areas, &(&1.key == :budget)),
         groups: AccountGroups.open(assigns.account_groups),
-        nav_key: nav_key(assigns.current, assigns.account_id, assigns.account_groups),
+        nav_key: nav_key(assigns),
         kasse?: Enum.any?(assigns.areas, &(&1.key == :kasse)),
+        depot?: Enum.any?(assigns.areas, &(&1.key == :depot)),
         in_budget_dock?: assigns.area == :budget,
-        in_kasse_dock?: assigns.area == :kasse
+        in_kasse_dock?: assigns.area == :kasse,
+        in_depot_dock?: assigns.area == :depot
       )
 
     ~H"""
@@ -172,6 +196,102 @@ defmodule AbakusWeb.Layouts do
         href={href(~p"/kasse/settings", @current)}
       />
       <:nav
+        :if={@depot?}
+        key={:depot_overview}
+        id="side-depot-overview"
+        label="Übersicht"
+        icon="house"
+        section={section(@areas, "Depot")}
+        dock={@in_depot_dock?}
+        navigate={navigate(~p"/depot", @current)}
+        href={href(~p"/depot", @current)}
+      />
+      <:nav
+        :if={@depot?}
+        key={:depot_holdings}
+        id="side-depot-holdings"
+        label="Bestand"
+        icon="layers"
+        dock={@in_depot_dock?}
+        navigate={navigate(~p"/depot/holdings", @current)}
+        href={href(~p"/depot/holdings", @current)}
+      />
+      <:nav
+        :if={@depot?}
+        key={:depot_dividends}
+        id="side-depot-dividends"
+        label="Dividenden"
+        icon="coins"
+        dock={@in_depot_dock?}
+        navigate={navigate(~p"/depot/dividends", @current)}
+        href={href(~p"/depot/dividends", @current)}
+      />
+      <:nav
+        :if={@depot?}
+        key={:depot_transactions}
+        id="side-depot-transactions"
+        label="Buchungen"
+        icon="list"
+        dock={@in_depot_dock?}
+        navigate={navigate(~p"/depot/transactions", @current)}
+        href={href(~p"/depot/transactions", @current)}
+      />
+      <:nav
+        :if={@depot?}
+        key={:depot_performance}
+        id="side-depot-performance"
+        label="Performance"
+        icon="trending-up"
+        dock={@in_depot_dock?}
+        navigate={navigate(~p"/depot/performance", @current)}
+        href={href(~p"/depot/performance", @current)}
+      />
+      <:nav
+        :if={@depot?}
+        key={:depot_securities}
+        id="side-depot-securities"
+        label="Wertpapiere"
+        icon="chart-line"
+        dock={false}
+        navigate={navigate(~p"/depot/securities", @current)}
+        href={href(~p"/depot/securities", @current)}
+      />
+      <:nav
+        :if={@depot_sidebar}
+        key={:depot_book}
+        id="side-depot-book"
+        label="Buchung erfassen"
+        icon="plus"
+        rail={true}
+        on_click={TransactionDialog.open()}
+      />
+      <:nav
+        :for={row <- (@depot_sidebar && @depot_sidebar.portfolios) || []}
+        key={{:depot_portfolio, row.portfolio.id}}
+        id={"side-depot-portfolio-#{row.portfolio.id}"}
+        label={Format.portfolio_name(row.portfolio)}
+        icon="briefcase"
+        amount={row.value}
+        section="Depots"
+        rail={false}
+        dock={false}
+        parent={:depot_holdings}
+        navigate={Sidebar.portfolio_path(row.portfolio)}
+      />
+      <:nav
+        :for={row <- (@depot_sidebar && @depot_sidebar.accounts) || []}
+        key={{:depot_account, row.account.id}}
+        id={"side-depot-account-#{row.account.id}"}
+        label={row.account.name}
+        icon="wallet"
+        amount={row.value}
+        section="Verrechnungskonten"
+        rail={false}
+        dock={false}
+        parent={:depot_holdings}
+        navigate={Sidebar.account_path(row.portfolio, row.account)}
+      />
+      <:nav
         key={:settings}
         id="side-settings"
         label="Einstellungen"
@@ -231,14 +351,24 @@ defmodule AbakusWeb.Layouts do
   defp label(name), do: name |> Names.split_emoji() |> elem(1)
 
   # The account shown, if the sidebar lists it; the account list and closed accounts belong to Alle Konten.
-  defp nav_key(:accounts, account_id, groups) do
+  defp nav_key(%{current: :accounts, account_id: account_id, account_groups: groups}) do
     listed? =
       Enum.any?(AccountGroups.rows(AccountGroups.open(groups)), &(&1.account.id == account_id))
 
     if account_id && listed?, do: {:account, account_id}, else: :all_accounts
   end
 
-  defp nav_key(current, _account_id, _groups), do: current
+  # The portfolio or account the holdings show, if the sidebar lists it; a retired one belongs to Bestand.
+  defp nav_key(%{current: :depot_holdings, depot_marked: marked, depot_sidebar: sidebar})
+       when marked != nil and sidebar != nil do
+    listed =
+      Enum.map(sidebar.portfolios, &{:depot_portfolio, &1.portfolio.id}) ++
+        Enum.map(sidebar.accounts, &{:depot_account, &1.account.id})
+
+    if marked in listed, do: marked, else: :depot_holdings
+  end
+
+  defp nav_key(%{current: current}), do: current
 
   defp initial(email), do: String.upcase(String.first(email) || "")
 
@@ -254,6 +384,7 @@ defmodule AbakusWeb.Layouts do
 
   defp same_area?("/budget" <> _, current), do: current in @budget_pages
   defp same_area?("/kasse" <> _, current), do: current in @kasse_pages
+  defp same_area?("/depot" <> _, current), do: current in @depot_pages
 
   # With more than one area, "Budget" heads the area, so its account groups say what they hold.
   defp account_section([_one], group), do: group.label
@@ -326,6 +457,67 @@ defmodule AbakusWeb.Layouts do
     </.app>
     """
   end
+
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :areas, :list, required: true
+  attr :area, :atom, required: true
+  attr :account_groups, :list, required: true
+  attr :account_dialog, :map, required: true
+
+  attr :sidebar, :map,
+    required: true,
+    doc: "the portfolios and accounts, see `AbakusWeb.Depot.Sidebar`"
+
+  attr :current, :any,
+    required: true,
+    doc: """
+    what is open: `:overview`, `:dividends`, `:transactions`, `:performance`, `:securities`, or
+    `{:holdings, portfolio_id, account_id}` with nil for all portfolios or no marked account
+    """
+
+  slot :inner_block, required: true
+
+  @doc """
+  The Depot's pages: wide, with the dialog „Buchung erfassen“, which the sidebar's entry and the
+  phone's floating button open.
+  """
+  def depot(assigns) do
+    {page, marked} = depot_page(assigns.current)
+    assigns = assign(assigns, page: page, marked: marked)
+
+    ~H"""
+    <.app
+      flash={@flash}
+      current_scope={@current_scope}
+      areas={@areas}
+      area={@area}
+      account_groups={@account_groups}
+      account_dialog={@account_dialog}
+      current={@page}
+      depot_sidebar={@sidebar}
+      depot_marked={@marked}
+      width={:wide}
+    >
+      <:fab><.fab id="fab-book" label="Buchung" phx-click={TransactionDialog.open()} /></:fab>
+      {render_slot(@inner_block)}
+    </.app>
+    <.live_component
+      module={TransactionDialog}
+      id={TransactionDialog.id()}
+      current_scope={@current_scope}
+    />
+    """
+  end
+
+  defp depot_page({:holdings, _portfolio_id, account_id}) when account_id != nil,
+    do: {:depot_holdings, {:depot_account, account_id}}
+
+  defp depot_page({:holdings, portfolio_id, nil}) when portfolio_id != nil,
+    do: {:depot_holdings, {:depot_portfolio, portfolio_id}}
+
+  defp depot_page({:holdings, nil, nil}), do: {:depot_holdings, nil}
+  defp depot_page(page) when is_atom(page), do: {:"depot_#{page}", nil}
 
   attr :flash, :map, required: true
   slot :inner_block, required: true

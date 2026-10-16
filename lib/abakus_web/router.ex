@@ -29,6 +29,10 @@ defmodule AbakusWeb.Router do
     plug :require_area, :kasse
   end
 
+  pipeline :depot do
+    plug :require_area, :depot
+  end
+
   # Public without a session: the health check and `/mcp/<secret>`, which checks its callers itself. Everything
   # else requires a signed-in user.
   scope "/", AbakusWeb do
@@ -89,6 +93,43 @@ defmodule AbakusWeb.Router do
 
     get "/export/expenses.csv", ExportController, :expenses_csv
     get "/export/expenses.json", ExportController, :expenses_json
+  end
+
+  scope "/depot", AbakusWeb.Depot do
+    pipe_through [:browser, :require_authenticated_user, :depot]
+
+    live_session :depot,
+      on_mount: [
+        {AbakusWeb.UserAuth, :require_authenticated},
+        {AbakusWeb.Areas, {:require, :depot}},
+        {AbakusWeb.AccountGroups, :assign},
+        {AbakusWeb.AccountDialog, :attach},
+        AbakusWeb.Depot.Sidebar,
+        AbakusWeb.Depot.TransactionDialog
+      ] do
+      live "/", OverviewLive
+      live "/holdings", HoldingsLive
+      live "/dividends", DividendsLive
+      live "/transactions", TransactionsLive
+      live "/performance", PerformanceLive
+      live "/securities", SecuritiesLive
+      live "/securities/:id", SecurityLive
+    end
+  end
+
+  # The portfolios belong to the settings: creating the first one opens the Depot.
+  scope "/depot", AbakusWeb.Depot do
+    pipe_through [:browser, :require_authenticated_user]
+
+    live_session :depot_settings,
+      on_mount: [
+        {AbakusWeb.UserAuth, :require_authenticated},
+        {AbakusWeb.Areas, :assign},
+        {AbakusWeb.AccountGroups, :assign},
+        {AbakusWeb.AccountDialog, :attach}
+      ] do
+      live "/portfolios", PortfoliosLive
+    end
   end
 
   scope "/", AbakusWeb do

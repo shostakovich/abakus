@@ -1,8 +1,8 @@
 defmodule AbakusWeb.Areas do
   @moduledoc """
   The app's areas, each with its own pages under its path, its section in the sidebar and its dock on phones. A
-  user sees only the areas they may use: the Budget is its owner's (ADR 0007), the Kasse its people's (ADR 0008);
-  anyone else gets 404 on their pages.
+  user sees only the areas they may use: the Budget is its owner's (ADR 0007), the Kasse its people's (ADR 0008),
+  the Depot is for those with a portfolio; anyone else gets 404 on their pages.
   The area used last is kept in the session, so `/` opens it.
   """
   use AbakusWeb, :verified_routes
@@ -19,12 +19,14 @@ defmodule AbakusWeb.Areas do
   defp all do
     [
       %{key: :budget, label: "Budget", icon: "wallet", path: ~p"/budget"},
-      %{key: :kasse, label: "Kasse", icon: "receipt", path: ~p"/kasse"}
+      %{key: :kasse, label: "Kasse", icon: "receipt", path: ~p"/kasse"},
+      %{key: :depot, label: "Depot", icon: "briefcase", path: ~p"/depot"}
     ]
   end
 
   defp may_use?(scope, :budget), do: scope.user.budget_owner
   defp may_use?(scope, :kasse), do: scope.participant != nil
+  defp may_use?(scope, :depot), do: scope.depot
 
   @doc "Where `/` leads: the area used last if the user may still use it, else their first one, else the settings."
   def home_path(scope, last_area) do

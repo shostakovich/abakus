@@ -2,11 +2,14 @@ defmodule AbakusWeb.AreasTest do
   use AbakusWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import Abakus.Depot.PortfoliosFixtures, only: [portfolio_fixture: 2]
   import Abakus.DomainFixtures
   import Abakus.KasseFixtures
   import Abakus.UsersFixtures
 
+  alias Abakus.Depot.Portfolios
   alias Abakus.Kasse.Participants
+  alias Abakus.Users.Scope
 
   # With a real id in every route param, so the area alone answers 404.
   defp get_paths(prefix, id) do
@@ -177,6 +180,67 @@ defmodule AbakusWeb.AreasTest do
 
       assert has_element?(view, "aside nav .menu-title", "Budgetkonten")
       assert has_element?(view, "aside nav .menu-title", "Trackingkonten")
+    end
+  end
+
+  describe "a person of the Kasse who has no portfolio" do
+    setup %{conn: conn} do
+      owner = user_fixture()
+
+      owner_portfolio =
+        portfolio_fixture(Scope.for_user(owner), %{name: "Ottos Altersvorsorge"})
+
+      dora = person!("Dora")
+
+      %{conn: log_in_participant(conn, dora.id), dora: dora, owner_portfolio: owner_portfolio}
+    end
+
+    test "gets 404 on every Depot page and sees no Depot", %{conn: conn} do
+      for path <- get_paths("/depot", 1), path != "/depot/portfolios" do
+        assert_error_sent 404, fn -> get(conn, path) end
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/kasse")
+      refute has_element?(view, ~s|a[href^="/depot"]|)
+      refute has_element?(view, "#area-switcher")
+    end
+
+    test "creates a portfolio of their own under Einstellungen, which opens the Depot", %{
+      conn: conn,
+      dora: dora
+    } do
+      {:ok, view, _html} = live(conn, ~p"/settings")
+      assert has_element?(view, ~s|#settings-nav a[href="/depot/portfolios"]|, "Depots")
+
+      {:ok, view, _html} = live(conn, ~p"/depot/portfolios")
+      refute render(view) =~ "Ottos Altersvorsorge"
+
+      view
+      |> form("#new-portfolio-form", portfolio: %{name: "Doras Depot"})
+      |> render_submit()
+
+      assert has_element?(view, ~s|#area-switcher a[href="/depot"]|, "Depot")
+      assert has_element?(view, sidebar_link("/depot"), "Übersicht")
+
+      {:ok, view, _html} = live(conn, ~p"/depot")
+      assert has_element?(view, "aside nav", "Doras Depot")
+      refute render(view) =~ "Ottos Altersvorsorge"
+
+      dora = Abakus.Repo.preload(dora, :user)
+
+      assert [%{name: "Doras Depot"}] =
+               Portfolios.list_portfolios(Scope.for_user(dora.user))
+    end
+
+    test "is not seen by the budget owner, who has a Depot of their own", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/depot/portfolios")
+      view |> form("#new-portfolio-form", portfolio: %{name: "Doras Depot"}) |> render_submit()
+
+      owner = Abakus.Repo.get_by!(Abakus.Users.User, budget_owner: true)
+      {:ok, view, html} = live(log_in_user(build_conn(), owner), ~p"/depot")
+
+      assert has_element?(view, "aside nav", "Ottos Altersvorsorge")
+      refute html =~ "Doras Depot"
     end
   end
 end

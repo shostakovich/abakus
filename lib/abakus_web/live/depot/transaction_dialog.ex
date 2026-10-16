@@ -1,0 +1,628 @@
+defmodule AbakusWeb.Depot.TransactionDialog do
+  @moduledoc """
+  The dialog „Buchung erfassen“ on the Depot's pages, opened by `open/0` from the sidebar entry of
+  that name (also in the rail), the Buchungen page and the phone's button: a purchase, sale,
+  dividend, deposit or removal. The amount follows the other fields until the user overwrites it. A
+  security missing from the list is created by its ISIN, with name and Yahoo symbol from Yahoo's
+  search.
+
+  `edit/1` opens it as „Buchung bearbeiten“ for a transaction the user booked, which it saves or
+  deletes. Once booked, every page loads its figures again, and the page shows what was booked:
+  components cannot show a flash themselves, so `on_mount/4` lets the page do it.
+  """
+  use AbakusWeb, :live_component
+
+  import AbakusWeb.Depot.Components
+
+  alias Abakus.Depot.{MarketData, Portfolios, Securities}
+  alias Abakus.Depot.Portfolios.Transaction
+  alias Abakus.Depot.Securities.ISIN
+  alias Abakus.LocalTime
+  alias AbakusWeb.Depot.Format
+
+  @id "transaction-dialog"
+  @kinds [
+    purchase: "Kauf",
+    sale: "Verkauf",
+    dividend: "Dividende",
+    deposit: "Einlage",
+    removal: "Entnahme"
+  ]
+
+  @holding_error "Ohne diese Buchung fiele der Bestand später unter null. " <>
+                   "Bitte zuerst die späteren Verkäufe ändern."
+
+  @doc "The id the layout renders the dialog with."
+  def id, do: @id
+
+  @doc "Opens the dialog."
+  def open, do: JS.push("open", target: "##{@id}")
+
+  @doc "Opens the dialog for the transaction with `id`, one the user booked."
+  def edit(id), do: JS.push("edit", value: %{id: id}, target: "##{@id}")
+
+  @doc "Shows the dialog's message on the page that renders it."
+  def on_mount(:default, _params, _session, socket),
+    do: {:cont, Phoenix.LiveView.attach_hook(socket, :transaction_dialog, :handle_info, &flash/2)}
+
+  defp flash({__MODULE__, :done, message}, socket),
+    do: {:halt, put_flash(socket, :info, message)}
+
+  defp flash(_message, socket), do: {:cont, socket}
+
+  @impl true
+  def mount(socket) do
+    {:ok, assign(socket, open: false, editing: nil, new_security: nil, delete_error: nil)}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <div id={@id}>
+      <.modal
+        :if={@open}
+        id="transaction-modal"
+        title={if @editing, do: "Buchung bearbeiten", else: "Buchung erfassen"}
+        show
+        on_cancel={JS.push("close", target: @myself)}
+        class="sm:max-w-2xl"
+      >
+        <.form
+          for={@form}
+          id="transaction-form"
+          class="mt-4"
+          phx-change="validate"
+          phx-submit="book"
+          phx-target={@myself}
+        >
+          <.kinds field={@form[:kind]} />
+          <.fields
+            form={@form}
+            kind={@kind}
+            choices={@choices}
+            editing={@editing}
+            today={@today}
+            new_security={@new_security}
+            myself={@myself}
+          />
+          <.alert
+            :if={@delete_error}
+            id="transaction-delete-error"
+            tone={:error}
+            class="mt-4"
+          >
+            {@delete_error}
+          </.alert>
+          <.action_bar sticky class="mt-6">
+            <:secondary :if={@editing}>
+              <.button
+                id="transaction-delete"
+                variant={:danger_outline}
+                icon="trash-2"
+                confirm="Diese Buchung löschen?"
+                phx-click={JS.push("delete", target: @myself)}
+              >
+                Löschen
+              </.button>
+            </:secondary>
+            <.button id="transaction-cancel" phx-click={close_js()}>Abbrechen</.button>
+            <.button
+              id="transaction-book"
+              type="submit"
+              variant={:primary}
+              name="intent"
+              value="book"
+              phx-disable-with={if @editing, do: "Wird gespeichert …", else: "Wird gebucht …"}
+            >
+              {if @editing, do: "Speichern", else: "Buchen"}
+            </.button>
+          </.action_bar>
+        </.form>
+      </.modal>
+    </div>
+    """
+  end
+
+  # Closes natively, so focus goes back to what opened the dialog; `on_cancel` tells the server.
+  defp close_js, do: hide_modal("transaction-modal")
+
+  attr :form, Phoenix.HTML.Form, required: true
+  attr :kind, :atom, required: true
+  attr :choices, :map, required: true
+  attr :editing, :any, required: true
+  attr :today, Date, required: true
+  attr :new_security, :any, required: true
+  attr :myself, :any, required: true
+
+  defp fields(assigns) do
+    assigns = assign(assigns, :security?, assigns.kind not in [:deposit, :removal])
+
+    ~H"""
+    <div class="mt-2 grid grid-cols-2 gap-x-4 sm:grid-cols-6">
+      <div :if={@security?} class="col-span-2 sm:col-span-3">
+        <.input
+          field={@form[:portfolio_id]}
+          type="select"
+          label="Depot"
+          options={Enum.map(@choices.portfolios, &{Format.portfolio_name(&1), &1.id})}
+          prompt={if @kind == :dividend, do: "Ohne Depot"}
+        />
+      </div>
+      <div class={["col-span-2", if(@security?, do: "sm:col-span-3", else: "sm:col-span-6")]}>
+        <.input field={@form[:date]} type="date" label="Datum" max={Date.to_iso8601(@today)} />
+      </div>
+      <div :if={@security?} class="col-span-2 sm:col-span-6">
+        <.input
+          field={@form[:security_id]}
+          type="select"
+          label="Wertpapier"
+          options={Enum.map(@choices.securities, &{security_label(&1), &1.id})}
+          prompt="Wertpapier wählen"
+        />
+        <.button
+          :if={!@new_security}
+          id="new-security"
+          variant={:link}
+          size={:sm}
+          class="px-0"
+          phx-click="new_security"
+          phx-target={@myself}
+        >
+          Neues Wertpapier per ISIN
+        </.button>
+        <.new_security
+          :if={@new_security}
+          form={@new_security.form}
+          lookup={@new_security.lookup}
+          myself={@myself}
+        />
+      </div>
+      <div :if={@security?} class="sm:col-span-2">
+        <.number field={@form[:shares]} label="Stück" />
+      </div>
+      <div :if={@kind in [:purchase, :sale]} class="sm:col-span-2">
+        <.number field={@form[:price]} label="Kurs" euros />
+      </div>
+      <div :if={@kind == :dividend} class="sm:col-span-2">
+        <.number field={@form[:gross]} label="Brutto" euros />
+      </div>
+      <div :if={@security?} class="sm:col-span-2">
+        <.number field={@form[:fees]} label="Gebühren" euros />
+      </div>
+      <div :if={@security?} class="sm:col-span-2">
+        <.number field={@form[:taxes]} label="Steuern" euros />
+      </div>
+      <div class="col-span-2 sm:col-span-4">
+        <.input
+          field={@form[:account_id]}
+          type="select"
+          label="Konto"
+          options={Enum.map(@choices.accounts, &{&1.name, &1.id})}
+          prompt={account_prompt(@kind)}
+        />
+      </div>
+      <div class="col-span-2 sm:col-span-6">
+        <.amount_field form={@form} kind={@kind} />
+      </div>
+      <div :if={@kind == :dividend and !@editing} class="col-span-2 sm:col-span-6">
+        <.input
+          field={@form[:remove_at_once]}
+          type="checkbox"
+          label="Gleich entnehmen"
+          help="Bucht den Nettobetrag am selben Tag vom Konto ab."
+        />
+      </div>
+    </div>
+    """
+  end
+
+  attr :form, Phoenix.HTML.Form, required: true
+  attr :lookup, :any, required: true, doc: "nil, `:searching`, `:found` or `{:error, message}`"
+  attr :myself, :any, required: true
+
+  # Inside the transaction form, as forms do not nest: its fields are sent as `security`. „Anlegen“
+  # comes first of the form's submit buttons, so Enter while it shows creates the security.
+  defp new_security(assigns) do
+    assigns =
+      assign(assigns,
+        isin: assigns.form[:isin],
+        isin_errors: field_errors(assigns.form[:isin])
+      )
+
+    ~H"""
+    <fieldset
+      id="new-security-panel"
+      class="mt-2 rounded-box border border-base-content/10 px-4 pb-4"
+    >
+      <legend class="fieldset-legend px-1">Neues Wertpapier</legend>
+      <div class="grid gap-x-4 sm:grid-cols-2">
+        <fieldset class="fieldset min-w-0">
+          <label class="fieldset-legend" for={@isin.id}>ISIN</label>
+          <input
+            type="text"
+            id={@isin.id}
+            name={@isin.name}
+            value={@isin.value}
+            autocomplete="off"
+            spellcheck="false"
+            phx-debounce="300"
+            class={["input w-full uppercase font-mono", @isin_errors != [] && "input-error"]}
+            aria-invalid={@isin_errors != [] && "true"}
+            aria-describedby={field_describedby(@isin.id, @isin_errors, true)}
+          />
+          <.field_error id={@isin.id} errors={@isin_errors} />
+          <.field_help id={@isin.id} aria-live="polite">
+            {lookup_text(@lookup, @isin.value)}
+          </.field_help>
+        </fieldset>
+        <.input field={@form[:name]} label="Name" autocomplete="off" />
+        <.input
+          field={@form[:symbol]}
+          label="Yahoo-Symbol"
+          help="Leer lassen ohne Kurse von Yahoo."
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="flex items-end justify-end gap-2 pt-2 sm:pb-7">
+          <.button variant={:ghost} phx-click="cancel_security" phx-target={@myself}>
+            Abbrechen
+          </.button>
+          <.button id="new-security-create" type="submit" name="intent" value="create_security">
+            Anlegen
+          </.button>
+        </div>
+      </div>
+    </fieldset>
+    """
+  end
+
+  defp lookup_text(nil, isin) when isin in [nil, ""],
+    do: "Name und Symbol kommen aus Yahoos Suche."
+
+  defp lookup_text(nil, _isin), do: nil
+  defp lookup_text(:searching, _isin), do: "Suche bei Yahoo …"
+  defp lookup_text(:found, _isin), do: "Von Yahoo übernommen, bitte prüfen."
+  defp lookup_text({:error, message}, _isin), do: message
+
+  attr :field, Phoenix.HTML.FormField, required: true
+
+  defp kinds(assigns) do
+    assigns = assign(assigns, :kinds, Enum.map(@kinds, fn {kind, label} -> {label, kind} end))
+
+    ~H"""
+    <.segmented
+      mode={:radio}
+      field={@field}
+      label="Art"
+      size={:sm}
+      options={@kinds}
+      block
+    />
+    """
+  end
+
+  attr :field, Phoenix.HTML.FormField, required: true
+  attr :label, :string, required: true
+  attr :euros, :boolean, default: false
+
+  # A number as typed, in German notation, with its error once the field was used.
+  defp number(assigns) do
+    ~H"""
+    <.input
+      field={@field}
+      label={@label}
+      value={typed(@field)}
+      numeric
+      suffix={@euros && "€"}
+      autocomplete="off"
+    />
+    """
+  end
+
+  attr :form, Phoenix.HTML.Form, required: true
+  attr :kind, :atom, required: true
+
+  # The amount computed or overwritten, and what the other fields give when it differs.
+  defp amount_field(assigns) do
+    form = assigns.form
+    expected = form[:expected_amount].value
+
+    assigns =
+      assign(assigns,
+        value: amount_value(form),
+        help:
+          expected &&
+            "#{expected_text(assigns.kind, form)} ergibt #{Format.amount(cents(expected))}\u00A0€."
+      )
+
+    ~H"""
+    <input type="hidden" name={@form[:amount_set].name} value={to_string(@form[:amount_set].value)} />
+    <.input
+      field={@form[:amount]}
+      label={"Betrag (#{amount_hint(@kind, @form[:account_id].value)})"}
+      value={@value}
+      numeric
+      suffix="€"
+      autocomplete="off"
+      class="font-semibold"
+      help={@help}
+      help_tone={:warning}
+    />
+    """
+  end
+
+  # Untranslated: `field_error` translates them.
+  defp field_errors(field),
+    do: if(Phoenix.Component.used_input?(field), do: field.errors, else: [])
+
+  # What the user typed, not the cast decimal, which would read as thousands in German.
+  defp typed(%Phoenix.HTML.FormField{form: form, field: field}),
+    do: Map.get(form.params, Atom.to_string(field))
+
+  defp amount_value(form) do
+    case {form[:amount_set].value, form[:amount].value} do
+      {true, _amount} -> typed(form[:amount])
+      {_computed, %Decimal{} = amount} -> Format.amount(cents(amount))
+      {_computed, _none} -> nil
+    end
+  end
+
+  defp cents(decimal), do: decimal |> Decimal.mult(100) |> Decimal.to_integer()
+
+  defp security_label(%{isin: isin} = security) when isin in [nil, ""], do: security.name
+  defp security_label(security), do: "#{security.name} (#{security.isin})"
+
+  defp account_prompt(:purchase), do: "Ohne Konto (Einlieferung)"
+  defp account_prompt(:sale), do: "Ohne Konto (Auslieferung)"
+  defp account_prompt(_kind), do: "Konto wählen"
+
+  defp amount_hint(kind, account_id) when kind in [:purchase, :sale] and account_id in [nil, ""],
+    do: "ohne Konto"
+
+  defp amount_hint(kind, _account_id) when kind in [:purchase, :removal],
+    do: "wird vom Konto abgebucht"
+
+  defp amount_hint(:dividend, _account_id), do: "netto, wird dem Konto gutgeschrieben"
+  defp amount_hint(_kind, _account_id), do: "wird dem Konto gutgeschrieben"
+
+  defp expected_text(:dividend, _form), do: "Brutto abzüglich Gebühren und Steuern"
+
+  defp expected_text(_kind, form) do
+    if zero?(form[:fees].value) and zero?(form[:taxes].value),
+      do: "Stück × Kurs",
+      else: "Stück × Kurs mit Gebühren und Steuern"
+  end
+
+  defp zero?(%Decimal{} = value), do: Decimal.eq?(value, 0)
+  defp zero?(_blank), do: true
+
+  @impl true
+  def handle_event("open", _params, socket) do
+    scope = socket.assigns.current_scope
+    choices = Portfolios.transaction_choices(scope)
+    portfolio = List.first(choices.portfolios)
+
+    params = %{
+      "kind" => "purchase",
+      "date" => Date.to_iso8601(LocalTime.today()),
+      "portfolio_id" => portfolio && to_string(portfolio.id),
+      "account_id" => reference_account(choices, portfolio && portfolio.id),
+      "fees" => "0,00",
+      "taxes" => "0,00"
+    }
+
+    {:noreply,
+     socket
+     |> assign(open: true, editing: nil, new_security: nil, delete_error: nil)
+     |> assign(choices: choices, today: LocalTime.today())
+     |> put_form(Portfolios.change_transaction_form(scope, choices, params))}
+  end
+
+  def handle_event("edit", %{"id" => id}, socket) do
+    scope = socket.assigns.current_scope
+
+    case Portfolios.get_transaction(scope, id) do
+      nil ->
+        done(socket, "Diese Buchung gibt es nicht mehr.")
+
+      transaction ->
+        if Transaction.editable?(transaction),
+          do: {:noreply, open_for(socket, transaction)},
+          else: {:noreply, socket}
+    end
+  end
+
+  def handle_event("close", _params, socket), do: {:noreply, close(socket)}
+
+  def handle_event("validate", %{"transaction" => params} = event, socket) do
+    params = follow(params, event["_target"], socket.assigns.choices)
+    changeset = socket |> change_form(params) |> Map.put(:action, :validate)
+
+    {:noreply,
+     socket
+     |> put_form(changeset)
+     |> change_new_security(event["security"], event["_target"])}
+  end
+
+  def handle_event("book", %{"intent" => "create_security"}, socket) do
+    if socket.assigns.new_security,
+      do: create_security(socket),
+      else: {:noreply, socket}
+  end
+
+  # A submit that comes after the dialog closed books nothing.
+  def handle_event("book", _params, %{assigns: %{open: false}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("book", %{"transaction" => params}, socket) do
+    changeset = change_form(socket, params)
+
+    if changeset.valid?,
+      do: socket |> save(params) |> saved(socket),
+      else: {:noreply, put_form(socket, Map.put(changeset, :action, :insert))}
+  end
+
+  def handle_event("delete", _params, %{assigns: %{editing: %{} = transaction}} = socket) do
+    scope = socket.assigns.current_scope
+
+    case Portfolios.delete_transaction(scope, transaction) do
+      {:ok, _deleted} ->
+        socket |> close() |> done("Buchung gelöscht.")
+
+      {:error, :read_only} ->
+        {:noreply, close(socket)}
+
+      {:error, :holding} ->
+        {:noreply, assign(socket, :delete_error, @holding_error)}
+    end
+  end
+
+  def handle_event("new_security", _params, socket) do
+    {:noreply,
+     assign(socket, :new_security, %{form: security_form(%{}, nil), lookup: nil, isin: nil})}
+  end
+
+  def handle_event("cancel_security", _params, socket),
+    do: {:noreply, assign(socket, :new_security, nil)}
+
+  @impl true
+  def handle_async(:lookup, result, %{assigns: %{new_security: %{} = new_security}} = socket) do
+    {:noreply, assign(socket, :new_security, looked_up(new_security, result))}
+  end
+
+  def handle_async(:lookup, _result, socket), do: {:noreply, socket}
+
+  defp open_for(socket, transaction) do
+    scope = socket.assigns.current_scope
+    choices = Portfolios.transaction_choices(scope, transaction)
+    params = Portfolios.transaction_form_params(transaction)
+
+    socket
+    |> assign(open: true, editing: transaction, new_security: nil, delete_error: nil)
+    |> assign(choices: choices, today: LocalTime.today())
+    |> put_form(Portfolios.change_transaction_form(scope, choices, params, transaction))
+  end
+
+  defp change_form(socket, params) do
+    %{current_scope: scope, choices: choices, editing: editing} = socket.assigns
+    Portfolios.change_transaction_form(scope, choices, params, editing)
+  end
+
+  defp security_form(params, action) do
+    params
+    |> Securities.change_new_security()
+    |> Map.put(:action, action)
+    |> to_form(as: :security)
+  end
+
+  # A new, valid ISIN is looked up at Yahoo; its name and symbol replace what is in the fields.
+  defp change_new_security(
+         %{assigns: %{new_security: %{} = new_security}} = socket,
+         params,
+         target
+       )
+       when is_map(params) do
+    isin = params |> Map.get("isin", "") |> String.replace(" ", "") |> String.upcase()
+    lookup? = target == ["security", "isin"] and isin != new_security.isin and ISIN.valid?(isin)
+    new_security = %{new_security | form: security_form(params, :validate)}
+
+    if lookup? do
+      socket
+      |> assign(:new_security, %{new_security | isin: isin, lookup: :searching})
+      |> start_async(:lookup, fn -> {isin, MarketData.lookup_isin(isin)} end)
+    else
+      assign(socket, :new_security, new_security)
+    end
+  end
+
+  defp change_new_security(socket, _params, _target), do: socket
+
+  defp looked_up(%{isin: isin} = new_security, {:ok, {isin, {:ok, found}}}) do
+    params =
+      new_security.form.params
+      |> Map.put("isin", isin)
+      |> Map.merge(%{"name" => found.name, "symbol" => found.symbol})
+
+    %{new_security | form: security_form(params, :validate), lookup: :found}
+  end
+
+  defp looked_up(%{isin: isin} = new_security, {:ok, {isin, {:error, reason}}}),
+    do: %{new_security | lookup: {:error, MarketData.lookup_error(reason)}}
+
+  defp looked_up(new_security, {:exit, _reason}),
+    do: %{new_security | lookup: {:error, MarketData.lookup_error(:unreachable)}}
+
+  # The answer for an ISIN typed over meanwhile.
+  defp looked_up(new_security, _stale), do: new_security
+
+  defp create_security(socket) do
+    %{current_scope: scope, new_security: new_security, editing: editing} = socket.assigns
+
+    case Securities.create_security(scope, new_security.form.params) do
+      {:ok, security} ->
+        if security.quote_feed == :yahoo, do: MarketData.fetch_in_background(security)
+        choices = Portfolios.transaction_choices(scope, editing)
+        socket = assign(socket, choices: choices, new_security: nil)
+        params = Map.put(socket.assigns.form.params, "security_id", to_string(security.id))
+        {:noreply, put_form(socket, Map.put(change_form(socket, params), :action, :validate))}
+
+      {:error, changeset} ->
+        form = to_form(changeset, as: :security)
+        {:noreply, assign(socket, :new_security, %{new_security | form: form})}
+    end
+  end
+
+  # The account follows the portfolio; an amount typed in stays until it is emptied.
+  defp follow(params, ["transaction", "portfolio_id"], choices),
+    do:
+      Map.put(params, "account_id", reference_account(choices, parse_id(params["portfolio_id"])))
+
+  defp follow(params, ["transaction", "amount"], _choices),
+    do: Map.put(params, "amount_set", to_string(String.trim(params["amount"] || "") != ""))
+
+  defp follow(params, _target, _choices), do: params
+
+  defp reference_account(choices, portfolio_id) do
+    with %{reference_account_id: id} when id != nil <-
+           Enum.find(choices.portfolios, &(&1.id == portfolio_id)),
+         true <- Enum.any?(choices.accounts, &(&1.id == id)) do
+      to_string(id)
+    else
+      _none -> ""
+    end
+  end
+
+  defp save(%{assigns: %{editing: nil}} = socket, params) do
+    %{current_scope: scope, choices: choices} = socket.assigns
+    Portfolios.book_transaction(scope, choices, params)
+  end
+
+  defp save(socket, params) do
+    %{current_scope: scope, choices: choices, editing: transaction} = socket.assigns
+    Portfolios.update_transaction(scope, choices, transaction, params)
+  end
+
+  defp saved({:ok, [_dividend, _removal]}, socket),
+    do: done(socket, "Dividende und Entnahme gebucht.")
+
+  defp saved({:ok, _transaction_or_transactions}, socket),
+    do: done(socket, "Buchung gespeichert.")
+
+  defp saved({:error, :read_only}, socket), do: {:noreply, close(socket)}
+  defp saved({:error, :gone}, socket), do: done(socket, "Diese Buchung gibt es nicht mehr.")
+  defp saved({:error, changeset}, socket), do: {:noreply, put_form(socket, changeset)}
+
+  defp done(socket, message) do
+    MarketData.broadcast()
+    send(self(), {__MODULE__, :done, message})
+    {:noreply, assign(socket, open: false, editing: nil, new_security: nil)}
+  end
+
+  defp close(socket), do: assign(socket, open: false, editing: nil, new_security: nil)
+
+  defp put_form(socket, changeset) do
+    socket
+    |> assign(:kind, Ecto.Changeset.get_field(changeset, :kind))
+    |> assign(:form, to_form(changeset, as: :transaction))
+  end
+end

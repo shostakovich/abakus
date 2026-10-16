@@ -1,13 +1,15 @@
 defmodule AbakusWeb.SettingsLive.Components do
   @moduledoc """
   The frame of the settings: the overview lists the sections; a section shows them as tabs from `lg` and below
-  it a way back to the overview. The links load the page, since Zugang sits behind the sudo plug.
+  it a way back to the overview. The links load the page, since Zugang sits behind the sudo plug and Depots in
+  the Depot's routes.
   """
   use AbakusWeb, :html
 
   @sections [
     {:access, "Zugang", "key-round", "Passkeys und E-Mail"},
     {:appearance, "Aussehen", "palette", "Hell, Dunkel oder System"},
+    {:depots, "Depots", "briefcase", "Deine Depots und ihre Verrechnungskonten"},
     {:ynab, "YNAB-Import", "history", "Was aus YNAB übernommen wurde"}
   ]
 
@@ -76,5 +78,6 @@ defmodule AbakusWeb.SettingsLive.Components do
 
   defp path(:access), do: ~p"/settings/access"
   defp path(:appearance), do: ~p"/settings/appearance"
+  defp path(:depots), do: ~p"/depot/portfolios"
   defp path(:ynab), do: ~p"/settings/ynab"
 end

@@ -1,0 +1,963 @@
+defmodule Abakus.Depot.Portfolios do
+  @moduledoc """
+  Portfolios, accounts, their transactions and savings plans, each of one user, the transactions
+  the user books, and what the screens show of them: net worth, the overview,
+  the holdings, the dividends, the performance, the sidebar and the user's holding of a security,
+  computed from the transactions on every request.
+  """
+
+  import Ecto.Query, warn: false
+
+  alias Abakus.Depot.{
+    Allocation,
+    Costs,
+    Distributions,
+    Dividends,
+    ExchangeRates,
+    Performance,
+    Period,
+    PriceChart,
+    Securities,
+    Settings,
+    Taxonomies,
+    Valuation
+  }
+
+  alias Abakus.Depot.Allocation.Classifications
+  alias Abakus.Depot.Performance.Breakdown
+
+  alias Abakus.Depot.Portfolios.{
+    Account,
+    Portfolio,
+    PortfolioForm,
+    SavingsPlan,
+    Transaction,
+    TransactionForm,
+    TransactionUnit
+  }
+
+  alias Abakus.Depot.Securities.Security
+  alias Abakus.Depot.Valuation.{Filter, Market, PurchaseValue}
+  alias Abakus.Repo
+  alias Abakus.Users.{Scope, User}
+
+  @doc "Whether the user has a portfolio, which opens the Depot to them."
+  def any?(%User{} = user), do: Repo.exists?(from p in Portfolio, where: p.user_id == ^user.id)
+
+  def list_portfolios(%Scope{} = scope),
+    do: Repo.all(from p in Portfolio, where: p.user_id == ^scope.user.id, order_by: p.name)
+
+  @doc "The form of a new portfolio with its Verrechnungskonto."
+  def change_new_portfolio(attrs \\ %{}), do: PortfolioForm.changeset(%PortfolioForm{}, attrs)
+
+  @doc """
+  Creates a portfolio of the user with a new account in euros as its Verrechnungskonto, which its
+  purchases, sales and dividends settle against.
+  """
+  def create_portfolio(%Scope{} = scope, attrs) do
+    with {:ok, form} <- Ecto.Changeset.apply_action(change_new_portfolio(attrs), :insert) do
+      Repo.transact(fn ->
+        account =
+          Repo.insert!(%Account{user_id: scope.user.id, name: form.account_name, currency: "EUR"})
+
+        {:ok,
+         Repo.insert!(%Portfolio{
+           user_id: scope.user.id,
+           name: form.name,
+           reference_account_id: account.id
+         })}
+      end)
+    end
+  end
+
+  @doc "The user's active portfolios by name with their reference accounts, for their depot numbers."
+  def list_active_portfolios(%Scope{} = scope) do
+    Repo.all(
+      from p in Portfolio,
+        where: p.user_id == ^scope.user.id and not p.retired,
+        order_by: p.name,
+        preload: :reference_account
+    )
+  end
+
+  @doc "The form of a portfolio's depot number."
+  def change_depot_number(%Scope{} = scope, %Portfolio{} = portfolio, attrs \\ %{}),
+    do:
+      Portfolio.depot_number_changeset(
+        portfolio,
+        attrs,
+        &depot_number_taken_by(scope, portfolio, &1)
+      )
+
+  @doc "Sets the depot number of a portfolio of the user; no two of them may share its digits."
+  def update_depot_number(%Scope{} = scope, %Portfolio{user_id: user_id} = portfolio, attrs)
+      when user_id == scope.user.id do
+    scope
+    |> change_depot_number(portfolio, attrs)
+    |> Repo.update()
+  end
+
+  defp depot_number_taken_by(scope, portfolio, digits) do
+    Repo.all(
+      from p in Portfolio,
+        where:
+          p.user_id == ^scope.user.id and p.id != ^portfolio.id and not is_nil(p.depot_number)
+    )
+    |> Enum.find_value(&(Portfolio.digits(&1.depot_number) == digits && &1.name))
+  end
+
+  def list_accounts(%Scope{} = scope),
+    do: Repo.all(from a in Account, where: a.user_id == ^scope.user.id, order_by: a.name)
+
+  def list_transactions(%Scope{} = scope) do
+    Repo.all(
+      from t in Transaction,
+        where: t.user_id == ^scope.user.id,
+        order_by: [t.date_time, t.id],
+        preload: :units
+    )
+  end
+
+  def list_savings_plans(%Scope{} = scope) do
+    Repo.all(
+      from p in SavingsPlan,
+        where: p.user_id == ^scope.user.id,
+        order_by: p.name,
+        preload: :transactions
+    )
+  end
+
+  @doc """
+  The user's net worth on each of `dates` as `%{date => cents}`: the value of all holdings plus
+  the account balances, in euros.
+  """
+  def net_worth(%Scope{} = scope, dates) do
+    transactions = list_transactions(scope)
+    accounts = list_accounts(scope)
+    market = load_market(transactions, accounts, Enum.min(dates, Date), :since_first_transaction)
+
+    transactions
+    |> Valuation.history(accounts, market, dates)
+    |> Map.new(&{&1.date, &1.net_worth})
+  end
+
+  @doc """
+  What the overview shows for `period` up to `today`, from one load of the user's transactions,
+  amounts in euro cents:
+
+  - `net_worth` today and `net_worth_yesterday`
+  - `chart`: net worth, invested capital and the value of the shadow portfolio in the benchmark
+    (`benchmark`, nil without one) on the days of the period a chart shows, see
+    `Performance.shadow_portfolio/4`
+  - `ttwror` and `irr` of all portfolios and accounts over the period, see `Performance`
+  - `benchmark`: the user's benchmark as `%{security, ttwror}` over the same interval, see
+    `Performance.benchmark_ttwror/3`; nil when they picked none
+  - `dividends`: this year's up to `today`, before taxes and fees
+  - `portfolios`: the portfolios by name, retired ones only while they hold shares, each with
+    `account`, its reference account as in the sidebar (nil when another portfolio owns it, see
+    below, or once it is retired and empty), its `balance` in euros, the number of `securities`
+    held, the `value` of the securities (as in the sidebar) and their `ttwror` since 1 January, as PP
+    figures a portfolio without its reference account. An account several portfolios settle
+    against belongs to the first active one by name, to a retired one only when no active one
+    settles against it.
+  """
+  def overview(%Scope{} = scope, period, today) do
+    transactions = list_transactions(scope)
+    accounts = list_accounts(scope)
+    first_day = first_transaction_day(transactions)
+    interval = Period.interval(period, today, first_day)
+    year = Period.interval(:year_to_date, today, first_day)
+    first = Enum.min([interval.first, year.first], Date)
+    benchmark = get_benchmark(scope)
+
+    market =
+      load_market(transactions, accounts, first, :since_first_transaction, benchmark: benchmark)
+
+    index = Performance.index(transactions, accounts, market, Filter.all(), interval)
+    [yesterday, today_point] = Enum.take(index.days, -2)
+    range = Period.range(period, today, first_day)
+
+    %{
+      net_worth: today_point.value,
+      net_worth_yesterday: yesterday.value,
+      chart: chart(index, range, shadow_portfolio(benchmark, index, market, range.first)),
+      ttwror: Performance.ttwror(index),
+      irr: Performance.irr(index),
+      benchmark: benchmark(benchmark, index, market),
+      dividends: Valuation.gross_dividends(transactions, market, year_to_date(today)),
+      portfolios: portfolios_overview(scope, transactions, accounts, market, year)
+    }
+  end
+
+  @doc """
+  What the performance screen shows for `period` up to `today`, of all portfolios and accounts or
+  of the portfolio with `portfolio_id` and its reference account:
+
+  - `portfolios`: the portfolios to choose from, as the holdings screen lists them
+  - `portfolio`: the chosen one of them, nil for all
+  - `interval`: the days of the period, the first the reference day, see `Period.interval/3`
+  - `ttwror`, `ttwror_per_year`, `irr`, `drawdown` and `volatility`, see `Performance`
+  - `benchmark`: as in `overview/3`, over the interval
+  - `breakdown`: where the change in value came from, see `Performance.Breakdown`
+  - `monthly_returns`: the TTWROR of every month and year since the first transaction, whatever
+    the period, see `Performance.monthly_returns/1`
+  """
+  def performance(%Scope{} = scope, period, portfolio_id, today) do
+    transactions = list_transactions(scope)
+    accounts = list_accounts(scope)
+    portfolios = shown_portfolios(scope, Valuation.holdings(transactions, today))
+    portfolio = Enum.find(portfolios, &(&1.id == portfolio_id))
+    first_day = first_transaction_day(transactions)
+    interval = Period.interval(period, today, first_day)
+    all_time = Period.interval(:max, today, first_day)
+    benchmark = get_benchmark(scope)
+
+    market =
+      load_market(transactions, accounts, all_time.first, :since_first_transaction,
+        benchmark: benchmark
+      )
+
+    filter = performance_filter(portfolio, transactions)
+    index = Performance.index(transactions, accounts, market, filter, interval)
+
+    all_time_index =
+      if interval == all_time,
+        do: index,
+        else: Performance.index(transactions, accounts, market, filter, all_time)
+
+    %{
+      portfolios: portfolios,
+      portfolio: portfolio,
+      interval: interval,
+      ttwror: Performance.ttwror(index),
+      ttwror_per_year: Performance.ttwror_per_year(index),
+      benchmark: benchmark(benchmark, index, market),
+      irr: Performance.irr(index),
+      drawdown: Performance.drawdown(index),
+      volatility: Performance.volatility(index),
+      breakdown: Breakdown.of(transactions, accounts, market, filter, index),
+      monthly_returns: Performance.monthly_returns(all_time_index)
+    }
+  end
+
+  # The security the user compares with, nil for none.
+  defp get_benchmark(scope) do
+    if id = Settings.benchmark_id(scope), do: Securities.get_security(scope, id)
+  end
+
+  defp benchmark(nil, _index, _market), do: nil
+
+  defp benchmark(security, index, market),
+    do: %{security: security, ttwror: Performance.benchmark_ttwror(index, market, security.id)}
+
+  defp performance_filter(nil, _transactions), do: Filter.all()
+
+  defp performance_filter(portfolio, transactions),
+    do: Filter.new([portfolio], List.wrap(portfolio.reference_account_id), transactions)
+
+  defp first_transaction_day([first | _]), do: NaiveDateTime.to_date(first.date_time)
+  defp first_transaction_day([]), do: nil
+
+  defp chart(%Performance{days: days}, range, shadow_portfolio) do
+    chart_days = range |> Period.chart_days() |> MapSet.new()
+
+    for day <- days,
+        MapSet.member?(chart_days, day.date),
+        do: %{
+          date: day.date,
+          net_worth: day.value,
+          invested_capital: day.invested_capital,
+          benchmark: shadow_portfolio[day.date]
+        }
+  end
+
+  defp shadow_portfolio(nil, _index, _market, _first_day), do: %{}
+
+  defp shadow_portfolio(security, index, market, first_day),
+    do: Performance.shadow_portfolio(index, market, security.id, first_day)
+
+  defp year_to_date(%Date{year: year} = today), do: Date.range(Date.new!(year, 1, 1), today)
+
+  defp portfolios_overview(scope, transactions, accounts, market, %Date.Range{last: today} = year) do
+    holdings = Valuation.holdings(transactions, today)
+    portfolios = shown_portfolios(scope, holdings)
+
+    rows = %{
+      holdings: value_rows(holdings, market, today),
+      accounts: account_rows(accounts, Valuation.balances(transactions, today), market, today)
+    }
+
+    for %{portfolio: %Portfolio{} = portfolio} = group <- holding_groups(portfolios, nil, rows) do
+      # The securities alone: purchases and sales are money in and out, dividends on the
+      # reference account count for them.
+      filter = Filter.new([portfolio], [], transactions)
+      index = Performance.index(transactions, accounts, market, filter, year)
+      account_row = List.first(group.accounts)
+
+      %{
+        portfolio: portfolio,
+        account: account_row && account_row.account,
+        balance: account_row && account_row.value,
+        securities: length(group.holdings),
+        value: List.last(index.days).value,
+        ttwror: Performance.ttwror(index)
+      }
+    end
+  end
+
+  # Retired portfolios only while they hold shares.
+  defp shown_portfolios(scope, holdings) do
+    held = MapSet.new(holdings, & &1.portfolio_id)
+    Enum.filter(list_portfolios(scope), &(not &1.retired or MapSet.member?(held, &1.id)))
+  end
+
+  # The portfolio each reference account of `portfolios` belongs to, as `%{account_id =>
+  # portfolio_id}`: an account several of them settle against belongs to the first active one, to
+  # a retired one only when no active one settles against it. The screens list the portfolios by
+  # name, so it is the first by name, as in the sidebar.
+  defp reference_account_owners(portfolios) do
+    for %{reference_account_id: account_id, id: id} <-
+          portfolios |> Enum.sort_by(& &1.retired) |> Enum.reverse(),
+        account_id != nil,
+        into: %{},
+        do: {account_id, id}
+  end
+
+  @doc """
+  What the holdings screen shows on `today` for all portfolios, or for the one with
+  `portfolio_id`; amounts in euro cents, prices × 10⁸ in the security's currency:
+
+  - `portfolios`: the portfolios to choose from by name, retired ones only while they hold shares
+  - `portfolio`: the chosen one of them, nil for all
+  - `groups`: each portfolio shown with its `holdings` by value and its reference account in
+    `accounts`. For all portfolios, an account several settle against appears under the first
+    active one (as in the overview and the sidebar), and the accounts of no portfolio follow in a group without portfolio.
+    Each group has the `value` of its rows and the `purchase_value` and `gain` of its holdings.
+  - `total`: `value`, `purchase_value` and `gain` of the groups shown, the `dividends` of their
+    holdings and the `securities_value` they make up
+  - `net_worth`: the value of all holdings and accounts, of which each row shows its share
+  - `costs`: what the securities shown cost a year, see `Costs.of/1`; accounts hold no funds
+  - `allocation`: the regions and sectors of the securities shown, see `Allocation.of/2`, and in
+    `taxonomies` the allocation of the securities and accounts shown into each of the user's
+    taxonomies by name, see `Classifications.of/3`, those without value shown in them left out
+
+  A holding has its `security`, `shares`, `price`, `value`, `purchase_value`, `gain` and the gross
+  `dividends` of the next 12 months, its part of those of its security (see `Dividends.upcoming/4`)
+  by shares; an account has its `value`. Retired accounts are left out once they are empty.
+  """
+  def holdings(%Scope{} = scope, portfolio_id, today) do
+    transactions = list_transactions(scope)
+    accounts = list_accounts(scope)
+    stored = stored_dividends(transactions)
+    # Purchase values convert each purchase at the rate of its day.
+    market =
+      load_market(transactions, accounts, today, :since_first_transaction, dividends: stored)
+
+    holdings = Valuation.holdings(transactions, today)
+    portfolios = shown_portfolios(scope, holdings)
+    portfolio = Enum.find(portfolios, &(&1.id == portfolio_id))
+    upcoming = Dividends.upcoming(transactions, stored, market, today)
+
+    rows = %{
+      holdings: holdings |> holding_rows(transactions, market, today) |> with_dividends(upcoming),
+      accounts: account_rows(accounts, Valuation.balances(transactions, today), market, today)
+    }
+
+    groups = portfolios |> holding_groups(portfolio, rows) |> Enum.map(&with_gains/1)
+    shown = Enum.flat_map(groups, & &1.holdings)
+    shown_accounts = Enum.flat_map(groups, & &1.accounts)
+
+    %{
+      portfolios: portfolios,
+      portfolio: portfolio,
+      groups: groups,
+      total: groups |> totals() |> Map.merge(dividend_totals(shown)),
+      net_worth: Enum.sum_by(rows.holdings ++ rows.accounts, & &1.value),
+      costs: Costs.of(shown),
+      allocation: allocation(scope, shown, shown_accounts)
+    }
+  end
+
+  defp with_dividends(rows, upcoming) do
+    gross = upcoming |> Enum.group_by(& &1.security.id, & &1.gross) |> Map.new(&sum_values/1)
+    shares = rows |> Enum.group_by(& &1.security.id, & &1.shares) |> Map.new(&sum_values/1)
+
+    Enum.map(rows, fn row ->
+      id = row.security.id
+      Map.put(row, :dividends, rounded_part(Map.get(gross, id, 0), row.shares, shares[id]))
+    end)
+  end
+
+  defp sum_values({key, values}), do: {key, Enum.sum(values)}
+
+  defp rounded_part(cents, part, whole) when whole > 0,
+    do: div(cents * part * 2 + whole, whole * 2)
+
+  defp rounded_part(_cents, _part, _whole), do: 0
+
+  defp dividend_totals(holdings) do
+    %{
+      dividends: Enum.sum_by(holdings, & &1.dividends),
+      securities_value: Enum.sum_by(holdings, & &1.value)
+    }
+  end
+
+  defp allocation(scope, holdings, accounts) do
+    compositions =
+      holdings |> Enum.map(& &1.security.id) |> Enum.uniq() |> Securities.list_compositions()
+
+    taxonomies =
+      for taxonomy <- Taxonomies.list_taxonomies(scope),
+          allocation = Classifications.of(taxonomy, holdings, accounts),
+          allocation.classifications != [],
+          do: allocation
+
+    holdings |> Allocation.of(compositions) |> Map.put(:taxonomies, taxonomies)
+  end
+
+  @doc """
+  What the dividend screen shows on `today`, amounts in euro cents:
+
+  - `received`: every dividend booked, newest first, see `Dividends.received/2`
+  - `years`: the dividends per month and year since the first, see `Dividends.by_year/2`
+  - `this_year` up to `today` and `last_year` in all, each as `gross` and `net`
+  - `upcoming`: the dividends announced or forecast for the coming months, see
+    `Dividends.upcoming/4`, with their `total` and per month in `months`, see
+    `Dividends.by_coming_month/2`
+  - `value` and `purchase_value` of all holdings today, for the yields
+  """
+  def dividends(%Scope{} = scope, %Date{} = today) do
+    transactions = list_transactions(scope)
+    stored = stored_dividends(transactions)
+
+    market =
+      load_market(transactions, list_accounts(scope), today, :since_first_transaction,
+        dividends: stored
+      )
+
+    received = Dividends.received(transactions, market)
+    upcoming = Dividends.upcoming(transactions, stored, market, today, received)
+
+    holdings =
+      transactions |> Valuation.holdings(today) |> holding_rows(transactions, market, today)
+
+    last_year = Date.range(Date.new!(today.year - 1, 1, 1), Date.new!(today.year - 1, 12, 31))
+
+    %{
+      received: received,
+      years: Dividends.by_year(received, today),
+      this_year: Dividends.total(received, year_to_date(today)),
+      last_year: Dividends.total(received, last_year),
+      upcoming: upcoming,
+      total: Dividends.total(upcoming),
+      months: Dividends.by_coming_month(upcoming, today),
+      value: Enum.sum_by(holdings, & &1.value),
+      purchase_value: Enum.sum_by(holdings, & &1.purchase_value)
+    }
+  end
+
+  @doc """
+  The dividends the overview expects after `today`, gross, see `Dividends.upcoming/4`:
+
+  - `upcoming`: all of them, by pay date
+  - `rest_of_year`: the total of those paid this year
+  - `next_three_months`: those of today's month and the next two
+  """
+  def upcoming_dividends(%Scope{} = scope, %Date{} = today) do
+    transactions = list_transactions(scope)
+    stored = stored_dividends(transactions)
+
+    market =
+      load_market(transactions, list_accounts(scope), today, :since_first_transaction,
+        dividends: stored
+      )
+
+    upcoming = Dividends.upcoming(transactions, stored, market, today)
+    three_months = today |> Date.beginning_of_month() |> Date.shift(month: 3)
+
+    %{
+      upcoming: upcoming,
+      rest_of_year:
+        upcoming |> Enum.filter(&(&1.pay_date.year == today.year)) |> Enum.sum_by(& &1.gross),
+      next_three_months: Enum.filter(upcoming, &Date.before?(&1.pay_date, three_months))
+    }
+  end
+
+  defp stored_dividends(transactions) do
+    transactions
+    |> Enum.map(& &1.security_id)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Securities.list_divvy_diary_dividends()
+  end
+
+  @doc """
+  What the security page shows of `security` on `today`; amounts in euro cents, prices × 10⁸ in
+  the security's currency, shares × 10⁸. The security and its prices are shared by all users,
+  the holdings and trades are the user's:
+
+  - `price` today and `price_yesterday`, nil without any price
+  - `chart`: see `PriceChart.of/4`, over the days of `period` from the first price or trade on
+  - `holdings`: the holdings of it by portfolio name, each with its `portfolio`, `shares`,
+    `value`, `purchase_value` and `gain`
+  - `total`: the `shares`, `value`, `purchase_value` and `gain` of all holdings
+  - `costs_per_year` of the holdings, see `Costs.of/1`
+  - `distributions`: from the user's dividends, see `Distributions.of/3`
+  - `upcoming`: the dividends expected of it, see `Dividends.upcoming/4`
+  """
+  def security(%Scope{} = scope, %Security{} = security, period, today) do
+    transactions = list_transactions_of(scope, security)
+    closes = scope |> Securities.list_prices(security) |> Enum.map(&{&1.date, &1.close})
+    stored = Securities.list_divvy_diary_dividends([security.id])
+    market = security_market(security, closes, transactions, stored, today)
+    holdings = security_holdings(scope, transactions, market, today)
+    range = Period.range(period, today, first_price_or_trade(security, closes, transactions))
+
+    %{
+      price: Market.price(market, security.id, today),
+      price_yesterday: Market.price(market, security.id, Date.add(today, -1)),
+      chart: PriceChart.of(security, closes, transactions, range),
+      holdings: holdings,
+      total: holdings |> totals() |> Map.put(:shares, Enum.sum_by(holdings, & &1.shares)),
+      costs_per_year: Costs.of(holdings).per_year,
+      distributions: Distributions.of(security, transactions, market),
+      upcoming: Dividends.upcoming(transactions, stored, market, today)
+    }
+  end
+
+  defp list_transactions_of(scope, %Security{id: security_id}) do
+    Repo.all(
+      from t in Transaction,
+        where: t.user_id == ^scope.user.id and t.security_id == ^security_id,
+        order_by: [t.date_time, t.id],
+        preload: :units
+    )
+  end
+
+  # Purchase values convert each purchase at the rate of its day.
+  defp security_market(security, closes, transactions, dividends, today) do
+    currencies =
+      [security | transactions ++ dividends]
+      |> Enum.map(& &1.currency)
+      |> Market.rate_currencies()
+
+    Market.new(
+      [security],
+      Enum.map(closes, fn {date, close} -> {security.id, date, close} end),
+      ExchangeRates.list_rates_since(currencies, first_day(transactions, today))
+    )
+  end
+
+  defp security_holdings(scope, transactions, market, today) do
+    portfolios = Map.new(list_portfolios(scope), &{&1.id, &1})
+
+    transactions
+    |> Valuation.holdings(today)
+    |> holding_rows(transactions, market, today)
+    |> Enum.map(&Map.put(&1, :portfolio, portfolios[&1.portfolio_id]))
+    |> Enum.sort_by(& &1.portfolio.name)
+  end
+
+  # Closes and transactions come in order of date; the latest quote may be all there is.
+  defp first_price_or_trade(security, closes, transactions) do
+    [
+      Enum.map(Enum.take(closes, 1), &elem(&1, 0)),
+      List.wrap(security.latest_date),
+      Enum.map(Enum.take(transactions, 1), &NaiveDateTime.to_date(&1.date_time))
+    ]
+    |> Enum.concat()
+    |> Enum.min(Date, fn -> nil end)
+  end
+
+  @doc """
+  What the sidebar shows on `today`, valued as the holdings screen values all portfolios, amounts
+  in euro cents; nothing retired, whatever it still holds:
+
+  - `portfolios`: the active portfolios by name, each with the `value` of its securities
+  - `accounts`: the active accounts by name, reference accounts too, each with its `value` and the
+    active `portfolio` it is the reference account of (the first by name if several settle
+    against it), nil for none
+
+  With nothing retired the values add up to net worth.
+  """
+  def sidebar(%Scope{} = scope, today) do
+    transactions = list_transactions(scope)
+    accounts = list_accounts(scope)
+    market = load_market(transactions, accounts, today, :since_date)
+    holdings = Valuation.holdings(transactions, today)
+    balances = Valuation.balances(transactions, today)
+    portfolios = scope |> list_portfolios() |> Enum.reject(& &1.retired)
+    owners = reference_account_owners(portfolios)
+    by_id = Map.new(portfolios, &{&1.id, &1})
+
+    %{
+      portfolios:
+        for portfolio <- portfolios do
+          value =
+            holdings
+            |> Enum.filter(&(&1.portfolio_id == portfolio.id))
+            |> Enum.sum_by(&Valuation.value(&1, market, today))
+
+          %{portfolio: portfolio, value: value}
+        end,
+      accounts:
+        for account <- accounts, not account.retired do
+          balance = Map.get(balances, account.id, 0)
+
+          %{
+            account: account,
+            value: Market.to_euros(market, balance, account.currency, today),
+            portfolio: by_id[owners[account.id]]
+          }
+        end
+    }
+  end
+
+  # The value of each holding, without the price and purchase value the holdings screen shows.
+  defp value_rows(holdings, market, today) do
+    for holding <- holdings,
+        do: %{portfolio_id: holding.portfolio_id, value: Valuation.value(holding, market, today)}
+  end
+
+  defp holding_rows(holdings, transactions, market, today) do
+    purchase_values = PurchaseValue.by_holding(transactions, market, today)
+
+    for holding <- holdings do
+      value = Valuation.value(holding, market, today)
+      purchase_value = Map.get(purchase_values, {holding.portfolio_id, holding.security_id}, 0)
+
+      %{
+        portfolio_id: holding.portfolio_id,
+        security: Market.security(market, holding.security_id),
+        shares: holding.shares,
+        price: Valuation.price(holding, market, today),
+        value: value,
+        purchase_value: purchase_value,
+        gain: value - purchase_value
+      }
+    end
+  end
+
+  defp account_rows(accounts, balances, market, today) do
+    for account <- accounts,
+        balance = Map.get(balances, account.id, 0),
+        not account.retired or balance != 0,
+        do: %{account: account, value: Market.to_euros(market, balance, account.currency, today)}
+  end
+
+  # Each portfolio with its holdings and its reference account, then the accounts of no portfolio
+  # in a group without portfolio; or the one `portfolio` with its reference account, even if an
+  # earlier one settles against it too. Each group has the `value` of its rows.
+  defp holding_groups(_portfolios, %Portfolio{} = portfolio, rows),
+    do: [holding_group(portfolio, rows, &(&1.id == portfolio.reference_account_id))]
+
+  defp holding_groups(portfolios, nil, rows) do
+    owners = reference_account_owners(portfolios)
+
+    groups =
+      Enum.map(portfolios, fn portfolio ->
+        holding_group(portfolio, rows, &(owners[&1.id] == portfolio.id))
+      end)
+
+    case Enum.reject(rows.accounts, &Map.has_key?(owners, &1.account.id)) do
+      [] -> groups
+      accounts -> groups ++ [group(nil, [], accounts)]
+    end
+  end
+
+  defp holding_group(portfolio, rows, account?) do
+    group(
+      portfolio,
+      Enum.filter(rows.holdings, &(&1.portfolio_id == portfolio.id)),
+      Enum.filter(rows.accounts, &account?.(&1.account))
+    )
+  end
+
+  defp group(portfolio, holdings, accounts) do
+    %{
+      portfolio: portfolio,
+      holdings: holdings,
+      accounts: accounts,
+      value: Enum.sum_by(holdings ++ accounts, & &1.value)
+    }
+  end
+
+  # The holdings by value, and the purchase value and gain of the group.
+  defp with_gains(%{holdings: holdings} = group) do
+    Map.merge(group, %{
+      holdings: Enum.sort_by(holdings, &{-&1.value, &1.security.name}),
+      purchase_value: Enum.sum_by(holdings, & &1.purchase_value),
+      gain: Enum.sum_by(holdings, & &1.gain)
+    })
+  end
+
+  defp totals(rows) do
+    %{
+      value: Enum.sum_by(rows, & &1.value),
+      purchase_value: Enum.sum_by(rows, & &1.purchase_value),
+      gain: Enum.sum_by(rows, & &1.gain)
+    }
+  end
+
+  # The securities of the transactions, and the `:benchmark` if given, with their closes from
+  # `date` on, and the rates of every currency involved, those of the `:dividends` too, from `date`
+  # on, or from the first transaction on, at which invested capital and purchase values convert.
+  defp load_market(transactions, accounts, date, rates, opts \\ []) do
+    benchmark = opts[:benchmark]
+    dividends = Keyword.get(opts, :dividends, [])
+
+    security_ids =
+      transactions
+      |> Enum.map(& &1.security_id)
+      |> Enum.concat(List.wrap(benchmark && benchmark.id))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    securities = Securities.list_securities_by_id(security_ids)
+
+    currencies =
+      (accounts ++ securities ++ transactions ++ dividends)
+      |> Enum.map(& &1.currency)
+      |> Market.rate_currencies()
+
+    rates_from =
+      case rates do
+        :since_date -> date
+        :since_first_transaction -> first_day(transactions, date)
+      end
+
+    Market.new(
+      securities,
+      Securities.list_closes_since(security_ids, date),
+      ExchangeRates.list_rates_since(currencies, rates_from)
+    )
+  end
+
+  # The transactions come in order of time.
+  defp first_day([first | _], date),
+    do: Enum.min([NaiveDateTime.to_date(first.date_time), date], Date)
+
+  defp first_day([], date), do: date
+
+  ## Transactions
+
+  @filters %{
+    trades: [:buy, :sell, :inbound_delivery, :outbound_delivery, :security_transfer],
+    earnings: [:dividend, :interest],
+    account: [
+      :deposit,
+      :removal,
+      :cash_transfer,
+      :interest_charge,
+      :tax,
+      :tax_refund,
+      :fee,
+      :fee_refund
+    ]
+  }
+
+  @transaction_preloads [
+    :units,
+    :security,
+    :portfolio,
+    :account,
+    :other_portfolio,
+    :other_account
+  ]
+
+  @doc """
+  The user's transactions grouped by month, newest first, as `{first day of month, transactions}`;
+  `filter` is nil for all, `:trades`, `:earnings` or `:account`.
+  """
+  def transactions_by_month(%Scope{} = scope, filter \\ nil) do
+    from(t in Transaction,
+      where: t.user_id == ^scope.user.id,
+      order_by: [desc: t.date_time, desc: t.id],
+      preload: ^@transaction_preloads
+    )
+    |> where_filter(filter)
+    |> Repo.all()
+    |> Enum.chunk_by(&month_of/1)
+    |> Enum.map(&{month_of(hd(&1)), &1})
+  end
+
+  defp where_filter(query, nil), do: query
+  defp where_filter(query, filter), do: where(query, [t], t.type in ^Map.fetch!(@filters, filter))
+
+  defp month_of(%Transaction{date_time: date_time}),
+    do: date_time |> NaiveDateTime.to_date() |> Date.beginning_of_month()
+
+  @doc """
+  A transaction of the user with what the transactions screen shows of it, nil for an unknown one
+  or another user's.
+  """
+  def get_transaction(%Scope{} = scope, id) do
+    Repo.one(
+      from t in Transaction,
+        where: t.id == ^id and t.user_id == ^scope.user.id,
+        preload: ^@transaction_preloads
+    )
+  end
+
+  ## Booking
+
+  @doc """
+  What the transaction form offers: the user's portfolios and accounts in euros by name, without
+  retired ones but those of the transaction being edited, and all securities.
+  """
+  def transaction_choices(%Scope{} = scope, editing \\ nil) do
+    %{
+      portfolios:
+        Enum.filter(list_portfolios(scope), &offered?(&1, editing && editing.portfolio_id)),
+      accounts:
+        Enum.filter(
+          list_accounts(scope),
+          &(&1.currency == "EUR" and offered?(&1, editing && editing.account_id))
+        ),
+      securities: Securities.list_securities(scope)
+    }
+  end
+
+  defp offered?(portfolio_or_account, own_id),
+    do: not portfolio_or_account.retired or portfolio_or_account.id == own_id
+
+  @doc """
+  The transaction form with `attrs`, checked against `choices`, see `transaction_choices/2`. A sale
+  may not exceed the holding on its day or later, which leaves out the transaction being edited.
+  """
+  def change_transaction_form(%Scope{} = scope, choices, attrs \\ %{}, editing \\ nil),
+    do: TransactionForm.changeset(%TransactionForm{}, attrs, checks(scope, choices, editing))
+
+  defp checks(scope, choices, editing) do
+    %{
+      portfolio_ids: MapSet.new(choices.portfolios, & &1.id),
+      account_ids: MapSet.new(choices.accounts, & &1.id),
+      security_ids: MapSet.new(choices.securities, & &1.id),
+      held_shares: &held_shares(scope, &1, &2, &3, editing)
+    }
+  end
+
+  @doc """
+  The fewest shares × 10⁸ of a security a portfolio of the user holds from the end of `date` on,
+  without the transaction `except` if given and with the transactions `extra`.
+  """
+  def held_shares(%Scope{} = scope, portfolio_id, security_id, date, except \\ nil, extra \\ []) do
+    transactions =
+      scope
+      |> list_transactions_of(%Security{id: security_id})
+      |> Enum.reject(&(except && &1.id == except.id))
+      |> Enum.concat(Enum.filter(extra, &(&1.security_id == security_id)))
+
+    later =
+      for t <- transactions,
+          day = NaiveDateTime.to_date(t.date_time),
+          Date.after?(day, date),
+          do: day
+
+    [date | later]
+    |> Enum.uniq()
+    |> Enum.map(fn day ->
+      transactions
+      |> Valuation.holdings(day)
+      |> Enum.find_value(0, &(&1.portfolio_id == portfolio_id && &1.shares))
+    end)
+    |> Enum.min()
+  end
+
+  # Without a purchase or inbound delivery, or with `replacement` instead, no later sale may exceed
+  # the holding.
+  defp keeps_holding?(scope, %Transaction{type: type} = t, replacement)
+       when type in [:buy, :inbound_delivery] do
+    date = NaiveDateTime.to_date(t.date_time)
+    held_shares(scope, t.portfolio_id, t.security_id, date, t, List.wrap(replacement)) >= 0
+  end
+
+  defp keeps_holding?(_scope, _transaction, _replacement), do: true
+
+  @doc """
+  Books the transaction form with `attrs` and returns the booked transactions: one, or a dividend
+  and its removal.
+  """
+  def book_transaction(%Scope{} = scope, choices, attrs) do
+    changeset = change_transaction_form(scope, choices, attrs)
+
+    Repo.transact(fn ->
+      with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :insert) do
+        {:ok, Enum.map(TransactionForm.to_transactions(form), &insert_transaction(scope, &1))}
+      end
+    end)
+  end
+
+  defp insert_transaction(scope, attrs) do
+    {units, attrs} = Map.pop!(attrs, :units)
+
+    Repo.insert!(
+      struct!(Transaction, attrs)
+      |> Map.merge(%{
+        user_id: scope.user.id,
+        units: Enum.map(units, &struct!(TransactionUnit, &1))
+      })
+    )
+  end
+
+  @doc "The params that show a transaction the user booked in the transaction form."
+  def transaction_form_params(%Transaction{} = transaction),
+    do: TransactionForm.params_of(transaction)
+
+  @doc "Saves the transaction form with `attrs` over `transaction`, one the user booked: its fields and units."
+  def update_transaction(%Scope{} = scope, choices, %Transaction{} = transaction, attrs) do
+    changeset = change_transaction_form(scope, choices, attrs, transaction)
+
+    with :ok <- check_editable(scope, transaction) do
+      Repo.transact(fn -> save_transaction(scope, changeset, transaction) end)
+    end
+  end
+
+  defp save_transaction(scope, changeset, transaction) do
+    with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :update),
+         %Transaction{} <- Repo.get(Transaction, transaction.id) || {:error, :gone},
+         [attrs] = TransactionForm.to_transactions(%{form | remove_at_once: false}),
+         {units, attrs} = Map.pop!(attrs, :units),
+         true <-
+           keeps_holding?(scope, transaction, struct!(Transaction, attrs)) ||
+             {:error, holding_error(changeset, form.kind)} do
+      Repo.delete_all(from u in TransactionUnit, where: u.transaction_id == ^transaction.id)
+      Repo.update!(Ecto.Changeset.change(transaction, Map.delete(attrs, :source)))
+
+      Repo.insert_all(
+        TransactionUnit,
+        Enum.map(units, &Map.put(&1, :transaction_id, transaction.id))
+      )
+
+      {:ok, get_transaction(scope, transaction.id)}
+    end
+  end
+
+  defp holding_error(changeset, kind) do
+    field = if kind in [:purchase, :sale], do: :shares, else: :date
+
+    Ecto.Changeset.add_error(
+      %{changeset | action: :update},
+      field,
+      "würde den Bestand später unter null bringen"
+    )
+  end
+
+  @doc """
+  Deletes a transaction the user booked; refused with `{:error, :holding}` when a later sale would
+  exceed the holding without it.
+  """
+  def delete_transaction(%Scope{} = scope, %Transaction{} = transaction) do
+    with :ok <- check_editable(scope, transaction),
+         true <- keeps_holding?(scope, transaction, nil) || {:error, :holding} do
+      Repo.delete!(transaction, allow_stale: true)
+      {:ok, transaction}
+    end
+  end
+
+  defp check_editable(%Scope{user: %{id: user_id}}, %Transaction{user_id: user_id} = transaction) do
+    if Transaction.editable?(transaction), do: :ok, else: {:error, :read_only}
+  end
+
+  defp check_editable(_scope, _transaction), do: {:error, :read_only}
+end

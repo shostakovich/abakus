@@ -1,0 +1,13 @@
+Plush images briefcase and coins
+
+Derived from Noto Emoji 3D (https://github.com/googlefonts/noto-emoji),
+Copyright Google LLC, whose image resources are licensed under the Apache
+License, Version 2.0 (see LICENSE-noto-emoji.txt in this directory).
+
+Modified: each image was redrawn as a plush fabric version of the Noto 3D
+emoji with an image model, cropped and scaled to 192px WebP.
+
+  briefcase  from emoji_u1f4bc (briefcase)
+  coins      from emoji_u1fa99 (coin)
+
+The other images in this directory were made for the Kasse.
