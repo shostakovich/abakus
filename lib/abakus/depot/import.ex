@@ -6,12 +6,14 @@ defmodule Abakus.Depot.Import do
   each user's benchmark and Paperless as their Depot settings.
 
   Each user becomes the user with the same email address: an existing one, or a new one who gets no mail and asks for
-  a sign-in link on the sign-in page. Sessions and passkeys stay behind, as passkeys belong to the old address.
+  a sign-in link on the sign-in page. Abakus needs a user first, the budget owner. Sessions and passkeys stay behind,
+  as passkeys belong to the old address.
   """
 
   alias Abakus.Depot.Portfolios
   alias Abakus.Repo
   alias Abakus.Users
+  alias Abakus.Users.User
   alias Exqlite.Sqlite3
 
   # The old app's tables lack the prefix. Its job runs stay behind: they tell when its own jobs last ran.
@@ -38,7 +40,8 @@ defmodule Abakus.Depot.Import do
   defp receipts_folder(path), do: Path.join(Path.dirname(path), "receipts")
 
   defp write_once(data, receipts_folder) do
-    with :ok <- check_empty() do
+    with :ok <- check_users(),
+         :ok <- check_empty() do
       # A classification may come in a later chunk than its children.
       Repo.query!("PRAGMA defer_foreign_keys = ON")
 
@@ -105,6 +108,15 @@ defmodule Abakus.Depot.Import do
   end
 
   defp receipt_source(folder, sha256), do: Path.join(folder, "#{sha256}.pdf")
+
+  # The first user owns the budget, which must not be someone the import creates.
+  defp check_users do
+    if Repo.exists?(User),
+      do: :ok,
+      else:
+        {:error,
+         "Abakus has no users yet; invite the budget owner first (Abakus.Release.invite/1)"}
+  end
 
   defp check_empty do
     case Enum.find(@guarded, &Repo.exists?("depot_" <> &1)) do

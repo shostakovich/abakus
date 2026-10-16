@@ -16,7 +16,10 @@ defmodule Abakus.Depot.ImportTest do
   @purchase "a7e1f6e59756f1cb2440ea200495f4e02025aa5f6523d34d8178bb1c9e840e37"
   @savings_plan "1705d84339a3fafbd3dd623cc6d421ba21871df5d18731805d638653034fdfda"
 
-  setup %{tmp_dir: dir}, do: %{path: PortfoliosFixtures.old_app_file!(dir)}
+  setup %{tmp_dir: dir} do
+    {:ok, _owner} = Users.create_user(%{email: "owner@example.com"})
+    %{path: PortfoliosFixtures.old_app_file!(dir)}
+  end
 
   defp import!(path) do
     {:ok, report} = Import.run(path)
@@ -165,6 +168,15 @@ defmodule Abakus.Depot.ImportTest do
     import!(complete)
 
     assert Import.run(complete) == {:error, "the Depot holds data already (depot_securities)"}
+  end
+
+  test "refuses an Abakus without users, whose budget owner it would make", %{path: path} do
+    Repo.delete_all(Users.User)
+
+    assert {:error, message} = Import.run(path)
+    assert message =~ "invite the budget owner first"
+    refute Repo.exists?(Users.User)
+    refute Repo.exists?(Abakus.Depot.Securities.Security)
   end
 
   test "rolls back on a damaged receipt file", %{path: path, tmp_dir: dir} do

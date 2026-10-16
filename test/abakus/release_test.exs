@@ -90,6 +90,7 @@ defmodule Abakus.ReleaseTest do
 
   @tag :tmp_dir
   test "import_kasse/2 imports the old app's file and names the users", %{tmp_dir: dir} do
+    user_fixture()
     path = Abakus.KasseFixtures.old_app_file!(dir)
 
     emails = %{
@@ -109,6 +110,7 @@ defmodule Abakus.ReleaseTest do
 
   @tag :tmp_dir
   test "import_depot/1 imports the old app's file and names the users", %{tmp_dir: dir} do
+    user_fixture()
     path = PortfoliosFixtures.old_app_file!(dir)
 
     output = capture_io(fn -> Abakus.Release.import_depot(path) end)

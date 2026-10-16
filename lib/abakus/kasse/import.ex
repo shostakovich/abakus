@@ -5,7 +5,7 @@ defmodule Abakus.Kasse.Import do
   activity log, exchange rates and each person's YNAB connection, category mapping and synced transactions.
 
   Each person becomes the user with the email address given for their name: an existing user, or a new one who gets
-  no mail and asks for a sign-in link on the sign-in page.
+  no mail and asks for a sign-in link on the sign-in page. Abakus needs a user first, the budget owner.
   """
 
   alias Abakus.Repo
@@ -32,7 +32,8 @@ defmodule Abakus.Kasse.Import do
   end
 
   defp write_once(data, emails) do
-    with :ok <- check_empty() do
+    with :ok <- check_users(),
+         :ok <- check_empty() do
       {users, report} = users(emails)
       write(data, users)
       {:ok, Map.put(report, :rows, Map.new(data, fn {table, rows} -> {table, length(rows)} end))}
@@ -95,6 +96,15 @@ defmodule Abakus.Kasse.Import do
       true ->
         {:ok, by_id}
     end
+  end
+
+  # The first user owns the budget, which must not be someone the import creates.
+  defp check_users do
+    if Repo.exists?(User),
+      do: :ok,
+      else:
+        {:error,
+         "Abakus has no users yet; invite the budget owner first (Abakus.Release.invite/1)"}
   end
 
   defp check_empty do
