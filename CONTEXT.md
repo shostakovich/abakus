@@ -299,7 +299,8 @@ Who created, changed or deleted what in the Kasse, with the changes as old and n
 _Avoid_: Unqualified Activity in code (that is a budget category's sum), audit log
 
 **Exchange rate**:
-Euros per unit of a foreign currency for an expense: the ECB reference rate of its date, or one entered by hand.
+Units of a foreign currency per euro, the way the ECB quotes it; for an expense the ECB reference rate of its date,
+or one entered by hand.
 UI "Wechselkurs", "EZB-Kurs".
 _Avoid_: FX rate in UI text
 

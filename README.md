@@ -67,9 +67,9 @@ data with real tokens stays away from it.
   the live UI only connects from `https://$PHX_HOST`.
 - `/up` answers 200 while the app and its database are up, for health checks.
 - Every night at 03:00 a copy of the database goes to `data/backups` (mode 0600); the newest seven are kept.
-- `TZ` (default `Europe/Berlin`) is the local time of the Kasse's dates and the jobs: ECB rates at 17:00,
-  recurring expenses hourly, the Depot's prices at 18:00, the backup. The Kasse's YNAB sync runs shortly after each
-  change and hourly.
+- `TZ` (default `Europe/Berlin`) is the local time of "today" in every area, of the Kasse's dates and of the jobs:
+  ECB rates at 17:00, recurring expenses hourly, the Depot's prices at 18:00, the backup. The Kasse's YNAB sync runs
+  shortly after each change and hourly.
 - `DIVVYDIARY_API_KEY` (optional) brings the Depot's countries, sectors and dividend dates from DivvyDiary.
 - The Depot's receipt recognition (optional): any OpenAI-compatible chat API such as Ollama with
   `RECEIPT_MODEL_URL` (e.g. `http://localhost:11434/v1`), `RECEIPT_MODEL` and, if the API wants one,
