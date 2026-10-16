@@ -8,8 +8,8 @@ defmodule AbakusWeb.Plush do
 
   @names ~w(activity archive baby banknote briefcase car clipboard-list coins file-text gift
             graduation-cap heart history house inbox key landmark layers link palette paw-print
-            plane receipt repeat scale settings shield shirt shopping-cart smartphone tag ticket
-            trending-up users utensils wallet zap)
+            piggy-bank plane receipt repeat scale settings shield shirt shopping-cart smartphone
+            tag ticket trending-up users utensils wallet zap)
 
   @doc "The motifs there are images of."
   def names, do: @names

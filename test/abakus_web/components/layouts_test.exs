@@ -2,7 +2,9 @@ defmodule AbakusWeb.LayoutsTest do
   use AbakusWeb.ConnCase
 
   alias Abakus.Depot.Portfolios.Portfolio
+  alias Abakus.Ledger.Account
   alias Abakus.Users.{Scope, User}
+  alias AbakusWeb.AccountGroups
 
   test "the root layout links the manifest, sets theme colours and the theme before the stylesheet",
        %{conn: conn} do
@@ -116,6 +118,44 @@ defmodule AbakusWeb.LayoutsTest do
         selector = ~s|##{id}-sidebar img[src^="/images/plush/#{plush}"]|
         assert html |> LazyHTML.query(selector) |> Enum.any?(), selector
       end
+    end
+
+    test "shows an account's emoji, for one without emoji its kind's plush" do
+      accounts = [
+        %Account{id: 1, name: "Girokonto", kind: :checking},
+        %Account{id: 2, name: "💶 Bargeld", kind: :cash}
+      ]
+
+      assigns = %{
+        areas: [
+          %{key: :finanzen, label: "Finanzen", plush: "wallet", icon: "wallet", path: "/budget"}
+        ],
+        scope: %Scope{user: %User{email: "kim@example.com", budget_owner: true}},
+        groups: AccountGroups.build(accounts, %{})
+      }
+
+      html =
+        ~H"""
+        <AbakusWeb.Layouts.app
+          flash={%{}}
+          current_scope={@scope}
+          areas={@areas}
+          area={:finanzen}
+          account_groups={@groups}
+        >
+          Inhalt
+        </AbakusWeb.Layouts.app>
+        """
+        |> rendered_to_string()
+        |> LazyHTML.from_fragment()
+
+      assert html
+             |> LazyHTML.query(~s|#side-account-1-sidebar img[src^="/images/plush/landmark"]|)
+             |> Enum.any?()
+
+      cash = LazyHTML.query(html, "#side-account-2-sidebar")
+      assert LazyHTML.text(cash) =~ "💶"
+      assert cash |> LazyHTML.query("img") |> Enum.empty?()
     end
   end
 
