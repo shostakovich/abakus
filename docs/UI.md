@@ -33,6 +33,15 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 - Months follow the budget's width: two from 760 px (a window of about 1100 px with the sidebar), three from
   1110 px (about 1450 px); the category column takes 22 % (224–320 px), the months the rest
 
+## Icons
+
+Setzkasten's rule: plush images (`AbakusWeb.Plush`, one WebP per motif in `priv/static/images/plush`) for the
+sidebar, dock and area switch, the settings hub, empty-state figures, Kasse categories, Depot booking rows and
+portfolio rows; Lucide for actions, status, warnings and chevrons. In the sidebar accounts and portfolios show the
+emoji of their name, a portfolio without one the briefcase. One motif per meaning, e.g. wallet for the budget and
+cash bookings, landmark for accounts, briefcase for portfolios and holdings, layers for securities and their trades,
+coins for dividends and interest, file-text for receipts, clipboard-list for the empty booking list.
+
 ## Method
 
 Every euro gets assigned and overspending is dealt with: RTA > 0 and overspent categories are open tasks, RTA =
