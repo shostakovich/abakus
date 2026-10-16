@@ -7,7 +7,7 @@ defmodule Abakus.Kasse.Ynab.Connections do
   import Ecto.Query
 
   alias Abakus.Format
-  alias Abakus.Kasse.{Activities, Categories}
+  alias Abakus.Kasse.Activities
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Kasse.Ynab.{CategoryMapping, Connection, Transaction}
   alias Abakus.{Repo, Schema}
@@ -210,13 +210,12 @@ defmodule Abakus.Kasse.Ynab.Connections do
   end
 
   @doc """
-  Replaces the mapping (category id to YNAB category id, `""` for none); `ynab_names` names the
-  YNAB categories for the log.
+  Replaces the mapping (category id to YNAB category id, `""` for none) among the Kasse's `categories`;
+  `ynab_names` names the YNAB categories for the log.
   """
-  def put_category_mapping(participant_id, mapping, ynab_names) do
+  def put_category_mapping(participant_id, mapping, categories, ynab_names) do
     Repo.transact(fn ->
       old = category_mapping(participant_id)
-      categories = Categories.list_categories(:all)
       known = MapSet.new(categories, & &1.id)
       mapped = Map.reject(mapping, fn {_id, ynab_id} -> ynab_id == "" end)
 

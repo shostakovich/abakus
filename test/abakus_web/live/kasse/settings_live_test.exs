@@ -51,7 +51,7 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
     save(view, "  WG   Süd ")
 
     assert_push_event(view, "setzkasten:saved", %{id: "settings-save"})
-    assert Settings.group_name() == "WG Süd"
+    assert Settings.group_name(Scope.system()) == "WG Süd"
     assert has_element?(view, "#settings_group_name[value='WG Süd']")
 
     save(view, "WG Süd")
@@ -79,7 +79,7 @@ defmodule AbakusWeb.Kasse.SettingsLiveTest do
              "Der Name ist zu lang (höchstens 60 Zeichen)."
            )
 
-    assert Settings.group_name() == "Kasse"
+    assert Settings.group_name(Scope.system()) == "Kasse"
     assert renames() == []
   end
 end

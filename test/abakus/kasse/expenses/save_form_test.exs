@@ -4,7 +4,7 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
   import Abakus.KasseFixtures
 
   alias Abakus.ExchangeRates
-  alias Abakus.Kasse.Expenses
+  alias Abakus.Kasse.{AccessError, Expenses}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Users.Scope
   alias Ecto.Changeset
@@ -14,7 +14,7 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
   setup do
     h = household()
     ExchangeRates.store([{"USD", ~D[2026-09-30], Decimal.new("1.2")}])
-    form = Expenses.new_form(Scope.system(), today: @today, participant_id: h.anna)
+    form = Expenses.new_form(scope_of(h.anna), today: @today)
     %{h: h, form: %{form | title: "Mein Titel", amount: "30,00", category_id: h.food}}
   end
 
@@ -25,6 +25,12 @@ defmodule Abakus.Kasse.Expenses.SaveFormTest do
     {:error, changeset} = save(form, existing)
     [{_field, {message, _opts}} | _] = changeset.errors
     message
+  end
+
+  test "a new form is paid by the scope's person, whom the system is not", %{h: h, form: form} do
+    assert form.paid_by_id == h.anna
+    assert Expenses.new_form(scope_of(h.ben), today: @today).paid_by_id == h.ben
+    assert_raise AccessError, fn -> Expenses.new_form(Scope.system(), today: @today) end
   end
 
   test "creates an expense from the form", %{h: h, form: form} do

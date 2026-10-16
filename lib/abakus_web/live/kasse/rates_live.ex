@@ -45,8 +45,7 @@ defmodule AbakusWeb.Kasse.RatesLive do
     params = typed(params)
 
     with {:ok, attrs} <- read(params),
-         {:ok, rate} <-
-           Rates.put_manual_rate(socket.assigns.current_participant.id, attrs) do
+         {:ok, rate} <- Rates.put_manual_rate(socket.assigns.current_scope, attrs) do
       {:noreply,
        socket
        |> put_flash(:info, "Kurs für #{rate.currency} gespeichert.")
@@ -59,10 +58,10 @@ defmodule AbakusWeb.Kasse.RatesLive do
   end
 
   def handle_event("delete", %{"currency" => currency, "date" => date}, socket) do
-    me = socket.assigns.current_participant.id
+    scope = socket.assigns.current_scope
 
     with {:ok, date} <- Date.from_iso8601(date),
-         {:ok, _activity} <- Rates.delete_manual_rate(me, currency, date) do
+         {:ok, _activity} <- Rates.delete_manual_rate(scope, currency, date) do
       {:noreply, socket |> put_flash(:info, "Manueller Kurs für #{currency} gelöscht.") |> load()}
     else
       _missing ->

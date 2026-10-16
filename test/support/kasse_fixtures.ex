@@ -15,14 +15,17 @@ defmodule Abakus.KasseFixtures do
         participant.id
       end
 
-    [food, restaurant | _] = Categories.list_categories()
+    [food, restaurant | _] = Categories.list_categories(Scope.system())
     %{anna: anna, ben: ben, cleo: cleo, food: food.id, restaurant: restaurant.id}
   end
 
   @doc "A person with the user `<name>@example.com`, added by `actor_id`."
   def person!(name, actor_id \\ nil) do
     email = (name |> String.trim() |> String.downcase()) <> "@example.com"
-    {:ok, participant} = Participants.create_participant(actor_id, %{name: name, email: email})
+
+    {:ok, participant} =
+      Participants.create_participant(scope(actor_id), %{name: name, email: email})
+
     participant
   end
 
@@ -76,12 +79,14 @@ defmodule Abakus.KasseFixtures do
 
   @doc "The scope of the person with `participant_id`, as if they were signed in."
   def scope_of(participant_id),
-    do: participant_id |> Participants.get_participant!() |> Scope.for_participant()
+    do: Scope.for_participant(Participants.get_participant!(Scope.system(), participant_id))
 
   @doc "An expense created by the person with `actor_id`, or by the system without one."
   def create!(attrs, actor_id \\ nil) do
-    scope = if actor_id, do: scope_of(actor_id), else: Scope.system()
-    {:ok, expense} = Expenses.create_expense(scope, attrs)
+    {:ok, expense} = Expenses.create_expense(scope(actor_id), attrs)
     expense
   end
+
+  defp scope(nil), do: Scope.system()
+  defp scope(actor_id), do: scope_of(actor_id)
 end

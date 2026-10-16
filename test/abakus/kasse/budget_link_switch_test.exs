@@ -4,7 +4,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
   import Abakus.DomainFixtures
   import Abakus.KasseFixtures
 
-  alias Abakus.Kasse.{Activities, BudgetLink, Expenses, Participants}
+  alias Abakus.Kasse.{Activities, BudgetLink, Expenses}
   alias Abakus.Kasse.BudgetLink.{Link, LinkedTransaction}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Ynab
@@ -20,7 +20,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     account = account_fixture(%{name: "Geteilt", kind: :cash})
     groceries = category_fixture(%{name: "🛒 Lebensmittel"})
     treats = category_fixture(%{name: "🍷 Genuss"})
-    {:ok, _mapping} = BudgetLink.put_category_mapping(%{h.food => groceries.id})
+    {:ok, _mapping} = BudgetLink.put_category_mapping(scope_of(h.anna), %{h.food => groceries.id})
 
     Repo.insert!(%Ynab.Connection{
       participant_id: h.anna,
@@ -39,9 +39,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     %{h: h, account: account, groceries: groceries.id, treats: treats.id}
   end
 
-  defp anna(h), do: Participants.get_participant!(h.anna)
-
-  defp switch_on(c), do: BudgetLink.switch_on(anna(c.h), c.account.id)
+  defp switch_on(c), do: BudgetLink.switch_on(scope_of(c.h.anna), c.account.id)
 
   defp expense!(h, title, cents, date, payer \\ nil),
     do: create!(equal(h, title, cents, date, payer || h.ben, [h.anna, h.ben]))
@@ -230,7 +228,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
     end
 
     test "links only the budget owner's participant", c do
-      assert BudgetLink.switch_on(Participants.get_participant!(c.h.ben), c.account.id) ==
+      assert BudgetLink.switch_on(scope_of(c.h.ben), c.account.id) ==
                {:error, :not_budget_owner}
     end
 
@@ -245,12 +243,12 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       depot = account_fixture(%{kind: :checking, fed_by: :portfolio})
 
       for id <- [closed.id, tracking.id, depot.id, "", "x", -1] do
-        assert BudgetLink.switch_on(anna(c.h), id) == {:error, :no_account}
+        assert BudgetLink.switch_on(scope_of(c.h.anna), id) == {:error, :no_account}
       end
 
       assert Repo.all(Link) == []
       assert Repo.get(Ynab.Connection, c.h.anna)
-      assert BudgetLink.account_choices() |> Enum.map(& &1.id) == [c.account.id]
+      assert BudgetLink.account_choices(scope_of(c.h.anna)) |> Enum.map(& &1.id) == [c.account.id]
     end
   end
 

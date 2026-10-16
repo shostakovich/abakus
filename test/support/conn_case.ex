@@ -69,7 +69,11 @@ defmodule AbakusWeb.ConnCase do
 
   @doc "Signs in the user of the Kasse's person with `participant_id`."
   def log_in_participant(conn, participant_id) do
-    participant = participant_id |> Participants.get_participant!() |> Abakus.Repo.preload(:user)
+    participant =
+      Scope.system()
+      |> Participants.get_participant!(participant_id)
+      |> Abakus.Repo.preload(:user)
+
     log_in_user(conn, participant.user)
   end
 

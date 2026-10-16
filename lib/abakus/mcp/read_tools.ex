@@ -393,7 +393,7 @@ defmodule Abakus.MCP.ReadTools do
       end)
 
     categories =
-      Enum.map_join(Categories.list_categories(:all), ", ", fn c ->
+      Enum.map_join(Categories.list_categories(Scope.system(), :all), ", ", fn c ->
         "#{c.id}: #{c.name}" <> if(c.archived_at, do: " (archived)", else: "")
       end)
 

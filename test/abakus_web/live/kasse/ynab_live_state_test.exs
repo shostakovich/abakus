@@ -41,8 +41,8 @@ defmodule AbakusWeb.Kasse.YnabLiveStateTest do
   end
 
   test "while one change runs, the others wait", %{conn: conn, h: h, fake: fake} do
-    {:ok, _message} = Ynab.save_token(h.anna, FakeYnab.token())
-    {:ok, _message} = Ynab.choose_target(h.anna, "plan-1|acc-geteilt", "2026-09-01")
+    {:ok, _message} = Ynab.save_token(scope_of(h.anna), FakeYnab.token())
+    {:ok, _message} = Ynab.choose_target(scope_of(h.anna), "plan-1|acc-geteilt", "2026-09-01")
     {:ok, view, _html} = live(conn, ~p"/settings/kasse/ynab")
     render_async(view)
 

@@ -8,7 +8,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
 
   alias Abakus.{Categories, Ledger}
   alias Abakus.Categories.Category
-  alias Abakus.Kasse.{Balances, BudgetLink, Expenses, Participants, Recurring}
+  alias Abakus.Kasse.{AccessError, Balances, BudgetLink, Expenses, Recurring}
   alias Abakus.Kasse.BudgetLink.{Link, LinkedTransaction}
   alias Abakus.Kasse.Categories, as: KasseCategories
   alias Abakus.Kasse.Expenses.Expense
@@ -26,12 +26,12 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     kasse_household = kasse_category("Haushalt")
 
     {:ok, _mapping} =
-      BudgetLink.put_category_mapping(%{
+      BudgetLink.put_category_mapping(scope_of(h.anna), %{
         h.food => groceries.id,
         kasse_household.id => household_goods.id
       })
 
-    {:ok, _counts} = BudgetLink.switch_on(Participants.get_participant!(h.anna), account.id)
+    {:ok, _counts} = BudgetLink.switch_on(scope_of(h.anna), account.id)
 
     %{
       h: h,
@@ -43,7 +43,8 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     }
   end
 
-  defp kasse_category(name), do: Enum.find(KasseCategories.list_categories(), &(&1.name == name))
+  defp kasse_category(name),
+    do: Enum.find(KasseCategories.list_categories(Scope.system()), &(&1.name == name))
 
   defp transaction(expense) do
     case Repo.get_by(LinkedTransaction, expense_id: expense.id) do
@@ -262,19 +263,50 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     end
   end
 
+  describe "the budget owner's scope" do
+    test "sees the link, the booking of an expense and the mapping", %{h: h} = context do
+      expense = create!(equal(h, "Markt", 1000, "2026-10-12", h.ben, [h.anna, h.ben]))
+      owner = scope_of(h.anna)
+
+      assert BudgetLink.account(owner).id == context.account.id
+      assert %Transaction{amount: -500} = BudgetLink.transaction_for(owner, expense.id)
+      assert BudgetLink.category_mapping(owner)[h.food] == context.groceries
+    end
+
+    test "is needed for the booking and the mapping", %{h: h} do
+      expense = create!(equal(h, "Markt", 1000, "2026-10-12", h.ben, [h.anna, h.ben]))
+      ben = scope_of(h.ben)
+
+      assert BudgetLink.account(ben) == nil
+      assert BudgetLink.transaction_for(ben, expense.id) == nil
+      assert BudgetLink.transaction_for(Scope.system(), expense.id) == nil
+      assert_raise AccessError, fn -> BudgetLink.category_mapping(ben) end
+      assert_raise AccessError, fn -> BudgetLink.put_category_mapping(ben, %{h.food => nil}) end
+      assert_raise AccessError, fn -> BudgetLink.account_choices(ben) end
+      assert BudgetLink.category_mapping(scope_of(h.anna))[h.food]
+    end
+  end
+
   describe "the category mapping" do
     test "refuses internal and unknown budget categories", %{h: h} do
       ready_to_assign = Categories.ready_to_assign!()
 
       assert {:error, _message} =
-               BudgetLink.put_category_mapping(%{"#{h.food}" => "#{ready_to_assign.id}"})
+               BudgetLink.put_category_mapping(scope_of(h.anna), %{
+                 "#{h.food}" => "#{ready_to_assign.id}"
+               })
 
-      assert {:error, _message} = BudgetLink.put_category_mapping(%{h.food => 999_999})
-      assert {:error, _message} = BudgetLink.put_category_mapping(%{999_999 => nil})
+      assert {:error, _message} =
+               BudgetLink.put_category_mapping(scope_of(h.anna), %{h.food => 999_999})
+
+      assert {:error, _message} =
+               BudgetLink.put_category_mapping(scope_of(h.anna), %{999_999 => nil})
     end
 
     test "clears a mapping with a blank choice", %{h: h} = context do
-      assert {:ok, mapping} = BudgetLink.put_category_mapping(%{"#{h.food}" => ""})
+      assert {:ok, mapping} =
+               BudgetLink.put_category_mapping(scope_of(h.anna), %{"#{h.food}" => ""})
+
       assert mapping == %{context.kasse_household => context.household_goods}
     end
 
@@ -285,7 +317,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
 
       {:ok, _deleted} = Categories.delete_category(groceries, treats)
 
-      assert BudgetLink.category_mapping()[h.food] == context.treats
+      assert BudgetLink.category_mapping(scope_of(h.anna))[h.food] == context.treats
 
       expense = update!(h.ben, expense, %{amount_cents: 2000, original_amount: 2000})
       assert %{amount: -1000, category_id: treats_id} = transaction(expense)

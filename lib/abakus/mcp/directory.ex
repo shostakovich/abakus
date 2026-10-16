@@ -1,17 +1,19 @@
 defmodule Abakus.MCP.Directory do
   @moduledoc """
   The people and categories the tools refer to by name, regardless of case. Lookups list all
-  people, archived ones too; new entries take only active people.
+  people, archived ones too; new entries take only active people. It reads with the system's
+  scope, as the MCP does.
   """
 
   alias Abakus.Kasse.{Categories, Participants}
   alias Abakus.MCP.ToolError
+  alias Abakus.Users.Scope
 
   defstruct people: [], names: %{}
 
   @doc "Everybody, by name."
   def load do
-    people = Participants.list_participants(:all)
+    people = Participants.list_participants(Scope.system(), :all)
     %__MODULE__{people: people, names: Map.new(people, &{&1.id, &1.name})}
   end
 
@@ -55,7 +57,8 @@ defmodule Abakus.MCP.Directory do
   end
 
   @doc "The category named `name`, archived ones too; refuses an unknown one."
-  def category(name), do: find_named(Categories.list_categories(:all), "category", name)
+  def category(name),
+    do: find_named(Categories.list_categories(Scope.system(), :all), "category", name)
 
   defp find_named(items, kind, name) do
     name = String.trim(name)

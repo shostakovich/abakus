@@ -314,16 +314,18 @@ defmodule Abakus.Kasse.Expenses do
   defp names, do: Map.new(Repo.all(from p in Participant, select: {p.id, p.name}))
   defp category_names, do: Map.new(Repo.all(from c in Category, select: {c.id, c.name}))
 
-  @doc "A blank expense form with everybody; options as `Abakus.Kasse.Expenses.Form.new/2`."
+  @doc """
+  A blank expense form with everybody, paid by the scope's person; options as `Abakus.Kasse.Expenses.Form.new/2`.
+  """
   def new_form(%Scope{} = scope, opts) do
-    Access.check!(scope)
-    Form.new(Participants.list_participants(:all), opts)
+    payer = Access.person!(scope)
+    Form.new(Participants.list_participants(scope, :all), [{:participant_id, payer.id} | opts])
   end
 
   @doc "The form of a saved expense."
   def edit_form(%Scope{} = scope, %Expense{} = expense) do
     Access.check!(scope)
-    Form.from_expense(expense, Participants.list_participants(:all))
+    Form.from_expense(expense, Participants.list_participants(scope, :all))
   end
 
   @doc "The split preview of a form; a new expense splits by the id it will get."
@@ -360,7 +362,7 @@ defmodule Abakus.Kasse.Expenses do
     with {:ok, date} <- Dates.parse(form.date),
          currency = Form.currency_code(form),
          true <- Money.valid_currency?(currency) and currency != "EUR" do
-      Form.put_rate(form, Rates.rate(currency, date, opts))
+      Form.put_rate(form, Rates.rate(scope, currency, date, opts))
     else
       _invalid -> Changeset.change(form)
     end
@@ -376,7 +378,7 @@ defmodule Abakus.Kasse.Expenses do
     Access.check!(scope)
 
     with {:ok, input} <- Form.input(form),
-         {:ok, form, input} <- resolve_rate(form, input, existing, opts) do
+         {:ok, form, input} <- resolve_rate(scope, form, input, existing, opts) do
       result =
         if existing,
           do: update_expense(scope, existing, input),
@@ -389,12 +391,12 @@ defmodule Abakus.Kasse.Expenses do
     end
   end
 
-  defp resolve_rate(form, input, existing, opts) do
+  defp resolve_rate(scope, form, input, existing, opts) do
     cond do
       Money.eur?(input.original_currency) -> {:ok, form, input}
       input.fx_rate && form.rate_source != :ecb -> {:ok, form, %{input | fx_source: :manual}}
       input.fx_rate && saved_ecb_rate?(existing, input) -> {:ok, form, %{input | fx_source: :ecb}}
-      true -> lookup_rate(form, input, opts)
+      true -> lookup_rate(scope, form, input, opts)
     end
   end
 
@@ -405,8 +407,8 @@ defmodule Abakus.Kasse.Expenses do
 
   defp saved_ecb_rate?(_existing, _input), do: false
 
-  defp lookup_rate(form, %{original_currency: currency, date: date} = input, opts) do
-    case Rates.rate(currency, date, opts) do
+  defp lookup_rate(scope, form, %{original_currency: currency, date: date} = input, opts) do
+    case Rates.rate(scope, currency, date, opts) do
       {:ok, rate} ->
         form = form |> Form.put_rate({:ok, rate}) |> Changeset.apply_changes()
         {:ok, form, %{input | fx_rate: rate.rate, fx_source: rate.source}}

@@ -8,6 +8,7 @@ defmodule AbakusWeb.Kasse.ExpensesLiveTest do
   alias Abakus.LocalTime
 
   alias Abakus.Kasse.Participants
+  alias Abakus.Users.Scope
 
   setup %{conn: conn} do
     h = household()
@@ -145,8 +146,8 @@ defmodule AbakusWeb.Kasse.ExpensesLiveTest do
     conn: conn,
     h: h
   } do
-    {:ok, ben} =
-      h.ben |> Participants.get_participant!() |> then(&Participants.archive_participant(nil, &1))
+    ben = Participants.get_participant!(Scope.system(), h.ben)
+    {:ok, ben} = Participants.archive_participant(Scope.system(), ben)
 
     {:ok, view, _html} = live(conn, ~p"/kasse")
     refute has_element?(view, "#expense-filter option", "Ben")

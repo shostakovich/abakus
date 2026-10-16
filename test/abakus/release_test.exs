@@ -7,6 +7,7 @@ defmodule Abakus.ReleaseTest do
   alias Abakus.Depot.PortfoliosFixtures
   alias Abakus.FakeYnab
   alias Abakus.Kasse.Participants
+  alias Abakus.Users.Scope
   alias Mix.Tasks.Abakus.AddParticipant
   alias Mix.Tasks.Abakus.Invite
   alias Mix.Tasks.Abakus.YnabImport, as: YnabImportTask
@@ -105,7 +106,7 @@ defmodule Abakus.ReleaseTest do
     assert output =~ "5 expenses"
     assert output =~ "Users matched: none."
     assert output =~ "sign-in page: anna@example.com, ben@example.com, cleo@example.com."
-    assert Participants.get_participant!(5).name == "Cleo"
+    assert Participants.get_participant!(Scope.system(), 5).name == "Cleo"
   end
 
   @tag :tmp_dir

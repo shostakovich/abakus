@@ -419,7 +419,7 @@ defmodule Abakus.Kasse.Recurring do
   end
 
   defp convert(rule, %{original_currency: currency, date: date} = attrs, opts) do
-    case Rates.rate(currency, date, opts) do
+    case Rates.rate(Scope.system(), currency, date, opts) do
       {:ok, rate} ->
         case Money.to_eur_cents(attrs.original_amount, currency, rate.rate) do
           {:ok, cents} when cents > 0 and cents <= @max_cents ->

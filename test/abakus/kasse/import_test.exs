@@ -2,9 +2,21 @@ defmodule Abakus.Kasse.ImportTest do
   use Abakus.DataCase
 
   import Swoosh.TestAssertions
+  import Abakus.KasseFixtures, only: [scope_of: 1]
 
   alias Abakus.ExchangeRates
-  alias Abakus.Kasse.{Activities, Categories, Expenses, Import, Participants, Recurring, Settings}
+
+  alias Abakus.Kasse.{
+    AccessError,
+    Activities,
+    Categories,
+    Expenses,
+    Import,
+    Participants,
+    Recurring,
+    Settings
+  }
+
   alias Abakus.Kasse.FakeYnab
   alias Abakus.Kasse.Ynab.{Connections, Sync, Transactions}
   alias Abakus.Repo
@@ -25,7 +37,7 @@ defmodule Abakus.Kasse.ImportTest do
   end
 
   defp import!(path, emails \\ @emails) do
-    {:ok, report} = Import.run(path, emails)
+    {:ok, report} = Import.run(Scope.system(), path, emails)
     report
   end
 
@@ -42,13 +54,16 @@ defmodule Abakus.Kasse.ImportTest do
     assert_no_email_sent()
 
     assert [{1, "Anna", nil}, {2, "Ben", nil}, {5, "Cleo", %DateTime{}}] =
-             for(p <- Participants.list_participants(:all), do: {p.id, p.name, p.archived_at})
+             for(
+               p <- Participants.list_participants(Scope.system(), :all),
+               do: {p.id, p.name, p.archived_at}
+             )
 
     assert Participants.for_user(anna).id == 1
     assert %{confirmed_at: nil} = Users.get_user_by_email("ben@example.com")
     assert Participants.for_user(Users.get_user_by_email("ben@example.com")).id == 2
 
-    assert for(c <- Categories.list_categories(:all), do: {c.id, c.name}) ==
+    assert for(c <- Categories.list_categories(Scope.system(), :all), do: {c.id, c.name}) ==
              [
                {1, "Lebensmittel"},
                {2, "Restaurant"},
@@ -57,7 +72,7 @@ defmodule Abakus.Kasse.ImportTest do
                {10, "Sonstiges"}
              ]
 
-    assert Settings.group_name() == "WG Sonnenblick"
+    assert Settings.group_name(Scope.system()) == "WG Sonnenblick"
     assert Enum.map(Expenses.list_expenses(Scope.system()), & &1.id) == [15, 12, 9, 7]
     assert Expenses.get_expense!(Scope.system(), 13).deleted_at
     assert Expenses.next_id() == 16
@@ -127,37 +142,46 @@ defmodule Abakus.Kasse.ImportTest do
     assert for(t <- Transactions.list(1), do: {t.expense_id, t.ynab_transaction_id}) ==
              [{7, "ynab-7"}, {9, "ynab-9"}, {15, "ynab-15"}]
 
-    outcome = Sync.sync_person(1, true, now: ~U[2026-10-15 12:00:00Z])
+    outcome = Sync.sync_person(scope_of(1), true, now: ~U[2026-10-15 12:00:00Z])
 
     assert {outcome.error, outcome.result.created, outcome.result.updated} == {nil, 0, 0}
     assert FakeYnab.take_requests(fake) == []
   end
 
   test "refuses a Kasse that holds data already, and missing or unknown people", %{path: path} do
-    assert Import.run(path, Map.delete(@emails, "Cleo")) == {:error, "no email address for Cleo"}
+    assert Import.run(Scope.system(), path, Map.delete(@emails, "Cleo")) ==
+             {:error, "no email address for Cleo"}
 
-    assert Import.run(path, Map.put(@emails, "Dora", "dora@example.com")) ==
+    assert Import.run(Scope.system(), path, Map.put(@emails, "Dora", "dora@example.com")) ==
              {:error, "no person named dora"}
 
-    assert Import.run(path, %{@emails | "Ben" => "ANNA@example.com"}) ==
+    assert Import.run(Scope.system(), path, %{@emails | "Ben" => "ANNA@example.com"}) ==
              {:error, "two people with the same email address"}
 
-    assert {:error, "#{path}.missing is not a file"} == Import.run(path <> ".missing", @emails)
+    assert {:error, "#{path}.missing is not a file"} ==
+             Import.run(Scope.system(), path <> ".missing", @emails)
 
     import!(path)
 
-    assert Import.run(path, @emails) ==
+    assert Import.run(Scope.system(), path, @emails) ==
              {:error, "the Kasse holds data already (kasse_participants)"}
 
     refute Repo.exists?(Abakus.Users.User |> where(email: "dora@example.com"))
   end
 
+  test "runs with the system's scope only", %{path: path} do
+    owner = Scope.for_user(Users.get_user_by_email("owner@example.com"))
+
+    assert_raise AccessError, fn -> Import.run(owner, path, @emails) end
+    assert Participants.list_participants(Scope.system(), :all) == []
+  end
+
   test "refuses an Abakus without users, whose budget owner it would make", %{path: path} do
     Repo.delete_all(Users.User)
 
-    assert {:error, message} = Import.run(path, @emails)
+    assert {:error, message} = Import.run(Scope.system(), path, @emails)
     assert message =~ "invite the budget owner first"
     refute Repo.exists?(Users.User)
-    assert Participants.list_participants(:all) == []
+    assert Participants.list_participants(Scope.system(), :all) == []
   end
 end

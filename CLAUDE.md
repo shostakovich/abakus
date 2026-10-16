@@ -43,10 +43,11 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
 - The Kasse (`Abakus.Kasse`, `AbakusWeb.Kasse`, tables `kasse_…`): money is integer cents, local time is the
   host's `TZ` (`Abakus.LocalTime`, no time zone database). Its jobs and the backup run in the release;
   `config/test.exs` turns them off (`jobs: false`), and tests fake YNAB with a Bandit stub
-  (`Abakus.Kasse.FakeYnab`). The YNAB sync's fingerprint and memo stay byte-identical (ADR 0011). Expenses,
-  recurring expenses, balances, statistics, exports and the activity log take `%Scope{}` (ADR 0019): a person's,
-  or `Scope.system()` for jobs and MCP reads; `Abakus.Kasse.Access` refuses any other. Tests get a person's
-  scope with `scope_of/1` from `Abakus.KasseFixtures`.
+  (`Abakus.Kasse.FakeYnab`). The YNAB sync's fingerprint and memo stay byte-identical (ADR 0011). What the app,
+  MCP, jobs and tasks call takes `%Scope{}` (ADR 0019): a person's, or `Scope.system()` for jobs, tasks and MCP
+  reads; `Abakus.Kasse.Access` refuses any other. The YNAB pages and the budget link act for the scope's person,
+  the YNAB scheduler syncs everybody with the system's. Tests get a person's scope with `scope_of/1` from
+  `Abakus.KasseFixtures`.
 - Exchange rates (`Abakus.ExchangeRates`, tables `exchange_rates`, `exchange_rate_runs`) are shared: one daily job
   loads the ECB rates, each area looks them up by its own rule, manual rates are the Kasse's only; its rule and the
   logged changes to manual rates live in `Abakus.Kasse.Rates`. Tests swap the source in `config/test.exs`

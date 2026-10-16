@@ -3,14 +3,15 @@ defmodule Abakus.Kasse.Ynab.Scheduler do
   Runs the YNAB syncs, one at a time: after the start, shortly after an expense changed
   (debounced), every hour in full, and when a person asks. Changes of a connection run here too,
   so that no sync works with a token or target that changes meanwhile; while it is not running
-  (tests), they run in the caller.
+  (tests), they run in the caller. The runs sync everybody with the system's scope, a person's
+  own request with theirs.
 
   Options: `:debounce` (5 s), `:start_delay` (15 s).
   """
 
   use GenServer
 
-  alias Abakus.Kasse.Expenses
+  alias Abakus.Kasse.{Access, Expenses}
   alias Abakus.Kasse.Ynab.Sync
   alias Abakus.Users.Scope
 
@@ -19,8 +20,11 @@ defmodule Abakus.Kasse.Ynab.Scheduler do
   @doc "Asks for a sync soon; never blocks."
   def trigger, do: cast(:trigger)
 
-  @doc "Starts a full sync of a person in the background."
-  def sync_now(participant_id), do: cast({:sync_now, participant_id})
+  @doc "Starts a full sync of the scope's person in the background."
+  def sync_now(%Scope{} = scope) do
+    Access.person!(scope)
+    cast({:sync_now, scope})
+  end
 
   defp cast(message) do
     if pid = GenServer.whereis(__MODULE__), do: GenServer.cast(pid, message)
@@ -59,11 +63,13 @@ defmodule Abakus.Kasse.Ynab.Scheduler do
   @impl true
   def handle_cast(:trigger, state), do: {:noreply, soon(state)}
 
-  def handle_cast({:sync_now, participant_id}, state) do
+  def handle_cast({:sync_now, scope}, state) do
+    participant_id = scope.participant.id
+
     if MapSet.member?(state.manual, participant_id) do
       {:noreply, state}
     else
-      send(self(), {:sync_now, participant_id})
+      send(self(), {:sync_now, scope})
       {:noreply, %{state | manual: MapSet.put(state.manual, participant_id)}}
     end
   end
@@ -89,16 +95,16 @@ defmodule Abakus.Kasse.Ynab.Scheduler do
     full? =
       is_nil(state.last_full) or now - state.last_full >= Sync.full_interval() - :timer.minutes(1)
 
-    next_run = Sync.sync_all(full?, debounce: state.debounce)
+    next_run = Sync.sync_all(Scope.system(), full?, debounce: state.debounce)
     state = if full?, do: %{state | last_full: now}, else: state
     {:noreply, schedule(state, next_run)}
   end
 
   def handle_info({:run, _stale}, state), do: {:noreply, state}
 
-  def handle_info({:sync_now, participant_id}, state) do
-    Sync.sync_person(participant_id, true, manual: true)
-    {:noreply, %{state | manual: MapSet.delete(state.manual, participant_id)}}
+  def handle_info({:sync_now, scope}, state) do
+    Sync.sync_person(scope, true, manual: true)
+    {:noreply, %{state | manual: MapSet.delete(state.manual, scope.participant.id)}}
   end
 
   defp soon(state) do

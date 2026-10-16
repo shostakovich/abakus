@@ -3,13 +3,14 @@ defmodule Abakus.Kasse.Ynab.Sync do
   Syncs a person's shares to YNAB and keeps the state of the connection: after an invalid token
   it waits for a new one, after a rate limit it backs off from 5 minutes up to an hour (at least
   as long as YNAB asks), and after an unclear error it tries again in 5 minutes. Callers make
-  sure only one sync runs at a time (see `Abakus.Kasse.Ynab.Scheduler`).
+  sure only one sync runs at a time (see `Abakus.Kasse.Ynab.Scheduler`). A person's scope syncs
+  their own connection, the system's everybody's.
   """
 
   require Logger
 
   alias Abakus.Format
-  alias Abakus.Kasse.{Expenses, Ynab}
+  alias Abakus.Kasse.{Access, Expenses, Ynab}
   alias Abakus.Kasse.Ynab.{Connection, Connections, Error, Result, Run, Want}
   alias Abakus.Schema
   alias Abakus.Users.Scope
@@ -33,10 +34,13 @@ defmodule Abakus.Kasse.Ynab.Sync do
   def full_interval, do: @full_interval
 
   @doc """
-  Syncs everybody connected; returns the milliseconds until the next run: an hour, sooner when a
-  run asks for another one (after `:debounce`) or a pause ends. Options: `:debounce`, `:now`.
+  Syncs everybody connected, for the system's scope only; returns the milliseconds until the next
+  run: an hour, sooner when a run asks for another one (after `:debounce`) or a pause ends.
+  Options: `:debounce`, `:now`.
   """
-  def sync_all(full?, opts \\ []) do
+  def sync_all(%Scope{} = scope, full?, opts \\ []) do
+    Access.system!(scope)
+
     connections =
       try do
         {:ok, Connections.list_connected()}
@@ -48,16 +52,16 @@ defmodule Abakus.Kasse.Ynab.Sync do
 
     case connections do
       {:ok, connections} ->
-        Enum.reduce(connections, @full_interval, &next_run(&1, &2, full?, opts))
+        Enum.reduce(connections, @full_interval, &next_run(scope, &1, &2, full?, opts))
 
       :error ->
         :timer.seconds(@retry_delay)
     end
   end
 
-  defp next_run(connection, next_run, full?, opts) do
+  defp next_run(scope, connection, next_run, full?, opts) do
     if Connections.ready?(connection) do
-      outcome = sync_person(connection.participant_id, full?, opts)
+      outcome = sync(scope, connection.participant_id, full?, opts)
 
       next_run =
         if outcome.result.again,
@@ -82,16 +86,19 @@ defmodule Abakus.Kasse.Ynab.Sync do
   end
 
   @doc """
-  Syncs a person: a full sync also retries failed transactions and deletions. Options: `:now`,
-  `:manual` (logged as such).
+  Syncs the scope's person: a full sync also retries failed transactions and deletions. Options:
+  `:now`, `:manual` (logged as such).
   """
-  @spec sync_person(integer(), boolean(), keyword()) :: Outcome.t()
-  def sync_person(participant_id, full?, opts \\ []) do
+  @spec sync_person(Scope.t(), boolean(), keyword()) :: Outcome.t()
+  def sync_person(%Scope{} = scope, full?, opts \\ []),
+    do: sync(scope, Access.person!(scope).id, full?, opts)
+
+  defp sync(scope, participant_id, full?, opts) do
     now = opts |> Keyword.get_lazy(:now, &DateTime.utc_now/0) |> Schema.usec()
 
     outcome =
       try do
-        sync_connected(participant_id, full?, now)
+        sync_connected(scope, participant_id, full?, now)
       rescue
         error -> %Outcome{error: error, message: Exception.message(error)}
       end
@@ -100,7 +107,7 @@ defmodule Abakus.Kasse.Ynab.Sync do
     outcome
   end
 
-  defp sync_connected(participant_id, full?, now) do
+  defp sync_connected(scope, participant_id, full?, now) do
     connection = Connections.get(participant_id)
 
     cond do
@@ -114,18 +121,22 @@ defmodule Abakus.Kasse.Ynab.Sync do
         %Outcome{status: connection, skipped: :backed_off}
 
       true ->
-        run(connection, full?, now)
+        run(scope, connection, full?, now)
     end
   end
 
-  defp run(connection, full?, now) do
+  defp run(scope, connection, full?, now) do
     {result, error} =
       try do
         connected_at =
           connection.connected_at ||
             Connections.ensure_connected_at(connection.participant_id, now)
 
-        case Run.call(Run.new(connection, now), wants(connection, connected_at, now), full?) do
+        case Run.call(
+               Run.new(connection, now),
+               wants(scope, connection, connected_at, now),
+               full?
+             ) do
           {:ok, run} -> {run.result, nil}
           {:error, error, run} -> {run.result, error}
         end
@@ -185,14 +196,14 @@ defmodule Abakus.Kasse.Ynab.Sync do
     end
   end
 
-  defp wants(%Connection{} = connection, connected_at, now) do
+  defp wants(scope, %Connection{} = connection, connected_at, now) do
     participant_id = connection.participant_id
     selection = Ynab.selection(connection, connected_at, Ynab.today(now))
     mapping = Connections.category_mapping(participant_id)
 
     selection
     |> Ynab.Selection.postings(
-      Expenses.list_expenses(Scope.system(), participant_id: participant_id),
+      Expenses.list_expenses(scope, participant_id: participant_id),
       participant_id
     )
     |> Map.new(fn posting ->

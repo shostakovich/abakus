@@ -7,18 +7,36 @@ defmodule Abakus.Kasse.ParticipantsTest do
   import Abakus.UsersFixtures
   import Swoosh.TestAssertions
 
-  alias Abakus.Kasse.{Activities, Expenses, Participants}
+  alias Abakus.Kasse.{AccessError, Activities, Expenses, Participants}
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Users.Scope
   alias Abakus.Users.User
 
   defp add(attrs),
-    do: Participants.create_participant(nil, Map.put_new(attrs, :email, "x@example.com"))
+    do:
+      Participants.create_participant(Scope.system(), Map.put_new(attrs, :email, "x@example.com"))
+
+  test "refuses a signed-in user who is not a person" do
+    anna = person!("Anna")
+    outsider = Scope.for_user(user_fixture())
+
+    assert_raise AccessError, fn -> Participants.list_participants(outsider) end
+    assert_raise AccessError, fn -> Participants.get_participant!(outsider, anna.id) end
+
+    assert_raise AccessError, fn ->
+      Participants.create_participant(outsider, %{name: "Dora", email: "dora@example.com"})
+    end
+
+    assert_raise AccessError, fn -> Participants.archive_participant(outsider, anna) end
+    assert activity_texts(:oldest_first) == ["Person „Anna“ hinzugefügt"]
+  end
 
   test "creates a person with a normalized name and logs it" do
     anna = person!("  Anna  ")
 
-    assert %{name: "Anna", archived_at: nil} = Participants.get_participant!(anna.id)
+    assert %{name: "Anna", archived_at: nil} =
+             Participants.get_participant!(Scope.system(), anna.id)
+
     assert activity_texts(:oldest_first) == ["Person „Anna“ hinzugefügt"]
   end
 
@@ -41,7 +59,10 @@ defmodule Abakus.Kasse.ParticipantsTest do
   describe "a person's user" do
     test "is created for a new email address, which is kept in lower case" do
       {:ok, dora} =
-        Participants.create_participant(nil, %{name: "Dora", email: " Dora@Example.com "})
+        Participants.create_participant(Scope.system(), %{
+          name: "Dora",
+          email: " Dora@Example.com "
+        })
 
       assert %User{email: "dora@example.com", confirmed_at: nil} = dora.user
       assert Repo.get!(Participant, dora.id).user_id == dora.user.id
@@ -51,7 +72,10 @@ defmodule Abakus.Kasse.ParticipantsTest do
       user = user_fixture(email: "owner@example.com")
 
       {:ok, owner} =
-        Participants.create_participant(nil, %{name: "Olga", email: "OWNER@example.com"})
+        Participants.create_participant(Scope.system(), %{
+          name: "Olga",
+          email: "OWNER@example.com"
+        })
 
       assert owner.user.id == user.id
       assert Participants.for_user(user).id == owner.id
@@ -61,13 +85,16 @@ defmodule Abakus.Kasse.ParticipantsTest do
       person!("Anna")
 
       assert {:error, changeset} =
-               Participants.create_participant(nil, %{name: "Anni", email: "anna@example.com"})
+               Participants.create_participant(Scope.system(), %{
+                 name: "Anni",
+                 email: "anna@example.com"
+               })
 
       assert errors_on(changeset) == %{email: ["Diese Adresse gehört schon zu einer Person."]}
     end
 
     test "needs a valid email address, checked with the name" do
-      assert {:error, changeset} = Participants.create_participant(nil, %{name: " "})
+      assert {:error, changeset} = Participants.create_participant(Scope.system(), %{name: " "})
 
       assert errors_on(changeset) == %{
                name: ["Bitte einen Namen für die Person angeben."],
@@ -75,7 +102,10 @@ defmodule Abakus.Kasse.ParticipantsTest do
              }
 
       assert {:error, changeset} =
-               Participants.create_participant(nil, %{name: "Dora", email: "dora at home"})
+               Participants.create_participant(Scope.system(), %{
+                 name: "Dora",
+                 email: "dora at home"
+               })
 
       assert errors_on(changeset) == %{email: ["braucht ein @ und keine Leerzeichen"]}
       assert Repo.aggregate(User, :count) == 0
@@ -85,7 +115,7 @@ defmodule Abakus.Kasse.ParticipantsTest do
     test "makes no person of the Kasse once the person is archived" do
       anna = person!("Anna")
       user = Repo.get!(User, anna.user_id)
-      {:ok, _anna} = Participants.archive_participant(nil, anna)
+      {:ok, _anna} = Participants.archive_participant(Scope.system(), anna)
 
       refute Participants.for_user(user)
     end
@@ -95,7 +125,7 @@ defmodule Abakus.Kasse.ParticipantsTest do
     test "mails a new user a sign-in link" do
       {:ok, dora} =
         Participants.invite_participant(
-          nil,
+          Scope.system(),
           %{name: "Dora", email: "dora@example.com"},
           &"/#{&1}"
         )
@@ -110,7 +140,7 @@ defmodule Abakus.Kasse.ParticipantsTest do
 
       {:ok, _olga} =
         Participants.invite_participant(
-          nil,
+          Scope.system(),
           %{name: "Olga", email: "owner@example.com"},
           &"/#{&1}"
         )
@@ -120,7 +150,7 @@ defmodule Abakus.Kasse.ParticipantsTest do
 
     test "adds nobody and mails nobody when the input is wrong" do
       assert {:error, _changeset} =
-               Participants.invite_participant(nil, %{name: "Dora"}, &"/#{&1}")
+               Participants.invite_participant(Scope.system(), %{name: "Dora"}, &"/#{&1}")
 
       refute_email_sent()
     end
@@ -131,13 +161,15 @@ defmodule Abakus.Kasse.ParticipantsTest do
     ben = person!("Ben")
 
     assert {:ok, %{name: "Benedikt"} = benedikt} =
-             Participants.rename_participant(anna.id, ben, %{name: " Benedikt "})
+             Participants.rename_participant(scope_of(anna.id), ben, %{name: " Benedikt "})
 
     assert {:error, changeset} =
-             Participants.rename_participant(anna.id, benedikt, %{name: "ANNA"})
+             Participants.rename_participant(scope_of(anna.id), benedikt, %{name: "ANNA"})
 
     assert errors_on(changeset) == %{name: ["„ANNA“ gibt es schon."]}
-    assert {:ok, _same} = Participants.rename_participant(anna.id, benedikt, %{name: "Benedikt"})
+
+    assert {:ok, _same} =
+             Participants.rename_participant(scope_of(anna.id), benedikt, %{name: "Benedikt"})
 
     assert [%{actor_id: actor_id} | _] = Activities.list_activities(Scope.system())
     assert actor_id == anna.id
@@ -149,19 +181,23 @@ defmodule Abakus.Kasse.ParticipantsTest do
     person!("berta")
     person!("Anna")
     cleo = person!("Cleo")
-    {:ok, _cleo} = Participants.archive_participant(nil, cleo)
+    {:ok, _cleo} = Participants.archive_participant(Scope.system(), cleo)
 
-    assert Enum.map(Participants.list_participants(), & &1.name) == ~w(Anna berta)
-    assert Enum.map(Participants.list_participants(:archived), & &1.name) == ~w(Cleo)
-    assert Enum.map(Participants.list_participants(:all), & &1.name) == ~w(Anna berta Cleo)
+    assert Enum.map(Participants.list_participants(Scope.system()), & &1.name) == ~w(Anna berta)
+
+    assert Enum.map(Participants.list_participants(Scope.system(), :archived), & &1.name) ==
+             ~w(Cleo)
+
+    assert Enum.map(Participants.list_participants(Scope.system(), :all), & &1.name) ==
+             ~w(Anna berta Cleo)
   end
 
   test "archives and reactivates a person, logging both" do
     cleo = person!("Cleo")
 
-    {:ok, archived} = Participants.archive_participant(nil, cleo)
+    {:ok, archived} = Participants.archive_participant(Scope.system(), cleo)
     assert archived.archived_at
-    {:ok, back} = Participants.reactivate_participant(nil, archived)
+    {:ok, back} = Participants.reactivate_participant(Scope.system(), archived)
     assert back.archived_at == nil
 
     assert Enum.drop(activity_texts(:oldest_first), 1) == [
@@ -176,9 +212,9 @@ defmodule Abakus.Kasse.ParticipantsTest do
     expense =
       h |> equal("Einkauf", 1000, "2026-08-01", h.anna, [h.anna, h.ben]) |> create!(h.anna)
 
-    ben = Participants.get_participant!(h.ben)
+    ben = Participants.get_participant!(Scope.system(), h.ben)
 
-    assert {:error, changeset} = Participants.archive_participant(nil, ben)
+    assert {:error, changeset} = Participants.archive_participant(Scope.system(), ben)
 
     assert errors_on(changeset) == %{
              archived_at: [
@@ -186,12 +222,15 @@ defmodule Abakus.Kasse.ParticipantsTest do
              ]
            }
 
-    refute Participants.get_participant!(h.ben).archived_at
+    refute Participants.get_participant!(Scope.system(), h.ben).archived_at
 
     assert {:ok, _cleo} =
-             Participants.archive_participant(nil, Participants.get_participant!(h.cleo))
+             Participants.archive_participant(
+               Scope.system(),
+               Participants.get_participant!(Scope.system(), h.cleo)
+             )
 
     {:ok, _deleted} = Expenses.delete_expense(scope_of(h.anna), expense)
-    assert {:ok, _ben} = Participants.archive_participant(nil, ben)
+    assert {:ok, _ben} = Participants.archive_participant(Scope.system(), ben)
   end
 end

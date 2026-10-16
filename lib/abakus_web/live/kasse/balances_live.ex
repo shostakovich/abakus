@@ -19,7 +19,7 @@ defmodule AbakusWeb.Kasse.BalancesLive do
 
   defp load(socket) do
     balances = Balances.balances(socket.assigns.current_scope)
-    people = Participants.list_participants(:all)
+    people = Participants.list_participants(socket.assigns.current_scope, :all)
     by_id = Map.new(people, &{&1.id, &1})
 
     rows =
@@ -81,7 +81,7 @@ defmodule AbakusWeb.Kasse.BalancesLive do
             >
               <span class={[
                 "truncate",
-                row.person.id == @current_participant.id && "font-semibold"
+                row.person.id == @current_scope.participant.id && "font-semibold"
               ]}>
                 {name(row.person)}
               </span>

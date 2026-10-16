@@ -8,8 +8,8 @@ defmodule Abakus.Users.ScopeTest do
       assert %Scope{user: nil, participant: nil, system: true} = Scope.system()
     end
 
-    test "differs from an empty scope" do
-      refute Scope.system() == %Scope{}
+    test "differs from an empty scope, which is not the system's" do
+      refute %Scope{}.system
     end
   end
 

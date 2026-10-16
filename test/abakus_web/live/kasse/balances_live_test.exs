@@ -6,6 +6,7 @@ defmodule AbakusWeb.Kasse.BalancesLiveTest do
   import AbakusWeb.PageText
 
   alias Abakus.Kasse.Participants
+  alias Abakus.Users.Scope
 
   setup %{conn: conn} do
     h = household()
@@ -24,7 +25,7 @@ defmodule AbakusWeb.Kasse.BalancesLiveTest do
   test "bars to either side of zero, as wide as the balance", %{conn: conn, h: h} do
     dora = person!("Dora")
     emil = person!("Emil")
-    {:ok, _emil} = Participants.archive_participant(nil, emil)
+    {:ok, _emil} = Participants.archive_participant(Scope.system(), emil)
     create!(equal(h, "Essen", 3000, "2026-10-01", h.anna, [h.anna, h.ben, h.cleo]))
     create!(equal(h, "Kaugummi", 1, "2026-10-01", dora.id, [h.cleo]))
 

@@ -27,7 +27,9 @@ defmodule AbakusWeb.SettingsLiveTest do
   end
 
   defp olga!(user),
-    do: {:ok, _olga} = Participants.create_participant(nil, %{name: "Olga", email: user.email})
+    do:
+      {:ok, _olga} =
+        Participants.create_participant(Scope.system(), %{name: "Olga", email: user.email})
 
   describe "the hub" do
     @tag signed_in_minutes_ago: 11

@@ -24,9 +24,9 @@ defmodule Abakus.MCP.ToolsTest do
     anna = person!("Anna")
     [ben, cleo, dora, emil] = for name <- ~w(Ben Cleo Dora Emil), do: person!(name, anna.id)
 
-    {:ok, _emil} = Participants.archive_participant(anna.id, emil)
-    health = Enum.find(Categories.list_categories(), &(&1.name == "Gesundheit"))
-    {:ok, _health} = Categories.archive_category(anna.id, health)
+    {:ok, _emil} = Participants.archive_participant(scope_of(anna.id), emil)
+    health = Enum.find(Categories.list_categories(Scope.system()), &(&1.name == "Gesundheit"))
+    {:ok, _health} = Categories.archive_category(scope_of(anna.id), health)
 
     for {date, rate} <- [{~D[2026-09-30], @usd_sept_30}, {~D[2026-10-02], @usd_oct_2}],
         do: ExchangeRates.store([{"USD", date, Decimal.from_float(rate)}])
@@ -1300,7 +1300,7 @@ defmodule Abakus.MCP.ToolsTest do
     end
 
     test "prefer a real category named None" do
-      {:ok, _none} = Categories.create_category(nil, %{name: "None"})
+      {:ok, _none} = Categories.create_category(Scope.system(), %{name: "None"})
       ok("create_expense", %{"title" => "Tanken", "amount" => "50", "paid_by" => "Anna"})
 
       ok("create_expense", %{

@@ -61,6 +61,21 @@ defmodule Abakus.Kasse.ExpensesTest do
       assert_raise AccessError, fn -> Activities.list_activities(outsider) end
       assert Expenses.list_expenses(Scope.system()) == []
     end
+
+    test "an archived person is refused", %{h: h} do
+      {:ok, cleo} =
+        Participants.archive_participant(
+          Scope.system(),
+          Participants.get_participant!(Scope.system(), h.cleo)
+        )
+
+      archived = Scope.for_participant(cleo)
+      attrs = equal(h, "Einkauf", 1000, "2026-09-30", h.anna, [h.anna])
+
+      assert_raise AccessError, fn -> Expenses.create_expense(archived, attrs) end
+      assert_raise AccessError, fn -> Expenses.list_expenses(archived) end
+      assert_raise AccessError, fn -> Expenses.new_form(archived, today: ~D[2026-09-30]) end
+    end
   end
 
   describe "creating an expense" do
@@ -242,11 +257,14 @@ defmodule Abakus.Kasse.ExpensesTest do
     end
 
     test "accepts archived people and categories", %{h: h} do
-      [food | _] = Categories.list_categories()
-      {:ok, _archived} = Categories.archive_category(nil, food)
+      [food | _] = Categories.list_categories(Scope.system())
+      {:ok, _archived} = Categories.archive_category(Scope.system(), food)
 
       {:ok, _archived} =
-        Participants.archive_participant(nil, Participants.get_participant!(h.cleo))
+        Participants.archive_participant(
+          Scope.system(),
+          Participants.get_participant!(Scope.system(), h.cleo)
+        )
 
       assert {:ok, _expense} =
                Expenses.create_expense(
@@ -619,7 +637,7 @@ defmodule Abakus.Kasse.ExpensesTest do
   end
 
   test "learns categories from the live expenses with an active category, newest first", %{h: h} do
-    [_food, other, archived | _] = Categories.list_categories()
+    [_food, other, archived | _] = Categories.list_categories(Scope.system())
 
     mk = fn title, date, category_id ->
       create!(%{equal(h, title, 1000, date, h.anna, [h.anna, h.ben]) | category_id: category_id})
@@ -633,7 +651,7 @@ defmodule Abakus.Kasse.ExpensesTest do
     {:ok, _deleted} =
       Expenses.delete_expense(Scope.system(), mk.("Gelöscht", "2026-09-13", h.food))
 
-    {:ok, _archived} = Categories.archive_category(nil, archived)
+    {:ok, _archived} = Categories.archive_category(Scope.system(), archived)
 
     create!(
       Map.put(equal(h, "Kaufland", 500, "2026-09-14", h.ben, [h.anna]), :reimbursement, true)

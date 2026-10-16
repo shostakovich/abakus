@@ -124,7 +124,7 @@ defmodule Abakus.MCP.WriteTools do
   end
 
   defp ecb_rate(currency, date, opts) do
-    case Rates.rate(currency, date, today: ReadTools.today(opts)) do
+    case Rates.rate(Scope.system(), currency, date, today: ReadTools.today(opts)) do
       {:ok, rate} ->
         {rate.rate, rate.source}
 

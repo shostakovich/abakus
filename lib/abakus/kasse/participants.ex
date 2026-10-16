@@ -1,21 +1,23 @@
 defmodule Abakus.Kasse.Participants do
   @moduledoc """
-  The people of the group, each a user who signs in (ADR 0008). Every change is logged with the person who made it (`actor_id`, nil
-  when it happened automatically).
+  The people of the group, each a user who signs in (ADR 0008). The functions take the caller's scope, which
+  `Abakus.Kasse.Access` checks; every change is logged with the scope's person, or none for the system.
   """
 
   import Ecto.Query
 
-  alias Abakus.Kasse.{Activities, Balances}
+  alias Abakus.Kasse.{Access, Activities, Balances}
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Money
   alias Abakus.Repo
   alias Abakus.Users
-  alias Abakus.Users.User
+  alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
 
   @doc "The people, by name: `:active` (default), `:archived` or `:all`."
-  def list_participants(which \\ :active) do
+  def list_participants(%Scope{} = scope, which \\ :active) do
+    Access.check!(scope)
+
     Participant
     |> archived(which)
     |> order_by([p], [fragment("? COLLATE NOCASE", p.name), p.id])
@@ -27,12 +29,18 @@ defmodule Abakus.Kasse.Participants do
   defp archived(query, :all), do: query
 
   @doc "The person with `id`, or nil."
-  def get_participant(id), do: Repo.get(Participant, id)
+  def get_participant(%Scope{} = scope, id) do
+    Access.check!(scope)
+    Repo.get(Participant, id)
+  end
 
   @doc "The person with `id`; raises if there is none."
-  def get_participant!(id), do: Repo.get!(Participant, id)
+  def get_participant!(%Scope{} = scope, id) do
+    Access.check!(scope)
+    Repo.get!(Participant, id)
+  end
 
-  @doc "The active person a user is, or nil."
+  @doc "The active person a user is, or nil; it builds the scope, so it takes none."
   def for_user(%User{id: user_id}) when is_integer(user_id) do
     Repo.one(from p in Participant, where: p.user_id == ^user_id and is_nil(p.archived_at))
   end
@@ -51,7 +59,8 @@ defmodule Abakus.Kasse.Participants do
   Adds a person as the user with their email address, creating that user if there is none; a user who already is a
   person is refused.
   """
-  def create_participant(actor_id, attrs) do
+  def create_participant(%Scope{} = scope, attrs) do
+    actor_id = Access.actor_id!(scope)
     changeset = change_new_participant(attrs)
 
     Repo.transact(fn ->
@@ -97,8 +106,8 @@ defmodule Abakus.Kasse.Participants do
   Adds a person like `create_participant/2` and mails their user a sign-in link unless they have signed in before.
   `{:error, :mail_not_delivered, participant}`: the person exists, but has to ask for a link on the sign-in page.
   """
-  def invite_participant(actor_id, attrs, magic_link_url_fun) do
-    with {:ok, participant} <- create_participant(actor_id, attrs) do
+  def invite_participant(%Scope{} = scope, attrs, magic_link_url_fun) do
+    with {:ok, participant} <- create_participant(scope, attrs) do
       invite(participant, magic_link_url_fun)
     end
   end
@@ -113,7 +122,9 @@ defmodule Abakus.Kasse.Participants do
   defp invite(participant, _url_fun), do: {:ok, participant}
 
   @doc "Renames a person; logged only when the name changes."
-  def rename_participant(actor_id, %Participant{} = participant, attrs) do
+  def rename_participant(%Scope{} = scope, %Participant{} = participant, attrs) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       with {:ok, renamed} <- Repo.update(Participant.changeset(participant, attrs)),
            {:ok, _activity} <- log_rename(actor_id, participant.name, renamed.name) do
@@ -131,7 +142,9 @@ defmodule Abakus.Kasse.Participants do
   Archives a person. Refused while their balance is not 0: they would vanish from the forms while
   money is still owed.
   """
-  def archive_participant(actor_id, %Participant{} = participant) do
+  def archive_participant(%Scope{} = scope, %Participant{} = participant) do
+    actor_id = Access.actor_id!(scope)
+
     Repo.transact(fn ->
       case Balances.balance_of(participant.id) do
         0 ->
@@ -151,8 +164,10 @@ defmodule Abakus.Kasse.Participants do
   end
 
   @doc "Brings an archived person back."
-  def reactivate_participant(actor_id, %Participant{} = participant),
-    do: Repo.transact(fn -> set_archived(actor_id, participant, nil, "reaktiviert") end)
+  def reactivate_participant(%Scope{} = scope, %Participant{} = participant) do
+    actor_id = Access.actor_id!(scope)
+    Repo.transact(fn -> set_archived(actor_id, participant, nil, "reaktiviert") end)
+  end
 
   # Logged even when nothing changes.
   defp set_archived(actor_id, participant, archived_at, verb) do

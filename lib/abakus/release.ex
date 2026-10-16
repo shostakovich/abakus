@@ -4,6 +4,7 @@ defmodule Abakus.Release do
   alias Abakus.Depot
   alias Abakus.Kasse
   alias Abakus.Kasse.Participants
+  alias Abakus.Users.Scope
   alias Abakus.YnabImport
   alias Abakus.YnabImport.Report
   alias AbakusWeb.UserAuth
@@ -54,7 +55,7 @@ defmodule Abakus.Release do
     start_without_server()
 
     case Participants.invite_participant(
-           nil,
+           Scope.system(),
            %{email: email, name: name},
            &UserAuth.magic_link_url/1
          ) do
@@ -83,7 +84,7 @@ defmodule Abakus.Release do
   def import_kasse(path, emails) do
     start_without_server()
 
-    case Kasse.Import.run(path, emails) do
+    case Kasse.Import.run(Scope.system(), path, emails) do
       {:ok, report} ->
         rows = Enum.map_join(report.rows, ", ", fn {table, count} -> "#{count} #{table}" end)
         IO.puts("Imported the Kasse: #{rows}.")

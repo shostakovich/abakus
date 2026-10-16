@@ -6,7 +6,7 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
   import ExUnit.CaptureLog
   import Abakus.KasseFixtures
 
-  alias Abakus.Kasse.{Categories, Expenses, FakeYnab, Participants, Ynab}
+  alias Abakus.Kasse.{AccessError, Categories, Expenses, FakeYnab, Participants, Ynab}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Kasse.Ynab.{Connections, Error, Result, Scheduler, Sync, Transactions}
   alias Abakus.LocalTime
@@ -71,8 +71,14 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
       {:ok, _deleted} =
         Expenses.delete_expense(scope_of(h.anna), Expenses.get_expense!(Scope.system(), id))
 
+  defp map_food(h) do
+    categories = Categories.list_categories(Scope.system(), :all)
+    Connections.put_category_mapping(h.anna, %{h.food => "c-food"}, categories, %{})
+  end
+
   defp sync(h, opts \\ []),
-    do: Sync.sync_person(h.anna, Keyword.get(opts, :full, false), now: opts[:now] || @now)
+    do:
+      Sync.sync_person(scope_of(h.anna), Keyword.get(opts, :full, false), now: opts[:now] || @now)
 
   defp sync!(h, opts \\ []) do
     outcome = sync(h, opts)
@@ -99,7 +105,7 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
     test "creates a transaction with the person's share as an outflow in the mapped category",
          %{h: h, fake: fake} do
       connect(h)
-      {:ok, _changed} = Connections.put_category_mapping(h.anna, %{h.food => "c-food"}, %{})
+      {:ok, _changed} = map_food(h)
       id = create(shared(h, "Einkauf Rewe", 8400, "2026-09-15"))
 
       assert sync!(h).created == 1
@@ -196,9 +202,13 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
       assert requests(fake) == [@post]
 
       {:ok, _renamed} =
-        Participants.rename_participant(nil, Participants.get_participant!(h.anna), %{
-          name: "Änna"
-        })
+        Participants.rename_participant(
+          Scope.system(),
+          Participants.get_participant!(Scope.system(), h.anna),
+          %{
+            name: "Änna"
+          }
+        )
 
       assert sync!(h).updated == 5
       assert requests(fake) == [@patch]
@@ -232,7 +242,7 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
       sync!(h)
       assert [%{category_id: "c-out", payee_name: "Pizza Napoli"}] = FakeYnab.live(fake)
 
-      {:ok, _changed} = Connections.put_category_mapping(h.anna, %{h.food => "c-food"}, %{})
+      {:ok, _changed} = map_food(h)
       assert sync!(h).updated == 1
       assert [%{category_id: "c-food"}] = FakeYnab.live(fake)
     end
@@ -487,7 +497,7 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
       FakeYnab.fail(fake, 429)
       edit(h, id, &%{&1 | title: "Kino 2"})
 
-      next_run = Sync.sync_all(false, now: @now, debounce: 5000)
+      next_run = Sync.sync_all(Scope.system(), false, now: @now, debounce: 5000)
 
       assert next_run >= :timer.minutes(5)
       assert next_run <= :timer.minutes(5) + 1000
@@ -687,6 +697,34 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
     end
   end
 
+  describe "the scope" do
+    test "a person's scope syncs their own connection, not another person's", %{h: h} do
+      connect(h)
+      create(shared(h, "Einkauf", 1000, "2026-09-15"))
+
+      assert Sync.sync_person(scope_of(h.ben), true, now: @now).skipped == :not_ready
+      assert rows(h) == %{}
+      assert sync!(h).created == 1
+    end
+
+    test "only the system's scope syncs everybody", %{h: h} do
+      connect(h)
+      create(shared(h, "Einkauf", 1000, "2026-09-15"))
+
+      assert_raise AccessError, fn -> Sync.sync_all(scope_of(h.anna), true, now: @now) end
+      assert rows(h) == %{}
+
+      Sync.sync_all(Scope.system(), true, now: @now)
+      assert map_size(rows(h)) == 1
+    end
+
+    test "the system has no connection of its own" do
+      assert_raise AccessError, fn -> Sync.sync_person(Scope.system(), true) end
+      assert_raise AccessError, fn -> Ynab.overview(Scope.system()) end
+      assert_raise AccessError, fn -> Scheduler.sync_now(Scope.system()) end
+    end
+  end
+
   describe "the scheduler" do
     defp start_scheduler(opts \\ []),
       do: start_supervised!({Scheduler, Keyword.merge([start_delay: :timer.hours(1)], opts)})
@@ -694,7 +732,7 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
     defp hang_a_sync(h, fake) do
       FakeYnab.hold(fake)
       requests(fake)
-      Scheduler.sync_now(h.anna)
+      Scheduler.sync_now(scope_of(h.anna))
       eventually(fn -> FakeYnab.request_count(fake) > 0 end)
     end
 
@@ -764,7 +802,7 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
       FakeYnab.hold(fake)
 
       {elapsed, {:ok, _message}} =
-        :timer.tc(fn -> Ynab.sync_now(h.anna) end, :millisecond)
+        :timer.tc(fn -> Ynab.sync_now(scope_of(h.anna)) end, :millisecond)
 
       assert elapsed < 1000
 
@@ -805,22 +843,30 @@ defmodule Abakus.Kasse.Ynab.SyncTest do
     create(shared(h, "Kino", 2400, "2026-09-20"))
     FakeYnab.fail(fake, 503)
 
-    log = capture_log(fn -> Sync.sync_person(h.anna, true, manual: true, now: @now) end)
+    log = capture_log(fn -> Sync.sync_person(scope_of(h.anna), true, manual: true, now: @now) end)
     assert log =~ "YNAB sync (now) failed"
     refute log =~ FakeYnab.token()
     assert log =~ "•••"
 
     {:ok, false} = Connections.put_token(h.anna, "expired")
-    capture_log(fn -> Sync.sync_person(h.anna, true, manual: true, now: later(6)) end)
+    capture_log(fn -> Sync.sync_person(scope_of(h.anna), true, manual: true, now: later(6)) end)
 
-    refute capture_log(fn -> Sync.sync_person(h.anna, true, manual: true, now: later(7)) end) =~
+    refute capture_log(fn ->
+             Sync.sync_person(scope_of(h.anna), true, manual: true, now: later(7))
+           end) =~
              "failed"
   end
 
   test "an archived category keeps its mapping", %{h: h} do
     connect(h)
-    {:ok, _archived} = Categories.archive_category(nil, Categories.get_category!(h.food))
-    {:ok, _changed} = Connections.put_category_mapping(h.anna, %{h.food => "c-food"}, %{})
+
+    {:ok, _archived} =
+      Categories.archive_category(
+        Scope.system(),
+        Categories.get_category!(Scope.system(), h.food)
+      )
+
+    {:ok, _changed} = map_food(h)
 
     assert Connections.category_mapping(h.anna) == %{h.food => "c-food"}
   end

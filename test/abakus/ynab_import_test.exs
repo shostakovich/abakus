@@ -6,7 +6,7 @@ defmodule Abakus.YnabImportTest do
   alias Abakus.{Categories, FakeYnab, KasseFixtures, Ledger, UsersFixtures, YnabImport}
   alias Abakus.Categories.{Assignment, Category, CategoryGroup, TargetSnooze, TargetVersion}
   alias Abakus.Depot.{BudgetFeed, PortfoliosFixtures}
-  alias Abakus.Kasse.{BudgetLink, Participants}
+  alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.{Account, BankBalance, Payee, Transaction}
   alias Abakus.YnabImport.Report
 
@@ -195,18 +195,22 @@ defmodule Abakus.YnabImportTest do
     test "refuses once the Kasse is linked to the budget" do
       account = account_fixture(%{kind: :cash})
       %{anna: anna} = KasseFixtures.household()
-      {:ok, _linked} = BudgetLink.switch_on(Participants.get_participant!(anna), account.id)
+      {:ok, _linked} = BudgetLink.switch_on(KasseFixtures.scope_of(anna), account.id)
 
       assert YnabImport.import_plan(@plan) == {:error, :own_data}
     end
 
     test "refuses once a Kasse category is mapped to the budget, which it would drop" do
       {:ok, _report} = YnabImport.import_plan(@plan)
-      %{food: food} = KasseFixtures.household()
-      {:ok, _mapping} = BudgetLink.put_category_mapping(%{food => category("🛒 Lebensmittel").id})
+      %{anna: anna, food: food} = KasseFixtures.household()
+
+      {:ok, _mapping} =
+        BudgetLink.put_category_mapping(KasseFixtures.scope_of(anna), %{
+          food => category("🛒 Lebensmittel").id
+        })
 
       assert YnabImport.import_plan(@plan) == {:error, :own_data}
-      assert BudgetLink.category_mapping() != %{}
+      assert BudgetLink.category_mapping(KasseFixtures.scope_of(anna)) != %{}
     end
 
     test "refuses once a portfolio is an account, which it would drop" do

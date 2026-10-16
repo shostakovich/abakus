@@ -15,11 +15,12 @@ defmodule AbakusWeb.Kasse.RecurringLive do
     do: {:ok, socket |> assign(page_title: "Wiederkehrende Ausgaben") |> load()}
 
   defp load(socket) do
-    people = Map.new(Participants.list_participants(:all), &{&1.id, &1.name})
-    categories = Map.new(Categories.list_categories(:all), &{&1.id, &1})
+    scope = socket.assigns.current_scope
+    people = Map.new(Participants.list_participants(scope, :all), &{&1.id, &1.name})
+    categories = Map.new(Categories.list_categories(scope, :all), &{&1.id, &1})
 
     rows =
-      for %{template: template} = rule <- Recurring.list_rules(socket.assigns.current_scope) do
+      for %{template: template} = rule <- Recurring.list_rules(scope) do
         %{
           rule: rule,
           payer: people[template.paid_by_id],

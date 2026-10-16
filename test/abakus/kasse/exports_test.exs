@@ -67,10 +67,15 @@ defmodule Abakus.Kasse.ExportsTest do
         |> Map.put("Anna", anna.id)
 
       {:ok, _xaver} =
-        Participants.archive_participant(nil, Participants.get_participant!(people["Xaver"]))
+        Participants.archive_participant(
+          Scope.system(),
+          Participants.get_participant!(Scope.system(), people["Xaver"])
+        )
 
-      {:ok, _settings} = Settings.update_settings(nil, %{group_name: ~s(WG <Zipfel> & "Co")})
-      categories = Map.new(Categories.list_categories(), &{&1.name, &1.id})
+      {:ok, _settings} =
+        Settings.update_settings(Scope.system(), %{group_name: ~s(WG <Zipfel> & "Co")})
+
+      categories = Map.new(Categories.list_categories(Scope.system()), &{&1.name, &1.id})
       [anna, ben, dora, jue] = Enum.map(~w(Anna Ben Dora Jürgen), &people[&1])
 
       inputs = [
@@ -243,7 +248,7 @@ defmodule Abakus.Kasse.ExportsTest do
     test "keeps its keys in the documented order" do
       anna = person!("Anna")
       ben = person!("Ben", anna.id)
-      food = Enum.find(Categories.list_categories(), &(&1.name == "Lebensmittel"))
+      food = Enum.find(Categories.list_categories(Scope.system()), &(&1.name == "Lebensmittel"))
 
       {:ok, expense} =
         Expenses.create_expense(scope_of(anna.id), %{

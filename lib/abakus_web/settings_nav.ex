@@ -42,7 +42,7 @@ defmodule AbakusWeb.SettingsNav do
   defp ynab_import, do: entry(:ynab_import, "YNAB-Import", "history", ~p"/settings/budget/ynab")
 
   defp kasse(scope) do
-    linked? = BudgetLink.account(scope.participant) != nil
+    linked? = BudgetLink.account(scope) != nil
 
     [
       kasse_entry(:kasse_group, "Gruppe", "house", ~p"/settings/kasse"),

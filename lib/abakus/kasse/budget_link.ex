@@ -11,16 +11,17 @@ defmodule Abakus.Kasse.BudgetLink do
   change category, memo, flag, cleared state and approval; a later Kasse change keeps a category or memo the
   register changed, but a change of the Kasse category always writes the mapped category.
 
-  The link's tables stay out of the MCP's SQL sandbox, as they point into the budget.
+  The functions the link's page calls take the caller's scope; only the budget owner's may switch it on, choose the
+  account or map the categories. The link's tables stay out of the MCP's SQL sandbox, as they point into the budget.
   """
 
   import Ecto.Query
 
   alias Abakus.Categories.Category, as: BudgetCategory
+  alias Abakus.Kasse.{Access, AccessError}
   alias Abakus.Kasse.BudgetLink.{CategoryMapping, Link, LinkedTransaction}
   alias Abakus.Kasse.Categories.Category
   alias Abakus.Kasse.Expenses.Expense
-  alias Abakus.Kasse.Participants.Participant
   alias Abakus.Kasse.Ynab.{Connections, Posting, Scheduler}
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
@@ -35,7 +36,12 @@ defmodule Abakus.Kasse.BudgetLink do
   def register_fields, do: @register_fields
 
   @doc "The accounts a participant can be linked to: open budget accounts not fed by another app, in order."
-  def account_choices do
+  def account_choices(%Scope{} = scope) do
+    owner!(scope)
+    choices()
+  end
+
+  defp choices do
     Repo.all(
       from a in Account,
         where:
@@ -46,22 +52,25 @@ defmodule Abakus.Kasse.BudgetLink do
   end
 
   @doc """
-  Links the budget owner's participant to the budget, in one step after the final YNAB import: the account
-  `account_id` (one of `account_choices/0`) becomes the one fed by shared expenses; its transactions whose memo ends
-  with the YNAB sync's marker become their expenses' linked transactions, whatever their date; every expense since
-  the start date of the participant's YNAB connection without one gets one; and the YNAB connection is removed.
+  Links the scope's person, the budget owner's participant, to the budget, in one step after the final YNAB import:
+  the account `account_id` (one of `account_choices/1`) becomes the one fed by shared expenses; its transactions
+  whose memo ends with the YNAB sync's marker become their expenses' linked transactions, whatever their date; every
+  expense since the start date of the participant's YNAB connection without one gets one; and the YNAB connection is
+  removed.
   Returns `{:ok, %{adopted:, created:, unadoptable:, left:}}`, `unadoptable` the marked transactions of an expense
   that could not be adopted (a split, a transfer or a second one for the expense), `left` those without an expense
   that wants a booking; or `{:error, reason}`: `:not_budget_owner`, `:linked`, `:no_account` or a message in German.
   """
-  def switch_on(%Participant{} = participant, account_id) do
-    participant = Repo.preload(participant, :user)
+  def switch_on(%Scope{} = scope, account_id) do
+    participant = Access.person!(scope)
 
-    Scheduler.change_connection(fn -> Repo.transact(fn -> link(participant, account_id) end) end)
+    Scheduler.change_connection(fn ->
+      Repo.transact(fn -> link(scope, participant, account_id) end)
+    end)
   end
 
-  defp link(participant, account_id) do
-    with :ok <- check_linkable(participant),
+  defp link(scope, participant, account_id) do
+    with :ok <- check_linkable(scope, participant),
          {:ok, account} <- feed(account_id),
          {:ok, connection} <- Connections.remove(participant.id) do
       %Link{
@@ -74,9 +83,9 @@ defmodule Abakus.Kasse.BudgetLink do
     end
   end
 
-  defp check_linkable(participant) do
+  defp check_linkable(scope, participant) do
     cond do
-      not Scope.budget_owner?(Scope.for_user(participant.user)) -> {:error, :not_budget_owner}
+      not Scope.budget_owner?(scope) -> {:error, :not_budget_owner}
       Repo.exists?(where(Link, participant_id: ^participant.id)) -> {:error, :linked}
       true -> :ok
     end
@@ -84,7 +93,7 @@ defmodule Abakus.Kasse.BudgetLink do
 
   defp feed(account_id) do
     with {:ok, id} <- Abakus.Schema.cast_id(account_id),
-         %Account{} = account <- Enum.find(account_choices(), &(&1.id == id)) do
+         %Account{} = account <- Enum.find(choices(), &(&1.id == id)) do
       Repo.update_all(
         from(a in Account, where: a.fed_by == :shared_expenses and a.id != ^id),
         set: [fed_by: nil]
@@ -187,11 +196,19 @@ defmodule Abakus.Kasse.BudgetLink do
     end
   end
 
-  @doc "The account the participant's shares are booked in; nil while they are not linked."
-  def account(%Participant{id: id}) do
+  @doc "The account the scope's person's shares are booked in; nil while they are not linked."
+  def account(%Scope{} = scope) do
+    id = Access.person!(scope).id
+
     Repo.one(
       from l in Link, join: a in assoc(l, :account), where: l.participant_id == ^id, select: a
     )
+  end
+
+  @doc "From when switching on books the scope's person's shares: the start date of their YNAB connection, or nil."
+  def start_date(%Scope{} = scope) do
+    connection = Connections.get(Access.person!(scope).id)
+    connection && connection.start_date
   end
 
   @doc "Whether anything is linked or mapped, which a wipe of the budget would break or drop."
@@ -367,7 +384,12 @@ defmodule Abakus.Kasse.BudgetLink do
   end
 
   @doc "The budget category each Kasse category is mapped to, by Kasse category id; unmapped ones are missing."
-  def category_mapping do
+  def category_mapping(%Scope{} = scope) do
+    owner!(scope)
+    mapping()
+  end
+
+  defp mapping do
     Repo.all(from m in CategoryMapping, select: {m.category_id, m.budget_category_id})
     |> Map.new()
   end
@@ -376,7 +398,9 @@ defmodule Abakus.Kasse.BudgetLink do
   Maps Kasse categories to budget categories: budget category ids (nil or `""` for none) by Kasse category id,
   also as text; Kasse categories left out keep theirs. Only regular budget categories can be chosen.
   """
-  def put_category_mapping(mapping) do
+  def put_category_mapping(%Scope{} = scope, mapping) do
+    owner!(scope)
+
     with {:ok, mapping} <- cast_mapping(mapping) do
       Repo.transact(fn -> replace_mapping(mapping) end)
     end
@@ -395,7 +419,7 @@ defmodule Abakus.Kasse.BudgetLink do
         )
       )
 
-      {:ok, category_mapping()}
+      {:ok, mapping()}
     end
   end
 
@@ -457,8 +481,13 @@ defmodule Abakus.Kasse.BudgetLink do
     |> Map.new()
   end
 
-  @doc "The transaction an expense is linked to, with its category; nil for none."
-  def transaction_for(expense_id) do
+  @doc "The transaction an expense is linked to, with its category, for the budget owner; nil for none."
+  def transaction_for(%Scope{} = scope, expense_id) do
+    Access.check!(scope)
+    if Scope.budget_owner?(scope), do: linked_to(expense_id)
+  end
+
+  defp linked_to(expense_id) do
     Repo.one(
       from t in Transaction,
         join: l in LinkedTransaction,
@@ -468,5 +497,10 @@ defmodule Abakus.Kasse.BudgetLink do
         limit: 1,
         preload: :category
     )
+  end
+
+  defp owner!(scope) do
+    Access.check!(scope)
+    if !Scope.budget_owner?(scope), do: raise(AccessError)
   end
 end

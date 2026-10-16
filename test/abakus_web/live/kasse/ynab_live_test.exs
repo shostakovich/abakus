@@ -24,8 +24,8 @@ defmodule AbakusWeb.Kasse.YnabLiveTest do
   end
 
   defp connect(h) do
-    {:ok, _message} = Ynab.save_token(h.anna, FakeYnab.token())
-    {:ok, _message} = Ynab.choose_target(h.anna, @target, "2026-09-01")
+    {:ok, _message} = Ynab.save_token(scope_of(h.anna), FakeYnab.token())
+    {:ok, _message} = Ynab.choose_target(scope_of(h.anna), @target, "2026-09-01")
   end
 
   # A finished action reloads the overview in a second task.
@@ -94,7 +94,7 @@ defmodule AbakusWeb.Kasse.YnabLiveTest do
   end
 
   test "choosing plan, account and start, then mapping categories", %{conn: conn, h: h} do
-    {:ok, _message} = Ynab.save_token(h.anna, FakeYnab.token())
+    {:ok, _message} = Ynab.save_token(scope_of(h.anna), FakeYnab.token())
     view = open(conn)
 
     view
@@ -135,7 +135,7 @@ defmodule AbakusWeb.Kasse.YnabLiveTest do
     connect(h)
     create!(equal(h, "Kino", 2400, "2026-09-20", h.anna, [h.anna, h.ben]))
     create!(equal(h, "REJECT me", 1000, "2026-09-21", h.ben, [h.anna, h.ben]))
-    Sync.sync_person(h.anna, true)
+    Sync.sync_person(scope_of(h.anna), true)
 
     view = open(conn)
 

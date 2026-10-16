@@ -51,7 +51,7 @@ defmodule Abakus.Kasse.Exports do
   @doc "Every expense with the shares of the people involved, for German Excel."
   def expenses_csv(%Scope{} = scope, period, opts \\ []) do
     expenses = expenses(scope, period)
-    people = involved(expenses)
+    people = involved(scope, expenses)
 
     rows =
       for expense <- expenses do
@@ -81,23 +81,23 @@ defmodule Abakus.Kasse.Exports do
       else: ""
   end
 
-  defp involved(expenses) do
+  defp involved(scope, expenses) do
     ids =
       for expense <- expenses,
           id <- [expense.paid_by_id | Enum.map(expense.shares, & &1.participant_id)],
           into: MapSet.new(),
           do: id
 
-    Enum.filter(Participants.list_participants(:all), &MapSet.member?(ids, &1.id))
+    Enum.filter(Participants.list_participants(scope, :all), &MapSet.member?(ids, &1.id))
   end
 
   @doc "Everything about the expenses, with all people, as JSON."
   def expenses_json(%Scope{} = scope, period, opts \\ []) do
-    people = Participants.list_participants(:all)
+    people = Participants.list_participants(scope, :all)
     names = Map.new(people, &{&1.id, &1.name})
 
     document =
-      [group: Settings.group_name(), exported_at: timestamp(now(opts))] ++
+      [group: Settings.group_name(scope), exported_at: timestamp(now(opts))] ++
         period_dates(period) ++
         [
           currency: "EUR",

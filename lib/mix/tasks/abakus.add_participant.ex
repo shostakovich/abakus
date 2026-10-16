@@ -11,6 +11,7 @@ defmodule Mix.Tasks.Abakus.AddParticipant do
   use Mix.Task
 
   alias Abakus.Kasse.Participants
+  alias Abakus.Users.Scope
 
   @requirements ["app.start"]
 
@@ -22,7 +23,7 @@ defmodule Mix.Tasks.Abakus.AddParticipant do
       url
     end
 
-    case Participants.invite_participant(nil, %{email: email, name: name}, url_fun) do
+    case Participants.invite_participant(Scope.system(), %{email: email, name: name}, url_fun) do
       {:ok, participant} ->
         Mix.shell().info("Added #{participant.name} to the Kasse." <> link_text())
 
