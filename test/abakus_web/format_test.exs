@@ -83,12 +83,5 @@ defmodule AbakusWeb.FormatTest do
       assert Format.long_date(~D[2027-06-01]) == "1. Juni 2027"
       assert Format.day_month(~D[2026-12-24]) == "24. Dezember"
     end
-
-    test "the browser's date when it is a plausible one" do
-      assert Format.today("2026-03-07") == ~D[2026-03-07]
-      assert Format.today("1999-12-31") == Date.utc_today()
-      assert Format.today("07.03.2026") == Date.utc_today()
-      assert Format.today(nil) == Date.utc_today()
-    end
   end
 end

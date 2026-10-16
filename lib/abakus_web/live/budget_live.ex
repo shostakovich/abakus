@@ -14,7 +14,7 @@ defmodule AbakusWeb.BudgetLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{Budget, Categories}
+  alias Abakus.{Budget, Categories, LocalTime}
 
   alias AbakusWeb.BudgetLive.{
     CategoryEditor,
@@ -231,8 +231,7 @@ defmodule AbakusWeb.BudgetLive do
      socket
      |> assign(
        page_title: "Budget",
-       # The budget computes every month up to the browser's.
-       current: Date.beginning_of_month(Format.today(connect["today"])),
+       current: Date.beginning_of_month(LocalTime.today()),
        fit: fit(connect["fit"]),
        income: Categories.income_by_payee(),
        focus: nil,

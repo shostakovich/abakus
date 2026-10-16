@@ -4,8 +4,8 @@ defmodule Abakus.LocalTime do
   @doc "The local wall-clock time."
   def now, do: NaiveDateTime.local_now()
 
-  @doc "The local calendar date."
-  def today, do: NaiveDateTime.to_date(now())
+  @doc "The local calendar date, or the one set as `:today` in the app environment."
+  def today, do: Application.get_env(:abakus, :today) || NaiveDateTime.to_date(now())
 
   @doc "The local wall-clock time of a UTC moment."
   def from_utc(%DateTime{} = utc) do

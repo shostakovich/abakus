@@ -187,21 +187,10 @@ defmodule AbakusWeb.BudgetLiveTest do
       refute has_element?(view, "#month-2026-10")
     end
 
-    test "the current month is the browser's, unless its date is implausible", c do
-      tomorrow = Date.add(Date.utc_today(), 1)
-      {:ok, view, _html} = open(c.conn, ~p"/budget", today: Date.to_iso8601(tomorrow))
+    test "the current month is the host's local one", c do
+      {:ok, view, _html} = open(c.conn, ~p"/budget", today: ~D[2031-03-15])
 
-      assert has_element?(
-               view,
-               "#month-#{Calendar.strftime(tomorrow, "%Y-%m")}[aria-current=date]"
-             )
-
-      {:ok, view, _html} = open(c.conn, ~p"/budget", today: "9999-12-31")
-
-      assert has_element?(
-               view,
-               "#month-#{Calendar.strftime(Date.utc_today(), "%Y-%m")}[aria-current=date]"
-             )
+      assert has_element?(view, "#month-2031-03[aria-current=date]")
     end
 
     test "focusing a month that is not shown changes nothing", c do
@@ -392,8 +381,10 @@ defmodule AbakusWeb.BudgetLiveTest do
       "compact" => Keyword.get(opts, :compact, false)
     }
 
+    fix_today(Keyword.get(opts, :today, ~D[2026-10-10]))
+
     conn
-    |> put_connect_params(%{"today" => Keyword.get(opts, :today, "2026-10-10"), "fit" => fit})
+    |> put_connect_params(%{"fit" => fit})
     |> live(path)
   end
 

@@ -20,10 +20,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
     do: transaction_fixture(account_id: account.id, date: date, amount: amount, cleared: :cleared)
 
   defp open(conn, account) do
-    {:ok, view, _html} =
-      conn
-      |> put_connect_params(%{"today" => "2026-10-10"})
-      |> live(~p"/budget/accounts/#{account}")
+    {:ok, view, _html} = live(conn, ~p"/budget/accounts/#{account}")
 
     view |> element("#reconcile-open") |> render_click()
     view
