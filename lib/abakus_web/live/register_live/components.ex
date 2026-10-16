@@ -98,7 +98,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       AccountGroups.kind_label(account.kind),
       account.closed && "Geschlossen",
       account.last_reconciled_at &&
-        "Abgeglichen am #{Format.date(DateTime.to_date(account.last_reconciled_at))}",
+        "Abgeglichen am #{Format.date(account.last_reconciled_at)}",
       account.note
     ]
     |> Enum.filter(& &1)

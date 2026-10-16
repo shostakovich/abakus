@@ -15,6 +15,7 @@ defmodule Abakus.FormatTest do
       utc = ~U[2026-10-09 23:30:00.000000Z]
 
       assert Format.date(utc) == utc |> LocalTime.from_utc() |> Format.date()
+      assert Format.date(LocalTime.to_utc(~N[2026-10-09 00:30:00])) == "09.10.2026"
     end
 
     test "long_date/1 writes the month out" do

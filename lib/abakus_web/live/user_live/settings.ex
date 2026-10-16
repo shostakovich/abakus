@@ -37,9 +37,9 @@ defmodule AbakusWeb.UserLive.Settings do
             >
               <:leading><.icon name="key-round" class="size-5 text-base-content/70" /></:leading>
               <:meta>
-                angelegt {Format.date(DateTime.to_date(passkey.inserted_at))}<span :if={
+                angelegt {Format.date(passkey.inserted_at)}<span :if={passkey.last_used_at}><.meta_sep />zuletzt genutzt {Format.date(
                   passkey.last_used_at
-                }><.meta_sep />zuletzt genutzt {Format.date(DateTime.to_date(passkey.last_used_at))}</span>
+                )}</span>
               </:meta>
               <:action
                 id={"passkey-#{passkey.id}-delete"}

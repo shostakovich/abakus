@@ -54,7 +54,7 @@ defmodule AbakusWeb.SettingsLive do
       <div :if={@status} class="flex flex-wrap items-center gap-2">
         <.badge tone={:success}>abgeschlossen</.badge>
         <span class="text-sm text-base-content/70">
-          übernommen am {Format.date(DateTime.to_date(@status.imported_at))}
+          übernommen am {Format.date(@status.imported_at)}
         </span>
       </div>
       <p :if={@status} id="ynab-import-summary" class="max-w-prose">

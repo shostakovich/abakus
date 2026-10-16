@@ -7,6 +7,7 @@ defmodule AbakusWeb.SettingsLiveTest do
   import Abakus.KasseFixtures
 
   alias Abakus.Kasse.Participants
+  alias Abakus.LocalTime
   alias Abakus.Users.Scope
   alias Abakus.YnabImport
 
@@ -195,7 +196,7 @@ defmodule AbakusWeb.SettingsLiveTest do
       assert has_element?(
                view,
                "#ynab-import",
-               "übernommen am #{Calendar.strftime(imported_at, "%d.%m.%Y")}"
+               "übernommen am #{Calendar.strftime(LocalTime.date(imported_at), "%d.%m.%Y")}"
              )
 
       assert has_element?(
