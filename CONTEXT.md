@@ -213,13 +213,19 @@ A person who signs in; sees the areas they may use.
 _Avoid_: Account (that is where money is kept), member
 
 **Budget owner**:
-The one user who owns the budget, the first one invited; only they see the Budget area.
+The one user who owns the budget, the first one invited; only they see the budget's pages in Finanzen.
 _Avoid_: Admin, budget user
 
 **Area**:
-A part of the app with its own pages under its path, its sidebar section and its dock: Budget, Kasse and Depot. `/`
-opens the area used last. UI "Bereich".
+A part of the app with its own sidebar and dock: Finanzen and Kasse (ADR 0017). A user with both switches between
+them at the top of the sidebar; `/` opens the area used last. Code areas such as `Abakus.Depot` are not areas of the
+UI. UI "Bereich".
 _Avoid_: Module, app, section (that is the sidebar's)
+
+**Finanzen**:
+The area of the budget and the portfolios: the budget's pages for the budget owner, Vermögen, Depots and Import &
+Sync for everyone with the budget or a portfolio. Code: `:finanzen`. UI "Finanzen".
+_Avoid_: Budget area, Depot area, finances
 
 ## Kasse
 
@@ -318,9 +324,9 @@ transaction, assignment, category) mean the Depot's here and are qualified in co
 belong to one user, who alone sees them; securities, prices, exchange rates and compositions are shared by all.
 
 **Depot**:
-The area of the portfolios; a user sees it once they have a portfolio, created or imported under Einstellungen. UI
-"Depot".
-_Avoid_: Portfolio app, investments
+The code area of the portfolios (`Abakus.Depot`, `/depot`), shown in Finanzen as Vermögen and Depots; a user without
+the budget gets Finanzen once they have a portfolio, created or imported under Einstellungen. No UI area of its own.
+_Avoid_: Portfolio app, investments, Depot area
 
 **Security**:
 A tradable instrument (ETF, fund, share) identified by its ISIN, with its own price history from Yahoo or the PP
@@ -330,7 +336,7 @@ _Avoid_: Asset, instrument, position
 
 **Portfolio**:
 A securities account at a bank; it holds shares of securities. UI "Depot".
-_Avoid_: Securities account; Depot in code (that is the area)
+_Avoid_: Securities account; Depot in code (that is the code area)
 
 **Depot number**:
 The number the bank gives a portfolio, as its documents print it; only its digits count when comparing. UI

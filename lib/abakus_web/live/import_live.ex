@@ -31,6 +31,7 @@ defmodule AbakusWeb.ImportLive do
       area={@area}
       current={:import}
       account_groups={@account_groups}
+      depot_sidebar={@depot_sidebar}
       account_dialog={@account_dialog}
     >
       <.header>

@@ -55,7 +55,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={{:depots, @portfolio && @portfolio.id, nil}}
+      current={{:depots, @portfolio && @portfolio.id}}
     >
       <.depots_header
         tab={:transactions}

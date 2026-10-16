@@ -30,7 +30,7 @@ defmodule AbakusWeb.Router do
   end
 
   pipeline :depot do
-    plug :require_area, :depot
+    plug :require_area, :finanzen
   end
 
   # Public without a session: the health check and `/mcp/<secret>`, which checks its callers itself. Everything
@@ -54,7 +54,8 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.UserAuth, :require_authenticated},
         {AbakusWeb.Areas, {:require, :budget}},
         {AbakusWeb.AccountGroups, :assign},
-        {AbakusWeb.AccountDialog, :attach}
+        {AbakusWeb.AccountDialog, :attach},
+        {AbakusWeb.Depot.Sidebar, :budget}
       ] do
       live "/", BudgetLive
       live "/accounts", AccountsLive
@@ -101,7 +102,7 @@ defmodule AbakusWeb.Router do
     live_session :depot,
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
-        {AbakusWeb.Areas, {:require, :depot}},
+        {AbakusWeb.Areas, {:require, :finanzen}},
         {AbakusWeb.AccountGroups, :assign},
         {AbakusWeb.AccountDialog, :attach},
         AbakusWeb.Depot.Sidebar,
@@ -119,7 +120,7 @@ defmodule AbakusWeb.Router do
     get "/receipts/:id", ReceiptController, :show
   end
 
-  # The Depot's settings: creating the first portfolio, or importing a PP file, opens the Depot.
+  # The Depot's settings: creating the first portfolio, or importing a PP file, opens Finanzen and the Depot.
   scope "/depot", AbakusWeb.Depot do
     pipe_through [:browser, :require_authenticated_user]
 

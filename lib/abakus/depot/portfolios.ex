@@ -604,47 +604,26 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   @doc """
-  What the sidebar shows on `today`, valued as the holdings screen values all portfolios, amounts
-  in euro cents; nothing retired, whatever it still holds:
-
-  - `portfolios`: the active portfolios by name, each with the `value` of its securities
-  - `accounts`: the active accounts by name, reference accounts too, each with its `value` and the
-    active `portfolio` it is the reference account of (the first by name if several settle
-    against it), nil for none
-
-  With nothing retired the values add up to net worth.
+  What the sidebar shows on `today`: the active portfolios by name, each with the `value` of its
+  securities in euro cents, valued as the holdings screen values all portfolios; nothing retired,
+  whatever it still holds.
   """
   def sidebar(%Scope{} = scope, today) do
     transactions = list_transactions(scope)
-    accounts = list_accounts(scope)
-    market = load_market(transactions, accounts, today, :since_date)
+    market = load_market(transactions, list_accounts(scope), today, :since_date)
     holdings = Valuation.holdings(transactions, today)
-    balances = Valuation.balances(transactions, today)
-    portfolios = scope |> list_portfolios() |> Enum.reject(& &1.retired)
-    owners = reference_account_owners(portfolios)
-    by_id = Map.new(portfolios, &{&1.id, &1})
 
-    %{
-      portfolios:
-        for portfolio <- portfolios do
-          value =
-            holdings
-            |> Enum.filter(&(&1.portfolio_id == portfolio.id))
-            |> Enum.sum_by(&Valuation.value(&1, market, today))
+    portfolios =
+      for portfolio <- list_portfolios(scope), not portfolio.retired do
+        value =
+          holdings
+          |> Enum.filter(&(&1.portfolio_id == portfolio.id))
+          |> Enum.sum_by(&Valuation.value(&1, market, today))
 
-          %{portfolio: portfolio, value: value}
-        end,
-      accounts:
-        for account <- accounts, not account.retired do
-          balance = Map.get(balances, account.id, 0)
+        %{portfolio: portfolio, value: value}
+      end
 
-          %{
-            account: account,
-            value: Market.to_euros(market, balance, account.currency, today),
-            portfolio: by_id[owners[account.id]]
-          }
-        end
-    }
+    %{portfolios: portfolios}
   end
 
   # The value of each holding, without the price and purchase value the holdings screen shows.

@@ -38,7 +38,7 @@ defmodule AbakusWeb.ImportLiveTest do
 
     assert has_element?(
              view,
-             ~s|#app-shell > nav[aria-label=Hauptnavigation] a[href="/budget/import"]|
+             ~s|#app-shell-rail a[href="/budget/import"]|
            )
 
     assert has_element?(view, ~s|#file-import[href="/budget/import"]|, "Datei-Import")

@@ -26,7 +26,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={{:depots, shown_portfolio_id(assigns), @account_id}}
+      current={{:depots, shown_portfolio_id(assigns)}}
     >
       <.depots_header
         tab={:holdings}

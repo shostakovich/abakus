@@ -5,8 +5,8 @@ defmodule AbakusWeb.Depot.SidebarTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
 
   alias Abakus.Depot.MarketData
-  alias Abakus.LocalTime
-  alias Abakus.Repo
+  alias Abakus.{DomainFixtures, LocalTime, Repo}
+  alias Abakus.Users.{Scope, User}
 
   setup :register_and_log_in_user_without_budget
 
@@ -34,7 +34,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
     )
   end
 
-  test "lists the views, the active portfolios and accounts, then the settings", ctx do
+  test "lists the views, the active portfolios, then the settings, but no accounts", ctx do
     retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
     holding(ctx.scope, retired, 5, 100)
     closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
@@ -52,7 +52,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
       |> Enum.map(&(&1 |> LazyHTML.text() |> String.split() |> hd()))
 
     assert Enum.drop_while(labels, &(&1 != "Vermögen")) ==
-             ~w(Vermögen Depots Depots Aktiv Verrechnungskonten Tagesgeld Einstellungen)
+             ~w(Vermögen Import Depots Aktiv Einstellungen)
 
     assert has_element?(lv, "#holdings-portfolio-#{retired.id}")
     refute has_element?(lv, sidebar_link(~p"/depot/holdings?#{[portfolio: retired.id]}"))
@@ -86,7 +86,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
     assert has_element?(lv, "#transaction-modal h2", "Buchung erfassen")
   end
 
-  describe "the portfolios and accounts" do
+  describe "the portfolios" do
     setup %{scope: scope} do
       account = account_fixture(scope, %{name: "Konto Langfristig"})
       deposit(scope, account, 240)
@@ -98,20 +98,15 @@ defmodule AbakusWeb.Depot.SidebarTest do
       %{
         account: account,
         portfolio: portfolio,
-        savings: savings,
-        portfolio_path: ~p"/depot/holdings?#{[portfolio: portfolio.id]}",
-        account_path: ~p"/depot/holdings?#{[portfolio: portfolio.id, account: account.id]}",
-        savings_path: ~p"/depot/holdings?#{[account: savings.id]}"
+        portfolio_path: ~p"/depot/holdings?#{[portfolio: portfolio.id]}"
       }
     end
 
-    test "show each portfolio's securities and each account's balance, adding up to net worth",
-         ctx do
+    test "show each portfolio's securities, while net worth holds the accounts too", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
 
       assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.000,00"
-      assert lv |> element(sidebar_link(ctx.account_path)) |> render() =~ "240,00"
-      assert lv |> element(sidebar_link(ctx.savings_path)) |> render() =~ "1.000,00"
+      refute has_element?(lv, "aside nav", "Tagesgeld")
       assert lv |> element("#net-worth") |> render() =~ "2.240 €"
     end
 
@@ -120,25 +115,20 @@ defmodule AbakusWeb.Depot.SidebarTest do
 
       rail = "#app-shell-rail"
       refute has_element?(lv, "#{rail} a[href='#{ctx.portfolio_path}']")
-      refute has_element?(lv, "#{rail} a[href='#{ctx.savings_path}']")
       assert has_element?(lv, "#{rail} a[href='/depot/holdings']")
       assert has_element?(lv, "#{rail} a[href='/settings']")
       assert has_element?(lv, sidebar_link(ctx.portfolio_path))
     end
 
-    test "link to the holdings, an account with its row marked", ctx do
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
-
+    test "mark the portfolio of an account the holdings show marked", ctx do
       {:ok, lv, _html} =
-        lv
-        |> element(sidebar_link(ctx.account_path))
-        |> render_click()
-        |> follow_redirect(ctx.conn)
+        live(
+          ctx.conn,
+          ~p"/depot/holdings?#{[portfolio: ctx.portfolio.id, account: ctx.account.id]}"
+        )
 
       assert has_element?(lv, "#account-#{ctx.account.id}[aria-current=true]")
-      assert has_element?(lv, sidebar_link(ctx.account_path) <> "[aria-current=page]")
-      refute has_element?(lv, sidebar_link(ctx.portfolio_path) <> "[aria-current]")
-      refute has_element?(lv, sidebar_link("/depot/holdings") <> "[aria-current]")
+      assert has_element?(lv, sidebar_link(ctx.portfolio_path) <> "[aria-current=page]")
     end
 
     test "mark the open portfolio, or the screen", ctx do
@@ -170,7 +160,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
     end
   end
 
-  test "shows only the user's own portfolios and accounts", ctx do
+  test "shows only the user's own portfolios", ctx do
     portfolio_fixture(ctx.scope, %{name: "Eigenes Depot"})
     other = Abakus.UsersFixtures.user_scope_fixture()
     deposit(other, account_fixture(other, %{name: "Fremdes Konto"}), 1)
@@ -190,5 +180,33 @@ defmodule AbakusWeb.Depot.SidebarTest do
 
     assert has_element?(lv, ~s(#depots-tabs a[href="/depot/transactions"]), "Buchungen")
     refute has_element?(lv, "#inbox-count")
+  end
+
+  describe "on the budget's pages" do
+    setup do
+      owner = Repo.get_by!(User, budget_owner: true)
+      %{owner: Scope.for_user(owner), conn: log_in_user(build_conn(), owner)}
+    end
+
+    test "lists the portfolios too, kept up to date with the prices", ctx do
+      portfolio = portfolio_fixture(ctx.owner, %{name: "Langfristig"})
+      holding(ctx.owner, portfolio, 10, 100)
+      path = ~p"/depot/holdings?#{[portfolio: portfolio.id]}"
+
+      giro = DomainFixtures.account_fixture(name: "Girokonto")
+      {:ok, lv, _html} = live(ctx.conn, ~p"/budget/accounts/#{giro}")
+
+      assert lv |> element(sidebar_link(path)) |> render() =~ "1.000,00"
+      assert has_element?(lv, sidebar_link("/depot/holdings"), "Depots")
+
+      Repo.update_all(Abakus.Depot.Securities.Security,
+        set: [latest_date: today(), latest_close: price(110)]
+      )
+
+      MarketData.run_daily()
+      send(lv.pid, :receipts_updated)
+
+      assert lv |> element(sidebar_link(path)) |> render() =~ "1.100,00"
+    end
   end
 end

@@ -82,15 +82,15 @@ defmodule AbakusWeb.LayoutsTest do
     import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
 
     @areas [
-      %{key: :budget, label: "Budget", icon: "wallet", path: "/budget"},
-      %{key: :kasse, label: "Kasse", icon: "history", path: "/kasse"}
+      %{key: :finanzen, label: "Finanzen", icon: "wallet", path: "/budget"},
+      %{key: :kasse, label: "Kasse", icon: "receipt", path: "/kasse"}
     ]
 
     defp app_with_areas(area) do
       assigns = %{
         areas: @areas,
         area: area,
-        scope: Scope.for_user(%User{email: "kim@example.com"})
+        scope: %Scope{user: %User{email: "kim@example.com", budget_owner: true}}
       }
 
       ~H"""
@@ -104,15 +104,26 @@ defmodule AbakusWeb.LayoutsTest do
 
     defp texts(html, selector), do: html |> LazyHTML.query(selector) |> Enum.map(&LazyHTML.text/1)
 
-    test "the sidebar groups the entries by area under the brand Abakus" do
+    defp hrefs(html, selector),
+      do: html |> LazyHTML.query(selector) |> Enum.flat_map(&LazyHTML.attribute(&1, "href"))
+
+    test "the sidebar switches the area under the brand Abakus and shows only the current one" do
       html = app_with_areas(:kasse)
 
-      assert texts(html, "#app-shell-sidebar-full .menu-title") |> Enum.map(&String.trim/1) == [
-               "Budget",
-               "Kasse"
-             ]
-
       assert html |> texts("#app-shell-sidebar-full") |> hd() =~ "Abakus"
+
+      assert html
+             |> LazyHTML.query(~s|#app-shell-sidebar-full nav[aria-label="Bereich wechseln"] a|)
+             |> Enum.map(
+               &{LazyHTML.attribute(&1, "href"), LazyHTML.attribute(&1, "aria-current")}
+             ) ==
+               [{["/budget"], []}, {["/kasse"], ["page"]}]
+
+      sidebar = ~s|#app-shell-sidebar-full nav[aria-label="Hauptnavigation"] a|
+      assert "/kasse/balances" in hrefs(html, sidebar)
+      refute "/budget" in hrefs(html, sidebar)
+      assert "/budget" in hrefs(app_with_areas(:finanzen), sidebar)
+      refute "/kasse" in hrefs(app_with_areas(:finanzen), sidebar)
     end
 
     test "the top bar's title switches the area" do
@@ -128,17 +139,12 @@ defmodule AbakusWeb.LayoutsTest do
                [{["/budget"], []}, {["/kasse"], ["page"]}]
     end
 
-    test "the dock holds only the current area's entries" do
-      dock = fn area ->
-        area
-        |> app_with_areas()
-        |> LazyHTML.query(".dock a")
-        |> Enum.flat_map(&LazyHTML.attribute(&1, "href"))
-      end
+    test "the dock holds only the current area's pages" do
+      assert hrefs(app_with_areas(:kasse), ".dock a") ==
+               ["/kasse", "/kasse/balances", "/kasse/activity"]
 
-      assert dock.(:kasse) == ["/kasse", "/kasse/balances", "/kasse/activity", "/kasse/settings"]
-      assert "/budget" in dock.(:budget)
-      refute "/kasse" in dock.(:budget)
+      assert hrefs(app_with_areas(:finanzen), ".dock a") ==
+               ["/budget", "/depot", "/budget/accounts/all"]
     end
   end
 

@@ -31,7 +31,7 @@ defmodule AbakusWeb.Depot.PerformanceLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={{:depots, @performance.portfolio && @performance.portfolio.id, nil}}
+      current={{:depots, @performance.portfolio && @performance.portfolio.id}}
     >
       <.depots_header
         tab={:performance}

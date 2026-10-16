@@ -29,7 +29,7 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={{:depots, nil, nil}}
+      current={{:depots, nil}}
     >
       <.depots_header tab={:securities} inbox={@depot_sidebar.inbox}>
         <:subtitle>

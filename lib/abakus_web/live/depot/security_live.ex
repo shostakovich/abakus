@@ -21,7 +21,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
   @recent_distributions 8
 
   # The sidebar marks „Depots“, which the page belongs to.
-  @current {:depots, nil, nil}
+  @current {:depots, nil}
 
   @impl true
   def render(%{security: nil} = assigns) do

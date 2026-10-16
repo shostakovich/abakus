@@ -3,7 +3,7 @@ defmodule AbakusWeb.Layouts do
   use AbakusWeb, :html
 
   alias Abakus.Names
-  alias AbakusWeb.AccountGroups
+  alias AbakusWeb.{AccountGroups, Areas}
   alias AbakusWeb.Depot.{Format, Sidebar, TransactionDialog}
 
   @budget_pages [:budget, :accounts, :all_accounts, :import]
@@ -21,23 +21,24 @@ defmodule AbakusWeb.Layouts do
       [nil, :budget, :accounts, :all_accounts, :import, :settings] ++ @kasse_pages ++ @depot_pages
 
   attr :areas, :list, required: true, doc: "the areas the user may use, from `AbakusWeb.Areas`"
-  attr :area, :atom, required: true, doc: "the current area's key; its entries go into the dock"
+
+  attr :area, :atom,
+    required: true,
+    doc: "the current area's key; the sidebar and the dock show its entries"
 
   attr :account_groups, :list,
     default: [],
-    doc: "from `AbakusWeb.AccountGroups`; the sidebar lists the open ones"
+    doc: "from `AbakusWeb.AccountGroups`; Finanzen lists the open ones"
 
   attr :account_id, :integer, default: nil, doc: "the account whose register is shown"
 
   attr :depot_sidebar, :map,
     default: nil,
-    doc:
-      "the portfolios and accounts with their values and the inbox's count from `AbakusWeb.Depot.Sidebar`, on the Depot's pages"
+    doc: "the portfolios with their values from `AbakusWeb.Depot.Sidebar`, which Finanzen lists"
 
   attr :depot_marked, :any,
     default: nil,
-    doc:
-      "on the Depots pages: the portfolio or account they show, `{:depot_portfolio, id}` or `{:depot_account, id}`"
+    doc: "on the Depots pages: the portfolio they show, `{:depot_portfolio, id}`"
 
   attr :account_dialog, :map,
     default: nil,
@@ -52,32 +53,42 @@ defmodule AbakusWeb.Layouts do
   slot :fab, doc: "the page's main action on phones, a `<.fab>`"
 
   @doc """
-  Signed-in pages in Setzkasten's sidebar shell, grouped into the areas the user may use, then the settings.
+  Signed-in pages in Setzkasten's sidebar shell, showing the current area's entries, then the settings.
 
-  The Budget: Budget and all accounts, the open accounts by group with their balance and how many transactions
-  wait for approval and "Konto hinzufügen" (not in the icon rail or the dock), then Import & Sync. The Kasse:
-  Ausgaben, Salden, Aktivität and Gruppe (its settings). The Depot: Vermögen and Depots; on its own pages also
-  the active portfolios and accounts with their values (not in the icon rail or the dock).
+  Finanzen: Budget, Vermögen, Alle Konten and Import & Sync, the open budget and tracking accounts with their
+  balance and how many transactions wait for approval and „Konto hinzufügen“, then Depots with the active
+  portfolios and their values; a user without the budget sees only Vermögen, Import & Sync and Depots. The Kasse:
+  Ausgaben, Salden, Aktivität and Gruppe (its settings). Accounts and portfolios stay out of the icon rail and
+  the dock.
 
-  With one area the brand is its name; with more, each area's entries start with its name as section title, and
-  in the top bar the brand is a menu that switches the area. On phones the dock holds the current area's entries;
-  its "Mehr" opens the sidebar with everything else, and the account menu offers the settings too.
+  With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
+  brand is a menu that switches the area. On phones the dock holds the current area's pages; its "Mehr" opens
+  the sidebar with everything else, and the account menu offers the settings too.
   """
   def app(assigns) do
+    finanzen? = assigns.area == :finanzen
+
     assigns =
       assign(assigns,
-        budget?: Enum.any?(assigns.areas, &(&1.key == :budget)),
-        groups: AccountGroups.open(assigns.account_groups),
-        nav_key: nav_key(assigns),
-        kasse?: Enum.any?(assigns.areas, &(&1.key == :kasse)),
-        depot?: Enum.any?(assigns.areas, &(&1.key == :depot)),
-        in_budget_dock?: assigns.area == :budget,
-        in_kasse_dock?: assigns.area == :kasse,
-        in_depot_dock?: assigns.area == :depot
+        finanzen?: finanzen?,
+        budget?: finanzen? and Areas.allowed?(assigns.current_scope, :budget),
+        depot?: finanzen? and Areas.allowed?(assigns.current_scope, :depot),
+        kasse?: assigns.area == :kasse,
+        groups: if(finanzen?, do: AccountGroups.open(assigns.account_groups), else: []),
+        portfolios:
+          (finanzen? && assigns.depot_sidebar && assigns.depot_sidebar.portfolios) || [],
+        nav_key: nav_key(assigns)
       )
 
     ~H"""
-    <.app_shell layout={:sidebar} current={@nav_key} width={@width} amount_tone={:negative}>
+    <.app_shell
+      layout={:sidebar}
+      current={@nav_key}
+      current_area={@area}
+      area_label="Bereich wechseln"
+      width={@width}
+      amount_tone={:negative}
+    >
       <:brand :let={place}>
         <img src={~p"/images/icon.svg"} alt="" width="28" height="28" class="size-7 shrink-0" />
         <.area_switcher :if={place == :bar and length(@areas) > 1} areas={@areas} area={@area} />
@@ -85,16 +96,31 @@ defmodule AbakusWeb.Layouts do
           {brand_name(@areas)}
         </span>
       </:brand>
+      <:area
+        :for={area <- @areas}
+        key={area.key}
+        id={"area-#{area.key}"}
+        label={area.label}
+        icon={area.icon}
+        href={area.path}
+      />
       <:nav
         :if={@budget?}
         key={:budget}
         id="side-budget"
         label="Budget"
         icon="wallet"
-        section={section(@areas, "Budget")}
-        dock={@in_budget_dock?}
         navigate={navigate(~p"/budget", @current)}
         href={href(~p"/budget", @current)}
+      />
+      <:nav
+        :if={@finanzen?}
+        key={:depot_wealth}
+        id="side-depot-wealth"
+        label="Vermögen"
+        icon="trending-up"
+        navigate={navigate(~p"/depot", @current)}
+        href={href(~p"/depot", @current)}
       />
       <:nav
         :if={@budget?}
@@ -102,9 +128,18 @@ defmodule AbakusWeb.Layouts do
         id="side-all-accounts"
         label="Alle Konten"
         icon="landmark"
-        dock={@in_budget_dock?}
         navigate={navigate(~p"/budget/accounts/all", @current)}
         href={href(~p"/budget/accounts/all", @current)}
+      />
+      <:nav
+        :if={@finanzen?}
+        key={:import}
+        id="side-import"
+        label="Import & Sync"
+        icon="refresh-cw"
+        dock={false}
+        navigate={if @budget?, do: navigate(~p"/budget/import", @current)}
+        href={if @budget?, do: href(~p"/budget/import", @current), else: ~p"/depot/import"}
       />
       <:nav
         :for={{group, row, first?} <- account_rows(@groups)}
@@ -115,7 +150,7 @@ defmodule AbakusWeb.Layouts do
         amount={row.balance}
         count={if row.unapproved > 0, do: row.unapproved}
         count_label="zu bestätigen"
-        section={account_section(@areas, group)}
+        section={account_section(group)}
         section_amount={if first?, do: group.balance}
         rail={false}
         dock={false}
@@ -129,18 +164,30 @@ defmodule AbakusWeb.Layouts do
         id="side-add-account"
         label="Konto hinzufügen"
         icon="plus"
-        section={List.last(@groups)[:label]}
+        section={@groups |> List.last() |> then(&(&1 && account_section(&1)))}
         on_click={JS.push("open_account_dialog")}
       />
       <:nav
-        :if={@budget?}
-        key={:import}
-        id="side-import"
-        label="Import & Sync"
-        icon="refresh-cw"
-        dock={@in_budget_dock?}
-        navigate={navigate(~p"/budget/import", @current)}
-        href={href(~p"/budget/import", @current)}
+        :if={@depot?}
+        key={:depots}
+        id="side-depots"
+        label="Depots"
+        icon="briefcase"
+        navigate={navigate(~p"/depot/holdings", @current)}
+        href={href(~p"/depot/holdings", @current)}
+      />
+      <:nav
+        :for={row <- @portfolios}
+        key={{:depot_portfolio, row.portfolio.id}}
+        id={"side-depot-portfolio-#{row.portfolio.id}"}
+        label={Format.portfolio_name(row.portfolio)}
+        icon="briefcase"
+        amount={row.value}
+        rail={false}
+        dock={false}
+        parent={:depots}
+        navigate={navigate(Sidebar.portfolio_path(row.portfolio), @current)}
+        href={href(Sidebar.portfolio_path(row.portfolio), @current)}
       />
       <:nav
         :if={@kasse?}
@@ -149,8 +196,6 @@ defmodule AbakusWeb.Layouts do
         label="Ausgaben"
         plush="receipt"
         icon="receipt"
-        section={section(@areas, "Kasse")}
-        dock={@in_kasse_dock?}
         navigate={navigate(~p"/kasse", @current)}
         href={href(~p"/kasse", @current)}
       />
@@ -161,7 +206,6 @@ defmodule AbakusWeb.Layouts do
         label="Salden"
         plush="scale"
         icon="scale"
-        dock={@in_kasse_dock?}
         navigate={navigate(~p"/kasse/balances", @current)}
         href={href(~p"/kasse/balances", @current)}
       />
@@ -172,7 +216,6 @@ defmodule AbakusWeb.Layouts do
         label="Aktivität"
         plush="activity"
         icon="activity"
-        dock={@in_kasse_dock?}
         navigate={navigate(~p"/kasse/activity", @current)}
         href={href(~p"/kasse/activity", @current)}
       />
@@ -183,56 +226,9 @@ defmodule AbakusWeb.Layouts do
         label="Gruppe"
         plush="users"
         icon="users"
-        dock={@in_kasse_dock?}
+        dock={false}
         navigate={navigate(~p"/kasse/settings", @current)}
         href={href(~p"/kasse/settings", @current)}
-      />
-      <:nav
-        :if={@depot?}
-        key={:depot_wealth}
-        id="side-depot-wealth"
-        label="Vermögen"
-        icon="trending-up"
-        section={section(@areas, "Depot")}
-        dock={@in_depot_dock?}
-        navigate={navigate(~p"/depot", @current)}
-        href={href(~p"/depot", @current)}
-      />
-      <:nav
-        :if={@depot?}
-        key={:depots}
-        id="side-depots"
-        label="Depots"
-        icon="briefcase"
-        dock={@in_depot_dock?}
-        navigate={navigate(~p"/depot/holdings", @current)}
-        href={href(~p"/depot/holdings", @current)}
-      />
-      <:nav
-        :for={row <- (@depot_sidebar && @depot_sidebar.portfolios) || []}
-        key={{:depot_portfolio, row.portfolio.id}}
-        id={"side-depot-portfolio-#{row.portfolio.id}"}
-        label={Format.portfolio_name(row.portfolio)}
-        icon="briefcase"
-        amount={row.value}
-        section="Depots"
-        rail={false}
-        dock={false}
-        parent={:depots}
-        navigate={Sidebar.portfolio_path(row.portfolio)}
-      />
-      <:nav
-        :for={row <- (@depot_sidebar && @depot_sidebar.accounts) || []}
-        key={{:depot_account, row.account.id}}
-        id={"side-depot-account-#{row.account.id}"}
-        label={row.account.name}
-        icon="wallet"
-        amount={row.value}
-        section="Verrechnungskonten"
-        rail={false}
-        dock={false}
-        parent={:depots}
-        navigate={Sidebar.account_path(row.portfolio, row.account)}
       />
       <:nav
         key={:settings}
@@ -301,13 +297,10 @@ defmodule AbakusWeb.Layouts do
     if account_id && listed?, do: {:account, account_id}, else: :all_accounts
   end
 
-  # The portfolio or account the Depots pages show, if the sidebar lists it; a retired one belongs to Depots.
+  # The portfolio the Depots pages show, if the sidebar lists it; a retired one belongs to Depots.
   defp nav_key(%{current: :depots, depot_marked: marked, depot_sidebar: sidebar})
        when marked != nil and sidebar != nil do
-    listed =
-      Enum.map(sidebar.portfolios, &{:depot_portfolio, &1.portfolio.id}) ++
-        Enum.map(sidebar.accounts, &{:depot_account, &1.account.id})
-
+    listed = Enum.map(sidebar.portfolios, &{:depot_portfolio, &1.portfolio.id})
     if marked in listed, do: marked, else: :depots
   end
 
@@ -315,31 +308,26 @@ defmodule AbakusWeb.Layouts do
 
   defp initial(email), do: String.upcase(String.first(email) || "")
 
-  # Each area and the settings have live_sessions of their own (Zugang a further one behind the sudo plug), so
-  # only links within an area navigate; the others load the page.
+  # The budget's, the Kasse's and the Depot's pages and the settings have live_sessions of their own (Zugang a
+  # further one behind the sudo plug), so only links within one navigate; the others load the page.
   defp navigate(path, current) do
-    if same_area?(path, current), do: path
+    if same_live_session?(path, current), do: path
   end
 
   defp href(path, current) do
-    if !same_area?(path, current), do: path
+    if !same_live_session?(path, current), do: path
   end
 
-  defp same_area?("/budget" <> _, current), do: current in @budget_pages
-  defp same_area?("/kasse" <> _, current), do: current in @kasse_pages
-  defp same_area?("/depot" <> _, current), do: current in @depot_pages
+  defp same_live_session?("/budget" <> _, current), do: current in @budget_pages
+  defp same_live_session?("/kasse" <> _, current), do: current in @kasse_pages
+  defp same_live_session?("/depot" <> _, current), do: current in @depot_pages
 
-  # With more than one area, "Budget" heads the area, so its account groups say what they hold.
-  defp account_section([_one], group), do: group.label
-  defp account_section(_areas, %{key: :budget}), do: "Budgetkonten"
-  defp account_section(_areas, %{key: :tracking}), do: "Trackingkonten"
+  # Below the page „Budget“, the account groups say what they hold.
+  defp account_section(%{key: :budget}), do: "Budgetkonten"
+  defp account_section(%{key: :tracking}), do: "Trackingkonten"
 
   defp brand_name([area]), do: area.label
   defp brand_name(_areas), do: "Abakus"
-
-  # With more than one area, each area's first entry carries its name.
-  defp section([_one], _label), do: nil
-  defp section(_areas, label), do: label
 
   attr :areas, :list, required: true
   attr :area, :atom, required: true
@@ -410,13 +398,13 @@ defmodule AbakusWeb.Layouts do
 
   attr :sidebar, :map,
     required: true,
-    doc: "the portfolios and accounts, see `AbakusWeb.Depot.Sidebar`"
+    doc: "the portfolios, see `AbakusWeb.Depot.Sidebar`"
 
   attr :current, :any,
     required: true,
     doc: """
-    what is open: `:wealth`, or a Depots page as `{:depots, portfolio_id, account_id}` with nil for
-    all portfolios or no marked account
+    what is open: `:wealth`, or a Depots page as `{:depots, portfolio_id}` with nil for all
+    portfolios
     """
 
   slot :inner_block, required: true
@@ -457,13 +445,8 @@ defmodule AbakusWeb.Layouts do
 
   defp depot_page(:wealth), do: {:depot_wealth, nil}
 
-  defp depot_page({:depots, _portfolio_id, account_id}) when account_id != nil,
-    do: {:depots, {:depot_account, account_id}}
-
-  defp depot_page({:depots, portfolio_id, nil}) when portfolio_id != nil,
-    do: {:depots, {:depot_portfolio, portfolio_id}}
-
-  defp depot_page({:depots, nil, nil}), do: {:depots, nil}
+  defp depot_page({:depots, nil}), do: {:depots, nil}
+  defp depot_page({:depots, portfolio_id}), do: {:depots, {:depot_portfolio, portfolio_id}}
 
   attr :flash, :map, required: true
   slot :inner_block, required: true

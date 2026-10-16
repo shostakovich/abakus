@@ -20,6 +20,7 @@ defmodule AbakusWeb.AccountsLive do
       current={:accounts}
       width={:narrow}
       account_groups={@account_groups}
+      depot_sidebar={@depot_sidebar}
       account_dialog={@account_dialog}
     >
       <.account_list

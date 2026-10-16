@@ -32,7 +32,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={{:depots, @portfolio_id, nil}}
+      current={{:depots, @portfolio_id}}
     >
       <.depots_header
         tab={:dividends}

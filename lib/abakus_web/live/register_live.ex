@@ -51,6 +51,7 @@ defmodule AbakusWeb.RegisterLive do
       account_id={@account && @account.id}
       width={:full}
       account_groups={@account_groups}
+      depot_sidebar={@depot_sidebar}
       account_dialog={@account_dialog}
     >
       <:fab :if={@manual && !@editor}>

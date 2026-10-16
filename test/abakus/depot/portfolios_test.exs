@@ -219,11 +219,6 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert [alt, langfristig] = Portfolios.overview(ctx.scope, :max, @saturday).portfolios
       assert {alt.portfolio.id, alt.account} == {retired.id, nil}
       assert {langfristig.account, langfristig.balance} == {account, money(50)}
-
-      assert [%{account: ^account, portfolio: %{id: id}}] =
-               Portfolios.sidebar(ctx.scope, @saturday).accounts
-
-      assert id == ctx.portfolio.id
     end
 
     test "gives nothing but zeros without any transaction", ctx do
@@ -942,59 +937,34 @@ defmodule Abakus.Depot.PortfoliosTest do
       )
     end
 
-    test "gives the portfolios with their securities and every account, adding up to net worth",
-         ctx do
+    test "gives the portfolios by name with the value of their securities", ctx do
       account = account_fixture(ctx.scope, %{name: "Konto Langfristig"})
       deposit_into(ctx.scope, account, 2_000)
       portfolio = Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
       held(ctx.scope, portfolio, 10, 100)
-      savings = account_fixture(ctx.scope, %{name: "Tagesgeld"})
-      deposit_into(ctx.scope, savings, 1_000)
       portfolio_fixture(ctx.scope, %{name: "Sparplan"})
 
-      sidebar = Portfolios.sidebar(ctx.scope, @saturday)
-
-      assert [
-               %{portfolio: %{name: "Langfristig"}, value: 100_000},
-               %{portfolio: %{name: "Sparplan"}, value: 0}
-             ] = sidebar.portfolios
-
-      assert sidebar.accounts == [
-               %{account: account, value: 200_000, portfolio: portfolio},
-               %{account: savings, value: 100_000, portfolio: nil}
-             ]
-
-      total = Enum.sum_by(sidebar.portfolios ++ sidebar.accounts, & &1.value)
-      assert Portfolios.net_worth(ctx.scope, [@saturday]) == %{@saturday => total}
+      assert %{
+               portfolios: [
+                 %{portfolio: %{name: "Langfristig"}, value: 100_000},
+                 %{portfolio: %{name: "Sparplan"}, value: 0}
+               ]
+             } = Portfolios.sidebar(ctx.scope, @saturday)
     end
 
-    test "gives an account two portfolios settle against the first of them", ctx do
-      account = account_fixture(ctx.scope, %{name: "K"})
-
-      [a, _b] =
-        for name <- ["A", "B"],
-            do: portfolio_fixture(ctx.scope, %{name: name, reference_account_id: account.id})
-
-      assert [%{account: ^account, portfolio: ^a}] =
-               Portfolios.sidebar(ctx.scope, @saturday).accounts
-    end
-
-    test "leaves out retired portfolios and accounts, even while they hold something", ctx do
+    test "leaves out retired portfolios, even while they hold something", ctx do
       retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
       held(ctx.scope, retired, 5, 100)
-      closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
-      deposit_into(ctx.scope, closed, 500)
 
-      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}}], accounts: []} =
+      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}}]} =
                Portfolios.sidebar(ctx.scope, @saturday)
     end
 
-    test "leaves out other users' portfolios and accounts", ctx do
+    test "leaves out other users' portfolios", ctx do
       other = user_scope_fixture()
-      deposit_into(other, account_fixture(other, %{name: "Fremdes Konto"}), 1)
       held(other, portfolio_fixture(other, %{name: "Fremd"}), 1, 100)
 
-      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}, value: 0}], accounts: []} =
+      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}, value: 0}]} =
                Portfolios.sidebar(ctx.scope, @saturday)
     end
   end

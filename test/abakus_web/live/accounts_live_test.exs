@@ -75,8 +75,8 @@ defmodule AbakusWeb.AccountsLiveTest do
     test "the sidebar lists the open accounts with their working balance", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget")
 
-      assert has_element?(view, "aside li.menu-title", ~r/Budget\s*2\.437,51\s€/u)
-      assert has_element?(view, "aside li.menu-title", ~r/Tracking\s*10\.000,00\s€/u)
+      assert has_element?(view, "aside li.menu-title", ~r/Budgetkonten\s*2\.437,51\s€/u)
+      assert has_element?(view, "aside li.menu-title", ~r/Trackingkonten\s*10\.000,00\s€/u)
       refute has_element?(view, "aside li.menu-title", "Geschlossen")
       assert has_element?(view, "#side-account-#{c.giro.id}-sidebar", "Girokonto")
       assert has_element?(view, "#side-account-#{c.giro.id}-sidebar", "💶")
@@ -95,8 +95,10 @@ defmodule AbakusWeb.AccountsLiveTest do
       assert has_element?(view, "button#side-add-account-sidebar", "Konto hinzufügen")
       refute has_element?(view, "#side-add-account-dock")
 
-      for entry <- ~w(budget all-accounts import),
+      for entry <- ~w(budget depot-wealth all-accounts),
           do: assert(has_element?(view, "#side-#{entry}-dock"))
+
+      refute has_element?(view, "#side-import-dock")
 
       refute has_element?(view, "#side-settings-dock")
       assert has_element?(view, ~s|nav.dock button[aria-haspopup=dialog]|, "Mehr")

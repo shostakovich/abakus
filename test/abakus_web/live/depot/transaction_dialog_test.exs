@@ -141,11 +141,14 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
   end
 
   test "updates the sidebar once booked", ctx do
+    security = security_fixture(quote_feed: :manual)
+    price_fixture(security, Date.add(LocalTime.today(), -1), price(123), :pp)
     lv = open_dialog(ctx.conn)
-    change(lv, %{kind: "deposit", amount: "1.234,00"}, "amount")
+    params = %{security_id: security.id, shares: "10", price: "100", account_id: ""}
+    change(lv, params, "account_id")
     lv |> form("#transaction-form") |> render_submit()
 
-    path = ~p"/depot/holdings?#{[portfolio: ctx.portfolio.id, account: ctx.account.id]}"
-    assert lv |> element(sidebar_link(path)) |> render() =~ "1.234,00"
+    path = ~p"/depot/holdings?#{[portfolio: ctx.portfolio.id]}"
+    assert lv |> element(sidebar_link(path)) |> render() =~ "1.230,00"
   end
 end

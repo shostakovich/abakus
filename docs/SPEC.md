@@ -12,7 +12,7 @@ source, benevolent dictator: no PRs, forks welcome.
 - online only; offline entry comes in v3, not a sync protocol like Actual's CRDTs
 
 Not in scope for now: reports beyond the budget view, payee rename rules, multiple budgets, other currencies.
-Investment tracking is the Depot area (#44), each user's own portfolios. No scheduled transactions: the only
+Investment tracking is the Depot (#44), part of Finanzen, each user's own portfolios. No scheduled transactions: the only
 recurring one (rent) comes from the shared expenses' recurring expenses (#43).
 
 ## Stack
@@ -33,12 +33,15 @@ The context is `Abakus.Users` (an "account" is a bank account here):
   mails a sign-in link at once: `mix abakus.invite EMAIL`, in the container
   `bin/abakus eval 'Abakus.Release.invite("EMAIL")'`. The first user invited owns the budget
   ([ADR 0007](../DECISIONS.md))
-- Areas: each has its pages under its path (the Budget under `/budget`, the Kasse under `/kasse`, the Depot under
-  `/depot`), its section in the sidebar and its dock on phones; a user sees only the areas they may use (the
-  Budget: its owner; the Kasse: its active participants, [ADR 0008](../DECISIONS.md); the Depot: every user with a
-  portfolio of their own, created or imported under Einstellungen), and anyone else gets 404 on their pages. With
-  one area the brand is its name; with more, the title in the top bar switches the area. `/` opens the area used
-  last, kept in the session
+- Areas ([ADR 0017](../DECISIONS.md)): Finanzen (the budget under `/budget`, the Depot under `/depot`) and the
+  Kasse (`/kasse`), each with its own sidebar and dock on phones; a user sees only the areas they may use (the
+  budget's pages: its owner; the Depot's: the budget owner and every user with a portfolio of their own, created or
+  imported under Einstellungen; the Kasse: its active participants, [ADR 0008](../DECISIONS.md)), and anyone else
+  gets 404 on their pages. Finanzen lists Budget, Vermögen, Alle Konten, Import & Sync, the open accounts, then
+  Depots with the active portfolios; without the budget only Vermögen, Import & Sync and Depots. The Kasse lists
+  Ausgaben, Salden, Aktivität and Gruppe. With one area the brand is its name; with more, a segmented switch tops
+  the sidebar and the title in the top bar switches the area; switching opens the area's first page. `/` opens
+  the area used last, kept in the session
 - Passkeys implemented in-house with `:crypto`, `:public_key`, `JSON`; attestation `none`; discoverable
   credentials; relying party id = the configured host (`PHX_HOST`); challenges are valid 5 minutes, one open
   per session, dropped from the session on any attempt. A sign-in challenge travels in the signed session, so
