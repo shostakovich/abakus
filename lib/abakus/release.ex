@@ -109,7 +109,7 @@ defmodule Abakus.Release do
   def import_depot(path) do
     start_without_server()
 
-    case Depot.Import.run(path) do
+    case Depot.Import.run(Scope.system(), path) do
       {:ok, report} ->
         rows = Enum.map_join(report.rows, ", ", fn {table, count} -> "#{count} #{table}" end)
         IO.puts("Imported the Depot: #{rows}, #{report.receipt_files} receipt files.")

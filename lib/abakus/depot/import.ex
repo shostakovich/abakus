@@ -13,7 +13,7 @@ defmodule Abakus.Depot.Import do
   alias Abakus.Depot.Portfolios
   alias Abakus.Repo
   alias Abakus.Users
-  alias Abakus.Users.User
+  alias Abakus.Users.{Scope, User}
   alias Exqlite.Sqlite3
 
   # The old app's tables lack the prefix. Its job runs stay behind: they tell when its own jobs last ran.
@@ -27,10 +27,10 @@ defmodule Abakus.Depot.Import do
   @chunk 200
 
   @doc """
-  Imports the file at `path`. Returns the rows imported per table, the users matched and created, by email, and the
-  number of receipt files.
+  Imports the file at `path` with the system's scope, as it is a task. Returns the rows imported per table, the users
+  matched and created, by email, and the number of receipt files.
   """
-  def run(path) do
+  def run(%Scope{system: true}, path) do
     with {:ok, data} <- read(path),
          :ok <- check_receipt_files(data["receipts"], receipts_folder(path)) do
       Repo.transact(fn -> write_once(data, receipts_folder(path)) end)
