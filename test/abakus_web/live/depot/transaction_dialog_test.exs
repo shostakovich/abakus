@@ -16,8 +16,8 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
   end
 
   defp open_dialog(conn) do
-    {:ok, lv, _html} = live(conn, ~p"/depot")
-    lv |> element("#side-depot-book-sidebar") |> render_click()
+    {:ok, lv, _html} = live(conn, ~p"/depot/holdings")
+    lv |> element("#depots-book") |> render_click()
     lv
   end
 
@@ -27,8 +27,9 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
     |> render_change(%{"_target" => ["transaction", target]})
   end
 
-  test "opens from the sidebar and on the phone with the portfolio's reference account", ctx do
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+  test "opens from the Depots pages and on the phone with the portfolio's reference account",
+       ctx do
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
     refute has_element?(lv, "#transaction-modal")
 
     lv |> element("#fab-book") |> render_click()

@@ -1,6 +1,6 @@
 defmodule AbakusWeb.Depot.Benchmark do
   @moduledoc """
-  Showing or hiding the user's benchmark on the overview and the performance screen, a choice of
+  Showing or hiding the user's benchmark on Vermögen and the performance screen, a choice of
   the device: hidden by default, the browser keeps the choice and sends it when a page connects
   (`assets/js/benchmark.js`). An `on_mount` hook assigns it as `@benchmark_shown` and handles the
   button's `"toggle_benchmark"`.

@@ -1,15 +1,100 @@
 defmodule AbakusWeb.Depot.Components do
   @moduledoc """
-  The Depot's own pieces next to Setzkasten's components: figure tones, gains, the portfolio menu
-  and URL ids.
+  The Depot's own pieces next to Setzkasten's components: the Depots pages' header and tabs, figure
+  tones, gains, the portfolio menu and URL ids.
   """
   use Phoenix.Component
+  use AbakusWeb, :verified_routes
 
+  import Setzkasten.Components.Actions, only: [button: 1]
   import Setzkasten.Components.Data, only: [amount: 1]
+  import Setzkasten.Components.Feedback, only: [badge: 1]
   import Setzkasten.Components.Icons, only: [icon: 1]
-  import Setzkasten.Components.Navigation, only: [dropdown: 1]
+  import Setzkasten.Components.Layout, only: [header: 1]
+  import Setzkasten.Components.Navigation, only: [dropdown: 1, tabs: 1]
 
-  alias AbakusWeb.Depot.Format
+  alias AbakusWeb.Depot.{Format, TransactionDialog}
+
+  @tabs [
+    holdings: "Bestand",
+    transactions: "Buchungen",
+    dividends: "Dividenden",
+    performance: "Performance",
+    securities: "Wertpapiere"
+  ]
+
+  attr :tab, :atom, required: true, values: Keyword.keys(@tabs)
+  attr :portfolio, :any, default: nil, doc: "the one shown, nil for all"
+  attr :portfolios, :list, default: [], doc: "those the menu offers; none on Wertpapiere"
+  attr :inbox, :integer, default: 0, doc: "the recognised receipts in the inbox"
+
+  attr :switch_path, :any,
+    default: nil,
+    doc: "the tab's page for a portfolio's id, if it keeps more than the portfolio"
+
+  slot :subtitle
+  slot :actions
+
+  @doc """
+  The Depots pages' title, all portfolios or one, with „Buchung erfassen“ and the portfolio menu,
+  then the tabs: Bestand, Buchungen with the inbox's count, Dividenden, Performance, and
+  Wertpapiere for all portfolios.
+  """
+  def depots_header(assigns) do
+    assigns =
+      assign(assigns,
+        tabs: if(assigns.portfolio, do: Keyword.delete(@tabs, :securities), else: @tabs),
+        portfolio_id: assigns.portfolio && assigns.portfolio.id
+      )
+
+    ~H"""
+    <.header>
+      {if @portfolio, do: Format.portfolio_name(@portfolio), else: "Depots"}
+      <:subtitle :if={@subtitle != []}>{render_slot(@subtitle)}</:subtitle>
+      <:actions>
+        {render_slot(@actions)}
+        <.portfolio_switcher
+          :if={@tab != :securities}
+          portfolios={@portfolios}
+          portfolio={@portfolio}
+          path={@switch_path || (&depots_path(@tab, &1))}
+        />
+        <.button
+          id="depots-book"
+          variant={:primary}
+          icon="plus"
+          class="max-md:hidden"
+          phx-click={TransactionDialog.open()}
+        >
+          Buchung erfassen
+        </.button>
+      </:actions>
+    </.header>
+    <.tabs id="depots-tabs" label="Depots" class="mb-6">
+      <:tab
+        :for={{tab, label} <- @tabs}
+        navigate={depots_path(tab, @portfolio_id)}
+        active={tab == @tab}
+      >
+        {label}
+        <.badge :if={tab == :transactions and @inbox > 0} id="inbox-count" style={:plain}>
+          {@inbox}<span class="sr-only"> im Eingang</span>
+        </.badge>
+      </:tab>
+    </.tabs>
+    """
+  end
+
+  @doc "A tab of the Depots pages, of all portfolios or of the one with `portfolio_id`."
+  def depots_path(tab, portfolio_id \\ nil)
+  def depots_path(:holdings, id), do: ~p"/depot/holdings?#{portfolio_query(id)}"
+  def depots_path(:transactions, id), do: ~p"/depot/transactions?#{portfolio_query(id)}"
+  def depots_path(:dividends, id), do: ~p"/depot/dividends?#{portfolio_query(id)}"
+  def depots_path(:performance, id), do: ~p"/depot/performance?#{portfolio_query(id)}"
+  def depots_path(:securities, nil), do: ~p"/depot/securities"
+
+  defp portfolio_query(nil), do: []
+  defp portfolio_query(id), do: [portfolio: id]
 
   attr :portfolios, :list, required: true
   attr :portfolio, :any, required: true, doc: "the one shown, nil for all"

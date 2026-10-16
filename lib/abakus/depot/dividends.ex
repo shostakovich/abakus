@@ -73,15 +73,20 @@ defmodule Abakus.Depot.Dividends do
 
   Each has `security`, `ex_date` (may be nil), `pay_date`, `shares`, `per_share` in `currency`,
   `gross` and `net`: the gross times the security's net-to-gross ratio of the last 12 months, or
-  the gross with `net_is_gross` set. `received` (as `received/2` gives it) saves computing that.
+  the gross with `net_is_gross` set.
+
+  Options: `received` (as `received/2` gives it) saves computing that; `portfolio_id` counts only
+  the shares of that portfolio.
   """
-  def upcoming(transactions, stored, %Market{} = market, %Date{} = today, received \\ nil) do
-    held = shares_by_security(transactions, today)
+  def upcoming(transactions, stored, %Market{} = market, %Date{} = today, opts \\ []) do
+    portfolio_id = opts[:portfolio_id]
+    held = shares_by_security(transactions, today, portfolio_id)
     announced = Enum.filter(stored, &Date.after?(&1.pay_date, today))
-    ratios = net_ratios(received || received_last_12_months(transactions, market, today), today)
+    received = opts[:received] || received_last_12_months(transactions, market, today)
+    ratios = net_ratios(received, today)
     months = coming_months(today)
 
-    (announced(announced, transactions, held, today) ++
+    (announced(announced, transactions, held, today, portfolio_id) ++
        forecast(stored, transactions, held, market, today))
     |> Enum.filter(&(&1.pay_date in months))
     |> Enum.map(&with_amounts(&1, market, ratios, today))
@@ -109,13 +114,13 @@ defmodule Abakus.Depot.Dividends do
 
   defp last_12_months(today), do: Date.range(today |> Date.shift(year: -1) |> Date.add(1), today)
 
-  defp announced(announced, transactions, held, today) do
+  defp announced(announced, transactions, held, today, portfolio_id) do
     held_on =
       announced
       |> Enum.map(& &1.ex_date)
       |> Enum.reject(&(is_nil(&1) or Date.after?(&1, today)))
       |> Enum.uniq()
-      |> Map.new(&{&1, shares_by_security(transactions, &1)})
+      |> Map.new(&{&1, shares_by_security(transactions, &1, portfolio_id)})
 
     for dividend <- announced,
         shares = shares_on_ex_date(dividend, held_on, held),
@@ -176,9 +181,10 @@ defmodule Abakus.Depot.Dividends do
     )
   end
 
-  defp shares_by_security(transactions, date) do
+  defp shares_by_security(transactions, date, portfolio_id) do
     transactions
     |> Valuation.holdings(date)
+    |> Enum.filter(&(portfolio_id == nil or &1.portfolio_id == portfolio_id))
     |> Enum.group_by(& &1.security_id, & &1.shares)
     |> Map.new(fn {security_id, shares} -> {security_id, Enum.sum(shares)} end)
     |> Map.reject(fn {_security_id, shares} -> shares <= 0 end)

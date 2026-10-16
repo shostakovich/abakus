@@ -221,7 +221,7 @@ defmodule Abakus.Depot.Portfolios do
   def performance(%Scope{} = scope, period, portfolio_id, today) do
     transactions = list_transactions(scope)
     accounts = list_accounts(scope)
-    portfolios = shown_portfolios(scope, Valuation.holdings(transactions, today))
+    portfolios = choosable_portfolios(scope, Valuation.holdings(transactions, today))
     portfolio = Enum.find(portfolios, &(&1.id == portfolio_id))
     first_day = first_transaction_day(transactions)
     interval = Period.interval(period, today, first_day)
@@ -296,7 +296,7 @@ defmodule Abakus.Depot.Portfolios do
 
   defp portfolios_overview(scope, transactions, accounts, market, %Date.Range{last: today} = year) do
     holdings = Valuation.holdings(transactions, today)
-    portfolios = shown_portfolios(scope, holdings)
+    portfolios = choosable_portfolios(scope, holdings)
 
     rows = %{
       holdings: value_rows(holdings, market, today),
@@ -322,7 +322,11 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   # Retired portfolios only while they hold shares.
-  defp shown_portfolios(scope, holdings) do
+  @doc "The portfolios the screens offer by name on `today`, retired ones only while they hold shares."
+  def shown_portfolios(%Scope{} = scope, %Date{} = today),
+    do: choosable_portfolios(scope, Valuation.holdings(list_transactions(scope), today))
+
+  defp choosable_portfolios(scope, holdings) do
     held = MapSet.new(holdings, & &1.portfolio_id)
     Enum.filter(list_portfolios(scope), &(not &1.retired or MapSet.member?(held, &1.id)))
   end
@@ -370,7 +374,7 @@ defmodule Abakus.Depot.Portfolios do
       load_market(transactions, accounts, today, :since_first_transaction, dividends: stored)
 
     holdings = Valuation.holdings(transactions, today)
-    portfolios = shown_portfolios(scope, holdings)
+    portfolios = choosable_portfolios(scope, holdings)
     portfolio = Enum.find(portfolios, &(&1.id == portfolio_id))
     upcoming = Dividends.upcoming(transactions, stored, market, today)
 
@@ -432,17 +436,19 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   @doc """
-  What the dividend screen shows on `today`, amounts in euro cents:
+  What the dividend screen shows on `today` for all portfolios, or for the one with `portfolio_id`
+  and its reference account; amounts in euro cents:
 
+  - `portfolios` and `portfolio`: as in `holdings/3`
   - `received`: every dividend booked, newest first, see `Dividends.received/2`
   - `years`: the dividends per month and year since the first, see `Dividends.by_year/2`
   - `this_year` up to `today` and `last_year` in all, each as `gross` and `net`
   - `upcoming`: the dividends announced or forecast for the coming months, see
     `Dividends.upcoming/4`, with their `total` and per month in `months`, see
     `Dividends.by_coming_month/2`
-  - `value` and `purchase_value` of all holdings today, for the yields
+  - `value` and `purchase_value` of the holdings shown today, for the yields
   """
-  def dividends(%Scope{} = scope, %Date{} = today) do
+  def dividends(%Scope{} = scope, portfolio_id, %Date{} = today) do
     transactions = list_transactions(scope)
     stored = stored_dividends(transactions)
 
@@ -451,15 +457,27 @@ defmodule Abakus.Depot.Portfolios do
         dividends: stored
       )
 
-    received = Dividends.received(transactions, market)
-    upcoming = Dividends.upcoming(transactions, stored, market, today, received)
+    held = Valuation.holdings(transactions, today)
+    portfolios = choosable_portfolios(scope, held)
+    portfolio = Enum.find(portfolios, &(&1.id == portfolio_id))
+    received = transactions |> of_portfolio(portfolio, transactions) |> Dividends.received(market)
+
+    upcoming =
+      Dividends.upcoming(transactions, stored, market, today,
+        received: received,
+        portfolio_id: portfolio && portfolio.id
+      )
 
     holdings =
-      transactions |> Valuation.holdings(today) |> holding_rows(transactions, market, today)
+      held
+      |> Enum.filter(&(portfolio == nil or &1.portfolio_id == portfolio.id))
+      |> holding_rows(transactions, market, today)
 
     last_year = Date.range(Date.new!(today.year - 1, 1, 1), Date.new!(today.year - 1, 12, 31))
 
     %{
+      portfolios: portfolios,
+      portfolio: portfolio,
       received: received,
       years: Dividends.by_year(received, today),
       this_year: Dividends.total(received, year_to_date(today)),
@@ -791,9 +809,10 @@ defmodule Abakus.Depot.Portfolios do
 
   @doc """
   The user's transactions grouped by month, newest first, as `{first day of month, transactions}`;
-  `filter` is nil for all, `:trades`, `:earnings` or `:account`.
+  `filter` is nil for all, `:trades`, `:earnings` or `:account`; `portfolio` nil for all
+  portfolios, or one of them for its transactions and its reference account's.
   """
-  def transactions_by_month(%Scope{} = scope, filter \\ nil) do
+  def transactions_by_month(%Scope{} = scope, filter \\ nil, portfolio \\ nil) do
     from(t in Transaction,
       where: t.user_id == ^scope.user.id,
       order_by: [desc: t.date_time, desc: t.id],
@@ -801,8 +820,20 @@ defmodule Abakus.Depot.Portfolios do
     )
     |> where_filter(filter)
     |> Repo.all()
+    |> of_portfolio(portfolio, scope)
     |> Enum.chunk_by(&month_of/1)
     |> Enum.map(&{month_of(hd(&1)), &1})
+  end
+
+  # Which securities the portfolio held comes from all the user's transactions, the scope's.
+  defp of_portfolio(transactions, nil, _all), do: transactions
+
+  defp of_portfolio(transactions, portfolio, %Scope{} = scope),
+    do: of_portfolio(transactions, portfolio, list_transactions(scope))
+
+  defp of_portfolio(transactions, %Portfolio{} = portfolio, all) do
+    filter = Filter.new([portfolio], List.wrap(portfolio.reference_account_id), all)
+    Enum.filter(transactions, &Filter.concerns?(filter, &1))
   end
 
   defp where_filter(query, nil), do: query

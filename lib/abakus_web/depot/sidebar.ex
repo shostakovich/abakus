@@ -6,7 +6,7 @@ defmodule AbakusWeb.Depot.Sidebar do
   The hook subscribes the page to the market data and refreshes stale quotes, so a LiveView that
   shows prices itself only handles `:market_data_updated`, which reaches it after the sidebar.
 
-  It counts the recognised receipts in the inbox for the badge on „Buchungen“, as
+  It counts the recognised receipts in the inbox for the count on the tab „Buchungen“, as
   `@depot_sidebar.inbox`; a page that shows the inbox itself, i.e. assigns `:inbox`, also gets
   `:receipts_updated`.
   """

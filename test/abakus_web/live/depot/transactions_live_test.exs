@@ -39,7 +39,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     |> render_change(%{"_target" => ["transaction", target]})
   end
 
-  test "lists the transactions by month, newest first, from the sidebar", ctx do
+  test "lists the transactions by month, newest first, from the tab", ctx do
     book(ctx, %{"kind" => "deposit", "amount" => "1.500,00", "date" => "2026-09-30"})
 
     book(ctx, %{
@@ -51,16 +51,17 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
       "fees" => "1"
     })
 
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
     {:ok, lv, _html} =
       lv
-      |> element(sidebar_link("/depot/transactions"))
+      |> element(~s(#depots-tabs a[href="/depot/transactions"]))
       |> render_click()
       |> follow_redirect(ctx.conn)
 
-    assert has_element?(lv, sidebar_link("/depot/transactions") <> "[aria-current=page]")
-    assert has_element?(lv, ~s(nav.dock a[href="/depot/transactions"][aria-current=page]))
+    assert has_element?(lv, ~s(#depots-tabs a[href="/depot/transactions"][aria-current=page]))
+    assert has_element?(lv, sidebar_link("/depot/holdings") <> "[aria-current=page]")
+    assert has_element?(lv, ~s(nav.dock a[href="/depot/holdings"][aria-current=page]))
 
     assert has_element?(lv, "#month-2026-10-01", "Oktober 2026")
     october = lv |> element("li[data-month='2026-10-01']") |> render()
@@ -76,8 +77,8 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
 
   test "the page's own „Buchung erfassen“ shows from 768 px", ctx do
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
-    assert has_element?(lv, "#transactions-book.max-md\\:hidden")
-    refute has_element?(lv, "#transactions-book.max-lg\\:hidden")
+    assert has_element?(lv, "#depots-book.max-md\\:hidden")
+    refute has_element?(lv, "#depots-book.max-lg\\:hidden")
   end
 
   test "invites the first booking while there is none", ctx do
@@ -308,7 +309,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
 
     confirm_click(lv, "#transaction-delete", "Diese Buchung löschen?")
 
-    lv |> element("#transactions-book") |> render_click()
+    lv |> element("#depots-book") |> render_click()
     change(lv, %{kind: "deposit", amount: "5"}, "amount")
     lv |> form("#transaction-form") |> render_submit()
 
@@ -322,7 +323,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     end)
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
-    lv |> element("#transactions-book") |> render_click()
+    lv |> element("#depots-book") |> render_click()
     lv |> element("#new-security") |> render_click()
 
     lv
@@ -355,7 +356,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
 
   test "„Buchen“ books while the panel of a new security is open", ctx do
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
-    lv |> element("#transactions-book") |> render_click()
+    lv |> element("#depots-book") |> render_click()
     lv |> element("#new-security") |> render_click()
     change(lv, %{kind: "deposit", amount: "5"}, "amount")
 
@@ -373,7 +374,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     FakeSymbolSearch.stub(fn _isin -> {:ok, []} end)
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
-    lv |> element("#transactions-book") |> render_click()
+    lv |> element("#depots-book") |> render_click()
     lv |> element("#new-security") |> render_click()
 
     lv

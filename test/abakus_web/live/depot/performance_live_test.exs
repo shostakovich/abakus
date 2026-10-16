@@ -56,10 +56,11 @@ defmodule AbakusWeb.Depot.PerformanceLiveTest do
     %{portfolio: portfolio, sparplan: sparplan}
   end
 
-  test "is in the sidebar", %{conn: conn} do
+  test "is a tab of the Depots", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/depot/performance")
 
-    assert has_element?(lv, sidebar_link("/depot/performance") <> "[aria-current=page]")
+    assert has_element?(lv, ~s(#depots-tabs a[href="/depot/performance"][aria-current=page]))
+    assert has_element?(lv, sidebar_link("/depot/holdings") <> "[aria-current=page]")
   end
 
   test "shows the key figures of all portfolios for the year to date", %{conn: conn} do
@@ -67,7 +68,7 @@ defmodule AbakusWeb.Depot.PerformanceLiveTest do
 
     assert has_element?(lv, "#period a[aria-current]", "YTD")
     assert has_element?(lv, "#portfolio-menu summary", "Gesamt")
-    assert has_element?(lv, "h1", "Performance")
+    assert has_element?(lv, "h1", "Depots")
     assert has_element?(lv, "#ttwror .stat-value")
     assert lv |> element("#ttwror") |> render() =~ "p.\u00A0a."
     assert has_element?(lv, "#irr .stat-value")

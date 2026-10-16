@@ -32,10 +32,15 @@ defmodule AbakusWeb.Depot.DividendsLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={:dividends}
+      current={{:depots, @portfolio_id, nil}}
     >
-      <.header>
-        Dividenden
+      <.depots_header
+        tab={:dividends}
+        portfolio={@dividends.portfolio}
+        portfolios={@dividends.portfolios}
+        inbox={@depot_sidebar.inbox}
+        switch_path={&dividends_path(@tab, @amount, &1)}
+      >
         <:subtitle :if={any?(assigns)}>{subtitle(@tab)}</:subtitle>
         <:actions :if={any?(assigns)}>
           <.segmented
@@ -45,11 +50,11 @@ defmodule AbakusWeb.Depot.DividendsLive do
             value={@amount}
             options={
               for {_param, amount, label} <- @amounts,
-                  do: {label, amount, dividends_path(@tab, amount)}
+                  do: {label, amount, dividends_path(@tab, amount, @portfolio_id)}
             }
           />
         </:actions>
-      </.header>
+      </.depots_header>
 
       <.empty_state
         :if={!any?(assigns)}
@@ -68,7 +73,7 @@ defmodule AbakusWeb.Depot.DividendsLive do
         <.tabs id="dividend-tabs" label="Ansicht" class="mt-8 mb-6">
           <:tab
             :for={{_param, tab, label} <- @tabs}
-            patch={dividends_path(tab, @amount)}
+            patch={dividends_path(tab, @amount, @portfolio_id)}
             active={@tab == tab}
           >
             {label}
@@ -508,10 +513,10 @@ defmodule AbakusWeb.Depot.DividendsLive do
 
   defp chart_label(colours), do: Enum.map_join(colours, ", ", &elem(&1, 0))
 
-  defp dividends_path(tab, amount) do
+  defp dividends_path(tab, amount, portfolio_id) do
     query =
       Enum.reject(
-        [tab: param(@tabs, tab), amount: param(@amounts, amount)],
+        [tab: param(@tabs, tab), amount: param(@amounts, amount), portfolio: portfolio_id],
         fn {_key, value} -> is_nil(value) end
       )
 
@@ -537,22 +542,31 @@ defmodule AbakusWeb.Depot.DividendsLive do
   def handle_params(params, _uri, socket) do
     socket
     |> assign(tab: parse(@tabs, params["tab"]), amount: parse(@amounts, params["amount"]))
-    |> show_or_load_dividends()
+    |> show_or_load_dividends(parse_id(params["portfolio"]))
     |> then(&{:noreply, &1})
   end
 
   @impl true
   def handle_info(:market_data_updated, socket), do: {:noreply, load_dividends(socket)}
 
-  defp show_or_load_dividends(%{assigns: %{dividends: _}} = socket), do: push_chart(socket)
-  defp show_or_load_dividends(socket), do: load_dividends(socket)
+  defp show_or_load_dividends(%{assigns: %{requested_id: id, dividends: _}} = socket, id),
+    do: push_chart(socket)
+
+  defp show_or_load_dividends(socket, portfolio_id),
+    do:
+      socket |> assign(requested_id: portfolio_id, portfolio_id: portfolio_id) |> load_dividends()
 
   defp load_dividends(socket) do
+    %{current_scope: scope, portfolio_id: portfolio_id} = socket.assigns
     today = LocalTime.today()
-    dividends = Portfolios.dividends(socket.assigns.current_scope, today)
+    dividends = Portfolios.dividends(scope, portfolio_id, today)
 
     socket
-    |> assign(today: today, dividends: dividends)
+    |> assign(
+      today: today,
+      dividends: dividends,
+      portfolio_id: dividends.portfolio && dividends.portfolio.id
+    )
     |> push_chart()
   end
 

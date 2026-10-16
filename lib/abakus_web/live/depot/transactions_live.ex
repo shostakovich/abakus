@@ -1,7 +1,7 @@
 defmodule AbakusWeb.Depot.TransactionsLive do
   @moduledoc """
-  „Buchungen“: every transaction of the user, grouped by month and newest first, filtered by all,
-  purchases and sales, earnings or account. A transaction booked in the Depot opens the dialog
+  „Buchungen“: every transaction of the user or of one portfolio, grouped by month and newest
+  first, filtered by all, purchases and sales, earnings or account. A transaction booked in the Depot opens the dialog
   „Buchung bearbeiten“; those from the PP import are read-only. A receipt opens as PDF.
 
   Above them the inbox („Eingang“) with the receipts from Paperless and the uploaded ones, see
@@ -11,6 +11,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
 
   alias Abakus.Depot.{Portfolios, Receipts, Securities, Valuation}
   alias Abakus.Depot.Portfolios.Transaction
+  alias Abakus.LocalTime
   alias AbakusWeb.Depot.{Format, ReceiptComponents, TransactionDialog}
 
   @filters [
@@ -54,10 +55,15 @@ defmodule AbakusWeb.Depot.TransactionsLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={:transactions}
+      current={{:depots, @portfolio && @portfolio.id, nil}}
     >
-      <.header>
-        Buchungen
+      <.depots_header
+        tab={:transactions}
+        portfolio={@portfolio}
+        portfolios={@portfolios}
+        inbox={@depot_sidebar.inbox}
+        switch_path={&transactions_path(@filter_param, &1)}
+      >
         <:subtitle>Aus Portfolio Performance importierte Buchungen sind nur lesbar.</:subtitle>
         <:actions>
           <form id="receipts-upload" phx-change="upload" phx-submit="upload">
@@ -69,17 +75,8 @@ defmodule AbakusWeb.Depot.TransactionsLive do
               <.live_file_input upload={@uploads.receipts} class="sr-only" />
             </label>
           </form>
-          <.button
-            id="transactions-book"
-            variant={:primary}
-            icon="plus"
-            class="max-md:hidden"
-            phx-click={TransactionDialog.open()}
-          >
-            Buchung erfassen
-          </.button>
         </:actions>
-      </.header>
+      </.depots_header>
 
       <div :if={receipt_upload_errors(@uploads) != []} class="mb-6 flex flex-col gap-2">
         <.alert :for={message <- receipt_upload_errors(@uploads)} tone={:error}>{message}</.alert>
@@ -97,7 +94,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
           <.tabs id="transaction-filter" label="Filter" class="mb-4">
             <:tab
               :for={{param, filter, label} <- @filters}
-              patch={~p"/depot/transactions?#{filter_query(param)}"}
+              patch={transactions_path(param, @portfolio && @portfolio.id)}
               active={@filter == filter}
             >
               {label}
@@ -295,8 +292,10 @@ defmodule AbakusWeb.Depot.TransactionsLive do
 
   defp month_name(month), do: "#{Format.month_name(month)} #{month.year}"
 
-  defp filter_query(nil), do: []
-  defp filter_query(param), do: [filter: param]
+  defp transactions_path(filter_param, portfolio_id) do
+    query = Enum.reject([filter: filter_param, portfolio: portfolio_id], &is_nil(elem(&1, 1)))
+    ~p"/depot/transactions?#{query}"
+  end
 
   defp receipt_upload_errors(uploads) do
     upload = uploads.receipts
@@ -417,7 +416,18 @@ defmodule AbakusWeb.Depot.TransactionsLive do
         param == params["filter"] && filter
       end)
 
-    {:noreply, socket |> assign(:filter, filter) |> load_transactions()}
+    portfolios = Portfolios.shown_portfolios(socket.assigns.current_scope, LocalTime.today())
+    portfolio_id = parse_id(params["portfolio"])
+
+    {:noreply,
+     socket
+     |> assign(
+       filter: filter,
+       filter_param: filter && params["filter"],
+       portfolios: portfolios,
+       portfolio: Enum.find(portfolios, &(&1.id == portfolio_id))
+     )
+     |> load_transactions()}
   end
 
   @impl true
@@ -439,6 +449,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
 
   defp load_transactions(socket) do
     scope = socket.assigns.current_scope
-    assign(socket, :months, Portfolios.transactions_by_month(scope, socket.assigns.filter))
+    %{filter: filter, portfolio: portfolio} = socket.assigns
+    assign(socket, :months, Portfolios.transactions_by_month(scope, filter, portfolio))
   end
 end

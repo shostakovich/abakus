@@ -269,10 +269,11 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   Budget (the budget owner's only: switching the link on, its account and which budget category each Kasse
   category's shares land in), YNAB (each participant's own sync to YNAB, until they are linked) and the CSV/JSON
   export
-- **Depot**: Übersicht (net worth, optionally against the benchmark), Bestand (holdings per portfolio and
-  Verrechnungskonto), Dividenden, Buchungen (the transactions, the receipt inbox and the booking form, also opened
-  by „Buchung erfassen“ in the sidebar), Performance, Wertpapiere (prices, quote feeds, the benchmark, exchange
-  rates) and a page per security
+- **Depot**: Vermögen (net worth: for the budget owner all open budget and tracking accounts, for anyone else
+  their portfolios and Verrechnungskonten, optionally against the benchmark) and Depots, for all portfolios or
+  one, with „Buchung erfassen“ and the tabs Bestand (holdings and Verrechnungskonten), Buchungen (the
+  transactions and the receipt inbox, its count on the tab), Dividenden, Performance and, for all portfolios,
+  Wertpapiere (prices, quote feeds, the benchmark, exchange rates); a page per security
 - **Mehr**: the settings in six sections: Zugang (passkeys, email), Aussehen (theme, per device), Depots (the
   user's portfolios and Verrechnungskonten, for the budget owner also the tracking account each feeds), PP-Import
   (a Portfolio Performance file into the Depot), Belegeingang (Paperless-ngx and the receipt recognition; Depot

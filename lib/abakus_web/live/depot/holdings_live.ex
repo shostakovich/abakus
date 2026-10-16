@@ -26,19 +26,17 @@ defmodule AbakusWeb.Depot.HoldingsLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={{:holdings, shown_portfolio_id(assigns), @account_id}}
+      current={{:depots, shown_portfolio_id(assigns), @account_id}}
     >
-      <.header>
-        Bestand
+      <.depots_header
+        tab={:holdings}
+        portfolio={@holdings.portfolio}
+        portfolios={@holdings.portfolios}
+        inbox={@depot_sidebar.inbox}
+        switch_path={&holdings_path(portfolio: &1, allocation: @allocation_tab)}
+      >
         <:subtitle>{subtitle(@holdings)}</:subtitle>
-        <:actions>
-          <.portfolio_switcher
-            portfolios={@holdings.portfolios}
-            portfolio={@holdings.portfolio}
-            path={&holdings_path(portfolio: &1, allocation: @allocation_tab)}
-          />
-        </:actions>
-      </.header>
+      </.depots_header>
 
       <.table
         id="holdings"

@@ -7,7 +7,7 @@ defmodule AbakusWeb.Depot.BenchmarkTest do
   alias Abakus.Depot.Settings
   alias Abakus.LocalTime
 
-  setup :register_and_log_in_user
+  setup :register_and_log_in_user_without_budget
 
   # 10 shares delivered yesterday; the benchmark stood at 100 € seven months ago and at 105 €
   # today.

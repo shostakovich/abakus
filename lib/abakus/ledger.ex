@@ -428,6 +428,43 @@ defmodule Abakus.Ledger do
   end
 
   @doc """
+  Net worth at the end of each day of `range`, as `[{date, cents}]`: the balance of all open accounts, budget
+  and tracking.
+  """
+  def net_worth(%Date.Range{first: first, last: last} = range) do
+    open = from t in in_register(), join: a in assoc(t, :account), where: not a.closed
+
+    opening =
+      Repo.one(from t in open, where: t.date < ^first, select: coalesce(sum(t.amount), 0))
+
+    by_day =
+      Repo.all(
+        from t in open,
+          where: t.date >= ^first and t.date <= ^last,
+          group_by: t.date,
+          select: {t.date, sum(t.amount)}
+      )
+      |> Map.new()
+
+    range
+    |> Enum.map_reduce(opening, fn date, total ->
+      total = total + Map.get(by_day, date, 0)
+      {{date, total}, total}
+    end)
+    |> elem(0)
+  end
+
+  @doc "The date of the first transaction in an open account, nil without any."
+  def first_open_date do
+    Repo.one(
+      from t in in_register(),
+        join: a in assoc(t, :account),
+        where: not a.closed,
+        select: min(t.date)
+    )
+  end
+
+  @doc """
   Each account's register as `%{balance, cleared, uncleared, unapproved}` by account id; cleared counts reconciled
   transactions too, unapproved is how many wait for approval, match proposals included. Accounts without
   transactions are missing.

@@ -107,7 +107,7 @@ defmodule AbakusWeb.Router do
         AbakusWeb.Depot.Sidebar,
         AbakusWeb.Depot.TransactionDialog
       ] do
-      live "/", OverviewLive
+      live "/", WealthLive
       live "/holdings", HoldingsLive
       live "/dividends", DividendsLive
       live "/transactions", TransactionsLive

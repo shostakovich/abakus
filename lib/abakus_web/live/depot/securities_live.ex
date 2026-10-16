@@ -29,21 +29,20 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
       area={@area}
       account_groups={@account_groups}
       account_dialog={@account_dialog}
-      current={:securities}
+      current={{:depots, nil, nil}}
     >
-      <.header>
-        Wertpapiere
+      <.depots_header tab={:securities} inbox={@depot_sidebar.inbox}>
         <:subtitle>
           Kurse kommen von Yahoo, täglich um 18:00 und beim Öffnen dieser Seite. Am selben Tag gilt
           ein Kurs aus Portfolio Performance vor einem von Yahoo.
         </:subtitle>
-      </.header>
+      </.depots_header>
 
       <div class="flex flex-col gap-8">
         <section id="benchmark" aria-labelledby="benchmark-title">
           <.section_heading id="benchmark-title">Benchmark</.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
-            Übersicht und Performance vergleichen deine Depots mit diesem Wertpapier, wenn du dort „Benchmark“ einschaltest.
+            Vermögen und Performance vergleichen deine Depots mit diesem Wertpapier, wenn du dort „Benchmark“ einschaltest.
           </p>
           <div class="grid gap-x-12 gap-y-4 lg:grid-cols-2">
             <.form

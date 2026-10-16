@@ -8,7 +8,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
   alias Abakus.LocalTime
   alias Abakus.Repo
 
-  setup :register_and_log_in_user
+  setup :register_and_log_in_user_without_budget
 
   defp today, do: LocalTime.today()
 
@@ -51,16 +51,15 @@ defmodule AbakusWeb.Depot.SidebarTest do
       |> LazyHTML.query(~s(aside nav[aria-label="Hauptnavigation"] li))
       |> Enum.map(&(&1 |> LazyHTML.text() |> String.split() |> hd()))
 
-    assert Enum.drop_while(labels, &(&1 != "Übersicht")) ==
-             ~w(Übersicht Bestand Dividenden Buchungen Performance Wertpapiere Buchung Depots Aktiv
-                Verrechnungskonten Tagesgeld Einstellungen)
+    assert Enum.drop_while(labels, &(&1 != "Vermögen")) ==
+             ~w(Vermögen Depots Depots Aktiv Verrechnungskonten Tagesgeld Einstellungen)
 
     assert has_element?(lv, "#holdings-portfolio-#{retired.id}")
     refute has_element?(lv, sidebar_link(~p"/depot/holdings?#{[portfolio: retired.id]}"))
     refute has_element?(lv, sidebar_link(~p"/depot/holdings?#{[account: closed.id]}"))
   end
 
-  test "marks „Bestand“ for a retired portfolio or account, which it leaves out", ctx do
+  test "marks „Depots“ for a retired portfolio or account, which it leaves out", ctx do
     retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
     holding(ctx.scope, retired, 5, 100)
     closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
@@ -75,16 +74,15 @@ defmodule AbakusWeb.Depot.SidebarTest do
     end
   end
 
-  test "keeps „Buchung erfassen“ in the icon rail", ctx do
+  test "leaves „Buchung erfassen“ to the Depots pages", ctx do
     portfolio_fixture(ctx.scope)
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
 
-    assert has_element?(
-             lv,
-             "#app-shell-rail #side-depot-book-rail[aria-label='Buchung erfassen']"
-           )
+    refute has_element?(lv, "#app-shell", "Buchung erfassen")
+    refute has_element?(lv, "#fab-book")
 
-    lv |> element("#side-depot-book-rail") |> render_click()
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
+    lv |> element("#depots-book") |> render_click()
     assert has_element?(lv, "#transaction-modal h2", "Buchung erfassen")
   end
 
@@ -186,13 +184,11 @@ defmodule AbakusWeb.Depot.SidebarTest do
     refute has_element?(lv, sidebar, "Verrechnungskonten")
   end
 
-  test "shows no count on „Buchungen“ while the inbox is empty", ctx do
+  test "shows no count on the tab „Buchungen“ while the inbox is empty", ctx do
     portfolio_fixture(ctx.scope)
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
-    link = lv |> element(sidebar_link("/depot/transactions")) |> render()
-    assert link =~ "Buchungen"
-    refute link =~ ~r/>\s*\d+\s*</
-    refute has_element?(lv, sidebar_link("/depot/transactions") <> "[aria-label]")
+    assert has_element?(lv, ~s(#depots-tabs a[href="/depot/transactions"]), "Buchungen")
+    refute has_element?(lv, "#inbox-count")
   end
 end

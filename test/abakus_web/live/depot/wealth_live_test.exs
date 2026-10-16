@@ -1,4 +1,4 @@
-defmodule AbakusWeb.Depot.OverviewLiveTest do
+defmodule AbakusWeb.Depot.WealthLiveTest do
   use AbakusWeb.ConnCase
 
   import Phoenix.LiveViewTest
@@ -6,11 +6,11 @@ defmodule AbakusWeb.Depot.OverviewLiveTest do
 
   alias Abakus.Depot.Portfolios.TransactionUnit
   alias Abakus.Depot.Securities.Security
-  alias Abakus.LocalTime
-  alias Abakus.Repo
+  alias Abakus.{DomainFixtures, LocalTime, Repo}
+  alias Abakus.Users.{Scope, User}
   alias AbakusWeb.Depot.Format
 
-  setup :register_and_log_in_user
+  setup :register_and_log_in_user_without_budget
 
   defp today, do: LocalTime.today()
 
@@ -394,6 +394,59 @@ defmodule AbakusWeb.Depot.OverviewLiveTest do
 
       assert row =~ "1\u00A0Wertpapier"
       refute row =~ "Konto"
+    end
+  end
+
+  describe "for the budget owner" do
+    setup do
+      owner = Repo.get_by!(User, budget_owner: true)
+      scope = Scope.for_user(owner)
+      holding_fixture(scope, 10)
+
+      checking = DomainFixtures.account_fixture(kind: :checking)
+      tracking = DomainFixtures.account_fixture(kind: :tracking)
+      closed = DomainFixtures.account_fixture(kind: :savings, closed: true)
+      yesterday = Date.add(today(), -1)
+
+      for {account, date, amount} <- [
+            {checking, yesterday, 100_000},
+            {checking, today(), -10_000},
+            {tracking, Date.shift(today(), month: -2), 250_000},
+            {closed, yesterday, 30_000}
+          ],
+          do:
+            DomainFixtures.transaction_fixture(account_id: account.id, date: date, amount: amount)
+
+      %{conn: log_in_user(build_conn(), owner)}
+    end
+
+    test "Vermögen is the sum of the open budget and tracking accounts", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/depot")
+
+      assert has_element?(lv, "h1", "Vermögen")
+      assert lv |> element("#net-worth") |> render() =~ "3.400\u00A0€"
+
+      assert has_element?(
+               lv,
+               "#net-worth .text-error-ink",
+               "−100\u00A0€ heute (−2,86\u00A0%)"
+             )
+    end
+
+    test "draws the accounts' total from the first transaction, without invested capital or benchmark",
+         %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/depot")
+
+      assert_push_event(lv, "net-worth-chart", chart)
+      assert chart.dates == Enum.to_list(Date.range(Date.shift(today(), month: -2), today()))
+      assert hd(chart.net_worth) == 250_000
+      assert List.last(chart.net_worth) == 340_000
+      assert Enum.at(chart.net_worth, -2) == 350_000
+      assert chart.invested_capital == nil
+      assert chart.benchmark == nil
+      refute has_element?(lv, "#benchmark-toggle")
+      assert has_element?(lv, "#history-legend", "Vermögen")
+      refute has_element?(lv, "#history-legend", "Investiert")
     end
   end
 end

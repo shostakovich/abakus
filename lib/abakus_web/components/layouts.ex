@@ -8,14 +8,7 @@ defmodule AbakusWeb.Layouts do
 
   @budget_pages [:budget, :accounts, :all_accounts, :import]
   @kasse_pages [:kasse_expenses, :kasse_balances, :kasse_activity, :kasse_settings]
-  @depot_pages [
-    :depot_overview,
-    :depot_holdings,
-    :depot_dividends,
-    :depot_transactions,
-    :depot_performance,
-    :depot_securities
-  ]
+  @depot_pages [:depot_wealth, :depots]
 
   embed_templates "layouts/*"
 
@@ -44,7 +37,7 @@ defmodule AbakusWeb.Layouts do
   attr :depot_marked, :any,
     default: nil,
     doc:
-      "on the holdings: the portfolio or account it shows, `{:depot_portfolio, id}` or `{:depot_account, id}`"
+      "on the Depots pages: the portfolio or account they show, `{:depot_portfolio, id}` or `{:depot_account, id}`"
 
   attr :account_dialog, :map,
     default: nil,
@@ -63,10 +56,8 @@ defmodule AbakusWeb.Layouts do
 
   The Budget: Budget and all accounts, the open accounts by group with their balance and how many transactions
   wait for approval and "Konto hinzufügen" (not in the icon rail or the dock), then Import & Sync. The Kasse:
-  Ausgaben, Salden, Aktivität and Gruppe (its settings). The Depot: Übersicht, Bestand, Dividenden, Buchungen,
-  Performance and Wertpapiere; on its own pages Buchungen counts the recognised receipts in the inbox, and there
-  are „Buchung erfassen“ (in the icon rail too) and the active portfolios and accounts with their values (not in
-  the icon rail or the dock).
+  Ausgaben, Salden, Aktivität and Gruppe (its settings). The Depot: Vermögen and Depots; on its own pages also
+  the active portfolios and accounts with their values (not in the icon rail or the dock).
 
   With one area the brand is its name; with more, each area's entries start with its name as section title, and
   in the top bar the brand is a menu that switches the area. On phones the dock holds the current area's entries;
@@ -198,10 +189,10 @@ defmodule AbakusWeb.Layouts do
       />
       <:nav
         :if={@depot?}
-        key={:depot_overview}
-        id="side-depot-overview"
-        label="Übersicht"
-        icon="house"
+        key={:depot_wealth}
+        id="side-depot-wealth"
+        label="Vermögen"
+        icon="trending-up"
         section={section(@areas, "Depot")}
         dock={@in_depot_dock?}
         navigate={navigate(~p"/depot", @current)}
@@ -209,64 +200,13 @@ defmodule AbakusWeb.Layouts do
       />
       <:nav
         :if={@depot?}
-        key={:depot_holdings}
-        id="side-depot-holdings"
-        label="Bestand"
-        icon="layers"
+        key={:depots}
+        id="side-depots"
+        label="Depots"
+        icon="briefcase"
         dock={@in_depot_dock?}
         navigate={navigate(~p"/depot/holdings", @current)}
         href={href(~p"/depot/holdings", @current)}
-      />
-      <:nav
-        :if={@depot?}
-        key={:depot_dividends}
-        id="side-depot-dividends"
-        label="Dividenden"
-        icon="coins"
-        dock={@in_depot_dock?}
-        navigate={navigate(~p"/depot/dividends", @current)}
-        href={href(~p"/depot/dividends", @current)}
-      />
-      <:nav
-        :if={@depot?}
-        key={:depot_transactions}
-        id="side-depot-transactions"
-        label="Buchungen"
-        icon="list"
-        dock={@in_depot_dock?}
-        navigate={navigate(~p"/depot/transactions", @current)}
-        href={href(~p"/depot/transactions", @current)}
-        count={inbox_count(@depot_sidebar)}
-        count_label="im Eingang"
-      />
-      <:nav
-        :if={@depot?}
-        key={:depot_performance}
-        id="side-depot-performance"
-        label="Performance"
-        icon="trending-up"
-        dock={@in_depot_dock?}
-        navigate={navigate(~p"/depot/performance", @current)}
-        href={href(~p"/depot/performance", @current)}
-      />
-      <:nav
-        :if={@depot?}
-        key={:depot_securities}
-        id="side-depot-securities"
-        label="Wertpapiere"
-        icon="chart-line"
-        dock={false}
-        navigate={navigate(~p"/depot/securities", @current)}
-        href={href(~p"/depot/securities", @current)}
-      />
-      <:nav
-        :if={@depot_sidebar}
-        key={:depot_book}
-        id="side-depot-book"
-        label="Buchung erfassen"
-        icon="plus"
-        rail={true}
-        on_click={TransactionDialog.open()}
       />
       <:nav
         :for={row <- (@depot_sidebar && @depot_sidebar.portfolios) || []}
@@ -278,7 +218,7 @@ defmodule AbakusWeb.Layouts do
         section="Depots"
         rail={false}
         dock={false}
-        parent={:depot_holdings}
+        parent={:depots}
         navigate={Sidebar.portfolio_path(row.portfolio)}
       />
       <:nav
@@ -291,7 +231,7 @@ defmodule AbakusWeb.Layouts do
         section="Verrechnungskonten"
         rail={false}
         dock={false}
-        parent={:depot_holdings}
+        parent={:depots}
         navigate={Sidebar.account_path(row.portfolio, row.account)}
       />
       <:nav
@@ -361,22 +301,19 @@ defmodule AbakusWeb.Layouts do
     if account_id && listed?, do: {:account, account_id}, else: :all_accounts
   end
 
-  # The portfolio or account the holdings show, if the sidebar lists it; a retired one belongs to Bestand.
-  defp nav_key(%{current: :depot_holdings, depot_marked: marked, depot_sidebar: sidebar})
+  # The portfolio or account the Depots pages show, if the sidebar lists it; a retired one belongs to Depots.
+  defp nav_key(%{current: :depots, depot_marked: marked, depot_sidebar: sidebar})
        when marked != nil and sidebar != nil do
     listed =
       Enum.map(sidebar.portfolios, &{:depot_portfolio, &1.portfolio.id}) ++
         Enum.map(sidebar.accounts, &{:depot_account, &1.account.id})
 
-    if marked in listed, do: marked, else: :depot_holdings
+    if marked in listed, do: marked, else: :depots
   end
 
   defp nav_key(%{current: current}), do: current
 
   defp initial(email), do: String.upcase(String.first(email) || "")
-
-  defp inbox_count(%{inbox: count}) when count > 0, do: count
-  defp inbox_count(_sidebar), do: nil
 
   # Each area and the settings have live_sessions of their own (Zugang a further one behind the sudo plug), so
   # only links within an area navigate; the others load the page.
@@ -478,15 +415,15 @@ defmodule AbakusWeb.Layouts do
   attr :current, :any,
     required: true,
     doc: """
-    what is open: `:overview`, `:dividends`, `:transactions`, `:performance`, `:securities`, or
-    `{:holdings, portfolio_id, account_id}` with nil for all portfolios or no marked account
+    what is open: `:wealth`, or a Depots page as `{:depots, portfolio_id, account_id}` with nil for
+    all portfolios or no marked account
     """
 
   slot :inner_block, required: true
 
   @doc """
-  The Depot's pages: wide, with the dialog „Buchung erfassen“, which the sidebar's entry and the
-  phone's floating button open.
+  The Depot's pages: wide, with the dialog „Buchung erfassen“, which the Depots pages open from
+  their header and on phones from the floating button.
   """
   def depot(assigns) do
     {page, marked} = depot_page(assigns.current)
@@ -505,7 +442,9 @@ defmodule AbakusWeb.Layouts do
       depot_marked={@marked}
       width={:wide}
     >
-      <:fab><.fab id="fab-book" label="Buchung" phx-click={TransactionDialog.open()} /></:fab>
+      <:fab :if={@page == :depots}>
+        <.fab id="fab-book" label="Buchung" phx-click={TransactionDialog.open()} />
+      </:fab>
       {render_slot(@inner_block)}
     </.app>
     <.live_component
@@ -516,14 +455,15 @@ defmodule AbakusWeb.Layouts do
     """
   end
 
-  defp depot_page({:holdings, _portfolio_id, account_id}) when account_id != nil,
-    do: {:depot_holdings, {:depot_account, account_id}}
+  defp depot_page(:wealth), do: {:depot_wealth, nil}
 
-  defp depot_page({:holdings, portfolio_id, nil}) when portfolio_id != nil,
-    do: {:depot_holdings, {:depot_portfolio, portfolio_id}}
+  defp depot_page({:depots, _portfolio_id, account_id}) when account_id != nil,
+    do: {:depots, {:depot_account, account_id}}
 
-  defp depot_page({:holdings, nil, nil}), do: {:depot_holdings, nil}
-  defp depot_page(page) when is_atom(page), do: {:"depot_#{page}", nil}
+  defp depot_page({:depots, portfolio_id, nil}) when portfolio_id != nil,
+    do: {:depots, {:depot_portfolio, portfolio_id}}
+
+  defp depot_page({:depots, nil, nil}), do: {:depots, nil}
 
   attr :flash, :map, required: true
   slot :inner_block, required: true

@@ -69,7 +69,7 @@ defmodule AbakusWeb.Depot.SeparationTest do
 
   test "the transaction form offers only the user's own portfolios and accounts", ctx do
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
-    lv |> element("#transactions-book") |> render_click()
+    lv |> element("#depots-book") |> render_click()
 
     assert has_element?(lv, "#transaction_portfolio_id option", "Eigenes Depot")
     refute has_element?(lv, "#transaction_portfolio_id option", "Fremdes Depot")

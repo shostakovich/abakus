@@ -233,4 +233,29 @@ defmodule Abakus.Ledger.AccountsTest do
     account = account_fixture()
     assert_raise Ecto.ConstraintError, fn -> Repo.delete(account) end
   end
+
+  describe "net_worth/1" do
+    test "adds up the open budget and tracking accounts at the end of each day" do
+      checking = account_fixture(kind: :checking)
+      depot = account_fixture(kind: :tracking)
+      closed = account_fixture(kind: :savings, closed: true)
+      transaction_fixture(account_id: checking.id, date: ~D[2026-10-01], amount: 10_000)
+      transaction_fixture(account_id: depot.id, date: ~D[2026-10-03], amount: 5_000)
+      transaction_fixture(account_id: checking.id, date: ~D[2026-10-03], amount: -2_000)
+      transaction_fixture(account_id: closed.id, date: ~D[2026-10-02], amount: 99_900)
+
+      assert Ledger.net_worth(Date.range(~D[2026-10-02], ~D[2026-10-04])) == [
+               {~D[2026-10-02], 10_000},
+               {~D[2026-10-03], 13_000},
+               {~D[2026-10-04], 13_000}
+             ]
+
+      assert Ledger.first_open_date() == ~D[2026-10-01]
+    end
+
+    test "is nothing without transactions" do
+      assert Ledger.net_worth(Date.range(~D[2026-10-01], ~D[2026-10-01])) == [{~D[2026-10-01], 0}]
+      assert Ledger.first_open_date() == nil
+    end
+  end
 end

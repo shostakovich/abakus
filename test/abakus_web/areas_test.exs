@@ -220,7 +220,7 @@ defmodule AbakusWeb.AreasTest do
       |> render_submit()
 
       assert has_element?(view, ~s|#area-switcher a[href="/depot"]|, "Depot")
-      assert has_element?(view, sidebar_link("/depot"), "Übersicht")
+      assert has_element?(view, sidebar_link("/depot"), "Vermögen")
 
       {:ok, view, _html} = live(conn, ~p"/depot")
       assert has_element?(view, "aside nav", "Doras Depot")

@@ -60,11 +60,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
 
   defp only_receipt(scope), do: hd(Receipts.list_inbox(scope))
 
-  # „Buchungen“ in the sidebar counts nothing, neither as a number nor in its name.
-  defp refute_inbox_count(lv) do
-    refute has_element?(lv, sidebar_link("/depot/transactions") <> " .tabular-nums")
-    refute has_element?(lv, sidebar_link("/depot/transactions") <> "[aria-label]")
-  end
+  defp refute_inbox_count(lv), do: refute(has_element?(lv, "#inbox-count"))
 
   test "an uploaded PDF goes through the model into the inbox and is booked once confirmed",
        ctx do
@@ -79,7 +75,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
              "01.10.2026\u2060\u00A0· 93,207 Stück\u2060\u00A0· 1.125,00\u00A0€\u2060\u00A0· Upload"
 
     assert has_element?(lv, "#receipt-#{receipt.id}-status", "Geprüft")
-    assert has_element?(lv, sidebar_link("/depot/transactions"), "1")
+    assert has_element?(lv, "#depots-tabs #inbox-count", "1")
 
     lv |> element("#receipt-#{receipt.id} button", "Prüfen und buchen") |> render_click()
 
@@ -129,7 +125,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
       receive do: (:go -> {:ok, answer()})
     end)
 
-    {:ok, other, _html} = live(ctx.conn, ~p"/depot")
+    {:ok, other, _html} = live(ctx.conn, ~p"/depot/holdings")
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
     upload(lv, [{"beleg.pdf", pdf()}])
     assert_receive {:waiting, task}
@@ -141,7 +137,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     send(task, :go)
     await_recognition()
     assert has_element?(lv, "#inbox button", "Prüfen und buchen")
-    assert has_element?(other, sidebar_link("/depot/transactions"), "1")
+    assert has_element?(other, "#depots-tabs #inbox-count", "1")
   end
 
   test "Scenario: Unknown depot number — the user picks the portfolio before booking", ctx do
@@ -157,7 +153,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
            )
 
     assert has_element?(lv, "#receipt-#{receipt.id}-status", "Bitte prüfen")
-    assert has_element?(lv, sidebar_link("/depot/transactions"), "1")
+    assert has_element?(lv, "#depots-tabs #inbox-count", "1")
 
     lv |> element("#receipt-#{receipt.id} button", "Prüfen und buchen") |> render_click()
 
@@ -320,7 +316,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     {:ok, other, _html} = live(ctx.conn, ~p"/depot/transactions")
     assert has_element?(other, "#inbox")
 
-    lv |> element("#transactions-book") |> render_click()
+    lv |> element("#depots-book") |> render_click()
 
     lv
     |> form("#transaction-form",
@@ -374,7 +370,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     lv = upload_and_recognise(ctx.conn, [{"a.pdf", pdf()}, {"b.pdf", pdf()}])
 
     assert has_element?(lv, "#inbox-title span", ~r/^\s*2\s*$/)
-    assert has_element?(lv, sidebar_link("/depot/transactions"), "2")
+    assert has_element?(lv, "#depots-tabs #inbox-count", "2")
     assert render(lv) =~ "2 Belege liegen im Eingang."
   end
 
@@ -553,7 +549,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     render_submit(dialog, "book", params)
     render_click(dialog, "discard_receipt", %{})
 
-    lv |> element("#transactions-book") |> render_click()
+    lv |> element("#depots-book") |> render_click()
     render_submit(dialog, "book", params)
 
     refute has_element?(lv, "#transaction-modal")
