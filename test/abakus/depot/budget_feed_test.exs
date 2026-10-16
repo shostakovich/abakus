@@ -5,10 +5,11 @@ defmodule Abakus.Depot.BudgetFeedTest do
   import Abakus.UsersFixtures
   import ExUnit.CaptureLog
 
-  alias Abakus.Depot.{BudgetFeed, FakePriceFeed}
+  alias Abakus.Depot.{BudgetFeed, FakePriceFeed, Portfolios}
   alias Abakus.Depot.MarketData.Job
+  alias Abakus.Depot.Portfolios.Portfolio
   alias Abakus.{DomainFixtures, Ledger, LocalTime}
-  alias Abakus.Ledger.Transaction
+  alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.Users.User
 
   @day ~D[2026-10-16]
@@ -17,15 +18,20 @@ defmodule Abakus.Depot.BudgetFeedTest do
     owner = user_scope_fixture()
     portfolio = portfolio_fixture(owner, %{name: "Langfristig"})
     cash = account_fixture(owner, %{name: "Verrechnung"})
-    depot = DomainFixtures.account_fixture(name: "Depot", kind: :tracking)
-    %{owner: owner, portfolio: portfolio, cash: cash, depot: depot}
+    %{owner: owner, portfolio: portfolio, cash: cash}
   end
 
-  # 100 shares in the portfolio and 10.812,34 € on the cash account.
-  defp holdings_fixture(c, security) do
+  defp manual_security(price) do
+    security = security_fixture(%{quote_feed: :manual, symbol: nil})
+    price_fixture(security, ~D[2026-10-15], price(price), :manual)
+    security
+  end
+
+  # 100 shares in the portfolio and 10.812,34 € on its Verrechnungskonto.
+  defp holdings_fixture(c, security, portfolio \\ nil) do
     transaction_fixture(c.owner, ~D[2026-10-01],
       type: :inbound_delivery,
-      portfolio_id: c.portfolio.id,
+      portfolio_id: (portfolio || c.portfolio).id,
       security_id: security.id,
       shares: shares(100),
       amount: money(40_000)
@@ -38,20 +44,19 @@ defmodule Abakus.Depot.BudgetFeedTest do
     )
   end
 
-  defp balance_fixture(account, amount) do
+  defp balance_fixture(account, amount, date \\ ~D[2026-10-01]) do
     DomainFixtures.transaction_fixture(
       account_id: account.id,
-      date: ~D[2026-10-01],
+      date: date,
       amount: amount,
       cleared: :cleared
     )
   end
 
-  defp feed(c, feeds), do: {:ok, _feeds} = BudgetFeed.put_feeds(c.owner, feeds)
-
-  defp feed_both(c),
-    do:
-      feed(c, %{{:portfolio, c.portfolio.id} => c.depot.id, {:account, c.cash.id} => c.depot.id})
+  defp account_of(portfolio) do
+    %Portfolio{budget_account_id: id} = Repo.reload!(portfolio)
+    id && Repo.get!(Account, id)
+  end
 
   defp value_changes(account) do
     Repo.all(
@@ -62,12 +67,120 @@ defmodule Abakus.Depot.BudgetFeedTest do
     )
   end
 
+  defp balance(account), do: Ledger.balances()[account.id].balance
+
+  describe "the switch to one account per portfolio" do
+    test "closes the old fed account with its history and starts each portfolio's account at its value",
+         c do
+      security = manual_security(400)
+      holdings_fixture(c, security)
+      other = portfolio_fixture(c.owner, %{name: "Kinder"})
+      holdings_fixture(c, security, other)
+      old = DomainFixtures.account_fixture(name: "Depot", kind: :tracking, fed_by: :portfolio)
+      history = balance_fixture(old, 5_000_000)
+
+      :ok = BudgetFeed.book_value_changes(@day)
+
+      assert %Account{closed: true} = Repo.reload!(old)
+      assert Repo.reload!(history).deleted_at == nil
+      assert [%Transaction{date: @day, amount: -5_000_000}] = value_changes(old)
+      assert balance(old) == 0
+
+      for portfolio <- [c.portfolio, other] do
+        account = account_of(portfolio)
+
+        assert {account.name, account.kind, account.fed_by, account.closed} ==
+                 {portfolio.name, :tracking, :portfolio, false}
+
+        assert [%Transaction{date: @day, amount: 4_000_000} = start] = value_changes(account)
+        assert start.payee.name == "Wertänderung"
+      end
+    end
+
+    test "opens the account of a portfolio of the budget owner as it is created", c do
+      {:ok, portfolio} =
+        Portfolios.create_portfolio(c.owner, %{name: "Neu", account_name: "Neu-Verrechnung"})
+
+      assert %Account{name: "Neu", kind: :tracking, fed_by: :portfolio} = account_of(portfolio)
+
+      member = user_scope_fixture()
+      {:ok, theirs} = Portfolios.create_portfolio(member, %{name: "Ihr", account_name: "Konto"})
+
+      assert account_of(theirs) == nil
+    end
+
+    test "gives no account to another user's portfolio", c do
+      member = user_scope_fixture()
+      theirs = portfolio_fixture(member, %{name: "Ihr"})
+
+      :ok = BudgetFeed.sync_accounts()
+
+      assert account_of(c.portfolio)
+      assert account_of(theirs) == nil
+      assert BudgetFeed.in_use?()
+    end
+
+    test "renames an account after its renamed portfolio", c do
+      :ok = BudgetFeed.sync_accounts()
+      Repo.update!(change(c.portfolio, name: "Rente"))
+
+      :ok = BudgetFeed.sync_accounts()
+
+      assert account_of(c.portfolio).name == "Rente"
+    end
+
+    test "opens no account for a retired portfolio", c do
+      retired = portfolio_fixture(c.owner, %{name: "Alt", retired: true})
+
+      :ok = BudgetFeed.sync_accounts()
+
+      assert account_of(c.portfolio)
+      assert account_of(retired) == nil
+    end
+
+    test "keeps an account the user closed closed and opens no other", c do
+      :ok = BudgetFeed.sync_accounts()
+      account = account_of(c.portfolio)
+      {:ok, _closed} = Ledger.update_account(account, %{closed: true})
+
+      :ok = BudgetFeed.book_value_changes(@day)
+
+      assert account_of(c.portfolio).id == account.id
+      assert %Account{closed: true} = Repo.reload!(account)
+      assert Repo.aggregate(Account, :count) == 1
+    end
+
+    test "keeps the Depot's value in the Vermögen history before the switch", c do
+      holdings_fixture(c, manual_security(400))
+      old = DomainFixtures.account_fixture(name: "Depot", kind: :tracking, fed_by: :portfolio)
+      balance_fixture(old, 5_000_000)
+
+      :ok = BudgetFeed.book_value_changes(@day)
+
+      assert Ledger.net_worth(Date.range(~D[2026-10-15], @day)) == [
+               {~D[2026-10-15], 5_000_000},
+               {@day, 4_000_000}
+             ]
+
+      assert Ledger.first_open_date() == ~D[2026-10-01]
+    end
+
+    test "finds the portfolio of its account", c do
+      :ok = BudgetFeed.sync_accounts()
+      account = account_of(c.portfolio)
+
+      assert BudgetFeed.portfolio(account).id == c.portfolio.id
+      assert BudgetFeed.portfolio(DomainFixtures.account_fixture(name: "Giro")) == nil
+    end
+  end
+
   describe "the daily value change" do
     test "after the daily price fetch books the difference to the account's balance", c do
       security = security_fixture(%{symbol: "VGWL.DE"})
       holdings_fixture(c, security)
-      balance_fixture(c.depot, 5_000_000)
-      feed_both(c)
+      :ok = BudgetFeed.sync_accounts()
+      account = account_of(c.portfolio)
+      balance_fixture(account, 3_900_000)
       today = LocalTime.today()
 
       FakePriceFeed.stub(fn _symbol, _from, now ->
@@ -82,134 +195,75 @@ defmodule Abakus.Depot.BudgetFeedTest do
 
       Job.run()
 
-      assert [change] = value_changes(c.depot)
+      assert [change] = value_changes(account)
 
       assert {change.date, change.amount, change.payee.name, change.cleared, change.approved} ==
-               {today, 81_234, "Wertänderung", :cleared, true}
+               {today, 100_000, "Wertänderung", :cleared, true}
 
-      assert Ledger.balances()[c.depot.id].balance == 5_081_234
+      assert balance(account) == 4_000_000
 
       Job.run()
 
-      assert [^change] = value_changes(c.depot)
+      assert [^change] = value_changes(account)
     end
 
     test "books a loss as an outflow, dated the given day", c do
-      security = security_fixture(%{quote_feed: :manual, symbol: nil})
-      price_fixture(security, ~D[2026-10-15], price(390), :manual)
-      holdings_fixture(c, security)
-      balance_fixture(c.depot, 5_000_000)
-      feed_both(c)
+      holdings_fixture(c, manual_security(390))
+      :ok = BudgetFeed.sync_accounts()
+      account = account_of(c.portfolio)
+      balance_fixture(account, 4_000_000)
 
       :ok = BudgetFeed.book_value_changes(@day)
 
-      assert [%Transaction{date: @day, amount: -18_766}] = value_changes(c.depot)
+      assert [%Transaction{date: @day, amount: -100_000}] = value_changes(account)
     end
 
     test "a second run on the same day amends that day's value change", c do
-      security = security_fixture(%{quote_feed: :manual, symbol: nil})
-      price_fixture(security, ~D[2026-10-15], price(400), :manual)
+      security = manual_security(400)
       holdings_fixture(c, security)
-      balance_fixture(c.depot, 5_000_000)
-      feed_both(c)
 
       BudgetFeed.book_value_changes(@day)
-      assert [%Transaction{amount: 81_234} = change] = value_changes(c.depot)
+      account = account_of(c.portfolio)
+      assert [%Transaction{amount: 4_000_000} = change] = value_changes(account)
 
       price_fixture(security, @day, price(410), :manual)
       BudgetFeed.book_value_changes(@day)
 
-      assert [%Transaction{id: id, date: @day, amount: 181_234}] = value_changes(c.depot)
+      assert [%Transaction{id: id, date: @day, amount: 4_100_000}] = value_changes(account)
       assert id == change.id
-      assert Ledger.balances()[c.depot.id].balance == 5_181_234
+      assert balance(account) == 4_100_000
     end
 
     test "a second run on the same day deletes a value change that comes to nothing", c do
-      security = security_fixture(%{quote_feed: :manual, symbol: nil})
-      price_fixture(security, ~D[2026-10-15], price(400), :manual)
-      holdings_fixture(c, security)
-      balance_fixture(c.depot, 5_000_000)
-      feed_both(c)
+      holdings_fixture(c, manual_security(400))
 
       BudgetFeed.book_value_changes(@day)
-      assert [%Transaction{amount: 81_234} = change] = value_changes(c.depot)
+      account = account_of(c.portfolio)
+      assert [%Transaction{amount: 4_000_000} = change] = value_changes(account)
 
-      balance_fixture(c.depot, 81_234)
+      balance_fixture(account, 4_000_000)
       BudgetFeed.book_value_changes(@day)
 
-      assert value_changes(c.depot) == []
+      assert value_changes(account) == []
       assert Repo.reload!(change).deleted_at
-      assert Ledger.balances()[c.depot.id].balance == 5_081_234
+      assert balance(account) == 4_000_000
     end
 
     test "leaves out transactions dated after the day", c do
-      security = security_fixture(%{quote_feed: :manual, symbol: nil})
-      price_fixture(security, ~D[2026-10-15], price(400), :manual)
-      holdings_fixture(c, security)
-      balance_fixture(c.depot, 5_000_000)
-
-      DomainFixtures.transaction_fixture(
-        account_id: c.depot.id,
-        date: Date.add(@day, 1),
-        amount: 70_000,
-        cleared: :cleared
-      )
-
-      feed_both(c)
+      holdings_fixture(c, manual_security(400))
+      :ok = BudgetFeed.sync_accounts()
+      account = account_of(c.portfolio)
+      balance_fixture(account, 70_000, Date.add(@day, 1))
 
       BudgetFeed.book_value_changes(@day)
 
-      assert [%Transaction{date: @day, amount: 81_234}] = value_changes(c.depot)
-    end
-
-    test "counts only what feeds the account", c do
-      security = security_fixture(%{quote_feed: :manual, symbol: nil})
-      price_fixture(security, ~D[2026-10-15], price(400), :manual)
-      holdings_fixture(c, security)
-      feed(c, %{{:account, c.cash.id} => c.depot.id})
-
-      BudgetFeed.book_value_changes(@day)
-
-      assert [%Transaction{amount: 1_081_234}] = value_changes(c.depot)
-    end
-
-    test "feeds each account from its own portfolios and accounts", c do
-      security = security_fixture(%{quote_feed: :manual, symbol: nil})
-      price_fixture(security, ~D[2026-10-15], price(400), :manual)
-      holdings_fixture(c, security)
-      other = DomainFixtures.account_fixture(name: "Tagesgeld", kind: :tracking)
-      feed(c, %{{:portfolio, c.portfolio.id} => c.depot.id, {:account, c.cash.id} => other.id})
-
-      BudgetFeed.book_value_changes(@day)
-
-      assert [%Transaction{amount: 4_000_000}] = value_changes(c.depot)
-      assert [%Transaction{amount: 1_081_234}] = value_changes(other)
-    end
-
-    test "leaves out closed accounts and does nothing without feeds", c do
-      security = security_fixture(%{quote_feed: :manual, symbol: nil})
-      price_fixture(security, ~D[2026-10-15], price(400), :manual)
-      holdings_fixture(c, security)
-
-      BudgetFeed.book_value_changes(@day)
-      assert value_changes(c.depot) == []
-
-      feed_both(c)
-      {:ok, _closed} = Ledger.update_account(Repo.reload!(c.depot), %{closed: true})
-
-      BudgetFeed.book_value_changes(@day)
-      assert value_changes(c.depot) == []
+      assert [%Transaction{date: @day, amount: 4_000_000}] = value_changes(account)
     end
 
     test "books nothing once the user of the portfolios no longer owns the budget", c do
-      balance_fixture(c.depot, 5_000)
-      feed_both(c)
-
-      transaction_fixture(c.owner, ~D[2026-10-01],
-        type: :deposit,
-        account_id: c.cash.id,
-        amount: 100
-      )
+      holdings_fixture(c, manual_security(400))
+      :ok = BudgetFeed.sync_accounts()
+      account = account_of(c.portfolio)
 
       other = user_scope_fixture()
       Repo.update_all(User, set: [budget_owner: false])
@@ -217,134 +271,29 @@ defmodule Abakus.Depot.BudgetFeedTest do
 
       BudgetFeed.book_value_changes(@day)
 
-      assert value_changes(c.depot) == []
+      assert value_changes(account) == []
     end
 
     test "logs a refused booking and books the other accounts", c do
-      huge = account_fixture(c.owner, %{name: "Riesig"})
+      huge = portfolio_fixture(c.owner, %{name: "Riesig"})
+      security = manual_security(400)
+      holdings_fixture(c, security)
 
       transaction_fixture(c.owner, ~D[2026-10-01],
-        type: :deposit,
-        account_id: huge.id,
-        amount: 10_000_000_000_001
+        type: :inbound_delivery,
+        portfolio_id: huge.id,
+        security_id: security.id,
+        shares: shares(1_000_000_000),
+        amount: 0
       )
 
-      transaction_fixture(c.owner, ~D[2026-10-01],
-        type: :deposit,
-        account_id: c.cash.id,
-        amount: 100
-      )
-
-      other = DomainFixtures.account_fixture(name: "Tagesgeld", kind: :tracking)
-      feed(c, %{{:account, huge.id} => other.id, {:account, c.cash.id} => c.depot.id})
+      :ok = BudgetFeed.sync_accounts()
 
       assert capture_log(fn -> BudgetFeed.book_value_changes(@day) end) =~
-               "The value change of account #{other.id} was refused"
+               "The value change of account #{account_of(huge).id} was refused"
 
-      assert value_changes(other) == []
-      assert [%Transaction{amount: 100}] = value_changes(c.depot)
-    end
-  end
-
-  describe "put_feeds/2" do
-    test "makes an account fed by something fed by portfolio, and one fed by nothing manual again",
-         c do
-      other = DomainFixtures.account_fixture(name: "Tagesgeld", kind: :tracking)
-
-      assert {:ok, feeds} =
-               BudgetFeed.put_feeds(c.owner, %{
-                 {:portfolio, "#{c.portfolio.id}"} => "#{c.depot.id}",
-                 {:account, c.cash.id} => other.id
-               })
-
-      assert feeds == %{
-               {:portfolio, c.portfolio.id} => c.depot.id,
-               {:account, c.cash.id} => other.id
-             }
-
-      assert {Repo.reload!(c.depot).fed_by, Repo.reload!(other).fed_by} ==
-               {:portfolio, :portfolio}
-
-      assert {:ok, feeds} = BudgetFeed.put_feeds(c.owner, %{{:account, c.cash.id} => ""})
-
-      assert feeds == %{{:portfolio, c.portfolio.id} => c.depot.id}
-      assert {Repo.reload!(c.depot).fed_by, Repo.reload!(other).fed_by} == {:portfolio, nil}
-    end
-
-    test "moves a portfolio from one account to another", c do
-      other = DomainFixtures.account_fixture(name: "Tagesgeld", kind: :tracking)
-      feed(c, %{{:portfolio, c.portfolio.id} => c.depot.id})
-
-      feed(c, %{{:portfolio, c.portfolio.id} => other.id})
-
-      assert BudgetFeed.feeds(c.owner) == %{{:portfolio, c.portfolio.id} => other.id}
-      assert {Repo.reload!(c.depot).fed_by, Repo.reload!(other).fed_by} == {nil, :portfolio}
-    end
-
-    test "offers open tracking accounts not fed by the Kasse", c do
-      DomainFixtures.account_fixture(name: "Giro", kind: :checking)
-      DomainFixtures.account_fixture(name: "Alt", kind: :tracking, closed: true)
-      DomainFixtures.account_fixture(name: "Geteilt", kind: :tracking, fed_by: :shared_expenses)
-      fed = DomainFixtures.account_fixture(name: "Depot 2", kind: :tracking, fed_by: :portfolio)
-
-      assert Enum.map(BudgetFeed.account_choices(), & &1.id) == [c.depot.id, fed.id]
-    end
-
-    test "refuses accounts it does not offer", c do
-      giro = DomainFixtures.account_fixture(name: "Giro", kind: :checking)
-
-      assert BudgetFeed.put_feeds(c.owner, %{{:portfolio, c.portfolio.id} => giro.id}) ==
-               {:error, :unknown}
-
-      assert BudgetFeed.put_feeds(c.owner, %{{:portfolio, c.portfolio.id} => "x"}) ==
-               {:error, :unknown}
-
-      assert BudgetFeed.feeds(c.owner) == %{}
-      assert Repo.reload!(giro).fed_by == nil
-    end
-
-    test "keeps a feed into an account closed since, but starts none there", c do
-      feed(c, %{{:portfolio, c.portfolio.id} => c.depot.id})
-      {:ok, depot} = Ledger.update_account(c.depot, %{closed: true})
-
-      assert [%{id: id}] = BudgetFeed.fed_accounts_not_offered(BudgetFeed.feeds(c.owner))
-      assert id == depot.id
-
-      assert BudgetFeed.put_feeds(c.owner, %{
-               {:portfolio, c.portfolio.id} => depot.id,
-               {:account, c.cash.id} => depot.id
-             }) == {:error, :unknown}
-
-      assert {:ok, feeds} =
-               BudgetFeed.put_feeds(c.owner, %{
-                 {:portfolio, c.portfolio.id} => to_string(depot.id),
-                 {:account, c.cash.id} => ""
-               })
-
-      assert feeds == %{{:portfolio, c.portfolio.id} => depot.id}
-      assert Repo.reload!(depot).fed_by == :portfolio
-    end
-
-    test "refuses another user's portfolios and accounts", c do
-      other = user_scope_fixture()
-      portfolio = portfolio_fixture(other)
-      cash = account_fixture(other)
-
-      for item <- [{:portfolio, portfolio.id}, {:account, cash.id}, {:security, c.portfolio.id}] do
-        assert BudgetFeed.put_feeds(c.owner, %{item => c.depot.id}) == {:error, :unknown}
-      end
-
-      assert BudgetFeed.feeds(c.owner) == %{}
-    end
-
-    test "is the budget owner's alone", c do
-      other = user_scope_fixture()
-      portfolio = portfolio_fixture(other)
-
-      assert BudgetFeed.put_feeds(other, %{{:portfolio, portfolio.id} => c.depot.id}) ==
-               {:error, :not_budget_owner}
-
-      assert Repo.reload!(c.depot).fed_by == nil
+      assert value_changes(account_of(huge)) == []
+      assert [%Transaction{amount: 4_000_000}] = value_changes(account_of(c.portfolio))
     end
   end
 end

@@ -253,6 +253,19 @@ defmodule Abakus.Ledger.AccountsTest do
       assert Ledger.first_open_date() == ~D[2026-10-01]
     end
 
+    test "keeps the history of a closed account without money" do
+      closed = account_fixture(kind: :tracking, closed: true)
+      transaction_fixture(account_id: closed.id, date: ~D[2026-10-01], amount: 5_000)
+      transaction_fixture(account_id: closed.id, date: ~D[2026-10-03], amount: -5_000)
+
+      assert Ledger.net_worth(Date.range(~D[2026-10-02], ~D[2026-10-03])) == [
+               {~D[2026-10-02], 5_000},
+               {~D[2026-10-03], 0}
+             ]
+
+      assert Ledger.first_open_date() == ~D[2026-10-01]
+    end
+
     test "is nothing without transactions" do
       assert Ledger.net_worth(Date.range(~D[2026-10-01], ~D[2026-10-01])) == [{~D[2026-10-01], 0}]
       assert Ledger.first_open_date() == nil

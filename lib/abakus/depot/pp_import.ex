@@ -524,7 +524,7 @@ defmodule Abakus.Depot.PPImport do
       )
       |> delete_or_detach(:accounts, Account, ctx.stale_accounts, :account_id, :other_account_id)
 
-    BudgetFeed.mark_fed_accounts()
+    BudgetFeed.sync_accounts()
 
     link_ids = Enum.map(ctx.stale_links, & &1.id)
     Repo.delete_all(from l in PPSecurityLink, where: l.id in ^link_ids)

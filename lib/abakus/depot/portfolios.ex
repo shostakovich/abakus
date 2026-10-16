@@ -10,6 +10,7 @@ defmodule Abakus.Depot.Portfolios do
 
   alias Abakus.Depot.{
     Allocation,
+    BudgetFeed,
     Costs,
     Distributions,
     Dividends,
@@ -53,7 +54,7 @@ defmodule Abakus.Depot.Portfolios do
 
   @doc """
   Creates a portfolio of the user with a new account in euros as its Verrechnungskonto, which its
-  purchases, sales and dividends settle against.
+  purchases, sales and dividends settle against, and for the budget owner its tracking account.
   """
   def create_portfolio(%Scope{} = scope, attrs) do
     with {:ok, form} <- Ecto.Changeset.apply_action(change_new_portfolio(attrs), :insert) do
@@ -61,12 +62,9 @@ defmodule Abakus.Depot.Portfolios do
         account =
           Repo.insert!(%Account{user_id: scope.user.id, name: form.account_name, currency: "EUR"})
 
-        {:ok,
-         Repo.insert!(%Portfolio{
-           user_id: scope.user.id,
-           name: form.name,
-           reference_account_id: account.id
-         })}
+        %Portfolio{user_id: scope.user.id, name: form.name, reference_account_id: account.id}
+        |> Repo.insert!()
+        |> BudgetFeed.open_account(scope.user)
       end)
     end
   end

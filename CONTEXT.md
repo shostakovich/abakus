@@ -99,10 +99,10 @@ An account whose value is only tracked, outside the budget, e.g. a securities de
 _Avoid_: Off-budget account, investment account
 
 **Fed account**:
-An account another area keeps up to date (`portfolio`: a tracking account whose value comes from the budget
-owner's portfolios and Verrechnungskonten in the Depot, see value change; `shared_expenses`: its transactions are
-the budget owner's shares of Kasse expenses), so the UI offers no manual entry, file import or reconciling for it,
-as its balance is the other area's; the Ledger still accepts entries.
+An account another area keeps up to date (`portfolio`: the tracking account that one of the budget owner's
+portfolios is, opened with the portfolio and closed once it is gone, its value kept by the value change;
+`shared_expenses`: its transactions are the budget owner's shares of Kasse expenses), so the UI offers no manual
+entry, file import or reconciling for it, as its balance is the other area's; the Ledger still accepts entries.
 _Avoid_: Synced account, linked account (that is bank sync)
 
 **Reconcile**:
@@ -400,11 +400,10 @@ One business event, such as a purchase, a dividend or a transfer, with a portfol
 _Avoid_: Transaction unqualified in code (that is the budget's), entry
 
 **Value change**:
-The daily transaction, after the price job, in a tracking account fed by `portfolio`: the difference between what
-the portfolios and Verrechnungskonten feeding it are worth and its balance, approved and cleared; none without a
-difference. One per day: another run that day amends it, and deletes it once nothing differs. Nothing else writes
-to the account, and it cannot be reconciled. Each of the budget owner's portfolios and Verrechnungskonten feeds at
-most one account, picked under Einstellungen › Depots. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its
+The daily transaction, after the price job, in a portfolio's account (fed by `portfolio`): the portfolio's value
+minus the account's balance, approved and cleared; none without a difference, so a new account starts at the
+portfolio's value. One per day: another run that day amends it, and deletes it once nothing differs. Nothing else
+writes to the account, and it cannot be reconciled. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its
 payee).
 _Avoid_: Revaluation, market value adjustment
 

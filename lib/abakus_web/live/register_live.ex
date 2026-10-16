@@ -7,7 +7,7 @@ defmodule AbakusWeb.RegisterLive do
   Here transactions are approved (one, the selected or all), categorised (the selected), flagged and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
-  no manual entry and no reconcile; transactions linked to Kasse expenses are deleted only with their expense, the
+  no manual entry and no reconcile, and a portfolio's account shows the Depots tabs as its Register tab; transactions linked to Kasse expenses are deleted only with their expense, the
   value changes the Depot books not at all here.
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
@@ -28,10 +28,12 @@ defmodule AbakusWeb.RegisterLive do
   """
   use AbakusWeb, :live_view
 
+  alias Abakus.Depot.BudgetFeed
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
   alias AbakusWeb.{AccountGroups, CategoryOptions, Format}
+  alias AbakusWeb.Depot.Components, as: DepotComponents
   alias AbakusWeb.RegisterLive.{Balances, Components, Reconcile, Rows, TransactionEditor}
   alias Plug.Conn.Query
 
@@ -93,6 +95,7 @@ defmodule AbakusWeb.RegisterLive do
             </:actions>
           </.header>
         </div>
+        <DepotComponents.depots_tabs :if={@portfolio} tab={:register} portfolio={@portfolio} />
         <Components.toolbar
           account={@account}
           manual={@manual}
@@ -202,7 +205,7 @@ defmodule AbakusWeb.RegisterLive do
 
   defp load(socket, :all) do
     socket
-    |> assign(scope: :all, account: nil, selected: MapSet.new(), editor: nil)
+    |> assign(scope: :all, account: nil, portfolio: nil, selected: MapSet.new(), editor: nil)
     |> assign(reconcile: nil, reconciling: nil)
     |> load_transactions()
   end
@@ -212,6 +215,7 @@ defmodule AbakusWeb.RegisterLive do
 
     socket
     |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
+    |> assign(:portfolio, BudgetFeed.portfolio(account))
     |> assign(reconcile: nil, reconciling: nil)
     |> load_transactions()
   end

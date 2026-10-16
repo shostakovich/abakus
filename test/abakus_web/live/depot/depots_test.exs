@@ -4,7 +4,8 @@ defmodule AbakusWeb.Depot.DepotsTest do
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
 
-  alias Abakus.LocalTime
+  alias Abakus.Depot.BudgetFeed
+  alias Abakus.{LocalTime, Repo}
 
   setup :register_and_log_in_user
 
@@ -102,6 +103,30 @@ defmodule AbakusWeb.Depot.DepotsTest do
              sidebar_link(~p"/depot/holdings?#{[portfolio: ctx.long.id]}") <>
                "[aria-current=page]"
            )
+  end
+
+  test "a portfolio of the budget owner is its account, whose register is its tab Register",
+       ctx do
+    :ok = BudgetFeed.sync_accounts()
+    long = Repo.reload!(ctx.long)
+    register = ~p"/budget/accounts/#{long.budget_account_id}"
+    holdings = ~p"/depot/holdings?#{[portfolio: long.id]}"
+
+    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?#{[portfolio: long.id]}")
+
+    assert tab_paths(lv) ==
+             ["/depot/holdings?portfolio=#{long.id}", register] ++
+               Enum.map(
+                 ~w(transactions dividends performance),
+                 &"/depot/#{&1}?portfolio=#{long.id}"
+               )
+
+    {:ok, lv, _html} = live(ctx.conn, register)
+
+    assert has_element?(lv, ~s(#depots-tabs a[href="#{register}"][aria-current=page]), "Register")
+    assert has_element?(lv, ~s(#depots-tabs a[href="#{holdings}"]), "Bestand")
+    assert has_element?(lv, sidebar_link(holdings) <> "[aria-current=page]")
+    refute has_element?(lv, "#side-account-#{long.budget_account_id}")
   end
 
   test "Buchungen of a portfolio are its own and its reference account's", ctx do

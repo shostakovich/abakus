@@ -225,14 +225,17 @@ same source; across sources (and against manual entries) a match is proposed, ne
 Only used for the portfolios (securities accounts and their cash accounts). Their value is booked by the Depot
 area, the way YNAB tools post market values:
 
-- The budget owner picks under Einstellungen › Depots which tracking account each of their portfolios and
-  Verrechnungskonten feeds; an account fed by one is fed by `portfolio`
+- Each of the budget owner's portfolios is one tracking account fed by `portfolio`, opened with the portfolio
+  (ADR 0017) and named after it; its register is the portfolio's tab Register, and the sidebar lists it only
+  under Depots. An account fed by `portfolio` whose portfolio is gone is closed with its history, as were the
+  accounts several portfolios fed before
 - Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus
 - Every day after the price job, the Depot area books the difference between the account's balance and the value
-  of what feeds it as one transaction through the Ledger, payee "Wertänderung", approved and cleared, none without
-  a difference; another run that day amends that transaction instead of booking a second one. Nothing else changes
-  the account (`Abakus.Depot.BudgetFeed` is its only writer), and it cannot be reconciled
-- Accounts that no aggregator reaches (e.g. a broker's settlement account) are covered this way too
+  of its portfolio as one transaction through the Ledger, payee "Wertänderung", approved and cleared, none without
+  a difference, so a new account starts at the portfolio's value; another run that day amends that transaction
+  instead of booking a second one. Nothing else changes the account (`Abakus.Depot.BudgetFeed` is its only
+  writer), and it cannot be reconciled
+- Verrechnungskonten count toward no account
 - A tracking account nothing feeds keeps its values from YNAB and can be adjusted by hand
 
 ## MCP
@@ -273,7 +276,8 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 - **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement and Aktivität
 - **Depot**: Vermögen (net worth: for the budget owner all open budget and tracking accounts, for anyone else
   their portfolios and Verrechnungskonten, optionally against the benchmark) and Depots, for all portfolios or
-  one, with „Buchung erfassen“ and the tabs Bestand (holdings and Verrechnungskonten), Buchungen, Dividenden, Performance and, for all portfolios,
+  one, with „Buchung erfassen“ and the tabs Bestand (holdings and Verrechnungskonten), for one portfolio of the
+  budget owner Register (its account's register), Buchungen, Dividenden, Performance and, for all portfolios,
   Wertpapiere (prices, quote feeds, the benchmark, exchange rates); a page per security
 - **Einstellungen**: a mode of the sidebar under `/settings/…`, with the way back to the area used last and the
   sections grouped by area; each group shows only to users of its area, whose settings answer 404 to others.
@@ -282,7 +286,7 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget owner's only: switching the link on, its account and
   which budget category each Kasse category's shares land in), Export (CSV/JSON) and YNAB (each participant's own
   sync to YNAB, until they are linked). Depot, for everyone, so anyone may start one: Depots (the user's
-  portfolios and Verrechnungskonten, for the budget owner also the tracking account each feeds) and Belegeingang
+  portfolios and Verrechnungskonten) and Belegeingang
   (Paperless-ngx and the receipt recognition; users with a portfolio). Categories and groups are edited in the
   budget
 

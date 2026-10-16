@@ -8,7 +8,7 @@ defmodule Abakus.Depot.PPImportTest do
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.PPImport.Reader
   alias Abakus.Depot.Securities.{Price, Security}
-  alias Abakus.DomainFixtures
+  alias Abakus.Ledger
 
   @sample "test/fixtures/depot/pp/sample.portfolio"
 
@@ -373,22 +373,24 @@ defmodule Abakus.Depot.PPImportTest do
     assert Portfolios.own_transactions?(scope)
   end
 
-  test "frees a tracking account whose feeding portfolio PP dropped", %{
-    scope: scope,
-    client: client
-  } do
+  test "opens an account for each imported portfolio and closes it once PP dropped the portfolio",
+       %{
+         scope: scope,
+         client: client
+       } do
     {:ok, _} = PPImport.import_client(scope, client)
-    tracking = DomainFixtures.account_fixture(name: "Depot", kind: :tracking)
-    [portfolio | _] = Portfolios.list_portfolios(scope)
-    {:ok, _feeds} = BudgetFeed.put_feeds(scope, %{{:portfolio, portfolio.id} => tracking.id})
-    assert %{fed_by: :portfolio} = Repo.reload!(tracking)
+    portfolios = Portfolios.list_portfolios(scope)
+    accounts = Enum.map(portfolios, &Repo.get!(Ledger.Account, &1.budget_account_id))
+
+    assert Enum.map(accounts, &{&1.name, &1.fed_by, &1.closed}) ==
+             Enum.map(portfolios, &{&1.name, :portfolio, false})
 
     {:ok, summary} =
       PPImport.import_client(scope, %{client | portfolios: [], transactions: [], plans: []})
 
     assert summary.portfolios.deleted == 2
-    assert BudgetFeed.feeds(scope) == %{}
-    assert %{fed_by: nil} = Repo.reload!(tracking)
+    assert Enum.all?(accounts, &Repo.reload!(&1).closed)
+    refute BudgetFeed.in_use?()
   end
 
   test "keeps a security PP recreated under a new UUID", %{scope: scope, client: client} do

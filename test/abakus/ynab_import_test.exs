@@ -209,12 +209,10 @@ defmodule Abakus.YnabImportTest do
       assert BudgetLink.category_mapping() != %{}
     end
 
-    test "refuses once the Depot feeds a tracking account, which it would drop" do
+    test "refuses once a portfolio is an account, which it would drop" do
       {:ok, _report} = YnabImport.import_plan(@plan)
-      scope = UsersFixtures.user_scope_fixture()
-      portfolio = PortfoliosFixtures.portfolio_fixture(scope)
-      depot = Enum.find(Ledger.list_accounts(), &(&1.kind == :tracking))
-      {:ok, _feeds} = BudgetFeed.put_feeds(scope, %{{:portfolio, portfolio.id} => depot.id})
+      PortfoliosFixtures.portfolio_fixture(UsersFixtures.user_scope_fixture())
+      :ok = BudgetFeed.sync_accounts()
 
       assert YnabImport.import_plan(@plan) == {:error, :own_data}
       assert BudgetFeed.in_use?()

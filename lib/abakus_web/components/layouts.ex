@@ -59,7 +59,7 @@ defmodule AbakusWeb.Layouts do
 
   Finanzen: Budget, Vermögen, Alle Konten and Import & Sync with the receipts waiting in the inbox, the open
   budget and tracking accounts with their balance and how many transactions wait for approval and „Konto
-  hinzufügen“, then Depots with the active portfolios and their values; a user without the budget sees only
+  hinzufügen“, then Depots with the active portfolios and their values, each also an account of the budget owner; a user without the budget sees only
   Vermögen, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of
   the icon rail and the dock.
 
@@ -76,7 +76,7 @@ defmodule AbakusWeb.Layouts do
         budget?: finanzen? and Areas.allowed?(assigns.current_scope, :budget),
         depot?: finanzen? and Areas.allowed?(assigns.current_scope, :depot),
         kasse?: assigns.area == :kasse,
-        groups: if(finanzen?, do: AccountGroups.open(assigns.account_groups), else: []),
+        groups: if(finanzen?, do: AccountGroups.sidebar(assigns.account_groups), else: []),
         portfolios:
           (finanzen? && assigns.depot_sidebar && assigns.depot_sidebar.portfolios) || [],
         import_path: import_path(assigns.current_scope),
@@ -294,12 +294,22 @@ defmodule AbakusWeb.Layouts do
 
   defp label(name), do: name |> Names.split_emoji() |> elem(1)
 
-  # The account shown, if the sidebar lists it; the account list and closed accounts belong to Alle Konten.
-  defp nav_key(%{current: :accounts, account_id: account_id, account_groups: groups}) do
+  # The account shown, or its portfolio, if the sidebar lists it; the account list and closed accounts belong to
+  # Alle Konten.
+  defp nav_key(%{current: :accounts, account_id: account_id} = assigns) do
     listed? =
-      Enum.any?(AccountGroups.rows(AccountGroups.open(groups)), &(&1.account.id == account_id))
+      Enum.any?(
+        AccountGroups.rows(AccountGroups.sidebar(assigns.account_groups)),
+        &(&1.account.id == account_id)
+      )
 
-    if account_id && listed?, do: {:account, account_id}, else: :all_accounts
+    portfolio = account_id && portfolio_of(assigns.depot_sidebar, account_id)
+
+    cond do
+      account_id && listed? -> {:account, account_id}
+      portfolio -> {:depot_portfolio, portfolio.id}
+      true -> :all_accounts
+    end
   end
 
   # The portfolio the Depots pages show, if the sidebar lists it; a retired one belongs to Depots.
@@ -311,6 +321,11 @@ defmodule AbakusWeb.Layouts do
 
   defp nav_key(%{current: current}) when current in [:import_receipts, :import_pp], do: :import
   defp nav_key(%{current: current}), do: current
+
+  defp portfolio_of(%{portfolios: rows}, account_id),
+    do: Enum.find_value(rows, &(&1.portfolio.budget_account_id == account_id && &1.portfolio))
+
+  defp portfolio_of(_sidebar, _account_id), do: nil
 
   defp initial(email), do: String.upcase(String.first(email) || "")
 

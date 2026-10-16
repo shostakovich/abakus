@@ -4,12 +4,9 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
   import Phoenix.LiveViewTest
   import Abakus.Depot.PortfoliosFixtures
 
-  import Abakus.UsersFixtures, only: [user_fixture: 0]
-
-  alias Abakus.Depot.{BudgetFeed, Portfolios}
+  alias Abakus.Depot.Portfolios
   alias Abakus.Depot.Portfolios.Portfolio
-  alias Abakus.{DomainFixtures, Ledger, Repo}
-  alias Abakus.Users.Scope
+  alias Abakus.Repo
   alias AbakusWeb.Depot.Sidebar
 
   setup :register_and_log_in_user
@@ -142,94 +139,6 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
       lv |> element("#depot-number-form button", "Abbrechen") |> render_click()
 
       refute has_element?(lv, "#depot-number-form")
-    end
-  end
-
-  describe "in the budget" do
-    setup ctx do
-      portfolio = portfolio_fixture(ctx.scope, %{name: "Langfristig"})
-      cash = account_fixture(ctx.scope, %{name: "Verrechnung"})
-      depot = DomainFixtures.account_fixture(name: "📈 Depot", kind: :tracking)
-      %{portfolio: portfolio, cash: cash, depot: depot}
-    end
-
-    test "the budget owner picks the tracking account each portfolio and account feeds", ctx do
-      retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
-      DomainFixtures.account_fixture(name: "Giro", kind: :checking)
-
-      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
-
-      assert has_element?(lv, "#budget-feeds", "Wertänderung")
-
-      assert has_element?(
-               lv,
-               ~s|label[for="feeds_portfolio-#{ctx.portfolio.id}"]|,
-               "Depot „Langfristig“"
-             )
-
-      assert has_element?(
-               lv,
-               ~s|label[for="feeds_account-#{ctx.cash.id}"]|,
-               "Verrechnungskonto „Verrechnung“"
-             )
-
-      refute has_element?(lv, "#feeds_portfolio-#{retired.id}")
-      assert has_element?(lv, "#feeds_portfolio-#{ctx.portfolio.id} option", "📈 Depot")
-      refute has_element?(lv, "#feeds_portfolio-#{ctx.portfolio.id} option", "Giro")
-
-      lv
-      |> form("#budget-feeds-form",
-        feeds: %{"portfolio-#{ctx.portfolio.id}" => ctx.depot.id, "account-#{ctx.cash.id}" => ""}
-      )
-      |> render_submit()
-
-      assert render(lv) =~ "Zuordnung zum Budget gespeichert."
-      assert BudgetFeed.feeds(ctx.scope) == %{{:portfolio, ctx.portfolio.id} => ctx.depot.id}
-      assert Repo.reload!(ctx.depot).fed_by == :portfolio
-      assert has_element?(lv, "#feeds_portfolio-#{ctx.portfolio.id} option[selected]", "📈 Depot")
-    end
-
-    test "keeps a feed into an account closed since", ctx do
-      {:ok, _feeds} =
-        BudgetFeed.put_feeds(ctx.scope, %{{:portfolio, ctx.portfolio.id} => ctx.depot.id})
-
-      {:ok, _closed} = Ledger.update_account(ctx.depot, %{closed: true})
-      DomainFixtures.account_fixture(name: "Tagesgeld", kind: :tracking)
-
-      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
-
-      assert has_element?(
-               lv,
-               "#feeds_portfolio-#{ctx.portfolio.id} option[selected]",
-               "📈 Depot (geschlossen)"
-             )
-
-      refute has_element?(lv, "#feeds_account-#{ctx.cash.id} option[selected]")
-
-      lv |> form("#budget-feeds-form") |> render_submit()
-
-      assert render(lv) =~ "Zuordnung zum Budget gespeichert."
-      assert BudgetFeed.feeds(ctx.scope) == %{{:portfolio, ctx.portfolio.id} => ctx.depot.id}
-      assert Repo.reload!(ctx.depot).fed_by == :portfolio
-    end
-
-    test "says when the budget has no open tracking account", ctx do
-      {:ok, _closed} = Ledger.update_account(ctx.depot, %{closed: true})
-
-      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
-
-      assert has_element?(lv, "#budget-feeds-none", "Tracking-Konto")
-      refute has_element?(lv, "#budget-feeds-form")
-    end
-
-    test "is not there for anyone else" do
-      member = user_fixture()
-      portfolio_fixture(Scope.for_user(member))
-
-      {:ok, lv, _html} = live(log_in_user(build_conn(), member), ~p"/settings/depot/portfolios")
-
-      assert has_element?(lv, "#depot-numbers")
-      refute has_element?(lv, "#budget-feeds")
     end
   end
 end

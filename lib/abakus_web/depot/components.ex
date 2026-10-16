@@ -16,6 +16,7 @@ defmodule AbakusWeb.Depot.Components do
 
   @tabs [
     holdings: "Bestand",
+    register: "Register",
     transactions: "Buchungen",
     dividends: "Dividenden",
     performance: "Performance",
@@ -35,15 +36,9 @@ defmodule AbakusWeb.Depot.Components do
 
   @doc """
   The Depots pages' title, all portfolios or one, with „Buchung erfassen“ and the portfolio menu,
-  then the tabs: Bestand, Buchungen, Dividenden, Performance, and Wertpapiere for all portfolios.
+  then the tabs (`depots_tabs/1`).
   """
   def depots_header(assigns) do
-    assigns =
-      assign(assigns,
-        tabs: if(assigns.portfolio, do: Keyword.delete(@tabs, :securities), else: @tabs),
-        portfolio_id: assigns.portfolio && assigns.portfolio.id
-      )
-
     ~H"""
     <.header>
       {if @portfolio, do: Format.portfolio_name(@portfolio), else: "Depots"}
@@ -67,17 +62,35 @@ defmodule AbakusWeb.Depot.Components do
         </.button>
       </:actions>
     </.header>
+    <.depots_tabs tab={@tab} portfolio={@portfolio} />
+    """
+  end
+
+  attr :tab, :atom, required: true, values: Keyword.keys(@tabs)
+  attr :portfolio, :any, default: nil, doc: "the one shown, nil for all"
+
+  @doc """
+  The Depots pages' tabs: Bestand, Buchungen, Dividenden, Performance, Wertpapiere for all portfolios;
+  for one the same without Wertpapiere, with Register, its account's register, if it has an account.
+  """
+  def depots_tabs(assigns) do
+    assigns = assign(assigns, :tabs, shown_tabs(assigns.portfolio))
+
+    ~H"""
     <.tabs id="depots-tabs" label="Depots" class="mb-6">
-      <:tab
-        :for={{tab, label} <- @tabs}
-        navigate={depots_path(tab, @portfolio_id)}
-        active={tab == @tab}
-      >
+      <:tab :for={{tab, label} <- @tabs} navigate={tab_path(tab, @portfolio)} active={tab == @tab}>
         {label}
       </:tab>
     </.tabs>
     """
   end
+
+  defp shown_tabs(nil), do: Keyword.delete(@tabs, :register)
+  defp shown_tabs(%{budget_account_id: nil}), do: Keyword.drop(@tabs, [:register, :securities])
+  defp shown_tabs(_portfolio), do: Keyword.delete(@tabs, :securities)
+
+  defp tab_path(:register, portfolio), do: ~p"/budget/accounts/#{portfolio.budget_account_id}"
+  defp tab_path(tab, portfolio), do: depots_path(tab, portfolio && portfolio.id)
 
   @doc "A tab of the Depots pages, of all portfolios or of the one with `portfolio_id`."
   def depots_path(tab, portfolio_id \\ nil)
