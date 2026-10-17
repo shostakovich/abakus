@@ -3,17 +3,10 @@ defmodule AbakusWeb.SettingsLiveTest do
 
   import Phoenix.LiveViewTest
   import Abakus.Depot.PortfoliosFixtures, only: [portfolio_fixture: 2]
-  import Abakus.DomainFixtures
   import Abakus.KasseFixtures
 
   alias Abakus.Kasse.Participants
-  alias Abakus.LocalTime
   alias Abakus.Users.Scope
-  alias Abakus.YnabImport
-
-  @fixture Path.expand("../../fixtures/ynab/plan.json", __DIR__)
-  @external_resource @fixture
-  @plan @fixture |> File.read!() |> JSON.decode!() |> Map.fetch!("plan")
 
   setup :register_and_log_in_user
 
@@ -36,8 +29,7 @@ defmodule AbakusWeb.SettingsLiveTest do
     test "opens at Aussehen; only Zugang needs a recent sign-in", %{conn: conn} do
       assert conn |> get(~p"/settings") |> redirected_to() == ~p"/settings/appearance"
 
-      for path <- [~p"/settings/appearance", ~p"/settings/budget/ynab"],
-          do: assert({:ok, _view, _html} = live(conn, path))
+      assert {:ok, _view, _html} = live(conn, ~p"/settings/appearance")
 
       assert {:error, {:redirect, %{to: "/users/log-in"}}} = live(conn, ~p"/settings/access")
     end
@@ -55,8 +47,6 @@ defmodule AbakusWeb.SettingsLiveTest do
                "Allgemein",
                "Zugang",
                "Aussehen",
-               "Budget",
-               "YNAB-Import",
                "Kasse",
                "Gruppe",
                "Teilnehmer",
@@ -78,7 +68,6 @@ defmodule AbakusWeb.SettingsLiveTest do
       for {id, plush} <- [
             access: "key",
             appearance: "palette",
-            ynab_import: "history",
             kasse_group: "house",
             kasse_participants: "users",
             kasse_categories: "tag",
@@ -163,8 +152,7 @@ defmodule AbakusWeb.SettingsLiveTest do
       assert has_element?(view, ~s|#settings-back-sidebar[href="/kasse"]|, "Zurück zur Kasse")
     end
 
-    test "gets 404 on the Budget's settings and Belegeingang", %{conn: conn} do
-      assert_error_sent 404, fn -> get(conn, ~p"/settings/budget/ynab") end
+    test "gets 404 on the budget link and Belegeingang", %{conn: conn} do
       assert_error_sent 404, fn -> get(conn, ~p"/settings/kasse/budget") end
       assert_error_sent 404, fn -> get(conn, ~p"/settings/depot/receipt-intake") end
     end
@@ -173,37 +161,6 @@ defmodule AbakusWeb.SettingsLiveTest do
   test "the Kasse's settings answer 404 to a user who is no person of the Kasse", %{conn: conn} do
     for %{verb: :get, path: "/settings/kasse" <> _ = path} <- AbakusWeb.Router.__routes__() do
       assert_error_sent 404, fn -> get(conn, path) end
-    end
-  end
-
-  describe "YNAB import status" do
-    test "says when nothing came from YNAB", %{conn: conn} do
-      transaction_fixture()
-
-      {:ok, view, _html} = live(conn, ~p"/settings/budget/ynab")
-
-      assert has_element?(view, "#ynab-import", "Noch nichts aus YNAB übernommen.")
-      refute has_element?(view, "#ynab-import-summary")
-    end
-
-    test "shows when the import ran and what it brought over", %{conn: conn} do
-      {:ok, _report} = YnabImport.import_plan(Scope.system(), @plan)
-      %{imported_at: imported_at} = YnabImport.status(budget_scope())
-
-      {:ok, view, _html} = live(conn, ~p"/settings/budget/ynab")
-
-      assert has_element?(
-               view,
-               "#ynab-import",
-               "übernommen am #{Calendar.strftime(LocalTime.date(imported_at), "%d.%m.%Y")}"
-             )
-
-      assert has_element?(
-               view,
-               "#ynab-import-summary",
-               "4 Konten, 3 Kategoriegruppen mit 7 Kategorien, 5 Empfänger, 18 Buchungen, " <>
-                 "Budget ab August 2026."
-             )
     end
   end
 end

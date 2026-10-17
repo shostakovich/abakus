@@ -46,15 +46,14 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   host's `TZ` (`Abakus.LocalTime`, no time zone database). Its jobs and the backup run in the release;
   `config/test.exs` turns them off (`jobs: false`). What the app, MCP, jobs and tasks call takes `%Scope{}`
   (ADR 0019): a person's, or `Scope.system()` for jobs, tasks and MCP reads; `Abakus.Kasse.Access` refuses any
-  other, except in what the budget calls of the budget link (`in_use?/1`, `recategorize/3`, `expense_ids/2`), which
+  other, except in what the budget calls of the budget link (`recategorize/3`, `expense_ids/2`), which
   takes a plain user scope. The budget link acts for the scope's person. Tests get a person's scope with
   `scope_of/1` from `Abakus.KasseFixtures`.
 - The budget: `Abakus.Ledger`, `Abakus.Categories` and `Abakus.FileImport` take `%Scope{}` and see only the rows
   with the user's `user_id` (ADR 0019); each user's Ready to Assign comes with its first use. What writes into it
   from another area writes with the budget owner's user, whichever way it gets that scope: the Depot's budget feed
-  (`Scope.for_budget_owner/0`) and link (the caller's), the Kasse's budget link (the linked person's,
-  `Scope.for_participant/1`) and the YNAB import (a task, so it takes `Scope.system()` and writes with
-  `Scope.for_budget_owner/0`). Tests get the owner's scope with `budget_scope/0` from `Abakus.DomainFixtures`.
+  (`Scope.for_budget_owner/0`) and link (the caller's) and the Kasse's budget link (the linked person's,
+  `Scope.for_participant/1`). Tests get the owner's scope with `budget_scope/0` from `Abakus.DomainFixtures`.
 - Exchange rates (`Abakus.ExchangeRates`, tables `exchange_rates`, `exchange_rate_runs`) are shared: one daily job
   loads the ECB rates, each area looks them up by its own rule, manual rates are the Kasse's only; its rule and the
   logged changes to manual rates live in `Abakus.Kasse.Rates`. Tests swap the source in `config/test.exs`

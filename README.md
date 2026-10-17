@@ -6,17 +6,16 @@ meant to replace YNAB for my own use. **The user interface is German.**
 
 ## Status
 
-Sign-in with magic link and passkeys, the budget math, the YNAB import, the budget view on desktop with its month
-calculation, category dialog (targets), auto-assign and covering and moving money, the register for one account or
-all of them, where transactions are edited in place as in YNAB, reconciling, the OFX/QFX file import with match
-proposals and the settings, and the Kasse: the household's shared expenses, moved in from Zipfelkasse with its
-expenses, balances, activity log, recurring expenses, categories, exchange rates, CSV/JSON export, its MCP server
-for AI assistants and the link that books the budget owner's shares in the budget; and the Depot, moved in from
-zipfelfolio and part of the area Finanzen with the budget: each user's Vermögen and portfolios with holdings,
-dividends, transactions, performance and securities, whose prices come from Yahoo every evening, a receipt inbox
-that reads bank PDFs, uploaded or taken from Paperless-ngx, the Portfolio Performance import, each of the budget
-owner's portfolios as a tracking account with its daily value change, and its cash flows linked to the budget. Bank
-sync and the budget's MCP tools follow in v2.
+Sign-in with magic link and passkeys, the budget math, the budget view on desktop with its month calculation,
+category dialog (targets), auto-assign and covering and moving money, the register for one account or all of them,
+where transactions are edited in place as in YNAB, reconciling, the OFX/QFX file import with match proposals and the
+settings, and the Kasse: the household's shared expenses with their balances, activity log, recurring expenses,
+categories, exchange rates, CSV/JSON export, its MCP server for AI assistants and the link that books the budget
+owner's shares in the budget; and the Depot, part of the area Finanzen with the budget: each user's Vermögen and
+portfolios with holdings, dividends, transactions, performance and securities, whose prices come from Yahoo every
+evening, a receipt inbox that reads bank PDFs, uploaded or taken from Paperless-ngx, the Portfolio Performance
+import, each of the budget owner's portfolios as a tracking account with its daily value change, and its cash flows
+linked to the budget. Bank sync and the budget's MCP tools follow in v2.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, phases
 - [docs/MCP.md](docs/MCP.md): the MCP server, its access rules and tools
@@ -87,40 +86,6 @@ first participant of the Kasse, who invites the others from there:
 
 ```sh
 docker compose exec abakus bin/abakus eval 'Abakus.Release.add_participant("you@example.com", "Your name")'
-```
-
-Import the budget from YNAB with a personal access token (YNAB: Account Settings → Developer Settings), passed to
-this one command only. It replaces the whole budget, so it refuses once Abakus holds transactions of its own, and
-then checks every month, category and account against YNAB's numbers (exit code 1 on a difference):
-
-```sh
-docker compose exec -e YNAB_TOKEN=… abakus bin/abakus eval 'Abakus.Release.import_ynab()'
-```
-
-With several plans in YNAB it lists them; pass the id as `import_ynab("…")`. Locally: `mix abakus.ynab_import`.
-
-Bring the Kasse over from Zipfelkasse once, instead of adding its first participant: stop Zipfelkasse, copy its
-database file into `data/` and import it with every person's email address. Ids, shares, recurring expenses and the
-activity log stay as they were; each person becomes the user with that address, and users missing in Abakus are
-created without mail and ask for a sign-in link on the sign-in page. It refuses once the Kasse holds people or
-expenses, and while Abakus has no users: invite the budget owner first.
-
-```sh
-docker compose exec abakus bin/abakus eval \
-  'Abakus.Release.import_kasse("/app/data/zipfelkasse.sqlite3", %{"Anna" => "anna@example.com"})'
-```
-
-Bring the Depot over from zipfelfolio once: stop zipfelfolio, copy its database file together with the `receipts`
-folder next to it into a folder under `data/` and import it. Ids, transactions, receipts, benchmarks and Paperless
-settings stay as they were; each user becomes the user with the same email address, and users missing in Abakus are
-created without mail and ask for a sign-in link on the sign-in page. Passkeys made for the old address do not work
-here: add them again under Einstellungen › Zugang. It refuses once the Depot holds securities or portfolios, and
-while Abakus has no users: invite the budget owner first. Then
-redirect the old address to Abakus's `/depot` in the reverse proxy.
-
-```sh
-docker compose exec abakus bin/abakus eval \
-  'Abakus.Release.import_depot("/app/data/zipfelfolio/zipfelfolio.sqlite3")'
 ```
 
 ## Before you use this

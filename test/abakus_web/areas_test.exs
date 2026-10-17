@@ -102,8 +102,6 @@ defmodule AbakusWeb.AreasTest do
       for path <- get_paths("/budget", account.id) do
         assert_error_sent 404, fn -> get(conn, path) end
       end
-
-      assert_error_sent 404, fn -> get(conn, ~p"/settings/budget/ynab") end
     end
 
     test "sees no Budget in the sidebar or the settings", %{conn: conn} do
@@ -111,7 +109,6 @@ defmodule AbakusWeb.AreasTest do
 
       refute has_element?(view, ~s|a[href^="/budget"]|)
       refute html =~ "Girokonto"
-      refute has_element?(view, "#settings-ynab-import-sidebar")
       assert has_element?(view, ~s|#settings-access-sidebar[href="/settings/access"]|)
     end
 

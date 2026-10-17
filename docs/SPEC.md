@@ -67,7 +67,7 @@ The context is `Abakus.Users` (an "account" is a bank account here):
 
 ## Domain
 
-Mirrors YNAB so the import is lossless.
+Mirrors YNAB.
 
 Terms: [`CONTEXT.md`](../CONTEXT.md). Two contexts: `Abakus.Ledger` (accounts, payees, transactions) and
 `Abakus.Categories` (groups, categories, assignments, targets); `Abakus.Budget` is the pure math on top. The budget
@@ -81,9 +81,9 @@ the rows of their caller's user (ADR 0019).
   tracking (derived; a kind never crosses that line). No credit cards or loans. Closed, never deleted.
 - **Payee**: name, transfer account, last used category. Each account has a transfer payee "Transfer : <account
   name>" as in YNAB, created and renamed with the account. Other payees are unique by lookup key.
-- **Category group** and **category**: name, hidden (from YNAB, for the import and its check; the budget ignores
-  it), position (new ones go to the end), note, internal. A category is deleted only into another, which takes over
-  everything it has; a group only when it is empty ([ADR 0003](../DECISIONS.md)).
+- **Category group** and **category**: name, hidden (kept, but the budget ignores it), position (new ones go to the
+  end), note, internal. A category is deleted only into another, which takes over everything it has; a group only
+  when it is empty ([ADR 0003](../DECISIONS.md)).
   Lookup keys of categories are not unique (an old "Urlaub" next to "🏖️ Urlaub"); groups have none. Each user's
   budget gets YNAB's internal group "Internal Master Category" with "Inflow: Ready to Assign" (UI "Zu verteilen")
   with its first use; internal ones are not listed, not editable and take no assignments or targets. Ready to
@@ -198,8 +198,8 @@ resting state.
   - other goal types (`TB`, `TBD`, `MF`, `DEBT`) only if needed later
 - All of this is one pure module (`Abakus.Budget`) computed from assignments and transactions; months are not
   stored as snapshots. It computes every month from the first with data to the month after the last with data,
-  where that month's overspending lands. Property tests plus hand-computed, fictional fixtures in YNAB's month format; the YNAB
-  import checks it against YNAB's own numbers (see acceptance v1).
+  where that month's overspending lands. Property tests plus hand-computed, fictional fixtures in YNAB's month
+  format.
 
 ## Import
 
@@ -249,7 +249,7 @@ the way YNAB tools post market values:
   else; "Cash von Depot Y" (cash at the broker of one of the user's portfolios), counting toward that portfolio's
   value and account and shown in its Bestand as „davon Cash“; or none. One without a role shows as a warning on
   Vermögen, linking to its setting
-- A tracking account nothing feeds keeps its values from YNAB and can be adjusted by hand
+- A tracking account nothing feeds is adjusted by hand
 
 ## MCP
 
@@ -262,20 +262,6 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   `search_transactions`, `statistics` (spending by category, payee, month; previous year comparison),
   `schema`, `sql_query` (`SELECT`/`WITH`, ≤ 500 rows, 2 s)
 - Budget, write (v2): `create_transaction` (unapproved, so it shows up for review). Nothing is changed or deleted via MCP.
-
-## YNAB import
-
-- One-shot via the YNAB API with a personal access token (`YNAB_TOKEN`): accounts, payees, category groups and
-  categories with targets (`goal_*` fields), assignments per month, all transactions with splits and transfers,
-  cleared and reconciled state (YNAB's flags stay behind); all from one request for the plan's export (`/plans/{plan_id}`)
-- Repeatable until the switch: a re-import replaces the whole budget
-  ([ADR 0002](../DECISIONS.md)); the run reports what differs from YNAB's numbers
-- The API keeps no target history: months before a target's creation month show it too but ask nothing, so a
-  target starts in its creation month; payees with the same lookup key are merged; data Abakus cannot represent
-  (credit cards, loans, targets other than monthly, yearly or by a date without repeat, amounts that are not
-  whole cents) stops the import before it writes
-- Checks after the import: per month RTA, and per category assigned, activity, available and underfunded
-  (`goal_under_funded`) equal the export's month numbers; account balances equal
 
 ## Screens
 
@@ -297,12 +283,12 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   exchange rates); a page per security
 - **Einstellungen**: a mode of the sidebar under `/settings/…`, with the way back to the area used last and the
   sections grouped by area; each group shows only to users of its area, whose settings answer 404 to others.
-  Allgemein: Zugang (passkeys, email), Aussehen (theme, per device). Budget: YNAB-Import (what the import brought
-  over). Kasse: Gruppe (the group's name), Teilnehmer (adding one invites their user), Kategorien, Wiederkehrende
-  Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget owner's only: switching the link on, its account and which
-  budget category each Kasse category's shares land in) and Export (CSV/JSON). Depot, for everyone, so anyone may
-  start one: Depots (the user's portfolios and Verrechnungskonten with their roles, and for the budget owner the
-  link to the budget) and Belegeingang (Paperless-ngx and the receipt recognition; users with a portfolio).
+  Allgemein: Zugang (passkeys, email), Aussehen (theme, per device). Kasse: Gruppe (the group's name), Teilnehmer
+  (adding one invites their user), Kategorien, Wiederkehrende Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget
+  owner's only: switching the link on, its account and which budget category each Kasse category's shares land in)
+  and Export (CSV/JSON). Depot, for everyone, so anyone may start one: Depots (the user's portfolios and
+  Verrechnungskonten with their roles, and for the budget owner the link to the budget) and Belegeingang
+  (Paperless-ngx and the receipt recognition; users with a portfolio).
   Categories and groups are edited in the budget
 
 State that should survive a reload (screen, month, account, filters) lives in the URL; the number of months
@@ -315,16 +301,15 @@ follows the window.
 1. Skeleton: Phoenix, SQLite, UI components, login with magic link and passkeys, PWA manifest,
    container, deploy behind a reverse proxy, CI (format, credo, tests, assets)
 2. Domain and `Abakus.Budget` incl. targets, with property tests
-3. YNAB import with the checks above
-4. Budget view, desktop and phone
-5. Accounts, register, transaction form, splits, transfers, reconcile
-6. OFX/QFX import with matching and approval
-7. The shared expenses move into Abakus and are linked to the budget (#43)
-8. The portfolios move into Abakus as the Depot and book their value into the tracking accounts (#44)
+3. Budget view, desktop and phone
+4. Accounts, register, transaction form, splits, transfers, reconcile
+5. OFX/QFX import with matching and approval
+6. The shared expenses move into Abakus and are linked to the budget (#43)
+7. The portfolios move into Abakus as the Depot and book their value into the tracking accounts (#44)
 
-Acceptance: after importing the owner's YNAB budget, every month since the start shows the same RTA and the same
-assigned, activity, available and underfunded per category as YNAB; account balances match; an OFX/QFX
-export imports without duplicates; the shared expenses reach the budget without a sync.
+Acceptance: every month shows the same RTA and the same assigned, activity, available and underfunded per category
+as YNAB would for the same data; an OFX/QFX export imports without duplicates; the shared expenses reach the budget
+without a sync.
 
 ### v2 — bank sync and MCP
 
@@ -346,7 +331,7 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
   time (`TZ`, `Europe/Berlin` in the image); `jobs: false` turns them off in tests
 - Runs behind the operator's HTTPS reverse proxy, which sets `X-Forwarded-Proto`
 - Config via env: `PHX_HOST` (required: the public host, also the passkey relying party id), `SECRET_KEY_BASE`,
-  SMTP, `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES`, `YNAB_TOKEN` (import only), `DIVVYDIARY_API_KEY`
+  SMTP, `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES`, `DIVVYDIARY_API_KEY`
   (the Depot's countries, sectors and dividends; optional), `RECEIPT_MODEL_URL`, `RECEIPT_MODEL`,
   `RECEIPT_MODEL_KEY`, `RECEIPT_MODEL_THINKING` (the Depot's receipt recognition; optional),
   `ENABLE_BANKING_APP_ID` and the private key as a read-only mounted file (v2)
@@ -354,8 +339,7 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
 
 ## Open
 
-- How YNAB computes `goal_under_funded` for targets by a date in detail (rounding up to the cent matched a test
-  plan's export; check against the owner's budget), and what it reports after the date of one that does not
-  repeat (Abakus asks nothing then)
+- How YNAB computes `goal_under_funded` for targets by a date in detail (Abakus rounds up to the cent), and what
+  it reports after the date of one that does not repeat (Abakus asks nothing then)
 - Which banks show up in Enable Banking's restricted mode and their `maximum_consent_validity` (needs the
   owner's Enable Banking account)

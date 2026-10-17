@@ -127,21 +127,6 @@ defmodule Abakus.Kasse.BudgetLink do
     )
   end
 
-  @doc "Whether anything is linked or mapped into the user's budget, which a wipe of it would break or drop."
-  def in_use?(%Scope{user: %User{id: user_id}}) do
-    Repo.exists?(from l in Link, join: a in assoc(l, :account), where: a.user_id == ^user_id) or
-      Repo.exists?(
-        from l in LinkedTransaction,
-          join: t in assoc(l, :transaction),
-          where: t.user_id == ^user_id
-      ) or
-      Repo.exists?(
-        from m in CategoryMapping,
-          join: c in assoc(m, :budget_category),
-          where: c.user_id == ^user_id
-      )
-  end
-
   @doc """
   Writes what a change of an expense means for the linked transactions, inside the caller's database transaction:
   `old` and `new` are the expense before and after (nil for none, both with payer and shares). Returns `:ok` or

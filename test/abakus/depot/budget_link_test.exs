@@ -377,8 +377,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert {:error, %Ecto.Changeset{}} = BudgetLink.change_category(c.owner, own.id)
       assert {:error, :not_linked} = BudgetLink.change_category(member, own.id)
 
-      assert BudgetLink.in_use?(c.owner)
-      refute BudgetLink.in_use?(member)
       assert BudgetLink.linked_ids(c.owner, ids) == MapSet.new(ids)
       assert BudgetLink.linked_ids(member, ids) == MapSet.new()
 

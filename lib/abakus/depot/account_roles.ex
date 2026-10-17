@@ -11,7 +11,7 @@ defmodule Abakus.Depot.AccountRoles do
   alias Abakus.Depot.Portfolios.{Account, Portfolio}
   alias Abakus.Ledger
   alias Abakus.Repo
-  alias Abakus.Users.{Scope, User}
+  alias Abakus.Users.Scope
 
   @doc "The user's Verrechnungskonten not retired, by name, with the budget account or portfolio of their role."
   def list_accounts(%Scope{} = scope) do
@@ -33,16 +33,6 @@ defmodule Abakus.Depot.AccountRoles do
         order_by: [a.name, a.id]
     )
   end
-
-  @doc "Whether a Verrechnungskonto is one of the user's budget accounts, which a wipe of their budget would clear."
-  def in_use?(%Scope{user: %User{id: user_id}}),
-    do:
-      Repo.exists?(
-        from a in Account,
-          join: b in Ledger.Account,
-          on: b.id == a.budget_account_id,
-          where: b.user_id == ^user_id
-      )
 
   @doc "The ids of the Verrechnungskonten that are the cash of `portfolio`."
   def cash_account_ids(%Portfolio{id: id}),

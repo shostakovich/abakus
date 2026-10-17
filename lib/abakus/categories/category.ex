@@ -1,8 +1,8 @@
 defmodule Abakus.Categories.Category do
   @moduledoc """
   An envelope in the budget. A category is deleted only by moving everything it has into another
-  (`Abakus.Categories.delete_category/4`), so history keeps its references. `hidden` comes from YNAB, for the import
-  and its check; the budget ignores it. Each user's internal category, Ready to Assign, comes with its first use
+  (`Abakus.Categories.delete_category/4`), so history keeps its references. `hidden` is kept,
+  but the budget ignores it. Each user's internal category, Ready to Assign, comes with its first use
   (`Abakus.Categories.ready_to_assign!/1`) and cannot be changed.
   """
 

@@ -13,10 +13,6 @@ defmodule Abakus.Kasse.Access do
   def check!(%Scope{participant: %Participant{archived_at: nil}} = scope), do: scope
   def check!(_scope), do: raise(AccessError)
 
-  @doc "The scope, if it is the system's: for what only jobs may do, such as syncing everybody."
-  def system!(%Scope{system: true} = scope), do: scope
-  def system!(_scope), do: raise(AccessError)
-
   @doc "The id of the person acting, for the activity log; nil for the system."
   def actor_id!(%Scope{system: true}), do: nil
   def actor_id!(scope), do: person!(scope).id

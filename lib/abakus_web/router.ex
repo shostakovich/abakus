@@ -141,8 +141,7 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.Areas, :assign},
         AbakusWeb.SettingsNav
       ] do
-      live "/appearance", SettingsLive, :appearance
-      live "/budget/ynab", SettingsLive, :ynab_import
+      live "/appearance", SettingsLive
       live "/depot/portfolios", Depot.PortfoliosLive
       live "/depot/receipt-intake", Depot.ReceiptIntakeLive
     end

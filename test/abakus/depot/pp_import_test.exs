@@ -7,7 +7,6 @@ defmodule Abakus.Depot.PPImportTest do
 
   alias Abakus.Depot.{
     AccountRoles,
-    BudgetFeed,
     BudgetLink,
     Portfolios,
     PPImport,
@@ -491,7 +490,6 @@ defmodule Abakus.Depot.PPImportTest do
 
     assert summary.portfolios.deleted == 2
     assert Enum.all?(accounts, &Repo.reload!(&1).closed)
-    refute BudgetFeed.in_use?(budget_scope())
   end
 
   test "only the budget owner's import brings their portfolios' accounts in line", %{scope: scope} do

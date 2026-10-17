@@ -94,12 +94,6 @@ defmodule Abakus.Depot.BudgetLink do
     end)
   end
 
-  @doc "Whether the user's Depot is linked, which a wipe of their budget would break."
-  def in_use?(%Scope{user: %User{id: user_id}}),
-    do:
-      Repo.exists?(where(Link, user_id: ^user_id)) or
-        Repo.exists?(where(LinkedTransaction, user_id: ^user_id))
-
   @doc "Moves the user's link's category from one budget category to another, as deleting `from_id` does."
   def recategorize(%Scope{user: %User{id: user_id}}, from_id, to_id) do
     Repo.update_all(where(Link, user_id: ^user_id, category_id: ^from_id),

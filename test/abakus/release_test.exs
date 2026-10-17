@@ -1,22 +1,12 @@
 defmodule Abakus.ReleaseTest do
   use Abakus.DataCase
 
-  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import ExUnit.CaptureIO
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.PortfoliosFixtures
-  alias Abakus.FakeYnab
   alias Abakus.Kasse.Participants
-  alias Abakus.Users.Scope
   alias Mix.Tasks.Abakus.AddParticipant
   alias Mix.Tasks.Abakus.Invite
-  alias Mix.Tasks.Abakus.YnabImport, as: YnabImportTask
-
-  @plan Path.expand("../fixtures/ynab/plan.json", __DIR__)
-        |> File.read!()
-        |> JSON.decode!()
-        |> Map.fetch!("plan")
 
   test "invite/1 creates the user and mails the sign-in link of the public URL" do
     email = unique_user_email()
@@ -88,89 +78,5 @@ defmodule Abakus.ReleaseTest do
     end
 
     assert_raise Mix.Error, ~r/usage/, fn -> AddParticipant.run(["dora@example.com"]) end
-  end
-
-  @tag :tmp_dir
-  test "import_kasse/2 imports the old app's file and names the users", %{tmp_dir: dir} do
-    user_fixture()
-    path = Abakus.KasseFixtures.old_app_file!(dir)
-
-    emails = %{
-      "Anna" => "anna@example.com",
-      "Ben" => "ben@example.com",
-      "Cleo" => "cleo@example.com"
-    }
-
-    output = capture_io(fn -> Abakus.Release.import_kasse(path, emails) end)
-
-    assert output =~ "Imported the Kasse: "
-    assert output =~ "5 expenses"
-    assert output =~ "Users matched: none."
-    assert output =~ "sign-in page: anna@example.com, ben@example.com, cleo@example.com."
-    assert Participants.get_participant!(Scope.system(), 5).name == "Cleo"
-  end
-
-  @tag :tmp_dir
-  test "import_depot/1 imports the old app's file and names the users", %{tmp_dir: dir} do
-    user_fixture()
-    path = PortfoliosFixtures.old_app_file!(dir)
-
-    output = capture_io(fn -> Abakus.Release.import_depot(path) end)
-
-    assert output =~ "Imported the Depot: "
-    assert output =~ "5 transactions"
-    assert output =~ "2 receipt files."
-    assert output =~ "sign-in page: anna@example.com, ben@example.com."
-    assert output =~ "add them again under Einstellungen"
-  end
-
-  describe "the YNAB import" do
-    setup do
-      budget_scope()
-      FakeYnab.start(%{"plan-test" => @plan})
-      previous = System.get_env("YNAB_TOKEN")
-      System.put_env("YNAB_TOKEN", FakeYnab.token())
-
-      on_exit(fn ->
-        if previous,
-          do: System.put_env("YNAB_TOKEN", previous),
-          else: System.delete_env("YNAB_TOKEN")
-      end)
-    end
-
-    test "import_ynab/1 imports with the token from the environment and prints the report" do
-      output = capture_io(fn -> Abakus.Release.import_ynab() end)
-
-      assert output =~ "Imported “Testhaushalt”: 4 accounts"
-      assert output =~ "Every month, category and account matches YNAB."
-    end
-
-    test "mix abakus.ynab_import fails when the numbers differ, keeping the data" do
-      Mix.shell(Mix.Shell.Process)
-      on_exit(fn -> Mix.shell(Mix.Shell.IO) end)
-      plan = update_in(@plan, ["months", Access.at(0), "to_be_budgeted"], &(&1 + 10))
-      FakeYnab.start(%{"other-plan" => plan})
-
-      assert_raise Mix.Error, ~r/numbers differ/, fn -> YnabImportTask.run(["other-plan"]) end
-
-      assert_received {:mix_shell, :info,
-                       ["  2026-08, Ready to Assign: YNAB 2770.01, Abakus 2770.00"]}
-
-      assert length(Abakus.Ledger.list_accounts(budget_scope())) == 4
-    end
-
-    test "mix abakus.ynab_import prints the report, and fails on errors" do
-      Mix.shell(Mix.Shell.Process)
-      on_exit(fn -> Mix.shell(Mix.Shell.IO) end)
-
-      YnabImportTask.run(["plan-test"])
-      assert_received {:mix_shell, :info, ["Imported “Testhaushalt”" <> _]}
-
-      assert_raise Mix.Error, ~r/YNAB answered 404/, fn -> YnabImportTask.run(["other"]) end
-      assert_raise Mix.Error, ~r/usage/, fn -> YnabImportTask.run(["a", "b"]) end
-
-      System.delete_env("YNAB_TOKEN")
-      assert_raise Mix.Error, ~r/YNAB_TOKEN is not set/, fn -> YnabImportTask.run([]) end
-    end
   end
 end
