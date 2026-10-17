@@ -16,7 +16,20 @@
       } catch (_) {}
     </script>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" href={~p"/images/icon.svg"} type="image/svg+xml" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      media="(prefers-color-scheme: light)"
+      href={~p"/images/icon-32-light.png"}
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      media="(prefers-color-scheme: dark)"
+      href={~p"/images/icon-32-dark.png"}
+    />
     <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
     <link
       rel="preload"

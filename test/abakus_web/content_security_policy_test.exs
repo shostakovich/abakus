@@ -68,7 +68,7 @@ defmodule AbakusWeb.ContentSecurityPolicyTest do
 
     test "the health check and static files" do
       assert_secure(get(build_conn(), ~p"/up").resp_headers)
-      assert_secure(get(build_conn(), ~p"/images/icon.svg").resp_headers)
+      assert_secure(get(build_conn(), ~p"/images/icon-192.webp").resp_headers)
     end
 
     test "a missing page, in German, with the stored theme" do

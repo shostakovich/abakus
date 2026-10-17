@@ -96,7 +96,7 @@ defmodule AbakusWeb.Layouts do
       amount_tone={:negative}
     >
       <:brand :let={place}>
-        <img src={~p"/images/icon.svg"} alt="" width="28" height="28" class="size-7 shrink-0" />
+        <img src={~p"/images/icon-192.webp"} alt="" width="28" height="28" class="size-7 shrink-0" />
         <.area_switcher :if={place == :bar and length(@areas) > 1} areas={@areas} area={@area} />
         <span :if={place != :bar or length(@areas) < 2} class="truncate">
           {brand_name(@areas)}
@@ -514,7 +514,7 @@ defmodule AbakusWeb.Layouts do
     ~H"""
     <.app_shell layout={:sidebar} current={@current} width={:narrow}>
       <:brand>
-        <img src={~p"/images/icon.svg"} alt="" width="28" height="28" class="size-7 shrink-0" />
+        <img src={~p"/images/icon-192.webp"} alt="" width="28" height="28" class="size-7 shrink-0" />
         <span class="truncate">{brand_name(@areas)}</span>
       </:brand>
       <:back :if={@back} id="settings-back" label={back_label(@back)} href={@back.path} />
@@ -560,7 +560,7 @@ defmodule AbakusWeb.Layouts do
       class="mx-auto flex min-h-dvh max-w-md flex-col px-4 py-12 before:grow-[35] after:grow-[65]"
     >
       <h1 class="mb-6 flex items-center justify-center gap-2 text-2xl font-semibold">
-        <img src={~p"/images/icon.svg"} alt="" width="32" height="32" class="size-8" /> Abakus
+        <img src={~p"/images/icon-192.webp"} alt="" width="32" height="32" class="size-8" /> Abakus
       </h1>
       {render_slot(@inner_block)}
     </main>
