@@ -476,8 +476,8 @@ defmodule AbakusWeb.BudgetLive.Components do
           <input
             :if={@assignable}
             id={"assign-#{@id}-#{key}"}
-            class={["app-assign", cell.assigned == 0 && "app-zero"]}
-            value={typed || Money.amount(cell.assigned)}
+            class="app-assign"
+            value={typed || blank_zero(cell.assigned)}
             inputmode="decimal"
             autocomplete="off"
             aria-label={"#{@name}, zugewiesen im #{month_year(month)}"}
@@ -489,14 +489,8 @@ defmodule AbakusWeb.BudgetLive.Components do
             phx-value-month={key}
           />
         </td>
-        <td
-          id={"activity-#{@id}-#{key}"}
-          class={[
-            "app-num",
-            if(cell.activity == 0, do: "app-zero", else: "app-quiet")
-          ]}
-        >
-          {Money.amount(cell.activity)}
+        <td id={"activity-#{@id}-#{key}"} class="app-num app-quiet">
+          {blank_zero(cell.activity)}
         </td>
         <td id={"available-#{@id}-#{key}"} class="app-num">
           <.pill
@@ -517,6 +511,9 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   defp typed({id, month, typed}, id, month), do: typed
   defp typed(_invalid, _id, _month), do: nil
+
+  defp blank_zero(0), do: nil
+  defp blank_zero(amount), do: Money.amount(amount)
 
   attr :cell, :any, required: true
   attr :id, :any, default: nil, doc: "set for a pill that opens the popover"

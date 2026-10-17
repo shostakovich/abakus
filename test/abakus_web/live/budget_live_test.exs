@@ -64,6 +64,27 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, ~s|#assign-#{c.groceries.id}-2026-10[value="250,50"]|)
     end
 
+    test "a category leaves zero assigned and activity blank, Verfügbar and the totals show 0,00",
+         c do
+      {:ok, view, _html} = open(c.conn)
+
+      assert has_element?(view, "#assign-#{c.groceries.id}-2026-10:not([value])")
+      assert view |> element("#activity-#{c.groceries.id}-2026-10") |> render() =~ ~r/>\s*<\/td>/
+      assert has_element?(view, "#available-#{c.groceries.id}-2026-10", "0,00")
+
+      assert has_element?(
+               view,
+               "#group-#{c.groceries.category_group_id}-2026-10-assigned",
+               "0,00"
+             )
+
+      assert has_element?(view, "#total-2026-10-activity", "0,00")
+
+      view |> element("#assign-#{c.groceries.id}-2026-10") |> render_blur(%{"value" => "12"})
+
+      assert has_element?(view, ~s|#assign-#{c.groceries.id}-2026-10[value="12,00"]|)
+    end
+
     test "an assignment is never refused, Zu verteilen goes below zero", c do
       income(c, 10_000, ~D[2026-10-01], "Arbeitgeber")
       {:ok, view, _html} = open(c.conn)
