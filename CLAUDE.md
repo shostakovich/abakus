@@ -25,7 +25,9 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   UI, on theme tokens, in the partials under `assets/css/`. A Setzkasten bug or gap is fixed in
   `shostakovich/setzkasten`, not worked around in the app.
 - Theme (light, dark, system) and the collapsed sidebar are per device: `localStorage["setzkasten:theme"]` and
-  `["setzkasten:sidebar"]`, applied before paint by `<.theme_script>` in the root layout.
+  `["setzkasten:sidebar"]`, applied before paint by `<.theme_script>` in the root layout. So are the register's memo
+  column and the budget's calculation (`["abakus:register-memo"]`, `["abakus:budget-calculation"]`), set on `<html>`
+  before paint as `data-register-memo` and `data-budget-calculation` by the root layout's own nonce'd script.
 - Confirmations go through Setzkasten's confirm dialog (`confirm` on buttons, menu items and list row actions);
   tests drive it with `Setzkasten.Test.Confirm`.
 - Sign-in lives in `Abakus.Users` (`User`, `UserToken`, `Passkey`, `Scope`, `UserNotifier`) and

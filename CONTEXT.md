@@ -107,11 +107,11 @@ _Avoid_: Synced account, linked account (that is bank sync)
 
 **Reconcile**:
 Confirming that an account's cleared balance equals the bank's balance, which locks its cleared transactions (they
-become reconciled, "Abgeschlossen"); one waiting for approval or a match decision stays cleared until then. A
+become reconciled, "Abgeglichen"); one waiting for approval or a match decision stays cleared until then. A
 reconciled transaction changes, directly or through its counterpart, only after the user confirms; leaving the
 reconciled state is a change too. A bank balance counts the transactions up to its date, a balance entered by hand
-up to today. UI "Abgleichen".
-_Avoid_: Balance check, sync
+up to today. UI "Abgleichen"; the register's subtitle "Abgeglichen am …" names the last one.
+_Avoid_: Balance check, sync; "Abschließen", "abgeschlossen"
 
 **Adjustment**:
 The transaction reconciling books for a difference to the bank that cannot be found: payee "Ausgleichsbuchung",
@@ -139,7 +139,7 @@ _Avoid_: Internal transfer, booking between accounts
 
 **Counterpart**:
 The other side of a transfer, in the account of the transfer payee: the amount negated, same date and memo.
-Cleared state, approval and flag are each side's own. The counterpart of a subtransaction belongs to its split.
+Cleared state and approval are each side's own. The counterpart of a subtransaction belongs to its split.
 _Avoid_: Mirror, twin
 
 **Transfer payee**:
@@ -156,18 +156,16 @@ One part of a split, in the split's order; it may be a transfer of its own. UI "
 _Avoid_: Line, split line, child transaction
 
 **Cleared state**:
-Whether the bank has a transaction yet: uncleared, cleared, or reconciled (locked by a reconcile). UI "Nicht
-abgeglichen", "Abgeglichen", "Abgeschlossen".
-_Avoid_: Status, booked; "bestätigt" (that is approval)
+Whether the bank has a transaction yet: uncleared, cleared, or reconciled (locked by a reconcile), in a bank's
+words: UI "Vorgemerkt", "Gebucht", "Abgeglichen" (with the lock); the balances read "Gebucht + Vorgemerkt =
+Arbeitssaldo".
+_Avoid_: Status, booked (in code); "Nicht abgeglichen" for uncleared, "Abgeglichen" for cleared (that is
+reconciled), "Abgeschlossen"; "bestätigt" (that is approval)
 
 **Approval**:
 A person has looked at an imported or Kasse-created transaction and accepted it; manual entries are approved. UI
 "Bestätigt", the action "Bestätigen".
-_Avoid_: Confirmed, reviewed; "abgeglichen" (that is the cleared state)
-
-**Flag**:
-A colour marker on a transaction (red, orange, yellow, green, blue, purple). UI "Markierung".
-_Avoid_: Tag, label
+_Avoid_: Confirmed, reviewed; "gebucht", "abgeglichen" (those are cleared states)
 
 ### Import
 
@@ -309,7 +307,7 @@ The budget owner's participant linked to the budget: their share of every expens
 account fed by `shared_expenses`, so its balance is their Kasse balance; each Kasse category maps to a budget
 category for it. Switching it on, after the final YNAB import, makes the chosen account the one fed by
 `shared_expenses`, links its transactions whose memo ends with the YNAB sync's marker to their expenses, whatever
-their date (keeping category, cleared state, approval and flag), books every other expense since the start date of
+their date (keeping category, cleared state and approval), books every other expense since the start date of
 the owner's YNAB connection and removes the YNAB connection. A split, a transfer or a second marked transaction of
 an expense stays unlinked for the owner to check, and its expense gets no booking. Any other expense dated before
 that start date gets a linked transaction only when entered later or moved past it. UI "Mit Budget verknüpfen", the
@@ -318,7 +316,7 @@ _Avoid_: Sync, budget export
 
 **Linked transaction**:
 A transaction another area writes into the budget and leads: amount, date and payee follow it, the register keeps
-the category, memo, flag and approval it set, and it is deleted only with what it is linked to. In the Kasse, a
+the category, memo and approval it set, and it is deleted only with what it is linked to. In the Kasse, a
 linked participant's share of an expense, written with the expense: minus the share, its date, its title as payee,
 the mapped category, a memo describing the expense, unapproved; a change of the expense's Kasse category writes the
 mapped category again. In the Depot, see Depot link.
