@@ -408,8 +408,8 @@ every deposit, removal or delivery buys or sells benchmark shares that day. UI "
 
 **Dividend**:
 What a user receives or will receive for their shares of a security on a pay date: booked, announced by DivvyDiary,
-or a forecast from the last 12 months' distributions; its net is the gross minus taxes and fees. UI "Dividende",
-"angekündigt", "Prognose", "Netto".
+or a forecast from the last 12 months' distributions (with less than a year of them, the latest repeated in its
+usual rhythm); its net is the gross minus taxes and fees. UI "Dividende", "angekündigt", "Prognose", "Netto".
 _Avoid_: Payment
 
 **Depot transaction**:
