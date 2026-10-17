@@ -1,7 +1,7 @@
 defmodule Abakus.Depot.AccountRoles do
   @moduledoc """
   The role of each Verrechnungskonto (ADR 0017), see `Account.role/1`: the same bank account as a budget account,
-  for the budget owner, in euros and at most one per budget account; the cash of one of the user's portfolios, which
+  for the budget owner, at most one per budget account; the cash of one of the user's portfolios, which
   counts toward that portfolio's value; or none. One without a role set shows as a warning on Vermögen.
   """
 
@@ -43,7 +43,7 @@ defmodule Abakus.Depot.AccountRoles do
 
   @doc """
   What `account` can be: `budget_accounts`, the open budget accounts in their order that nothing else feeds and no
-  other Verrechnungskonto is, none unless the user owns the budget and the account is in euros; `portfolios`, the
+  other Verrechnungskonto is, none unless the user owns the budget; `portfolios`, the
   user's active portfolios by name and the one it is the cash of.
   """
   def choices(%Scope{} = scope, %Account{} = account) do
@@ -53,11 +53,9 @@ defmodule Abakus.Depot.AccountRoles do
     }
   end
 
-  defp budget_account_choices(%Scope{} = scope, %Account{currency: "EUR"} = account) do
+  defp budget_account_choices(%Scope{} = scope, %Account{} = account) do
     if Scope.budget_owner?(scope), do: open_budget_accounts(scope, account), else: []
   end
-
-  defp budget_account_choices(_scope, _account), do: []
 
   defp open_budget_accounts(scope, account) do
     taken =
@@ -123,9 +121,9 @@ defmodule Abakus.Depot.AccountRoles do
     end
   end
 
-  defp check(scope, account, {:budget_account, id}) do
+  defp check(scope, _account, {:budget_account, id}) do
     if Scope.budget_owner?(scope),
-      do: check_budget_account(scope, account, id),
+      do: check_budget_account(scope, id),
       else: {:error, "Nur wer das Budget führt, kann ein Budgetkonto wählen."}
   end
 
@@ -142,10 +140,7 @@ defmodule Abakus.Depot.AccountRoles do
 
   defp check(_scope, _account, :none), do: :ok
 
-  defp check_budget_account(_scope, %Account{currency: currency}, _id) when currency != "EUR",
-    do: {:error, "Ein Konto in #{currency} kann kein Budgetkonto sein, das Budget ist in Euro."}
-
-  defp check_budget_account(scope, _account, id) do
+  defp check_budget_account(scope, id) do
     case Ledger.get_account(scope, id) do
       %Ledger.Account{closed: false, fed_by: nil} = budget_account ->
         if Ledger.Account.budget_account?(budget_account),

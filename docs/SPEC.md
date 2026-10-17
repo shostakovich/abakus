@@ -245,7 +245,7 @@ the way YNAB tools post market values:
   amends that transaction instead of booking a second one. Only it (`Abakus.Depot.BudgetFeed`) and the linked
   transfers change the account, so the value change keeps the market movement, and it cannot be reconciled
 - Each Verrechnungskonto has a role, set under Einstellungen › Depots: "ist Budgetkonto X" (the same bank account
-  as a budget account; EUR only, the budget owner's only, at most one per budget account), counting toward nothing
+  as a budget account; the budget owner's only, at most one per budget account), counting toward nothing
   else; "Cash von Depot Y" (cash at the broker of one of the user's portfolios), counting toward that portfolio's
   value and account and shown in its Bestand as „davon Cash“; or none. One without a role shows as a warning on
   Vermögen, linking to its setting

@@ -236,7 +236,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
         places(transaction) ++
         [
           transaction.shares not in [nil, 0] && {"Stück", Format.shares(transaction.shares)},
-          {"Betrag", Money.money(transaction.amount, transaction.currency)},
+          {"Betrag", Money.euros(transaction.amount)},
           unit_fact(transaction, :fee, "Gebühren"),
           unit_fact(transaction, :tax, "Steuern"),
           transaction.note not in [nil, ""] && {"Notiz", transaction.note}
@@ -275,7 +275,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   defp unit_fact(transaction, type, label) do
     case transaction.units |> Enum.filter(&(&1.type == type)) |> Enum.sum_by(& &1.amount) do
       0 -> nil
-      cents -> {label, Money.money(cents, transaction.currency)}
+      cents -> {label, Money.euros(cents)}
     end
   end
 

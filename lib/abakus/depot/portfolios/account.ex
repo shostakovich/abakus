@@ -1,6 +1,6 @@
 defmodule Abakus.Depot.Portfolios.Account do
   @moduledoc """
-  A cash account in one currency; it exists on its own, not as part of a portfolio. Its role, see `role/1`, says
+  A cash account in euros; it exists on its own, not as part of a portfolio. Its role, see `role/1`, says
   what it is in Finanzen (`Abakus.Depot.AccountRoles`).
   """
   use Abakus.Schema
@@ -13,7 +13,6 @@ defmodule Abakus.Depot.Portfolios.Account do
     belongs_to :cash_of_portfolio, Abakus.Depot.Portfolios.Portfolio
     field :no_role, :boolean, default: false
     field :name, :string
-    field :currency, :string
     field :note, :string
     field :retired, :boolean, default: false
     field :attributes, :map, default: %{}

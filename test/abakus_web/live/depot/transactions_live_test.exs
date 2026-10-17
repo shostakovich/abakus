@@ -109,22 +109,6 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
         do: assert(has_element?(lv, "#transaction-#{id} img[src^='/images/plush/#{plush}']"))
   end
 
-  test "names a foreign currency by its code", ctx do
-    usd = account_fixture(ctx.scope, name: "Dollarkonto", currency: "USD")
-
-    deposit =
-      transaction_fixture(ctx.scope, ~D[2026-10-01],
-        type: :deposit,
-        account_id: usd.id,
-        amount: money(100),
-        currency: "USD"
-      )
-
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
-
-    assert lv |> element("#transaction-#{deposit.id}") |> render() =~ "+100,00\u00A0USD"
-  end
-
   test "rounds the price per share as the holdings do", ctx do
     # 1,00 € over 0,01015596 shares is 98,46434999… €.
     transaction_fixture(ctx.scope, ~D[2026-10-01], %{

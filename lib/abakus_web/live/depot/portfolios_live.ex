@@ -241,10 +241,10 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     <.list_row id={"clearing-account-#{@account.id}"} title={@account.name}>
       <:leading><.icon name="wallet" class="size-5 text-base-content/70" /></:leading>
       <:meta>
-        <span class="whitespace-nowrap">{@account.currency}</span><.meta_sep /><span
-          :if={Account.role(@account)}
-          class="whitespace-nowrap"
-        >{role_label(@account)}</span><.badge :if={!Account.role(@account)} tone={:warning}>
+        <span :if={Account.role(@account)} class="whitespace-nowrap">{role_label(@account)}</span><.badge
+          :if={!Account.role(@account)}
+          tone={:warning}
+        >
           Rolle fehlt
         </.badge>
       </:meta>

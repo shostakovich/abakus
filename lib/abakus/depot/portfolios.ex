@@ -54,7 +54,7 @@ defmodule Abakus.Depot.Portfolios do
   def change_new_portfolio(attrs \\ %{}), do: PortfolioForm.changeset(%PortfolioForm{}, attrs)
 
   @doc """
-  Creates a portfolio of the user with a new account in euros as its Verrechnungskonto, which its
+  Creates a portfolio of the user with a new account as its Verrechnungskonto, which its
   purchases, sales and dividends settle against and which is its cash, and for the budget owner its
   tracking account.
   """
@@ -62,7 +62,7 @@ defmodule Abakus.Depot.Portfolios do
     with {:ok, form} <- Ecto.Changeset.apply_action(change_new_portfolio(attrs), :insert) do
       Repo.transact(fn ->
         account =
-          Repo.insert!(%Account{user_id: scope.user.id, name: form.account_name, currency: "EUR"})
+          Repo.insert!(%Account{user_id: scope.user.id, name: form.account_name})
 
         portfolio =
           Repo.insert!(%Portfolio{
@@ -131,11 +131,10 @@ defmodule Abakus.Depot.Portfolios do
   """
   def net_worth(%Scope{} = scope, dates) do
     transactions = list_transactions(scope)
-    accounts = list_accounts(scope)
-    market = load_market(transactions, accounts, Enum.min(dates, Date), :since_first_transaction)
+    market = load_market(transactions, Enum.min(dates, Date))
 
     transactions
-    |> Valuation.history(accounts, market, dates)
+    |> Valuation.history(market, dates)
     |> Map.new(&{&1.date, &1.net_worth})
   end
 
@@ -145,12 +144,11 @@ defmodule Abakus.Depot.Portfolios do
   """
   def value(%Scope{} = scope, portfolio_ids, account_ids, %Date{} = date) do
     transactions = list_transactions(scope)
-    accounts = list_accounts(scope)
     portfolios = Enum.filter(list_portfolios(scope), &(&1.id in portfolio_ids))
     filter = Filter.new(portfolios, account_ids, transactions)
-    market = load_market(transactions, accounts, date, :since_first_transaction)
+    market = load_market(transactions, date)
 
-    [%{net_worth: value}] = Valuation.history(transactions, accounts, market, [date], filter)
+    [%{net_worth: value}] = Valuation.history(transactions, market, [date], filter)
     value
   end
 
@@ -168,7 +166,7 @@ defmodule Abakus.Depot.Portfolios do
     `Performance.benchmark_ttwror/3`; nil when they picked none
   - `dividends`: this year's up to `today`, before taxes and fees
   - `portfolios`: the portfolios by name, retired ones only while they hold shares, each with
-    `cash`, the balance in euros of its accounts as the holdings screen groups them for all
+    `cash`, the balance of its accounts as the holdings screen groups them for all
     portfolios (nil without any), the number of `securities` held, the `value` of the securities
     and their `ttwror` since 1 January, as PP figures a portfolio without its reference account.
   """
@@ -181,10 +179,8 @@ defmodule Abakus.Depot.Portfolios do
     first = Enum.min([interval.first, year.first], Date)
     benchmark = get_benchmark(scope)
 
-    market =
-      load_market(transactions, accounts, first, :since_first_transaction, benchmark: benchmark)
-
-    index = Performance.index(transactions, accounts, market, Filter.all(), interval)
+    market = load_market(transactions, first, benchmark: benchmark)
+    index = Performance.index(transactions, market, Filter.all(), interval)
     [yesterday, today_point] = Enum.take(index.days, -2)
     range = Period.range(period, today, first_day)
 
@@ -196,7 +192,7 @@ defmodule Abakus.Depot.Portfolios do
       ttwror: Performance.ttwror(index),
       irr: Performance.irr(index),
       benchmark: benchmark(benchmark, index, market),
-      dividends: Valuation.gross_dividends(transactions, market, year_to_date(today)),
+      dividends: Valuation.gross_dividends(transactions, year_to_date(today)),
       portfolios: portfolios_overview(scope, transactions, accounts, market, year)
     }
   end
@@ -216,7 +212,6 @@ defmodule Abakus.Depot.Portfolios do
   """
   def performance(%Scope{} = scope, period, portfolio_id, today) do
     transactions = list_transactions(scope)
-    accounts = list_accounts(scope)
     portfolios = choosable_portfolios(scope, Valuation.holdings(transactions, today))
     portfolio = Enum.find(portfolios, &(&1.id == portfolio_id))
     first_day = first_transaction_day(transactions)
@@ -224,18 +219,14 @@ defmodule Abakus.Depot.Portfolios do
     all_time = Period.interval(:max, today, first_day)
     benchmark = get_benchmark(scope)
 
-    market =
-      load_market(transactions, accounts, all_time.first, :since_first_transaction,
-        benchmark: benchmark
-      )
-
+    market = load_market(transactions, all_time.first, benchmark: benchmark)
     filter = performance_filter(portfolio, transactions)
-    index = Performance.index(transactions, accounts, market, filter, interval)
+    index = Performance.index(transactions, market, filter, interval)
 
     all_time_index =
       if interval == all_time,
         do: index,
-        else: Performance.index(transactions, accounts, market, filter, all_time)
+        else: Performance.index(transactions, market, filter, all_time)
 
     %{
       portfolios: portfolios,
@@ -247,7 +238,7 @@ defmodule Abakus.Depot.Portfolios do
       irr: Performance.irr(index),
       drawdown: Performance.drawdown(index),
       volatility: Performance.volatility(index),
-      breakdown: Breakdown.of(transactions, accounts, market, filter, index),
+      breakdown: Breakdown.of(transactions, market, filter, index),
       monthly_returns: Performance.monthly_returns(all_time_index)
     }
   end
@@ -296,14 +287,14 @@ defmodule Abakus.Depot.Portfolios do
 
     rows = %{
       holdings: value_rows(holdings, market, today),
-      accounts: account_rows(accounts, Valuation.balances(transactions, today), market, today)
+      accounts: account_rows(accounts, Valuation.balances(transactions, today))
     }
 
     for %{portfolio: %Portfolio{} = portfolio} = group <- holding_groups(portfolios, nil, rows) do
       # The securities alone: purchases and sales are money in and out, dividends on the
       # reference account count for them.
       filter = Filter.new([portfolio], [], transactions)
-      index = Performance.index(transactions, accounts, market, filter, year)
+      index = Performance.index(transactions, market, filter, year)
 
       %{
         portfolio: portfolio,
@@ -384,9 +375,7 @@ defmodule Abakus.Depot.Portfolios do
     transactions = list_transactions(scope)
     accounts = list_accounts(scope)
     stored = stored_dividends(transactions)
-    # Purchase values convert each purchase at the rate of its day.
-    market =
-      load_market(transactions, accounts, today, :since_first_transaction, dividends: stored)
+    market = load_market(transactions, today, dividends: stored)
 
     holdings = Valuation.holdings(transactions, today)
     portfolios = choosable_portfolios(scope, holdings)
@@ -395,7 +384,7 @@ defmodule Abakus.Depot.Portfolios do
 
     rows = %{
       holdings: holdings |> holding_rows(transactions, market, today) |> with_dividends(upcoming),
-      accounts: account_rows(accounts, Valuation.balances(transactions, today), market, today)
+      accounts: account_rows(accounts, Valuation.balances(transactions, today))
     }
 
     groups = portfolios |> holding_groups(portfolio, rows) |> Enum.map(&with_gains/1)
@@ -467,10 +456,7 @@ defmodule Abakus.Depot.Portfolios do
     transactions = list_transactions(scope)
     stored = stored_dividends(transactions)
 
-    market =
-      load_market(transactions, list_accounts(scope), today, :since_first_transaction,
-        dividends: stored
-      )
+    market = load_market(transactions, today, dividends: stored)
 
     held = Valuation.holdings(transactions, today)
     portfolios = choosable_portfolios(scope, held)
@@ -516,10 +502,7 @@ defmodule Abakus.Depot.Portfolios do
     transactions = list_transactions(scope)
     stored = stored_dividends(transactions)
 
-    market =
-      load_market(transactions, list_accounts(scope), today, :since_first_transaction,
-        dividends: stored
-      )
+    market = load_market(transactions, today, dividends: stored)
 
     upcoming = Dividends.upcoming(transactions, stored, market, today)
     three_months = today |> Date.beginning_of_month() |> Date.shift(month: 3)
@@ -551,14 +534,14 @@ defmodule Abakus.Depot.Portfolios do
     `value`, `purchase_value` and `gain`
   - `total`: the `shares`, `value`, `purchase_value` and `gain` of all holdings
   - `costs_per_year` of the holdings, see `Costs.of/1`
-  - `distributions`: from the user's dividends, see `Distributions.of/3`
+  - `distributions`: from the user's dividends, see `Distributions.of/1`
   - `upcoming`: the dividends expected of it, see `Dividends.upcoming/4`
   """
   def security(%Scope{} = scope, %Security{} = security, period, today) do
     transactions = list_transactions_of(scope, security)
     closes = scope |> Securities.list_prices(security) |> Enum.map(&{&1.date, &1.close})
     stored = Securities.list_divvy_diary_dividends([security.id])
-    market = security_market(security, closes, transactions, stored, today)
+    market = security_market(security, closes, stored, today)
     holdings = security_holdings(scope, transactions, market, today)
     range = Period.range(period, today, first_price_or_trade(security, closes, transactions))
 
@@ -569,7 +552,7 @@ defmodule Abakus.Depot.Portfolios do
       holdings: holdings,
       total: holdings |> totals() |> Map.put(:shares, Enum.sum_by(holdings, & &1.shares)),
       costs_per_year: Costs.of(holdings).per_year,
-      distributions: Distributions.of(security, transactions, market),
+      distributions: Distributions.of(transactions),
       upcoming: Dividends.upcoming(transactions, stored, market, today)
     }
   end
@@ -583,17 +566,13 @@ defmodule Abakus.Depot.Portfolios do
     )
   end
 
-  # Purchase values convert each purchase at the rate of its day.
-  defp security_market(security, closes, transactions, dividends, today) do
-    currencies =
-      [security | transactions ++ dividends]
-      |> Enum.map(& &1.currency)
-      |> Market.rate_currencies()
+  defp security_market(security, closes, dividends, today) do
+    currencies = [security | dividends] |> Enum.map(& &1.currency) |> Market.rate_currencies()
 
     Market.new(
       [security],
       Enum.map(closes, fn {date, close} -> {security.id, date, close} end),
-      ExchangeRates.list_rates_since(currencies, first_day(transactions, today))
+      ExchangeRates.list_rates_since(currencies, today)
     )
   end
 
@@ -626,7 +605,7 @@ defmodule Abakus.Depot.Portfolios do
   def sidebar(%Scope{} = scope, today) do
     transactions = list_transactions(scope)
     accounts = list_accounts(scope)
-    market = load_market(transactions, accounts, today, :since_date)
+    market = load_market(transactions, today)
     holdings = Valuation.holdings(transactions, today)
     balances = Valuation.balances(transactions, today)
 
@@ -640,9 +619,7 @@ defmodule Abakus.Depot.Portfolios do
         cash =
           accounts
           |> Enum.filter(&(Account.role(&1) == {:portfolio_cash, portfolio.id}))
-          |> Enum.sum_by(
-            &Market.to_euros(market, Map.get(balances, &1.id, 0), &1.currency, today)
-          )
+          |> Enum.sum_by(&Map.get(balances, &1.id, 0))
 
         %{portfolio: portfolio, value: securities + cash}
       end
@@ -657,7 +634,7 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   defp holding_rows(holdings, transactions, market, today) do
-    purchase_values = PurchaseValue.by_holding(transactions, market, today)
+    purchase_values = PurchaseValue.by_holding(transactions, today)
 
     for holding <- holdings do
       value = Valuation.value(holding, market, today)
@@ -675,12 +652,12 @@ defmodule Abakus.Depot.Portfolios do
     end
   end
 
-  defp account_rows(accounts, balances, market, today) do
+  defp account_rows(accounts, balances) do
     for account <- accounts,
         not match?({:budget_account, _id}, Account.role(account)),
         balance = Map.get(balances, account.id, 0),
         not account.retired or balance != 0,
-        do: %{account: account, value: Market.to_euros(market, balance, account.currency, today)}
+        do: %{account: account, value: balance}
   end
 
   # Each portfolio with its holdings and its accounts (see `account_owners/2`), then the accounts of
@@ -746,10 +723,9 @@ defmodule Abakus.Depot.Portfolios do
     }
   end
 
-  # The securities of the transactions, and the `:benchmark` if given, with their closes from
-  # `date` on, and the rates of every currency involved, those of the `:dividends` too, from `date`
-  # on, or from the first transaction on, at which invested capital and purchase values convert.
-  defp load_market(transactions, accounts, date, rates, opts \\ []) do
+  # The securities of the transactions, and the `:benchmark` if given, with their closes and the
+  # rates of their currencies and those of the `:dividends` from `date` on.
+  defp load_market(transactions, date, opts \\ []) do
     benchmark = opts[:benchmark]
     dividends = Keyword.get(opts, :dividends, [])
 
@@ -762,29 +738,14 @@ defmodule Abakus.Depot.Portfolios do
 
     securities = Securities.list_securities_by_id(security_ids)
 
-    currencies =
-      (accounts ++ securities ++ transactions ++ dividends)
-      |> Enum.map(& &1.currency)
-      |> Market.rate_currencies()
-
-    rates_from =
-      case rates do
-        :since_date -> date
-        :since_first_transaction -> first_day(transactions, date)
-      end
+    currencies = (securities ++ dividends) |> Enum.map(& &1.currency) |> Market.rate_currencies()
 
     Market.new(
       securities,
       Securities.list_closes_since(security_ids, date),
-      ExchangeRates.list_rates_since(currencies, rates_from)
+      ExchangeRates.list_rates_since(currencies, date)
     )
   end
-
-  # The transactions come in order of time.
-  defp first_day([first | _], date),
-    do: Enum.min([NaiveDateTime.to_date(first.date_time), date], Date)
-
-  defp first_day([], date), do: date
 
   ## Transactions
 
@@ -872,18 +833,14 @@ defmodule Abakus.Depot.Portfolios do
   ## Booking
 
   @doc """
-  What the transaction form offers: the user's portfolios and accounts in euros by name, without
+  What the transaction form offers: the user's portfolios and accounts by name, without
   retired ones but those of the transaction being edited, and all securities.
   """
   def transaction_choices(%Scope{} = scope, editing \\ nil) do
     %{
       portfolios:
         Enum.filter(list_portfolios(scope), &offered?(&1, editing && editing.portfolio_id)),
-      accounts:
-        Enum.filter(
-          list_accounts(scope),
-          &(&1.currency == "EUR" and offered?(&1, editing && editing.account_id))
-        ),
+      accounts: Enum.filter(list_accounts(scope), &offered?(&1, editing && editing.account_id)),
       securities: Securities.list_securities(scope)
     }
   end

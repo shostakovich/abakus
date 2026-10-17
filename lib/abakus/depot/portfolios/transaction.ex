@@ -2,7 +2,7 @@ defmodule Abakus.Depot.Portfolios.Transaction do
   @moduledoc """
   One business event with a portfolio side, an account side or both (ADR 0013). A buy has a
   portfolio and an account; a security transfer goes from `portfolio` to `other_portfolio`, a cash
-  transfer from `account` to `other_account`. Amounts in cents, shares × 10⁸. `source` says where
+  transfer from `account` to `other_account`. Amounts in euro cents, shares × 10⁸. `source` says where
   it came from: booked in the Depot or from a receipt.
   """
   use Abakus.Schema
@@ -38,7 +38,6 @@ defmodule Abakus.Depot.Portfolios.Transaction do
     belongs_to :security, Abakus.Depot.Securities.Security
     field :shares, :integer
     field :amount, :integer
-    field :currency, :string
     field :ex_date, :naive_datetime
     field :note, :string
     field :source, Ecto.Enum, values: [:manual, :receipt]

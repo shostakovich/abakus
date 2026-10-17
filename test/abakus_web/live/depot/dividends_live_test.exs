@@ -30,8 +30,7 @@ defmodule AbakusWeb.Depot.DividendsLiveTest do
       Repo.insert!(%TransactionUnit{
         transaction_id: dividend.id,
         type: type,
-        amount: money(amount),
-        currency: "EUR"
+        amount: money(amount)
       })
     end
 

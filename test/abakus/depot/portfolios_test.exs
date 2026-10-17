@@ -82,7 +82,7 @@ defmodule Abakus.Depot.PortfoliosTest do
           account_id: account.id,
           security_id: security.id,
           amount: money(net),
-          units: [%TransactionUnit{type: :tax, amount: money(tax), currency: "EUR"}]
+          units: [%TransactionUnit{type: :tax, amount: money(tax)}]
         )
       end
 
@@ -269,7 +269,7 @@ defmodule Abakus.Depot.PortfoliosTest do
         security_id: security.id,
         shares: shares(10),
         amount: money(1_005),
-        units: [%TransactionUnit{type: :fee, amount: money(5), currency: "EUR"}]
+        units: [%TransactionUnit{type: :fee, amount: money(5)}]
       )
 
       savings = account_fixture(scope, %{name: "Konto Sparplan"})
@@ -670,7 +670,7 @@ defmodule Abakus.Depot.PortfoliosTest do
         security_id: security.id,
         shares: shares(10),
         amount: money(net),
-        units: [%TransactionUnit{type: :tax, amount: money(tax), currency: "EUR"}]
+        units: [%TransactionUnit{type: :tax, amount: money(tax)}]
       )
     end
 
@@ -1067,25 +1067,6 @@ defmodule Abakus.Depot.PortfoliosTest do
       )
 
       assert Portfolios.net_worth(ctx.scope, [@friday]) == %{@friday => money(500)}
-    end
-
-    test "converts an account in another currency at the ECB rate of the day", ctx do
-      account = account_fixture(ctx.scope, %{currency: "USD"})
-
-      ExchangeRates.store([
-        {"USD", @friday, Decimal.new("1.10")},
-        {"USD", @saturday, Decimal.new("1.25")}
-      ])
-
-      transaction_fixture(ctx.scope, @friday,
-        type: :deposit,
-        account_id: account.id,
-        currency: "USD",
-        amount: money(110)
-      )
-
-      assert Portfolios.net_worth(ctx.scope, [@friday, @saturday]) ==
-               %{@friday => money(100), @saturday => money(88)}
     end
   end
 end

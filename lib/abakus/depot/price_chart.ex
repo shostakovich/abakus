@@ -21,8 +21,8 @@ defmodule Abakus.Depot.PriceChart do
     each day `Period.chart_days/1` keeps and each day with a trade, the last price on or before
     it, so that years of prices stay small without a trade losing the price of its day.
   - `trades`: the purchases and sales on the days of `range` by time, each with its `date`,
-    `type`, `shares` and gross `price` per share, or the price of its day where that is not
-    known in the security's currency; without either it is left out.
+    `type`, `shares` and gross `price` per share, or for a security not in euros the price of its
+    day; without either it is left out.
   """
   def of(%Security{} = security, closes, transactions, %Date.Range{} = range) do
     prices = with_latest_quote(closes, security)
@@ -61,7 +61,7 @@ defmodule Abakus.Depot.PriceChart do
     date = date(t)
 
     price =
-      Valuation.price_per_share(t, currency) ||
+      (currency == "EUR" && Valuation.price_per_share(t)) ||
         Enum.find_value(on(prices, [date]), & &1.price)
 
     %{date: date, type: t.type, shares: t.shares, price: price}

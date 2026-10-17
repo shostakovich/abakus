@@ -352,7 +352,6 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
       security_id: if(form.kind in [:purchase, :sale, :dividend], do: form.security_id),
       shares: stored_shares(form),
       amount: cents(form.amount),
-      currency: "EUR",
       source: :manual,
       units: units(form)
     }
@@ -374,7 +373,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
 
   defp units(form) do
     for {type, value} <- [fee: form.fees, tax: form.taxes], Decimal.positive?(value) do
-      %{type: type, amount: cents(value), currency: "EUR"}
+      %{type: type, amount: cents(value)}
     end
   end
 

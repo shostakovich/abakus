@@ -199,34 +199,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
     assert Ledger.balance(budget_scope(), c.tracking, @day) == 25_000
   end
 
-  test "dollars moved from a portfolio's cash to a budget account are an inflow of the euros received",
-       c do
-    usd = account_fixture(c.owner, %{name: "USD-Cash", currency: "USD"})
-    {:ok, usd} = AccountRoles.set_role(c.owner, usd, "portfolio_cash:#{c.portfolio.id}")
-    switch_on(c)
-
-    received = %Portfolios.TransactionUnit{
-      type: :gross_value,
-      amount: 11_000,
-      currency: "USD",
-      fx_amount: 10_000,
-      fx_currency: "EUR"
-    }
-
-    transaction_fixture(c.owner, @day,
-      type: :cash_transfer,
-      account_id: usd.id,
-      other_account_id: c.clearing.id,
-      amount: 11_000,
-      currency: "USD",
-      units: [received]
-    )
-
-    :ok = BudgetLink.sync(c.owner)
-
-    assert [%Transaction{amount: 10_000, memo: "Entnahme"}] = register(c.giro)
-  end
-
   test "a linked transaction the Ledger refuses books nothing in the Depot either", c do
     switch_on(c)
     Repo.update!(Ecto.Changeset.change(c.giro, kind: :tracking))

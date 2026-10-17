@@ -117,8 +117,8 @@ defmodule AbakusWeb.Depot.PerformanceLive do
   attr :breakdown, :map, required: true
   attr :interval, Date.Range, required: true
 
-  # PP's performance calculation, from the initial to the final value; currency gains only when
-  # there are any. The changes carry their sign, the two values none.
+  # PP's performance calculation, from the initial to the final value. The changes carry their
+  # sign, the two values none.
   defp breakdown(assigns) do
     ~H"""
     <section id="breakdown" aria-labelledby="breakdown-title">
@@ -136,9 +136,6 @@ defmodule AbakusWeb.Depot.PerformanceLive do
         <:item label="Erträge"><.amount value={@breakdown.earnings} signed /></:item>
         <:item label="Gebühren"><.amount value={-@breakdown.fees} signed /></:item>
         <:item label="Steuern"><.amount value={-@breakdown.taxes} signed /></:item>
-        <:item :if={@breakdown.currency_gains != 0} label="Währungsgewinne">
-          <.amount value={@breakdown.currency_gains} signed />
-        </:item>
         <:item label="Einlagen und Entnahmen">
           <.amount value={@breakdown.transfers} signed />
         </:item>

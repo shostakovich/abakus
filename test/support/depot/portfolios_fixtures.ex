@@ -9,7 +9,7 @@ defmodule Abakus.Depot.PortfoliosFixtures do
     do: Repo.insert!(struct!(%Portfolio{user_id: user.id, name: "Langfristig"}, attrs))
 
   def account_fixture(%Scope{user: user}, attrs \\ %{}),
-    do: Repo.insert!(struct!(%Account{user_id: user.id, name: "Konto", currency: "EUR"}, attrs))
+    do: Repo.insert!(struct!(%Account{user_id: user.id, name: "Konto"}, attrs))
 
   @doc "A transaction on `date`, at noon; `attrs` needs at least `type`."
   def transaction_fixture(%Scope{user: user}, date, attrs) do
@@ -19,7 +19,6 @@ defmodule Abakus.Depot.PortfoliosFixtures do
           user_id: user.id,
           date_time: NaiveDateTime.new!(date, ~T[12:00:00]),
           amount: 0,
-          currency: "EUR",
           source: :manual
         },
         attrs
@@ -30,6 +29,6 @@ defmodule Abakus.Depot.PortfoliosFixtures do
   @doc "Shares as stored, × 10⁸."
   def shares(count), do: round(count * 100_000_000)
 
-  @doc "An amount as stored, in cents of its currency."
+  @doc "An amount as stored, in euro cents."
   def money(value), do: round(value * 100)
 end

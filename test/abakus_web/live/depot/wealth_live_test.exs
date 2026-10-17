@@ -224,8 +224,8 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
         security_id: security.id,
         amount: money(net),
         units: [
-          %TransactionUnit{type: :tax, amount: money(tax), currency: "EUR"},
-          %TransactionUnit{type: :fee, amount: money(fee), currency: "EUR"}
+          %TransactionUnit{type: :tax, amount: money(tax)},
+          %TransactionUnit{type: :fee, amount: money(fee)}
         ]
       )
     end

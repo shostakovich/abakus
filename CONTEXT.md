@@ -346,7 +346,7 @@ The number the bank gives a portfolio, as its documents print it; only its digit
 "Depotnummer".
 
 **Verrechnungskonto**:
-A cash account of the Depot in one currency; it exists on its own, not as part of a portfolio. The one a portfolio's
+A cash account of the Depot, in euros; it exists on its own, not as part of a portfolio. The one a portfolio's
 purchases, sales and dividends settle against by default is its reference account; several portfolios may share one.
 Code: `Abakus.Depot.Portfolios.Account`. UI "Verrechnungskonto", the reference account "Referenzkonto" where it is one.
 _Avoid_: Account unqualified in code (that is the budget's), cash account
@@ -357,12 +357,12 @@ portfolio, or none; without a role set it shows as a warning on Vermögen. A por
 as its cash. Code: `Abakus.Depot.AccountRoles`, `Account.role/1`. UI "Rolle", "Rolle fehlt".
 
 **Budget account role**:
-The role of a Verrechnungskonto that is the same bank account as a budget account: in euros, the budget owner's only,
+The role of a Verrechnungskonto that is the same bank account as a budget account: the budget owner's only,
 at most one per budget account; it counts toward nothing else, and once the Depot link is on its flows with the
 user's portfolios are linked transactions in that budget account. UI "ist Budgetkonto „X“".
 
 **Portfolio cash**:
-The role of a Verrechnungskonto that is cash held at the broker of one of the user's portfolios, in any currency: its
+The role of a Verrechnungskonto that is cash held at the broker of one of the user's portfolios: its
 balance counts toward that portfolio's value, in the sidebar and its value change, and shows in its Bestand. UI
 "Cash von Depot „Y“", in the Bestand "davon Cash".
 _Avoid_: Cash account (that is any Verrechnungskonto)
@@ -385,7 +385,8 @@ What the shares of a holding cost by FIFO, including the fees and taxes of their
 minus the purchase value. UI "Einstand".
 
 **Distribution**:
-What a security paid per share on a payment date, from the user's dividend transactions, gross. UI "Ausschüttung".
+What a security paid per share on a payment date, from the user's dividend transactions, gross, in euros as booked.
+UI "Ausschüttung".
 
 **Benchmark**:
 The security a user compares their portfolios with, kept in their Depot settings; each user picks their own, or
@@ -403,7 +404,8 @@ _Avoid_: Payment
 
 **Depot transaction**:
 One business event, such as a purchase, a dividend or a transfer, with a portfolio side, an account side or both
-(ADR 0013); its units are gross value, fee and tax. Code: `Abakus.Depot.Portfolios.Transaction`. UI "Buchung".
+(ADR 0013), booked in euros whatever the security's currency; its units are fee and tax. Code:
+`Abakus.Depot.Portfolios.Transaction`. UI "Buchung".
 _Avoid_: Transaction unqualified in code (that is the budget's), entry
 
 **Value change**:
@@ -416,7 +418,7 @@ _Avoid_: Revaluation, market value adjustment
 
 **Depot link**:
 The budget owner's Depot linked to the budget (ADR 0018), switched on under Einstellungen › Depots with a start date
-and the category for purchases. Every euro Depot transaction since the start date between one of their portfolios
+and the category for purchases. Every Depot transaction since the start date between one of their portfolios
 and a Verrechnungskonto with the budget account role is a linked transaction in that budget account, written in the
 Depot change's database transaction: a purchase or a cash transfer into a portfolio's cash is
 an outflow in that category, a sale or a cash transfer back an inflow to Ready to Assign, each a transfer to the

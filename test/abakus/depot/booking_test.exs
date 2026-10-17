@@ -47,7 +47,7 @@ defmodule Abakus.Depot.BookingTest do
     transaction = Repo.preload(transaction, :units, force: true)
 
     transaction
-    |> Map.take([:type, :portfolio_id, :account_id, :security_id, :shares, :amount, :currency])
+    |> Map.take([:type, :portfolio_id, :account_id, :security_id, :shares, :amount])
     |> Map.put(:units, Enum.map(transaction.units, &{&1.type, &1.amount}))
   end
 
@@ -56,8 +56,7 @@ defmodule Abakus.Depot.BookingTest do
     transactions = Portfolios.list_transactions(ctx.scope)
     market = Market.new([ctx.security], [], [])
 
-    [%{invested_capital: invested}] =
-      Valuation.history(transactions, Portfolios.list_accounts(ctx.scope), market, [@day])
+    [%{invested_capital: invested}] = Valuation.history(transactions, market, [@day])
 
     %{
       holdings: for(h <- Valuation.holdings(transactions, @day), do: {h.portfolio_id, h.shares}),
@@ -150,7 +149,6 @@ defmodule Abakus.Depot.BookingTest do
                security_id: ctx.security.id,
                shares: shares(10),
                amount: money(1_005.50),
-               currency: "EUR",
                units: [fee: 450, tax: 100]
              }
 
@@ -188,7 +186,6 @@ defmodule Abakus.Depot.BookingTest do
                security_id: ctx.security.id,
                shares: shares(4),
                amount: money(412.30),
-               currency: "EUR",
                units: [fee: 450, tax: 320]
              }
 
@@ -214,7 +211,6 @@ defmodule Abakus.Depot.BookingTest do
                security_id: ctx.security.id,
                shares: shares(40),
                amount: money(81.50),
-               currency: "EUR",
                units: [tax: 1_850]
              }
 
@@ -322,21 +318,6 @@ defmodule Abakus.Depot.BookingTest do
       purchase = %{"shares" => "1", "price" => "1", "portfolio_id" => foreign_portfolio.id}
       assert {:error, changeset} = book(ctx, "purchase", purchase)
       assert errors_on(changeset).portfolio_id == ["ist ungültig"]
-    end
-
-    test "only accounts in euros", ctx do
-      dollars = account_fixture(ctx.scope, name: "Dollarkonto", currency: "USD")
-      choices = Portfolios.transaction_choices(ctx.scope)
-      refute dollars in choices.accounts
-
-      assert {:error, changeset} =
-               Portfolios.book_transaction(
-                 ctx.scope,
-                 choices,
-                 form(ctx, "deposit", %{"amount" => "1", "account_id" => dollars.id})
-               )
-
-      assert errors_on(changeset).account_id == ["ist ungültig"]
     end
 
     test "amounts in whole cents", ctx do

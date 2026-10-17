@@ -58,7 +58,7 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
         type: :buy,
         shares: shares(10),
         amount: money(1_210),
-        units: [%TransactionUnit{type: :fee, amount: money(10), currency: "EUR"}]
+        units: [%TransactionUnit{type: :fee, amount: money(10)}]
       ] ++ trade
     )
 

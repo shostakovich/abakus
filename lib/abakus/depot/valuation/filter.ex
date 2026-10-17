@@ -15,7 +15,6 @@ defmodule Abakus.Depot.Valuation.Filter do
   """
 
   alias Abakus.Depot.Portfolios.Transaction
-  alias Abakus.Depot.Valuation
 
   defstruct portfolio_ids: :all,
             account_ids: :all,
@@ -80,26 +79,26 @@ defmodule Abakus.Depot.Valuation.Filter do
   end
 
   @doc """
-  The money a transaction brings in or takes out, as `{kind, amount, currency}`: `:inbound` for a
+  The money a transaction brings in or takes out, as `{kind, amount}`: `:inbound` for a
   deposit or an inbound delivery, `:outbound` for a removal or an outbound delivery, and
   `:transfer_out` and `:transfer_in` for both sides of a transfer inside.
   """
   def flows(%__MODULE__{} = filter, %Transaction{type: type} = t), do: flows(filter, type, t)
 
-  defp flows(filter, :deposit, t), do: crossing(false, account?(filter, t.account_id), sent(t))
-  defp flows(filter, :removal, t), do: crossing(account?(filter, t.account_id), false, sent(t))
+  defp flows(filter, :deposit, t), do: crossing(false, account?(filter, t.account_id), t.amount)
+  defp flows(filter, :removal, t), do: crossing(account?(filter, t.account_id), false, t.amount)
 
   defp flows(filter, :inbound_delivery, t),
-    do: crossing(false, portfolio?(filter, t.portfolio_id), sent(t))
+    do: crossing(false, portfolio?(filter, t.portfolio_id), t.amount)
 
   defp flows(filter, :outbound_delivery, t),
-    do: crossing(portfolio?(filter, t.portfolio_id), false, sent(t))
+    do: crossing(portfolio?(filter, t.portfolio_id), false, t.amount)
 
   defp flows(filter, :buy, t),
-    do: crossing(account?(filter, t.account_id), portfolio?(filter, t.portfolio_id), sent(t))
+    do: crossing(account?(filter, t.account_id), portfolio?(filter, t.portfolio_id), t.amount)
 
   defp flows(filter, :sell, t),
-    do: crossing(portfolio?(filter, t.portfolio_id), account?(filter, t.account_id), sent(t))
+    do: crossing(portfolio?(filter, t.portfolio_id), account?(filter, t.account_id), t.amount)
 
   defp flows(filter, :security_transfer, t),
     do: transfer(portfolio?(filter, t.portfolio_id), portfolio?(filter, t.other_portfolio_id), t)
@@ -115,22 +114,13 @@ defmodule Abakus.Depot.Valuation.Filter do
 
   defp flows(_filter, _interest, _t), do: []
 
-  defp sent(t), do: {t.amount, t.currency}
-
   # Something moving from one side to the other; only crossing the edge brings money in or out.
-  defp crossing(true, false, {amount, currency}), do: [{:outbound, amount, currency}]
-  defp crossing(false, true, {amount, currency}), do: [{:inbound, amount, currency}]
+  defp crossing(true, false, amount), do: [{:outbound, amount}]
+  defp crossing(false, true, amount), do: [{:inbound, amount}]
   defp crossing(_from, _to, _amount), do: []
 
-  defp transfer(true, true, t) do
-    {sent, sent_currency} = sent(t)
-    {received, received_currency} = Valuation.received(t)
-    [{:transfer_out, sent, sent_currency}, {:transfer_in, received, received_currency}]
-  end
-
-  defp transfer(true, false, t), do: crossing(true, false, sent(t))
-  defp transfer(false, true, t), do: crossing(false, true, Valuation.received(t))
-  defp transfer(false, false, _t), do: []
+  defp transfer(true, true, t), do: [{:transfer_out, t.amount}, {:transfer_in, t.amount}]
+  defp transfer(from, to, t), do: crossing(from, to, t.amount)
 
   @doc """
   The transaction as the filter's portfolios and accounts book it, as PP's filtered client holds
@@ -187,9 +177,7 @@ defmodule Abakus.Depot.Valuation.Filter do
         [cash(%{t | other_account_id: nil}, :removal)]
 
       {false, true} ->
-        {amount, currency} = Valuation.received(t)
-        received = %{t | account_id: t.other_account_id, amount: amount, currency: currency}
-        [cash(%{received | other_account_id: nil}, :deposit)]
+        [cash(%{t | account_id: t.other_account_id, other_account_id: nil}, :deposit)]
 
       {false, false} ->
         []
@@ -225,10 +213,10 @@ defmodule Abakus.Depot.Valuation.Filter do
       account?(filter, t.account_id) ->
         if t.security_id == nil or held?(filter, t.security_id),
           do: [],
-          else: [{outside_security, t.amount, t.currency}]
+          else: [{outside_security, t.amount}]
 
       MapSet.member?(filter.reference_account_ids, t.account_id) and held?(filter, t.security_id) ->
-        [{reference_account, t.amount, t.currency}]
+        [{reference_account, t.amount}]
 
       true ->
         []

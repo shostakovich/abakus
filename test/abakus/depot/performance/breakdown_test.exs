@@ -6,13 +6,11 @@ defmodule Abakus.Depot.Performance.BreakdownTest do
 
   alias Abakus.Depot.Performance
   alias Abakus.Depot.Performance.Breakdown
-  alias Abakus.Depot.Portfolios.{Account, Portfolio, Transaction, TransactionUnit}
+  alias Abakus.Depot.Portfolios.{Portfolio, Transaction, TransactionUnit}
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Valuation.{Filter, Market}
 
-  # Portfolios 1 and 2 settle against account 10 (EUR); account 11 is in USD. Security 20 is in
-  # EUR, security 21 in USD.
-  @accounts [%Account{id: 10, currency: "EUR"}, %Account{id: 11, currency: "USD"}]
+  # Portfolios 1 and 2 settle against account 10. Security 20 is in EUR, security 21 in USD.
   @securities [%Security{id: 20, currency: "EUR"}, %Security{id: 21, currency: "USD"}]
   @interval Date.range(~D[2026-10-01], ~D[2026-10-09])
 
@@ -22,14 +20,13 @@ defmodule Abakus.Depot.Performance.BreakdownTest do
         type: type,
         date_time: NaiveDateTime.new!(date, ~T[12:00:00]),
         amount: 0,
-        currency: "EUR",
         units: []
       },
       attrs
     )
   end
 
-  defp unit(type, euros), do: %TransactionUnit{type: type, amount: money(euros), currency: "EUR"}
+  defp unit(type, euros), do: %TransactionUnit{type: type, amount: money(euros)}
 
   defp buy(date, portfolio_id, count, euros, attrs \\ []) do
     transaction(
@@ -46,15 +43,15 @@ defmodule Abakus.Depot.Performance.BreakdownTest do
   end
 
   defp breakdown(transactions, market, filter \\ Filter.all()) do
-    index = Performance.index(transactions, @accounts, market, filter, @interval)
-    Breakdown.of(transactions, @accounts, market, filter, index)
+    index = Performance.index(transactions, market, filter, @interval)
+    Breakdown.of(transactions, market, filter, index)
   end
 
   # Values on the reference day and the last day, gains and money in or out add up as in PP.
   defp assert_adds_up(breakdown) do
     assert breakdown.initial_value + breakdown.capital_gains + breakdown.realized_capital_gains +
-             breakdown.earnings - breakdown.fees - breakdown.taxes + breakdown.currency_gains +
-             breakdown.transfers == breakdown.final_value
+             breakdown.earnings - breakdown.fees - breakdown.taxes + breakdown.transfers ==
+             breakdown.final_value
   end
 
   test "breaks the change in value down into gains, earnings, fees, taxes and money in or out" do
@@ -100,7 +97,6 @@ defmodule Abakus.Depot.Performance.BreakdownTest do
              earnings: money(21),
              fees: money(10),
              taxes: money(15),
-             currency_gains: 0,
              transfers: money(600),
              final_value: money(1_836)
            }
@@ -197,23 +193,22 @@ defmodule Abakus.Depot.Performance.BreakdownTest do
     assert_adds_up(breakdown)
   end
 
-  test "counts the change of foreign cash in euros as currency gains" do
-    # 110 USD at 1.10 USD per euro on the reference day, 50 USD removed and 60 USD left at 1.25.
+  test "takes a purchase of a foreign security at the euros booked for it" do
+    # 10 shares for 1,000 €, at 110 USD and 1.25 USD per euro at the end.
     transactions = [
-      transaction(:deposit, ~D[2026-09-30], account_id: 11, currency: "USD", amount: money(110)),
-      transaction(:removal, ~D[2026-10-05], account_id: 11, currency: "USD", amount: money(50))
+      transaction(:deposit, ~D[2026-09-30], account_id: 10, amount: money(1_000)),
+      buy(~D[2026-10-02], 1, 10, 1_000, security_id: 21)
     ]
 
-    rates = [
-      {"USD", ~D[2026-10-01], Decimal.new("1.10")},
-      {"USD", ~D[2026-10-05], Decimal.new("1.25")}
-    ]
+    market =
+      Market.new(@securities, [{21, ~D[2026-10-09], price(110)}], [
+        {"USD", ~D[2026-10-02], Decimal.new("1.10")},
+        {"USD", ~D[2026-10-09], Decimal.new("1.25")}
+      ])
 
-    breakdown = breakdown(transactions, Market.new(@securities, [], rates))
+    breakdown = breakdown(transactions, market)
 
-    assert breakdown.initial_value == money(100)
-    assert breakdown.transfers == money(-40)
-    assert breakdown.currency_gains == money(48 + 40 - 100)
+    assert breakdown.capital_gains == money(880 - 1_000)
     assert_adds_up(breakdown)
   end
 

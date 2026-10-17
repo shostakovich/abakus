@@ -236,7 +236,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
     |> Enum.max(fn -> 2 end)
   end
 
-  attr :distributions, :list, required: true, doc: "see `Distributions.of/3`"
+  attr :distributions, :list, required: true, doc: "see `Distributions.of/1`"
 
   # The newest until all are asked for; the older rows stay hidden until then.
   defp distributions(assigns) do

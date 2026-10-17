@@ -123,8 +123,6 @@ defmodule AbakusWeb.Depot.TransactionsLive do
         <.receipt_link :if={@transaction.receipt && place == :column} transaction={@transaction} />
         <.amount
           value={signed_cents(@transaction)}
-          currency={@transaction.currency}
-          currency_display={DepotFormat.currency_display(@transaction.currency)}
           signed={signed?(@transaction.type)}
           tone={inflow?(@transaction.type)}
           class="font-semibold"
@@ -215,17 +213,16 @@ defmodule AbakusWeb.Depot.TransactionsLive do
   defp shares(%Transaction{shares: shares}) when shares in [nil, 0], do: nil
 
   defp shares(%Transaction{type: type} = transaction) when type in [:buy, :sell] do
-    price = Valuation.price_per_share(transaction, transaction.currency)
-
-    "#{DepotFormat.shares(transaction.shares)} Stück à #{DepotFormat.price(price, transaction.currency)}"
+    price = Valuation.price_per_share(transaction)
+    "#{DepotFormat.shares(transaction.shares)} Stück à #{DepotFormat.price(price, "EUR")}"
   end
 
   defp shares(transaction), do: "#{DepotFormat.shares(transaction.shares)} Stück"
 
   defp gross(%Transaction{type: :dividend, amount: amount} = transaction) do
-    case Valuation.gross_value(transaction, transaction.currency) do
+    case Valuation.gross_value(transaction) do
       ^amount -> nil
-      gross -> "brutto #{money(gross, transaction)}"
+      gross -> "brutto #{Money.euros(gross)}"
     end
   end
 
@@ -234,15 +231,12 @@ defmodule AbakusWeb.Depot.TransactionsLive do
   defp unit(transaction, type, label) do
     case unit_cents(transaction, type) do
       0 -> nil
-      cents -> "#{label} #{money(cents, transaction)}"
+      cents -> "#{label} #{Money.euros(cents)}"
     end
   end
 
   defp unit_cents(transaction, type),
     do: transaction.units |> Enum.filter(&(&1.type == type)) |> Enum.sum_by(& &1.amount)
-
-  defp money(cents, transaction),
-    do: Money.amount(cents) <> "\u00A0" <> DepotFormat.currency(transaction.currency)
 
   defp transactions_path(filter_param, portfolio_id) do
     query = Enum.reject([filter: filter_param, portfolio: portfolio_id], &is_nil(elem(&1, 1)))

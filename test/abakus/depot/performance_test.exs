@@ -6,7 +6,7 @@ defmodule Abakus.Depot.PerformanceTest do
 
   alias Abakus.Depot.Performance
   alias Abakus.Depot.Performance.IRR
-  alias Abakus.Depot.Portfolios.{Account, Portfolio, Transaction}
+  alias Abakus.Depot.Portfolios.{Portfolio, Transaction}
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Valuation.{Filter, Market}
 
@@ -15,8 +15,7 @@ defmodule Abakus.Depot.PerformanceTest do
   @saturday ~D[2026-10-03]
   @days Date.range(@thursday, @saturday)
 
-  # Portfolio 1 settles against account 10 (EUR); account 11 is in USD; security 20 is in EUR.
-  @accounts [%Account{id: 10, currency: "EUR"}, %Account{id: 11, currency: "USD"}]
+  # Portfolio 1 settles against account 10; security 20 is in EUR.
   @portfolio %Portfolio{id: 1, reference_account_id: 10}
 
   defp transaction(type, date, attrs) do
@@ -25,15 +24,13 @@ defmodule Abakus.Depot.PerformanceTest do
         type: type,
         date_time: NaiveDateTime.new!(date, ~T[12:00:00]),
         amount: 0,
-        currency: "EUR",
         units: []
       },
       attrs
     )
   end
 
-  defp market(closes, rates \\ []),
-    do: Market.new([%Security{id: 20, currency: "EUR"}], closes, rates)
+  defp market(closes), do: Market.new([%Security{id: 20, currency: "EUR"}], closes, [])
 
   defp day(date, value, attrs \\ []),
     do: Map.merge(%{date: date, value: value, inbound: 0, outbound: 0}, Map.new(attrs))
@@ -545,7 +542,7 @@ defmodule Abakus.Depot.PerformanceTest do
     end
 
     test "values every day and counts the money in and out per day", ctx do
-      index = Performance.index(ctx.transactions, @accounts, ctx.market, Filter.all(), @days)
+      index = Performance.index(ctx.transactions, ctx.market, Filter.all(), @days)
 
       assert Enum.map(index.days, &Map.take(&1, [:date, :value, :inbound, :outbound])) == [
                day(@thursday, money(1_000), inbound: money(1_000)),
@@ -568,30 +565,10 @@ defmodule Abakus.Depot.PerformanceTest do
 
       for {account_ids, ttwror} <- [{[10], 1_570 / 1_500 - 1}, {[], (1_050 + 20) / 1_000 - 1}] do
         filter = Filter.new([@portfolio], account_ids, ctx.transactions)
-        index = Performance.index(ctx.transactions, @accounts, ctx.market, filter, days)
+        index = Performance.index(ctx.transactions, ctx.market, filter, days)
 
         assert_in_delta Performance.ttwror(index), ttwror, 1.0e-12
       end
-    end
-
-    test "converts the money in and out at the ECB rate of its day" do
-      transactions = [
-        transaction(:deposit, @friday, account_id: 11, currency: "USD", amount: money(110)),
-        transaction(:removal, @saturday, account_id: 11, currency: "USD", amount: money(50))
-      ]
-
-      market =
-        market([], [
-          {"USD", @friday, Decimal.new("1.10")},
-          {"USD", @saturday, Decimal.new("1.25")}
-        ])
-
-      index = Performance.index(transactions, @accounts, market, Filter.all(), @days)
-
-      assert Enum.map(index.days, &{&1.inbound, &1.outbound}) ==
-               [{0, 0}, {money(100), 0}, {0, money(40)}]
-
-      assert index.cash_flows == [{@friday, -100.0}, {@saturday, 40.0}]
     end
 
     test "counts both sides of a transfer inside for the IRR only" do
@@ -602,7 +579,7 @@ defmodule Abakus.Depot.PerformanceTest do
           amount: money(5)
         )
 
-      index = Performance.index([transfer], @accounts, market([]), Filter.all(), @days)
+      index = Performance.index([transfer], market([]), Filter.all(), @days)
 
       assert Enum.map(index.days, &{&1.inbound, &1.outbound}) == [{0, 0}, {0, 0}, {0, 0}]
       assert index.cash_flows == [{@friday, 5.0}, {@friday, -5.0}]

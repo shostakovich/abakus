@@ -76,22 +76,6 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
       assert has_element?(lv, row, "Cash von Depot „Broker“")
     end
 
-    test "offers a Verrechnungskonto in another currency no budget account", ctx do
-      usd = account_fixture(ctx.scope, %{name: "USD-Cash", currency: "USD"})
-      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
-
-      lv |> element("#clearing-account-#{usd.id} button", "Festlegen") |> render_click()
-
-      refute has_element?(lv, ~s|#account-role-form option[value^="budget_account:"]|)
-
-      assert has_element?(
-               lv,
-               ~s|#account-role-form option[value="portfolio_cash:#{ctx.portfolio.id}"]|
-             )
-
-      assert has_element?(lv, ~s|#account-role-form option[value="none"]|)
-    end
-
     test "shows why a role was refused", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
       lv |> element("#clearing-account-#{ctx.account.id} button", "Festlegen") |> render_click()
@@ -118,7 +102,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
 
       assert render(lv) =~ "Depot „Langfristig“ angelegt."
       assert [%{name: "Langfristig"} = portfolio] = Portfolios.list_portfolios(scope)
-      assert [%{name: "Girokonto", currency: "EUR"} = account] = Portfolios.list_accounts(scope)
+      assert [%{name: "Girokonto"} = account] = Portfolios.list_accounts(scope)
       assert portfolio.reference_account_id == account.id
 
       assert has_element?(

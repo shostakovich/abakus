@@ -168,7 +168,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
     test "lists per payment date the gross amount per share of the user's dividends", ctx do
       pension = account_fixture(ctx.scope, %{name: "Altersvorsorge"})
       paid = Date.add(today(), -100)
-      tax = %TransactionUnit{type: :tax, amount: money(3), currency: "EUR"}
+      tax = %TransactionUnit{type: :tax, amount: money(3)}
       dividend(ctx.scope, ctx.account, ctx.security, paid, 10, 15, units: [tax])
       dividend(ctx.scope, pension, ctx.security, paid, 2, 3.6)
 
@@ -192,24 +192,15 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
       assert has_element?(lv, "#distributions-total", "33,60\u00A0€")
     end
 
-    test "gives the amount per share of a security in dollars in dollars", ctx do
+    test "gives the amount per share of a security in dollars in the euros booked", ctx do
       security = security_fixture(currency: "USD", quote_feed: :manual)
-
-      gross = %TransactionUnit{
-        type: :gross_value,
-        amount: money(4.29),
-        currency: "EUR",
-        fx_amount: money(5),
-        fx_currency: "USD",
-        fx_rate: Decimal.new("0.858")
-      }
-
-      dividend(ctx.scope, ctx.account, security, Date.add(today(), -3), 10, 4.29, units: [gross])
+      ExchangeRates.store([{"USD", today(), Decimal.new("1.25")}])
+      dividend(ctx.scope, ctx.account, security, Date.add(today(), -3), 10, 5)
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/securities/#{security}")
 
       assert cells(lv, "#distributions tbody tr", "td") ==
-               [[day(-3), "0,50\u00A0USD", "10", "4,29\u00A0€"]]
+               [[day(-3), "0,50\u00A0€", "10", "5,00\u00A0€"]]
     end
 
     test "shows a dividend booked without shares without an amount per share", ctx do

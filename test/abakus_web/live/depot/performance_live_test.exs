@@ -39,7 +39,7 @@ defmodule AbakusWeb.Depot.PerformanceLiveTest do
       security_id: security.id,
       shares: shares(10),
       amount: money(1_002),
-      units: [%TransactionUnit{type: :fee, amount: money(2), currency: "EUR"}]
+      units: [%TransactionUnit{type: :fee, amount: money(2)}]
     )
 
     savings = account_fixture(scope, %{name: "Konto Sparplan"})
@@ -88,8 +88,6 @@ defmodule AbakusWeb.Depot.PerformanceLiveTest do
 
     assert breakdown =~
              ~r/Endwert am #{Format.date(today())}.*1.600,00\x{00A0}€/su
-
-    refute breakdown =~ "Währungsgewinne"
   end
 
   test "shows the largest fall with its days", %{conn: conn} do

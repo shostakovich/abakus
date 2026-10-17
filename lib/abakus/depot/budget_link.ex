@@ -11,8 +11,7 @@ defmodule Abakus.Depot.BudgetLink do
       the daily value change (`Abakus.Depot.BudgetFeed`) keeps only the market movement;
     * a dividend is an inflow to Ready to Assign from the security, as it leaves the portfolio's value alone.
 
-  Only transactions dated on or after the link's start date count; a transfer out of a portfolio's cash in another
-  currency counts with the euros the budget account received. The Depot leads amount, date, payee and account,
+  Only transactions dated on or after the link's start date count. The Depot leads amount, date, payee and account,
   rewriting only what it changed since it wrote them last; category, memo, cleared state and approval are the
   register's after the first write. `sync/1` runs in the database transaction of every Depot
   write, so a removed Depot transaction removes its linked one.
@@ -24,7 +23,6 @@ defmodule Abakus.Depot.BudgetLink do
   alias Abakus.Categories.Category
   alias Abakus.Depot.BudgetLink.{Link, LinkedTransaction}
   alias Abakus.Depot.Portfolios.{Account, Portfolio, Transaction}
-  alias Abakus.Depot.Valuation
   alias Abakus.{Ledger, LocalTime, Repo}
   alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
@@ -267,9 +265,7 @@ defmodule Abakus.Depot.BudgetLink do
 
     %{
       budget_accounts:
-        for(%Account{currency: "EUR"} = a <- accounts, a.budget_account_id, into: %{}) do
-          {a.id, a.budget_account_id}
-        end,
+        for(a <- accounts, a.budget_account_id, into: %{}, do: {a.id, a.budget_account_id}),
       cash_of:
         for(a <- accounts, a.cash_of_portfolio_id, into: %{}, do: {a.id, a.cash_of_portfolio_id}),
       portfolios: Map.new(portfolios, &{&1.id, &1})
@@ -293,13 +289,7 @@ defmodule Abakus.Depot.BudgetLink do
         portfolio_flow(context, t.account_id, portfolio_id, -t.amount, "Einzahlung")
 
       portfolio_id = context.cash_of[t.account_id] ->
-        case Valuation.received(t) do
-          {amount, "EUR"} ->
-            portfolio_flow(context, t.other_account_id, portfolio_id, amount, "Entnahme")
-
-          _other_currency ->
-            nil
-        end
+        portfolio_flow(context, t.other_account_id, portfolio_id, t.amount, "Entnahme")
 
       true ->
         nil

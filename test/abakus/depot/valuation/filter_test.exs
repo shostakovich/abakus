@@ -16,7 +16,6 @@ defmodule Abakus.Depot.Valuation.FilterTest do
         type: type,
         date_time: ~N[2026-10-02 12:00:00],
         amount: money(100),
-        currency: "EUR",
         units: []
       },
       attrs
@@ -36,41 +35,32 @@ defmodule Abakus.Depot.Valuation.FilterTest do
   defp dividend(type, account_id, security_id),
     do: transaction(type, account_id: account_id, security_id: security_id)
 
-  defp usd_transfer(from, to) do
-    unit = %TransactionUnit{
-      type: :gross_value,
-      amount: money(100),
-      currency: "EUR",
-      fx_amount: money(110),
-      fx_currency: "USD"
-    }
-
-    transaction(:cash_transfer, account_id: from, other_account_id: to, units: [unit])
-  end
+  defp cash_transfer(from, to),
+    do: transaction(:cash_transfer, account_id: from, other_account_id: to)
 
   describe "all/0" do
     test "counts deposits and inbound deliveries as money in, removals and outbound ones as out" do
       assert Filter.flows(Filter.all(), transaction(:deposit, account_id: 10)) ==
-               [{:inbound, money(100), "EUR"}]
+               [{:inbound, money(100)}]
 
       assert Filter.flows(Filter.all(), transaction(:inbound_delivery, portfolio_id: 1)) ==
-               [{:inbound, money(100), "EUR"}]
+               [{:inbound, money(100)}]
 
       assert Filter.flows(Filter.all(), transaction(:removal, account_id: 10)) ==
-               [{:outbound, money(100), "EUR"}]
+               [{:outbound, money(100)}]
 
       assert Filter.flows(Filter.all(), transaction(:outbound_delivery, portfolio_id: 1)) ==
-               [{:outbound, money(100), "EUR"}]
+               [{:outbound, money(100)}]
     end
 
-    test "keeps transfers as transfers, the received side in the other account's currency" do
-      assert Filter.flows(Filter.all(), usd_transfer(10, 11)) ==
-               [{:transfer_out, money(100), "EUR"}, {:transfer_in, money(110), "USD"}]
+    test "keeps transfers as transfers" do
+      assert Filter.flows(Filter.all(), cash_transfer(10, 11)) ==
+               [{:transfer_out, money(100)}, {:transfer_in, money(100)}]
 
       transfer = transaction(:security_transfer, portfolio_id: 1, other_portfolio_id: 2)
 
       assert Filter.flows(Filter.all(), transfer) ==
-               [{:transfer_out, money(100), "EUR"}, {:transfer_in, money(100), "EUR"}]
+               [{:transfer_out, money(100)}, {:transfer_in, money(100)}]
     end
 
     test "counts no money in or out for what happens inside" do
@@ -101,17 +91,17 @@ defmodule Abakus.Depot.Valuation.FilterTest do
       buy = transaction(:buy, portfolio_id: 1, account_id: 11)
       sell = transaction(:sell, portfolio_id: 1, account_id: 11)
 
-      assert Filter.flows(with_account(), buy) == [{:inbound, money(100), "EUR"}]
-      assert Filter.flows(with_account(), sell) == [{:outbound, money(100), "EUR"}]
-      assert Filter.flows(without_account(), hd(history())) == [{:inbound, money(100), "EUR"}]
+      assert Filter.flows(with_account(), buy) == [{:inbound, money(100)}]
+      assert Filter.flows(with_account(), sell) == [{:outbound, money(100)}]
+      assert Filter.flows(without_account(), hd(history())) == [{:inbound, money(100)}]
     end
 
     test "a purchase by a portfolio outside takes the money out, a sale by one brings it in" do
       buy = transaction(:buy, portfolio_id: 2, account_id: 10)
       sell = transaction(:sell, portfolio_id: 2, account_id: 10)
 
-      assert Filter.flows(with_account(), buy) == [{:outbound, money(100), "EUR"}]
-      assert Filter.flows(with_account(), sell) == [{:inbound, money(100), "EUR"}]
+      assert Filter.flows(with_account(), buy) == [{:outbound, money(100)}]
+      assert Filter.flows(with_account(), sell) == [{:inbound, money(100)}]
     end
 
     test "a purchase or sale inside counts no money in or out" do
@@ -119,18 +109,15 @@ defmodule Abakus.Depot.Valuation.FilterTest do
                []
     end
 
-    test "a transfer across the edge is money in or out, in the currency of its side" do
-      assert Filter.flows(with_account(), usd_transfer(10, 11)) == [
-               {:outbound, money(100), "EUR"}
-             ]
-
-      assert Filter.flows(with_account(), usd_transfer(11, 10)) == [{:inbound, money(110), "USD"}]
+    test "a transfer across the edge is money in or out" do
+      assert Filter.flows(with_account(), cash_transfer(10, 11)) == [{:outbound, money(100)}]
+      assert Filter.flows(with_account(), cash_transfer(11, 10)) == [{:inbound, money(100)}]
 
       out = transaction(:security_transfer, portfolio_id: 1, other_portfolio_id: 2)
       into = transaction(:security_transfer, portfolio_id: 2, other_portfolio_id: 1)
 
-      assert Filter.flows(with_account(), out) == [{:outbound, money(100), "EUR"}]
-      assert Filter.flows(with_account(), into) == [{:inbound, money(100), "EUR"}]
+      assert Filter.flows(with_account(), out) == [{:outbound, money(100)}]
+      assert Filter.flows(with_account(), into) == [{:inbound, money(100)}]
     end
 
     test "a dividend, tax or fee of a security the portfolios never held is money in or out" do
@@ -138,7 +125,7 @@ defmodule Abakus.Depot.Valuation.FilterTest do
           do:
             assert(
               Filter.flows(with_account(), dividend(type, 10, 21)) == [
-                {:inbound, money(100), "EUR"}
+                {:inbound, money(100)}
               ]
             )
 
@@ -146,7 +133,7 @@ defmodule Abakus.Depot.Valuation.FilterTest do
           do:
             assert(
               Filter.flows(with_account(), dividend(type, 10, 21)) == [
-                {:outbound, money(100), "EUR"}
+                {:outbound, money(100)}
               ]
             )
     end
@@ -159,10 +146,10 @@ defmodule Abakus.Depot.Valuation.FilterTest do
 
     test "a dividend on the reference account outside goes out at once, a tax or fee comes in" do
       assert Filter.flows(without_account(), dividend(:dividend, 10, 20)) ==
-               [{:outbound, money(100), "EUR"}]
+               [{:outbound, money(100)}]
 
       assert Filter.flows(without_account(), dividend(:tax, 10, 20)) ==
-               [{:inbound, money(100), "EUR"}]
+               [{:inbound, money(100)}]
 
       assert Filter.flows(without_account(), dividend(:dividend, 10, 21)) == []
       assert Filter.flows(without_account(), dividend(:dividend, 11, 20)) == []
@@ -174,14 +161,14 @@ defmodule Abakus.Depot.Valuation.FilterTest do
             transaction(:deposit, account_id: 11),
             transaction(:inbound_delivery, portfolio_id: 2),
             transaction(:buy, portfolio_id: 2, account_id: 11),
-            usd_transfer(11, 12)
+            cash_transfer(11, 12)
           ],
           do: assert(Filter.flows(with_account(), transaction) == [])
     end
   end
 
   describe "view/2" do
-    defp fee_unit, do: %TransactionUnit{type: :fee, amount: money(1), currency: "EUR"}
+    defp fee_unit, do: %TransactionUnit{type: :fee, amount: money(1)}
 
     test "keeps every transaction of all portfolios and accounts as it is" do
       buy = hd(history())
@@ -227,18 +214,10 @@ defmodule Abakus.Depot.Valuation.FilterTest do
                [%{into | type: :inbound_delivery, portfolio_id: 1, other_portfolio_id: nil}]
 
       assert [%{type: :removal, account_id: 10, other_account_id: nil, units: []}] =
-               Filter.view(with_account(), usd_transfer(10, 11))
+               Filter.view(with_account(), cash_transfer(10, 11))
 
-      assert [
-               %{
-                 type: :deposit,
-                 account_id: 10,
-                 other_account_id: nil,
-                 amount: 11_000,
-                 currency: "USD",
-                 units: []
-               }
-             ] = Filter.view(with_account(), usd_transfer(11, 10))
+      assert [%{type: :deposit, account_id: 10, other_account_id: nil, amount: 10_000, units: []}] =
+               Filter.view(with_account(), cash_transfer(11, 10))
     end
 
     test "turns a dividend, tax or fee of a security never held into a deposit or removal" do
