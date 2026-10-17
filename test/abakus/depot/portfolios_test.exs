@@ -917,6 +917,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       security = security_fixture(quote_feed: :manual)
       deliver(ctx.scope, ctx.portfolio, security, ~D[2025-01-02], 100)
       divvy_diary_dividend_fixture(security, ~D[2026-10-10], ~D[2026-10-20], 0.5)
+      divvy_diary_dividend_fixture(security, nil, ~D[2025-06-15], 1)
       divvy_diary_dividend_fixture(security, nil, ~D[2025-12-15], 1)
       divvy_diary_dividend_fixture(security, nil, ~D[2026-01-15], 1)
       other = user_scope_fixture()

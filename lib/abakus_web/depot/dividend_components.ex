@@ -46,7 +46,8 @@ defmodule AbakusWeb.Depot.DividendComponents do
 
     ~H"""
     Angekündigt sind Termine von DivvyDiary. Die Prognose nimmt die Zahlungen der letzten
-    12 Monate ein Jahr später, mal heutigem Bestand. {@currencies} zum letzten EZB‑Kurs.
+    12 Monate ein Jahr später, bei jüngeren Wertpapieren die letzte Zahlung in ihrem bisherigen
+    Rhythmus, mal heutigem Bestand. {@currencies} zum letzten EZB‑Kurs.
     """
   end
 
