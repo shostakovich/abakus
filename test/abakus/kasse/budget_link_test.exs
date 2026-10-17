@@ -164,19 +164,19 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     assert transaction.payee.name == "Wochenmarkt"
   end
 
-  test "a Kasse change writes the memo the register left alone, and keeps flag and approval",
+  test "a Kasse change writes the memo the register left alone, and keeps cleared state and approval",
        %{h: h} do
     expense = create!(equal(h, "Markt", 1000, "2026-10-12", h.ben, [h.anna, h.ben]))
 
     {:ok, _transaction} =
       Ledger.update_transaction(budget_scope(), transaction(expense), %{
-        flag: :red,
+        cleared: :cleared,
         approved: true
       })
 
     update!(h.ben, expense, %{amount_cents: 2000, original_amount: 2000})
 
-    assert %{memo: "Gesamt 20,00 € · bezahlt von Ben", flag: :red, approved: true} =
+    assert %{memo: "Gesamt 20,00 € · bezahlt von Ben", cleared: :cleared, approved: true} =
              transaction(expense)
   end
 

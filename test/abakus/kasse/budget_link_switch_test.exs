@@ -78,7 +78,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       older = expense!(c.h, "Altbau", 5000, "2026-02-20")
       create!(reimbursement(1000, "2026-03-15", c.h.anna, c.h.ben))
 
-      ynab = %{category_id: c.treats, cleared: :reconciled, approved: true, flag: :red}
+      ynab = %{category_id: c.treats, cleared: :reconciled, approved: true}
       weekly_ynab = imported!(c, weekly, ynab)
       stale_ynab = imported!(c, market, %{amount: -1000})
       _twice = imported!(c, weekly)
@@ -101,7 +101,6 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
                category_id: treats,
                cleared: :reconciled,
                approved: true,
-               flag: :red,
                memo: "Gesamt 87,42 € · bezahlt von Ben",
                source: :ynab
              } = linked(weekly)

@@ -59,7 +59,7 @@ defmodule Abakus.Ledger.ReconciledTest do
     test "changes only when confirmed", c do
       transaction = reconcile(transaction_fixture(account_id: c.checking.id, memo: "Miete"))
 
-      for attrs <- [%{memo: "Pacht"}, %{amount: 1}, %{flag: :red}, %{account_id: c.cash.id}] do
+      for attrs <- [%{memo: "Pacht"}, %{amount: 1}, %{account_id: c.cash.id}] do
         assert {:error, changeset} = Ledger.update_transaction(budget_scope(), transaction, attrs)
         assert %{cleared: ["ist abgeschlossen"]} = errors_on(changeset)
       end
@@ -132,7 +132,10 @@ defmodule Abakus.Ledger.ReconciledTest do
       %{outflow: outflow, inflow: inflow} = transfer(c)
 
       assert {:ok, _} =
-               Ledger.update_transaction(budget_scope(), outflow, %{cleared: :cleared, flag: :red})
+               Ledger.update_transaction(budget_scope(), outflow, %{
+                 cleared: :cleared,
+                 approved: false
+               })
 
       assert reload(inflow) == inflow
     end

@@ -11,7 +11,7 @@ defmodule Abakus.Ledger do
 
   Deleting either side of a transfer deletes both; deleting a split deletes the counterparts of its
   subtransactions. The counterpart of a subtransaction belongs to its split: it is changed and deleted there, so
-  only its own fields (cleared, approved, flag, category) change on it directly.
+  only its own fields (cleared, approved, category) change on it directly.
 
   A reconciled transaction is locked: the Ledger refuses any change to it, made directly, through a transfer
   (a counterpart kept in step, moved, released or deleted) or by moving its category (`recategorize/4`), unless the
@@ -721,7 +721,7 @@ defmodule Abakus.Ledger do
 
   @doc """
   Updates a transaction as stored (the struct only names it) and its counterparts. A deleted transaction cannot
-  be changed; the counterpart of a split's subtransaction changes only its own fields (cleared, approved, flag,
+  be changed; the counterpart of a split's subtransaction changes only its own fields (cleared, approved,
   category), the rest in its split. When the account changes, the origins move along. A change that alters a
   reconciled transaction or counterpart needs `reconciled: :confirmed`. The payee may be given by name, as for
   `create_transaction/2`.

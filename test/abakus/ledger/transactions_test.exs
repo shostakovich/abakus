@@ -29,14 +29,13 @@ defmodule Abakus.Ledger.TransactionsTest do
                amount: -1_250,
                cleared: :uncleared,
                approved: true,
-               flag: nil,
                source: :manual,
                deleted_at: nil,
                memo: "Wocheneinkauf"
              } = Repo.get!(Transaction, transaction.id)
     end
 
-    test "stores cleared state, approval, flag and source" do
+    test "stores cleared state, approval and source" do
       account = account_fixture()
 
       assert {:ok, transaction} =
@@ -45,12 +44,11 @@ defmodule Abakus.Ledger.TransactionsTest do
                  attrs(account,
                    cleared: "reconciled",
                    approved: true,
-                   flag: "purple",
                    source: "file"
                  )
                )
 
-      assert %Transaction{cleared: :reconciled, approved: true, flag: :purple, source: :file} =
+      assert %Transaction{cleared: :reconciled, approved: true, source: :file} =
                Repo.get!(Transaction, transaction.id)
     end
 
@@ -104,10 +102,10 @@ defmodule Abakus.Ledger.TransactionsTest do
       assert {:error, changeset} =
                Ledger.create_transaction(
                  budget_scope(),
-                 attrs(account, cleared: "pending", flag: "pink", source: "csv")
+                 attrs(account, cleared: "pending", source: "csv")
                )
 
-      assert %{cleared: ["is invalid"], flag: ["is invalid"], source: ["is invalid"]} =
+      assert %{cleared: ["is invalid"], source: ["is invalid"]} =
                errors_on(changeset)
     end
 

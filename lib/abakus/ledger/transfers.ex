@@ -4,8 +4,8 @@ defmodule Abakus.Ledger.Transfers do
 
   A side of a transfer is a transaction that is not a split, or a split's subtransaction, whose payee is a
   transfer payee. Its counterpart is a transaction in that payee's account with the negated amount, the same date
-  and memo, and the side's account's transfer payee. Both point at each other. Cleared state, approval and flag
-  belong to each side; the category follows the category rule.
+  and memo, and the side's account's transfer payee. Both point at each other. Cleared state and approval belong
+  to each side; the category follows the category rule.
 
   A reconciled counterpart is changed, moved or released only when `confirmed?` is true.
   """

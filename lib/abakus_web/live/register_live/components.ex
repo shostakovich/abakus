@@ -14,15 +14,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.RegisterLive.{Rows, TransactionEditor}
 
-  @flags [
-    red: "Rot",
-    orange: "Orange",
-    yellow: "Gelb",
-    green: "Grün",
-    blue: "Blau",
-    purple: "Lila"
-  ]
-
   @feeds %{
     portfolio: "Wert kommt aus dem Depot",
     shared_expenses: "Buchungen kommen aus der Kasse"
@@ -491,7 +482,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :columns, :map, required: true, doc: "`%{all, category, running, count}`, see `columns/2`"
   attr :selected, :any, required: true
-  attr :flag_menu, :any, required: true
   attr :running, :map, default: nil
 
   attr :editor, :any,
@@ -537,9 +527,6 @@ defmodule AbakusWeb.RegisterLive.Components do
                 aria-label="Alle auswählen"
               />
             </th>
-            <th class="app-flag-col">
-              <span class="sr-only">Markierung</span><.icon name="flag" />
-            </th>
             <th class="app-date-col">Datum</th>
             <th :if={@columns.all} class="app-konto">Konto</th>
             <th class="app-payee">Empfänger</th>
@@ -567,7 +554,6 @@ defmodule AbakusWeb.RegisterLive.Components do
                 accounts={@accounts}
                 columns={@columns}
                 selected={transaction.id in @selected}
-                flag_open={@flag_menu == transaction.id}
                 running={@running}
               />
           <% end %>
@@ -581,7 +567,6 @@ defmodule AbakusWeb.RegisterLive.Components do
         </tbody>
       </table>
     </div>
-    <.flag_menu :if={@flag_menu} rows={@rows} id={@flag_menu} />
     """
   end
 
@@ -589,7 +574,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   def columns(account, running) do
     all = is_nil(account)
     category = all or Account.budget_account?(account)
-    count = 9 + Enum.count([all, category, running], & &1)
+    count = 8 + Enum.count([all, category, running], & &1)
     %{all: all, category: category, running: running, count: count}
   end
 
@@ -597,7 +582,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
   attr :selected, :boolean, required: true
-  attr :flag_open, :boolean, required: true
   attr :running, :map, default: nil
 
   defp row(assigns) do
@@ -617,9 +601,6 @@ defmodule AbakusWeb.RegisterLive.Components do
             phx-value-id={@transaction.id}
             aria-label="Buchung auswählen"
           />
-        </td>
-        <td class="app-flag-col">
-          <.flag transaction={@transaction} open={@flag_open} />
         </td>
         <td {cell(@transaction, "date")}>
           <span class="app-wide">{Format.date(@transaction.date)}</span>
@@ -685,7 +666,6 @@ defmodule AbakusWeb.RegisterLive.Components do
         class="app-part"
       >
         <td></td>
-        <td></td>
         <td {cell(@transaction, "date")}></td>
         <td :if={@columns.all} {cell(@transaction, "account")}></td>
         <td class="app-payee" {cell(@transaction, "payee")}>
@@ -716,7 +696,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     <tbody id={"proposal-#{@proposal.id}-rows"} class="app-tx">
       <tr id={"proposal-#{@proposal.id}"} class="app-tx-main app-unapproved">
         <td class="app-pick"></td>
-        <td class="app-flag-col"></td>
         <td>
           <span class="app-wide">{Format.date(@proposal.date)}</span>
           <span class="app-short">{Format.date(@proposal.date, year: false)}</span>
@@ -742,8 +721,8 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td></td>
       </tr>
       <tr id={"proposal-#{@proposal.id}-match"} class="app-actrow app-unapproved">
-        <td colspan="2"></td>
-        <td colspan={@columns.count - 2}>
+        <td></td>
+        <td colspan={@columns.count - 1}>
           <div class="flex flex-wrap items-center gap-2">
             <span class="flex items-center gap-1 text-base-content/70">
               <.icon name="link" />{match_text(@proposal.matched_transaction, @accounts)}
@@ -861,16 +840,7 @@ defmodule AbakusWeb.RegisterLive.Components do
               transaction.memo
             ])}
           </:meta>
-          <:trailing>
-            <span class="flex items-center gap-1">
-              <.icon
-                :if={transaction.flag}
-                name="flag"
-                class={"app-flag-mark app-flag-#{transaction.flag}"}
-              />
-              <.signed amount={transaction.amount} />
-            </span>
-          </:trailing>
+          <:trailing><.signed amount={transaction.amount} /></:trailing>
         </.list_row>
       <% end %>
       <li :if={@rows == [] and @proposals == []} class="px-4">
@@ -913,84 +883,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     </div>
     """
   end
-
-  attr :transaction, :map, required: true
-  attr :open, :boolean, required: true
-
-  defp flag(assigns) do
-    ~H"""
-    <button
-      id={"tx-#{@transaction.id}-flag"}
-      type="button"
-      class={["app-flag", @transaction.flag && "is-set app-flag-#{@transaction.flag}"]}
-      aria-label={"Markierung: #{flag_label(@transaction.flag)}, ändern"}
-      aria-haspopup="dialog"
-      aria-expanded={to_string(@open)}
-      title="Markierung"
-      phx-click="flag_menu"
-      phx-value-id={@transaction.id}
-    >
-      <.icon name="flag" />
-    </button>
-    """
-  end
-
-  attr :rows, :list, required: true
-  attr :id, :integer, required: true, doc: "the transaction whose flag opened it"
-
-  @doc "The one flag picker of the register, at the flag of the row that opened it."
-  def flag_menu(assigns) do
-    case Enum.find(assigns.rows, &(&1.id == assigns.id)) do
-      nil -> ~H""
-      transaction -> assigns |> assign(transaction: transaction, flags: @flags) |> flag_picker()
-    end
-  end
-
-  defp flag_picker(assigns) do
-    ~H"""
-    <.popover
-      id="flag-menu"
-      title="Markierung"
-      anchor={"tx-#{@transaction.id}-flag"}
-      show
-      on_cancel={JS.push("close_flag_menu")}
-      class="w-72"
-    >
-      <div class="flex flex-wrap gap-1">
-        <.button
-          :for={{flag, label} <- @flags}
-          id={"flag-menu-#{flag}"}
-          size={:sm}
-          variant={if @transaction.flag == flag, do: :neutral, else: :ghost}
-          class={@transaction.flag == flag && "setzkasten-selected"}
-          aria-pressed={to_string(@transaction.flag == flag)}
-          phx-click="set_flag"
-          phx-value-id={@transaction.id}
-          phx-value-flag={flag}
-          {confirm([@transaction])}
-        >
-          <.icon name="flag" class={"app-flag-mark app-flag-#{flag}"} />{label}
-        </.button>
-        <.button
-          id="flag-menu-none"
-          size={:sm}
-          variant={if is_nil(@transaction.flag), do: :neutral, else: :ghost}
-          class={is_nil(@transaction.flag) && "setzkasten-selected"}
-          aria-pressed={to_string(is_nil(@transaction.flag))}
-          phx-click="set_flag"
-          phx-value-id={@transaction.id}
-          phx-value-flag=""
-          {confirm([@transaction])}
-        >
-          Keine
-        </.button>
-      </div>
-    </.popover>
-    """
-  end
-
-  defp flag_label(nil), do: "keine"
-  defp flag_label(flag), do: @flags[flag]
 
   attr :id, :string, required: true
   attr :transaction, :map, required: true

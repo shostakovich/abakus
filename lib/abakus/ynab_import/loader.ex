@@ -3,8 +3,8 @@ defmodule Abakus.YnabImport.Loader do
   Replaces the budget owner's budget with a YNAB plan, inside the caller's database transaction: `wipe/1` deletes
   it, `load/2` writes the plan through the contexts with the owner's scope, so their rules hold as for any other
   entry. Transactions go in by date through the Ledger, which creates the counterparts of transfers; each
-  counterpart then takes its own cleared state, approval and flag from YNAB, and every side gets its YNAB id as an
-  origin.
+  counterpart then takes its own cleared state and approval from YNAB, and every side gets its YNAB id as an origin;
+  YNAB's flags stay behind.
   """
 
   import Ecto.Query
@@ -262,7 +262,6 @@ defmodule Abakus.YnabImport.Loader do
         date: transaction["date"],
         cleared: transaction["cleared"],
         approved: transaction["approved"],
-        flag: transaction["flag_color"],
         source: :ynab,
         subtransactions:
           Enum.map(parts, fn {part, other} -> side_attrs(part, account, other, context) end)
@@ -331,8 +330,7 @@ defmodule Abakus.YnabImport.Loader do
   defp take_own_fields(owner, counterpart_id, transaction) do
     attrs = %{
       cleared: transaction["cleared"],
-      approved: transaction["approved"],
-      flag: transaction["flag_color"]
+      approved: transaction["approved"]
     }
 
     counterpart =

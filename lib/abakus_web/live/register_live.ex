@@ -4,7 +4,7 @@ defmodule AbakusWeb.RegisterLive do
   below the balances. The view (`filter`), the search (`q`) and the running balance (`running`, one account in the
   full list only) live in the URL; the selection does not.
 
-  Here transactions are approved (one, the selected or all), categorised (the selected), flagged and toggled
+  Here transactions are approved (one, the selected or all), categorised (the selected) and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
   no manual entry and no reconcile, and a portfolio's account shows the Depots tabs as its Register tab.
@@ -39,8 +39,6 @@ defmodule AbakusWeb.RegisterLive do
   alias Plug.Conn.Query
 
   import TransactionEditor, only: [confirmed: 1]
-
-  @flags Ecto.Enum.dump_values(Abakus.Ledger.Transaction, :flag)
 
   @impl true
   def render(assigns) do
@@ -128,7 +126,6 @@ defmodule AbakusWeb.RegisterLive do
           accounts={@accounts}
           columns={@columns}
           selected={@selected}
-          flag_menu={@flag_menu}
           running={@running_balances}
           editor={@editor && @editor.layout == :row && @editor}
           empty={empty_text(@transactions, @proposals)}
@@ -166,7 +163,6 @@ defmodule AbakusWeb.RegisterLive do
        scope: nil,
        editor: nil,
        selected: MapSet.new(),
-       flag_menu: nil,
        reconcile: nil,
        reconciling: nil
      )}
@@ -452,34 +448,6 @@ defmodule AbakusWeb.RegisterLive do
   def handle_event("clear_selection", _params, socket),
     do: {:noreply, assign(socket, :selected, MapSet.new())}
 
-  def handle_event("flag_menu", %{"id" => id}, socket) do
-    case find(socket, id) do
-      nil -> {:noreply, socket}
-      %{id: id} when id == socket.assigns.flag_menu -> {:noreply, assign(socket, :flag_menu, nil)}
-      transaction -> {:noreply, assign(socket, :flag_menu, transaction.id)}
-    end
-  end
-
-  def handle_event("close_flag_menu", _params, socket),
-    do: {:noreply, assign(socket, :flag_menu, nil)}
-
-  def handle_event("set_flag", %{"id" => id, "flag" => flag} = params, socket)
-      when flag in ["" | @flags] do
-    socket
-    |> assign(:flag_menu, nil)
-    |> change(
-      id,
-      &Ledger.update_transaction(
-        socket.assigns.current_scope,
-        &1,
-        %{flag: blank_to_nil(flag)},
-        confirmed(params)
-      )
-    )
-  end
-
-  def handle_event("set_flag", _params, socket), do: {:noreply, socket}
-
   def handle_event(
         "reconcile_open",
         _params,
@@ -679,9 +647,6 @@ defmodule AbakusWeb.RegisterLive do
   defp toggled(:uncleared), do: :cleared
   defp toggled(:cleared), do: :uncleared
   defp toggled(:reconciled), do: :cleared
-
-  defp blank_to_nil(""), do: nil
-  defp blank_to_nil(flag), do: flag
 
   defp toggle(set, id), do: if(id in set, do: MapSet.delete(set, id), else: MapSet.put(set, id))
 

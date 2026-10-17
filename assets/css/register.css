@@ -1,4 +1,4 @@
-/* Register: the transaction grid, its edit row, flags and the phone sheet. */
+/* Register: the transaction grid, its edit row and the phone sheet. */
 
 /* Fixed columns, so an opened row keeps every column where it is: the edit row lays its inputs on the same tracks
    as a grid. Narrow registers move the memo behind the payee, the narrowest also shorten dates. */
@@ -6,7 +6,6 @@
 .app-reg {
   table-layout: fixed;
   --reg-pick: 2.5rem;
-  --reg-flag: 2rem;
   --reg-date: 8rem;
   --reg-konto: 0px;
   --reg-cat: 20%;
@@ -21,7 +20,6 @@
 .app-reg-running { --reg-run: 7rem; }
 .app-reg-nocat { --reg-cat: 0px; }
 .app-reg th.app-pick { width: var(--reg-pick); }
-.app-reg th.app-flag-col { width: var(--reg-flag); }
 .app-reg th.app-date-col { width: var(--reg-date); }
 .app-reg th.app-konto { width: var(--reg-konto); }
 .app-reg th.app-catcol { width: var(--reg-cat); }
@@ -78,21 +76,8 @@
 .app-clear.is-cleared { border: 1.5px solid var(--color-success-ink); color: var(--color-success-ink); }
 .app-clear.is-reconciled { border-color: transparent; color: var(--color-success-ink); }
 .app-clear .lucide { width: 1rem; height: 1rem; }
-.app-clear:focus-visible, .app-flag:focus-visible, .app-parts-toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
-@media (pointer: coarse) { .app-clear::after, .app-flag::after { content: ""; position: absolute; inset: -.75rem; } }
-
-/* Flags on the chart tokens; an unset flag shows only on the row under the pointer, in focus or selected. */
-.app-flag { position: relative; display: inline-flex; border: 0; background: none; padding: 0; color: color-mix(in oklab, var(--color-base-content) 50%, transparent); cursor: pointer; }
-.app-flag .lucide, .app-flag-mark { fill: currentColor; }
-.app-flag:not(.is-set) .lucide { fill: none; }
-.app-reg .app-flag:not(.is-set) { opacity: 0; }
-.app-reg tr:is(:hover, :focus-within) .app-flag:not(.is-set), .app-reg .is-selected .app-flag:not(.is-set), .app-reg .app-flag:focus-visible { opacity: 1; }
-.app-flag-red { color: var(--color-chart-4); }
-.app-flag-orange { color: var(--color-chart-7); }
-.app-flag-yellow { color: var(--color-chart-2); }
-.app-flag-green { color: var(--color-chart-3); }
-.app-flag-blue { color: var(--color-chart-1); }
-.app-flag-purple { color: var(--color-chart-5); }
+.app-clear:focus-visible, .app-parts-toggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+@media (pointer: coarse) { .app-clear::after { content: ""; position: absolute; inset: -.75rem; } }
 
 /* Each transaction is a tbody: a split's parts below it, collapsible. */
 .app-reg .app-part > * { height: 1.75rem; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
@@ -108,7 +93,7 @@
   display: grid;
   align-items: center;
   grid-template-columns:
-    [pick] var(--reg-pick) [flag] var(--reg-flag) [date] var(--reg-date) [konto] var(--reg-konto)
+    [pick] var(--reg-pick) [date] var(--reg-date) [konto] var(--reg-konto)
     [payee] minmax(0, 1fr) [cat] var(--reg-cat) [memo] var(--reg-memo) [out] var(--reg-amount)
     [in] var(--reg-amount) [run] var(--reg-run) [ok] var(--reg-ok) [c] var(--reg-c) [end];
   padding-block: .125rem;

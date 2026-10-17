@@ -355,41 +355,12 @@ defmodule AbakusWeb.RegisterLiveTest do
     end
   end
 
-  describe "flags" do
-    test "the picker sets and clears a flag", c do
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+  test "has no flags", c do
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      view |> element("#tx-#{c.shopping.id}-flag") |> render_click()
-      assert has_element?(view, "#flag-menu button", "Lila")
-
-      view |> element("#flag-menu-purple") |> render_click()
-      assert reload(c.shopping).flag == :purple
-      assert has_element?(view, "#tx-#{c.shopping.id}-flag.app-flag-purple")
-      refute has_element?(view, "#flag-menu")
-
-      view |> element("#tx-#{c.shopping.id}-flag") |> render_click()
-      view |> element("#flag-menu-none") |> render_click()
-      assert reload(c.shopping).flag == nil
-    end
-
-    test "a reconciled transaction asks first", c do
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-
-      view |> element("#tx-#{c.old.id}-flag") |> render_click()
-      assert asked(view, "#flag-menu-red").text == "Der abgeglichene Saldo bleibt gleich."
-      confirm_click(view, "#flag-menu-red", "Diese Buchung ist abgeschlossen. Trotzdem ändern?")
-
-      assert reload(c.old).flag == :red
-      assert reload(c.old).cleared == :reconciled
-    end
-
-    test "an unknown flag changes nothing", c do
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-
-      render_click(view, "set_flag", %{"id" => "#{c.shopping.id}", "flag" => "pink"})
-
-      assert reload(c.shopping).flag == nil
-    end
+    refute has_element?(view, "#tx-#{c.shopping.id}-flag")
+    refute render(view) =~ "Markierung"
+    refute :flag in Transaction.__schema__(:fields)
   end
 
   describe "cleared state" do

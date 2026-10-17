@@ -234,7 +234,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       refute has_element?(view, "#reconcile-question")
     end
 
-    test "edits only category, memo, flag and approval of a linked transaction", c do
+    test "edits only category, memo and approval of a linked transaction", c do
       %{expense: expense, transaction: transaction} = link!(c)
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.account}")
       open_edit(view, transaction)

@@ -9,7 +9,7 @@ defmodule Abakus.Kasse.BudgetLink do
   date.
 
   The Kasse leads on what it changes: amount, date and payee follow every change of the expense. The register may
-  change category, memo, flag, cleared state and approval; a later Kasse change keeps a category or memo the
+  change category, memo, cleared state and approval; a later Kasse change keeps a category or memo the
   register changed, but a change of the Kasse category always writes the mapped category.
 
   The functions the link's page calls take the caller's scope; only the budget owner's may switch it on, choose the
@@ -32,7 +32,7 @@ defmodule Abakus.Kasse.BudgetLink do
   alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
 
-  @register_fields [:category_id, :memo, :flag, :cleared, :approved]
+  @register_fields [:category_id, :memo, :cleared, :approved]
 
   @doc "The fields of a linked transaction the register may change."
   def register_fields, do: @register_fields
@@ -185,7 +185,7 @@ defmodule Abakus.Kasse.BudgetLink do
   defp since_or_marked(query, nil, _ids), do: query
   defp since_or_marked(query, date, ids), do: where(query, [e], e.date >= ^date or e.id in ^ids)
 
-  # The transaction keeps its category, cleared state, approval and flag; the rest follows the expense.
+  # The transaction keeps its category, cleared state and approval; the rest follows the expense.
   defp adopt(scope, link, expense_id, transaction, wanted) do
     attrs = %{
       amount: wanted.amount,
