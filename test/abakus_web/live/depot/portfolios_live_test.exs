@@ -11,7 +11,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
 
   setup :register_and_log_in_user
 
-  test "is the Depot's section of the settings and links the PP import", %{conn: conn} do
+  test "is the Depot's section of the settings", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/settings/depot/portfolios")
 
     assert has_element?(
@@ -21,10 +21,9 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
            )
 
     assert has_element?(lv, "h1", "Depots")
-    assert has_element?(lv, ~s|#new-portfolio-import[href="/depot/import"]|)
   end
 
-  test "shows a portfolio without a name, as PP may store one, as „Ohne Namen“", ctx do
+  test "shows a portfolio without a name as „Ohne Namen“", ctx do
     portfolio = portfolio_fixture(ctx.scope, %{name: ""})
     path = Components.depots_path(:holdings, portfolio.id)
 

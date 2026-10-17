@@ -10,7 +10,6 @@ defmodule Abakus.Depot.Taxonomies.Classification do
     field :color, :string
     field :weight, :integer
     field :rank, :integer, default: 0
-    field :pp_id, :string
 
     has_many :assignments, Abakus.Depot.Taxonomies.Assignment
 

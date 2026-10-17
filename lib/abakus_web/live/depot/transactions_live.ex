@@ -1,8 +1,8 @@
 defmodule AbakusWeb.Depot.TransactionsLive do
   @moduledoc """
   „Buchungen“: every transaction of the user or of one portfolio, grouped by month and newest
-  first, filtered by all, purchases and sales, earnings or account. A transaction booked in the Depot opens the dialog
-  „Buchung bearbeiten“; those from the PP import are read-only. A receipt opens as PDF.
+  first, filtered by all, purchases and sales, earnings or account. A transaction of a type the form knows opens the
+  dialog „Buchung bearbeiten“. A receipt opens as PDF.
   """
   use AbakusWeb, :depot_live_view
 
@@ -58,9 +58,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
         portfolio={@portfolio}
         portfolios={@portfolios}
         switch_path={&transactions_path(@filter_param, &1)}
-      >
-        <:subtitle>Aus Portfolio Performance importierte Buchungen sind nur lesbar.</:subtitle>
-      </.depots_header>
+      />
 
       <section aria-label="Buchungen">
         <.tabs id="transaction-filter" label="Filter" class="mb-4">

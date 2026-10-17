@@ -2,8 +2,8 @@ defmodule Abakus.Depot.Distributions do
   @moduledoc """
   What a security paid out per share, from the user's dividend transactions: per payment date
   their gross value before taxes and fees per share. That is in the security's currency where the
-  payment knows its gross value in it, as PP keeps it for a payment in another currency, else in
-  the payment's currency. Pure; amounts in cents, shares and amounts per share × 10⁸.
+  payment knows its gross value in it, as a payment in another currency keeps it, else in the
+  payment's currency. Pure; amounts in cents, shares and amounts per share × 10⁸.
   """
 
   alias Abakus.Depot.Portfolios.Transaction
@@ -21,7 +21,7 @@ defmodule Abakus.Depot.Distributions do
     counts dividends
 
   The dividends of a day, such as those into several accounts, make one distribution. A dividend
-  without shares, which PP allows, adds to the gross value but not to the amount per share.
+  without shares adds to the gross value but not to the amount per share.
   """
   def of(%Security{currency: currency}, transactions, %Market{} = market) do
     transactions

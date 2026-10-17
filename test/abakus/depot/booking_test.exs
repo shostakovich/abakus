@@ -4,7 +4,7 @@ defmodule Abakus.Depot.BookingTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{Portfolios, PPImport, Valuation}
+  alias Abakus.Depot.{Portfolios, Valuation}
   alias Abakus.Depot.Portfolios.{Receipt, Transaction, TransactionForm}
   alias Abakus.Depot.Receipts.Fields
   alias Abakus.Depot.Valuation.Market
@@ -138,7 +138,7 @@ defmodule Abakus.Depot.BookingTest do
     end
   end
 
-  describe "book_transaction/4 books as the PP import would" do
+  describe "book_transaction/4" do
     test "a purchase from an account", ctx do
       attrs = %{"shares" => "10", "price" => "100", "fees" => "4,50", "taxes" => "1"}
       assert {:ok, [purchase]} = book(ctx, "purchase", attrs)
@@ -422,15 +422,6 @@ defmodule Abakus.Depot.BookingTest do
     end
   end
 
-  test "a PP re-import keeps manually booked transactions", ctx do
-    {:ok, _} = PPImport.run(ctx.scope, "test/fixtures/depot/pp/sample.portfolio")
-    {:ok, [deposit]} = book(ctx, "deposit", %{"amount" => "100"})
-
-    {:ok, _} = PPImport.run(ctx.scope, "test/fixtures/depot/pp/sample.portfolio")
-
-    assert Repo.get(Transaction, deposit.id)
-  end
-
   describe "editing and deleting" do
     @pdf "%PDF-1.4\nein Beleg\n%%EOF\n"
 
@@ -581,12 +572,42 @@ defmodule Abakus.Depot.BookingTest do
       assert {:ok, _} = Portfolios.delete_transaction(ctx.scope, purchase)
     end
 
-    test "imported and other users' transactions are read-only", ctx do
-      {:ok, _} = PPImport.run(ctx.scope, "test/fixtures/depot/pp/sample.portfolio")
-      imported = Repo.one!(from t in Transaction, where: t.type == :deposit, limit: 1)
+    test "a transaction stored without the form can be edited and deleted", ctx do
+      stored =
+        transaction_fixture(ctx.scope, @day,
+          type: :deposit,
+          account_id: ctx.account.id,
+          amount: 10_000
+        )
 
-      assert {:error, :read_only} = edit(ctx, imported, "deposit", %{"amount" => "1"})
-      assert {:error, :read_only} = Portfolios.delete_transaction(ctx.scope, imported)
+      assert {:ok, _} = edit(ctx, stored, "deposit", %{"amount" => "50"})
+      assert [%{type: :deposit, amount: 5000}] = Portfolios.list_transactions(ctx.scope)
+      assert {:ok, _} = Portfolios.delete_transaction(ctx.scope, stored)
+      assert Portfolios.list_transactions(ctx.scope) == []
+    end
+
+    test "an edit keeps the time of day", ctx do
+      stored =
+        transaction_fixture(ctx.scope, @day,
+          type: :deposit,
+          account_id: ctx.account.id,
+          amount: 10_000,
+          date_time: ~N[2026-10-01 14:30:00]
+        )
+
+      assert {:ok, _} = edit(ctx, stored, "deposit", %{"amount" => "50"})
+      assert %{date_time: ~N[2026-10-01 14:30:00]} = Repo.get!(Transaction, stored.id)
+
+      assert {:ok, _} = edit(ctx, stored, "deposit", %{"date" => "2026-10-02", "amount" => "50"})
+      assert %{date_time: ~N[2026-10-02 14:30:00]} = Repo.get!(Transaction, stored.id)
+    end
+
+    test "types the form does not know and other users' transactions are read-only", ctx do
+      fee =
+        transaction_fixture(ctx.scope, @day, type: :fee, account_id: ctx.account.id, amount: 100)
+
+      assert {:error, :read_only} = edit(ctx, fee, "deposit", %{"amount" => "1"})
+      assert {:error, :read_only} = Portfolios.delete_transaction(ctx.scope, fee)
 
       {:ok, [own]} = book(ctx, "deposit", %{"amount" => "1"})
       other = user_scope_fixture()

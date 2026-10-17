@@ -142,7 +142,7 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
 
   test "updates the sidebar once booked", ctx do
     security = security_fixture(quote_feed: :manual)
-    price_fixture(security, Date.add(LocalTime.today(), -1), price(123), :pp)
+    price_fixture(security, Date.add(LocalTime.today(), -1), price(123), :manual)
     lv = open_dialog(ctx.conn)
     params = %{security_id: security.id, shares: "10", price: "100", account_id: ""}
     change(lv, params, "account_id")

@@ -12,7 +12,7 @@ defmodule AbakusWeb.Depot.FormatTest do
     assert Format.price(nil, "EUR") == "–"
   end
 
-  test "a portfolio without a name, as PP may store one, is „Ohne Namen“" do
+  test "a portfolio without a name is „Ohne Namen“" do
     assert Format.portfolio_name(%{name: "Sparplan"}) == "Sparplan"
     assert Format.portfolio_name(%{name: ""}) == "Ohne Namen"
     assert Format.portfolio_name(nil) == "Ohne Namen"

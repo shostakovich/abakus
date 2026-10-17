@@ -206,14 +206,6 @@ defmodule AbakusWeb.AreasTest do
       assert get_session(get(in_finanzen, ~p"/settings/kasse"), :area) == "finanzen"
     end
 
-    test "opens the PP import in Finanzen, coming from the Kasse", %{conn: conn} do
-      in_kasse = Plug.Test.init_test_session(conn, area: "kasse")
-      assert get_session(get(in_kasse, ~p"/depot/import"), :area) == "finanzen"
-
-      {:ok, view, _html} = live(in_kasse, ~p"/depot/import")
-      assert has_element?(view, ~s|#area-finanzen-sidebar[aria-current=page]|)
-    end
-
     test "sees only the current area's entries", %{conn: conn} do
       account_fixture(name: "Girokonto")
       account_fixture(name: "Depot", kind: :tracking)
@@ -249,7 +241,7 @@ defmodule AbakusWeb.AreasTest do
     end
 
     test "gets 404 on every Depot page and sees no Finanzen", %{conn: conn} do
-      for path <- get_paths("/depot", 1), path != "/depot/import" do
+      for path <- get_paths("/depot", 1) do
         assert_error_sent 404, fn -> get(conn, path) end
       end
 

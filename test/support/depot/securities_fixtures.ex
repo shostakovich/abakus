@@ -25,12 +25,12 @@ defmodule Abakus.Depot.SecuritiesFixtures do
   end
 
   @doc """
-  An attribute type as PP defines it, for securities unless `target` names another class;
-  `converter` is the short name of PP's converter, e.g. `StringConverter`.
+  An attribute type for securities unless `target` names another class; `converter` is the short
+  name of its converter, e.g. `StringConverter`.
   """
-  def attribute_type_fixture(pp_id, name, converter, target \\ "Security") do
+  def attribute_type_fixture(key, name, converter, target \\ "Security") do
     Repo.insert!(%AttributeType{
-      pp_id: pp_id,
+      key: key,
       name: name,
       column_label: name,
       target: "name.abuchen.portfolio.model." <> target,

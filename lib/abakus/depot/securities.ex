@@ -24,8 +24,8 @@ defmodule Abakus.Depot.Securities do
     do: %Security{} |> Security.create_changeset(attrs) |> validate_new_isin()
 
   @doc """
-  Creates a security by its ISIN with a name and, for prices from Yahoo, a symbol. It belongs to
-  no PP file. An ISIN that a security already has is refused, the user picks that one instead.
+  Creates a security by its ISIN with a name and, for prices from Yahoo, a symbol. An ISIN that a
+  security already has is refused, the user picks that one instead.
   """
   def create_security(%Scope{}, attrs), do: attrs |> change_new_security() |> Repo.insert()
 
@@ -59,7 +59,7 @@ defmodule Abakus.Depot.Securities do
         where: s.quote_feed == :yahoo and not s.retired,
         where: is_nil(s.checked_at) or s.checked_at < ^cutoff
 
-    # Only a write waits for another, such as an import, so pages read first.
+    # Only a write waits for another, so pages read first.
     if Repo.exists?(unchecked) do
       {_count, securities} =
         Repo.update_all(select(unchecked, [s], s), set: [checked_at: now])
@@ -98,8 +98,8 @@ defmodule Abakus.Depot.Securities do
 
   @doc """
   Creates a security from the Yahoo `symbol` with the name, currency and prices of `chart`, as
-  `PriceFeed` delivers it at `now`. It belongs to no PP file, so an import leaves it alone. The
-  security another request created meanwhile is returned as it is.
+  `PriceFeed` delivers it at `now`. The security another request created meanwhile is returned
+  as it is.
   """
   def create_yahoo_security(%Scope{}, symbol, chart, now) do
     Repo.transact(fn ->
@@ -116,8 +116,7 @@ defmodule Abakus.Depot.Securities do
         name: chart.name || symbol,
         currency: chart.currency,
         quote_feed: :yahoo,
-        symbol: symbol,
-        quote_feed_set_by_user: true
+        symbol: symbol
       })
 
     store_yahoo_prices(security, chart.closes)
@@ -125,8 +124,8 @@ defmodule Abakus.Depot.Securities do
   end
 
   @doc """
-  Sets where prices come from; a later PP import keeps this choice. A switch to Yahoo or a new
-  Yahoo symbol drops the Yahoo prices and the quote of the old one, a switch to manual keeps them.
+  Sets where prices come from. A switch to Yahoo or a new Yahoo symbol drops the Yahoo prices and
+  the quote of the old one, a switch to manual keeps them.
   """
   def update_quote_feed(%Scope{}, %Security{} = security, attrs) do
     changeset = Security.quote_feed_changeset(security, attrs)
@@ -198,7 +197,6 @@ defmodule Abakus.Depot.Securities do
 
   @doc "Stores `{date, close}` from Yahoo; days with a price from another source keep it."
   def store_yahoo_prices(%Security{id: id}, closes) do
-    # The source check sits in the upsert itself, so a price an import stores meanwhile wins.
     only_over_yahoo =
       from p in Price,
         where: p.source == :yahoo,

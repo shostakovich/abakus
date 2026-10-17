@@ -354,7 +354,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
     <section id="profile" aria-labelledby="profile-title">
       <.section_heading id="profile-title">Steckbrief</.section_heading>
       <.empty_state :if={@rows == []} plush="layers" icon="layers">
-        Keine Angaben aus Portfolio Performance.
+        Keine Angaben.
       </.empty_state>
       <.description_list :if={@rows != []} class="border-t border-base-content/10">
         <:item :for={{label, value} <- @rows} label={label}><.attribute value={value} /></:item>
@@ -387,9 +387,8 @@ defmodule AbakusWeb.Depot.SecurityLive do
   defp ter(ter, per_year),
     do: join_meta([DepotFormat.ter(ter), "#{Money.euros(per_year, decimals: 0)} im Jahr"])
 
-  # PP names its built-in attributes in the language the file was created in; its English
-  # default for the vendor reads in German here. A name the user chose stays.
-  defp attribute_label(%{pp_id: "vendor", name: "Vendor"}), do: "Anbieter"
+  # The built-in vendor attribute may carry its English name; a name the user chose stays.
+  defp attribute_label(%{key: "vendor", name: "Vendor"}), do: "Anbieter"
   defp attribute_label(type), do: type.name
 
   attr :value, :any, required: true, doc: "see `AttributeValue.display/3`"
@@ -436,8 +435,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
             </p>
           </div>
           <div :if={@security.quote_feed == :manual}>
-            <p>Portfolio Performance</p>
-            <p class="font-normal text-base-content/70">nur aus dem PP-Import</p>
+            <p>Ohne Kursabruf</p>
           </div>
         </:item>
         <:item :if={@security.currency != "EUR"} label={"Wechselkurs #{@security.currency}"}>

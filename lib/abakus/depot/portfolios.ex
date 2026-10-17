@@ -1,7 +1,7 @@
 defmodule Abakus.Depot.Portfolios do
   @moduledoc """
-  Portfolios, accounts, their transactions and savings plans, each of one user, the transactions
-  the user books with their receipts, and what the screens show of them: net worth, the overview,
+  Portfolios, accounts and their transactions, each of one user, the transactions the user
+  books with their receipts, and what the screens show of them: net worth, the overview,
   the holdings, the dividends, the performance, the sidebar and the user's holding of a security,
   computed from the transactions on every request.
   """
@@ -33,7 +33,6 @@ defmodule Abakus.Depot.Portfolios do
     Portfolio,
     PortfolioForm,
     Receipt,
-    SavingsPlan,
     Transaction,
     TransactionForm,
     TransactionUnit
@@ -123,15 +122,6 @@ defmodule Abakus.Depot.Portfolios do
         where: t.user_id == ^scope.user.id,
         order_by: [t.date_time, t.id],
         preload: :units
-    )
-  end
-
-  def list_savings_plans(%Scope{} = scope) do
-    Repo.all(
-      from p in SavingsPlan,
-        where: p.user_id == ^scope.user.id,
-        order_by: p.name,
-        preload: :transactions
     )
   end
 
@@ -796,13 +786,6 @@ defmodule Abakus.Depot.Portfolios do
 
   defp first_day([], date), do: date
 
-  @doc "Whether the user has transactions that did not come from a PP import."
-  def own_transactions?(%Scope{} = scope) do
-    Repo.exists?(
-      from t in Transaction, where: t.user_id == ^scope.user.id and t.source != :pp_import
-    )
-  end
-
   ## Transactions
 
   @filters %{
@@ -1057,6 +1040,7 @@ defmodule Abakus.Depot.Portfolios do
     with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :update),
          %Transaction{} <- Repo.get(Transaction, transaction.id) || {:error, :gone},
          [attrs] = TransactionForm.to_transactions(%{form | remove_at_once: false}),
+         attrs = %{attrs | date_time: keep_time_of_day(attrs.date_time, transaction.date_time)},
          {units, attrs} = Map.pop!(attrs, :units),
          true <-
            keeps_holding?(scope, transaction, struct!(Transaction, attrs)) ||
@@ -1079,6 +1063,10 @@ defmodule Abakus.Depot.Portfolios do
            do: {:ok, {get_transaction(scope, transaction.id), unused}}
     end
   end
+
+  # The time of day orders a day's transactions, so an edit keeps it.
+  defp keep_time_of_day(date_time, stored),
+    do: NaiveDateTime.new!(NaiveDateTime.to_date(date_time), NaiveDateTime.to_time(stored))
 
   defp holding_error(changeset, kind) do
     field = if kind in [:purchase, :sale], do: :shares, else: :date

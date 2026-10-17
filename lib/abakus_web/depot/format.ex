@@ -69,7 +69,7 @@ defmodule AbakusWeb.Depot.Format do
   def ter(nil), do: "–"
   def ter(%Decimal{} = ter), do: ter |> Decimal.mult(100) |> Format.percent(2)
 
-  @doc "A portfolio's name or its `name`; „Ohne Namen“ for the empty one PP may store."
+  @doc "A portfolio's name or its `name`; „Ohne Namen“ for an empty one."
   def portfolio_name(%{name: name}), do: portfolio_name(name)
   def portfolio_name(name) when name in [nil, ""], do: "Ohne Namen"
   def portfolio_name(name) when is_binary(name), do: name

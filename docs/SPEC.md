@@ -35,13 +35,13 @@ The context is `Abakus.Users` (an "account" is a bank account here):
   ([ADR 0007](../DECISIONS.md))
 - Areas ([ADR 0017](../DECISIONS.md)): Finanzen (the budget under `/budget`, the Depot under `/depot`) and the
   Kasse (`/kasse`), each with its own sidebar and dock on phones; a user sees only the areas they may use (the
-  budget's pages: its owner; the Depot's: the budget owner and every user with a portfolio of their own, created or
-  imported from a PP file; the Kasse: its active participants, [ADR 0008](../DECISIONS.md)), and anyone else
-  gets 404 on their pages. Finanzen lists Budget, Vermögen, Alle Konten, Import & Sync, the open accounts, then
-  Depots with the active portfolios; without the budget only Vermögen, Import & Sync and Depots. The Kasse lists
-  Ausgaben, Salden and Aktivität. With one area the brand is its name; with more, a segmented switch tops
-  the sidebar and the title in the top bar switches the area; switching opens the area's first page. `/` opens
-  the area used last, kept in the session
+  budget's pages: its owner; the Depot's: the budget owner and every user with a portfolio of their own; the
+  Kasse: its active participants, [ADR 0008](../DECISIONS.md)), and anyone else gets 404 on their pages.
+  Finanzen lists Budget, Vermögen, Alle Konten, Import & Sync, the open accounts, then Depots with the active
+  portfolios; without the budget only Vermögen, Import & Sync and Depots. The Kasse lists Ausgaben, Salden and
+  Aktivität. With one area the brand is its name; with more, a segmented switch tops the sidebar and the title in
+  the top bar switches the area; switching opens the area's first page. `/` opens the area used last, kept in the
+  session
 - Passkeys implemented in-house with `:crypto`, `:public_key`, `JSON`; attestation `none`; discoverable
   credentials; relying party id = the configured host (`PHX_HOST`); challenges are valid 5 minutes, one open
   per session, dropped from the session on any attempt. A sign-in challenge travels in the signed session, so
@@ -269,10 +269,9 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 - **Konten**: the register of all accounts (the sidebar's Alle Konten) and of each account, reconcile;
   "Konto hinzufügen" in Alle Konten
 - **Buchung**: transaction form (FAB on phones)
-- **Import & Sync**: tabs Bankdateien (file import with preview; the budget owner's), Belege (the receipt
-  inbox and the PDF upload, its count on the tab and the sidebar entry; users with a portfolio) and Portfolio
-  Performance (a PP file into the Depot; open before the first portfolio); later bank connections with consent
-  expiry
+- **Import & Sync**: tabs Bankdateien (file import with preview; the budget owner's) and Belege (the receipt
+  inbox and the PDF upload, its count on the tab and the sidebar entry; users with a portfolio); later bank
+  connections with consent expiry
 - **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement and Aktivität
 - **Vermögen and Depots** (Finanzen): Vermögen (net worth: for the budget owner all budget and tracking accounts
   but those closed with money left in them, its curve showing the Depot's value before the budget's first

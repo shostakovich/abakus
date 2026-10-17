@@ -112,7 +112,7 @@ defmodule Abakus.Depot.DistributionsTest do
     assert per_share == price(0.4)
   end
 
-  test "has no amount per share without shares, which PP leaves at zero" do
+  test "has no amount per share without shares" do
     dividends = [
       dividend(~D[2026-09-30], 0, 4),
       dividend(~D[2026-06-30], 0, 3),

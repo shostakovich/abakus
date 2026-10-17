@@ -137,11 +137,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           <.section_heading id="new-portfolio-title">Depot anlegen</.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
             Nur du siehst deine Depots. Käufe, Verkäufe und Dividenden laufen über ein
-            Verrechnungskonto, das mit dem Depot angelegt wird. Oder <.link
-              id="new-portfolio-import"
-              href={~p"/depot/import"}
-              class="link"
-            >importiere eine Datei aus Portfolio Performance</.link>.
+            Verrechnungskonto, das mit dem Depot angelegt wird.
           </p>
           <.form
             for={@new_form}

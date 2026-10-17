@@ -48,7 +48,6 @@ defmodule AbakusWeb.ImportLiveTest do
     assert has_element?(view, "h1", "Import & Sync")
     assert has_element?(view, "#side-import-sidebar[aria-current=page]")
     assert has_element?(view, ~s|#import-tabs a[href="/budget/import"][aria-current=page]|)
-    assert has_element?(view, ~s|#import-tabs a[href="/depot/import"]|, "Portfolio Performance")
     refute has_element?(view, ~s|#import-tabs a[href="/depot/receipts"]|)
     assert_error_sent 404, fn -> get(conn, ~p"/depot/receipts") end
     assert has_element?(view, ~s|#import-form input[type=file][accept=".ofx,.qfx"]|)

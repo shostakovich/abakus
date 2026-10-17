@@ -18,9 +18,9 @@ defmodule AbakusWeb.Layouts do
   attr :current, :atom,
     default: nil,
     values:
-      [nil, :budget, :accounts, :all_accounts, :import, :import_pp] ++
+      [nil, :budget, :accounts, :all_accounts, :import] ++
         @kasse_pages ++ @depot_pages,
-    doc: "the page shown; Import & Sync's tabs are `:import`, `:import_receipts` and `:import_pp`"
+    doc: "the page shown; Import & Sync's tabs are `:import` and `:import_receipts`"
 
   attr :areas, :list, required: true, doc: "the areas the user may use, from `AbakusWeb.Areas`"
 
@@ -340,7 +340,7 @@ defmodule AbakusWeb.Layouts do
     if marked in listed, do: marked, else: :depots
   end
 
-  defp nav_key(%{current: current}) when current in [:import_receipts, :import_pp], do: :import
+  defp nav_key(%{current: :import_receipts}), do: :import
   defp nav_key(%{current: current}), do: current
 
   defp portfolio_of(%{portfolios: rows}, account_id),

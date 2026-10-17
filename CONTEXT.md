@@ -226,8 +226,8 @@ Sync for everyone with the budget or a portfolio. Code: `:finanzen`. UI "Finanze
 _Avoid_: Budget area, Depot area, finances
 
 **Import & Sync**:
-Finanzen's page for what comes in from outside, in tabs: Bankdateien (the budget owner's file import), Belege (the
-inbox, for users with a portfolio) and Portfolio Performance (the PP import). UI "Import & Sync".
+Finanzen's page for what comes in from outside, in tabs: Bankdateien (the budget owner's file import) and Belege (the
+inbox, for users with a portfolio). UI "Import & Sync".
 _Avoid_: Settings (it is a task, not a setting)
 
 **Settings hub**:
@@ -323,18 +323,18 @@ _Avoid_: Synced transaction, mirror
 Each user's portfolios: what they hold, what it is worth, what it paid and how it performed. Code lives in
 `Abakus.Depot` and `AbakusWeb.Depot`, tables start with `depot_`. Terms that the budget uses too (account,
 transaction, assignment, category) mean the Depot's here and are qualified in code (`Abakus.Depot.Portfolios.Account`,
-`Abakus.Depot.Taxonomies.Assignment`). Portfolios, Verrechnungskonten, transactions, savings plans and taxonomies
-belong to one user, who alone sees them; securities, prices, exchange rates and compositions are shared by all.
+`Abakus.Depot.Taxonomies.Assignment`). Portfolios, Verrechnungskonten, transactions and taxonomies belong to
+one user, who alone sees them; securities, prices, exchange rates and compositions are shared by all.
 
 **Depot**:
 The code area of the portfolios (`Abakus.Depot`, `/depot`), shown in Finanzen as Vermögen and Depots; a user without
-the budget gets Finanzen once they have a portfolio, created under Einstellungen › Depots or imported from a PP file. No UI area of its own.
+the budget gets Finanzen once they have a portfolio, created under Einstellungen › Depots. No UI area of its own.
 _Avoid_: Portfolio app, investments, Depot area
 
 **Security**:
-A tradable instrument (ETF, fund, share) identified by its ISIN, with its own price history from Yahoo or the PP
-import; on one day a price from the import wins over Yahoo's. Nobody enters prices by hand: prices are shared and
-feed the value change, so one user's price would move the budget. UI "Wertpapier".
+A tradable instrument (ETF, fund, share) identified by its ISIN, with its own price history from Yahoo or manual;
+on one day a manual price wins over Yahoo's. No screen enters prices: prices are shared and feed the value change,
+so one user's price would move the budget. UI "Wertpapier".
 _Avoid_: Asset, instrument, position
 
 **Portfolio**:
@@ -418,7 +418,7 @@ _Avoid_: Revaluation, market value adjustment
 The budget owner's Depot linked to the budget (ADR 0018), switched on under Einstellungen › Depots with a start date
 and the category for purchases. Every euro Depot transaction since the start date between one of their portfolios
 and a Verrechnungskonto with the budget account role is a linked transaction in that budget account, written in the
-Depot change's database transaction, PP imports included: a purchase or a cash transfer into a portfolio's cash is
+Depot change's database transaction: a purchase or a cash transfer into a portfolio's cash is
 an outflow in that category, a sale or a cash transfer back an inflow to Ready to Assign, each a transfer to the
 portfolio's account, unapproved; a dividend is an inflow to Ready to Assign with the security as payee. Flows inside
 a portfolio's own cash stay out. Code: `Abakus.Depot.BudgetLink`. UI "Mit Budget verknüpfen".
@@ -437,16 +437,6 @@ A user's receipts waiting for them to confirm, correct or discard what a languag
 **Receipt intake**:
 Where a user's receipts come from besides uploads: their own Paperless-ngx, polled every 15 minutes for documents
 with their tag (ADR 0016), kept in their Depot settings. UI "Belegeingang".
-
-**PP import**:
-Reads a Portfolio Performance file into the user's Depot, again and again: objects are matched by their PP UUID,
-those missing from the file go, what was entered in the Depot stays. Open before the first portfolio, so a file can
-start the Depot. Code: `Abakus.Depot.PPImport`. UI "Portfolio Performance", Import & Sync's tab.
-
-**Savings plan**:
-A recurring purchase, deposit, removal or interest payment with a start, an interval and an amount, as Portfolio
-Performance keeps it; the PP import brings it over and keeps it, but no screen shows it and it books nothing. UI
-"Sparplan" (the import's summary).
 
 **Taxonomy**:
 A user's named tree of classifications with target weights, such as regions or asset classes; securities and

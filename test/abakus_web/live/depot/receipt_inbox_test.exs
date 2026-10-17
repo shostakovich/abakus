@@ -80,7 +80,6 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
            )
 
     assert has_element?(lv, ~s|#import-tabs a[href="/budget/import"]|, "Bankdateien")
-    assert has_element?(lv, ~s|#import-tabs a[href="/depot/import"]|, "Portfolio Performance")
     assert has_element?(lv, "#side-import-sidebar[aria-current=page]", "1")
 
     {:ok, transactions, _html} = live(ctx.conn, ~p"/depot/transactions")

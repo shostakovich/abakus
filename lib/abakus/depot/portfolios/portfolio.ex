@@ -16,7 +16,6 @@ defmodule Abakus.Depot.Portfolios.Portfolio do
     field :note, :string
     field :retired, :boolean, default: false
     field :attributes, :map, default: %{}
-    field :pp_uuid, :string
     field :depot_number, :string
 
     timestamps()

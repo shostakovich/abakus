@@ -15,7 +15,7 @@ defmodule Abakus.Depot.Dividends do
 
   @doc """
   The dividends of `transactions`, newest first, each with its pay `date`, `security`, `shares`
-  (0 where PP booked none), `gross`, `taxes`, `fees` and `net`.
+  (0 where none were booked), `gross`, `taxes`, `fees` and `net`.
   """
   def received(transactions, %Market{} = market) do
     transactions

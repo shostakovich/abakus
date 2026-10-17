@@ -1,10 +1,8 @@
 defmodule Abakus.Depot.Securities.Security do
   @moduledoc """
-  A security, shared by all users. `quote_feed` and `symbol` say where prices come from; once a
-  user sets them, a PP import leaves them alone. `latest_*` is the latest quote, `fetched_at` and
-  `fetch_error` the last successful and the last failed fetch, `checked_at` the last attempt.
-  `source` says where it came from: one created in the Depot belongs to no PP file, so no import
-  takes it over.
+  A security, shared by all users. `quote_feed` and `symbol` say where prices come from.
+  `latest_*` is the latest quote, `fetched_at` and `fetch_error` the last successful and the last
+  failed fetch, `checked_at` the last attempt.
   """
   use Abakus.Schema
 
@@ -20,49 +18,44 @@ defmodule Abakus.Depot.Securities.Security do
     field :note, :string
     field :retired, :boolean, default: false
     field :attributes, :map, default: %{}
-    field :pp_feed, :string
-    field :pp_ticker, :string
     field :quote_feed, Ecto.Enum, values: [:yahoo, :manual], default: :manual
     field :symbol, :string
-    field :quote_feed_set_by_user, :boolean, default: false
     field :latest_date, :date
     field :latest_close, :integer
     field :latest_at, :utc_datetime_usec
     field :fetched_at, :utc_datetime_usec
     field :checked_at, :utc_datetime_usec
     field :fetch_error, :string
-    field :source, Ecto.Enum, values: [:pp_import, :manual], default: :pp_import
 
     timestamps()
   end
 
-  # The ids of PP's built-in attributes, which PP fixes.
+  # The keys of the built-in attributes.
   @ter "ter"
   @fund_size "aum"
 
-  @doc "The TER from PP's attribute as a fraction, e.g. 0.002 for 0.20 %; nil without one."
+  @doc "The TER from its attribute as a fraction, e.g. 0.002 for 0.20 %; nil without one."
   def ter(%__MODULE__{attributes: %{@ter => ter}}) when is_float(ter), do: Decimal.from_float(ter)
   def ter(%__MODULE__{attributes: %{@ter => ter}}) when is_integer(ter), do: Decimal.new(ter)
   def ter(%__MODULE__{}), do: nil
 
   @doc """
-  The fund size from PP's attribute in cents, PP's plain amount without a currency; nil without
-  one.
+  The fund size from its attribute in cents, a plain amount without a currency; nil without one.
   """
   def fund_size(%__MODULE__{attributes: %{@fund_size => size}}) when is_integer(size), do: size
   def fund_size(%__MODULE__{}), do: nil
 
   @doc """
   The attributes set on the security other than TER and fund size as `{type, value}`, in the
-  order of `types`, PP's attribute types of securities; a value without its type is left out.
+  order of `types`, the attribute types of securities; a value without its type is left out.
   """
   def attributes(%__MODULE__{attributes: attributes}, types) do
     attributes = attributes || %{}
 
-    for %{pp_id: id} = type <- types,
-        id not in [@ter, @fund_size],
-        attributes[id] not in [nil, ""],
-        do: {type, attributes[id]}
+    for %{key: key} = type <- types,
+        key not in [@ter, @fund_size],
+        attributes[key] not in [nil, ""],
+        do: {type, attributes[key]}
   end
 
   def quote_feed_changeset(security, attrs) do
@@ -72,7 +65,6 @@ defmodule Abakus.Depot.Securities.Security do
     |> then(fn cs ->
       if get_field(cs, :quote_feed) == :yahoo, do: validate_required(cs, [:symbol]), else: cs
     end)
-    |> put_change(:quote_feed_set_by_user, true)
   end
 
   @doc """
@@ -91,7 +83,5 @@ defmodule Abakus.Depot.Securities.Security do
     end)
     |> then(&put_change(&1, :quote_feed, if(get_field(&1, :symbol), do: :yahoo, else: :manual)))
     |> put_change(:currency, "EUR")
-    |> put_change(:source, :manual)
-    |> put_change(:quote_feed_set_by_user, true)
   end
 end

@@ -4,9 +4,8 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
-  import Ecto.Query, only: [from: 2]
 
-  alias Abakus.Depot.{FakeSymbolSearch, Portfolios, PPImport}
+  alias Abakus.Depot.{FakeSymbolSearch, Portfolios}
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.Securities.Security
   alias Abakus.Repo
@@ -164,19 +163,20 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     assert has_element?(lv, "#transactions-empty", "Keine Buchungen dieser Art.")
   end
 
-  test "imported transactions are read-only", ctx do
-    {:ok, _summary} = PPImport.run(ctx.scope, "test/fixtures/depot/pp/sample.portfolio")
-    imported = Repo.all(from t in Transaction, where: t.source == :pp_import)
-    assert length(imported) == 21
+  test "transactions of a type the form does not know are read-only", ctx do
+    fee =
+      transaction_fixture(ctx.scope, ~D[2026-10-01],
+        type: :fee,
+        account_id: ctx.account.id,
+        amount: 100
+      )
+
     [own] = book(ctx, %{"kind" => "deposit", "amount" => "1"})
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
 
-    for transaction <- imported do
-      assert has_element?(lv, "#transaction-#{transaction.id}")
-      refute has_element?(lv, "#transaction-#{transaction.id} button")
-    end
-
+    assert has_element?(lv, "#transaction-#{fee.id}")
+    refute has_element?(lv, "#transaction-#{fee.id} button")
     assert has_element?(lv, "#transaction-#{own.id} button")
   end
 
@@ -374,7 +374,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     lv |> form("#transaction-form") |> put_submitter("#new-security-create") |> render_submit()
 
     security = Repo.get_by!(Security, isin: "IE00BKM4GZ66")
-    assert %{name: "iShares EM IMI", symbol: "IS3N.DE", source: :manual} = security
+    assert %{name: "iShares EM IMI", symbol: "IS3N.DE"} = security
     refute has_element?(lv, "#new-security-panel")
     assert has_element?(lv, "#transaction_security_id option[selected]", "iShares EM IMI")
   end
@@ -392,7 +392,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
 
     assert render(lv) =~ "Buchung gespeichert."
     assert [%{type: :deposit, amount: 500}] = Portfolios.list_transactions(ctx.scope)
-    refute Repo.get_by(Security, source: :manual)
+    assert Repo.aggregate(Security, :count) == 1
   end
 
   test "says when Yahoo does not know the ISIN", ctx do

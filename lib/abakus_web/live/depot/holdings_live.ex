@@ -267,11 +267,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
         Ohne Kategorie: {unassigned(@allocation.unassigned)}. Die Anteile beziehen sich wie die
         Ziele auf den zugeordneten Wert.
       </span>
-      {join_meta([
-        "Balken: Ist",
-        "Strich: dein Ziel",
-        "Zuordnungen und Ziele aus Portfolio Performance"
-      ])}
+      {join_meta(["Balken: Ist", "Strich: dein Ziel"])}
     </p>
     """
   end
@@ -309,7 +305,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
       <p class="mt-2 max-w-prose text-sm text-base-content/70">
         Laufende Kosten, die im Kurs stecken. Ordergebühren kommen aus den Buchungen.
         <span :if={Enum.any?(@costs.funds, &is_nil(&1.ter))}>
-          Wertpapiere ohne TER in Portfolio Performance zählen nicht mit.
+          Wertpapiere ohne TER zählen nicht mit.
         </span>
       </p>
     </section>

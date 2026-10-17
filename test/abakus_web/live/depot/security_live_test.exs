@@ -29,8 +29,8 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
         latest_close: price(102)
       )
 
-    price_fixture(security, Date.shift(today(), year: -2), price(90), :pp)
-    price_fixture(security, Date.add(today(), -1), price(100), :pp)
+    price_fixture(security, Date.shift(today(), year: -2), price(90), :manual)
+    price_fixture(security, Date.add(today(), -1), price(100), :manual)
     security
   end
 
@@ -318,7 +318,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
       attribute_type_fixture("logo", "Logo", "ImageConverter", "Account")
       attribute_type_fixture("ter", "Total Expense Ratio (TER)", "PercentConverter")
       attribute_type_fixture("aum", "Assets under Management", "AmountPlainConverter")
-      # PP's English default name for its built-in vendor attribute reads in German.
+      # The built-in vendor attribute's English name reads in German.
       attribute_type_fixture("vendor", "Vendor", "StringConverter")
       attribute_type_fixture("index", "Index", "StringConverter")
       attribute_type_fixture("launch", "Auflage", "DateConverter")
@@ -383,7 +383,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
 
       {:ok, lv, _html} = live(conn, ~p"/depot/securities/#{security}")
 
-      assert has_element?(lv, "#profile", "Keine Angaben aus Portfolio Performance")
+      assert has_element?(lv, "#profile", "Keine Angaben")
       refute has_element?(lv, "#profile dl")
     end
   end
@@ -474,7 +474,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/securities/#{security}")
 
       assert lines(lv, "#sources dl > div", "dt, p") == [
-               "Kurse Portfolio Performance nur aus dem PP-Import",
+               "Kurse Ohne Kursabruf",
                "Wechselkurs USD EZB\u2060\u00A0· 1,1652 Stand 08.10.2026",
                "Länder und Sektoren DivvyDiary ohne API-Key"
              ]
@@ -502,7 +502,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
 
   test "says so when there is no price in the period", %{conn: conn} do
     security = security_fixture(quote_feed: :manual)
-    price_fixture(security, Date.shift(today(), year: -3), price(50), :pp)
+    price_fixture(security, Date.shift(today(), year: -3), price(50), :manual)
 
     {:ok, lv, _html} = live(conn, ~p"/depot/securities/#{security}")
 

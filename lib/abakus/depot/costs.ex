@@ -1,6 +1,6 @@
 defmodule Abakus.Depot.Costs do
   @moduledoc """
-  What the held funds cost a year: their TER from PP's attribute times their value, and the TER
+  What the held funds cost a year: their TER from their attribute times their value, and the TER
   weighted by value. A security without a TER is listed but left out of both. Pure; amounts in
   euro cents, TERs as fractions (0.002 for 0.20 %).
   """

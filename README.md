@@ -13,9 +13,8 @@ settings, and the Kasse: the household's shared expenses with their balances, ac
 categories, exchange rates, CSV/JSON export, its MCP server for AI assistants and the link that books the budget
 owner's shares in the budget; and the Depot, part of the area Finanzen with the budget: each user's Vermögen and
 portfolios with holdings, dividends, transactions, performance and securities, whose prices come from Yahoo every
-evening, a receipt inbox that reads bank PDFs, uploaded or taken from Paperless-ngx, the Portfolio Performance
-import, each of the budget owner's portfolios as a tracking account with its daily value change, and its cash flows
-linked to the budget. Bank sync and the budget's MCP tools follow in v2.
+evening, a receipt inbox that reads bank PDFs, uploaded or taken from Paperless-ngx, each of the budget owner's
+portfolios as a tracking account with its daily value change, and its cash flows linked to the budget. Bank sync and the budget's MCP tools follow in v2.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, phases
 - [docs/MCP.md](docs/MCP.md): the MCP server, its access rules and tools
