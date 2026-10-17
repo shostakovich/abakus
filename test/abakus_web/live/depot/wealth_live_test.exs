@@ -475,6 +475,41 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       refute has_element?(lv, "#benchmark-toggle")
       assert has_element?(lv, "#history-legend", "Vermögen")
       refute has_element?(lv, "#history-legend", "Investiert")
+      refute has_element?(lv, "#history", "nur Depots")
+    end
+
+    test "draws the Depot's value before the budget's first day and says so", %{conn: conn} do
+      owner = Repo.get_by!(User, budget_owner: true)
+      scope = Scope.for_user(owner)
+      depot_first = Date.shift(today(), month: -4)
+      budget_first = Date.shift(today(), month: -2)
+
+      transaction_fixture(scope, depot_first,
+        type: :deposit,
+        account_id: account_fixture(scope).id,
+        amount: money(1_000)
+      )
+
+      {:ok, lv, _html} = live(conn, ~p"/depot?period=max")
+
+      assert_push_event(lv, "net-worth-chart", chart)
+      assert hd(chart.dates) == depot_first
+      assert hd(chart.net_worth) == money(1_000)
+      assert List.last(chart.net_worth) == 340_000
+
+      day_before = Abakus.Format.date(Date.add(budget_first, -1))
+      first = Abakus.Format.date(budget_first)
+
+      assert has_element?(
+               lv,
+               "#history p",
+               "Bis #{day_before} nur Depots, ab #{first} alle Konten."
+             )
+
+      assert has_element?(
+               lv,
+               ~s|#history [role="img"][aria-label="Vermögen seit der ersten Buchung, bis #{day_before} der Depots, ab #{first} aller offenen Konten"]|
+             )
     end
   end
 end

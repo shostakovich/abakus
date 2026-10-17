@@ -142,5 +142,5 @@ one container behind a reverse proxy.
 
 Public domain ([The Unlicense](LICENSE)). Bank sync follows Actual Budget's Enable Banking integration (MIT). The
 Lucide icons in `assets/vendor/lucide` are under the ISC License (some derive from Feather, MIT), both in its
-`LICENSE`; the plush images in `priv/static/images/plush` were made for Zipfelkasse and Abakus. Chart.js in
-`assets/vendor` is under the MIT License.
+`LICENSE`; the plush images and app icons in `priv/static/images` were made for Zipfelkasse and Abakus. Chart.js
+in `assets/vendor` is under the MIT License.

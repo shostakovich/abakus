@@ -253,31 +253,43 @@ defmodule AbakusWeb.LayoutsTest do
 
     assert Enum.map(icons, &Map.take(&1, ["src", "sizes", "type", "purpose"])) == [
              %{
-               "src" => "/images/icon.svg",
-               "sizes" => "any",
-               "type" => "image/svg+xml",
-               "purpose" => "any"
-             },
-             %{
-               "src" => "/images/icon-192.png",
+               "src" => "/images/icon-192.webp",
                "sizes" => "192x192",
-               "type" => "image/png",
+               "type" => "image/webp",
                "purpose" => "any"
              },
              %{
-               "src" => "/images/icon-512.png",
+               "src" => "/images/icon-512.webp",
                "sizes" => "512x512",
-               "type" => "image/png",
+               "type" => "image/webp",
                "purpose" => "any"
+             },
+             %{
+               "src" => "/images/icon-maskable-512.webp",
+               "sizes" => "512x512",
+               "type" => "image/webp",
+               "purpose" => "maskable"
              }
            ]
 
-    for %{"src" => src, "sizes" => sizes, "type" => "image/png"} <- icons do
+    for %{"src" => src, "type" => "image/webp"} <- icons do
+      conn = get(build_conn(), src)
+      assert get_resp_header(conn, "content-type") == ["image/webp"]
+      assert <<"RIFF", _::binary-size(4), "WEBP", _::binary>> = response(conn, 200)
+    end
+  end
+
+  test "the favicons and the touch icon are PNGs of their size" do
+    for {src, size} <- [
+          {"/images/icon-32-light.png", 32},
+          {"/images/icon-32-dark.png", 32},
+          {"/images/apple-touch-icon.png", 180}
+        ] do
       conn = get(build_conn(), src)
       assert get_resp_header(conn, "content-type") == ["image/png"]
 
       <<137, "PNG", _::binary-size(12), width::32, height::32, _::binary>> = response(conn, 200)
-      assert "#{width}x#{height}" == sizes
+      assert {width, height} == {size, size}
     end
   end
 end
