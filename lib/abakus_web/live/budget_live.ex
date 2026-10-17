@@ -113,6 +113,7 @@ defmodule AbakusWeb.BudgetLive do
                 invalid={@invalid}
                 assignable={false}
                 compact={@fit.compact}
+                budgeting={@budgeting}
               />
             </tbody>
             <Components.group
@@ -133,6 +134,7 @@ defmodule AbakusWeb.BudgetLive do
                 focus={@window.focus}
                 invalid={@invalid}
                 compact={@fit.compact}
+                budgeting={@budgeting}
               />
             </Components.group>
             <tbody :if={@rows.groups == [] and is_nil(@rows.uncategorised)}>
@@ -901,13 +903,14 @@ defmodule AbakusWeb.BudgetLive do
     shown = Enum.map(window.months, &by_month[&1])
 
     inspector =
-      Inspector.new(socket.assigns.groups, months, window.focus, socket.assigns.selected)
+      Inspector.new(socket.assigns.groups, months, window.focus, current, socket.assigns.selected)
 
     socket
     |> assign(
       window: window,
       months: shown,
       inspector: inspector,
+      budgeting: for(m <- shown, Status.budgeting?(m, current), into: MapSet.new(), do: m.month),
       rows: Rows.new(socket.assigns.groups, shown)
     )
     |> keep_open(socket.assigns[:window])

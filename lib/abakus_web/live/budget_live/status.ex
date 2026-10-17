@@ -12,14 +12,14 @@ defmodule AbakusWeb.BudgetLive.Status do
   alias Abakus.Money
 
   @doc """
-  The available cell, the same in every month: `%{tone, icon, label}`. The tone colours the number (red when
-  overspent, amber while the target is underfunded, muted at zero), the icon marks the target as underfunded, funded
-  or snoozed, and `label` names the state for screen readers.
+  The available cell: `%{tone, icon, label}`. The tone colours the number (red when overspent, amber while the
+  target is underfunded, muted at zero), the icon marks the target as underfunded, funded or snoozed, and `label`
+  names the state for screen readers. An underfunded target shows only in a month being budgeted (`budgeting?/2`).
   """
-  def available(%CategoryMonth{available: available}) when available < 0,
+  def available(%CategoryMonth{available: available}, _budgeting) when available < 0,
     do: %{tone: :error, icon: nil, label: "überzogen"}
 
-  def available(%CategoryMonth{} = row) do
+  def available(%CategoryMonth{} = row, budgeting) do
     tone = if row.available == 0, do: :muted
 
     cond do
@@ -27,7 +27,7 @@ defmodule AbakusWeb.BudgetLive.Status do
         %{tone: tone, icon: "pause", label: "Ziel pausiert"}
 
       underfunded?(row) ->
-        %{tone: :warning, icon: "clock", label: "unterfinanziert"}
+        underfunded(budgeting, tone)
 
       row.target != nil and row.available > 0 ->
         %{tone: nil, icon: "circle-check", label: "Ziel erreicht"}
@@ -36,6 +36,13 @@ defmodule AbakusWeb.BudgetLive.Status do
         %{tone: tone, icon: nil, label: nil}
     end
   end
+
+  defp underfunded(true, _tone), do: %{tone: :warning, icon: "clock", label: "unterfinanziert"}
+  defp underfunded(false, tone), do: %{tone: tone, icon: nil, label: nil}
+
+  @doc "Whether the month is being budgeted: the current month, and any other with money assigned."
+  def budgeting?(%Month{month: month, assigned: assigned}, current),
+    do: month == current or assigned != 0
 
   @doc "What the row's target still asks this month; nothing while it is snoozed."
   def open_need(%CategoryMonth{snoozed: true}), do: 0

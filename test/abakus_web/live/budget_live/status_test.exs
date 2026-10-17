@@ -11,34 +11,52 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
 
   defp row(attrs), do: struct!(CategoryMonth, Enum.into(attrs, %{month: @oct}))
 
-  describe "available/1" do
+  describe "available/2" do
     test "red when overspent, amber with a clock while underfunded, a check for a funded target" do
-      assert Status.available(row(available: -100, underfunded: 50, target: @monthly)) ==
+      assert Status.available(row(available: -100, underfunded: 50, target: @monthly), true) ==
                %{tone: :error, icon: nil, label: "überzogen"}
 
-      assert Status.available(row(available: 100, underfunded: 50, target: @monthly)) ==
+      assert Status.available(row(available: 100, underfunded: 50, target: @monthly), true) ==
                %{tone: :warning, icon: "clock", label: "unterfinanziert"}
 
-      assert Status.available(row(available: 100, target: @monthly)) ==
+      assert Status.available(row(available: 100, target: @monthly), true) ==
                %{tone: nil, icon: "circle-check", label: "Ziel erreicht"}
     end
 
     test "a snoozed target pauses, neither underfunded nor funded" do
       assert Status.available(
-               row(available: 100, underfunded: 50, snoozed: true, target: @monthly)
+               row(available: 100, underfunded: 50, snoozed: true, target: @monthly),
+               true
              ) ==
                %{tone: nil, icon: "pause", label: "Ziel pausiert"}
 
-      assert Status.available(row(snoozed: true, target: @monthly)).tone == :muted
+      assert Status.available(row(snoozed: true, target: @monthly), true).tone == :muted
     end
 
-    test "plain without a target, muted at zero, the same in a later month" do
-      assert Status.available(row(available: 100)) == %{tone: nil, icon: nil, label: nil}
-      assert Status.available(row(available: 0)) == %{tone: :muted, icon: nil, label: nil}
-
-      assert Status.available(row(month: @nov, underfunded: 50, target: @monthly)) ==
-               %{tone: :warning, icon: "clock", label: "unterfinanziert"}
+    test "plain without a target, muted at zero" do
+      assert Status.available(row(available: 100), true) == %{tone: nil, icon: nil, label: nil}
+      assert Status.available(row(available: 0), true) == %{tone: :muted, icon: nil, label: nil}
     end
+
+    test "an underfunded target stays plain in a month not being budgeted; the other states show" do
+      assert Status.available(row(available: 100, underfunded: 50, target: @monthly), false) ==
+               %{tone: nil, icon: nil, label: nil}
+
+      assert Status.available(row(available: -100, underfunded: 50, target: @monthly), false).tone ==
+               :error
+
+      assert Status.available(row(available: 100, target: @monthly), false).icon == "circle-check"
+
+      assert Status.available(row(underfunded: 50, snoozed: true, target: @monthly), false).icon ==
+               "pause"
+    end
+  end
+
+  test "budgeting?/2: the current month, and any other with money assigned" do
+    assert Status.budgeting?(%Month{month: @oct}, @oct)
+    refute Status.budgeting?(%Month{month: @nov}, @oct)
+    assert Status.budgeting?(%Month{month: @nov, assigned: 1}, @oct)
+    assert Status.budgeting?(%Month{month: ~D[2026-09-01], assigned: -5}, @oct)
   end
 
   describe "target_head/1" do

@@ -121,7 +121,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
     ~H"""
     <div class="flex items-center justify-between gap-2">
       <p class="text-sm text-base-content/70">{month_year(@entry.cell.month)}</p>
-      <Components.available cell={@entry.cell} />
+      <Components.available cell={@entry.cell} budgeting={@inspector.budgeting} />
     </div>
     <.segmented
       :if={@entry.cell.available < 0}

@@ -379,6 +379,7 @@ defmodule AbakusWeb.BudgetLive.Components do
     doc: "false for the uncategorised row, which takes no assignments and links to all accounts"
 
   attr :compact, :boolean, default: false, doc: "on phones, without the pencil"
+  attr :budgeting, :any, required: true, doc: "the months being budgeted (`Status.budgeting?/2`)"
 
   @doc """
   A category on one line: name, then per month an assign input, activity and available, which opens the popover
@@ -460,7 +461,11 @@ defmodule AbakusWeb.BudgetLive.Components do
           {blank_zero(cell.activity)}
         </td>
         <td id={"available-#{@id}-#{key}"} class="app-num">
-          <.available cell={cell} id={@assignable && "available-button-#{@id}-#{key}"} />
+          <.available
+            cell={cell}
+            budgeting={month in @budgeting}
+            id={@assignable && "available-button-#{@id}-#{key}"}
+          />
         </td>
       <% end %>
     </tr>
@@ -478,11 +483,12 @@ defmodule AbakusWeb.BudgetLive.Components do
   defp blank_zero(amount), do: Money.amount(amount)
 
   attr :cell, :any, required: true
+  attr :budgeting, :boolean, required: true, doc: "whether its month is being budgeted"
   attr :id, :any, default: nil, doc: "set for a cell that opens the popover"
 
-  @doc "A cell's available amount, coloured and marked by its status (`Status.available/1`)."
+  @doc "A cell's available amount, coloured and marked by its status (`Status.available/2`)."
   def available(assigns) do
-    assigns = assign(assigns, :status, Status.available(assigns.cell))
+    assigns = assign(assigns, :status, Status.available(assigns.cell, assigns.budgeting))
 
     ~H"""
     <button

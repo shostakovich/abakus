@@ -4,7 +4,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   name, target and deleting, on phones a sheet with the same parts after what is available (with the assignment)
   and auto-assign.
 
-  `new/4` gathers what they show: every category, as the table shows them.
+  `new/5` gathers what they show: every category, as the table shows them.
   """
   use AbakusWeb, :html
 
@@ -14,14 +14,14 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   alias Abakus.Money
   alias AbakusWeb.BudgetLive.{CategoryEditor, Components, Status, TargetForm, Window}
 
-  defstruct [:month, :free, categories: [], selected: nil]
+  defstruct [:month, :free, budgeting: false, categories: [], selected: nil]
 
   @doc """
   The focus month among `months` (`Abakus.Budget.Month`s), with the selected category's id or nil. `categories`
   are the categories in budget order with their group and cell; `free` is what can be assigned without taking
-  what later months have.
+  what later months have; `budgeting` whether the month is being budgeted (`Status.budgeting?/2`).
   """
-  def new(groups, months, focus, selected_id) do
+  def new(groups, months, focus, current, selected_id) do
     by_month = Map.new(months, &{&1.month, &1})
     %Month{} = month = by_month[focus]
     cells = Map.new(month.categories, &{&1.category_id, &1})
@@ -34,6 +34,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     %__MODULE__{
       month: month,
       free: Month.free(month),
+      budgeting: Status.budgeting?(month, current),
       categories: categories,
       selected: selected(categories, selected_id, by_month[Date.shift(focus, month: -1)])
     }
@@ -95,6 +96,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
       </div>
       <.available_section
         cell={@entry.cell}
+        budgeting={@inspector.budgeting}
         previous={@entry.previous}
         category={@entry.category}
         assign={@assign}
@@ -177,6 +179,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     do: JS.push("auto", value: %{month: key, category: to_string(category), kind: kind})
 
   attr :cell, CategoryMonth, required: true
+  attr :budgeting, :boolean, required: true
   attr :previous, :any, required: true
   attr :category, :any, required: true
   attr :assign, :map, required: true
@@ -186,7 +189,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     <section id="inspector-available">
       <.section_heading level={3}>
         Verfügbar
-        <:actions><Components.available cell={@cell} /></:actions>
+        <:actions><Components.available cell={@cell} budgeting={@budgeting} /></:actions>
       </.section_heading>
       <.description_list>
         <:item label="Übrig aus Vormonat"><.amount value={@cell.carried} /></:item>

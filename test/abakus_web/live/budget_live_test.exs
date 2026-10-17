@@ -466,6 +466,36 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, "#popover #move-form")
     end
 
+    test "an underfunded target shows only in the current month and months with assignments", c do
+      Categories.set_target(budget_scope(), c.rent, %{
+        from_month: @october,
+        cadence: :monthly,
+        amount: 50_000
+      })
+
+      {:ok, view, _html} = open(c.conn, ~p"/budget", months: 3)
+
+      cell = &"#available-button-#{c.rent.id}-#{&1}"
+
+      assert has_element?(
+               view,
+               cell.("2026-10") <> ~s|.text-warning-ink[aria-label*="unterfinanziert"]|
+             )
+
+      refute has_element?(view, cell.("2026-12") <> ~s|[aria-label*="unterfinanziert"]|)
+      refute has_element?(view, cell.("2026-12") <> " .lucide")
+      refute has_element?(view, cell.("2026-12") <> ".text-warning-ink")
+
+      view |> element("#assign-#{c.groceries.id}-2026-12") |> render_blur(%{"value" => "10"})
+
+      assert has_element?(
+               view,
+               cell.("2026-12") <> ~s|.text-warning-ink[aria-label*="unterfinanziert"]|
+             )
+
+      assert has_element?(view, cell.("2026-12") <> " .lucide")
+    end
+
     test "a target shows its state in Verfügbar, not on the row", c do
       Categories.set_target(budget_scope(), c.groceries, %{
         from_month: @october,
