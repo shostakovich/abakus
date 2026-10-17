@@ -140,7 +140,6 @@ defmodule AbakusWeb.BudgetLive do
                 compact={@fit.compact}
               />
             </Components.group>
-            <Components.income :if={@rows.income != []} rows={@rows.income} months={@months} />
             <tbody :if={@rows.groups == [] and is_nil(@rows.uncategorised)}>
               <tr>
                 <td colspan={1 + 3 * length(@months)} class="app-empty">
@@ -229,7 +228,6 @@ defmodule AbakusWeb.BudgetLive do
        page_title: "Budget",
        current: Date.beginning_of_month(LocalTime.today()),
        fit: fit(connect["fit"]),
-       income: Categories.income_by_payee(socket.assigns.current_scope),
        focus: nil,
        invalid: nil,
        selected: nil,
@@ -878,7 +876,7 @@ defmodule AbakusWeb.BudgetLive do
       months: shown,
       future: Map.new(shown, &{&1.month, MonthDetails.future(months, &1)}),
       inspector: inspector,
-      rows: Rows.new(socket.assigns.groups, shown, income: socket.assigns.income)
+      rows: Rows.new(socket.assigns.groups, shown)
     )
     |> keep_open(socket.assigns[:window])
   end

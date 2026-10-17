@@ -300,15 +300,14 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, "#group-#{gone.id}", "Weg")
     end
 
-    test "the income group lists the income per payee", c do
+    test "income goes into Zu verteilen and has no group of its own", c do
       income(c, 324_000, ~D[2026-10-01], "Arbeitgeber")
-      income(c, 1_180, ~D[2026-10-03], "Bank")
 
       {:ok, view, _html} = open(c.conn)
 
-      assert has_element?(view, "#group-income-2026-10-activity", "3.251,80")
-      assert has_element?(view, "#group-income-rows tr", "Arbeitgeber")
-      assert has_element?(view, "#group-income-rows tr", "Bank")
+      assert has_element?(view, "#ready-2026-10", "3.240,00 €")
+      refute has_element?(view, "#group-income")
+      refute render(view) =~ "Arbeitgeber"
     end
 
     test "transactions without a category get a row of their own", c do

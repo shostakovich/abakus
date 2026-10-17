@@ -552,34 +552,6 @@ defmodule Abakus.Ledger do
     sum_by_key(Repo.all(transactions) ++ Repo.all(subtransactions))
   end
 
-  @doc """
-  What the budget accounts' register adds up to in one category per `{payee_name, month}` (`nil` without a payee):
-  a split by its subtransactions, each under its own payee or else the split's.
-  """
-  def category_activity_by_payee(%Scope{} = scope, category_id) do
-    transactions =
-      from t in in_register(scope),
-        join: a in assoc(t, :account),
-        left_join: p in assoc(t, :payee),
-        where: a.kind in ^Account.budget_kinds() and t.category_id == ^category_id,
-        group_by: [p.name, month(t.date)],
-        select: {{p.name, month(t.date)}, sum(t.amount)}
-
-    subtransactions =
-      from s in Subtransaction,
-        join: t in subquery(in_register(scope)),
-        on: t.id == s.transaction_id,
-        join: a in Account,
-        on: a.id == t.account_id,
-        left_join: p in Payee,
-        on: p.id == coalesce(s.payee_id, t.payee_id),
-        where: a.kind in ^Account.budget_kinds() and s.category_id == ^category_id,
-        group_by: [p.name, month(t.date)],
-        select: {{p.name, month(t.date)}, sum(s.amount)}
-
-    sum_by_key(Repo.all(transactions) ++ Repo.all(subtransactions))
-  end
-
   @doc "Whether a reconciled transaction, not deleted, has the category, itself or in a split line."
   def reconciled_in_category?(%Scope{} = scope, category_id) do
     Repo.exists?(

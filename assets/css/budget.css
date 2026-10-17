@@ -81,8 +81,6 @@ a.app-catbtn:hover { text-decoration: underline; text-underline-offset: 3px; }
 :is(.app-row:hover, .app-row:focus-within) .app-rowact { visibility: visible; }
 @media (hover: none) { .app-rowact { visibility: visible; } }
 
-.app-inc > .app-cat { color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
-
 .app-budget .app-grp > * { height: var(--app-row-h); font-weight: 600; box-shadow: inset 0 1px 0 var(--app-group-line), inset 0 -1px 0 var(--app-line); }
 .app-budget .app-grp > .app-ms { box-shadow: inset 1px 0 0 var(--app-line), inset 0 1px 0 var(--app-group-line), inset 0 -1px 0 var(--app-line); }
 .app-budget tbody:has(+ tbody > .app-grp) > tr:last-child > * { box-shadow: none; }
@@ -180,12 +178,10 @@ button.app-pill:focus-visible { outline: 2px solid var(--color-primary); outline
 .app-mbar-nav { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .app-mbar .app-mcard { min-height: 4rem; cursor: default; }
 
-.app-alt { display: none; }
 @media (width < 40rem) {
   .app-budget.is-compact :is(.app-col-assigned, .app-col-activity) { width: 0; visibility: collapse; }
   .app-budget.is-compact .app-col-available { width: var(--month-w); }
   .app-budget.is-compact .app-pill .lucide { display: none; }
-  .app-budget.is-compact .app-alt { display: inline; }
 }
 .app-budget .app-empty { height: auto; padding: 2rem 1rem; white-space: normal; text-align: center; }
 

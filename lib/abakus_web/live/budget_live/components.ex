@@ -368,9 +368,6 @@ defmodule AbakusWeb.BudgetLive.Components do
             ]}
           >
             {totals[field] && Money.amount(totals[field])}
-            <span :if={field == :available and only_activity?(totals)} class="app-alt">
-              {Money.amount(totals.activity)}
-            </span>
           </td>
         <% end %>
       </tr>
@@ -381,10 +378,6 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   defp group_columns(months, totals),
     do: for(month <- months, do: {Window.param(month), Map.get(totals, month, %{})})
-
-  # Income has activity alone; phones, which hide that column, show it under Verfügbar.
-  defp only_activity?(totals),
-    do: Map.has_key?(totals, :activity) and not Map.has_key?(totals, :available)
 
   defp total_class(_field, nil), do: nil
   defp total_class(_field, 0), do: "app-zero"
@@ -579,37 +572,4 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   defp quiet_class(:muted), do: "app-zero"
   defp quiet_class(tone), do: tone_class(tone)
-
-  attr :rows, :list, required: true, doc: "income per payee: `%{payee, amounts}`"
-  attr :months, :list, required: true, doc: "the shown `Abakus.Budget.Month`s"
-
-  @doc "The income group: income per payee in the activity column."
-  def income(assigns) do
-    assigns =
-      assigns
-      |> assign(:totals, Map.new(assigns.months, &{&1.month, %{activity: &1.income}}))
-      |> assign(:months, Enum.map(assigns.months, & &1.month))
-
-    ~H"""
-    <.group id="group-income" name="💰 Einnahmen" months={@months} totals={@totals}>
-      <tr :for={row <- @rows} class="app-row app-inc">
-        <td class="app-cat">
-          <div class="app-catcell">
-            <span class="app-emoji" aria-hidden="true"></span>
-            <span class="app-catbtn">{row.payee || "Ohne Empfänger"}</span>
-          </div>
-        </td>
-        <%= for value <- Enum.map(@months, &Map.get(row.amounts, &1, 0)) do %>
-          <td class="app-ms"></td>
-          <td class={["app-num", if(value == 0, do: "app-zero", else: "app-quiet")]}>
-            {Money.amount(value)}
-          </td>
-          <td class="app-num app-quiet">
-            <span class="app-alt">{Money.amount(value)}</span>
-          </td>
-        <% end %>
-      </tr>
-    </.group>
-    """
-  end
 end
