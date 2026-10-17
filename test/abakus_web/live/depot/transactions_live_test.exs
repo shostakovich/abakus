@@ -163,21 +163,34 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     assert has_element?(lv, "#transactions-empty", "Keine Buchungen dieser Art.")
   end
 
-  test "transactions of a type the form does not know are read-only", ctx do
-    fee =
+  test "a transaction of a type the form does not know shows read-only and deletes", ctx do
+    other = portfolio_fixture(ctx.scope, name: "Anderes Depot")
+
+    transfer =
       transaction_fixture(ctx.scope, ~D[2026-10-01],
-        type: :fee,
-        account_id: ctx.account.id,
-        amount: 100
+        type: :security_transfer,
+        portfolio_id: ctx.portfolio.id,
+        other_portfolio_id: other.id,
+        security_id: ctx.security.id,
+        shares: shares(3)
       )
 
-    [own] = book(ctx, %{"kind" => "deposit", "amount" => "1"})
-
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
+    lv |> element("#transaction-#{transfer.id} button") |> render_click()
 
-    assert has_element?(lv, "#transaction-#{fee.id}")
-    refute has_element?(lv, "#transaction-#{fee.id} button")
-    assert has_element?(lv, "#transaction-#{own.id} button")
+    assert has_element?(lv, "#transaction-modal h2", "Buchung")
+    refute has_element?(lv, "#transaction-form")
+    refute has_element?(lv, "#transaction-book")
+    assert has_element?(lv, "#transaction-facts", "Depotwechsel")
+    assert has_element?(lv, "#transaction-facts", "Anderes Depot")
+    assert has_element?(lv, "#transaction-facts div", ~r/Stück\s+3$/)
+    assert has_element?(lv, "#transaction-read-only", "Diese Buchungsart lässt sich nur löschen.")
+
+    confirm_click(lv, "#transaction-delete", "Diese Buchung löschen?")
+
+    assert render(lv) =~ "Buchung gelöscht."
+    refute has_element?(lv, "#transaction-#{transfer.id}")
+    assert Portfolios.list_transactions(ctx.scope) == []
   end
 
   test "edits a booked transaction, which updates the overview", ctx do

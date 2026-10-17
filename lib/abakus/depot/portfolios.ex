@@ -934,15 +934,25 @@ defmodule Abakus.Depot.Portfolios do
     |> Enum.min()
   end
 
-  # Without a purchase or inbound delivery, or with `replacement` instead, no later sale may exceed
-  # the holding.
-  defp keeps_holding?(scope, %Transaction{type: type} = t, replacement)
-       when type in [:buy, :inbound_delivery] do
+  # Without `t`, or with `replacement` instead, no portfolio `t` brings shares to may later hold
+  # fewer than none.
+  defp keeps_holding?(scope, %Transaction{} = t, replacement) do
     date = NaiveDateTime.to_date(t.date_time)
-    held_shares(scope, t.portfolio_id, t.security_id, date, t, List.wrap(replacement)) >= 0
+
+    Enum.all?(
+      receiving_portfolio_ids(t),
+      &(held_shares(scope, &1, t.security_id, date, t, List.wrap(replacement)) >= 0)
+    )
   end
 
-  defp keeps_holding?(_scope, _transaction, _replacement), do: true
+  defp receiving_portfolio_ids(%Transaction{type: type} = t)
+       when type in [:buy, :inbound_delivery],
+       do: [t.portfolio_id]
+
+  defp receiving_portfolio_ids(%Transaction{type: :security_transfer} = t),
+    do: [t.other_portfolio_id]
+
+  defp receiving_portfolio_ids(_transaction), do: []
 
   @doc """
   Books the transaction form with `attrs` and returns the booked transactions: one, or a dividend
@@ -1079,11 +1089,12 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   @doc """
-  Deletes a transaction the user booked, and its receipt and the receipt's file once nothing uses
-  them; refused with `{:error, :holding}` when a later sale would exceed the holding without it.
+  Deletes a transaction of the user, of any type, and its receipt and the receipt's file once
+  nothing uses them; refused with `{:error, :holding}` when a portfolio would later hold fewer
+  shares than none without it.
   """
   def delete_transaction(%Scope{} = scope, %Transaction{} = transaction) do
-    with :ok <- check_editable(scope, transaction),
+    with :ok <- check_own(scope, transaction),
          true <- keeps_holding?(scope, transaction, nil) || {:error, :holding},
          {:ok, unused} <- Repo.transact(fn -> remove_transaction(scope, transaction) end) do
       remove_receipt_file(unused)
@@ -1097,11 +1108,14 @@ defmodule Abakus.Depot.Portfolios do
     with :ok <- BudgetLink.sync(scope), do: {:ok, unused}
   end
 
-  defp check_editable(%Scope{user: %{id: user_id}}, %Transaction{user_id: user_id} = transaction) do
-    if Transaction.editable?(transaction), do: :ok, else: {:error, :read_only}
+  defp check_editable(scope, transaction) do
+    with :ok <- check_own(scope, transaction) do
+      if Transaction.editable?(transaction), do: :ok, else: {:error, :read_only}
+    end
   end
 
-  defp check_editable(_scope, _transaction), do: {:error, :read_only}
+  defp check_own(%Scope{user: %{id: user_id}}, %Transaction{user_id: user_id}), do: :ok
+  defp check_own(_scope, _transaction), do: {:error, :read_only}
 
   # Drops the receipt with `id` if no transaction uses it any more; returns the hash of its file if
   # no user's receipt needs the file either.

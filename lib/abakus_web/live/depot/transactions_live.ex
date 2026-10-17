@@ -1,8 +1,9 @@
 defmodule AbakusWeb.Depot.TransactionsLive do
   @moduledoc """
   „Buchungen“: every transaction of the user or of one portfolio, grouped by month and newest
-  first, filtered by all, purchases and sales, earnings or account. A transaction of a type the form knows opens the
-  dialog „Buchung bearbeiten“. A receipt opens as PDF.
+  first, filtered by all, purchases and sales, earnings or account. Every transaction opens the
+  dialog: „Buchung bearbeiten“ for a type the form knows, otherwise read-only, to delete it. A
+  receipt opens as PDF.
   """
   use AbakusWeb, :depot_live_view
 
@@ -18,24 +19,6 @@ defmodule AbakusWeb.Depot.TransactionsLive do
     {"earnings", :earnings, "Erträge"},
     {"account", :account, "Konto"}
   ]
-
-  @labels %{
-    buy: "Kauf",
-    sell: "Verkauf",
-    inbound_delivery: "Einlieferung",
-    outbound_delivery: "Auslieferung",
-    security_transfer: "Depotwechsel",
-    cash_transfer: "Umbuchung",
-    deposit: "Einlage",
-    removal: "Entnahme",
-    dividend: "Dividende",
-    interest: "Zinsen",
-    interest_charge: "Zinsbelastung",
-    tax: "Steuern",
-    tax_refund: "Steuerrückerstattung",
-    fee: "Gebühren",
-    fee_refund: "Gebührenerstattung"
-  }
 
   @inflows [:sell, :dividend, :interest, :deposit, :tax_refund, :fee_refund]
   @outflows [:buy, :removal, :interest_charge, :tax, :fee]
@@ -129,12 +112,12 @@ defmodule AbakusWeb.Depot.TransactionsLive do
     <.list_row
       id={"transaction-#{@transaction.id}"}
       title={@title}
-      on_click={if @editable, do: TransactionDialog.edit(@transaction.id)}
+      on_click={TransactionDialog.edit(@transaction.id)}
       trailing_on_phone={:title}
       data-month={Date.to_iso8601(@month)}
     >
       <:leading><.plush name={type_plush(@transaction.type)} size={:lg} /></:leading>
-      <span :if={@editable} class="sr-only"> bearbeiten</span>
+      <span class="sr-only">{if @editable, do: "bearbeiten", else: "ansehen"}</span>
       <:meta>{details(@transaction)}</:meta>
       <:trailing :let={place}>
         <.receipt_link :if={@transaction.receipt && place == :column} transaction={@transaction} />
@@ -179,9 +162,9 @@ defmodule AbakusWeb.Depot.TransactionsLive do
   end
 
   defp title(%Transaction{security: %{name: name}} = transaction),
-    do: join_meta([@labels[transaction.type], name])
+    do: join_meta([DepotFormat.transaction_type(transaction.type), name])
 
-  defp title(transaction), do: @labels[transaction.type]
+  defp title(transaction), do: DepotFormat.transaction_type(transaction.type)
 
   defp type_plush(type) when type in [:dividend, :interest], do: "coins"
 

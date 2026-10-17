@@ -51,7 +51,7 @@ defmodule Abakus.Depot.Portfolios.Transaction do
 
   def types, do: @types
 
-  @doc "Whether the user may edit or delete the transaction: one of a type the transaction form knows."
+  @doc "Whether the transaction form can edit the transaction: one of a type it knows. Any type can be deleted."
   def editable?(%__MODULE__{type: type}),
     do:
       type in [:buy, :sell, :inbound_delivery, :outbound_delivery, :dividend, :deposit, :removal]

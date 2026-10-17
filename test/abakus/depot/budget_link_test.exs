@@ -304,6 +304,27 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert Repo.aggregate(LinkedTransaction, :count) == 0
     end
 
+    test "deleting a cash transfer deletes its linked transaction", c do
+      switch_on(c)
+
+      transfer =
+        transaction_fixture(c.owner, @day,
+          type: :cash_transfer,
+          account_id: c.clearing.id,
+          other_account_id: c.broker_cash.id,
+          amount: 30_000
+        )
+
+      :ok = BudgetLink.sync(c.owner)
+      assert [%Transaction{amount: -30_000}] = register(c.giro)
+
+      {:ok, _} = Portfolios.delete_transaction(c.owner, transfer)
+
+      assert register(c.giro) == []
+      assert register(c.tracking) == []
+      assert Repo.aggregate(LinkedTransaction, :count) == 0
+    end
+
     test "an account that stops being a budget account takes its linked transactions along", c do
       switch_on(c)
       purchase(c, 9)

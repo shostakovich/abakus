@@ -6,10 +6,11 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   until the user overwrites it. A security missing from the list is created by its ISIN, with name
   and Yahoo symbol from Yahoo's search.
 
-  `edit/1` opens it as „Buchung bearbeiten“ for a transaction the user booked, which it saves or
-  deletes. `open_receipt/1` opens it as „Beleg prüfen“ for a receipt of the inbox, prefilled with
-  what the model recognised, beside the receipt's checks and text; booking attaches the receipt,
-  which may also be discarded or left for later. Once booked, every page loads its figures again,
+  `edit/1` opens it for a transaction of the user: as „Buchung bearbeiten“, which saves or deletes
+  it, for a type the form knows, otherwise as „Buchung“, which shows and only deletes it.
+  `open_receipt/1` opens it as „Beleg prüfen“ for a receipt of the inbox, prefilled with what the
+  model recognised, beside the receipt's checks and text; booking attaches the receipt, which may
+  also be discarded or left for later. Once booked, every page loads its figures again,
   and the page shows what was booked:
   components cannot show a flash themselves, so `on_mount/4` lets the page do it.
   """
@@ -45,7 +46,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   @doc "Opens the dialog."
   def open, do: JS.push("open", target: "##{@id}")
 
-  @doc "Opens the dialog for the transaction with `id`, one the user booked."
+  @doc "Opens the dialog for the user's transaction with `id`."
   def edit(id), do: JS.push("edit", value: %{id: id}, target: "##{@id}")
 
   @doc "Opens the dialog for the receipt with `id`, one ready in the user's inbox."
@@ -83,7 +84,14 @@ defmodule AbakusWeb.Depot.TransactionDialog do
         <p :if={@receipt} class="text-sm text-base-content/70 wrap-anywhere">
           {ReceiptComponents.receipt_subtitle(@receipt)}
         </p>
+        <.read_only
+          :if={read_only?(@editing)}
+          transaction={@editing}
+          error={@error}
+          myself={@myself}
+        />
         <.form
+          :if={!read_only?(@editing)}
           for={@form}
           id="transaction-form"
           class="mt-4"
@@ -175,11 +183,101 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   end
 
   defp title(%{} = _receipt, _editing), do: "Beleg prüfen"
-  defp title(nil, %{} = _editing), do: "Buchung bearbeiten"
   defp title(nil, nil), do: "Buchung erfassen"
+
+  defp title(nil, editing),
+    do: if(read_only?(editing), do: "Buchung", else: "Buchung bearbeiten")
+
+  defp read_only?(nil), do: false
+  defp read_only?(editing), do: not Transaction.editable?(editing)
 
   # Closes natively, so focus goes back to what opened the dialog; `on_cancel` tells the server.
   defp close_js, do: hide_modal("transaction-modal")
+
+  attr :transaction, Transaction, required: true
+  attr :error, :string, required: true
+  attr :myself, :any, required: true
+
+  defp read_only(assigns) do
+    assigns = assign(assigns, :facts, facts(assigns.transaction))
+
+    ~H"""
+    <div id="transaction-read-only" class="mt-4">
+      <.description_list id="transaction-facts">
+        <:item :for={{label, value} <- @facts} label={label}>{value}</:item>
+      </.description_list>
+      <p class="mt-4 text-sm text-base-content/70">Diese Buchungsart lässt sich nur löschen.</p>
+      <.alert :if={@error} id="transaction-error" tone={:error} class="mt-4">{@error}</.alert>
+      <.action_bar sticky class="mt-6">
+        <:secondary>
+          <.button
+            id="transaction-delete"
+            variant={:danger_outline}
+            icon="trash-2"
+            confirm="Diese Buchung löschen?"
+            phx-click={JS.push("delete", target: @myself)}
+          >
+            Löschen
+          </.button>
+        </:secondary>
+        <.button id="transaction-cancel" phx-click={close_js()}>Schließen</.button>
+      </.action_bar>
+    </div>
+    """
+  end
+
+  defp facts(transaction) do
+    Enum.reject(
+      [
+        {"Art", Format.transaction_type(transaction.type)},
+        {"Datum", Abakus.Format.date(transaction.date_time)},
+        transaction.security && {"Wertpapier", transaction.security.name}
+      ] ++
+        places(transaction) ++
+        [
+          transaction.shares not in [nil, 0] && {"Stück", Format.shares(transaction.shares)},
+          {"Betrag", Money.money(transaction.amount, transaction.currency)},
+          unit_fact(transaction, :fee, "Gebühren"),
+          unit_fact(transaction, :tax, "Steuern"),
+          transaction.note not in [nil, ""] && {"Notiz", transaction.note}
+        ],
+      &(!&1)
+    )
+  end
+
+  defp places(%Transaction{type: :security_transfer} = transaction) do
+    [
+      {"Von Depot", portfolio_name(transaction.portfolio)},
+      {"An Depot", portfolio_name(transaction.other_portfolio)}
+    ]
+  end
+
+  defp places(%Transaction{type: :cash_transfer} = transaction) do
+    [
+      {"Von Konto", account_name(transaction.account)},
+      {"An Konto", account_name(transaction.other_account)}
+    ]
+  end
+
+  defp places(transaction) do
+    [
+      transaction.portfolio && {"Depot", portfolio_name(transaction.portfolio)},
+      transaction.account && {"Konto", account_name(transaction.account)}
+    ]
+  end
+
+  defp portfolio_name(nil), do: "–"
+  defp portfolio_name(portfolio), do: Format.portfolio_name(portfolio)
+
+  defp account_name(nil), do: "–"
+  defp account_name(account), do: account.name
+
+  defp unit_fact(transaction, type, label) do
+    case transaction.units |> Enum.filter(&(&1.type == type)) |> Enum.sum_by(& &1.amount) do
+      0 -> nil
+      cents -> {label, Money.money(cents, transaction.currency)}
+    end
+  end
 
   attr :form, Phoenix.HTML.Form, required: true
   attr :kind, :atom, required: true
@@ -574,9 +672,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
         done(socket, "Diese Buchung gibt es nicht mehr.")
 
       transaction ->
-        if Transaction.editable?(transaction),
-          do: {:noreply, open_for(socket, transaction)},
-          else: {:noreply, socket}
+        {:noreply, open_for(socket, transaction)}
     end
   end
 
@@ -668,18 +764,26 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   def handle_async(:lookup, _result, socket), do: {:noreply, socket}
 
   defp open_for(socket, transaction) do
+    socket =
+      assign(socket,
+        open: true,
+        editing: transaction,
+        receipt: nil,
+        new_security: nil,
+        error: nil
+      )
+
+    if Transaction.editable?(transaction),
+      do: open_form_for(socket, transaction),
+      else: socket
+  end
+
+  defp open_form_for(socket, transaction) do
     scope = socket.assigns.current_scope
     choices = Portfolios.transaction_choices(scope, transaction)
     params = Portfolios.transaction_form_params(transaction)
 
     socket
-    |> assign(
-      open: true,
-      editing: transaction,
-      receipt: nil,
-      new_security: nil,
-      error: nil
-    )
     |> assign(choices: choices, today: LocalTime.today())
     |> put_form(Portfolios.change_transaction_form(scope, choices, params, transaction))
   end

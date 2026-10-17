@@ -602,13 +602,75 @@ defmodule Abakus.Depot.BookingTest do
       assert %{date_time: ~N[2026-10-02 14:30:00]} = Repo.get!(Transaction, stored.id)
     end
 
-    test "types the form does not know and other users' transactions are read-only", ctx do
+    test "types the form does not know can be deleted, not edited", ctx do
+      other_account = account_fixture(ctx.scope, name: "Tagesgeld")
+      other_portfolio = portfolio_fixture(ctx.scope, name: "Anderes Depot")
+
       fee =
         transaction_fixture(ctx.scope, @day, type: :fee, account_id: ctx.account.id, amount: 100)
 
-      assert {:error, :read_only} = edit(ctx, fee, "deposit", %{"amount" => "1"})
-      assert {:error, :read_only} = Portfolios.delete_transaction(ctx.scope, fee)
+      cash_transfer =
+        transaction_fixture(ctx.scope, @day,
+          type: :cash_transfer,
+          account_id: ctx.account.id,
+          other_account_id: other_account.id,
+          amount: 5000
+        )
 
+      security_transfer =
+        transaction_fixture(ctx.scope, @day,
+          type: :security_transfer,
+          portfolio_id: ctx.portfolio.id,
+          other_portfolio_id: other_portfolio.id,
+          security_id: ctx.security.id,
+          shares: shares(2)
+        )
+
+      for transaction <- [fee, cash_transfer, security_transfer] do
+        assert {:error, :read_only} = edit(ctx, transaction, "deposit", %{"amount" => "1"})
+        assert {:ok, _} = Portfolios.delete_transaction(ctx.scope, transaction)
+      end
+
+      assert Portfolios.list_transactions(ctx.scope) == []
+    end
+
+    test "deleting a security transfer may not leave its target portfolio below none", ctx do
+      other = portfolio_fixture(ctx.scope, name: "Anderes Depot")
+
+      {:ok, [_purchase]} = book(ctx, "purchase", %{"shares" => "2", "price" => "100"})
+
+      transfer =
+        transaction_fixture(ctx.scope, ~D[2026-10-02],
+          type: :security_transfer,
+          portfolio_id: ctx.portfolio.id,
+          other_portfolio_id: other.id,
+          security_id: ctx.security.id,
+          shares: shares(2)
+        )
+
+      sale_params =
+        form(ctx, "sale", %{
+          "date" => "2026-10-03",
+          "portfolio_id" => other.id,
+          "shares" => "2",
+          "price" => "100"
+        })
+
+      {:ok, [sale]} =
+        Portfolios.book_transaction(
+          ctx.scope,
+          Portfolios.transaction_choices(ctx.scope),
+          sale_params
+        )
+
+      assert {:error, :holding} = Portfolios.delete_transaction(ctx.scope, transfer)
+      assert Repo.get(Transaction, transfer.id)
+
+      assert {:ok, _} = Portfolios.delete_transaction(ctx.scope, sale)
+      assert {:ok, _} = Portfolios.delete_transaction(ctx.scope, transfer)
+    end
+
+    test "other users' transactions are read-only", ctx do
       {:ok, [own]} = book(ctx, "deposit", %{"amount" => "1"})
       other = user_scope_fixture()
       assert {:error, :read_only} = Portfolios.delete_transaction(other, own)
