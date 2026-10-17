@@ -170,7 +170,7 @@ _Avoid_: Confirmed, reviewed; "gebucht", "abgeglichen" (those are cleared states
 ### Import
 
 **Source**:
-Where a transaction came from: manual, YNAB, file, bank, API or the Kasse.
+Where a transaction came from: manual, YNAB, file, bank, API, the Kasse or the Depot.
 _Avoid_: Channel, provider
 
 **Origin**:
@@ -232,9 +232,8 @@ _Avoid_: Settings (it is a task, not a setting)
 
 **Settings hub**:
 The sidebar's settings mode: a way back to the area used last, then the sections grouped by area, Allgemein for
-everyone, Budget, Kasse and Depot for the users of that area; Depot for everyone, so anyone may start a Depot, with
-Belegeingang once they have a portfolio. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI
-"Einstellungen".
+everyone, Kasse for its participants; Depot for everyone, so anyone may start a Depot, with Belegeingang once they
+have a portfolio. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI "Einstellungen".
 _Avoid_: Settings page, Mehr (that is the dock's button)
 
 ## Kasse
@@ -377,8 +376,8 @@ The value of all of a user's holdings plus the balances of their Verrechnungskon
 "Vermögen".
 
 **Invested capital**:
-What came in from outside up to a date: deposits − removals + inbound deliveries − outbound deliveries, as in
-Portfolio Performance; a purchase from a Verrechnungskonto moves money inside and changes nothing. UI "Investiert".
+What came in from outside up to a date: deposits − removals + inbound deliveries − outbound deliveries; a purchase
+from a Verrechnungskonto moves money inside and changes nothing. UI "Investiert".
 
 **Purchase value**:
 What the shares of a holding cost by FIFO, including the fees and taxes of their purchases; the gain is the value
