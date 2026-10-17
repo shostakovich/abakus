@@ -796,8 +796,8 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :empty_hint, :string, default: nil
 
   @doc """
-  Phones: one row per transaction, as on a bank statement, which opens the transaction sheet; one waiting for
-  approval has its ✓ in front, the others their cleared state. A match proposal says what it matches, with "Zuordnen" and
+  Phones: one row per transaction, as on a bank statement, which opens the transaction sheet; one waiting for approval
+  has its ✓ in front, the others their cleared state. A match proposal says what it matches, with "Zuordnen" and
   "Trennen" in its menu.
   """
   def cards(assigns) do

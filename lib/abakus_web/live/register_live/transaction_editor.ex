@@ -7,14 +7,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   inputs outside the first row belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet
   from the bottom with the amount first. The form's state is `AbakusWeb.TransactionForm` params.
 
-  Payee and category are Setzkasten comboboxes; a choice arrives as a change of `payee_pick` (with `payee_new` for
-  a payee typed anew) or `category_pick`, "Aufteilen" among the categories splits the transaction. Transfers are picked as payees, the other open accounts above the payees, in a
-  split's subtransactions too. A payee suggests its last category, and a suggestion goes again when the payee
-  changes; a chosen category stays. A transfer between a budget and a tracking account takes a category and
-  suggests the one last used between the two. Changing or deleting a reconciled transaction, or one whose
-  counterpart is, asks first. A transaction linked to a Kasse expense (`expense_id`) links to it and keeps account,
-  date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006). So does whatever
-  the Depot booked (`source: :depot`): a value change, or a transaction linked to a Depot transaction (ADR 0018).
+  Payee and category are Setzkasten comboboxes; a choice arrives as a change of `payee_pick` (with `payee_new` for a
+  payee typed anew) or `category_pick`, "Aufteilen" among the categories splits the transaction. Transfers are picked as
+  payees, the other open accounts above the payees, in a split's subtransactions too. A payee suggests its last
+  category, and a suggestion goes again when the payee changes; a chosen category stays. A transfer between a budget and
+  a tracking account takes a category and suggests the one last used between the two. Changing or deleting a reconciled
+  transaction, or one whose counterpart is, asks first. A transaction linked to a Kasse expense (`expense_id`) links to
+  it and keeps account, date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006).
+  So does whatever the Depot booked (`source: :depot`): a value change, or a transaction linked to a Depot transaction
+  (ADR 0018).
 
   Tells its LiveView `{TransactionEditor, :done, message}` once the transaction is saved or deleted; the events
   `cancel_edit` (Cancel, Escape) go to the LiveView itself.

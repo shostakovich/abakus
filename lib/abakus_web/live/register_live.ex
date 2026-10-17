@@ -1,10 +1,10 @@
 defmodule AbakusWeb.RegisterLive do
   @moduledoc """
-  The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first.
-  Its header has three rows, as in YNAB: the name with its meta line and the actions (pencil, "Abgleichen"; in Alle Konten "Konto hinzufügen"), the
-  balances, and the toolbar. The view (`filter`), the search (`q`) and the running balance (`running`, one account
-  in the full list only) live in the URL; the selection does not, and whether the memo column shows is kept per
-  device in the browser.
+  The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first. Its
+  header has three rows, as in YNAB: the name with its meta line and the actions (pencil, "Abgleichen"; in Alle Konten
+  "Konto hinzufügen"), the balances, and the toolbar. The view (`filter`), the search (`q`) and the running balance
+  (`running`, one account in the full list only) live in the URL; the selection does not, and whether the memo column
+  shows is kept per device in the browser.
 
   Here transactions are approved (one, the selected or all), categorised (the selected) and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends

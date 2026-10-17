@@ -57,13 +57,12 @@ defmodule AbakusWeb.Layouts do
   @doc """
   Signed-in pages in Setzkasten's sidebar shell, showing the current area's entries, then the settings.
 
-  Finanzen: Budget, Vermögen, Alle Konten, Alle Depots and Import & Sync with the receipts waiting in the inbox,
-  the open budget and tracking accounts with their emoji (else `AbakusWeb.AccountMotif`), their balance and how
-  many transactions wait for approval; then the section
-  Depots with the active portfolios and their values, each shown with the leading emoji of its account in the
-  budget, else the briefcase; a user without the budget sees only Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and
-  portfolios stay out of the icon rail and the dock. Entries show plush images, the Lucide icon only where a plush
-  has no image.
+  Finanzen: Budget, Vermögen, Alle Konten, Alle Depots and Import & Sync with the receipts waiting in the inbox, the
+  open budget and tracking accounts with their emoji (else `AbakusWeb.AccountMotif`), their balance and how many
+  transactions wait for approval; then the section Depots with the active portfolios and their values, each shown with
+  the leading emoji of its account in the budget, else the briefcase; a user without the budget sees only Vermögen, Alle
+  Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of the
+  icon rail and the dock. Entries show plush images, the Lucide icon only where a plush has no image.
 
   With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
   brand is a menu that switches the area. On phones the dock holds the current area's pages; its "Mehr" opens

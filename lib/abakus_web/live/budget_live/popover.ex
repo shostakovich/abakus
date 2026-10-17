@@ -5,7 +5,8 @@ defmodule AbakusWeb.BudgetLive.Popover do
   assigns Zu verteilen to a category. One shared Setzkasten `popover`, anchored to what opened it.
 
   The state is `%{kind: :available | :cover | :pick, anchor, category_id, mode: :cover | :move, from, error, open}`
-  (`from`: the chosen source to cover from); a pick also has the category and amount it suggests. A closed popover stays rendered, so focus returns to its anchor.
+  (`from`: the chosen source to cover from); a pick also has the category and amount it suggests. A closed popover stays
+  rendered, so focus returns to its anchor.
   """
   use AbakusWeb, :html
 
@@ -14,7 +15,9 @@ defmodule AbakusWeb.BudgetLive.Popover do
   alias Abakus.Money
   alias AbakusWeb.BudgetLive.{Components, Inspector, Status}
 
-  @doc "Opens a popover at the anchor's element; the available cell's opens on \"Decken\" while its category is overspent."
+  @doc """
+  Opens a popover at the anchor's element; the available cell's opens on "Decken" while its category is overspent.
+  """
   def open(:pick, anchor, _entry, inspector) do
     suggested =
       Enum.find(inspector.categories, &(Status.open_need(&1.cell) > 0)) ||
