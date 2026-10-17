@@ -289,9 +289,10 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   expiry
 - **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement and Aktivität
 - **Vermögen and Depots** (Finanzen): Vermögen (net worth: for the budget owner all budget and tracking accounts
-  but those closed with money left in them, for anyone else their portfolios and Verrechnungskonten, optionally
-  against the benchmark) and Depots, for all portfolios or one, with „Buchung erfassen“ and the tabs Bestand
-  (holdings and Verrechnungskonten), for one portfolio of the budget owner Register (its account's register),
+  but those closed with money left in them, its curve showing the Depot's value before the budget's first
+  transaction, for anyone else their portfolios and Verrechnungskonten, optionally against the benchmark) and
+  Depots, for all portfolios or one, with „Buchung erfassen“ and the tabs Bestand (holdings and
+  Verrechnungskonten), for one portfolio of the budget owner Register (its account's register),
   Buchungen, Dividenden, Performance and, for all portfolios, Wertpapiere (prices, quote feeds, the benchmark,
   exchange rates); a page per security
 - **Einstellungen**: a mode of the sidebar under `/settings/…`, with the way back to the area used last and the
