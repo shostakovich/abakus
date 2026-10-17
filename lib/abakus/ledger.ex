@@ -845,8 +845,8 @@ defmodule Abakus.Ledger do
     end
   end
 
-  @reconciled "ist abgeschlossen"
-  @counterpart_reconciled "betrifft eine abgeschlossene Gegenbuchung"
+  @reconciled "ist abgeglichen"
+  @counterpart_reconciled "betrifft eine abgeglichene Gegenbuchung"
 
   # The counterpart's category is checked where it would change.
   defp validate_reconciled(

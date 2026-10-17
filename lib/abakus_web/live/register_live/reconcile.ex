@@ -49,8 +49,8 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
       "Nicht abgeglichen: Der Saldo weicht inzwischen um #{Money.euros(difference, signed: true)} ab."
 
   defp locked_text(0), do: ""
-  defp locked_text(1), do: ", 1 Buchung abgeschlossen"
-  defp locked_text(count), do: ", #{count} Buchungen abgeschlossen"
+  defp locked_text(1), do: ", 1 Buchung gesperrt"
+  defp locked_text(count), do: ", #{count} Buchungen gesperrt"
 
   attr :state, :map,
     default: nil,
@@ -113,7 +113,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
       </div>
       <p class="text-base-content/70">{source_label(@state.bank.source)}</p>
       <div id="reconcile-cleared" class="flex justify-between gap-3 pt-2">
-        <span>Abgeglichener Saldo bis dahin</span>
+        <span>Gebuchter Saldo bis dahin</span>
         <.amount value={@state.cleared} class="font-semibold" />
       </div>
       <%= if @difference == 0 do %>
@@ -124,7 +124,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
       <% else %>
         <p id="reconcile-question" class="py-4">
           Differenz <.amount value={@difference} signed class="font-semibold" />.
-          Fehlt eine Buchung oder ist eine nicht abgeglichen?
+          Fehlt eine Buchung oder ist eine noch vorgemerkt?
         </p>
       <% end %>
     </div>
@@ -211,7 +211,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
           <dd><.amount value={@mode.bank.amount} /></dd>
         </div>
         <div class="flex items-baseline gap-2">
-          <dt class="text-base-content/70">Abgeglichen{through(@mode.bank)}</dt>
+          <dt class="text-base-content/70">Gebucht{through(@mode.bank)}</dt>
           <dd><.amount value={@mode.cleared} /></dd>
         </div>
         <div class="flex items-baseline gap-2">
@@ -239,10 +239,10 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
             if @difference != 0,
               do: "Ausgleichsbuchung über #{Money.euros(@difference, signed: true)} anlegen?"
           }
-          confirm_text="Sie gleicht die Differenz zur Bank aus. Danach ist das Konto abgeschlossen."
-          confirm_label="Ausgleichen und abschließen"
+          confirm_text="Sie gleicht die Differenz zur Bank aus. Danach ist das Konto abgeglichen."
+          confirm_label="Ausgleichen und abgleichen"
         >
-          {if @difference == 0, do: "Abschließen", else: "Ausgleichen und abschließen"}
+          {if @difference == 0, do: "Abgleichen", else: "Ausgleichen und abgleichen"}
         </.button>
       </:actions>
     </.alert>

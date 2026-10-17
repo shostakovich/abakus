@@ -55,7 +55,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
     assert Enum.map([first, second, by_hand], &reload(&1).cleared) ==
              [:reconciled, :reconciled, :cleared]
 
-    assert has_element?(view, "#flash-info", "2 Buchungen abgeschlossen")
+    assert has_element?(view, "#flash-info", "2 Buchungen gesperrt")
     assert has_element?(view, "#register-meta", "Abgeglichen am")
     refute has_element?(view, "#reconcile-menu")
   end
@@ -71,7 +71,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
     enter(view, "150,00")
 
     assert has_element?(view, "#reconcile-banner", "Die Salden stimmen überein")
-    view |> element("#reconcile-finish", "Abschließen") |> render_click()
+    view |> element("#reconcile-finish", "Abgleichen") |> render_click()
 
     assert reload(first).cleared == :reconciled
     assert reload(second).cleared == :reconciled
@@ -87,12 +87,12 @@ defmodule AbakusWeb.RegisterReconcileTest do
     enter(view, "212,00")
 
     assert has_element?(view, "#reconcile-difference", "+12,00 €")
-    assert has_element?(view, "#reconcile-finish", "Ausgleichen und abschließen")
+    assert has_element?(view, "#reconcile-finish", "Ausgleichen und abgleichen")
 
     view |> element("#tx-#{missing.id}-cleared") |> render_click()
 
     assert has_element?(view, "#reconcile-banner", "Die Salden stimmen überein")
-    assert has_element?(view, "#reconcile-finish", "Abschließen")
+    assert has_element?(view, "#reconcile-finish", "Abgleichen")
     refute has_element?(view, "#reconcile-finish", "Ausgleichen")
 
     view |> element("#reconcile-finish") |> render_click()
@@ -155,7 +155,7 @@ defmodule AbakusWeb.RegisterReconcileTest do
     view = open(c.conn, c.giro)
 
     enter(view, "100,00")
-    assert has_element?(view, "#reconcile-finish", "Abschließen")
+    assert has_element?(view, "#reconcile-finish", "Abgleichen")
 
     # Another session clears a transaction meanwhile.
     cleared(c.giro, ~D[2026-10-02], 500)

@@ -213,7 +213,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
               class="-ms-4 text-error-ink"
               confirm={
                 if @locked,
-                  do: "Diese Buchung ist abgeschlossen. Trotzdem löschen?",
+                  do: "Diese Buchung ist abgeglichen. Trotzdem löschen?",
                   else: "Buchung löschen?"
               }
               phx-click="delete"
@@ -479,8 +479,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         icon="check"
         icon_only
         label={@save_label}
-        confirm={if @locked, do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"}
-        confirm_text="Der abgeglichene Saldo kann sich dadurch ändern."
+        confirm={if @locked, do: "Diese Buchung ist abgeglichen. Trotzdem ändern?"}
+        confirm_text="Der gebuchte Saldo kann sich dadurch ändern."
         confirm_label="Ändern"
       />
     </.tooltip>
@@ -496,8 +496,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       type="submit"
       variant={:primary}
       phx-disable-with="Speichern …"
-      confirm={if @locked, do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"}
-      confirm_text="Der abgeglichene Saldo kann sich dadurch ändern."
+      confirm={if @locked, do: "Diese Buchung ist abgeglichen. Trotzdem ändern?"}
+      confirm_text="Der gebuchte Saldo kann sich dadurch ändern."
       confirm_label="Ändern"
     >
       {save_label(@transaction)}
@@ -1061,7 +1061,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
          {:ok, attrs} <- register_fields(attrs, socket.assigns),
          {:ok, _transaction} <-
            write(socket.assigns.current_scope, original, attrs, confirmed(event)) do
-      {:noreply, done(socket, if(original, do: "Gespeichert.", else: "Gebucht."))}
+      {:noreply, done(socket, "Gespeichert.")}
     else
       {:error, error} -> {:noreply, assign(socket, params: params, error: error_message(error))}
     end

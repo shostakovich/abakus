@@ -85,7 +85,7 @@ defmodule Abakus.Ledger.Matches do
         add_error(changeset, "muss denselben Betrag haben")
 
       target.cleared == :reconciled ->
-        add_error(changeset, "ist abgeschlossen")
+        add_error(changeset, "ist abgeglichen")
 
       true ->
         changeset

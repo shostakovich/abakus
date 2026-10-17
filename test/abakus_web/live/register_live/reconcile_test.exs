@@ -43,10 +43,10 @@ defmodule AbakusWeb.RegisterLive.ReconcileTest do
     assert Reconcile.done_text(%{reconciled: 0, adjustment: nil}) == "Abgeglichen."
 
     assert Reconcile.done_text(%{reconciled: 1, adjustment: nil}) ==
-             "Abgeglichen, 1 Buchung abgeschlossen."
+             "Abgeglichen, 1 Buchung gesperrt."
 
     assert Reconcile.done_text(%{reconciled: 3, adjustment: %Transaction{amount: 42}}) ==
-             "Ausgleichsbuchung über +0,42 € angelegt, 3 Buchungen abgeschlossen."
+             "Ausgleichsbuchung über +0,42 € angelegt, 3 Buchungen gesperrt."
 
     assert Reconcile.refused_text(-500) ==
              "Nicht abgeglichen: Der Saldo weicht inzwischen um −5,00 € ab."

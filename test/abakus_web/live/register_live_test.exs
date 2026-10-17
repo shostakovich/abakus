@@ -323,9 +323,9 @@ defmodule AbakusWeb.RegisterLiveTest do
     test "views show what waits for approval or for the bank", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      view |> element("#view-menu a", "Nicht abgeglichen") |> render_click()
+      view |> element("#view-menu a", "Vorgemerkt") |> render_click()
       assert_patch(view, ~p"/budget/accounts/#{c.giro}?filter=uncleared")
-      assert has_element?(view, "#view-toggle", "nicht abgeglichen")
+      assert has_element?(view, "#view-toggle", "vorgemerkt")
       assert has_element?(view, "#tx-#{c.shopping.id}")
       refute has_element?(view, "#tx-#{c.salary.id}")
 
@@ -364,6 +364,23 @@ defmodule AbakusWeb.RegisterLiveTest do
   end
 
   describe "cleared state" do
+    test "speaks a bank's words: vorgemerkt, gebucht, abgeglichen", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      assert has_element?(view, "#register-balances", "Gebucht")
+      assert has_element?(view, "#register-balances", "Vorgemerkt")
+      assert has_element?(view, "#register-balances", "Arbeitssaldo")
+
+      assert has_element?(
+               view,
+               ~s|#tx-#{c.shopping.id}-cleared[aria-label="Vorgemerkt, umschalten"]|
+             )
+
+      assert has_element?(view, ~s|#tx-#{c.salary.id}-cleared[aria-label="Gebucht, umschalten"]|)
+      assert has_element?(view, ~s|#tx-#{c.old.id}-cleared[aria-label="Abgeglichen, entsperren"]|)
+      refute render(view) =~ ~r/nicht abgeglichen|abgeschlossen/i
+    end
+
     test "C toggles between uncleared and cleared", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
@@ -385,7 +402,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       confirm_click(
         view,
         "#tx-#{c.old.id}-cleared",
-        "Diese Buchung ist abgeschlossen. Entsperren?"
+        "Diese Buchung ist abgeglichen. Entsperren?"
       )
 
       assert reload(c.old).cleared == :cleared
@@ -397,7 +414,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       render_click(view, "toggle_cleared", %{"id" => "#{c.old.id}"})
 
       assert reload(c.old).cleared == :reconciled
-      assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeschlossen")
+      assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeglichen")
     end
   end
 
@@ -504,7 +521,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       confirm_click(
         view,
         "#approve-all",
-        "Eine abgeschlossene Buchung ist dabei. Trotzdem ändern?"
+        "Eine abgeglichene Buchung ist dabei. Trotzdem ändern?"
       )
 
       assert reload(c.old).approved
@@ -555,7 +572,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       view |> element("#tx-#{c.old.id}-select") |> render_click()
       # Without the confirmation the reconciled one stays locked, and so do the others.
       render_click(view, "approve_selected", %{})
-      assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeschlossen")
+      assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeglichen")
       refute reload(c.waiting).approved
       assert has_element?(view, "#bulk", "3 Buchungen")
     end
@@ -580,7 +597,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       confirm_click(
         view,
         "#categorise-submit",
-        "Diese Buchung ist abgeschlossen. Trotzdem ändern?",
+        "Diese Buchung ist abgeglichen. Trotzdem ändern?",
         with: %{category_id: Categories.ready_to_assign!(budget_scope()).id}
       )
 
@@ -718,7 +735,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(
                view,
                "#flash-error",
-               "Nicht geändert: Zugeordnete Buchung ist abgeschlossen"
+               "Nicht geändert: Zugeordnete Buchung ist abgeglichen"
              )
 
       assert reload(c.proposal).matched_transaction_id == c.shopping.id
@@ -773,7 +790,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       confirm_click(
         view,
         "#proposal-#{proposal.id}-accept",
-        "Eine Gegenbuchung ist abgeschlossen. Trotzdem zuordnen?"
+        "Eine Gegenbuchung ist abgeglichen. Trotzdem zuordnen?"
       )
 
       assert Repo.get!(Transaction, counterpart_id).date == ~D[2026-10-05]

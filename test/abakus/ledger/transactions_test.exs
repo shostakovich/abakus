@@ -845,7 +845,7 @@ defmodule Abakus.Ledger.TransactionsTest do
                  approved: true
                })
 
-      assert "ist abgeschlossen" in errors_on(changeset).cleared
+      assert "ist abgeglichen" in errors_on(changeset).cleared
       refute Repo.get!(Transaction, c.first.id).approved
     end
 

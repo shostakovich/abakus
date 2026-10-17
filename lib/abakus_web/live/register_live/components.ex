@@ -191,12 +191,12 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp equation(assigns) do
     ~H"""
     <div class="flex flex-wrap items-start gap-x-4 gap-y-2">
-      <.figure id={@ids && "balance-cleared"} value={@balances.cleared} label="Abgeglichen" />
+      <.figure id={@ids && "balance-cleared"} value={@balances.cleared} label="Gebucht" />
       <.figure
         id={@ids && "balance-uncleared"}
         op="+"
         value={@balances.uncleared}
-        label="Nicht abgeglichen"
+        label="Vorgemerkt"
         tone={false}
       />
       <.figure
@@ -349,11 +349,11 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp feed_hint(account), do: @feeds[account.fed_by]
 
   defp filter_labels,
-    do: [all: "Alle Buchungen", unapproved: "Zu bestätigen", uncleared: "Nicht abgeglichen"]
+    do: [all: "Alle Buchungen", unapproved: "Zu bestätigen", uncleared: "Vorgemerkt"]
 
   defp view_label(:all), do: "Ansicht"
   defp view_label(:unapproved), do: "Ansicht: zu bestätigen"
-  defp view_label(:uncleared), do: "Ansicht: nicht abgeglichen"
+  defp view_label(:uncleared), do: "Ansicht: vorgemerkt"
 
   attr :selected, :list, required: true
   attr :categories, :list, required: true
@@ -537,7 +537,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             <th :if={@columns.running} class="text-end app-run">Saldo</th>
             <th class="app-ok-col"><span class="sr-only">Bestätigen</span></th>
             <th class="text-end app-c-col">
-              <span class="sr-only">Abgeglichen</span><span aria-hidden="true">C</span>
+              <span class="sr-only">Gebucht</span><span aria-hidden="true">C</span>
             </th>
           </tr>
         </thead>
@@ -870,15 +870,14 @@ defmodule AbakusWeb.RegisterLive.Components do
     ~H"""
     <div class="flex flex-wrap gap-x-4 gap-y-1 pt-3 text-sm text-base-content/70">
       <span class="inline-flex items-center gap-1">
-        <span class="app-clear" aria-hidden="true">C</span> nicht abgeglichen
+        <span class="app-clear" aria-hidden="true">C</span> vorgemerkt
       </span>
       <span class="inline-flex items-center gap-1">
-        <span class="app-clear is-cleared" aria-hidden="true">C</span>
-        abgeglichen (bei der Bank gebucht)
+        <span class="app-clear is-cleared" aria-hidden="true">C</span> gebucht
       </span>
       <span class="inline-flex items-center gap-1">
         <span class="app-clear is-reconciled" aria-hidden="true"><.icon name="lock" /></span>
-        abgeschlossen, gesperrt
+        abgeglichen, gesperrt
       </span>
     </div>
     """
@@ -893,18 +892,18 @@ defmodule AbakusWeb.RegisterLive.Components do
       id={@id}
       type="button"
       class="app-clear is-reconciled"
-      title="Abgeschlossen"
-      aria-label="Abgeschlossen, entsperren"
+      title="Abgeglichen"
+      aria-label="Abgeglichen, entsperren"
       aria-haspopup="dialog"
       phx-click={
         show_confirm(
           %JS{},
           "confirm-delete",
-          "Diese Buchung ist abgeschlossen. Entsperren?",
+          "Diese Buchung ist abgeglichen. Entsperren?",
           JS.push("toggle_cleared",
             value: %{id: to_string(@transaction.id), reconciled: "confirmed"}
           ),
-          text: "Sie ist danach abgeglichen, aber nicht mehr gesperrt.",
+          text: "Sie ist danach gebucht, aber nicht mehr gesperrt.",
           label: "Entsperren"
         )
       }
@@ -922,7 +921,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       id={@id}
       type="button"
       class={["app-clear", @cleared? && "is-cleared"]}
-      aria-label={if @cleared?, do: "Abgeglichen, umschalten", else: "Nicht abgeglichen, umschalten"}
+      aria-label={if @cleared?, do: "Gebucht, umschalten", else: "Vorgemerkt, umschalten"}
       phx-click="toggle_cleared"
       phx-value-id={@transaction.id}
     >
@@ -1037,10 +1036,10 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp delete_question(transactions) do
     case {length(transactions), length(locked(transactions))} do
       {1, 0} -> "Buchung löschen?"
-      {1, 1} -> "Diese Buchung ist abgeschlossen. Trotzdem löschen?"
+      {1, 1} -> "Diese Buchung ist abgeglichen. Trotzdem löschen?"
       {count, 0} -> "#{count} Buchungen löschen?"
-      {count, 1} -> "#{count} Buchungen löschen? Eine davon ist abgeschlossen."
-      {count, locked} -> "#{count} Buchungen löschen? #{locked} davon sind abgeschlossen."
+      {count, 1} -> "#{count} Buchungen löschen? Eine davon ist abgeglichen."
+      {count, locked} -> "#{count} Buchungen löschen? #{locked} davon sind abgeglichen."
     end
   end
 
@@ -1048,13 +1047,13 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp merge_question(proposals) do
     case proposals |> Enum.map(& &1.matched_transaction) |> locked() |> length() do
       0 -> nil
-      1 -> "Eine Gegenbuchung ist abgeschlossen. Trotzdem zuordnen?"
-      count -> "#{count} Gegenbuchungen sind abgeschlossen. Trotzdem zuordnen?"
+      1 -> "Eine Gegenbuchung ist abgeglichen. Trotzdem zuordnen?"
+      count -> "#{count} Gegenbuchungen sind abgeglichen. Trotzdem zuordnen?"
     end
   end
 
   defp confirm(transactions, value \\ ["phx-value-reconciled": "confirmed"]),
-    do: asking(question(transactions), "Ändern", "Der abgeglichene Saldo bleibt gleich.", value)
+    do: asking(question(transactions), "Ändern", "Der gebuchte Saldo bleibt gleich.", value)
 
   defp confirm_merge(proposals),
     do: asking(merge_question(proposals), "Zuordnen", merge_text())
@@ -1069,13 +1068,13 @@ defmodule AbakusWeb.RegisterLive.Components do
     do: [confirm: question, confirm_label: label, confirm_text: text] ++ value
 
   defp question([%{cleared: :reconciled}]),
-    do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"
+    do: "Diese Buchung ist abgeglichen. Trotzdem ändern?"
 
   defp question(transactions) do
     case length(reconciled(transactions)) do
       0 -> nil
-      1 -> "Eine abgeschlossene Buchung ist dabei. Trotzdem ändern?"
-      count -> "#{count} abgeschlossene Buchungen sind dabei. Trotzdem ändern?"
+      1 -> "Eine abgeglichene Buchung ist dabei. Trotzdem ändern?"
+      count -> "#{count} abgeglichene Buchungen sind dabei. Trotzdem ändern?"
     end
   end
 end
