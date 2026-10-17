@@ -44,9 +44,6 @@
 .app-col-activity { width: calc(var(--month-w) * .27); }
 .app-col-available { width: calc(var(--month-w) * .4); }
 .app-budget-wrap { container-type: inline-size; }
-/* Below about 300px a month drops the pills' icons, so four-digit amounts still fit. */
-@container (width < 52rem) { .app-budget[data-months="2"] .app-pill .lucide { display: none; } }
-@container (width < 74rem) { .app-budget[data-months="3"] .app-pill .lucide { display: none; } }
 
 .app-budget .app-cards > th { height: 1px; padding: .25rem .5rem; box-shadow: none; vertical-align: bottom; overflow: visible; }
 .app-budget .app-cards > th.app-ms { box-shadow: inset 1px 0 0 var(--app-line); }
@@ -117,22 +114,16 @@ button.app-grp-name:hover { text-decoration: underline; text-underline-offset: 3
 .app-assign:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); background: var(--color-base-100); color: var(--color-base-content); }
 .app-assign[aria-invalid=true] { border-color: var(--color-error-ink); }
 
-.app-pill {
-  position: relative; display: inline-flex; align-items: center; gap: .25rem; height: 1.5rem; padding: 0 .5rem;
-  border: 0; border-radius: var(--radius-selector); font: inherit; font-size: .8125rem; font-weight: 600;
+.app-avail {
+  position: relative; display: inline-flex; align-items: center; gap: .25rem; height: 1.75rem; margin-inline-end: -.375rem;
+  padding: 0 .375rem; border: 0; border-radius: var(--radius-field); background: none; font: inherit;
   font-variant-numeric: tabular-nums; white-space: nowrap; vertical-align: middle;
 }
-.app-pill .lucide { width: .875rem; height: .875rem; }
-.app-pill-success { background: var(--color-success); color: var(--color-success-content); }
-.app-pill-warning { background: var(--color-warning); color: var(--color-warning-content); }
-.app-pill-error { background: var(--color-error); color: var(--color-error-content); }
-.app-pill-zero { padding: 0; background: none; font-size: .875rem; font-weight: 400; color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
-button.app-pill { cursor: pointer; }
-button.app-pill:not(.app-pill-zero):hover { filter: brightness(.95); }
-button.app-pill-zero:hover { color: var(--color-base-content); }
-button.app-pill:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
-@media (pointer: coarse) { button.app-pill::after { content: ""; position: absolute; inset: -.625rem -.25rem; } }
-.app-udot { display: inline-block; width: .375rem; height: .375rem; margin-inline-end: .375rem; border-radius: 50%; background: var(--color-chart-2); vertical-align: .125rem; }
+.app-avail .lucide { flex: none; width: .875rem; height: .875rem; }
+button.app-avail { cursor: pointer; }
+button.app-avail:hover { background: color-mix(in oklab, var(--color-base-content) 6%, transparent); }
+button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+@media (pointer: coarse) { button.app-avail::after { content: ""; position: absolute; inset: -.5rem -.25rem; } }
 
 .app-mcard {
   --app-tone: var(--color-base-content);
@@ -199,7 +190,6 @@ button.app-pill:focus-visible { outline: 2px solid var(--color-primary); outline
 @media (width < 40rem) {
   .app-budget.is-compact :is(.app-col-assigned, .app-col-activity) { width: 0; visibility: collapse; }
   .app-budget.is-compact .app-col-available { width: var(--month-w); }
-  .app-budget.is-compact .app-pill .lucide { display: none; }
 }
 .app-budget .app-empty { height: auto; padding: 2rem 1rem; white-space: normal; text-align: center; }
 

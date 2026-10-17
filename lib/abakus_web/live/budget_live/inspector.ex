@@ -186,7 +186,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     <section id="inspector-available">
       <.section_heading level={3}>
         Verfügbar
-        <:actions><Components.pill cell={@cell} /></:actions>
+        <:actions><Components.available cell={@cell} /></:actions>
       </.section_heading>
       <.description_list>
         <:item label="Übrig aus Vormonat"><.amount value={@cell.carried} /></:item>

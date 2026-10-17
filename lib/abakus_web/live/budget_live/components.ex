@@ -1,7 +1,6 @@
 defmodule AbakusWeb.BudgetLive.Components do
   @moduledoc """
-  The budget view's parts: month strip, month cards (the month bar on narrow screens) and the table's rows. The
-  focus month shows pills; the other months stay quiet.
+  The budget view's parts: month strip, month cards (the month bar on narrow screens) and the table's rows.
   """
 
   use AbakusWeb, :html
@@ -277,6 +276,7 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   @doc "The text colour of a tone (`Status`): only the ink tokens colour text."
   def tone_class(:error), do: "text-error-ink"
+  def tone_class(:warning), do: "text-warning-ink"
   def tone_class(:success), do: "text-success-ink"
   def tone_class(:muted), do: "text-base-content/70"
   def tone_class(_tone), do: nil
@@ -401,7 +401,6 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :cells, :map, required: true, doc: "the category's `Abakus.Budget.CategoryMonth` per month"
   attr :months, :list, required: true
   attr :focus, Date, required: true
-  attr :current, Date, required: true
 
   attr :invalid, :any,
     required: true,
@@ -414,9 +413,9 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :compact, :boolean, default: false, doc: "on phones, without the pencil"
 
   @doc """
-  A category on one line: name, then per month an assign input, activity and available (a pill in the focus
-  month, which opens the popover). The name, and on desktop a pencil shown on hover and focus, open the
-  category's dialog (name, target, delete).
+  A category on one line: name, then per month an assign input, activity and available, which opens the popover
+  for that month. Zero assigned and activity stay blank. The name, and on desktop a pencil shown on hover and
+  focus, open the category's dialog (name, target, delete).
   """
   def category_row(assigns) do
     assigns = assign(assigns, :parts, Names.split_emoji(assigns.name))
@@ -493,12 +492,7 @@ defmodule AbakusWeb.BudgetLive.Components do
           {blank_zero(cell.activity)}
         </td>
         <td id={"available-#{@id}-#{key}"} class="app-num">
-          <.pill
-            :if={month == @focus}
-            cell={cell}
-            id={@assignable && "pill-#{@id}-#{key}"}
-          />
-          <.quiet :if={month != @focus} cell={cell} current={@current} />
+          <.available cell={cell} id={@assignable && "available-button-#{@id}-#{key}"} />
         </td>
       <% end %>
     </tr>
@@ -516,69 +510,54 @@ defmodule AbakusWeb.BudgetLive.Components do
   defp blank_zero(amount), do: Money.amount(amount)
 
   attr :cell, :any, required: true
-  attr :id, :any, default: nil, doc: "set for a pill that opens the popover"
+  attr :id, :any, default: nil, doc: "set for a cell that opens the popover"
 
-  @doc "A cell's available amount as a pill coloured by its status."
-  def pill(assigns) do
-    assigns = assign(assigns, :status, Status.pill(assigns.cell))
+  @doc "A cell's available amount, coloured and marked by its status (`Status.available/1`)."
+  def available(assigns) do
+    assigns = assign(assigns, :status, Status.available(assigns.cell))
 
     ~H"""
     <button
       :if={@id}
       id={@id}
       type="button"
-      class={["app-pill", pill_class(@status)]}
-      aria-label={pill_label(@status, @cell)}
+      class={["app-avail", available_class(@status.tone)]}
+      aria-label={available_label(@status, @cell)}
       phx-click="open_popover"
-      phx-value-kind="pill"
+      phx-value-kind="available"
       phx-value-category={@cell.category_id}
+      phx-value-month={Window.param(@cell.month)}
       phx-value-anchor={@id}
     >
-      <.pill_content status={@status} cell={@cell} />
+      <.available_content status={@status} cell={@cell} />
     </button>
-    <span :if={!@id} class={["app-pill", pill_class(@status)]}>
-      <.pill_content status={@status} cell={@cell} />
-      <span :if={@status != :zero && @status.label} class="sr-only">{@status.label}</span>
+    <span :if={!@id} class={["app-avail", available_class(@status.tone)]}>
+      <.available_content status={@status} cell={@cell} />
+      <span :if={@status.label} class="sr-only">{@status.label}</span>
     </span>
     """
   end
 
-  attr :status, :any, required: true
+  attr :status, :map, required: true
   attr :cell, :any, required: true
 
-  defp pill_content(%{status: :zero} = assigns), do: ~H"{Money.amount(0)}"
-
-  defp pill_content(assigns) do
+  defp available_content(assigns) do
     ~H"""
-    <.icon :if={@status.icon} name={@status.icon} />{Money.euros(@cell.available)}
+    <.icon :if={@status.icon} name={@status.icon} class={icon_class(@status.icon)} />{Money.amount(
+      @cell.available
+    )}
     """
   end
 
-  defp pill_class(:zero), do: "app-pill-zero"
-  defp pill_class(%{tone: tone}), do: "app-pill-#{tone}"
+  defp available_class(:muted), do: "app-zero"
+  defp available_class(tone), do: tone_class(tone)
 
-  defp pill_label(status, cell) do
-    state = if status != :zero && status.label, do: ", #{status.label}"
+  defp icon_class("circle-check"), do: "text-success-ink"
+  defp icon_class("pause"), do: "text-base-content/70"
+  defp icon_class(_icon), do: nil
+
+  defp available_label(status, cell) do
+    state = if status.label, do: ", #{status.label}"
     "Verfügbar #{Money.euros(cell.available)}#{state}, Geld verschieben"
   end
-
-  attr :cell, :any, required: true
-  attr :current, Date, required: true
-
-  defp quiet(assigns) do
-    assigns = assign(assigns, :status, Status.quiet(assigns.cell, assigns.current))
-
-    ~H"""
-    <span class={quiet_class(@status.tone)}>
-      <span :if={@status.dot} class="app-udot" title="unterfinanziert">
-        <span class="sr-only">unterfinanziert</span>
-      </span>{Money.amount(
-        @cell.available
-      )}
-    </span>
-    """
-  end
-
-  defp quiet_class(:muted), do: "app-zero"
-  defp quiet_class(tone), do: tone_class(tone)
 end

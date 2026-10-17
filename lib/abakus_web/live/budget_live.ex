@@ -8,9 +8,9 @@ defmodule AbakusWeb.BudgetLive do
   As in Actual there is no inspector: a month's card shows how Zu verteilen adds up and its Verteilen menu
   auto-assigns or resets the month; a category's name or pencil opens its dialog (`Inspector`: name, target,
   deleting), on phones a sheet that also takes the assignment. Targets, snoozing, auto-assign, covering and moving
-  money work in the focus month; covering and moving through the available pill's popover (`Popover`). Groups are
-  added, renamed and deleted in popovers (`CategoryEditor`): "+ Gruppe" above the table (below it on phones), "+"
-  and the name on a group's row.
+  money work in the focus month; covering and moving through the available cell's popover (`Popover`), which makes
+  its month the focus. Groups are added, renamed and deleted in popovers (`CategoryEditor`): "+ Gruppe" above the
+  table (below it on phones), "+" and the name on a group's row.
   """
   use AbakusWeb, :live_view
 
@@ -110,7 +110,6 @@ defmodule AbakusWeb.BudgetLive do
                 cells={@rows.uncategorised.cells}
                 months={@window.months}
                 focus={@window.focus}
-                current={@current}
                 invalid={@invalid}
                 assignable={false}
                 compact={@fit.compact}
@@ -132,7 +131,6 @@ defmodule AbakusWeb.BudgetLive do
                 cells={cells}
                 months={@window.months}
                 focus={@window.focus}
-                current={@current}
                 invalid={@invalid}
                 compact={@fit.compact}
               />
@@ -311,7 +309,9 @@ defmodule AbakusWeb.BudgetLive do
   end
 
   def handle_event("open_popover", %{"kind" => kind, "category" => id} = params, socket)
-      when kind in ["pill", "cover"] do
+      when kind in ["available", "cover"] do
+    socket = focus_shown(socket, params["month"])
+
     case entry(socket, id) do
       nil ->
         {:noreply, socket}
@@ -342,7 +342,7 @@ defmodule AbakusWeb.BudgetLive do
 
   def handle_event("popover_mode", %{"value" => mode}, socket) when mode in ["cover", "move"] do
     case socket.assigns.popover do
-      %{kind: :pill} = popover ->
+      %{kind: :available} = popover ->
         {:noreply,
          assign(socket, :popover, %{popover | mode: String.to_existing_atom(mode), error: nil})}
 
@@ -353,7 +353,7 @@ defmodule AbakusWeb.BudgetLive do
 
   def handle_event("cover_change", %{"from" => from}, socket) do
     case socket.assigns.popover do
-      %{kind: kind} = popover when kind in [:pill, :cover] ->
+      %{kind: kind} = popover when kind in [:available, :cover] ->
         {:noreply, assign(socket, :popover, %{popover | from: from, error: nil})}
 
       _other ->
@@ -644,6 +644,16 @@ defmodule AbakusWeb.BudgetLive do
     case CategoryEditor.delete(socket.assigns.current_scope, edit, socket.assigns.groups) do
       :ok -> edited(socket)
       result -> refused(socket, result)
+    end
+  end
+
+  defp focus_shown(socket, param) do
+    case shown_month(socket, param) do
+      {:ok, month} when month != socket.assigns.window.focus ->
+        socket |> assign(:focus, month) |> assign_view()
+
+      _same_or_none ->
+        socket
     end
   end
 

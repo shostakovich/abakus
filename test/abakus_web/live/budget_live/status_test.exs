@@ -12,35 +12,33 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
 
   defp row(attrs), do: struct!(CategoryMonth, Enum.into(attrs, %{month: @oct}))
 
-  describe "pill/1" do
-    test "red when overspent, half when underfunded, a check for a met target, plain at zero" do
-      assert Status.pill(row(available: -100, underfunded: 50)) ==
+  describe "available/1" do
+    test "red when overspent, amber with a clock while underfunded, a check for a funded target" do
+      assert Status.available(row(available: -100, underfunded: 50, target: @monthly)) ==
                %{tone: :error, icon: nil, label: "überzogen"}
 
-      assert Status.pill(row(available: 100, underfunded: 50)) ==
-               %{tone: :warning, icon: "circle-dashed", label: "unterfinanziert"}
+      assert Status.available(row(available: 100, underfunded: 50, target: @monthly)) ==
+               %{tone: :warning, icon: "clock", label: "unterfinanziert"}
 
-      assert Status.pill(row(available: 100, target: @monthly)) ==
-               %{tone: :success, icon: "circle-check", label: "Ziel erreicht"}
-
-      assert Status.pill(row(available: 100)) == %{tone: :success, icon: nil, label: nil}
-      assert Status.pill(row(available: 0)) == :zero
+      assert Status.available(row(available: 100, target: @monthly)) ==
+               %{tone: nil, icon: "circle-check", label: "Ziel erreicht"}
     end
 
-    test "a snoozed target is neither underfunded nor met" do
-      assert Status.pill(row(available: 100, underfunded: 50, snoozed: true, target: @monthly)) ==
-               %{tone: :success, icon: nil, label: nil}
-    end
-  end
+    test "a snoozed target pauses, neither underfunded nor funded" do
+      assert Status.available(
+               row(available: 100, underfunded: 50, snoozed: true, target: @monthly)
+             ) ==
+               %{tone: nil, icon: "pause", label: "Ziel pausiert"}
 
-  describe "quiet/2" do
-    test "red when negative, dimmed at zero, a dot while underfunded up to now or once assigned" do
-      assert Status.quiet(row(available: -1), @oct) == %{tone: :error, dot: false}
-      assert Status.quiet(row(available: 0), @oct) == %{tone: :muted, dot: false}
-      assert Status.quiet(row(available: 5, underfunded: 5), @oct) == %{tone: nil, dot: true}
-      assert Status.quiet(row(month: @nov, available: 5, underfunded: 5), @oct).dot == false
-      assert Status.quiet(row(month: @nov, assigned: 1, underfunded: 5), @oct).dot == true
-      assert Status.quiet(row(underfunded: 5, snoozed: true), @oct).dot == false
+      assert Status.available(row(snoozed: true, target: @monthly)).tone == :muted
+    end
+
+    test "plain without a target, muted at zero, the same in a later month" do
+      assert Status.available(row(available: 100)) == %{tone: nil, icon: nil, label: nil}
+      assert Status.available(row(available: 0)) == %{tone: :muted, icon: nil, label: nil}
+
+      assert Status.available(row(month: @nov, underfunded: 50, target: @monthly)) ==
+               %{tone: :warning, icon: "clock", label: "unterfinanziert"}
     end
   end
 

@@ -1,7 +1,6 @@
 defmodule AbakusWeb.BudgetLive.Status do
   @moduledoc """
-  What the budget shows about a category or month, as in YNAB: the available pill in the focus month and the quiet
-  numbers of the others, the target's status in the category dialog, and Zu verteilen with YNAB 4's calculation
+  What the budget shows about a category or month, as in YNAB: the available cell, the target's status in the category dialog, and Zu verteilen with YNAB 4's calculation
   and the later months it does not cover. A snoozed target counts as done. Colours are tones
   (`:error`, `:warning`, `:success`, `:neutral`, `:muted`); the components map them to theme tokens.
   """
@@ -13,38 +12,29 @@ defmodule AbakusWeb.BudgetLive.Status do
   alias Abakus.Money
 
   @doc """
-  The available pill: `%{tone, icon, label}` (`label` names the state for screen readers), or `:zero`.
+  The available cell, the same in every month: `%{tone, icon, label}`. The tone colours the number (red when
+  overspent, amber while the target is underfunded, muted at zero), the icon marks the target as underfunded, funded
+  or snoozed, and `label` names the state for screen readers.
   """
-  def pill(%CategoryMonth{available: available}) when available < 0,
+  def available(%CategoryMonth{available: available}) when available < 0,
     do: %{tone: :error, icon: nil, label: "überzogen"}
 
-  def pill(%CategoryMonth{} = row) do
+  def available(%CategoryMonth{} = row) do
+    tone = if row.available == 0, do: :muted
+
     cond do
+      row.target != nil and row.snoozed ->
+        %{tone: tone, icon: "pause", label: "Ziel pausiert"}
+
       underfunded?(row) ->
-        %{tone: :warning, icon: "circle-dashed", label: "unterfinanziert"}
+        %{tone: :warning, icon: "clock", label: "unterfinanziert"}
 
-      row.available > 0 and row.target != nil and not row.snoozed ->
-        %{tone: :success, icon: "circle-check", label: "Ziel erreicht"}
-
-      row.available > 0 ->
-        %{tone: :success, icon: nil, label: nil}
+      row.target != nil and row.available > 0 ->
+        %{tone: nil, icon: "circle-check", label: "Ziel erreicht"}
 
       true ->
-        :zero
+        %{tone: tone, icon: nil, label: nil}
     end
-  end
-
-  @doc "Available outside the focus month: its tone, with a dot while underfunded up to now or once assigned."
-  def quiet(%CategoryMonth{} = row, current) do
-    %{
-      tone:
-        cond do
-          row.available < 0 -> :error
-          row.available == 0 -> :muted
-          true -> nil
-        end,
-      dot: underfunded?(row) and (not Date.after?(row.month, current) or row.assigned > 0)
-    }
   end
 
   @doc "What the row's target still asks this month; nothing while it is snoozed."

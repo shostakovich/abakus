@@ -177,13 +177,13 @@ defmodule AbakusWeb.BudgetDetailsTest do
     end
   end
 
-  describe "the available pill" do
+  describe "the available cell" do
     test "covers an overspent category from Zu verteilen", c do
       income(c, 100_000)
       spend(c, c.fuel, -2_500)
       {:ok, view, _html} = open(c.conn)
 
-      view |> element("#pill-#{c.fuel.id}-2026-10") |> render_click()
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
 
       assert has_element?(view, "#popover", "⛽ Tanken")
 
@@ -207,7 +207,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       Categories.assign(budget_scope(), c.groceries, @october, 10_000)
       {:ok, view, _html} = open(c.conn)
 
-      view |> element("#pill-#{c.groceries.id}-2026-10") |> render_click()
+      view |> element("#available-button-#{c.groceries.id}-2026-10") |> render_click()
 
       assert has_element?(view, "#popover", "🛒 Lebensmittel")
       refute has_element?(view, "#popover-cover")
@@ -227,7 +227,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
                "30,00 € von 🛒 Lebensmittel nach 🏠 Miete verschoben."
              )
 
-      view |> element("#pill-#{c.rent.id}-2026-10") |> render_click()
+      view |> element("#available-button-#{c.rent.id}-2026-10") |> render_click()
 
       view
       |> form("#move-form", %{"amount" => "10", "direction" => "from"})
@@ -258,7 +258,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       Categories.assign(budget_scope(), c.groceries, @october, 10_000)
       {:ok, view, _html} = open(c.conn)
 
-      view |> element("#pill-#{c.groceries.id}-2026-10") |> render_click()
+      view |> element("#available-button-#{c.groceries.id}-2026-10") |> render_click()
 
       view
       |> form("#move-form", %{"amount" => "viel", "direction" => "to"})
@@ -288,7 +288,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       spend(c, c.fuel, -2_500)
       {:ok, view, _html} = open(c.conn)
 
-      view |> element("#pill-#{c.fuel.id}-2026-10") |> render_click()
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
 
       assert has_element?(view, "#popover-mode button[aria-pressed=true]", "Decken")
       refute has_element?(view, "#cover-from option[value=rta]")
@@ -303,7 +303,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       assert assigned(c.groceries, @october) == 0
       assert assigned(c.fuel, @october) == 1_000
 
-      view |> element("#pill-#{c.fuel.id}-2026-10") |> render_click()
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
       view |> element("#popover-mode button", "Verschieben") |> render_click()
 
       assert has_element?(view, "#move-form")
@@ -313,8 +313,8 @@ defmodule AbakusWeb.BudgetDetailsTest do
     test "closes on cancel, and a click away closes only its own popover", c do
       {:ok, view, _html} = open(c.conn)
 
-      view |> element("#pill-#{c.groceries.id}-2026-10") |> render_click()
-      render_hook(view, "close_popover", %{"anchor" => "pill-#{c.rent.id}-2026-10"})
+      view |> element("#available-button-#{c.groceries.id}-2026-10") |> render_click()
+      render_hook(view, "close_popover", %{"anchor" => "available-button-#{c.rent.id}-2026-10"})
       assert has_element?(view, ~s|#popover[data-show="true"]|)
 
       view |> element("#move-form button", "Abbrechen") |> render_click()
@@ -324,10 +324,10 @@ defmodule AbakusWeb.BudgetDetailsTest do
     test "leads to the category's details", c do
       {:ok, view, _html} = open(c.conn)
 
-      view |> element("#pill-#{c.groceries.id}-2026-10") |> render_click()
+      view |> element("#available-button-#{c.groceries.id}-2026-10") |> render_click()
 
       assert view |> element("#popover-details") |> render() =~
-               ~s|&quot;focus&quot;,{&quot;to&quot;:&quot;#pill-#{c.groceries.id}-2026-10&quot;}|
+               ~s|&quot;focus&quot;,{&quot;to&quot;:&quot;#available-button-#{c.groceries.id}-2026-10&quot;}|
 
       view |> element("#popover-details") |> render_click()
 
