@@ -134,25 +134,33 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   end
 
   describe "calculation/1" do
-    test "explains Zu verteilen as Actual does: funds, last month's overspending, assigned, kept for later" do
+    test "explains Zu verteilen as YNAB 4 does, the lines adding up to it" do
       october = %Month{
         month: @oct,
         not_assigned_last_month: 52_126,
         overspent_last_month: 1_810,
         income: 324_000,
         assigned: 313_071,
-        assigned_in_future: 39_200
+        assigned_in_future: 39_200,
+        ready_to_assign_shown: 22_045
       }
 
-      assert Status.calculation(october) == [
-               %{label: "Verfügbare Mittel", value: 376_126, tone: nil},
+      lines = Status.calculation(october)
+
+      assert lines == [
+               %{label: "Nicht verteilt im Sep", value: 52_126, tone: nil},
                %{label: "Überzogen im Sep", value: -1_810, tone: :error},
-               %{label: "Zugewiesen", value: -313_071, tone: nil},
+               %{label: "Einnahmen im Okt", value: 324_000, tone: nil},
+               %{label: "Zugewiesen im Okt", value: -313_071, tone: nil},
                %{label: "Für spätere Monate", value: -39_200, tone: nil}
              ]
+
+      assert lines |> Enum.map(& &1.value) |> Enum.sum() == october.ready_to_assign_shown
     end
 
-    test "a past month counts nothing for later months, as it shows Zu verteilen as it ended" do
+    test "leaves out later months when they assigned nothing, and in a past month, which ended without them" do
+      assert [_, _, _, _] = Status.calculation(%Month{month: @nov})
+
       november = %Month{
         month: @nov,
         not_assigned_last_month: -500,
@@ -161,9 +169,10 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       }
 
       assert [
-               %{label: "Verfügbare Mittel", value: -500, tone: :error},
+               %{label: "Nicht verteilt im Okt", value: -500, tone: :error},
                %{label: "Überzogen im Okt", value: 0, tone: nil},
-               %{label: "Zugewiesen", value: 0}
+               %{label: "Einnahmen im Nov", value: 0},
+               %{label: "Zugewiesen im Nov", value: 0}
              ] = Status.calculation(november)
     end
   end

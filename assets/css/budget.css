@@ -137,7 +137,7 @@ button.app-pill:focus-visible { outline: 2px solid var(--color-primary); outline
 .app-mcard {
   --app-tone: var(--color-base-content);
   --app-tint: var(--setzkasten-alert-neutral-tint);
-  display: flex; align-items: center; justify-content: space-between; gap: .75rem; height: 100%; padding: .375rem .75rem;
+  display: flex; flex-direction: column; gap: .25rem; height: 100%; padding: .375rem .75rem .5rem;
   border: 1px solid color-mix(in oklab, var(--app-tone) var(--setzkasten-alert-border), transparent); border-radius: var(--radius-box);
   background: color-mix(in oklab, var(--app-tone) var(--app-tint), var(--color-base-100));
   white-space: normal; cursor: pointer;
@@ -146,21 +146,24 @@ button.app-pill:focus-visible { outline: 2px solid var(--color-primary); outline
 .app-mcard-error { --app-tone: var(--color-error); --app-tint: var(--setzkasten-alert-tint); }
 .app-mcard:not(.is-focus, .app-mbar-card):hover { border-color: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
 .app-mcard.is-focus { cursor: default; }
-.app-minfo {
-  display: flex; flex-direction: column; align-items: flex-start; min-width: 0; margin: -.25rem -.5rem; padding: .25rem .5rem;
-  border: 0; border-radius: var(--radius-field); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer;
-}
-.app-minfo:hover { background: color-mix(in oklab, var(--color-base-content) 6%, transparent); }
-.app-minfo:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 0; }
+.app-mhead { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2rem; }
 .app-mcard .app-mname { font-size: .875rem; line-height: 1.25rem; }
+.app-mcalc { display: grid; grid-template-columns: auto auto; justify-content: end; gap: 0 .75rem; margin: 0; font-size: .75rem; line-height: 1rem; }
+.app-mcalc > div { display: contents; }
+.app-mcalc dt { text-align: end; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
+.app-mcalc dd { margin: 0; text-align: end; }
+.app-mtotal { display: flex; flex-direction: column; align-items: flex-end; text-align: end; }
+.app-rta { display: inline-flex; align-items: baseline; gap: .375rem; }
+.app-rta-sign { font-size: 1rem; font-weight: 600; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
 .app-mcard .app-rta-value { line-height: 1.75rem; }
 .app-mcard .app-rta-label { font-size: .75rem; line-height: 1rem; }
 
 .app-mname { font-size: 1rem; font-weight: 600; line-height: 1.5rem; }
 .app-rta-value { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -.01em; }
-.app-rta-label { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .25rem .5rem; font-weight: 500; }
-.app-rta-label .app-uncovered { display: inline-flex; align-items: center; gap: .25rem; color: var(--color-error-ink); font-weight: 600; }
-.app-rta-label .app-uncovered .lucide { width: .875rem; height: .875rem; }
+.app-rta-label { font-weight: 500; }
+.app-uncovered { display: flex; flex-direction: column; align-items: flex-end; gap: .125rem; font-size: .75rem; line-height: 1rem; font-weight: 600; color: var(--color-error-ink); text-align: end; }
+.app-uncovered li { display: flex; align-items: flex-start; gap: .25rem; }
+.app-uncovered .lucide { flex: none; width: .875rem; height: .875rem; margin-block-start: .0625rem; }
 .app-distribute .menu { text-align: start; }
 /* As Setzkasten's neutral buttons on an alert's tint: base-200 all but vanishes on the card's. */
 .app-mcard .app-distribute > .btn:not(.btn-primary) {
@@ -177,6 +180,21 @@ button.app-pill:focus-visible { outline: 2px solid var(--color-primary); outline
 @media (width >= 40rem) { .app-mbar { margin-inline: -1.5rem; padding-inline: 1.5rem; } }
 .app-mbar-nav { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .app-mbar .app-mcard { min-height: 4rem; cursor: default; }
+.app-mtoggle {
+  display: flex; align-items: center; gap: .5rem; min-width: 0; margin: -.25rem -.5rem; padding: .25rem .5rem;
+  border: 0; border-radius: var(--radius-field); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer;
+}
+.app-mtoggle:hover { background: color-mix(in oklab, var(--color-base-content) 6%, transparent); }
+.app-mtoggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 0; }
+.app-mtoggle-text { display: flex; flex-direction: column; min-width: 0; }
+.app-mtoggle > .lucide { flex: none; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); transition: rotate var(--setzkasten-duration) var(--setzkasten-ease-out); }
+.app-mbar.is-open .app-mtoggle > .lucide { rotate: 180deg; }
+.app-mbar .app-mcalc { display: none; grid-template-columns: minmax(0, 1fr) auto; justify-content: stretch; padding-block-start: .25rem; }
+.app-mbar.is-open .app-mcalc { display: grid; }
+.app-mbar .app-mcalc dt { text-align: start; }
+.app-mbar .app-uncovered { align-items: flex-start; text-align: start; }
+@media (prefers-reduced-motion: reduce) { .app-mtoggle > .lucide { transition: none; } }
+
 
 @media (width < 40rem) {
   .app-budget.is-compact :is(.app-col-assigned, .app-col-activity) { width: 0; visibility: collapse; }
@@ -196,8 +214,6 @@ button.app-pill:focus-visible { outline: 2px solid var(--color-primary); outline
 .app-act > .btn { grid-column: 2; justify-self: end; }
 .app-dialog { width: min(30rem, 100vw); max-width: none; }
 .app-dialog .app-insp { gap: 1.5rem; }
-@media (width >= 40rem) { .app-mpop { width: 20rem; } }
-.app-mdetails { display: flex; flex-direction: column; gap: 1.25rem; }
 .app-act-name { min-width: 0; hyphens: auto; overflow-wrap: break-word; }
 .app-panel-assign .fieldset { padding: 0; }
 .app-panel-assign label.input { margin-inline-start: auto; }

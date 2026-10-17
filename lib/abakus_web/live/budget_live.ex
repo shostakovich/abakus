@@ -5,7 +5,7 @@ defmodule AbakusWeb.BudgetLive do
   the current month, so that it is the user's own. Every month takes assignments, as in YNAB; Zu verteilen may go
   below zero.
 
-  As in Actual there is no inspector: a month's card opens its details (`MonthDetails`) and its Verteilen menu
+  As in Actual there is no inspector: a month's card shows how Zu verteilen adds up and its Verteilen menu
   auto-assigns or resets the month; a category's name or pencil opens its dialog (`Inspector`: name, target,
   deleting), on phones a sheet that also takes the assignment. Targets, snoozing, auto-assign, covering and moving
   money work in the focus month; covering and moving through the available pill's popover (`Popover`). Groups are
@@ -20,7 +20,6 @@ defmodule AbakusWeb.BudgetLive do
     CategoryEditor,
     Components,
     Inspector,
-    MonthDetails,
     Popover,
     Rows,
     Status,
@@ -63,7 +62,6 @@ defmodule AbakusWeb.BudgetLive do
         <Components.month_bar
           :if={@fit.compact}
           month={focus_month(@months, @window)}
-          future={@future[@window.focus]}
           window={@window}
         />
         <div class="app-budget-wrap">
@@ -93,7 +91,6 @@ defmodule AbakusWeb.BudgetLive do
                 <th :for={month <- @months} colspan="3" class="app-ms">
                   <Components.month_card
                     month={month}
-                    future={@future[month.month]}
                     focus={month.month == @window.focus}
                     current={@current}
                   />
@@ -874,7 +871,6 @@ defmodule AbakusWeb.BudgetLive do
     |> assign(
       window: window,
       months: shown,
-      future: Map.new(shown, &{&1.month, MonthDetails.future(months, &1)}),
       inspector: inspector,
       rows: Rows.new(socket.assigns.groups, shown)
     )

@@ -29,42 +29,34 @@ defmodule AbakusWeb.BudgetDetailsTest do
   end
 
   describe "a month" do
-    test "its card opens its details: how Zu verteilen adds up, the summary, the need and later months",
+    test "its card adds up to Zu verteilen, last month's overspending and later months included",
          c do
-      income(c, 100_000)
+      income(c, 100_000, ~D[2026-09-01])
+      spend(c, c.groceries, -2_500, ~D[2026-09-15])
+      income(c, 50_000)
       Categories.assign(budget_scope(), c.groceries, @october, 10_000)
       Categories.assign(budget_scope(), c.rent, @november, 30_000)
-      monthly(c.rent, 50_000)
 
-      {:ok, view, _html} = open(c.conn)
+      {:ok, view, _html} = open(c.conn, months: 3, path: ~p"/budget?month=2026-09")
 
-      assert has_element?(view, "#month-info-2026-10", "Zu verteilen")
-      assert view |> element("#month-info-2026-10") |> render() =~ "month-details-2026-10"
+      assert calculation(view, "2026-10") == [
+               {"Nicht verteilt im Sep", "1000.00"},
+               {"Überzogen im Sep", "-25.00"},
+               {"Einnahmen im Okt", "500.00"},
+               {"Zugewiesen im Okt", "-100.00"},
+               {"Für spätere Monate", "-300.00"}
+             ]
 
-      assert has_element?(view, "#month-details-2026-10 h2", "Oktober 2026")
-      assert has_element?(view, "#month-2026-10-ready", "Zu verteilen")
-      assert has_element?(view, "#month-2026-10-summary", "100,00 €")
-      assert has_element?(view, "#month-2026-10-need", "Noch offen")
-      assert has_element?(view, "#month-2026-10-need", "500,00 €")
-      assert has_element?(view, "#month-2026-10-future", "300,00 €")
-      assert has_element?(view, "#month-2026-10-future", "November 2026")
+      assert has_element?(view, "#month-2026-10 .app-mtotal", "Zu verteilen")
 
-      sections =
-        Regex.scan(
-          ~r/<section[^>]* id="month-2026-10-([a-z]+)"/,
-          render(element(view, "#month-details-2026-10")),
-          capture: :all_but_first
-        )
+      for key <- ~w(2026-09 2026-10 2026-11) do
+        assert sum(calculation(view, key)) == ready(view, key)
+      end
 
-      assert List.flatten(sections) == ~w(ready summary need future)
-    end
-
-    test "the details of a card that is not the focus month make it the focus", c do
-      {:ok, view, _html} = open(c.conn, months: 2)
-
-      view |> element("#month-info-2026-11") |> render_click()
-
-      assert has_element?(view, "#month-2026-11.is-focus")
+      assert ready(view, "2026-10") == Decimal.new("1075.00")
+      refute has_element?(view, "#calc-2026-11", "Für spätere Monate")
+      refute has_element?(view, "#calc-2026-09", "Für spätere Monate")
+      assert has_element?(view, "#month-2026-09 .app-mtotal", "Nicht verteilt am Monatsende")
     end
 
     test "Unterfinanziert fills every target's share as far as Zu verteilen reaches", c do
@@ -72,6 +64,12 @@ defmodule AbakusWeb.BudgetDetailsTest do
       monthly(c.groceries, 40_000)
       by_date(c.rent, 120_000, ~D[2027-06-01])
       {:ok, view, _html} = open(c.conn)
+
+      assert has_element?(
+               view,
+               "#distribute-underfunded-2026-10",
+               "Unterfinanzierte füllen (533,34 €)"
+             )
 
       view |> element("#distribute-underfunded-2026-10") |> render_click()
 
@@ -655,7 +653,29 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
     conn
     |> put_connect_params(%{"fit" => fit})
-    |> live(~p"/budget")
+    |> live(Keyword.get(opts, :path, ~p"/budget"))
+  end
+
+  defp calculation(view, key) do
+    html = render(element(view, "#calc-#{key}"))
+
+    Enum.zip(
+      Regex.scan(~r/<dt>([^<]+)<\/dt>/, html, capture: :all_but_first),
+      Regex.scan(~r/<data[^>]* value="([-\d.]+)"/, html, capture: :all_but_first)
+    )
+    |> Enum.map(fn {[label], [value]} -> {label, value} end)
+  end
+
+  defp sum(lines),
+    do: Enum.reduce(lines, Decimal.new(0), fn {_label, value}, sum -> Decimal.add(sum, value) end)
+
+  defp ready(view, key) do
+    [value] =
+      Regex.run(~r/value="([-\d.]+)"/, render(element(view, "#ready-#{key}")),
+        capture: :all_but_first
+      )
+
+    Decimal.new(value)
   end
 
   defp monthly(category, amount, from \\ @october) do

@@ -138,8 +138,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert Categories.budget(budget_scope()).assigned == %{}
     end
 
-    test "the month's details warn while a later month is not covered, the month card with a sign",
-         c do
+    test "the month card warns while a later month is not covered", c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       Categories.assign(budget_scope(), c.groceries, @october, 40_000)
       spend(c, c.groceries, -80_000, ~D[2026-10-05])
@@ -149,17 +148,14 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       assert has_element?(view, "#ready-2026-10", "100,00 €")
       warning = "November nicht gedeckt: es fehlen 300,00 €"
-      assert has_element?(view, "#month-details-2026-10 .app-uncovered-alert", warning)
-      assert has_element?(view, "#month-2026-10 .app-uncovered", "nicht gedeckt")
+      assert has_element?(view, "#month-2026-10 #uncovered-2026-10", warning)
 
       view |> element("#assign-#{c.rent.id}-2026-11") |> render_blur(%{"value" => "200"})
 
       refute has_element?(view, ".app-uncovered")
-      refute has_element?(view, ".app-uncovered-alert")
     end
 
-    test "the current month is the focus month, with pills; a card's details have its calculation",
-         c do
+    test "the current month is the focus month, with pills; a card has its calculation", c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       Categories.assign(budget_scope(), c.groceries, @october, 30_000)
       Categories.assign(budget_scope(), c.groceries, @november, 30_000)
@@ -173,16 +169,10 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       assert has_element?(view, "#month-2026-11:not(.is-focus):not([aria-current])", "400,00 €")
       assert has_element?(view, "#month-2026-12:not(.is-focus)")
-      assert has_element?(view, "#month-info-2026-10[aria-haspopup=dialog]")
-      assert has_element?(view, "#month-details-2026-10[data-anchor=month-info-2026-10]")
-      assert has_element?(view, "#month-details-2026-10", "Oktober 2026")
-      assert has_element?(view, "#month-details-2026-10", "Verfügbare Mittel")
-      assert has_element?(view, "#month-details-2026-10", "Für spätere Monate")
-      assert has_element?(view, "#month-2026-10-summary", "Zusammenfassung")
-      assert has_element?(view, "#month-2026-10-need", "Monatsbedarf")
-      assert has_element?(view, "#month-2026-10-future", "November 2026")
-      assert has_element?(view, "#month-2026-10-future", "300,00")
-      assert has_element?(view, "#month-2026-11-future", "Nichts im Voraus verteilt.")
+      assert has_element?(view, "#month-2026-10 #calc-2026-10", "Für spätere Monate")
+      assert has_element?(view, "#calc-2026-10", "−300,00")
+      refute has_element?(view, "#calc-2026-11", "Für spätere Monate")
+      refute has_element?(view, "#month-details-2026-10")
       assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .app-pill", "300,00 €")
       assert has_element?(view, "#available-#{c.groceries.id}-2026-11", "600,00")
       assert has_element?(view, "#strip button.is-focus", "Okt")
@@ -254,7 +244,15 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, "#month-bar", "Oktober 2026")
       assert has_element?(view, "#month-bar #ready-2026-10", "1.000,00 €")
       assert has_element?(view, "#month-bar #distribute-2026-10")
-      assert has_element?(view, "#month-bar #month-details-2026-10", "Zusammenfassung")
+
+      assert has_element?(
+               view,
+               "#month-bar #month-toggle-2026-10[aria-expanded=false][aria-controls=calc-2026-10]",
+               "1.000,00"
+             )
+
+      assert has_element?(view, "#month-bar #calc-2026-10", "Einnahmen im Okt")
+      assert view |> element("#month-toggle-2026-10") |> render() =~ "is-open"
       assert has_element?(view, ".app-add-end #add-group")
       refute has_element?(view, "thead #add-group")
 

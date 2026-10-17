@@ -11,7 +11,7 @@ defmodule AbakusWeb.BudgetLive.Components do
   alias Abakus.Budget.Month
   alias Abakus.Money
   alias Abakus.Names
-  alias AbakusWeb.BudgetLive.{CategoryEditor, MonthDetails, Status, Window}
+  alias AbakusWeb.BudgetLive.{CategoryEditor, Status, Window}
 
   @doc "The budget's path for the first month shown."
   def budget_path(first), do: ~p"/budget?#{[month: Window.param(first)]}"
@@ -65,13 +65,12 @@ defmodule AbakusWeb.BudgetLive.Components do
   end
 
   attr :month, Month, required: true
-  attr :future, :list, required: true, doc: "from `MonthDetails.future/2`"
   attr :focus, :boolean, required: true
   attr :current, Date, required: true
 
   @doc """
-  A month's card, as compact as Actual's: Zu verteilen on a fill that carries its state, a sign while later months
-  are not covered, and Verteilen. The rest opens in the month's popover.
+  A month's card, as YNAB 4's month header: the month and Verteilen, how Zu verteilen adds up, then Zu verteilen on a
+  fill that carries its state, with the later months it does not cover.
   """
   def month_card(assigns) do
     assigns =
@@ -88,28 +87,25 @@ defmodule AbakusWeb.BudgetLive.Components do
       phx-click={not @focus && "focus"}
       phx-value-month={@key}
     >
-      <.month_info key={@key} focus={@focus}>
+      <div class="app-mhead">
         <span class="app-mname">{title(@month.month, @current)}</span>
-        <.ready_to_assign month={@month} key={@key} focus={@focus} />
-      </.month_info>
-      <.distribute month={@month} key={@key} primary={@focus} />
+        <.distribute month={@month} key={@key} primary={@focus} />
+      </div>
+      <.calculation month={@month} key={@key} />
+      <div class="app-mtotal">
+        <.ready_to_assign month={@month} key={@key} focus={@focus} sign />
+      </div>
+      <.uncovered month={@month} key={@key} />
     </div>
-    <MonthDetails.details
-      id={"month-details-#{@key}"}
-      anchor={"month-info-#{@key}"}
-      month={@month}
-      future={@future}
-    />
     """
   end
 
   attr :month, Month, required: true
-  attr :future, :list, required: true
   attr :window, Window, required: true
 
   @doc """
   The focus month on narrow screens, as a bar that stays at the top: the month with arrows to step, and
-  Zu verteilen with its menu on a band like the month card.
+  Zu verteilen with its menu on a band like the month card; a tap on Zu verteilen shows how it adds up.
   """
   def month_bar(assigns) do
     assigns =
@@ -144,40 +140,54 @@ defmodule AbakusWeb.BudgetLive.Components do
         />
       </div>
       <div id={"month-#{@key}"} class={["app-mcard app-mbar-card", card_class(@tone)]}>
-        <.month_info key={@key} focus>
-          <.ready_to_assign month={@month} key={@key} focus />
-        </.month_info>
-        <.distribute month={@month} key={@key} primary />
+        <div class="app-mhead">
+          <button
+            id={"month-toggle-#{@key}"}
+            type="button"
+            class="app-mtoggle"
+            aria-expanded="false"
+            aria-controls={"calc-#{@key}"}
+            phx-click={
+              JS.toggle_attribute({"aria-expanded", "true", "false"})
+              |> JS.toggle_class("is-open", to: "#month-bar")
+            }
+          >
+            <span class="app-mtoggle-text">
+              <.ready_to_assign month={@month} key={@key} focus />
+            </span>
+            <.icon name="chevron-down" />
+          </button>
+          <.distribute month={@month} key={@key} primary />
+        </div>
+        <.calculation month={@month} key={@key} />
+        <.uncovered month={@month} key={@key} />
       </div>
-      <MonthDetails.details
-        id={"month-details-#{@key}"}
-        anchor={"month-info-#{@key}"}
-        month={@month}
-        future={@future}
-      />
     </div>
     """
   end
 
+  attr :month, Month, required: true
   attr :key, :string, required: true
-  attr :focus, :boolean, required: true
-  slot :inner_block, required: true
 
-  defp month_info(assigns) do
-    assigns = assign(assigns, :open, show_popover("month-details-#{assigns.key}"))
-
+  defp calculation(assigns) do
     ~H"""
-    <button
-      id={"month-info-#{@key}"}
-      type="button"
-      class="app-minfo"
-      aria-haspopup="dialog"
-      phx-click={
-        if @focus, do: @open, else: JS.push("focus", value: %{month: @key}) |> JS.concat(@open)
-      }
-    >
-      {render_slot(@inner_block)}
-    </button>
+    <dl id={"calc-#{@key}"} class="app-mcalc">
+      <div :for={line <- Status.calculation(@month)}>
+        <dt>{line.label}</dt>
+        <dd><.amount value={line.value} signed class={tone_class(line.tone)} /></dd>
+      </div>
+    </dl>
+    """
+  end
+
+  attr :month, Month, required: true
+  attr :key, :string, required: true
+
+  defp uncovered(assigns) do
+    ~H"""
+    <ul :if={@month.uncovered != []} id={"uncovered-#{@key}"} class="app-uncovered">
+      <li :for={line <- Status.uncovered(@month)}><.icon name="triangle-alert" />{line}</li>
+    </ul>
     """
   end
 
@@ -207,7 +217,7 @@ defmodule AbakusWeb.BudgetLive.Components do
         icon="target"
         on_click={JS.push("auto", value: %{kind: "underfunded", month: @key})}
       >
-        Unterfinanzierte füllen
+        Unterfinanzierte füllen ({Money.euros(@month.underfunded)})
       </:item>
       <:item
         :if={@free}
@@ -246,20 +256,22 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :key, :string, required: true
   attr :focus, :boolean, required: true
 
+  attr :sign, :boolean,
+    default: false,
+    doc: "an equals sign before it, as the result of the calculation"
+
   defp ready_to_assign(assigns) do
     ~H"""
-    <.amount
-      id={"ready-#{@key}"}
-      value={@month.ready_to_assign_shown}
-      animate={@focus}
-      class="app-rta-value"
-    />
-    <span class="app-rta-label">
-      {elem(Status.ready(@month), 1)}
-      <span :if={@month.uncovered != []} id={"uncovered-#{@key}"} class="app-uncovered">
-        <.icon name="triangle-alert" />nicht gedeckt
-      </span>
+    <span class="app-rta">
+      <span :if={@sign} class="app-rta-sign" aria-hidden="true">=</span>
+      <.amount
+        id={"ready-#{@key}"}
+        value={@month.ready_to_assign_shown}
+        animate={@focus}
+        class="app-rta-value"
+      />
     </span>
+    <span class="app-rta-label">{elem(Status.ready(@month), 1)}</span>
     """
   end
 

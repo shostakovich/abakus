@@ -1,8 +1,8 @@
 defmodule AbakusWeb.BudgetLive.Status do
   @moduledoc """
   What the budget shows about a category or month, as in YNAB: the available pill in the focus month and the quiet
-  numbers of the others, the target's status in the category dialog, and Zu verteilen with Actual's short
-  calculation and the later months it does not cover. A snoozed target counts as done. Colours are tones
+  numbers of the others, the target's status in the category dialog, and Zu verteilen with YNAB 4's calculation
+  and the later months it does not cover. A snoozed target counts as done. Colours are tones
   (`:error`, `:warning`, `:success`, `:neutral`, `:muted`); the components map them to theme tokens.
   """
 
@@ -127,23 +127,29 @@ defmodule AbakusWeb.BudgetLive.Status do
   def ready(%Month{}), do: {nil, "Alles verteilt"}
 
   @doc """
-  How Zu verteilen adds up, as in Actual: the funds (what last month left plus this month's income), last month's
-  overspending, what is assigned and, in an open month, what later months have. Values are signed cents.
+  How Zu verteilen adds up, as YNAB 4's month header: what last month left unassigned and overspent, this month's
+  income and assignments and, in an open month, what later months have assigned. Signed cents that add up to
+  `ready_to_assign_shown`.
   """
   def calculation(%Month{} = month) do
-    funds = month.not_assigned_last_month + month.income
     last = month_abbr(Date.shift(month.month, month: -1))
+    this = month_abbr(month.month)
+    later = if month.closed, do: 0, else: month.assigned_in_future
 
     [
-      %{label: "Verfügbare Mittel", value: funds, tone: error(funds < 0)},
+      %{
+        label: "Nicht verteilt im #{last}",
+        value: month.not_assigned_last_month,
+        tone: error(month.not_assigned_last_month < 0)
+      },
       %{
         label: "Überzogen im #{last}",
         value: -month.overspent_last_month,
         tone: error(month.overspent_last_month > 0)
       },
-      %{label: "Zugewiesen", value: -month.assigned, tone: nil},
-      not month.closed &&
-        %{label: "Für spätere Monate", value: -month.assigned_in_future, tone: nil}
+      %{label: "Einnahmen im #{this}", value: month.income, tone: nil},
+      %{label: "Zugewiesen im #{this}", value: -month.assigned, tone: nil},
+      later != 0 && %{label: "Für spätere Monate", value: -later, tone: nil}
     ]
     |> Enum.filter(& &1)
   end
