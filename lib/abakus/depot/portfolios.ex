@@ -169,6 +169,7 @@ defmodule Abakus.Depot.Portfolios do
   amounts in euro cents:
 
   - `net_worth` today and `net_worth_yesterday`
+  - `first_day`: the day of the first transaction, nil without any
   - `chart`: net worth, invested capital and the value of the shadow portfolio in the benchmark
     (`benchmark`, nil without one) on the days of the period a chart shows, see
     `Performance.shadow_portfolio/4`
@@ -200,6 +201,7 @@ defmodule Abakus.Depot.Portfolios do
     %{
       net_worth: today_point.value,
       net_worth_yesterday: yesterday.value,
+      first_day: first_day,
       chart: chart(index, range, shadow_portfolio(benchmark, index, market, range.first)),
       ttwror: Performance.ttwror(index),
       irr: Performance.irr(index),
