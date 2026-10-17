@@ -119,7 +119,7 @@ defmodule AbakusWeb.Depot.SecuritiesLiveTest do
 
   test "a new symbol drops the old Yahoo prices and fetches the whole history", %{conn: conn} do
     security = security_fixture(fetched_at: fresh(), checked_at: fresh())
-    price_fixture(security, ~D[2026-10-05], 100, :pp)
+    price_fixture(security, ~D[2026-10-05], 100, :manual)
     price_fixture(security, ~D[2026-10-06], 200, :manual)
     price_fixture(security, ~D[2026-10-07], 300, :yahoo)
 
@@ -138,7 +138,7 @@ defmodule AbakusWeb.Depot.SecuritiesLiveTest do
 
     assert prices_of(security) == [
              {~D[2017-10-26], 50, :yahoo},
-             {~D[2026-10-05], 100, :pp},
+             {~D[2026-10-05], 100, :manual},
              {~D[2026-10-06], 200, :manual}
            ]
   end

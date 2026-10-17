@@ -1226,7 +1226,7 @@ defmodule Abakus.MCP.ToolsTest do
            )
 
     assert text =~
-             "YNAB tables (credentials) are not visible via MCP, nor is anything outside the Kasse but exchange_rates"
+             "Nothing outside the Kasse but exchange_rates is visible via MCP"
 
     assert text =~ "GROUP BY 1 ORDER BY 2 DESC;\n\nPeople (id: name): "
 
@@ -1242,7 +1242,6 @@ defmodule Abakus.MCP.ToolsTest do
              ~w(kasse_participants kasse_categories kasse_settings kasse_recurring_expenses kasse_expenses
                 kasse_expense_shares kasse_activities exchange_rates)
 
-    refute String.downcase(text) =~ "ynab_"
     decode_refusal("schema", %{"table" => "expenses"}, "table")
   end
 

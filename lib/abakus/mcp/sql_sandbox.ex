@@ -1,10 +1,10 @@
 defmodule Abakus.MCP.SqlSandbox do
   @moduledoc """
-  Runs one query on an in-memory copy of the tables the MCP may see; the YNAB tables with their
-  tokens are never copied. The copy comes from the database file, attached read-only and
-  detached again; then the connection only reads (`query_only`) and may neither attach nor run
-  pragmas. The query is embedded as a subquery that SQLite must compile whole, so only a single
-  SELECT runs, and is cancelled after 2 seconds, the copy included.
+  Runs one query on an in-memory copy of the tables the MCP may see; no other table is ever
+  copied. The copy comes from the database file, attached read-only and detached again; then
+  the connection only reads (`query_only`) and may neither attach nor run pragmas. The query is
+  embedded as a subquery that SQLite must compile whole, so only a single SELECT runs, and is
+  cancelled after 2 seconds, the copy included.
   """
 
   alias Abakus.MCP.Tools

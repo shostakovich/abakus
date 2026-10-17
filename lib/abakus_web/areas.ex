@@ -58,8 +58,7 @@ defmodule AbakusWeb.Areas do
     remember_area(conn, area_of(part))
   end
 
-  @doc "Plug for a page open to everyone that belongs to `area`: the session remembers it."
-  def remember_area(conn, area), do: put_session(conn, :area, Atom.to_string(area))
+  defp remember_area(conn, area), do: put_session(conn, :area, Atom.to_string(area))
 
   @doc "Plug for a part's settings: 404 unless the user may use it; the area used last stays."
   def require_part(conn, part) do
@@ -101,17 +100,6 @@ defmodule AbakusWeb.Areas do
       areas: for_scope(scope),
       area: socket.assigns.area || :finanzen
     )
-  end
-
-  @doc "Hides the Depot again once the user's last portfolio is gone, e.g. after a PP import deleted it."
-  def close_depot(%{assigns: %{current_scope: %Scope{depot: false}}} = socket), do: socket
-
-  def close_depot(socket) do
-    scope = %{socket.assigns.current_scope | depot: false}
-    areas = for_scope(scope)
-    area = shown_area(areas, socket.assigns.area && Atom.to_string(socket.assigns.area))
-
-    Phoenix.Component.assign(socket, current_scope: scope, areas: areas, area: area && area.key)
   end
 
   defp area_of(:kasse), do: :kasse

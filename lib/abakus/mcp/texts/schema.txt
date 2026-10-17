@@ -27,7 +27,7 @@ Tables:
   A day can have both an ECB and a manual rate; the Kasse takes the most recent manual rate on or before a date, otherwise the ECB rate
   of that day or of up to ten days before.
 - kasse_settings: the settings of the group (a single row, group_name).
-YNAB tables (credentials) are not visible via MCP, nor is anything outside the Kasse but exchange_rates (kasse_participants.user_id refers to the sign-in).
+Nothing outside the Kasse but exchange_rates is visible via MCP (kasse_participants.user_id refers to the sign-in).
 
 Balance of a person = sum of amount_cents of the expenses they paid (paid_by_id) − sum of their shares in kasse_expense_shares
 (only deleted_at IS NULL, reimbursements included). Positive = is owed money.

@@ -121,7 +121,6 @@ defmodule Abakus.Depot.BudgetFeedTest do
 
       assert account_of(c.portfolio)
       assert account_of(theirs) == nil
-      assert BudgetFeed.in_use?(budget_scope())
     end
 
     test "renames an account after its renamed portfolio", c do

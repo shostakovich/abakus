@@ -10,7 +10,7 @@ defmodule Abakus.Depot.Performance do
   - The interval's first day is the reference day: the returns start from its closing value, and
     what happens on it counts no further.
   - Money in and out are deposits and removals, inbound and outbound deliveries, and what crosses
-    the filter's edge as `Filter` converts it, each in euros at the ECB rate of its day.
+    the filter's edge as `Filter` converts it.
   - TTWROR: each day returns (value + money out) / (previous day's value + money in) − 1, so
     money comes in at the start of the day and goes out at its end; a day with neither value
     before it nor money coming in returns 0. The days are chained.
@@ -36,19 +36,13 @@ defmodule Abakus.Depot.Performance do
   and the IRR's cash flows after the reference day as `{date, euros}` with money in negative, in
   order of time.
   """
-  def index(
-        transactions,
-        accounts,
-        %Market{} = market,
-        %Filter{} = filter,
-        %Date.Range{} = interval
-      ) do
-    flows = flows(transactions, market, filter, interval)
+  def index(transactions, %Market{} = market, %Filter{} = filter, %Date.Range{} = interval) do
+    flows = flows(transactions, filter, interval)
     per_day = Enum.group_by(flows, &elem(&1, 0), &Tuple.delete_at(&1, 0))
 
     days =
       transactions
-      |> Valuation.history(accounts, market, Enum.to_list(interval), filter)
+      |> Valuation.history(market, Enum.to_list(interval), filter)
       |> Enum.map(fn point ->
         day_flows = Map.get(per_day, point.date, [])
 
@@ -70,12 +64,12 @@ defmodule Abakus.Depot.Performance do
   end
 
   # `{date, kind, cents}` per side of each transaction in the interval, in order of time.
-  defp flows(transactions, market, filter, interval) do
+  defp flows(transactions, filter, interval) do
     for t <- Enum.sort_by(transactions, & &1.date_time, NaiveDateTime),
         date = NaiveDateTime.to_date(t.date_time),
         date in interval,
-        {kind, amount, currency} <- Filter.flows(filter, t),
-        do: {date, kind, Market.to_euros(market, amount, currency, date)}
+        {kind, amount} <- Filter.flows(filter, t),
+        do: {date, kind, amount}
   end
 
   defp sum(day_flows, kind),

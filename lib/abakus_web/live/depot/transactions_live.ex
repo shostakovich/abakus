@@ -1,8 +1,9 @@
 defmodule AbakusWeb.Depot.TransactionsLive do
   @moduledoc """
   „Buchungen“: every transaction of the user or of one portfolio, grouped by month and newest
-  first, filtered by all, purchases and sales, earnings or account. A transaction booked in the Depot opens the dialog
-  „Buchung bearbeiten“; those from the PP import are read-only. A receipt opens as PDF.
+  first, filtered by all, purchases and sales, earnings or account. Every transaction opens the
+  dialog: „Buchung bearbeiten“ for a type the form knows, otherwise read-only, to delete it. A
+  receipt opens as PDF.
   """
   use AbakusWeb, :depot_live_view
 
@@ -18,24 +19,6 @@ defmodule AbakusWeb.Depot.TransactionsLive do
     {"earnings", :earnings, "Erträge"},
     {"account", :account, "Konto"}
   ]
-
-  @labels %{
-    buy: "Kauf",
-    sell: "Verkauf",
-    inbound_delivery: "Einlieferung",
-    outbound_delivery: "Auslieferung",
-    security_transfer: "Depotwechsel",
-    cash_transfer: "Umbuchung",
-    deposit: "Einlage",
-    removal: "Entnahme",
-    dividend: "Dividende",
-    interest: "Zinsen",
-    interest_charge: "Zinsbelastung",
-    tax: "Steuern",
-    tax_refund: "Steuerrückerstattung",
-    fee: "Gebühren",
-    fee_refund: "Gebührenerstattung"
-  }
 
   @inflows [:sell, :dividend, :interest, :deposit, :tax_refund, :fee_refund]
   @outflows [:buy, :removal, :interest_charge, :tax, :fee]
@@ -58,9 +41,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
         portfolio={@portfolio}
         portfolios={@portfolios}
         switch_path={&transactions_path(@filter_param, &1)}
-      >
-        <:subtitle>Aus Portfolio Performance importierte Buchungen sind nur lesbar.</:subtitle>
-      </.depots_header>
+      />
 
       <section aria-label="Buchungen">
         <.tabs id="transaction-filter" label="Filter" class="mb-4">
@@ -131,19 +112,17 @@ defmodule AbakusWeb.Depot.TransactionsLive do
     <.list_row
       id={"transaction-#{@transaction.id}"}
       title={@title}
-      on_click={if @editable, do: TransactionDialog.edit(@transaction.id)}
+      on_click={TransactionDialog.edit(@transaction.id)}
       trailing_on_phone={:title}
       data-month={Date.to_iso8601(@month)}
     >
       <:leading><.plush name={type_plush(@transaction.type)} size={:lg} /></:leading>
-      <span :if={@editable} class="sr-only"> bearbeiten</span>
+      <span class="sr-only">{if @editable, do: "bearbeiten", else: "ansehen"}</span>
       <:meta>{details(@transaction)}</:meta>
       <:trailing :let={place}>
         <.receipt_link :if={@transaction.receipt && place == :column} transaction={@transaction} />
         <.amount
           value={signed_cents(@transaction)}
-          currency={@transaction.currency}
-          currency_display={DepotFormat.currency_display(@transaction.currency)}
           signed={signed?(@transaction.type)}
           tone={inflow?(@transaction.type)}
           class="font-semibold"
@@ -181,9 +160,9 @@ defmodule AbakusWeb.Depot.TransactionsLive do
   end
 
   defp title(%Transaction{security: %{name: name}} = transaction),
-    do: join_meta([@labels[transaction.type], name])
+    do: join_meta([DepotFormat.transaction_type(transaction.type), name])
 
-  defp title(transaction), do: @labels[transaction.type]
+  defp title(transaction), do: DepotFormat.transaction_type(transaction.type)
 
   defp type_plush(type) when type in [:dividend, :interest], do: "coins"
 
@@ -234,17 +213,16 @@ defmodule AbakusWeb.Depot.TransactionsLive do
   defp shares(%Transaction{shares: shares}) when shares in [nil, 0], do: nil
 
   defp shares(%Transaction{type: type} = transaction) when type in [:buy, :sell] do
-    price = Valuation.price_per_share(transaction, transaction.currency)
-
-    "#{DepotFormat.shares(transaction.shares)} Stück à #{DepotFormat.price(price, transaction.currency)}"
+    price = Valuation.price_per_share(transaction)
+    "#{DepotFormat.shares(transaction.shares)} Stück à #{DepotFormat.price(price, "EUR")}"
   end
 
   defp shares(transaction), do: "#{DepotFormat.shares(transaction.shares)} Stück"
 
   defp gross(%Transaction{type: :dividend, amount: amount} = transaction) do
-    case Valuation.gross_value(transaction, transaction.currency) do
+    case Valuation.gross_value(transaction) do
       ^amount -> nil
-      gross -> "brutto #{money(gross, transaction)}"
+      gross -> "brutto #{Money.euros(gross)}"
     end
   end
 
@@ -253,15 +231,12 @@ defmodule AbakusWeb.Depot.TransactionsLive do
   defp unit(transaction, type, label) do
     case unit_cents(transaction, type) do
       0 -> nil
-      cents -> "#{label} #{money(cents, transaction)}"
+      cents -> "#{label} #{Money.euros(cents)}"
     end
   end
 
   defp unit_cents(transaction, type),
     do: transaction.units |> Enum.filter(&(&1.type == type)) |> Enum.sum_by(& &1.amount)
-
-  defp money(cents, transaction),
-    do: Money.amount(cents) <> "\u00A0" <> DepotFormat.currency(transaction.currency)
 
   defp transactions_path(filter_param, portfolio_id) do
     query = Enum.reject([filter: filter_param, portfolio: portfolio_id], &is_nil(elem(&1, 1)))

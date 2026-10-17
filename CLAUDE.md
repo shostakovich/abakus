@@ -39,24 +39,21 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   script without `nonce={@csp_nonce}` and no inline `style` attributes.
 - Amounts in every area: `Abakus.Money` reads what is typed (`parse/2`, the Depot's `parse_number/1`) and writes
   field values (`amount/2`; the Depot's numbers `Abakus.Format.decimal/2`; both read back unchanged) and shown
-  amounts (`euros/2`, `money/2`). MCP output, CSV exports and the YNAB memo keep their own formats. Dates, times,
-  counts, percentages and other numbers are written by `Abakus.Format` (on `Setzkasten.Format`); what only the
-  Depot shows, such as prices, fund sizes and TERs, by `AbakusWeb.Depot.Format`.
+  amounts (`euros/2`, `money/2`). MCP output and CSV exports keep their own formats. Dates, times, counts,
+  percentages and other numbers are written by `Abakus.Format` (on `Setzkasten.Format`); what only the Depot shows,
+  such as prices, fund sizes and TERs, by `AbakusWeb.Depot.Format`.
 - The Kasse (`Abakus.Kasse`, `AbakusWeb.Kasse`, tables `kasse_…`): money is integer cents, local time is the
   host's `TZ` (`Abakus.LocalTime`, no time zone database). Its jobs and the backup run in the release;
-  `config/test.exs` turns them off (`jobs: false`), and tests fake YNAB with a Bandit stub
-  (`Abakus.Kasse.FakeYnab`). The YNAB sync's fingerprint and memo stay byte-identical (ADR 0011). What the app,
-  MCP, jobs and tasks call takes `%Scope{}` (ADR 0019): a person's, or `Scope.system()` for jobs, tasks and MCP
-  reads; `Abakus.Kasse.Access` refuses any other, except in what the budget calls of the budget link (`in_use?/1`,
-  `recategorize/3`, `expense_ids/2`), which takes a plain user scope. The YNAB pages and the budget link act for
-  the scope's person, the YNAB scheduler syncs everybody with the system's. Tests get a person's scope with
+  `config/test.exs` turns them off (`jobs: false`). What the app, MCP, jobs and tasks call takes `%Scope{}`
+  (ADR 0019): a person's, or `Scope.system()` for jobs, tasks and MCP reads; `Abakus.Kasse.Access` refuses any
+  other, except in what the budget calls of the budget link (`recategorize/3`, `expense_ids/2`), which
+  takes a plain user scope. The budget link acts for the scope's person. Tests get a person's scope with
   `scope_of/1` from `Abakus.KasseFixtures`.
 - The budget: `Abakus.Ledger`, `Abakus.Categories` and `Abakus.FileImport` take `%Scope{}` and see only the rows
   with the user's `user_id` (ADR 0019); each user's Ready to Assign comes with its first use. What writes into it
   from another area writes with the budget owner's user, whichever way it gets that scope: the Depot's budget feed
-  (`Scope.for_budget_owner/0`) and link (the caller's), the Kasse's budget link (the linked person's,
-  `Scope.for_participant/1`) and the YNAB import (a task, so it takes `Scope.system()` and writes with
-  `Scope.for_budget_owner/0`). Tests get the owner's scope with `budget_scope/0` from `Abakus.DomainFixtures`.
+  (`Scope.for_budget_owner/0`) and link (the caller's) and the Kasse's budget link (the linked person's,
+  `Scope.for_participant/1`). Tests get the owner's scope with `budget_scope/0` from `Abakus.DomainFixtures`.
 - Exchange rates (`Abakus.ExchangeRates`, tables `exchange_rates`, `exchange_rate_runs`) are shared: one daily job
   loads the ECB rates, each area looks them up by its own rule, manual rates are the Kasse's only; its rule and the
   logged changes to manual rates live in `Abakus.Kasse.Rates`. Tests swap the source in `config/test.exs`

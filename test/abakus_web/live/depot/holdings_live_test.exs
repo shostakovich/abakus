@@ -17,7 +17,7 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
   defp security(close, attrs \\ []) do
     security = security_fixture([quote_feed: :manual, isin: "IE00B3RBWM25"] ++ attrs)
 
-    price_fixture(security, Date.add(today(), -1), price(close), :pp)
+    price_fixture(security, Date.add(today(), -1), price(close), :manual)
     security
   end
 
@@ -58,7 +58,7 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
         type: :buy,
         shares: shares(10),
         amount: money(1_210),
-        units: [%TransactionUnit{type: :fee, amount: money(10), currency: "EUR"}]
+        units: [%TransactionUnit{type: :fee, amount: money(10)}]
       ] ++ trade
     )
 
@@ -357,7 +357,6 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
       # marker sits at its exact share of the bar: 10 % of a bar that 80 % fills.
       assert bar(lv, ctx.real_estate) == {"0.0", "80.0", "12.5"}
       assert bar(lv, ctx.risk_free) == {"20.0", "80.0", "12.5"}
-      assert has_element?(lv, "#allocation", "Ziele aus Portfolio Performance")
       refute has_element?(lv, "#allocation", "Ohne Kategorie")
     end
 

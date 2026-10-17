@@ -2,7 +2,7 @@ defmodule AbakusWeb.Router do
   use AbakusWeb, :router
 
   import AbakusWeb.UserAuth
-  import AbakusWeb.Areas, only: [require_area: 2, require_part: 2, remember_area: 2]
+  import AbakusWeb.Areas, only: [require_area: 2, require_part: 2]
 
   pipeline :browser do
     plug :accepts, ["html"]
@@ -31,10 +31,6 @@ defmodule AbakusWeb.Router do
 
   pipeline :depot do
     plug :require_area, :finanzen
-  end
-
-  pipeline :depot_import do
-    plug :remember_area, :finanzen
   end
 
   pipeline :kasse_settings do
@@ -116,22 +112,6 @@ defmodule AbakusWeb.Router do
     get "/receipts/:id", ReceiptController, :show
   end
 
-  # Import & Sync's PP import is open before the first portfolio, so a file can start the Depot and Finanzen.
-  scope "/depot", AbakusWeb.Depot do
-    pipe_through [:browser, :require_authenticated_user, :depot_import]
-
-    live_session :depot_import,
-      on_mount: [
-        {AbakusWeb.UserAuth, :require_authenticated},
-        {AbakusWeb.Areas, :assign},
-        {AbakusWeb.AccountGroups, :assign},
-        {AbakusWeb.AccountDialog, :attach},
-        {AbakusWeb.Depot.Sidebar, :budget}
-      ] do
-      live "/import", ImportLive
-    end
-  end
-
   scope "/settings", AbakusWeb do
     pipe_through [:browser, :require_authenticated_user]
 
@@ -141,8 +121,7 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.Areas, :assign},
         AbakusWeb.SettingsNav
       ] do
-      live "/appearance", SettingsLive, :appearance
-      live "/budget/ynab", SettingsLive, :ynab_import
+      live "/appearance", SettingsLive
       live "/depot/portfolios", Depot.PortfoliosLive
       live "/depot/receipt-intake", Depot.ReceiptIntakeLive
     end
@@ -164,7 +143,6 @@ defmodule AbakusWeb.Router do
       live "/recurring/new", RecurringNewLive
       live "/rates", RatesLive
       live "/budget", BudgetLinkLive
-      live "/ynab", YnabLive
       live "/export", ExportLive
     end
 

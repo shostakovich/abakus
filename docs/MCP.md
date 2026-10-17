@@ -76,8 +76,8 @@ Output:
 - At most 500 rows and 8 MiB are returned; long texts are cut inside SQLite, before they reach the app.
 - It is cancelled after 2 seconds, the copy included.
 - Visible tables: `kasse_participants`, `kasse_categories`, `kasse_expenses`, `kasse_expense_shares`,
-  `kasse_recurring_expenses`, `kasse_activities`, `kasse_settings`, `exchange_rates`. The YNAB tables (they hold
-  tokens), the users and the budget are never copied.
+  `kasse_recurring_expenses`, `kasse_activities`, `kasse_settings`, `exchange_rates`. The users and the budget are
+  never copied.
 - `kasse_expenses.title_folded` and `notes_folded` are case-folded copies of title and notes (Unicode-correct, "ß" as
   "ss"): compare them with a folded term, e.g. `instr(title_folded, 'bäckerei') > 0`.
 - `kasse_recurring_expenses.template` is the expense as JSON without date: `title`, `category_id`, `paid_by_id`, `notes`,

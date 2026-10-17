@@ -1,7 +1,7 @@
 defmodule AbakusWeb.Depot.AttributeValue do
   @moduledoc """
-  An attribute of a security as the security page shows it, read as the converter of its PP
-  attribute type stores it: `{:text, text}`, `{:link, label, url}` or `{:image, data_uri}`, nil
+  An attribute of a security as the security page shows it, read as the converter of its attribute
+  type stores it: `{:text, text}`, `{:link, label, url}` or `{:image, data_uri}`, nil
   for a value the page cannot show, such as a logo that is no embedded image.
   """
 

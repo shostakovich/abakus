@@ -18,9 +18,9 @@ defmodule Abakus.Depot.SecuritiesTest do
   end
 
   describe "store_yahoo_prices/2" do
-    test "adds new days and replaces Yahoo prices, but keeps PP and manual ones" do
+    test "adds new days and replaces Yahoo prices, but keeps manual ones" do
       security = security_fixture()
-      price_fixture(security, ~D[2026-10-05], 100, :pp)
+      price_fixture(security, ~D[2026-10-05], 100, :manual)
       price_fixture(security, ~D[2026-10-06], 200, :manual)
       price_fixture(security, ~D[2026-10-07], 300, :yahoo)
 
@@ -32,7 +32,7 @@ defmodule Abakus.Depot.SecuritiesTest do
       ])
 
       assert prices_of(security) == [
-               {~D[2026-10-05], 100, :pp},
+               {~D[2026-10-05], 100, :manual},
                {~D[2026-10-06], 200, :manual},
                {~D[2026-10-07], 301, :yahoo},
                {~D[2026-10-08], 401, :yahoo}
@@ -100,10 +100,10 @@ defmodule Abakus.Depot.SecuritiesTest do
       later = security_fixture(name: "Später notiert")
 
       for {date, close} <- [{~D[2026-10-01], 1}, {~D[2026-10-02], 2}, {~D[2026-10-05], 5}],
-          do: price_fixture(security, date, close, :pp)
+          do: price_fixture(security, date, close, :manual)
 
-      price_fixture(later, ~D[2026-10-05], 50, :pp)
-      price_fixture(security_fixture(name: "Nicht gefragt"), ~D[2026-10-05], 9, :pp)
+      price_fixture(later, ~D[2026-10-05], 50, :manual)
+      price_fixture(security_fixture(name: "Nicht gefragt"), ~D[2026-10-05], 9, :manual)
 
       assert Enum.sort(Securities.list_closes_since([security.id, later.id], ~D[2026-10-03])) ==
                [
@@ -119,7 +119,7 @@ defmodule Abakus.Depot.SecuritiesTest do
       security = security_fixture()
       assert Securities.last_price_date(security) == nil
 
-      price_fixture(security, ~D[2026-10-01], 100, :pp)
+      price_fixture(security, ~D[2026-10-01], 100, :manual)
       price_fixture(security, ~D[2026-09-01], 100, :yahoo)
 
       assert Securities.last_price_date(security) == ~D[2026-10-01]
@@ -131,7 +131,7 @@ defmodule Abakus.Depot.SecuritiesTest do
       security =
         security_fixture(fetched_at: ~U[2026-10-09 16:00:00.000000Z], fetch_error: "Fehler")
 
-      price_fixture(security, ~D[2026-10-05], 100, :pp)
+      price_fixture(security, ~D[2026-10-05], 100, :manual)
       price_fixture(security, ~D[2026-10-06], 200, :manual)
       price_fixture(security, ~D[2026-10-07], 300, :yahoo)
       %{security: security}
@@ -145,9 +145,12 @@ defmodule Abakus.Depot.SecuritiesTest do
                })
 
       assert updated.symbol == "VWRL.AS"
-      assert updated.quote_feed_set_by_user
       assert {updated.fetched_at, updated.fetch_error} == {nil, nil}
-      assert prices_of(security) == [{~D[2026-10-05], 100, :pp}, {~D[2026-10-06], 200, :manual}]
+
+      assert prices_of(security) == [
+               {~D[2026-10-05], 100, :manual},
+               {~D[2026-10-06], 200, :manual}
+             ]
     end
 
     test "a switch back to Yahoo drops the Yahoo prices and the quote of the old symbol", %{
@@ -162,7 +165,11 @@ defmodule Abakus.Depot.SecuritiesTest do
       assert {:ok, updated} = Securities.update_quote_feed(@scope, manual, %{quote_feed: "yahoo"})
 
       assert {updated.latest_close, updated.latest_date} == {nil, nil}
-      assert prices_of(security) == [{~D[2026-10-05], 100, :pp}, {~D[2026-10-06], 200, :manual}]
+
+      assert prices_of(security) == [
+               {~D[2026-10-05], 100, :manual},
+               {~D[2026-10-06], 200, :manual}
+             ]
     end
 
     test "switching to manual keeps the Yahoo prices", %{security: security} do

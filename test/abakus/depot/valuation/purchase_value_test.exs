@@ -4,20 +4,11 @@ defmodule Abakus.Depot.Valuation.PurchaseValueTest do
   import Abakus.Depot.PortfoliosFixtures, only: [money: 1, shares: 1]
 
   alias Abakus.Depot.Portfolios.{Transaction, TransactionUnit}
-  alias Abakus.Depot.Securities.Security
-  alias Abakus.Depot.Valuation.{Market, PurchaseValue}
+  alias Abakus.Depot.Valuation.PurchaseValue
 
   @day ~D[2026-10-01]
 
-  # Portfolios 1 and 2, securities 20 (EUR) and 21 (USD).
-  defp market(rates \\ []) do
-    Market.new(
-      [%Security{id: 20, currency: "EUR"}, %Security{id: 21, currency: "USD"}],
-      [],
-      rates
-    )
-  end
-
+  # Portfolios 1 and 2, securities 20 and 21.
   defp transaction(type, days, portfolio_id, count, amount, attrs \\ []) do
     struct!(
       %Transaction{
@@ -27,7 +18,6 @@ defmodule Abakus.Depot.Valuation.PurchaseValueTest do
         security_id: 20,
         shares: shares(count),
         amount: money(amount),
-        currency: "EUR",
         units: []
       },
       attrs
@@ -35,10 +25,10 @@ defmodule Abakus.Depot.Valuation.PurchaseValueTest do
   end
 
   defp purchase_values(transactions, date \\ Date.add(@day, 100)),
-    do: PurchaseValue.by_holding(transactions, market(), date)
+    do: PurchaseValue.by_holding(transactions, date)
 
   test "the remaining shares after a partial sale cost what their purchases cost, by FIFO" do
-    fee = %TransactionUnit{type: :fee, amount: money(10), currency: "EUR"}
+    fee = %TransactionUnit{type: :fee, amount: money(10)}
 
     transactions = [
       transaction(:buy, 0, 1, 10, 1_000),
@@ -96,43 +86,10 @@ defmodule Abakus.Depot.Valuation.PurchaseValueTest do
   test "counts each security apart" do
     transactions = [
       transaction(:buy, 0, 1, 1, 100),
-      transaction(:buy, 0, 1, 1, 200, security_id: 21, currency: "EUR")
+      transaction(:buy, 0, 1, 1, 200, security_id: 21)
     ]
 
     assert purchase_values(transactions) == %{{1, 20} => money(100), {1, 21} => money(200)}
-  end
-
-  test "converts a purchase in another currency at the ECB rate of its day" do
-    rates = [{"USD", @day, Decimal.new("1.10")}, {"USD", Date.add(@day, 1), Decimal.new("1.25")}]
-
-    transactions = [transaction(:buy, 0, 1, 1, 110, security_id: 21, currency: "USD")]
-
-    assert PurchaseValue.by_holding(transactions, market(rates), Date.add(@day, 1)) ==
-             %{{1, 21} => money(100)}
-  end
-
-  test "converts a purchase of a security in euros at the rate booked with it, as PP does" do
-    gross = %TransactionUnit{
-      type: :gross_value,
-      amount: money(1_090),
-      currency: "USD",
-      fx_amount: money(990.91),
-      fx_currency: "EUR",
-      fx_rate: Decimal.new("1.10")
-    }
-
-    fee = %TransactionUnit{type: :fee, amount: money(10), currency: "USD"}
-    buy = transaction(:buy, 0, 1, 10, 1_100, currency: "USD", units: [gross, fee])
-    market = market([{"USD", @day, Decimal.new("1.12")}])
-
-    assert PurchaseValue.by_holding([buy], market, @day) == %{{1, 20} => money(1_000)}
-  end
-
-  test "converts a purchase of a security in euros without a booked rate at the ECB rate" do
-    buy = transaction(:buy, 0, 1, 10, 1_120, currency: "USD")
-    market = market([{"USD", @day, Decimal.new("1.12")}])
-
-    assert PurchaseValue.by_holding([buy], market, @day) == %{{1, 20} => money(1_000)}
   end
 
   test "leaves out transactions after the day, and sold shares cost nothing" do

@@ -7,7 +7,7 @@ defmodule Abakus.Depot.TaxonomiesFixtures do
   alias Abakus.Repo
   alias Abakus.Users.Scope
 
-  @doc "A taxonomy of the user and its root classification, as PP keeps it."
+  @doc "A taxonomy of the user and its root classification."
   def taxonomy_fixture(%Scope{user: user}, name \\ "Anlageklassen") do
     taxonomy = Repo.insert!(%Taxonomy{user_id: user.id, name: name})
     root = Repo.insert!(%Classification{taxonomy_id: taxonomy.id, name: name, weight: 10_000})

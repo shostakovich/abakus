@@ -36,7 +36,7 @@ defmodule Abakus.HTTPTest do
     def call(conn, {:record, test}) do
       {:ok, body, conn} = read_body(conn)
       send(test, {:request, conn.method, conn.query_string, conn.req_headers, body})
-      conn |> put_resp_header("retry-after", "60") |> send_resp(201, "recorded")
+      send_resp(conn, 201, "recorded")
     end
   end
 
@@ -68,23 +68,18 @@ defmodule Abakus.HTTPTest do
     assert Enum.filter(headers, &(elem(&1, 0) == "user-agent")) == [{"user-agent", "abakus/1.0"}]
   end
 
-  test "sends other methods with a JSON body and returns the response headers" do
+  test "posts a JSON body with headers" do
     url = serve({:record, self()})
 
-    assert {:ok, 201, headers, "recorded"} =
-             HTTP.request(:post, url, headers: [{"authorization", "Bearer t"}], json: %{n: [1]})
+    assert HTTP.post(url, headers: [{"authorization", "Bearer t"}], json: %{n: [1]}) ==
+             {:ok, 201, "recorded"}
 
-    assert {"retry-after", "60"} in headers
     assert_received {:request, "POST", _query, request_headers, ~s({"n":[1]})}
     assert {"authorization", "Bearer t"} in request_headers
     assert {"content-type", "application/json"} in request_headers
 
     assert {:ok, 201, "recorded"} = HTTP.post(url, json: [])
     assert_received {:request, "POST", _query, _headers, "[]"}
-    assert {:ok, 201, _headers, "recorded"} = HTTP.request(:patch, url, json: [])
-    assert_received {:request, "PATCH", _query, _headers, "[]"}
-    assert {:ok, 201, _headers, "recorded"} = HTTP.request(:delete, url)
-    assert_received {:request, "DELETE", _query, _headers, ""}
   end
 
   test "does not follow a redirect unless asked to" do

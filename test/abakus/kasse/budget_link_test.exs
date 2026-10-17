@@ -312,8 +312,6 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       owner = budget_scope()
       ben = scope_of(h.ben)
 
-      assert BudgetLink.in_use?(owner)
-      refute BudgetLink.in_use?(ben)
       assert BudgetLink.expense_ids(owner, [id]) == %{id => expense.id}
       assert BudgetLink.expense_ids(ben, [id]) == %{}
 

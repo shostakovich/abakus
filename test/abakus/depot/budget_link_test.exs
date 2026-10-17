@@ -199,34 +199,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
     assert Ledger.balance(budget_scope(), c.tracking, @day) == 25_000
   end
 
-  test "dollars moved from a portfolio's cash to a budget account are an inflow of the euros received",
-       c do
-    usd = account_fixture(c.owner, %{name: "USD-Cash", currency: "USD"})
-    {:ok, usd} = AccountRoles.set_role(c.owner, usd, "portfolio_cash:#{c.portfolio.id}")
-    switch_on(c)
-
-    received = %Portfolios.TransactionUnit{
-      type: :gross_value,
-      amount: 11_000,
-      currency: "USD",
-      fx_amount: 10_000,
-      fx_currency: "EUR"
-    }
-
-    transaction_fixture(c.owner, @day,
-      type: :cash_transfer,
-      account_id: usd.id,
-      other_account_id: c.clearing.id,
-      amount: 11_000,
-      currency: "USD",
-      units: [received]
-    )
-
-    :ok = BudgetLink.sync(c.owner)
-
-    assert [%Transaction{amount: 10_000, memo: "Entnahme"}] = register(c.giro)
-  end
-
   test "a linked transaction the Ledger refuses books nothing in the Depot either", c do
     switch_on(c)
     Repo.update!(Ecto.Changeset.change(c.giro, kind: :tracking))
@@ -298,6 +270,27 @@ defmodule Abakus.Depot.BudgetLinkTest do
       purchase = purchase(c, 9)
 
       {:ok, _} = Portfolios.delete_transaction(c.owner, purchase)
+
+      assert register(c.giro) == []
+      assert register(c.tracking) == []
+      assert Repo.aggregate(LinkedTransaction, :count) == 0
+    end
+
+    test "deleting a cash transfer deletes its linked transaction", c do
+      switch_on(c)
+
+      transfer =
+        transaction_fixture(c.owner, @day,
+          type: :cash_transfer,
+          account_id: c.clearing.id,
+          other_account_id: c.broker_cash.id,
+          amount: 30_000
+        )
+
+      :ok = BudgetLink.sync(c.owner)
+      assert [%Transaction{amount: -30_000}] = register(c.giro)
+
+      {:ok, _} = Portfolios.delete_transaction(c.owner, transfer)
 
       assert register(c.giro) == []
       assert register(c.tracking) == []
@@ -377,8 +370,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert {:error, %Ecto.Changeset{}} = BudgetLink.change_category(c.owner, own.id)
       assert {:error, :not_linked} = BudgetLink.change_category(member, own.id)
 
-      assert BudgetLink.in_use?(c.owner)
-      refute BudgetLink.in_use?(member)
       assert BudgetLink.linked_ids(c.owner, ids) == MapSet.new(ids)
       assert BudgetLink.linked_ids(member, ids) == MapSet.new()
 

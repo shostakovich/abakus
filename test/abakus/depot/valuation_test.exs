@@ -4,7 +4,7 @@ defmodule Abakus.Depot.ValuationTest do
   import Abakus.Depot.PortfoliosFixtures, only: [money: 1, shares: 1]
   import Abakus.Depot.SecuritiesFixtures, only: [price: 1]
 
-  alias Abakus.Depot.Portfolios.{Account, Portfolio, Transaction, TransactionUnit}
+  alias Abakus.Depot.Portfolios.{Portfolio, Transaction, TransactionUnit}
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Valuation
   alias Abakus.Depot.Valuation.{Filter, Holding, Market}
@@ -13,14 +13,13 @@ defmodule Abakus.Depot.ValuationTest do
   @friday ~D[2026-10-02]
   @saturday ~D[2026-10-03]
 
-  # Portfolios 1 and 2, accounts 10 (EUR) and 11 (USD), securities 20 (EUR) and 21 (USD).
+  # Portfolios 1 and 2, accounts 10 and 11, securities 20 (EUR) and 21 (USD).
   defp transaction(type, date, attrs) do
     struct!(
       %Transaction{
         type: type,
         date_time: NaiveDateTime.new!(date, ~T[12:00:00]),
         amount: 0,
-        currency: "EUR",
         units: []
       },
       attrs
@@ -179,26 +178,6 @@ defmodule Abakus.Depot.ValuationTest do
       assert Valuation.balances([transfer], @friday) == %{10 => -money(500), 11 => money(500)}
     end
 
-    test "a cash transfer into another currency credits its converted gross value" do
-      unit = %TransactionUnit{
-        type: :gross_value,
-        amount: money(500),
-        currency: "EUR",
-        fx_amount: money(550),
-        fx_currency: "USD"
-      }
-
-      transfer =
-        transaction(:cash_transfer, @friday,
-          account_id: 10,
-          other_account_id: 11,
-          amount: money(500),
-          units: [unit]
-        )
-
-      assert Valuation.balances([transfer], @friday) == %{10 => -money(500), 11 => money(550)}
-    end
-
     test "count no transaction after the day" do
       transactions = [transaction(:deposit, @saturday, account_id: 10, amount: money(1))]
 
@@ -238,7 +217,7 @@ defmodule Abakus.Depot.ValuationTest do
     end
 
     test "takes the gross price per share of the last transaction without any price, as PP does" do
-      fee = %TransactionUnit{type: :fee, amount: money(10), currency: "EUR"}
+      fee = %TransactionUnit{type: :fee, amount: money(10)}
 
       transactions = [
         in_portfolio(:buy, @thursday, 1, 20, 2, amount: money(180)),
@@ -250,19 +229,11 @@ defmodule Abakus.Depot.ValuationTest do
       assert Valuation.value(holding, market([]), @friday) == money(600)
     end
 
-    test "takes the price in the security's currency from the gross value of a foreign purchase" do
-      unit = %TransactionUnit{
-        type: :gross_value,
-        amount: money(920),
-        currency: "EUR",
-        fx_amount: money(1_000),
-        fx_currency: "USD"
-      }
-
-      buy = in_portfolio(:buy, @friday, 1, 21, 10, amount: money(920), units: [unit])
+    test "takes no price from the last transaction of a security not in euros" do
+      buy = in_portfolio(:buy, @friday, 1, 21, 10, amount: money(920))
       market = market([], rates: [{"USD", @friday, Decimal.new("1.25")}])
 
-      assert Valuation.value(holding(21, 10, buy), market, @friday) == money(800)
+      assert Valuation.value(holding(21, 10, buy), market, @friday) == 0
     end
 
     test "takes a price of 0 as none, as PP does" do
@@ -295,23 +266,23 @@ defmodule Abakus.Depot.ValuationTest do
     end
   end
 
-  describe "price_per_share/2" do
+  describe "price_per_share/1" do
     test "is a purchase's price before fees and taxes" do
-      fee = %TransactionUnit{type: :fee, amount: money(10), currency: "EUR"}
+      fee = %TransactionUnit{type: :fee, amount: money(10)}
       buy = in_portfolio(:buy, @friday, 1, 20, 4, amount: money(410), units: [fee])
 
-      assert Valuation.price_per_share(buy, "EUR") == price(100)
+      assert Valuation.price_per_share(buy) == price(100)
     end
 
     test "is a sale's price before fees and taxes" do
-      tax = %TransactionUnit{type: :tax, amount: money(20), currency: "EUR"}
+      tax = %TransactionUnit{type: :tax, amount: money(20)}
       sale = in_portfolio(:sell, @friday, 1, 20, 4, amount: money(380), units: [tax])
 
-      assert Valuation.price_per_share(sale, "EUR") == price(100)
+      assert Valuation.price_per_share(sale) == price(100)
     end
 
     test "counts a delivery as a purchase or a sale" do
-      fee = %TransactionUnit{type: :fee, amount: money(2), currency: "EUR"}
+      fee = %TransactionUnit{type: :fee, amount: money(2)}
 
       inbound =
         in_portfolio(:inbound_delivery, @friday, 1, 20, 2, amount: money(202), units: [fee])
@@ -319,51 +290,32 @@ defmodule Abakus.Depot.ValuationTest do
       outbound =
         in_portfolio(:outbound_delivery, @friday, 1, 20, 2, amount: money(198), units: [fee])
 
-      assert Valuation.price_per_share(inbound, "EUR") == price(100)
-      assert Valuation.price_per_share(outbound, "EUR") == price(100)
+      assert Valuation.price_per_share(inbound) == price(100)
+      assert Valuation.price_per_share(outbound) == price(100)
     end
 
-    test "is in the security's currency from the gross value of a foreign purchase" do
-      unit = %TransactionUnit{
-        type: :gross_value,
-        amount: money(920),
-        currency: "EUR",
-        fx_amount: money(1_000),
-        fx_currency: "USD"
-      }
+    test "is nil without shares" do
+      buy = in_portfolio(:buy, @friday, 1, 20, 0, amount: money(1))
 
-      buy = in_portfolio(:buy, @friday, 1, 21, 10, amount: money(920), units: [unit])
-
-      assert Valuation.price_per_share(buy, "USD") == price(100)
-    end
-
-    test "is nil when the gross value is not known in the currency" do
-      buy = in_portfolio(:buy, @friday, 1, 21, 10, amount: money(920))
-
-      assert Valuation.price_per_share(buy, "USD") == nil
+      assert Valuation.price_per_share(buy) == nil
     end
   end
 
   describe "history/4" do
-    setup do
-      %{accounts: [%Account{id: 10, currency: "EUR"}, %Account{id: 11, currency: "USD"}]}
-    end
-
-    defp net_worth(transactions, accounts, market, date) do
-      [%{date: ^date, net_worth: net_worth}] =
-        Valuation.history(transactions, accounts, market, [date])
+    defp net_worth(transactions, market, date) do
+      [%{date: ^date, net_worth: net_worth}] = Valuation.history(transactions, market, [date])
 
       net_worth
     end
 
     defp invested_capital(transactions, market \\ market([]), date) do
       [%{date: ^date, invested_capital: invested_capital}] =
-        Valuation.history(transactions, [], market, [date])
+        Valuation.history(transactions, market, [date])
 
       invested_capital
     end
 
-    test "net worth adds the values of the holdings and the account balances", ctx do
+    test "net worth adds the values of the holdings and the account balances" do
       transactions = [
         transaction(:deposit, @thursday, account_id: 10, amount: money(1_000)),
         in_portfolio(:buy, @friday, 1, 20, 10, account_id: 10, amount: money(900))
@@ -371,20 +323,10 @@ defmodule Abakus.Depot.ValuationTest do
 
       market = market([{20, @friday, price(95)}])
 
-      assert net_worth(transactions, ctx.accounts, market, @friday) == money(1_050)
+      assert net_worth(transactions, market, @friday) == money(1_050)
     end
 
-    test "net worth converts account balances in a foreign currency", ctx do
-      transactions = [
-        transaction(:deposit, @friday, account_id: 11, currency: "USD", amount: money(110))
-      ]
-
-      market = market([], rates: [{"USD", @friday, Decimal.new("1.10")}])
-
-      assert net_worth(transactions, ctx.accounts, market, @friday) == money(100)
-    end
-
-    test "net worth values a security held in several portfolios once, as PP does", ctx do
+    test "net worth values a security held in several portfolios once, as PP does" do
       transactions = [
         in_portfolio(:inbound_delivery, @friday, 1, 20, 1),
         in_portfolio(:inbound_delivery, @friday, 2, 20, 1)
@@ -392,32 +334,31 @@ defmodule Abakus.Depot.ValuationTest do
 
       market = market([{20, @friday, price(0.015)}])
 
-      assert net_worth(transactions, ctx.accounts, market, @friday) == 3
+      assert net_worth(transactions, market, @friday) == 3
     end
 
-    test "net worth takes the gross price of the last transaction up to each day without any price",
-         ctx do
+    test "net worth takes the gross price of the last transaction up to each day without any price" do
       transactions = [
         in_portfolio(:buy, @friday, 1, 20, 1, amount: money(110)),
         in_portfolio(:buy, @thursday, 1, 20, 1, amount: money(100))
       ]
 
       assert [%{net_worth: thursday}, %{net_worth: friday}] =
-               Valuation.history(transactions, ctx.accounts, market([]), [@friday, @thursday])
+               Valuation.history(transactions, market([]), [@friday, @thursday])
 
       assert {thursday, friday} == {money(100), money(220)}
     end
 
-    test "net worth takes the largest of transactions at the same time as the last", ctx do
+    test "net worth takes the largest of transactions at the same time as the last" do
       small = in_portfolio(:buy, @friday, 1, 20, 10, amount: money(1_000))
       large = in_portfolio(:buy, @friday, 2, 20, 10, amount: money(1_200))
 
       for transactions <- [[small, large], [large, small]] do
-        assert net_worth(transactions, ctx.accounts, market([]), @friday) == money(2_400)
+        assert net_worth(transactions, market([]), @friday) == money(2_400)
       end
     end
 
-    test "gives each of the dates in order the transactions up to it and today's quote", ctx do
+    test "gives each of the dates in order the transactions up to it and today's quote" do
       transactions = [
         transaction(:deposit, @saturday, account_id: 10, amount: money(5)),
         in_portfolio(:inbound_delivery, @thursday, 1, 20, 10, amount: money(990))
@@ -425,7 +366,7 @@ defmodule Abakus.Depot.ValuationTest do
 
       market = market([{20, @friday, price(100)}], quote_date: @saturday, quote: price(102))
 
-      assert Valuation.history(transactions, ctx.accounts, market, [@saturday, @friday]) == [
+      assert Valuation.history(transactions, market, [@saturday, @friday]) == [
                %{date: @friday, net_worth: money(1_000), invested_capital: money(990)},
                %{date: @saturday, net_worth: money(1_025), invested_capital: money(995)}
              ]
@@ -476,26 +417,10 @@ defmodule Abakus.Depot.ValuationTest do
       assert invested_capital(transactions, @friday) == money(1_500)
     end
 
-    test "invested capital converts each transferal at the ECB rate of its own day" do
-      transactions = [
-        transaction(:deposit, @thursday, account_id: 11, currency: "USD", amount: money(110))
-      ]
-
-      market =
-        market([],
-          rates: [
-            {"USD", @thursday, Decimal.new("1.10")},
-            {"USD", @saturday, Decimal.new("1.25")}
-          ]
-        )
-
-      assert invested_capital(transactions, market, @saturday) == money(100)
-    end
-
-    test "with a filter values only its portfolios and accounts", ctx do
+    test "with a filter values only its portfolios and accounts" do
       transactions = [
         transaction(:deposit, @thursday, account_id: 10, amount: money(1_000)),
-        transaction(:deposit, @thursday, account_id: 11, currency: "USD", amount: money(7)),
+        transaction(:deposit, @thursday, account_id: 11, amount: money(7)),
         in_portfolio(:buy, @friday, 1, 20, 4, account_id: 10, amount: money(400)),
         in_portfolio(:buy, @friday, 2, 20, 1, account_id: 11, amount: money(100))
       ]
@@ -504,12 +429,12 @@ defmodule Abakus.Depot.ValuationTest do
       market = market([{20, @friday, price(110)}])
 
       assert [%{net_worth: net_worth}] =
-               Valuation.history(transactions, ctx.accounts, market, [@friday], filter)
+               Valuation.history(transactions, market, [@friday], filter)
 
       assert net_worth == money(600 + 440)
     end
 
-    test "with a filter, invested capital is the money its edge brings in or takes out", ctx do
+    test "with a filter, invested capital is the money its edge brings in or takes out" do
       transactions = [
         transaction(:deposit, @thursday, account_id: 11, amount: money(1_000)),
         in_portfolio(:buy, @friday, 1, 20, 4, account_id: 11, amount: money(400)),
@@ -519,28 +444,21 @@ defmodule Abakus.Depot.ValuationTest do
       filter = Filter.new([%Portfolio{id: 1}], [], transactions)
 
       assert [%{invested_capital: friday}, %{invested_capital: saturday}] =
-               Valuation.history(
-                 transactions,
-                 ctx.accounts,
-                 market([]),
-                 [@friday, @saturday],
-                 filter
-               )
+               Valuation.history(transactions, market([]), [@friday, @saturday], filter)
 
       assert {friday, saturday} == {money(400), money(310)}
     end
   end
 
-  describe "gross_dividends/3" do
+  describe "gross_dividends/2" do
     defp dividend(date, amount, attrs \\ []) do
       transaction(:dividend, date, [account_id: 10, security_id: 20, amount: amount] ++ attrs)
     end
 
     test "adds up the dividends of the days before taxes and fees" do
       units = [
-        %TransactionUnit{type: :tax, amount: money(4), currency: "EUR"},
-        %TransactionUnit{type: :fee, amount: money(1), currency: "EUR"},
-        %TransactionUnit{type: :gross_value, amount: money(20), currency: "EUR"}
+        %TransactionUnit{type: :tax, amount: money(4)},
+        %TransactionUnit{type: :fee, amount: money(1)}
       ]
 
       transactions = [
@@ -550,23 +468,7 @@ defmodule Abakus.Depot.ValuationTest do
         transaction(:interest, @friday, account_id: 10, amount: money(7))
       ]
 
-      assert Valuation.gross_dividends(transactions, market([]), Date.range(@thursday, @friday)) ==
-               money(50)
-    end
-
-    test "converts each dividend at the ECB rate of its day" do
-      transactions = [
-        dividend(@thursday, money(11), account_id: 11, currency: "USD"),
-        dividend(@friday, money(25), account_id: 11, currency: "USD")
-      ]
-
-      market =
-        market([],
-          rates: [{"USD", @thursday, Decimal.new("1.10")}, {"USD", @friday, Decimal.new("1.25")}]
-        )
-
-      assert Valuation.gross_dividends(transactions, market, Date.range(@thursday, @friday)) ==
-               money(30)
+      assert Valuation.gross_dividends(transactions, Date.range(@thursday, @friday)) == money(50)
     end
   end
 end

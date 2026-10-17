@@ -24,33 +24,18 @@ another account; a move into an account that has the same external id from the s
 - Keeping the imported row as a hidden duplicate after the match: dedupes, but leaves two rows for one booking that
   every balance, report and API response has to skip for good, not only while the match is open.
 
-## 0002. The YNAB re-import wipes and reloads the budget
-
-Accepted, 2026-10-09
-
-- **Context:** The YNAB import runs again and again until the switch, and YNAB stays the source of truth until
-  then; Abakus holds nothing of its own yet, and the API clients only move to Abakus afterwards.
-- **Decision:** Each run deletes the whole budget domain (everything but users and the internal Ready to Assign)
-  and loads the YNAB export anew, in one database transaction; it refuses to run once any transaction, deleted
-  ones included, has a source other than `ynab`. Matching by YNAB ids (an id column on accounts, groups,
-  categories and payees, updates through the Ledger's rules) was rejected as much more work for data that does not
-  need to survive.
-- **Consequences:** Ids change on every run, so nothing may hold them before the switch; accounts or categories
-  created in Abakus without transactions are lost on a re-import, and after the switch the import cannot be used
-  to catch up.
-
 ## 0003. Categories are deleted only with a transfer
 
 Accepted, 2026-10-10. Replaces "hidden, never deleted" from the spec.
 
-- **Context:** After the switch YNAB no longer shapes the categories, so Abakus has to add, rename and remove
-  them. Hiding (YNAB's way to retire a category) keeps old envelopes around for good and needs a second kind of
-  category everywhere: in the budget, the pickers, filling and name lookups.
+- **Context:** Abakus has to add, rename and remove categories. Hiding (YNAB's way to retire a category) keeps old
+  envelopes around for good and needs a second kind of category everywhere: in the budget, the pickers, filling and
+  name lookups.
 - **Decision:** There is no hiding. Deleting a category names a regular category that takes over everything:
   transactions and split lines (deleted ones, match proposals and the budget side of transfers to tracking accounts
   included), payees' last categories and the assignments, added per month. Targets and snoozes go with the
   category. Reconciled transactions change too, after the user confirms it. A group is deleted only when it is
-  empty. YNAB's hidden flag stays on groups and categories for the import and its check; the budget ignores it.
+  empty. YNAB's hidden flag stays on groups and categories; the budget ignores it.
 - **Consequences:** History keeps its references and every past month's Ready to Assign and sum of available stay
   as they were, as long as neither category was overspent in a month where the other had money; merging
   envelopes covers such overspending, so Ready to Assign changes from that month on, as in YNAB. Deleted
@@ -89,8 +74,8 @@ Accepted, 2026-10-15; partly superseded by 0017, 2026-10-16
 
 Accepted, 2026-10-15
 
-- **Context:** The Kasse synced each person's share to YNAB with fingerprints and retries; with both in one database a
-  sync would only copy data the app already holds.
+- **Context:** The budget owner's share of each expense belongs in the budget; with the Kasse and the budget in one
+  database, a sync would only copy data the app already holds.
 - **Decision:** The budget owner's share of each expense is a transaction in the account fed by `shared_expenses`,
   written with the expense through the Ledger. The Kasse leads: a change there overwrites the fields it changed,
   while the register's own category, memo, flag and approval stay; only a change of the expense's Kasse category
@@ -144,23 +129,6 @@ Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
 - **Consequences:** Plain SQL works everywhere. Every write must go through the changeset (or set the columns
   itself), and the texts are stored twice.
 
-## 0011. The Kasse's YNAB sync keeps the Kasse as the source of truth
-
-Accepted, 2026-10-15. From Zipfelkasse, where it was decided first; it lasts until the switch to Abakus (ADR 0006).
-
-- **Context:** Each participant can mirror their share of every expense into their own YNAB account. Expenses change
-  and disappear after they were synced, and requests can fail with an unknown outcome.
-- **Decision:** The Kasse creates, updates and deletes its transactions in YNAB and never takes changes back. No
-  `import_id` (YNAB would merge the imports with reimbursement transfers of the same amount); every memo ends with
-  the marker `zipfelkasse #<expense id>`, which finds transactions after an unclear outcome or a change of account.
-  A fingerprint (`v1\0date\0milliunits\0payee\0memo\0category`, the first 16 bytes of SHA-256 as hex) per
-  share decides whether an update is needed.
-- **Consequences:** Date, amount, payee or memo edited in YNAB are overwritten when the expense changes. The
-  fingerprint and memo format must stay byte-identical, also across the move into Abakus, or every transaction looks
-  changed; the marker keeps the old app's name for that reason, and the import keeps expense ids. The tokens are
-  stored in the database, so backups are private, and a copy of the database in development reaches YNAB only when
-  `YNAB_BASE_URL` points there.
-
 ## 0012. A stateless MCP server behind a secret path and an address filter
 
 Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
@@ -170,29 +138,29 @@ Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
 - **Decision:** Only MCP protocol version 2026-07-28, stateless (no handshake, session or SSE). The one endpoint is
   `/mcp/<MCP_SECRET>`, compared in constant time, for client addresses in `MCP_ALLOWED_CIDRS` only, and refuses
   browsers (any `Origin`). Tools only read, except two that add Kasse entries. `sql_query` runs on an in-memory copy
-  of the Kasse's tables (`kasse_…` without the YNAB ones), read-only, without ATTACH or pragmas, cancelled after 2
+  of the Kasse's tables (`kasse_…`), read-only, without ATTACH or pragmas, cancelled after 2
   seconds.
 - **Consequences:** No server state to lose and no older protocol versions to support; clients that do not speak
-  2026-07-28 cannot connect. A query can never change or lock the real database or see the YNAB tokens, users or the
+  2026-07-28 cannot connect. A query can never change or lock the real database or see users or the
   budget, at the cost of copying the data per query. The budget's tools join the same endpoint and its rules.
 
 ## 0013. One Depot transaction per business event
 
 Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
 
-- **Context:** Portfolio Performance keeps a purchase in memory as two linked entries (portfolio and account), but its
-  file stores it as one transaction with `other*` fields.
-- **Decision:** The Depot follows the file: one transaction with a portfolio side, an account side or both;
-  calculations that need a per-side view derive it.
-- **Consequences:** The import maps one record to one record, both sides can never drift apart, and the booking form
-  edits one thing. Unlike the budget's transfers, there is no pair of transactions to keep in step.
+- **Context:** A purchase moves shares into a portfolio and cash out of an account at once; a transfer moves shares
+  or cash between two of them.
+- **Decision:** One transaction with a portfolio side, an account side or both, and `other*` fields for the other
+  end of a transfer; calculations that need a per-side view derive it.
+- **Consequences:** Both sides can never drift apart, and the booking form edits one thing. Unlike the budget's
+  transfers, there is no pair of transactions to keep in step.
 
 ## 0014. Depot holdings are computed on every request
 
 Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
 
 - **Context:** The overview, holdings and charts need holdings and values for any date. A household has at most a few
-  thousand Depot transactions and a handful of securities, and a booking, an import or a price fix can change any
+  thousand Depot transactions and a handful of securities, and a booking or a price fix can change any
   past date.
 - **Decision:** A pure module computes holdings and values from transactions and prices on every request; no stored
   daily snapshots.
@@ -248,8 +216,8 @@ Accepted, 2026-10-16 (#56).
   category chosen when linking, inflows go to Ready to Assign, and nothing before the link's start date is booked.
   Flows inside a portfolio's own cash stay out of the budget.
 - **Consequences:** Investing becomes budget spending, so every savings plan run is a transaction to approve, and
-  the value change shrinks to market movement and income inside the portfolio. Every Depot write, including PP
-  re-imports, must keep its linked transactions in the same database transaction.
+  the value change shrinks to market movement and income inside the portfolio. Every Depot write must keep
+  its linked transactions in the same database transaction.
 
 ## 0019. Every context takes the scope
 

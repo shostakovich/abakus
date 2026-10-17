@@ -5,8 +5,7 @@ defmodule Abakus.Depot.Performance.CapitalGains do
   against gross values, as the breakdown shows the fees and taxes of the trades on their own.
 
   - Each holding of the filter's portfolios on the reference day is a lot at its value then, each
-    purchase or inbound delivery after it a lot at its gross value in euros, at the rate booked
-    with it where the security is in euros.
+    purchase or inbound delivery after it a lot at its gross value.
   - A sale or outbound delivery takes the oldest lots of its portfolio; it realises its gross
     value less their part of the lots' value. A transfer moves lots to the other portfolio.
   - The unrealised gain of a security is the value of its holdings on the last day less what is
@@ -46,7 +45,7 @@ defmodule Abakus.Depot.Performance.CapitalGains do
       lots = for h <- start, h.security_id == security_id, do: start_lot(h, market, interval)
 
       {lots, realized} =
-        Enum.reduce(Map.get(trades, security_id, []), {lots, 0}, &trade(&1, &2, market))
+        Enum.reduce(Map.get(trades, security_id, []), {lots, 0}, &trade/2)
 
       holdings = Enum.filter(finish, &(&1.security_id == security_id))
 
@@ -77,20 +76,20 @@ defmodule Abakus.Depot.Performance.CapitalGains do
     }
   end
 
-  defp trade(%{type: type} = t, {lots, realized}, market) when type in @purchases do
+  defp trade(%{type: type} = t, {lots, realized}) when type in @purchases do
     lot = %{
       portfolio_id: t.portfolio_id,
       shares: t.shares,
       original: t.shares,
-      value: gross_value(t, market),
+      value: Valuation.gross_value(t),
       start: false
     }
 
     {lots ++ [lot], realized}
   end
 
-  defp trade(%{type: type} = t, {lots, realized}, market) when type in @sales do
-    proceeds = gross_value(t, market)
+  defp trade(%{type: type} = t, {lots, realized}) when type in @sales do
+    proceeds = Valuation.gross_value(t)
 
     {lots, {_left, gain}} =
       Enum.map_reduce(lots, {t.shares, 0}, fn lot, {left, gain} ->
@@ -107,7 +106,7 @@ defmodule Abakus.Depot.Performance.CapitalGains do
     {lots, realized + gain}
   end
 
-  defp trade(%{type: :security_transfer} = t, {lots, realized}, _market) do
+  defp trade(%{type: :security_transfer} = t, {lots, realized}) do
     {lots, _left} =
       Enum.flat_map_reduce(lots, t.shares, fn lot, left ->
         if lot.portfolio_id == t.portfolio_id and lot.shares > 0 and left > 0 do
@@ -130,22 +129,6 @@ defmodule Abakus.Depot.Performance.CapitalGains do
       end)
 
     {lots, realized}
-  end
-
-  # The gross value in euros, as PP's gross value in the term currency.
-  defp gross_value(%{currency: "EUR"} = t, _market), do: Valuation.gross_value(t, "EUR")
-
-  defp gross_value(t, market) do
-    gross_value_unit = Enum.find(t.units, &(&1.type == :gross_value))
-
-    case {Market.currency(market, t.security_id), gross_value_unit} do
-      {"EUR", %{fx_amount: amount}} when is_integer(amount) ->
-        amount
-
-      _other ->
-        date = NaiveDateTime.to_date(t.date_time)
-        Market.to_euros(market, Valuation.gross_value(t, t.currency), t.currency, date)
-    end
   end
 
   defp unrealized(_security_id, _lots, [], _market, _interval), do: 0

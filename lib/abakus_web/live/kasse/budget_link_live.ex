@@ -34,13 +34,9 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
     assign(socket,
       account: account,
       account_options: Enum.map(choices, &{&1.name, &1.id}),
-      start_date: if(!account, do: start_date(BudgetLink.start_date(scope))),
       link_form: to_form(%{"account_id" => fed && fed.id}, as: :link)
     )
   end
-
-  defp start_date(%Date{} = date), do: Format.date(date)
-  defp start_date(nil), do: nil
 
   defp budget_groups(scope) do
     for %{categories: [_ | _] = categories} = group <- Categories.list_category_groups(scope),
@@ -67,12 +63,11 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
     account_id = get_in(params, ["link", "account_id"])
 
     case BudgetLink.switch_on(socket.assigns.current_scope, account_id) do
-      {:ok, counts} ->
+      {:ok, %{created: created}} ->
         {:noreply,
          socket
-         |> put_flash(:info, switched_on(counts))
-         |> load_link()
-         |> AbakusWeb.SettingsNav.assign_groups()}
+         |> put_flash(:info, "Mit dem Budget verknüpft: #{bookings(created)} angelegt.")
+         |> load_link()}
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, refused(reason))}
@@ -89,28 +84,6 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
       {:error, message} ->
         {:noreply, put_flash(socket, :error, message)}
     end
-  end
-
-  defp switched_on(counts) do
-    linked =
-      "Mit dem Budget verknüpft: #{bookings(counts.adopted)} übernommen, " <>
-        "#{bookings(counts.created)} neu angelegt."
-
-    case unlinked(counts) do
-      [] -> linked
-      unlinked -> linked <> " Unverknüpft geblieben: " <> Enum.join(unlinked, "; ") <> "."
-    end
-  end
-
-  defp unlinked(%{unadoptable: unadoptable, left: left}) do
-    [
-      unadoptable > 0 &&
-        "#{bookings(unadoptable)} mit Kasse-Kennung, die sich nicht übernehmen " <>
-          "#{if unadoptable == 1, do: "ließ", else: "ließen"} (Aufteilung, Umbuchung oder doppelt) – " <>
-          "bitte von Hand prüfen",
-      left > 0 && "#{bookings(left)} mit Kasse-Kennung ohne passende Ausgabe"
-    ]
-    |> Enum.filter(& &1)
   end
 
   defp bookings(1), do: "1 Buchung"
@@ -152,15 +125,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
           <div :if={!@account} class="flex flex-col gap-3">
             <p id="budget-link-state">
               Noch nicht mit dem Budget verknüpft. Danach ist dein Anteil an jeder Ausgabe eine Buchung im
-              gewählten Konto, in der Kategorie, die du unten zuordnest.
-            </p>
-            <p :if={@start_date} id="budget-link-ynab">
-              Führe vorher den letzten YNAB-Import aus und ordne erst danach die Kategorien zu. Buchungen mit
-              Kasse-Kennung in diesem Konto werden verknüpft und behalten Kategorie, Status und Bestätigung;
-              jede Ausgabe seit dem {@start_date} ohne Buchung bekommt eine. Deine YNAB-Verbindung wird entfernt.
-            </p>
-            <p :if={!@start_date} id="budget-link-ynab">
-              Jede bisherige Ausgabe bekommt eine Buchung.
+              gewählten Konto, in der Kategorie, die du unten zuordnest. Jede bisherige Ausgabe bekommt eine Buchung.
             </p>
             <.form for={@link_form} id="budget-link-form" phx-submit="switch_on">
               <.input
@@ -192,14 +157,6 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
           <.section_heading id="budget-categories">Kategorien</.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
             In welcher Kategorie des Budgets landet dein Anteil? Ohne Zuordnung bleibt er unkategorisiert.
-          </p>
-          <p
-            :if={@start_date}
-            id="budget-mapping-ynab"
-            class="mb-3 max-w-prose text-sm text-base-content/70"
-          >
-            Erst nach dem letzten YNAB-Import zuordnen: Er ersetzt die Kategorien des Budgets und läuft nicht,
-            solange eine Zuordnung besteht.
           </p>
           <.form for={@mapping_form} id="budget-mapping-form" phx-submit="map_categories">
             <.table id="budget-mapping" rows={@rows} row_id={&"budget-mapping-#{&1.id}"} size={:dense}>

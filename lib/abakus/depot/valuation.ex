@@ -2,7 +2,8 @@ defmodule Abakus.Depot.Valuation do
   @moduledoc """
   Holdings, account balances, net worth, invested capital and gross dividends, computed from
   transactions and a `Market` on every request (ADR 0014). Pure, without the database, and
-  computed as PP does so that the figures match PP's. Amounts in cents, shares and prices × 10⁸.
+  computed as PP does so that the figures match PP's. Amounts in euro cents, shares and prices
+  × 10⁸.
   """
 
   alias Abakus.Depot.Portfolios.Transaction
@@ -50,7 +51,7 @@ defmodule Abakus.Depot.Valuation do
 
   defp shares_moved(_transaction), do: []
 
-  @doc "The balance of each account on `date`, in the account's currency."
+  @doc "The balance of each account on `date`."
   def balances(transactions, date) do
     for t <- transactions, on_or_before?(t, date), reduce: %{} do
       balances -> add(balances, cash_moved(t))
@@ -66,20 +67,9 @@ defmodule Abakus.Depot.Valuation do
     do: [{t.account_id, -t.amount}]
 
   defp cash_moved(%Transaction{type: :cash_transfer} = t),
-    do: [{t.account_id, -t.amount}, {t.other_account_id, t |> received() |> elem(0)}]
+    do: [{t.account_id, -t.amount}, {t.other_account_id, t.amount}]
 
   defp cash_moved(_transaction), do: []
-
-  @doc """
-  What a cash transfer credits the other account, as `{amount, currency}`: into another currency
-  the converted gross value, as PP books it.
-  """
-  def received(%Transaction{} = t) do
-    case gross_value_unit(t) do
-      %{fx_amount: amount, fx_currency: currency} when is_integer(amount) -> {amount, currency}
-      _same_currency -> {t.amount, t.currency}
-    end
-  end
 
   defp on_or_before?(%Transaction{date_time: date_time}, date),
     do: not Date.after?(NaiveDateTime.to_date(date_time), date)
@@ -92,7 +82,7 @@ defmodule Abakus.Depot.Valuation do
 
   @doc """
   The value of a holding on `date`, in euro cents. Without any price, PP takes the gross price per
-  share of the holding's last transaction.
+  share of the holding's last transaction, which is known only for a security in euros.
   """
   def value(%Holding{} = holding, %Market{} = market, date) do
     currency = Market.currency(market, holding.security_id)
@@ -105,7 +95,7 @@ defmodule Abakus.Depot.Valuation do
 
   @doc """
   The price per share × 10⁸ a holding is valued at on `date`, in the security's currency; nil
-  without any price or transaction.
+  without any price, unless the last transaction gives one for a security in euros.
   """
   def price(%Holding{} = holding, %Market{} = market, date) do
     case Market.price(market, holding.security_id, date) do
@@ -129,46 +119,32 @@ defmodule Abakus.Depot.Valuation do
     |> Decimal.to_integer()
   end
 
-  defp last_price(%Holding{last: nil}, _currency), do: nil
-  defp last_price(%Holding{last: last}, currency), do: price_per_share(last, currency)
+  defp last_price(%Holding{last: %Transaction{} = last}, "EUR"), do: price_per_share(last)
+  defp last_price(%Holding{}, _currency), do: nil
 
   @doc """
-  The price per share × 10⁸ of a purchase, sale or delivery in `currency`, before fees and taxes,
-  as PP rounds it; nil when its gross value is not known in that currency.
+  The price per share × 10⁸ in euros of a purchase, sale or delivery, before fees and taxes, as PP
+  rounds it; nil without shares.
   """
-  def price_per_share(%Transaction{shares: shares} = t, currency) do
-    case gross_value(t, currency) do
-      gross when is_integer(gross) and shares > 0 ->
-        @pp_math
-        |> Decimal.Context.with(fn -> Decimal.div(gross * 100_000_000_000_000, shares) end)
-        |> Decimal.round(0, :half_even)
-        |> Decimal.to_integer()
-
-      _unknown ->
-        nil
-    end
+  def price_per_share(%Transaction{shares: shares} = t) when is_integer(shares) and shares > 0 do
+    @pp_math
+    |> Decimal.Context.with(fn -> Decimal.div(gross_value(t) * 100_000_000_000_000, shares) end)
+    |> Decimal.round(0, :half_even)
+    |> Decimal.to_integer()
   end
 
+  def price_per_share(%Transaction{}), do: nil
+
   @doc """
-  The gross value of a transaction in cents of `currency`, before fees and taxes: a purchase's
-  amount without them, any other's with them added back, or in another currency the forex amount
-  of its gross value unit, as PP keeps it; nil when it is not known in `currency`.
+  The gross value of a transaction in euro cents, before fees and taxes: a purchase's amount
+  without them, any other's with them added back.
   """
-  def gross_value(%Transaction{currency: currency} = t, currency) do
+  def gross_value(%Transaction{} = t) do
     fees_and_taxes =
       t.units |> Enum.filter(&(&1.type in [:fee, :tax])) |> Enum.sum_by(& &1.amount)
 
     if t.type in @purchases, do: t.amount - fees_and_taxes, else: t.amount + fees_and_taxes
   end
-
-  def gross_value(t, currency) do
-    case gross_value_unit(t) do
-      %{fx_currency: ^currency, fx_amount: fx_amount} -> fx_amount
-      _other -> nil
-    end
-  end
-
-  defp gross_value_unit(t), do: Enum.find(t.units, &(&1.type == :gross_value))
 
   # The transactions up to a day, added up: the balance per account, the shares and the last
   # transaction that moved them per security over the portfolios, and invested capital.
@@ -176,24 +152,21 @@ defmodule Abakus.Depot.Valuation do
 
   @doc """
   Net worth and invested capital on each of `dates`, in euro cents and in order of date, from one
-  pass over the transactions. `accounts` give the currency of each balance. With a `filter`, net
-  worth is the value of its portfolios and accounts, and invested capital the money its edge
-  brought in or took out. Invested capital converts each transferal at the ECB rate of its own
-  day, so `market` needs the rates from the first transaction on.
+  pass over the transactions. With a `filter`, net worth is the value of its portfolios and
+  accounts, and invested capital the money its edge brought in or took out.
   """
-  def history(transactions, accounts, %Market{} = market, dates, filter \\ Filter.all()) do
-    currencies = Map.new(accounts, &{&1.id, &1.currency})
+  def history(transactions, %Market{} = market, dates, filter \\ Filter.all()) do
     transactions = Enum.sort_by(transactions, & &1.date_time, NaiveDateTime)
 
     dates
     |> Enum.sort(Date)
     |> Enum.map_reduce({transactions, @empty_ledger}, fn date, {pending, ledger} ->
       {due, pending} = Enum.split_while(pending, &on_or_before?(&1, date))
-      ledger = Enum.reduce(due, ledger, &book(&2, &1, filter, market))
+      ledger = Enum.reduce(due, ledger, &book(&2, &1, filter))
 
       point = %{
         date: date,
-        net_worth: net_worth(ledger, currencies, market, date),
+        net_worth: net_worth(ledger, market, date),
         invested_capital: ledger.invested_capital
       }
 
@@ -202,11 +175,11 @@ defmodule Abakus.Depot.Valuation do
     |> elem(0)
   end
 
-  defp book(ledger, %Transaction{} = t, filter, market) do
+  defp book(ledger, %Transaction{} = t, filter) do
     ledger = %{
       ledger
       | balances: add(ledger.balances, inside(cash_moved(t), &Filter.account?(filter, &1))),
-        invested_capital: ledger.invested_capital + transferals(filter, t, market)
+        invested_capital: ledger.invested_capital + transferals(filter, t)
     }
 
     case inside(shares_moved(t), &Filter.portfolio?(filter, &1)) do
@@ -238,11 +211,8 @@ defmodule Abakus.Depot.Valuation do
 
   # PP values one joint holding per security over all portfolios; its price without any close
   # needs only the last of its transactions.
-  defp net_worth(ledger, currencies, market, date) do
-    balances =
-      Enum.sum_by(ledger.balances, fn {account_id, amount} ->
-        Market.to_euros(market, amount, currencies[account_id], date)
-      end)
+  defp net_worth(ledger, market, date) do
+    balances = ledger.balances |> Map.values() |> Enum.sum()
 
     values =
       for {security_id, shares} <- ledger.shares, shares != 0, reduce: 0 do
@@ -259,27 +229,18 @@ defmodule Abakus.Depot.Valuation do
     balances + values
   end
 
-  # Money from outside, in euros at the rate of its day, as PP counts invested capital.
-  defp transferals(filter, t, market) do
-    for {kind, amount, currency} <- Filter.flows(filter, t),
-        kind in [:inbound, :outbound],
-        reduce: 0 do
-      sum ->
-        euros = Market.to_euros(market, amount, currency, NaiveDateTime.to_date(t.date_time))
-        if kind == :inbound, do: sum + euros, else: sum - euros
+  defp transferals(filter, t) do
+    for {kind, amount} <- Filter.flows(filter, t), kind in [:inbound, :outbound], reduce: 0 do
+      sum -> if kind == :inbound, do: sum + amount, else: sum - amount
     end
   end
 
-  @doc """
-  The dividends booked on the days of `range` before taxes and fees, in euro cents, each at the
-  ECB rate of its day, as PP's gross value of a dividend.
-  """
-  def gross_dividends(transactions, %Market{} = market, %Date.Range{} = range) do
+  @doc "The dividends booked on the days of `range` before taxes and fees, in euro cents."
+  def gross_dividends(transactions, %Date.Range{} = range) do
     for %Transaction{type: :dividend} = t <- transactions,
-        date = NaiveDateTime.to_date(t.date_time),
-        date in range,
+        NaiveDateTime.to_date(t.date_time) in range,
         reduce: 0 do
-      sum -> sum + Market.to_euros(market, gross_value(t, t.currency), t.currency, date)
+      sum -> sum + gross_value(t)
     end
   end
 end

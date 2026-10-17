@@ -20,13 +20,6 @@ defmodule Abakus.Depot.BudgetFeed do
 
   @payee "Wertänderung"
 
-  @doc "Whether a portfolio of the user has an account in the budget, which a wipe of their budget would drop."
-  def in_use?(%Scope{user: %User{id: user_id}}),
-    do:
-      Repo.exists?(
-        from p in Portfolio, where: p.user_id == ^user_id and not is_nil(p.budget_account_id)
-      )
-
   @doc "The user's portfolio whose account `account` is, nil for any other account."
   def portfolio(%Scope{user: %User{id: user_id}}, %Account{fed_by: :portfolio, id: id}),
     do: Repo.get_by(Portfolio, budget_account_id: id, user_id: user_id)

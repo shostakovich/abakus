@@ -125,8 +125,8 @@ defmodule AbakusWeb.Depot.HoldingsLive do
 
   attr :item, :map, required: true, doc: "an item of `groups/2`"
 
-  # A security with its ISIN or, below xl, its shares and price; an account with what it is; the
-  # note of a portfolio without securities.
+  # A security with its ISIN or, below xl, its shares and price; an account with what it is in its
+  # portfolio; the note of a portfolio without securities.
   defp position_name(%{item: %{type: :holding, entry: entry}} = assigns) do
     assigns = assign(assigns, :entry, entry)
 
@@ -146,7 +146,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     <span class="inline-flex items-center gap-2 font-medium">
       <.icon name="wallet" class="text-base-content/70" />{@item.entry.account.name}
     </span>
-    <.cell_sub class="whitespace-nowrap">{@item.note}</.cell_sub>
+    <.cell_sub :if={@item.note} class="whitespace-nowrap">{@item.note}</.cell_sub>
     """
   end
 
@@ -267,11 +267,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
         Ohne Kategorie: {unassigned(@allocation.unassigned)}. Die Anteile beziehen sich wie die
         Ziele auf den zugeordneten Wert.
       </span>
-      {join_meta([
-        "Balken: Ist",
-        "Strich: dein Ziel",
-        "Zuordnungen und Ziele aus Portfolio Performance"
-      ])}
+      {join_meta(["Balken: Ist", "Strich: dein Ziel"])}
     </p>
     """
   end
@@ -309,7 +305,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
       <p class="mt-2 max-w-prose text-sm text-base-content/70">
         Laufende Kosten, die im Kurs stecken. Ordergebühren kommen aus den Buchungen.
         <span :if={Enum.any?(@costs.funds, &is_nil(&1.ter))}>
-          Wertpapiere ohne TER in Portfolio Performance zählen nicht mit.
+          Wertpapiere ohne TER zählen nicht mit.
         </span>
       </p>
     </section>
@@ -382,12 +378,12 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp count(1, one, _many), do: "1\u00A0#{one}"
   defp count(count, _one, many), do: "#{count}\u00A0#{many}"
 
-  defp account_note(%{portfolio: nil}, account), do: account.currency
+  defp account_note(%{portfolio: nil}, _account), do: nil
 
   defp account_note(_portfolio_group, account) do
     case Account.role(account) do
-      {:portfolio_cash, _portfolio_id} -> join_meta(["Cash", account.currency])
-      _none -> join_meta(["Referenzkonto", account.currency])
+      {:portfolio_cash, _portfolio_id} -> "Cash"
+      _none -> "Referenzkonto"
     end
   end
 

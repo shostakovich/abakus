@@ -43,9 +43,9 @@ defmodule Abakus.Depot.MarketDataTest do
       refute_received {:rates, _from}
     end
 
-    test "PP and manual prices win over Yahoo" do
+    test "manual prices win over Yahoo" do
       security = security_fixture()
-      price_fixture(security, ~D[2026-10-05], 100, :pp)
+      price_fixture(security, ~D[2026-10-05], 100, :manual)
       price_fixture(security, ~D[2026-10-06], 200, :manual)
 
       FakePriceFeed.stub(fn _symbol, _from, _now ->
@@ -54,7 +54,10 @@ defmodule Abakus.Depot.MarketDataTest do
 
       MarketData.run_daily(@now)
 
-      assert prices_of(security) == [{~D[2026-10-05], 100, :pp}, {~D[2026-10-06], 200, :manual}]
+      assert prices_of(security) == [
+               {~D[2026-10-05], 100, :manual},
+               {~D[2026-10-06], 200, :manual}
+             ]
     end
 
     test "a quote in another currency stores nothing and records the mismatch" do
@@ -365,7 +368,7 @@ defmodule Abakus.Depot.MarketDataTest do
   describe "fetch_in_background/1" do
     test "fetches the whole history and tells subscribers" do
       security = security_fixture()
-      price_fixture(security, ~D[2026-10-01], 100, :pp)
+      price_fixture(security, ~D[2026-10-01], 100, :manual)
 
       FakePriceFeed.stub(fn _symbol, _from, _now ->
         {:ok, FakePriceFeed.chart_result([{~D[2017-10-26], 50}])}

@@ -15,7 +15,7 @@ defmodule AbakusWeb.Depot.SeparationTest do
   setup %{scope: scope} do
     yesterday = Date.add(LocalTime.today(), -1)
     security = security_fixture(quote_feed: :manual, name: "Weltaktie")
-    price_fixture(security, yesterday, price(100), :pp)
+    price_fixture(security, yesterday, price(100), :manual)
     own = portfolio_fixture(scope, %{name: "Eigenes Depot"})
 
     other = user_scope_fixture()

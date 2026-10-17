@@ -23,8 +23,8 @@ defmodule AbakusWeb.Depot.PerformanceLiveTest do
     security =
       security_fixture(quote_feed: :manual, latest_date: today(), latest_close: price(110))
 
-    price_fixture(security, two_years_ago, price(100), :pp)
-    price_fixture(security, Date.shift(today(), year: -1), price(90), :pp)
+    price_fixture(security, two_years_ago, price(100), :manual)
+    price_fixture(security, Date.shift(today(), year: -1), price(90), :manual)
 
     transaction_fixture(scope, two_years_ago,
       type: :deposit,
@@ -39,7 +39,7 @@ defmodule AbakusWeb.Depot.PerformanceLiveTest do
       security_id: security.id,
       shares: shares(10),
       amount: money(1_002),
-      units: [%TransactionUnit{type: :fee, amount: money(2), currency: "EUR"}]
+      units: [%TransactionUnit{type: :fee, amount: money(2)}]
     )
 
     savings = account_fixture(scope, %{name: "Konto Sparplan"})
@@ -88,8 +88,6 @@ defmodule AbakusWeb.Depot.PerformanceLiveTest do
 
     assert breakdown =~
              ~r/Endwert am #{Format.date(today())}.*1.600,00\x{00A0}€/su
-
-    refute breakdown =~ "Währungsgewinne"
   end
 
   test "shows the largest fall with its days", %{conn: conn} do

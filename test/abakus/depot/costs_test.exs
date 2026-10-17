@@ -61,7 +61,7 @@ defmodule Abakus.Depot.CostsTest do
     assert costs.per_year == 1
   end
 
-  test "takes the fund size from PP's attribute" do
+  test "takes the fund size from its attribute" do
     assert [%{fund_size: 1_780_000_000_000}] =
              Costs.of([holding(fund(1, %{"aum" => 1_780_000_000_000}), 100)]).funds
   end

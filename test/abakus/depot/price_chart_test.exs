@@ -22,7 +22,6 @@ defmodule Abakus.Depot.PriceChartTest do
         security_id: 20,
         shares: shares(count),
         amount: money(amount),
-        currency: "EUR",
         units: []
       },
       attrs
@@ -86,7 +85,7 @@ defmodule Abakus.Depot.PriceChartTest do
 
   describe "trades" do
     test "are the purchases and sales with their price per share before fees, in order" do
-      fee = %TransactionUnit{type: :fee, amount: money(10), currency: "EUR"}
+      fee = %TransactionUnit{type: :fee, amount: money(10)}
 
       transactions = [
         trade(:sell, ~D[2026-06-01], 4, 480),
@@ -125,7 +124,7 @@ defmodule Abakus.Depot.PriceChartTest do
       assert Enum.map(chart.trades, & &1.date) == [~D[2025-10-09]]
     end
 
-    test "put a trade whose price is not known in the security's currency at the price of its day" do
+    test "put a trade of a security not in euros at the price of its day" do
       usd = security(currency: "USD")
       closes = [{~D[2026-03-02], price(110)}, {~D[2026-03-04], price(112)}]
 

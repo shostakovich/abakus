@@ -5,7 +5,6 @@ defmodule Abakus.HTTP do
   `:too_large` and `:unreachable`, never a reason that could hold the request's credentials.
   """
 
-  @type header :: {String.t(), String.t()}
   @type reason :: :timeout | :too_large | :unreachable
 
   # Yahoo answers requests without a browser-like user agent with 429.
@@ -14,26 +13,22 @@ defmodule Abakus.HTTP do
   @connect_timeout 15_000
   @max_body 32 * 1024 * 1024
 
-  @doc "GETs `url` and returns the status and body; options and errors as `request/3`."
-  @spec get(String.t(), keyword()) :: {:ok, pos_integer(), binary()} | {:error, reason()}
-  def get(url, opts \\ []), do: without_headers(request(:get, url, opts))
-
-  @doc "POSTs to `url` and returns the status and body; options and errors as `request/3`."
-  @spec post(String.t(), keyword()) :: {:ok, pos_integer(), binary()} | {:error, reason()}
-  def post(url, opts \\ []), do: without_headers(request(:post, url, opts))
-
   @doc """
-  Sends a `:get`, `:post`, `:patch` or `:delete` request and returns the status, the response
-  headers (names in lower case) and the body.
+  GETs `url` and returns the status and body.
 
-  Options: `:headers` as `{name, value}` strings, `:params` for the query, `:json` for a body,
-  `:timeout` for the whole response in milliseconds (two minutes), `:max_body` in bytes
-  (32 MiB) and `:follow_redirects` (false). A request with headers never follows a redirect, as
-  `:httpc` would send them, an API key among them, on to wherever it points.
+  Options: `:headers` as `{name, value}` strings, `:params` for the query, `:timeout` for the
+  whole response in milliseconds (two minutes), `:max_body` in bytes (32 MiB) and
+  `:follow_redirects` (false). A request with headers never follows a redirect, as `:httpc`
+  would send them, an API key among them, on to wherever it points.
   """
-  @spec request(atom(), String.t(), keyword()) ::
-          {:ok, pos_integer(), [header()], binary()} | {:error, reason()}
-  def request(method, url, opts \\ []) do
+  @spec get(String.t(), keyword()) :: {:ok, pos_integer(), binary()} | {:error, reason()}
+  def get(url, opts \\ []), do: request(:get, url, opts)
+
+  @doc "POSTs `:json` to `url` and returns the status and body; other options as `get/2`."
+  @spec post(String.t(), keyword()) :: {:ok, pos_integer(), binary()} | {:error, reason()}
+  def post(url, opts \\ []), do: request(:post, url, opts)
+
+  defp request(method, url, opts) do
     headers = Keyword.get(opts, :headers, [])
     timeout = Keyword.get(opts, :timeout, @timeout)
     deadline = System.monotonic_time(:millisecond) + timeout
@@ -57,9 +52,6 @@ defmodule Abakus.HTTP do
     :exit, _reason -> {:error, :unreachable}
   end
 
-  defp without_headers({:ok, status, _headers, body}), do: {:ok, status, body}
-  defp without_headers(error), do: error
-
   defp with_query(uri, []), do: uri
   defp with_query(uri, params), do: URI.append_query(uri, URI.encode_query(params))
 
@@ -79,27 +71,27 @@ defmodule Abakus.HTTP do
       else: [{"user-agent", @user_agent} | headers]
   end
 
-  defp receive_response(ref, deadline, max_body, headers \\ [], chunks \\ []) do
+  defp receive_response(ref, deadline, max_body, chunks \\ []) do
     receive do
-      {:http, {^ref, :stream_start, headers}} ->
-        receive_response(ref, deadline, max_body, headers, chunks)
+      {:http, {^ref, :stream_start, _headers}} ->
+        receive_response(ref, deadline, max_body, chunks)
 
       {:http, {^ref, :stream, chunk}} when byte_size(chunk) > max_body ->
         cancel(ref)
         {:error, :too_large}
 
       {:http, {^ref, :stream, chunk}} ->
-        receive_response(ref, deadline, max_body - byte_size(chunk), headers, [chunks | chunk])
+        receive_response(ref, deadline, max_body - byte_size(chunk), [chunks | chunk])
 
       {:http, {^ref, :stream_end, _headers}} ->
-        {:ok, 200, strings(headers), IO.iodata_to_binary(chunks)}
+        {:ok, 200, IO.iodata_to_binary(chunks)}
 
       {:http, {^ref, {{_version, _status, _reason}, _headers, body}}}
       when byte_size(body) > max_body ->
         {:error, :too_large}
 
-      {:http, {^ref, {{_version, status, _reason}, headers, body}}} ->
-        {:ok, status, strings(headers), body}
+      {:http, {^ref, {{_version, status, _reason}, _headers, body}}} ->
+        {:ok, status, body}
 
       {:http, {^ref, {:error, reason}}} ->
         {:error, reduce(reason)}
@@ -112,12 +104,6 @@ defmodule Abakus.HTTP do
 
   defp reduce(:timeout), do: :timeout
   defp reduce(_reason), do: :unreachable
-
-  defp strings(headers) do
-    Enum.map(headers, fn {name, value} ->
-      {name |> to_string() |> String.downcase(), to_string(value)}
-    end)
-  end
 
   defp cancel(ref) do
     :httpc.cancel_request(ref)

@@ -14,7 +14,7 @@ defmodule AbakusWeb.Depot.BenchmarkTest do
   setup %{scope: scope} do
     today = LocalTime.today()
     security = security_fixture(quote_feed: :manual, latest_date: today, latest_close: price(110))
-    price_fixture(security, Date.add(today, -1), price(100), :pp)
+    price_fixture(security, Date.add(today, -1), price(100), :manual)
 
     transaction_fixture(scope, Date.add(today, -1),
       type: :inbound_delivery,

@@ -22,15 +22,13 @@ defmodule Abakus.Depot.DividendsTest do
         security_id: @fund.id,
         shares: shares(10),
         amount: money(net),
-        currency: "EUR",
         units: []
       },
       attrs
     )
   end
 
-  defp unit(type, amount, currency \\ "EUR"),
-    do: %TransactionUnit{type: type, amount: money(amount), currency: currency}
+  defp unit(type, amount), do: %TransactionUnit{type: type, amount: money(amount)}
 
   describe "received/2" do
     test "gives each dividend with gross, taxes, fees and net, newest first" do
@@ -66,19 +64,12 @@ defmodule Abakus.Depot.DividendsTest do
              |> Enum.map(& &1.net) == [money(5)]
     end
 
-    test "converts each amount at the ECB rate of the pay date" do
+    test "takes the euros booked for a security in another currency, whatever the rate" do
       market =
-        Market.new([@fund, @dollar_fund], [], [
-          {"USD", ~D[2026-09-29], Decimal.new("1.10")},
-          {"USD", ~D[2026-09-30], Decimal.new("1.25")}
-        ])
+        Market.new([@fund, @dollar_fund], [], [{"USD", ~D[2026-09-30], Decimal.new("1.25")}])
 
       dividend =
-        dividend(~D[2026-09-30], 20,
-          security_id: @dollar_fund.id,
-          currency: "USD",
-          units: [unit(:tax, 5, "USD")]
-        )
+        dividend(~D[2026-09-30], 16, security_id: @dollar_fund.id, units: [unit(:tax, 4)])
 
       assert [%{gross: gross, taxes: taxes, net: net}] = Dividends.received([dividend], market)
       assert {gross, taxes, net} == {money(20), money(4), money(16)}
@@ -160,7 +151,6 @@ defmodule Abakus.Depot.DividendsTest do
         security_id: security.id,
         shares: shares(count),
         amount: 0,
-        currency: "EUR",
         units: []
       }
     end
@@ -414,6 +404,21 @@ defmodule Abakus.Depot.DividendsTest do
 
       assert {forecast.per_share, forecast.shares, forecast.gross} ==
                {100_000_000, shares(30), money(30)}
+    end
+
+    test "the user's own distributions of a security in another currency stay in euros" do
+      market =
+        Market.new([@fund, @dollar_fund], [], [{"USD", ~D[2026-10-09], Decimal.new("1.25")}])
+
+      transactions = [
+        buy(~D[2026-01-05], 10, @dollar_fund),
+        dividend(~D[2026-06-01], 10, security_id: @dollar_fund.id)
+      ]
+
+      assert [%{currency: "EUR", per_share: 100_000_000, gross: gross}] =
+               upcoming(transactions, [], market)
+
+      assert gross == money(10)
     end
 
     test "with DivvyDiary dividends, even only old ones, the user's own do not count" do

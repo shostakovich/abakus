@@ -1,7 +1,7 @@
 defmodule Abakus.Depot.Dividends do
   @moduledoc """
-  The dividends a user received, converted at the ECB rate of the pay date, and those expected in
-  the coming months, at the latest rate. Interest does not count. Pure; amounts in euro cents,
+  The dividends a user received and those expected in the coming months, the expected ones
+  converted to euros at the latest rate. Interest does not count. Pure; amounts in euro cents,
   shares and amounts per share × 10⁸.
   """
 
@@ -15,7 +15,7 @@ defmodule Abakus.Depot.Dividends do
 
   @doc """
   The dividends of `transactions`, newest first, each with its pay `date`, `security`, `shares`
-  (0 where PP booked none), `gross`, `taxes`, `fees` and `net`.
+  (0 where none were booked), `gross`, `taxes`, `fees` and `net`.
   """
   def received(transactions, %Market{} = market) do
     transactions
@@ -24,18 +24,15 @@ defmodule Abakus.Depot.Dividends do
     |> Enum.map(&dividend(&1, market))
   end
 
-  defp dividend(%Transaction{currency: currency} = t, market) do
-    date = NaiveDateTime.to_date(t.date_time)
-    euros = &Market.to_euros(market, &1, currency, date)
-
+  defp dividend(%Transaction{} = t, market) do
     %{
-      date: date,
+      date: NaiveDateTime.to_date(t.date_time),
       security: Market.security(market, t.security_id),
       shares: t.shares || 0,
-      gross: euros.(Valuation.gross_value(t, currency)),
-      taxes: euros.(units(t, :tax)),
-      fees: euros.(units(t, :fee)),
-      net: euros.(t.amount)
+      gross: Valuation.gross_value(t),
+      taxes: units(t, :tax),
+      fees: units(t, :fee),
+      net: t.amount
     }
   end
 
@@ -91,7 +88,7 @@ defmodule Abakus.Depot.Dividends do
     months = coming_months(today)
 
     (announced(announced, transactions, held, today, portfolio_id) ++
-       forecast(stored, transactions, held, market, today))
+       forecast(stored, transactions, held, today))
     |> Enum.filter(&(&1.pay_date in months))
     |> Enum.map(&with_amounts(&1, market, ratios, today))
     |> Enum.sort_by(&{Date.to_gregorian_days(&1.pay_date), &1.security.name})
@@ -144,11 +141,11 @@ defmodule Abakus.Depot.Dividends do
   defp shares_on_ex_date(dividend, held_on, held),
     do: held_on |> Map.get(dividend.ex_date, held) |> Map.get(dividend.security_id, 0)
 
-  defp forecast(stored, transactions, held, market, today) do
+  defp forecast(stored, transactions, held, today) do
     stored = Enum.group_by(stored, & &1.security_id)
 
     for {security_id, shares} <- held,
-        known = known_dividends(security_id, stored, transactions, market),
+        known = known_dividends(security_id, stored, transactions),
         last = known |> Enum.map(& &1.pay_date) |> Enum.max(Date, fn -> nil end),
         {paid, months} <- repeated(Enum.reject(known, &is_nil(&1.per_share)), today),
         pay_date = Date.shift(paid.pay_date, month: months),
@@ -201,23 +198,16 @@ defmodule Abakus.Depot.Dividends do
     Enum.sum(middle) / length(middle)
   end
 
-  defp known_dividends(security_id, stored, transactions, market) do
+  defp known_dividends(security_id, stored, transactions) do
     case Map.fetch(stored, security_id) do
       {:ok, dividends} ->
         dividends
 
       :error ->
-        for distribution <- own_distributions(security_id, transactions, market),
+        for distribution <-
+              Distributions.of(Enum.filter(transactions, &(&1.security_id == security_id))),
             do: Map.put(distribution, :pay_date, distribution.date)
     end
-  end
-
-  defp own_distributions(security_id, transactions, market) do
-    Distributions.of(
-      Market.security(market, security_id),
-      Enum.filter(transactions, &(&1.security_id == security_id)),
-      market
-    )
   end
 
   defp shares_by_security(transactions, date, portfolio_id) do

@@ -15,7 +15,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
 
   defp holding(scope, portfolio, count, close) do
     security = security_fixture(quote_feed: :manual)
-    price_fixture(security, Date.add(today(), -1), price(close), :pp)
+    price_fixture(security, Date.add(today(), -1), price(close), :manual)
 
     transaction_fixture(scope, Date.add(today(), -1),
       type: :inbound_delivery,

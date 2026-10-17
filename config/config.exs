@@ -24,8 +24,6 @@ config :abakus,
   generators: [timestamp_type: :utc_datetime_usec],
   jobs: true
 
-config :abakus, Abakus.Kasse.Ynab.Client, base_url: "https://api.ynab.com/v1"
-
 config :abakus, Abakus.ExchangeRates, source: Abakus.ExchangeRates.ECB
 
 config :abakus, Abakus.Depot.MarketData,

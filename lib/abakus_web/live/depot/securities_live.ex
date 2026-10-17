@@ -7,7 +7,7 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
   alias Abakus.{ExchangeRates, Format}
   alias AbakusWeb.Depot.Format, as: DepotFormat
 
-  @feeds [{"Yahoo", "yahoo"}, {"Portfolio Performance", "manual"}]
+  @feeds [{"Yahoo", "yahoo"}, {"Ohne Kursabruf", "manual"}]
 
   # What a new security from Yahoo starts with: the MSCI ACWI, in euros on Xetra.
   @symbol "IUSQ.DE"
@@ -34,8 +34,8 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
     >
       <.depots_header tab={:securities}>
         <:subtitle>
-          Kurse kommen von Yahoo, täglich um 18:00 und beim Öffnen dieser Seite. Am selben Tag gilt
-          ein Kurs aus Portfolio Performance vor einem von Yahoo.
+          Kurse kommen von Yahoo, täglich um 18:00 und beim Öffnen dieser Seite. Ältere Kurse aus
+          anderen Quellen überschreibt Yahoo nicht.
         </:subtitle>
       </.depots_header>
 
@@ -100,11 +100,7 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
             Aktive Wertpapiere
           </.section_heading>
           <.empty_state :if={@active == []} plush="layers" icon="layers">
-            Noch keine Wertpapiere. Lege eines beim Erfassen einer Buchung per ISIN an oder übernimm
-            sie aus Portfolio Performance.
-            <:action>
-              <.button href={~p"/depot/import"} icon="upload">PP-Datei importieren</.button>
-            </:action>
+            Noch keine Wertpapiere. Lege eines beim Erfassen einer Buchung per ISIN an.
           </.empty_state>
           <.list :if={@active != []}>
             <.security

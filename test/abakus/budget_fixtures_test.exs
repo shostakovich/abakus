@@ -1,8 +1,7 @@
 defmodule Abakus.BudgetFixturesTest do
   @moduledoc """
   Fictional budgets with hand-computed numbers in YNAB's month format (milliunits): `to_be_budgeted`, and per
-  category `budgeted`, `activity`, `balance` and `goal_under_funded`. The check against YNAB's own numbers is the
-  YNAB import's.
+  category `budgeted`, `activity`, `balance` and `goal_under_funded`.
   """
 
   use ExUnit.Case, async: true

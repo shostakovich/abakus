@@ -19,8 +19,6 @@ defmodule Abakus.Ledger.AccountsTest do
     end
 
     test "stores every field" do
-      reconciled_at = ~U[2026-10-01 08:30:00.123456Z]
-
       assert {:ok, account} =
                Ledger.create_account(budget_scope(), %{
                  name: "Depot",
@@ -28,8 +26,7 @@ defmodule Abakus.Ledger.AccountsTest do
                  fed_by: "portfolio",
                  closed: true,
                  note: "Wertpapiere",
-                 position: 3,
-                 last_reconciled_at: reconciled_at
+                 position: 3
                })
 
       assert %Account{
@@ -40,8 +37,6 @@ defmodule Abakus.Ledger.AccountsTest do
                position: 3
              } =
                Ledger.get_account!(budget_scope(), account.id)
-
-      assert Ledger.get_account!(budget_scope(), account.id).last_reconciled_at == reconciled_at
     end
 
     test "puts a new account after the others unless it has a position" do

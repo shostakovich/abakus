@@ -137,11 +137,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           <.section_heading id="new-portfolio-title">Depot anlegen</.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
             Nur du siehst deine Depots. Käufe, Verkäufe und Dividenden laufen über ein
-            Verrechnungskonto, das mit dem Depot angelegt wird. Oder <.link
-              id="new-portfolio-import"
-              href={~p"/depot/import"}
-              class="link"
-            >importiere eine Datei aus Portfolio Performance</.link>.
+            Verrechnungskonto, das mit dem Depot angelegt wird.
           </p>
           <.form
             for={@new_form}
@@ -245,10 +241,10 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     <.list_row id={"clearing-account-#{@account.id}"} title={@account.name}>
       <:leading><.icon name="wallet" class="size-5 text-base-content/70" /></:leading>
       <:meta>
-        <span class="whitespace-nowrap">{@account.currency}</span><.meta_sep /><span
-          :if={Account.role(@account)}
-          class="whitespace-nowrap"
-        >{role_label(@account)}</span><.badge :if={!Account.role(@account)} tone={:warning}>
+        <span :if={Account.role(@account)} class="whitespace-nowrap">{role_label(@account)}</span><.badge
+          :if={!Account.role(@account)}
+          tone={:warning}
+        >
           Rolle fehlt
         </.badge>
       </:meta>

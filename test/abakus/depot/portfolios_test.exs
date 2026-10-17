@@ -49,8 +49,8 @@ defmodule Abakus.Depot.PortfoliosTest do
     # 10 shares delivered on Friday for 1,000 €, closing at 100 € that day and at 102 € today.
     defp shares_fixture(scope, portfolio, count \\ 10) do
       security = security_fixture(quote_feed: :manual)
-      price_fixture(security, @friday, price(100), :pp)
-      price_fixture(security, @saturday, price(102), :pp)
+      price_fixture(security, @friday, price(100), :manual)
+      price_fixture(security, @saturday, price(102), :manual)
 
       transaction_fixture(scope, @friday,
         type: :inbound_delivery,
@@ -82,7 +82,7 @@ defmodule Abakus.Depot.PortfoliosTest do
           account_id: account.id,
           security_id: security.id,
           amount: money(net),
-          units: [%TransactionUnit{type: :tax, amount: money(tax), currency: "EUR"}]
+          units: [%TransactionUnit{type: :tax, amount: money(tax)}]
         )
       end
 
@@ -254,7 +254,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       security = security_fixture(quote_feed: :manual)
 
       for {date, close} <- [{~D[2026-09-01], 100}, {~D[2026-10-01], 90}, {@friday, 99}],
-          do: price_fixture(security, date, price(close), :pp)
+          do: price_fixture(security, date, price(close), :manual)
 
       transaction_fixture(scope, ~D[2026-09-01],
         type: :deposit,
@@ -269,7 +269,7 @@ defmodule Abakus.Depot.PortfoliosTest do
         security_id: security.id,
         shares: shares(10),
         amount: money(1_005),
-        units: [%TransactionUnit{type: :fee, amount: money(5), currency: "EUR"}]
+        units: [%TransactionUnit{type: :fee, amount: money(5)}]
       )
 
       savings = account_fixture(scope, %{name: "Konto Sparplan"})
@@ -348,7 +348,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       security = security_fixture(quote_feed: :manual)
 
       for {date, close} <- [{~D[2024-12-31], 100}, {~D[2025-01-31], 110}, {~D[2025-02-28], 99}],
-          do: price_fixture(security, date, price(close), :pp)
+          do: price_fixture(security, date, price(close), :manual)
 
       transaction_fixture(scope, ~D[2024-12-31],
         type: :deposit,
@@ -395,7 +395,7 @@ defmodule Abakus.Depot.PortfoliosTest do
   describe "holdings/3" do
     defp security_at(close, name, attrs \\ []) do
       security = security_fixture([quote_feed: :manual, name: name] ++ attrs)
-      price_fixture(security, @friday, price(close), :pp)
+      price_fixture(security, @friday, price(close), :manual)
       security
     end
 
@@ -670,7 +670,7 @@ defmodule Abakus.Depot.PortfoliosTest do
         security_id: security.id,
         shares: shares(10),
         amount: money(net),
-        units: [%TransactionUnit{type: :tax, amount: money(tax), currency: "EUR"}]
+        units: [%TransactionUnit{type: :tax, amount: money(tax)}]
       )
     end
 
@@ -698,7 +698,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "gives the user's dividends expected and the value of their holdings", ctx do
       security = security_fixture(quote_feed: :manual)
-      price_fixture(security, @friday, price(100), :pp)
+      price_fixture(security, @friday, price(100), :manual)
 
       transaction_fixture(ctx.scope, @friday,
         type: :buy,
@@ -727,7 +727,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "gives one portfolio's dividends on its reference account and for its shares", ctx do
       security = security_fixture(quote_feed: :manual)
-      price_fixture(security, @friday, price(100), :pp)
+      price_fixture(security, @friday, price(100), :manual)
       account = account_fixture(ctx.scope)
       own = portfolio_fixture(ctx.scope, %{name: "Eigen", reference_account_id: account.id})
       other = portfolio_fixture(ctx.scope, %{name: "Anders"})
@@ -783,7 +783,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "gives the user's holdings of the security by portfolio name and their total", ctx do
       security = security_fixture(quote_feed: :manual)
-      price_fixture(security, @friday, price(120), :pp)
+      price_fixture(security, @friday, price(120), :manual)
       pension = portfolio_fixture(ctx.scope, %{name: "Altersvorsorge"})
       trade(ctx.scope, :buy, ctx.portfolio, security, ~D[2026-09-01], 10, 1_000)
       trade(ctx.scope, :buy, pension, security, ~D[2026-09-02], 5, 550)
@@ -812,7 +812,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "values a holding in pence at a hundredth of the pound's ECB rate", ctx do
       security = security_fixture(quote_feed: :manual, currency: "GBX")
-      price_fixture(security, @friday, price(500), :pp)
+      price_fixture(security, @friday, price(500), :manual)
       ExchangeRates.store([{"GBP", @friday, Decimal.new("0.85")}])
       deliver(ctx.scope, ctx.portfolio, security, @friday, 1_000)
 
@@ -836,7 +836,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       security =
         security_fixture(quote_feed: :manual, latest_date: @saturday, latest_close: price(102))
 
-      price_fixture(security, @friday, price(100), :pp)
+      price_fixture(security, @friday, price(100), :manual)
 
       result = Portfolios.security(ctx.scope, security, :one_year, @saturday)
 
@@ -847,7 +847,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       security = security_fixture(quote_feed: :manual)
 
       for {date, close} <- [{~D[2020-10-01], 50}, {~D[2025-10-01], 90}, {@friday, 100}],
-          do: price_fixture(security, date, price(close), :pp)
+          do: price_fixture(security, date, price(close), :manual)
 
       trade(ctx.scope, :buy, ctx.portfolio, security, ~D[2026-09-01], 10, 950)
       other = user_scope_fixture()
@@ -865,7 +865,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "gives the distributions from the user's dividends and the costs a year", ctx do
       security = security_fixture(quote_feed: :manual, attributes: %{"ter" => 0.002})
-      price_fixture(security, @friday, price(100), :pp)
+      price_fixture(security, @friday, price(100), :manual)
       trade(ctx.scope, :buy, ctx.portfolio, security, ~D[2026-03-02], 100, 9_000)
 
       for scope <- [ctx.scope, user_scope_fixture()] do
@@ -889,7 +889,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "gives the dividends expected of the security, at the latest ECB rate", ctx do
       security = security_fixture(quote_feed: :manual)
-      price_fixture(security, @friday, price(100), :pp)
+      price_fixture(security, @friday, price(100), :manual)
       trade(ctx.scope, :buy, ctx.portfolio, security, ~D[2026-03-02], 100, 9_000)
       divvy_diary_dividend_fixture(security, ~D[2026-10-10], ~D[2026-10-20], 0.5, "USD")
       ExchangeRates.store([{"USD", @friday, Decimal.new("1.25")}])
@@ -902,7 +902,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "starts Max at the first trade before the first price", ctx do
       security = security_fixture(quote_feed: :manual)
-      price_fixture(security, @friday, price(100), :pp)
+      price_fixture(security, @friday, price(100), :manual)
       trade(ctx.scope, :buy, ctx.portfolio, security, ~D[2024-05-02], 1, 80)
 
       chart = Portfolios.security(ctx.scope, security, :max, @saturday).chart
@@ -939,7 +939,7 @@ defmodule Abakus.Depot.PortfoliosTest do
   describe "sidebar/2" do
     defp held(scope, portfolio, count, close) do
       security = security_fixture(quote_feed: :manual)
-      price_fixture(security, @friday, price(close), :pp)
+      price_fixture(security, @friday, price(close), :manual)
       deliver(scope, portfolio, security, @friday, count)
       security
     end
@@ -996,7 +996,7 @@ defmodule Abakus.Depot.PortfoliosTest do
   describe "net_worth/2" do
     test "values shares on a day without a price at the last close before it", ctx do
       security = security_fixture(quote_feed: :manual)
-      price_fixture(security, @friday, price(100), :pp)
+      price_fixture(security, @friday, price(100), :manual)
       deliver(ctx.scope, ctx.portfolio, security, @friday, 10)
 
       assert Portfolios.net_worth(ctx.scope, [@saturday]) == %{@saturday => money(1_000)}
@@ -1006,7 +1006,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       security =
         security_fixture(quote_feed: :manual, latest_date: @saturday, latest_close: price(102))
 
-      price_fixture(security, @friday, price(100), :pp)
+      price_fixture(security, @friday, price(100), :manual)
       deliver(ctx.scope, ctx.portfolio, security, @friday, 10)
 
       assert Portfolios.net_worth(ctx.scope, [@friday, @saturday]) ==
@@ -1015,7 +1015,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "converts a foreign currency at the ECB rate of the day", ctx do
       security = security_fixture(quote_feed: :manual, currency: "USD")
-      price_fixture(security, @friday, price(110), :pp)
+      price_fixture(security, @friday, price(110), :manual)
       ExchangeRates.store([{"USD", @friday, Decimal.new("1.10")}])
       deliver(ctx.scope, ctx.portfolio, security, @friday, 10)
 
@@ -1024,7 +1024,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "ignores manual rates", ctx do
       security = security_fixture(quote_feed: :manual, currency: "USD")
-      price_fixture(security, @friday, price(110), :pp)
+      price_fixture(security, @friday, price(110), :manual)
       ExchangeRates.store([{"USD", ~D[2026-10-01], Decimal.new("1.10")}])
 
       Repo.insert!(%ExchangeRate{
@@ -1041,7 +1041,7 @@ defmodule Abakus.Depot.PortfoliosTest do
 
     test "converts pence at a hundredth of the pound's ECB rate", ctx do
       security = security_fixture(quote_feed: :manual, currency: "GBX")
-      price_fixture(security, @friday, price(500), :pp)
+      price_fixture(security, @friday, price(500), :manual)
       ExchangeRates.store([{"GBP", @friday, Decimal.new("0.85")}])
       deliver(ctx.scope, ctx.portfolio, security, @friday, 1_000)
 
@@ -1067,25 +1067,6 @@ defmodule Abakus.Depot.PortfoliosTest do
       )
 
       assert Portfolios.net_worth(ctx.scope, [@friday]) == %{@friday => money(500)}
-    end
-
-    test "converts an account in another currency at the ECB rate of the day", ctx do
-      account = account_fixture(ctx.scope, %{currency: "USD"})
-
-      ExchangeRates.store([
-        {"USD", @friday, Decimal.new("1.10")},
-        {"USD", @saturday, Decimal.new("1.25")}
-      ])
-
-      transaction_fixture(ctx.scope, @friday,
-        type: :deposit,
-        account_id: account.id,
-        currency: "USD",
-        amount: money(110)
-      )
-
-      assert Portfolios.net_worth(ctx.scope, [@friday, @saturday]) ==
-               %{@friday => money(100), @saturday => money(88)}
     end
   end
 end

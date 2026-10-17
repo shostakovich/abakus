@@ -42,21 +42,6 @@ defmodule Abakus.Depot.AccountRolesTest do
     assert AccountRoles.without_role(c.owner) == []
   end
 
-  test "lets a Verrechnungskonto in another currency be a portfolio's cash, but no budget account",
-       c do
-    usd = account_fixture(c.owner, %{name: "USD-Cash", currency: "USD"})
-
-    assert {:error, "Ein Konto in USD kann kein Budgetkonto sein, das Budget ist in Euro."} =
-             AccountRoles.set_role(c.owner, usd, "budget_account:#{c.giro.id}")
-
-    assert AccountRoles.choices(c.owner, usd).budget_accounts == []
-
-    assert {:ok, _account} =
-             AccountRoles.set_role(c.owner, usd, "portfolio_cash:#{c.portfolio.id}")
-
-    assert role(usd) == {:portfolio_cash, c.portfolio.id}
-  end
-
   test "makes only the budget owner's Verrechnungskonten budget accounts", c do
     member = user_scope_fixture()
     account = account_fixture(member)

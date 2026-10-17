@@ -1,7 +1,7 @@
 defmodule AbakusWeb.Depot.Format do
   @moduledoc """
-  What only the Depot shows: prices and shares × 10⁸, currencies, fund sizes, TERs and portfolio
-  names. Dates and other numbers are `Abakus.Format`'s, amounts in euros `Abakus.Money`'s.
+  What only the Depot shows: prices and shares × 10⁸, currencies, fund sizes, TERs, portfolio
+  names and transaction types. Dates and other numbers are `Abakus.Format`'s, amounts in euros `Abakus.Money`'s.
   """
 
   alias Abakus.Depot.Portfolios.Portfolio
@@ -69,10 +69,31 @@ defmodule AbakusWeb.Depot.Format do
   def ter(nil), do: "–"
   def ter(%Decimal{} = ter), do: ter |> Decimal.mult(100) |> Format.percent(2)
 
-  @doc "A portfolio's name or its `name`; „Ohne Namen“ for the empty one PP may store."
+  @doc "A portfolio's name or its `name`; „Ohne Namen“ for an empty one."
   def portfolio_name(%{name: name}), do: portfolio_name(name)
   def portfolio_name(name) when name in [nil, ""], do: "Ohne Namen"
   def portfolio_name(name) when is_binary(name), do: name
+
+  @transaction_types %{
+    buy: "Kauf",
+    sell: "Verkauf",
+    inbound_delivery: "Einlieferung",
+    outbound_delivery: "Auslieferung",
+    security_transfer: "Depotwechsel",
+    cash_transfer: "Umbuchung",
+    deposit: "Einlage",
+    removal: "Entnahme",
+    dividend: "Dividende",
+    interest: "Zinsen",
+    interest_charge: "Zinsbelastung",
+    tax: "Steuern",
+    tax_refund: "Steuerrückerstattung",
+    fee: "Gebühren",
+    fee_refund: "Gebührenerstattung"
+  }
+
+  @doc "The name of a transaction's type, e.g. „Depotwechsel“."
+  def transaction_type(type), do: Map.fetch!(@transaction_types, type)
 
   @doc "A depot or account number by its last four digits, e.g. „…4471“."
   def masked(number),

@@ -17,7 +17,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
     security =
       security_fixture(quote_feed: :manual, latest_date: today(), latest_close: price(102))
 
-    price_fixture(security, Date.add(today(), -1), price(100), :pp)
+    price_fixture(security, Date.add(today(), -1), price(100), :manual)
 
     transaction_fixture(
       scope,
@@ -224,8 +224,8 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
         security_id: security.id,
         amount: money(net),
         units: [
-          %TransactionUnit{type: :tax, amount: money(tax), currency: "EUR"},
-          %TransactionUnit{type: :fee, amount: money(fee), currency: "EUR"}
+          %TransactionUnit{type: :tax, amount: money(tax)},
+          %TransactionUnit{type: :fee, amount: money(fee)}
         ]
       )
     end
@@ -360,7 +360,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       security =
         security_fixture(quote_feed: :manual, latest_date: today(), latest_close: price(102))
 
-      price_fixture(security, Date.add(today(), -1), price(100), :pp)
+      price_fixture(security, Date.add(today(), -1), price(100), :manual)
 
       transaction_fixture(scope, Date.add(today(), -1),
         type: :inbound_delivery,
