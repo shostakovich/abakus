@@ -134,7 +134,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute has_element?(view, "#tx-#{c.gain.id}")
     end
 
-    test "the sidebar and the account list lead to it", c do
+    test "the sidebar marks the open account, the header edits it", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       assert has_element?(

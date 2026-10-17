@@ -68,33 +68,26 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :current, Date, required: true
 
   @doc """
-  A month's card, as YNAB 4's month header: the month and Verteilen, how Zu verteilen adds up, then Zu verteilen on a
-  fill that carries its state, with the later months it does not cover.
+  A month's card, as YNAB 4's month header: the month and its Verteilen menu, YNAB 4's calculation (shown or hidden
+  per device) and Zu verteilen, which shows and hides the calculation in every month.
   """
   def month_card(assigns) do
-    assigns =
-      assign(assigns,
-        key: Window.param(assigns.month.month),
-        tone: elem(Status.ready(assigns.month), 0)
-      )
+    assigns = assign(assigns, :key, Window.param(assigns.month.month))
 
     ~H"""
     <div
       id={"month-#{@key}"}
-      class={["app-mcard", card_class(@tone), @focus && "is-focus"]}
+      class={["app-mcard", @focus && "is-focus"]}
       aria-current={@month.month == @current && "date"}
       phx-click={not @focus && "focus"}
       phx-value-month={@key}
     >
       <div class="app-mhead">
         <span class="app-mname">{title(@month.month, @current)}</span>
-        <.distribute month={@month} key={@key} primary={@focus} />
+        <.distribute month={@month} key={@key} />
       </div>
       <.calculation month={@month} key={@key} />
-      <div class="app-mtotal">
-        <.ready_to_assign month={@month} key={@key} focus={@focus} sign />
-      </div>
-      <.uncovered month={@month} key={@key} />
+      <.ready_to_assign month={@month} key={@key} focus={@focus} />
     </div>
     """
   end
@@ -103,64 +96,42 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :window, Window, required: true
 
   @doc """
-  The focus month on narrow screens, as a bar that stays at the top: the month with arrows to step, and
-  Zu verteilen with its menu on a band like the month card; a tap on Zu verteilen shows how it adds up.
+  The focus month on narrow screens, as a bar that stays at the top: the parts of the month card in the same order,
+  with arrows to step through the months.
   """
   def month_bar(assigns) do
-    assigns =
-      assign(assigns,
-        key: Window.param(assigns.month.month),
-        tone: elem(Status.ready(assigns.month), 0)
-      )
+    assigns = assign(assigns, :key, Window.param(assigns.month.month))
 
     ~H"""
     <div id="month-bar" class="app-mbar">
-      <div class="app-mbar-nav">
-        <.button
-          variant={:ghost}
-          size={:sm}
-          icon="chevron-left"
-          icon_only
-          label="Früher"
-          disabled={not @window.earlier}
-          phx-click="step"
-          phx-value-by="-1"
-        />
+      <div class="app-mhead">
         <span class="app-mname">{month_year(@month.month)}</span>
-        <.button
-          variant={:ghost}
-          size={:sm}
-          icon="chevron-right"
-          icon_only
-          label="Später"
-          disabled={not @window.later}
-          phx-click="step"
-          phx-value-by="1"
-        />
-      </div>
-      <div id={"month-#{@key}"} class={["app-mcard app-mbar-card", card_class(@tone)]}>
-        <div class="app-mhead">
-          <button
-            id={"month-toggle-#{@key}"}
-            type="button"
-            class="app-mtoggle"
-            aria-expanded="false"
-            aria-controls={"calc-#{@key}"}
-            phx-click={
-              JS.toggle_attribute({"aria-expanded", "true", "false"})
-              |> JS.toggle_class("is-open", to: "#month-bar")
-            }
-          >
-            <span class="app-mtoggle-text">
-              <.ready_to_assign month={@month} key={@key} focus />
-            </span>
-            <.icon name="chevron-down" />
-          </button>
-          <.distribute month={@month} key={@key} primary />
+        <div class="app-mbar-nav">
+          <.button
+            variant={:ghost}
+            size={:sm}
+            icon="chevron-left"
+            icon_only
+            label="Früher"
+            disabled={not @window.earlier}
+            phx-click="step"
+            phx-value-by="-1"
+          />
+          <.button
+            variant={:ghost}
+            size={:sm}
+            icon="chevron-right"
+            icon_only
+            label="Später"
+            disabled={not @window.later}
+            phx-click="step"
+            phx-value-by="1"
+          />
+          <.distribute month={@month} key={@key} />
         </div>
-        <.calculation month={@month} key={@key} />
-        <.uncovered month={@month} key={@key} />
       </div>
+      <.calculation month={@month} key={@key} />
+      <.ready_to_assign month={@month} key={@key} focus />
     </div>
     """
   end
@@ -171,9 +142,13 @@ defmodule AbakusWeb.BudgetLive.Components do
   defp calculation(assigns) do
     ~H"""
     <dl id={"calc-#{@key}"} class="app-mcalc">
-      <div :for={line <- Status.calculation(@month)}>
+      <div :for={{line, index} <- Enum.with_index(Status.calculation(@month))}>
         <dt>{line.label}</dt>
-        <dd><.amount value={line.value} signed class={tone_class(line.tone)} /></dd>
+        <dd><.amount value={line.value} signed={index > 0} class={tone_class(line.tone)} /></dd>
+      </div>
+      <div :for={line <- Status.uncovered(@month)} class="app-mcalc-warn">
+        <dt>{line.label}</dt>
+        <dd><.amount value={line.value} signed /></dd>
       </div>
     </dl>
     """
@@ -181,18 +156,6 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   attr :month, Month, required: true
   attr :key, :string, required: true
-
-  defp uncovered(assigns) do
-    ~H"""
-    <ul :if={@month.uncovered != []} id={"uncovered-#{@key}"} class="app-uncovered">
-      <li :for={line <- Status.uncovered(@month)}><.icon name="triangle-alert" />{line}</li>
-    </ul>
-    """
-  end
-
-  attr :month, Month, required: true
-  attr :key, :string, required: true
-  attr :primary, :boolean, default: false
 
   defp distribute(assigns) do
     assigns =
@@ -205,11 +168,14 @@ defmodule AbakusWeb.BudgetLive.Components do
     <.dropdown
       :if={@free or @assigned}
       id={"distribute-#{@key}"}
-      trigger_class={["btn-sm", @primary && @free && "btn-primary"]}
+      label="Verteilen"
+      variant={:ghost}
+      chevron={false}
+      trigger_class="btn-sm btn-square"
       class="app-distribute"
       align={:end}
     >
-      <:trigger>Verteilen</:trigger>
+      <:trigger><.icon name="ellipsis-vertical" /></:trigger>
       <:item
         :if={@free and @month.underfunded > 0}
         id={"distribute-underfunded-#{@key}"}
@@ -244,10 +210,6 @@ defmodule AbakusWeb.BudgetLive.Components do
     """
   end
 
-  defp card_class(:success), do: "app-mcard-success"
-  defp card_class(:error), do: "app-mcard-error"
-  defp card_class(_tone), do: nil
-
   defp title(%Date{year: year} = month, %Date{year: year}), do: month_name(month)
   defp title(month, _current), do: month_year(month)
 
@@ -255,22 +217,28 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :key, :string, required: true
   attr :focus, :boolean, required: true
 
-  attr :sign, :boolean,
-    default: false,
-    doc: "an equals sign before it, as the result of the calculation"
-
+  # aria-expanded follows the device's choice, which only the browser knows: the hook sets it.
   defp ready_to_assign(assigns) do
+    assigns = assign(assigns, :ready, Status.ready(assigns.month))
+
     ~H"""
-    <span class="app-rta">
-      <span :if={@sign} class="app-rta-sign" aria-hidden="true">=</span>
+    <button
+      id={"calc-toggle-#{@key}"}
+      type="button"
+      class="app-rta"
+      aria-expanded="false"
+      aria-controls={"calc-#{@key}"}
+      phx-hook="CalculationToggle"
+      phx-mounted={JS.ignore_attributes("aria-expanded")}
+    >
+      <span class="app-rta-label">{elem(@ready, 1)}<.icon name="chevron-down" /></span>
       <.amount
         id={"ready-#{@key}"}
         value={@month.ready_to_assign_shown}
         animate={@focus}
-        class="app-rta-value"
+        class={["app-rta-value", tone_class(elem(@ready, 0))]}
       />
-    </span>
-    <span class="app-rta-label">{elem(Status.ready(@month), 1)}</span>
+    </button>
     """
   end
 

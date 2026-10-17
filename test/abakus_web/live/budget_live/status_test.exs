@@ -109,14 +109,16 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   end
 
   describe "ready/1" do
-    test "red when too much is assigned, as it ended in a past month, green with money, else done" do
-      assert Status.ready(%Month{ready_to_assign_shown: -1}) == {:error, "Zu viel verteilt"}
+    test "an open month says Zu verteilen in the colour of its sign, a past month how it ended" do
+      assert Status.ready(%Month{ready_to_assign_shown: 5}) == {:success, "Zu verteilen"}
+      assert Status.ready(%Month{ready_to_assign_shown: -1}) == {:error, "Zu verteilen"}
+      assert Status.ready(%Month{ready_to_assign_shown: 0}) == {nil, "Zu verteilen"}
 
       assert Status.ready(%Month{ready_to_assign_shown: 5, closed: true}) ==
                {:muted, "Nicht verteilt am Monatsende"}
 
-      assert Status.ready(%Month{ready_to_assign_shown: 5}) == {:success, "Zu verteilen"}
-      assert Status.ready(%Month{ready_to_assign_shown: 0}) == {nil, "Alles verteilt"}
+      assert Status.ready(%Month{ready_to_assign_shown: -1, closed: true}) ==
+               {:error, "Zu viel verteilt"}
     end
   end
 
@@ -164,12 +166,12 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
     end
   end
 
-  test "uncovered/1 says which later months are short and by how much, with the year when it differs" do
+  test "uncovered/1 lists the later months that are short as lines of the calculation, with the year when it differs" do
     month = %Month{month: @oct, uncovered: [{@nov, 30_000}, {~D[2027-01-01], 5}]}
 
     assert Status.uncovered(month) == [
-             "November nicht gedeckt: es fehlen 300,00 €",
-             "Januar 2027 nicht gedeckt: es fehlen 0,05 €"
+             %{label: "Nicht gedeckt im Nov", value: -30_000, tone: :error},
+             %{label: "Nicht gedeckt im Jan 2027", value: -5, tone: :error}
            ]
   end
 end

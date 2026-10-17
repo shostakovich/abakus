@@ -5,7 +5,7 @@ import { hooks as colocatedHooks } from "phoenix-colocated/abakus"
 import { hooks as setzkastenHooks } from "phoenix-colocated/setzkasten"
 
 import { benchmarkChoice } from "./benchmark.js"
-import { BudgetLayout, initialBudgetFit, RenameField } from "./hooks/budget.js"
+import { BudgetLayout, CalculationToggle, initialBudgetFit, RenameField } from "./hooks/budget.js"
 import { DividendChart, UpcomingDividendChart } from "./hooks/dividend_chart.js"
 import { NetWorthChart } from "./hooks/net_worth_chart.js"
 import { PasskeyLogin, PasskeyRegister } from "./hooks/passkey.js"
@@ -15,6 +15,7 @@ import { EditRow, StickyBar, toggleMemo } from "./hooks/register.js"
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const appHooks = {
   BudgetLayout,
+  CalculationToggle,
   DividendChart,
   EditRow,
   NetWorthChart,

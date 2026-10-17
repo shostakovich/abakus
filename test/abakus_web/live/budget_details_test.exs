@@ -47,7 +47,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
                {"Für spätere Monate", "-300.00"}
              ]
 
-      assert has_element?(view, "#month-2026-10 .app-mtotal", "Zu verteilen")
+      assert has_element?(view, "#month-2026-10 #calc-toggle-2026-10", "Zu verteilen")
 
       for key <- ~w(2026-09 2026-10 2026-11) do
         assert sum(calculation(view, key)) == ready(view, key)
@@ -56,7 +56,12 @@ defmodule AbakusWeb.BudgetDetailsTest do
       assert ready(view, "2026-10") == Decimal.new("1075.00")
       refute has_element?(view, "#calc-2026-11", "Für spätere Monate")
       refute has_element?(view, "#calc-2026-09", "Für spätere Monate")
-      assert has_element?(view, "#month-2026-09 .app-mtotal", "Nicht verteilt am Monatsende")
+
+      assert has_element?(
+               view,
+               "#month-2026-09 #calc-toggle-2026-09",
+               "Nicht verteilt am Monatsende"
+             )
     end
 
     test "Unterfinanziert fills every target's share as far as Zu verteilen reaches", c do
@@ -674,13 +679,14 @@ defmodule AbakusWeb.BudgetDetailsTest do
   end
 
   defp calculation(view, key) do
-    html = render(element(view, "#calc-#{key}"))
-
-    Enum.zip(
-      Regex.scan(~r/<dt>([^<]+)<\/dt>/, html, capture: :all_but_first),
-      Regex.scan(~r/<data[^>]* value="([-\d.]+)"/, html, capture: :all_but_first)
-    )
-    |> Enum.map(fn {[label], [value]} -> {label, value} end)
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#calc-#{key} > div:not(.app-mcalc-warn)")
+    |> Enum.map(fn line ->
+      [value] = line |> LazyHTML.query("data") |> LazyHTML.attribute("value")
+      {line |> LazyHTML.query("dt") |> LazyHTML.text(), value}
+    end)
   end
 
   defp sum(lines),

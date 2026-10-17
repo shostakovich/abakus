@@ -93,7 +93,8 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       assert assigned(c.rent, @october) == 105_000
       assert has_element?(view, "#ready-2026-10", "−950,00\u00A0€")
-      assert has_element?(view, "#month-2026-10.app-mcard-error", "Zu viel verteilt")
+      assert has_element?(view, "#ready-2026-10.text-error-ink")
+      assert has_element?(view, "#calc-toggle-2026-10", "Zu verteilen")
     end
 
     test "an amount that is no number is marked and changes nothing", c do
@@ -168,12 +169,63 @@ defmodule AbakusWeb.BudgetLiveTest do
       {:ok, view, _html} = open(c.conn, ~p"/budget", months: 2)
 
       assert has_element?(view, "#ready-2026-10", "100,00\u00A0€")
-      warning = "November nicht gedeckt: es fehlen 300,00\u00A0€"
-      assert has_element?(view, "#month-2026-10 #uncovered-2026-10", warning)
+      assert has_element?(view, "#calc-2026-10 .app-mcalc-warn dt", "Nicht gedeckt im Nov")
+      assert has_element?(view, "#calc-2026-10 .app-mcalc-warn dd", "−300,00\u00A0€")
 
       view |> element("#assign-#{c.rent.id}-2026-11") |> render_blur(%{"value" => "200"})
 
-      refute has_element?(view, ".app-uncovered")
+      refute has_element?(view, ".app-mcalc-warn")
+    end
+
+    test "Zu verteilen shows and hides the calculation of every month on the device", c do
+      income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
+      {:ok, view, _html} = open(c.conn, ~p"/budget", months: 3)
+
+      for key <- ~w(2026-10 2026-11 2026-12) do
+        assert has_element?(
+                 view,
+                 "#month-#{key} button#calc-toggle-#{key}[phx-hook=CalculationToggle]" <>
+                   "[aria-expanded=false][aria-controls=calc-#{key}]",
+                 "Zu verteilen"
+               )
+
+        assert has_element?(
+                 view,
+                 "#calc-toggle-#{key}[phx-mounted*=ignore_attrs][phx-mounted*=aria-expanded]"
+               )
+
+        assert has_element?(view, "#month-#{key} dl#calc-#{key} dt", "Einnahmen im")
+      end
+    end
+
+    test "a card's ⋮ menu distributes the month", c do
+      income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
+
+      {:ok, _} =
+        Categories.set_target(budget_scope(), c.rent, %{
+          cadence: :monthly,
+          amount: 6_834,
+          from_month: @october
+        })
+
+      {:ok, view, _html} = open(c.conn, ~p"/budget")
+
+      assert has_element?(
+               view,
+               ~s|#month-2026-10 #distribute-2026-10 summary.btn-ghost[aria-label="Verteilen"]|
+             )
+
+      refute has_element?(view, "#distribute-2026-10 summary", "Verteilen")
+
+      assert has_element?(
+               view,
+               "#distribute-underfunded-2026-10",
+               "Unterfinanzierte füllen (68,34\u00A0€)"
+             )
+
+      assert has_element?(view, "#distribute-pick-2026-10", "In eine Kategorie …")
+      assert has_element?(view, "#distribute-reset-2026-10", "Zuweisung zurücksetzen")
     end
 
     test "the current month is the focus month; a card has its calculation", c do
@@ -269,16 +321,19 @@ defmodule AbakusWeb.BudgetLiveTest do
       refute has_element?(view, "#month-2026-11")
       assert has_element?(view, "#month-bar", "Oktober 2026")
       assert has_element?(view, "#month-bar #ready-2026-10", "1.000,00\u00A0€")
-      assert has_element?(view, "#month-bar #distribute-2026-10")
 
       assert has_element?(
                view,
-               "#month-bar #month-toggle-2026-10[aria-expanded=false][aria-controls=calc-2026-10]",
-               "1.000,00"
+               ~s|#month-bar #distribute-2026-10 summary[aria-label="Verteilen"]|
+             )
+
+      assert has_element?(
+               view,
+               "#month-bar #calc-toggle-2026-10[aria-expanded][aria-controls=calc-2026-10]",
+               "Zu verteilen"
              )
 
       assert has_element?(view, "#month-bar #calc-2026-10", "Einnahmen im Okt")
-      assert view |> element("#month-toggle-2026-10") |> render() =~ "is-open"
       assert has_element?(view, ".app-add-end #add-group")
       refute has_element?(view, "thead #add-group")
 

@@ -126,66 +126,56 @@ button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outlin
 @media (pointer: coarse) { button.app-avail::after { content: ""; position: absolute; inset: -.5rem -.25rem; } }
 
 .app-mcard {
-  --app-tone: var(--color-base-content);
-  --app-tint: var(--setzkasten-alert-neutral-tint);
-  display: flex; flex-direction: column; gap: .25rem; height: 100%; padding: .375rem .75rem .5rem;
-  border: 1px solid color-mix(in oklab, var(--app-tone) var(--setzkasten-alert-border), transparent); border-radius: var(--radius-box);
-  background: color-mix(in oklab, var(--app-tone) var(--app-tint), var(--color-base-100));
+  display: flex; flex-direction: column; gap: .25rem; height: 100%; padding: .25rem .75rem .5rem;
+  border: 1px solid var(--app-line); border-radius: var(--radius-box); background: var(--color-base-100);
   white-space: normal; cursor: pointer;
 }
-.app-mcard-success { --app-tone: var(--color-success); --app-tint: var(--setzkasten-alert-tint); }
-.app-mcard-error { --app-tone: var(--color-error); --app-tint: var(--setzkasten-alert-tint); }
-.app-mcard:not(.is-focus, .app-mbar-card):hover { border-color: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
+.app-mcard:not(.is-focus):hover { border-color: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
 .app-mcard.is-focus { cursor: default; }
 .app-mhead { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2rem; }
-.app-mcard .app-mname { font-size: .875rem; line-height: 1.25rem; }
-.app-mcalc { display: grid; grid-template-columns: auto auto; justify-content: end; gap: 0 .75rem; margin: 0; font-size: .75rem; line-height: 1rem; }
-.app-mcalc > div { display: contents; }
-.app-mcalc dt { text-align: end; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
-.app-mcalc dd { margin: 0; text-align: end; }
-.app-mtotal { display: flex; flex-direction: column; align-items: flex-end; text-align: end; }
-.app-rta { display: inline-flex; align-items: baseline; gap: .375rem; }
-.app-rta-sign { font-size: 1rem; font-weight: 600; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
-.app-mcard .app-rta-value { line-height: 1.75rem; }
-.app-mcard .app-rta-label { font-size: .75rem; line-height: 1rem; }
-
-.app-mname { font-size: 1rem; font-weight: 600; line-height: 1.5rem; }
-.app-rta-value { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -.01em; }
-.app-rta-label { font-weight: 500; }
-.app-uncovered { display: flex; flex-direction: column; align-items: flex-end; gap: .125rem; font-size: .75rem; line-height: 1rem; font-weight: 600; color: var(--color-error-ink); text-align: end; }
-.app-uncovered li { display: flex; align-items: flex-start; gap: .25rem; }
-.app-uncovered .lucide { flex: none; width: .875rem; height: .875rem; margin-block-start: .0625rem; }
+.app-mhead .app-distribute { margin-inline-end: -.5rem; }
 .app-distribute .menu { text-align: start; }
-/* As Setzkasten's neutral buttons on an alert's tint: base-200 all but vanishes on the card's. */
-.app-mcard .app-distribute > .btn:not(.btn-primary) {
-  --btn-bg: var(--setzkasten-alert-control); --btn-border: color-mix(in oklab, var(--color-base-content) 50%, transparent);
+.app-mname { font-size: 1rem; font-weight: 600; line-height: 1.5rem; }
+.app-mcard .app-mname { font-size: .875rem; line-height: 1.25rem; }
+
+.app-mcalc {
+  --app-mcalc-x: .75rem;
+  display: none; grid-template-columns: auto auto; justify-content: center; gap: .125rem .75rem;
+  margin: 0 calc(-1 * var(--app-mcalc-x)); padding: .375rem var(--app-mcalc-x);
+  border-block: 1px solid var(--app-line); background: var(--color-base-200); font-size: .75rem; line-height: 1rem;
 }
-@media (hover: hover) {
-  .app-mcard .app-distribute > .btn:not(.btn-primary):hover { --btn-bg: color-mix(in oklab, var(--setzkasten-alert-control), var(--color-base-content) 7%); }
+:root[data-budget-calculation="shown"] .app-mcalc { display: grid; }
+.app-mcalc > div { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
+.app-mcalc dd { grid-area: 1 / 1; margin: 0; text-align: end; }
+.app-mcalc dt { grid-area: 1 / 2; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
+.app-mcalc .app-mcalc-warn { font-weight: 600; color: var(--color-error-ink); }
+.app-mcalc .app-mcalc-warn dt { color: inherit; }
+
+.app-rta {
+  display: flex; flex-direction: column; align-items: center; margin-block-start: auto; padding: .125rem .5rem;
+  border: 0; border-radius: var(--radius-field); background: none; color: inherit; font: inherit; cursor: pointer;
 }
+.app-rta:hover { background: color-mix(in oklab, var(--color-base-content) 6%, transparent); }
+.app-rta:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 0; }
+.app-rta-label {
+  display: inline-flex; align-items: center; gap: .25rem; font-size: .75rem; line-height: 1rem; font-weight: 500;
+  color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
+}
+.app-rta-label .lucide { flex: none; width: .875rem; height: .875rem; transition: rotate var(--setzkasten-duration) var(--setzkasten-ease-out); }
+:root[data-budget-calculation="shown"] .app-rta-label .lucide { rotate: 180deg; }
+.app-rta-value { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -.01em; }
+@media (prefers-reduced-motion: reduce) { .app-rta-label .lucide { transition: none; } }
 
 .app-mbar {
-  position: sticky; top: 0; z-index: 20; display: flex; flex-direction: column; gap: .5rem;
-  margin: -.5rem -1rem .5rem; padding: .25rem 1rem .75rem; background: var(--color-base-100); border-bottom: 1px solid var(--app-line);
+  --app-bar-x: 1rem;
+  position: sticky; top: 0; z-index: 20; display: flex; flex-direction: column; gap: .25rem;
+  margin: -.5rem calc(-1 * var(--app-bar-x)) .5rem; padding: .25rem var(--app-bar-x) .5rem;
+  background: var(--color-base-100); border-bottom: 1px solid var(--app-line);
 }
-@media (width >= 40rem) { .app-mbar { margin-inline: -1.5rem; padding-inline: 1.5rem; } }
-.app-mbar-nav { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.app-mbar .app-mcard { min-height: 4rem; cursor: default; }
-.app-mtoggle {
-  display: flex; align-items: center; gap: .5rem; min-width: 0; margin: -.25rem -.5rem; padding: .25rem .5rem;
-  border: 0; border-radius: var(--radius-field); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer;
-}
-.app-mtoggle:hover { background: color-mix(in oklab, var(--color-base-content) 6%, transparent); }
-.app-mtoggle:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 0; }
-.app-mtoggle-text { display: flex; flex-direction: column; min-width: 0; }
-.app-mtoggle > .lucide { flex: none; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); transition: rotate var(--setzkasten-duration) var(--setzkasten-ease-out); }
-.app-mbar.is-open .app-mtoggle > .lucide { rotate: 180deg; }
-.app-mbar .app-mcalc { display: none; grid-template-columns: minmax(0, 1fr) auto; justify-content: stretch; padding-block-start: .25rem; }
-.app-mbar.is-open .app-mcalc { display: grid; }
-.app-mbar .app-mcalc dt { text-align: start; }
-.app-mbar .app-uncovered { align-items: flex-start; text-align: start; }
-@media (prefers-reduced-motion: reduce) { .app-mtoggle > .lucide { transition: none; } }
-
+@media (width >= 40rem) { .app-mbar { --app-bar-x: 1.5rem; } }
+.app-mbar .app-mcalc { --app-mcalc-x: var(--app-bar-x); }
+.app-mbar-nav { display: flex; align-items: center; gap: .25rem; }
+.app-mbar .app-rta-value { font-size: 1.25rem; line-height: 1.75rem; }
 
 @media (width < 40rem) {
   .app-budget.is-compact :is(.app-col-assigned, .app-col-activity) { width: 0; visibility: collapse; }

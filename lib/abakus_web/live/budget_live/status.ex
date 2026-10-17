@@ -6,7 +6,7 @@ defmodule AbakusWeb.BudgetLive.Status do
   """
 
   import Abakus.Format,
-    only: [long_date: 1, day_month: 1, month_name: 1, month_abbr: 1, month_year: 1]
+    only: [long_date: 1, day_month: 1, month_name: 1, month_abbr: 1]
 
   alias Abakus.Budget.{CategoryMonth, Month}
   alias Abakus.Money
@@ -96,16 +96,15 @@ defmodule AbakusWeb.BudgetLive.Status do
 
   def target_mark(%CategoryMonth{}), do: nil
 
-  @doc "Zu verteilen's tone and label."
-  def ready(%Month{ready_to_assign_shown: shown}) when shown < 0,
+  @doc "Zu verteilen's tone and label: an open month's by its sign, a past month's as it ended."
+  def ready(%Month{closed: true, ready_to_assign_shown: shown}) when shown < 0,
     do: {:error, "Zu viel verteilt"}
 
   def ready(%Month{closed: true}), do: {:muted, "Nicht verteilt am Monatsende"}
 
-  def ready(%Month{ready_to_assign_shown: shown}) when shown > 0,
-    do: {:success, "Zu verteilen"}
-
-  def ready(%Month{}), do: {nil, "Alles verteilt"}
+  def ready(%Month{ready_to_assign_shown: shown}) when shown > 0, do: {:success, "Zu verteilen"}
+  def ready(%Month{ready_to_assign_shown: shown}) when shown < 0, do: {:error, "Zu verteilen"}
+  def ready(%Month{}), do: {nil, "Zu verteilen"}
 
   @doc """
   How Zu verteilen adds up, as YNAB 4's month header: what last month left unassigned and overspent, this month's
@@ -138,11 +137,15 @@ defmodule AbakusWeb.BudgetLive.Status do
   defp error(true), do: :error
   defp error(false), do: nil
 
-  @doc "The later months whose Zu verteilen is below zero, with the shortfall."
+  @doc "The later months whose Zu verteilen is below zero, as lines of the calculation: the shortfall, negative."
   def uncovered(%Month{month: month, uncovered: uncovered}) do
     for {later, shortfall} <- uncovered do
-      name = if later.year == month.year, do: month_name(later), else: month_year(later)
-      "#{name} nicht gedeckt: es fehlen #{Money.euros(shortfall)}"
+      name =
+        if later.year == month.year,
+          do: month_abbr(later),
+          else: "#{month_abbr(later)} #{later.year}"
+
+      %{label: "Nicht gedeckt im #{name}", value: -shortfall, tone: :error}
     end
   end
 end

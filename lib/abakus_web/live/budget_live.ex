@@ -249,12 +249,8 @@ defmodule AbakusWeb.BudgetLive do
     {:noreply, socket |> assign(:fit, fit(params)) |> assign_view()}
   end
 
-  def handle_event("focus", %{"month" => param}, socket) do
-    case shown_month(socket, param) do
-      {:ok, month} -> {:noreply, socket |> assign(:focus, month) |> assign_view()}
-      :error -> {:noreply, socket}
-    end
-  end
+  def handle_event("focus", %{"month" => param}, socket),
+    do: {:noreply, focus_shown(socket, param)}
 
   def handle_event("show_month", %{"month" => param}, socket) do
     case Window.parse_param(param) do
