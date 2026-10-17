@@ -2,7 +2,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   @moduledoc """
   Edits a transaction as YNAB does, for a new one and an existing one alike. On desktops (`layout: :row`) it
   replaces the transaction's rows in the register on one line: inputs in every column, Cancel and Save (Approve for
-  one waiting for approval) where approve and C stand, Enter saves and Escape cancels; a split's subtransactions as
+  one waiting for approval) where approve and status stand, Enter saves and Escape cancels; a split's subtransactions as
   rows below, each with a payee field only where it differs from the transaction's. Its root is a `<tbody>`, the
   inputs outside the first row belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet
   from the bottom with the amount first. The form's state is `AbakusWeb.TransactionForm` params.

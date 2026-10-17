@@ -59,7 +59,7 @@ defmodule AbakusWeb.Layouts do
 
   Finanzen: Budget, Vermögen, Alle Konten, Alle Depots and Import & Sync with the receipts waiting in the inbox,
   the open budget and tracking accounts with their emoji (else `AbakusWeb.AccountMotif`), their balance and how
-  many transactions wait for approval, and "Konto hinzufügen", which opens the account form; then the section
+  many transactions wait for approval; then the section
   Depots with the active portfolios and their values, each shown with the leading emoji of its account in the
   budget, else the briefcase; a user without the budget sees only Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and
   portfolios stay out of the icon rail and the dock. Entries show plush images, the Lucide icon only where a plush
@@ -182,15 +182,6 @@ defmodule AbakusWeb.Layouts do
         parent={:all_accounts}
         navigate={navigate(~p"/budget/accounts/#{row.account}", @current)}
         href={href(~p"/budget/accounts/#{row.account}", @current)}
-      />
-      <:nav
-        :if={@budget?}
-        key={:add_account}
-        id="side-add-account"
-        label="Konto hinzufügen"
-        icon="plus"
-        section={last_section(@groups)}
-        on_click="open_account_dialog"
       />
       <:nav
         :for={{row, first?} <- Enum.with_index(@portfolios, &{&1, &2 == 0})}
@@ -373,9 +364,6 @@ defmodule AbakusWeb.Layouts do
   defp same_live_session?("/budget" <> _, current), do: current in @budget_pages
   defp same_live_session?("/kasse" <> _, current), do: current in @kasse_pages
   defp same_live_session?("/depot" <> _, current), do: current in @depot_pages
-
-  defp last_section([]), do: nil
-  defp last_section(groups), do: groups |> List.last() |> account_section()
 
   defp account_section(%{key: :budget}), do: "Budgetkonten"
   defp account_section(%{key: :tracking}), do: "Trackingkonten"

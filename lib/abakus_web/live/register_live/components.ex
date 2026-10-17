@@ -1,7 +1,7 @@
 defmodule AbakusWeb.RegisterLive.Components do
   @moduledoc """
-  The parts of the register: what waits, account line, balances, toolbar, selection bar, the table on desktops and
-  the list on phones, both with the match proposals among the transactions. A click into a selected row (on phones
+  The parts of the register: the header's meta line, balances and toolbar, the selection bar, the table on desktops
+  and the list on phones, both with the match proposals among the transactions. A click into a selected row (on phones
   a list row) opens the transaction editor. Actions that change a reconciled transaction ask in the confirmation
   dialog first and send `reconciled: "confirmed"`.
   """
@@ -19,80 +19,37 @@ defmodule AbakusWeb.RegisterLive.Components do
     shared_expenses: "Buchungen kommen aus der Kasse"
   }
 
-  attr :transactions, :list, required: true, doc: "the unapproved ones in the register"
-  attr :proposals, :list, required: true
-
-  attr :show_path, :any,
-    required: true,
-    doc: "where \"Ansehen\" leads, false in that view already"
-
-  @doc """
-  What waits, as a chip in the toolbar: unapproved transactions and match proposals, with "Alle bestätigen" for the
-  ones and "Alle Zuordnungen übernehmen" for the others.
-  """
-  def waiting(assigns) do
-    assigns =
-      assign(assigns, :count, length(assigns.transactions) + length(assigns.proposals))
-
-    ~H"""
-    <div id="unapproved-banner" class="app-waiting">
-      <span class={["px-2 font-medium", @show_path && "max-md:hidden"]}>{@count} zu bestätigen</span>
-      <.button
-        :if={@show_path}
-        id="show-unapproved"
-        variant={:ghost}
-        size={:sm}
-        patch={@show_path}
-      >
-        <span class="md:hidden">{@count} zu bestätigen</span><span class="max-md:hidden">Ansehen</span>
-      </.button>
-      <.button
-        :if={@transactions != []}
-        id="approve-all"
-        variant={:ghost}
-        size={:sm}
-        icon="check"
-        class="max-md:btn-square"
-        phx-click="approve_all"
-        {confirm(@transactions)}
-      >
-        <span class="max-md:sr-only">Alle bestätigen</span>
-      </.button>
-      <.button
-        :if={@proposals != []}
-        id="accept-all-matches"
-        variant={:ghost}
-        size={:sm}
-        icon="link"
-        class="max-md:btn-square"
-        phx-click="accept_all_matches"
-        {confirm_merge(@proposals)}
-      >
-        <span class="max-md:sr-only">Alle Zuordnungen übernehmen</span>
-      </.button>
-    </div>
-    """
-  end
-
   attr :account, Account, default: nil
 
+  @doc "The line below the title: the account's kind, closed, last reconciled (with the lock) and note."
   def meta(assigns) do
+    assigns = assign(assigns, :parts, meta_parts(assigns.account))
+
     ~H"""
-    <span id="register-meta" class="max-md:hidden">{join_meta(meta_parts(@account))}</span>
+    <span id="register-meta" class="inline-flex flex-wrap items-center gap-x-1">
+      <%= for {part, index} <- Enum.with_index(@parts) do %>
+        <span :if={index > 0} aria-hidden="true">·</span>
+        <span :if={is_binary(part)}>{part}</span>
+        <span :if={match?({:reconciled, _date}, part)} class="inline-flex items-center gap-1">
+          <.icon name="lock" class="size-3.5" />Abgeglichen am {Format.date(elem(part, 1))}
+        </span>
+      <% end %>
+    </span>
     """
   end
 
   defp meta_parts(nil), do: ["Budget- und Tracking-Konten"]
 
   defp meta_parts(account) do
-    [
-      AccountGroups.kind_label(account.kind),
-      account.closed && "Geschlossen",
-      account.last_reconciled_at &&
-        "Abgeglichen am #{Format.date(account.last_reconciled_at)}",
-      account.note
-    ]
-    |> Enum.filter(& &1)
+    Enum.filter(
+      [
+        AccountGroups.kind_label(account.kind),
+        account.closed && "Geschlossen",
+        account.last_reconciled_at && {:reconciled, account.last_reconciled_at},
+        account.note
+      ],
+      & &1
+    )
   end
 
   attr :account, Account, default: nil
@@ -103,14 +60,14 @@ defmodule AbakusWeb.RegisterLive.Components do
     doc: "the difference animates then, not the balance"
 
   @doc """
-  One account: the balance equation, or for a depot only its value. All accounts: the budget accounts' equation,
-  tracking and the total. In the header beside the title from `md`; phones get `balances_compact/1`.
+  The header's second row. One account: Gebucht + Vorgemerkt = Arbeitssaldo, or for a depot only its value. All
+  accounts: that equation for the budget accounts, then tracking and the total. Phones get one compact line.
   """
   def balances(assigns) do
     ~H"""
     <div
       id="register-balances"
-      class="max-md:hidden flex flex-wrap items-center gap-x-6 gap-y-2 md:me-4"
+      class="app-reg-row flex flex-wrap items-center gap-x-6 gap-y-2 max-md:hidden"
     >
       <%= cond do %>
         <% portfolio?(@account) -> %>
@@ -121,67 +78,38 @@ defmodule AbakusWeb.RegisterLive.Components do
             animate={!@reconciling}
           />
         <% @account -> %>
-          <.equation balances={@balances} ids animate={!@reconciling} />
+          <.equation balances={@balances} animate={!@reconciling} />
         <% true -> %>
-          <.equation balances={@balances.budget} ids label="Budgetkonten" animate />
+          <.equation balances={@balances.budget} label="Budgetkonten" animate />
           <span class="self-stretch border-s border-base-content/10" aria-hidden="true"></span>
           <.figure id="balance-tracking" value={@balances.tracking} label="Tracking" />
           <span class="self-stretch border-s border-base-content/10" aria-hidden="true"></span>
           <.figure id="balance-total" value={@balances.total} label="Gesamt" />
       <% end %>
     </div>
-    """
-  end
-
-  attr :account, Account, default: nil
-  attr :balances, :map, required: true
-
-  @doc "Phones: the headline balance beside the title, opening the meta line and the equation in a sheet."
-  def balances_compact(assigns) do
-    ~H"""
-    <div class="md:hidden">
-      <.popover
-        id="balances-compact"
-        title={headline_label(@account)}
-        variant={:ghost}
-        chevron
-        trigger_class="px-2"
-      >
-        <:trigger><.amount value={headline(@account, @balances)} tone={:negative} /></:trigger>
-        <div class="flex flex-col gap-4">
-          <p class="text-base-content/70">{join_meta(meta_parts(@account))}</p>
-          <.equation
-            :if={!portfolio?(@account)}
-            balances={if @account, do: @balances, else: @balances.budget}
-            label={!@account && "Budgetkonten"}
-          />
-          <.figure :if={!@account} value={@balances.tracking} label="Tracking" />
-          <.button
-            :if={@account}
-            id="edit-account-compact"
-            icon="pencil"
-            phx-click="open_account_dialog"
-            phx-value-id={@account.id}
-          >
-            Konto bearbeiten
-          </.button>
-        </div>
-      </.popover>
+    <div
+      id="register-balances-line"
+      class={["app-reg-row app-reg-line flex md:hidden", !@account && "app-reg-line-all"]}
+    >
+      <%= cond do %>
+        <% portfolio?(@account) -> %>
+          <.line_figure value={@balances.working} label="Wert laut Depot" />
+        <% @account -> %>
+          <.line_figure value={@balances.cleared} label="Gebucht" />
+          <.line_figure op="+" value={@balances.uncleared} label="Vorgemerkt" tone={false} />
+          <.line_figure op="=" value={@balances.working} label="Arbeitssaldo" />
+        <% true -> %>
+          <.line_figure value={@balances.budget.working} label="Budgetkonten" />
+          <.line_figure value={@balances.tracking} label="Tracking" />
+          <.line_figure value={@balances.total} label="Gesamt" />
+      <% end %>
     </div>
     """
   end
 
   defp portfolio?(account), do: match?(%Account{fed_by: :portfolio}, account)
 
-  defp headline(nil, balances), do: balances.total
-  defp headline(_account, balances), do: balances.working
-
-  defp headline_label(nil), do: "Gesamt"
-  defp headline_label(%Account{fed_by: :portfolio}), do: "Wert"
-  defp headline_label(_account), do: "Arbeitssaldo"
-
   attr :balances, :map, required: true
-  attr :ids, :boolean, default: false
   attr :animate, :boolean, default: false
 
   attr :label, :any,
@@ -191,29 +119,31 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp equation(assigns) do
     ~H"""
     <div class="flex flex-wrap items-start gap-x-4 gap-y-2">
-      <.figure id={@ids && "balance-cleared"} value={@balances.cleared} label="Gebucht" />
+      <.figure id="balance-cleared" value={@balances.cleared} label="Gebucht" state={:cleared} />
       <.figure
-        id={@ids && "balance-uncleared"}
+        id="balance-uncleared"
         op="+"
         value={@balances.uncleared}
         label="Vorgemerkt"
+        state={:uncleared}
         tone={false}
       />
       <.figure
-        id={@ids && "balance-working"}
+        id="balance-working"
         op="="
         value={@balances.working}
         label={@label || "Arbeitssaldo"}
-        animate={@ids && @animate}
+        animate={@animate}
       />
     </div>
     """
   end
 
-  attr :id, :any, default: nil
+  attr :id, :string, required: true
   attr :op, :string, default: nil
   attr :value, :integer, required: true
   attr :label, :string, required: true
+  attr :state, :atom, default: nil, doc: "the cleared state whose icon goes before the label"
   attr :animate, :boolean, default: false
   attr :tone, :any, default: :negative
 
@@ -222,126 +152,213 @@ defmodule AbakusWeb.RegisterLive.Components do
     <div class="flex items-start gap-3">
       <span :if={@op} class="text-lg text-base-content/70" aria-hidden="true">{@op}</span>
       <div class="flex flex-col">
-        <.amount
-          id={@id || nil}
-          value={@value}
-          size={:lg}
-          tone={@tone}
-          animate={!!@id and @animate}
-        />
-        <span class="text-sm text-base-content/70">{@label}</span>
+        <.amount id={@id} value={@value} size={:lg} tone={@tone} animate={@animate} />
+        <span class="inline-flex items-center gap-1 text-sm text-base-content/70">
+          <.state_icon :if={@state} state={@state} />{@label}
+        </span>
       </div>
     </div>
     """
   end
 
+  attr :op, :string, default: nil
+  attr :value, :integer, required: true
+  attr :label, :string, required: true
+  attr :tone, :any, default: :negative
+
+  defp line_figure(assigns) do
+    ~H"""
+    <span :if={@op} class="text-base-content/70" aria-hidden="true">{@op}</span>
+    <span class="app-reg-figure">
+      <.amount value={@value} tone={@tone} class="font-semibold" />
+      <span class="truncate text-xs text-base-content/70">{@label}</span>
+    </span>
+    """
+  end
+
+  attr :state, :atom, required: true
+
+  defp state_icon(%{state: :cleared} = assigns),
+    do: ~H|<.icon name="circle-check" class="app-state-cleared" />|
+
+  defp state_icon(%{state: :uncleared} = assigns),
+    do: ~H|<.icon name="circle" class="app-state-uncleared" />|
+
+  defp state_icon(%{state: :reconciled} = assigns),
+    do: ~H|<.icon name="lock" class="app-state-reconciled" />|
+
   attr :account, Account, default: nil
 
   attr :manual, :boolean, required: true, doc: "whether \"Buchung\" adds a transaction here"
 
+  attr :unapproved, :list, required: true
+  attr :proposals, :list, required: true
   attr :filter, :atom, required: true
   attr :query, :string, required: true
   attr :running, :boolean, required: true
   attr :running_shown, :boolean, required: true
   attr :paths, :map, required: true
-  slot :inner_block, doc: "what waits, after the actions"
 
+  @doc """
+  The header's third row: "Buchung", "Datei-Import" and what waits ("Alle bestätigen" with the count, "Alle
+  zuordnen"), then the view menu and the search. Phones keep the search and the menu, which takes the rest; the
+  floating button adds a transaction there.
+  """
   def toolbar(assigns) do
     ~H"""
-    <div id="register-toolbar" class="flex flex-wrap items-center gap-2 pb-3">
-      <.button
-        :if={@manual}
-        id="new-transaction"
-        variant={:ghost}
-        size={:sm}
-        icon="plus"
-        class="max-md:hidden"
-        phx-click="new"
-        phx-value-layout="row"
-      >
-        Buchung
-      </.button>
-      <.button
-        :if={@manual}
-        id="file-import"
-        variant={:ghost}
-        size={:sm}
-        icon="file-text"
-        class="max-md:hidden"
-        navigate={~p"/budget/import"}
-      >
-        Datei-Import
-      </.button>
-      {render_slot(@inner_block)}
-      <p
-        :if={@account && @account.fed_by}
-        id="feed-hint"
-        class="flex items-center gap-1 text-sm text-base-content/70 max-md:order-last"
-      >
+    <div id="register-toolbar" class="app-reg-row">
+      <div class="app-reg-toolbar">
+        <div class="app-reg-actions flex max-md:hidden">
+          <.button
+            :if={@manual}
+            id="new-transaction"
+            variant={:ghost}
+            size={:sm}
+            icon="plus"
+            phx-click="new"
+            phx-value-layout="row"
+          >
+            Buchung
+          </.button>
+          <.button
+            :if={@manual}
+            id="file-import"
+            variant={:ghost}
+            size={:sm}
+            icon="file-text"
+            navigate={~p"/budget/import"}
+          >
+            Datei-Import
+          </.button>
+          <.button
+            :if={@unapproved != []}
+            id="approve-all"
+            variant={:ghost}
+            size={:sm}
+            icon="check"
+            aria-label={"Alle #{length(@unapproved)} bestätigen"}
+            phx-click="approve_all"
+            {confirm(@unapproved)}
+          >
+            Alle bestätigen
+            <.badge id="approve-all-count" tone={:primary} style={:plain}>
+              {length(@unapproved)}
+            </.badge>
+          </.button>
+          <.button
+            :if={@proposals != []}
+            id="accept-all-matches"
+            variant={:ghost}
+            size={:sm}
+            icon="link"
+            phx-click="accept_all_matches"
+            {confirm_merge(@proposals)}
+          >
+            Alle zuordnen
+          </.button>
+        </div>
+        <div class="app-reg-find">
+          <.dropdown
+            id="view-menu"
+            align={:end}
+            variant={:ghost}
+            chevron={false}
+            trigger_class="btn-sm max-md:btn-square"
+          >
+            <:trigger>
+              <span id="view-toggle" class="max-md:sr-only">{view_label(@filter)}</span>
+              <.icon name="chevron-down" class="max-md:hidden" />
+              <.icon name="ellipsis-vertical" class="md:hidden" />
+            </:trigger>
+            <:item
+              :if={@manual}
+              id="file-import-item"
+              icon="file-text"
+              navigate={~p"/budget/import"}
+              class="md:hidden"
+            >
+              Datei-Import
+            </:item>
+            <:item
+              :if={@unapproved != []}
+              id="approve-all-item"
+              icon="check"
+              class="md:hidden"
+              confirm={question(@unapproved)}
+              confirm_text="Der gebuchte Saldo bleibt gleich."
+              confirm_label="Ändern"
+              on_click={
+                JS.push("approve_all",
+                  value: if(reconciled(@unapproved) != [], do: %{reconciled: "confirmed"}, else: %{})
+                )
+              }
+            >
+              Alle bestätigen ({length(@unapproved)})
+            </:item>
+            <:item
+              :if={@proposals != []}
+              id="accept-all-matches-item"
+              icon="link"
+              class="md:hidden"
+              confirm={merge_question(@proposals)}
+              confirm_text={merge_text()}
+              confirm_label="Zuordnen"
+              on_click={
+                JS.push("accept_all_matches",
+                  value: if(merge_question(@proposals), do: %{reconciled: "confirmed"}, else: %{})
+                )
+              }
+            >
+              Alle zuordnen
+            </:item>
+            <:item
+              :for={{filter, label} <- filter_labels()}
+              patch={@paths.filters[filter]}
+              active={@filter == filter}
+            >
+              {label}
+            </:item>
+            <:item :if={@account} id="running-toggle" patch={@paths.running} divider>
+              {if @running, do: "Laufenden Saldo ausblenden", else: "Laufenden Saldo zeigen"}
+            </:item>
+            <:item
+              id="memo-toggle"
+              on_click={JS.dispatch("abakus:toggle-memo")}
+              class="max-md:hidden"
+              divider={!@account}
+            >
+              <span class="app-memo-hide">Memo ausblenden</span><span class="app-memo-show">Memo zeigen</span>
+            </:item>
+          </.dropdown>
+          <form
+            id="register-search"
+            class="app-reg-search"
+            role="search"
+            phx-change="search"
+            phx-submit="search"
+          >
+            <.input
+              id="register-q"
+              type="search"
+              name="q"
+              value={@query}
+              label="Buchungen durchsuchen"
+              hide_label
+              icon="search"
+              placeholder="Suchen"
+              class="input-sm"
+              phx-debounce="300"
+            />
+          </form>
+        </div>
+      </div>
+      <p :if={@account && @account.fed_by} id="feed-hint" class="app-reg-hint">
         <.icon name="info" class="shrink-0" />
         {feed_hint(@account)}, keine Buchungen von Hand oder per Datei
       </p>
-      <p
-        :if={@account && @running && !@running_shown}
-        id="running-hint"
-        class="text-sm text-base-content/70 max-md:order-last"
-      >
+      <p :if={@account && @running && !@running_shown} id="running-hint" class="app-reg-hint">
         Laufender Saldo nur in „Alle Buchungen“ ohne Suche
       </p>
-      <div class="ml-auto flex min-w-0 items-center gap-2 max-md:flex-1 max-md:basis-32">
-        <form
-          id="register-search"
-          class="min-w-0 grow md:w-56 md:grow-0"
-          role="search"
-          phx-change="search"
-          phx-submit="search"
-        >
-          <.input
-            id="register-q"
-            type="search"
-            name="q"
-            value={@query}
-            label="Buchungen durchsuchen"
-            hide_label
-            icon="search"
-            placeholder="Suchen"
-            class="input-sm"
-            phx-debounce="300"
-          />
-        </form>
-        <.dropdown
-          id="view-menu"
-          align={:end}
-          variant={:ghost}
-          chevron={false}
-          trigger_class="btn-sm max-md:btn-square"
-        >
-          <:trigger>
-            <span id="view-toggle" class="max-md:sr-only">{view_label(@filter)}</span>
-            <.icon name="chevron-down" class="max-md:hidden" />
-            <.icon name="ellipsis-vertical" class="md:hidden" />
-          </:trigger>
-          <:item
-            :if={@manual}
-            id="file-import-item"
-            icon="file-text"
-            navigate={~p"/budget/import"}
-            class="md:hidden"
-          >
-            Datei-Import
-          </:item>
-          <:item
-            :for={{filter, label} <- filter_labels()}
-            patch={@paths.filters[filter]}
-            active={@filter == filter}
-          >
-            {label}
-          </:item>
-          <:item :if={@account} id="running-toggle" patch={@paths.running} divider>
-            {if @running, do: "Laufenden Saldo ausblenden", else: "Laufenden Saldo zeigen"}
-          </:item>
-        </.dropdown>
-      </div>
     </div>
     """
   end
@@ -489,6 +506,7 @@ defmodule AbakusWeb.RegisterLive.Components do
     doc: "the transaction editor's assigns while a row is edited"
 
   attr :empty, :string, required: true
+  attr :empty_hint, :string, default: nil
 
   @doc """
   The register on desktops, as in YNAB: a click selects a row, a click into a cell of a selected row opens it for
@@ -515,13 +533,26 @@ defmodule AbakusWeb.RegisterLive.Components do
           @columns.running && "app-reg-running"
         ]}
       >
+        <colgroup>
+          <col class="app-col-pick" />
+          <col class="app-col-date" />
+          <col :if={@columns.all} class="app-col-konto" />
+          <col class="app-col-payee" />
+          <col :if={@columns.category} class="app-col-cat" />
+          <col class="app-col-memo" />
+          <col class="app-col-out" />
+          <col class="app-col-in" />
+          <col :if={@columns.running} class="app-col-run" />
+          <col class="app-col-ok" />
+          <col class="app-col-c" />
+        </colgroup>
         <thead>
           <tr>
             <th class="app-pick">
               <input
                 id="select-all"
                 type="checkbox"
-                class="checkbox checkbox-sm"
+                class="checkbox checkbox-xs"
                 checked={@all_selected}
                 phx-click="select_all"
                 aria-label="Alle auswählen"
@@ -536,8 +567,8 @@ defmodule AbakusWeb.RegisterLive.Components do
             <th class="text-end app-in">Eingang</th>
             <th :if={@columns.running} class="text-end app-run">Saldo</th>
             <th class="app-ok-col"><span class="sr-only">Bestätigen</span></th>
-            <th class="text-end app-c-col">
-              <span class="sr-only">Gebucht</span><span aria-hidden="true">C</span>
+            <th class="app-c-col">
+              <span class="sr-only">Gebucht</span><.icon name="check" />
             </th>
           </tr>
         </thead>
@@ -561,7 +592,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <tbody :if={@rows == [] and @proposals == []}>
           <tr>
             <td colspan={@columns.count}>
-              <.empty_state title={@empty} class="py-4" />
+              <.empty title={@empty} hint={@empty_hint} class="py-4" />
             </td>
           </tr>
         </tbody>
@@ -595,7 +626,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           <input
             id={"tx-#{@transaction.id}-select"}
             type="checkbox"
-            class="checkbox checkbox-sm"
+            class="checkbox checkbox-xs"
             checked={@selected}
             phx-click="select"
             phx-value-id={@transaction.id}
@@ -618,10 +649,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           {payee(@transaction, @accounts)}<span
             :if={payee(@transaction, @accounts) == ""}
             class="text-base-content/70"
-          >Ohne Empfänger</span><span
-            :if={@transaction.memo}
-            class="app-memo-inline text-base-content/70"
-          ><.meta_sep />{@transaction.memo}</span>
+          >Ohne Empfänger</span>
         </td>
         <td :if={@columns.category} class="app-catcol" {cell(@transaction, "category")}>
           <button
@@ -669,7 +697,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td {cell(@transaction, "date")}></td>
         <td :if={@columns.all} {cell(@transaction, "account")}></td>
         <td class="app-payee" {cell(@transaction, "payee")}>
-          {payee(part, @accounts)}<span :if={part.memo} class="app-memo-inline"><.meta_sep />{part.memo}</span>
+          {payee(part, @accounts)}
         </td>
         <td :if={@columns.category} class="app-catcol" {cell(@transaction, "category")}>
           {category_text(part, @accounts)}
@@ -707,10 +735,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           {payee(@proposal, @accounts)}<span
             :if={payee(@proposal, @accounts) == ""}
             class="text-base-content/70"
-          >Ohne Empfänger</span><span
-            :if={@proposal.memo}
-            class="app-memo-inline text-base-content/70"
-          ><.meta_sep />{@proposal.memo}</span>
+          >Ohne Empfänger</span>
         </td>
         <td :if={@columns.category} class="app-catcol"></td>
         <td class="text-base-content/70 app-memo-col">{@proposal.memo}</td>
@@ -730,7 +755,6 @@ defmodule AbakusWeb.RegisterLive.Components do
             <.button
               id={"proposal-#{@proposal.id}-accept"}
               size={:sm}
-              variant={:primary}
               phx-click="accept_match"
               phx-value-id={@proposal.id}
               {confirm_merge([@proposal])}
@@ -769,10 +793,11 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :all, :boolean, required: true
   attr :empty, :string, required: true
+  attr :empty_hint, :string, default: nil
 
   @doc """
   Phones: one row per transaction, as on a bank statement, which opens the transaction sheet; one waiting for
-  approval has its ✓ in front, the others their C. A match proposal says what it matches, with "Zuordnen" and
+  approval has its ✓ in front, the others their cleared state. A match proposal says what it matches, with "Zuordnen" and
   "Trennen" in its menu.
   """
   def cards(assigns) do
@@ -844,7 +869,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         </.list_row>
       <% end %>
       <li :if={@rows == [] and @proposals == []} class="px-4">
-        <.empty_state title={@empty} />
+        <.empty title={@empty} hint={@empty_hint} />
       </li>
     </.list>
     """
@@ -870,14 +895,13 @@ defmodule AbakusWeb.RegisterLive.Components do
     ~H"""
     <div class="flex flex-wrap gap-x-4 gap-y-1 pt-3 text-sm text-base-content/70">
       <span class="inline-flex items-center gap-1">
-        <span class="app-clear" aria-hidden="true">C</span> vorgemerkt
+        <.state_icon state={:uncleared} /> vorgemerkt
       </span>
       <span class="inline-flex items-center gap-1">
-        <span class="app-clear is-cleared" aria-hidden="true">C</span> gebucht
+        <.state_icon state={:cleared} /> gebucht
       </span>
       <span class="inline-flex items-center gap-1">
-        <span class="app-clear is-reconciled" aria-hidden="true"><.icon name="lock" /></span>
-        abgeglichen, gesperrt
+        <.state_icon state={:reconciled} /> abgeglichen, gesperrt
       </span>
     </div>
     """
@@ -891,7 +915,7 @@ defmodule AbakusWeb.RegisterLive.Components do
     <button
       id={@id}
       type="button"
-      class="app-clear is-reconciled"
+      class="app-clear"
       title="Abgeglichen"
       aria-label="Abgeglichen, entsperren"
       aria-haspopup="dialog"
@@ -908,7 +932,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         )
       }
     >
-      <.icon name="lock" />
+      <.state_icon state={:reconciled} />
     </button>
     """
   end
@@ -920,12 +944,13 @@ defmodule AbakusWeb.RegisterLive.Components do
     <button
       id={@id}
       type="button"
-      class={["app-clear", @cleared? && "is-cleared"]}
+      class="app-clear"
+      title={if @cleared?, do: "Gebucht", else: "Vorgemerkt"}
       aria-label={if @cleared?, do: "Gebucht, umschalten", else: "Vorgemerkt, umschalten"}
       phx-click="toggle_cleared"
       phx-value-id={@transaction.id}
     >
-      C
+      <.state_icon state={if @cleared?, do: :cleared, else: :uncleared} />
     </button>
     """
   end
@@ -1061,6 +1086,18 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp merge_text, do: "Das Datum aus dem Import gilt dann auf beiden Seiten der Umbuchung."
 
   # A `<.button>` that asks before changing reconciled transactions and tells the server it did.
+  attr :title, :string, required: true
+  attr :hint, :string, default: nil
+  attr :class, :any, default: nil
+
+  defp empty(%{hint: nil} = assigns), do: ~H"<.empty_state title={@title} class={@class} />"
+
+  defp empty(assigns) do
+    ~H"""
+    <.empty_state title={@title} class={@class}>{@hint}</.empty_state>
+    """
+  end
+
   defp asking(question, label, text, value \\ ["phx-value-reconciled": "confirmed"])
   defp asking(nil, _label, _text, _value), do: []
 

@@ -9,6 +9,9 @@
       {assigns[:page_title]}
     </.live_title>
     <.theme_script nonce={assigns[:csp_nonce]} />
+    <script nonce={assigns[:csp_nonce]}>
+      try { if (localStorage.getItem("abakus:register-memo") === "hidden") document.documentElement.setAttribute("data-register-memo", "hidden") } catch (_) {}
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href={~p"/images/icon.svg"} type="image/svg+xml" />
     <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />

@@ -62,6 +62,7 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
     <.button
       id="reconcile-open"
       icon="lock"
+      variant={:primary}
       class="max-md:btn-square"
       aria-haspopup="dialog"
       aria-expanded={to_string(@state != nil)}
@@ -203,7 +204,8 @@ defmodule AbakusWeb.RegisterLive.Reconcile do
       id="reconcile-banner"
       aria-label="Abgleichen"
       tone={if @difference == 0, do: :success, else: :warning}
-      class="sticky top-0 z-10 mb-3 py-2"
+      class="app-reconcile-bar sticky top-0 z-10 mb-3 py-2"
+      phx-hook="StickyBar"
     >
       <dl class="flex flex-wrap items-baseline gap-x-6 gap-y-1">
         <div class="flex items-baseline gap-2">

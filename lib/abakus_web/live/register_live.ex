@@ -1,8 +1,10 @@
 defmodule AbakusWeb.RegisterLive do
   @moduledoc """
-  The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first,
-  below the balances. The view (`filter`), the search (`q`) and the running balance (`running`, one account in the
-  full list only) live in the URL; the selection does not.
+  The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first.
+  Its header has three rows, as in YNAB: the name with its meta line and the actions (pencil, "Abgleichen"; in Alle Konten "Konto hinzufügen"), the
+  balances, and the toolbar. The view (`filter`), the search (`q`) and the running balance (`running`, one account
+  in the full list only) live in the URL; the selection does not, and whether the memo column shows is kept per
+  device in the browser.
 
   Here transactions are approved (one, the selected or all), categorised (the selected) and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
@@ -12,8 +14,7 @@ defmodule AbakusWeb.RegisterLive do
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
   the transaction they match: "Zuordnen" merges them, "Trennen" keeps the import as a transaction of its own, and
-  "Alle Zuordnungen übernehmen" in the toolbar merges all. Approving all leaves them open, as that is a decision of
-  its own.
+  "Alle zuordnen" in the toolbar merges all. "Alle bestätigen" leaves them open, as that is a decision of its own.
 
   "Abgleichen" reconciles one account (`Reconcile`): its popover asks whether the balance is right, reconcile mode
   keeps the difference in a bar while transactions are cleared, until it is finished or cancelled.
@@ -59,51 +60,43 @@ defmodule AbakusWeb.RegisterLive do
         <.fab id="new-transaction-fab" label="Buchung" phx-click="new" phx-value-layout="sheet" />
       </:fab>
       <div id="register">
-        <div>
-          <.header class="min-w-0 grow pb-4 max-md:pb-3">
-            <span id="register-title">{@page_title}</span>
-            <:badge><Components.balances_compact account={@account} balances={@balances} /></:badge>
-            <:subtitle><Components.meta account={@account} /></:subtitle>
-            <:actions>
-              <Components.balances
-                account={@account}
-                balances={@balances}
-                reconciling={!!@reconciling}
-              />
-              <.button
-                :if={@account}
-                id="edit-account"
-                icon="pencil"
-                icon_only
-                label="Konto bearbeiten"
-                class="max-md:hidden"
-                phx-click="open_account_dialog"
-                phx-value-id={@account.id}
-              />
-              <Reconcile.editor
-                :if={@account && Account.reconcilable?(@account) && !@reconciling}
-                state={@reconcile}
-              />
-            </:actions>
-          </.header>
-        </div>
+        <.header class="app-reg-row pb-4 max-md:pb-3">
+          <span id="register-title">{@page_title}</span>
+          <:subtitle><Components.meta account={@account} /></:subtitle>
+          <:actions :if={!@account}>
+            <.button id="add-account" icon="plus" phx-click="open_account_dialog">
+              Konto hinzufügen
+            </.button>
+          </:actions>
+          <:actions :if={@account}>
+            <.button
+              id="edit-account"
+              icon="pencil"
+              icon_only
+              label="Konto bearbeiten"
+              variant={:ghost}
+              phx-click="open_account_dialog"
+              phx-value-id={@account.id}
+            />
+            <Reconcile.editor
+              :if={Account.reconcilable?(@account) && !@reconciling}
+              state={@reconcile}
+            />
+          </:actions>
+        </.header>
+        <Components.balances account={@account} balances={@balances} reconciling={!!@reconciling} />
         <DepotComponents.depots_tabs :if={@portfolio} tab={:register} portfolio={@portfolio} />
         <Components.toolbar
           account={@account}
           manual={@manual}
+          unapproved={@unapproved}
+          proposals={@proposals}
           filter={@filter}
           query={@query}
           running={@running}
           running_shown={@running_balances != nil}
           paths={@paths}
-        >
-          <Components.waiting
-            :if={@unapproved != [] or @proposals != []}
-            transactions={@unapproved}
-            proposals={@proposals}
-            show_path={@filter != :unapproved && @paths.filters.unapproved}
-          />
-        </Components.toolbar>
+        />
         <Reconcile.bar :if={@reconciling} mode={@reconciling} />
         <Components.table
           rows={@rows}
@@ -113,14 +106,16 @@ defmodule AbakusWeb.RegisterLive do
           selected={@selected}
           running={@running_balances}
           editor={@editor && @editor.layout == :row && @editor}
-          empty={empty_text(@transactions, @proposals)}
+          empty={empty_text(@accounts, @transactions, @proposals)}
+          empty_hint={empty_hint(@accounts)}
         />
         <Components.cards
           rows={@rows}
           proposals={@shown_proposals}
           accounts={@accounts}
           all={is_nil(@account)}
-          empty={empty_text(@transactions, @proposals)}
+          empty={empty_text(@accounts, @transactions, @proposals)}
+          empty_hint={empty_hint(@accounts)}
         />
         <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
         <Components.bulk
@@ -137,8 +132,16 @@ defmodule AbakusWeb.RegisterLive do
     """
   end
 
-  defp empty_text([], []), do: "Noch keine Buchungen"
-  defp empty_text(_transactions, _proposals), do: "Keine Buchungen in dieser Ansicht"
+  defp empty_text(accounts, _transactions, _proposals) when accounts == %{},
+    do: "Noch keine Konten"
+
+  defp empty_text(_accounts, [], []), do: "Noch keine Buchungen"
+  defp empty_text(_accounts, _transactions, _proposals), do: "Keine Buchungen in dieser Ansicht"
+
+  defp empty_hint(accounts) when accounts == %{},
+    do: "Lege mit „Konto hinzufügen“ ein Konto an, um Buchungen zu erfassen oder zu importieren."
+
+  defp empty_hint(_accounts), do: nil
 
   @impl true
   def mount(_params, _session, socket) do

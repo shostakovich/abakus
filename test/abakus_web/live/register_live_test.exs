@@ -292,6 +292,90 @@ defmodule AbakusWeb.RegisterLiveTest do
     end
   end
 
+  describe "header and columns" do
+    test "the header has three rows and Abgleichen as its one primary button", c do
+      Repo.update_all(from(a in Ledger.Account, where: a.id == ^c.giro.id),
+        set: [last_reconciled_at: ~U[2026-10-05 10:00:00Z]]
+      )
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      document = view |> render() |> LazyHTML.from_fragment()
+
+      assert has_element?(view, "#register-meta svg")
+      assert has_element?(view, "#register-meta", "Abgeglichen am 05.10.2026")
+      assert has_element?(view, "#reconcile-open.btn-primary", "Abgleichen")
+      assert document |> LazyHTML.query("#register .btn-primary") |> Enum.count() == 1
+      refute has_element?(view, "#register-back")
+
+      assert has_element?(view, "#register-balances-line", "Gebucht")
+      assert has_element?(view, "#register-balances-line", "Vorgemerkt")
+      assert has_element?(view, "#register-balances-line", "Arbeitssaldo")
+
+      for id <- ~w(new-transaction file-import register-search view-menu),
+          do: assert(has_element?(view, "#register-toolbar ##{id}"))
+    end
+
+    test "all accounts: the budget accounts' equation, tracking, the total and „Konto hinzufügen“",
+         c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
+
+      assert has_element?(view, "#register-balances", "Budgetkonten")
+      assert has_element?(view, "#register-balances-line", "Budgetkonten")
+      assert has_element?(view, "#register-balances-line", "Gesamt")
+      assert has_element?(view, "#register #add-account", "Konto hinzufügen")
+      refute has_element?(view, "#register .btn-primary")
+    end
+
+    test "the approve button shows only while something waits", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.savings}")
+
+      refute has_element?(view, "#approve-all")
+      refute has_element?(view, "#approve-all-item")
+      refute has_element?(view, "#accept-all-matches")
+    end
+
+    test "columns come from a colgroup, memo and status are columns of their own", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      document = view |> render() |> LazyHTML.from_fragment()
+
+      assert document |> LazyHTML.query("#register-table colgroup col") |> Enum.count() ==
+               document |> LazyHTML.query("#register-table thead th") |> Enum.count()
+
+      assert has_element?(view, "#register-table th.app-memo-col", "Memo")
+      assert has_element?(view, "#tx-#{c.salary.id} td.app-memo-col", "Gehalt Oktober")
+      refute has_element?(view, "#tx-#{c.salary.id} td.app-payee", "Gehalt Oktober")
+
+      assert has_element?(view, "#register-table thead th:last-child.app-c-col svg")
+      assert has_element?(view, "#register-table thead th.app-c-col .sr-only", "Gebucht")
+      refute has_element?(view, "#register-table thead th.app-c-col", "C")
+
+      assert has_element?(
+               view,
+               "#tx-#{c.shopping.id} td:last-child #tx-#{c.shopping.id}-cleared svg"
+             )
+    end
+
+    test "the view menu hides and shows the memo column on this device", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      assert has_element?(view, "#memo-toggle .app-memo-hide", "Memo ausblenden")
+      assert has_element?(view, "#memo-toggle .app-memo-show", "Memo zeigen")
+      assert view |> element("#memo-toggle") |> render() =~ "abakus:toggle-memo"
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
+      assert has_element?(view, "#memo-toggle")
+    end
+
+    test "an opened row has its memo input in the memo column", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      view |> element("#tx-#{c.shopping.id} td.app-payee") |> render_click()
+      view |> element("#tx-#{c.shopping.id} td.app-payee") |> render_click()
+
+      assert has_element?(view, "#tx-editor .app-edit-grid > .app-memo-col #tx-memo")
+    end
+  end
+
   describe "search and views" do
     test "search finds payee, category and memo and lives in the URL", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
@@ -376,7 +460,12 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       view |> element("#tx-#{c.shopping.id}-cleared") |> render_click()
       assert reload(c.shopping).cleared == :cleared
-      assert has_element?(view, "#tx-#{c.shopping.id}-cleared.is-cleared")
+
+      assert has_element?(
+               view,
+               ~s|#tx-#{c.shopping.id}-cleared[aria-label="Gebucht, umschalten"][title="Gebucht"]|
+             )
+
       assert has_element?(view, "#balance-cleared", "2.798,71 €")
       assert has_element?(view, sidebar_link("/budget/accounts/#{c.giro.id}"), "2.598,71")
 
@@ -427,7 +516,11 @@ defmodule AbakusWeb.RegisterLiveTest do
     test "the waiting chip counts what waits and the rows are marked", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      assert has_element?(view, "#unapproved-banner", "2 zu bestätigen")
+      assert has_element?(view, "#approve-all", "Alle bestätigen")
+      assert has_element?(view, ~s|#approve-all[aria-label="Alle 2 bestätigen"]|)
+      assert has_element?(view, "#approve-all-count", "2")
+      refute has_element?(view, "#show-unapproved")
+      refute render(view) =~ "Ansehen"
       assert has_element?(view, "tr#tx-#{c.waiting.id}.app-unapproved")
       refute has_element?(view, "tr#tx-#{c.shopping.id}.app-unapproved")
       assert has_element?(view, "#tx-#{c.uncategorised.id}", "Nicht kategorisiert")
@@ -438,7 +531,7 @@ defmodule AbakusWeb.RegisterLiveTest do
                  ~s([aria-label*="2 zu bestätigen"])
              )
 
-      view |> element("#show-unapproved") |> render_click()
+      view |> element("#view-menu a", "Zu bestätigen") |> render_click()
       assert_patch(view, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
     end
 
@@ -448,7 +541,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       view |> element("#tx-#{c.waiting.id}-approve") |> render_click()
 
       assert reload(c.waiting).approved
-      assert has_element?(view, "#unapproved-banner", "1 zu bestätigen")
+      assert has_element?(view, "#approve-all-count", "1")
       refute has_element?(view, "#tx-#{c.waiting.id}-approve")
     end
 
@@ -483,8 +576,9 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute reload(proposal).approved
       assert reload(proposal).matched_transaction_id == c.shopping.id
       refute reload(elsewhere).approved
-      assert has_element?(view, "#unapproved-banner", "1 zu bestätigen")
       refute has_element?(view, "#approve-all")
+      refute has_element?(view, "#approve-all-item")
+      assert has_element?(view, "#accept-all-matches")
 
       assert has_element?(
                view,
@@ -493,7 +587,7 @@ defmodule AbakusWeb.RegisterLiveTest do
              )
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
-      assert has_element?(view, "#unapproved-banner", "2 zu bestätigen")
+      assert has_element?(view, "#approve-all-count", "1")
       view |> element("#approve-all") |> render_click()
       assert reload(elsewhere).approved
     end
@@ -632,8 +726,9 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#proposal-card-#{id}-accept")
       refute has_element?(view, "#proposal-#{id}-select")
 
-      assert has_element?(view, "#unapproved-banner", "2 zu bestätigen")
-      assert has_element?(view, "#accept-all-matches", "Alle Zuordnungen übernehmen")
+      assert has_element?(view, "#approve-all-count", "1")
+      assert has_element?(view, "#accept-all-matches", "Alle zuordnen")
+      assert has_element?(view, "#accept-all-matches-item", "Alle zuordnen")
 
       assert has_element?(
                view,
@@ -675,7 +770,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert Repo.get(Transaction, c.proposal.id) == nil
       assert has_element?(view, "#flash-info", "Zugeordnet.")
       refute has_element?(view, "#proposal-#{c.proposal.id}")
-      assert has_element?(view, "#unapproved-banner", "1 zu bestätigen")
+      assert has_element?(view, "#approve-all-count", "1")
       refute has_element?(view, "#accept-all-matches")
     end
 
@@ -690,7 +785,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute has_element?(view, "#proposal-#{c.proposal.id}")
     end
 
-    test "Alle Zuordnungen übernehmen accepts every open proposal", c do
+    test "Alle zuordnen accepts every open proposal", c do
       {:ok, other} =
         Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
@@ -702,7 +797,7 @@ defmodule AbakusWeb.RegisterLiveTest do
         })
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-      assert has_element?(view, "#unapproved-banner", "3 zu bestätigen")
+      assert has_element?(view, "#approve-all-count", "1")
 
       view |> element("#accept-all-matches") |> render_click()
 

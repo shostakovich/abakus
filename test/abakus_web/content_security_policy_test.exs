@@ -19,13 +19,10 @@ defmodule AbakusWeb.ContentSecurityPolicyTest do
     nonce = String.trim_trailing(nonce, "'")
     assert byte_size(Base.decode64!(nonce)) == 18
 
-    assert [script] =
-             html
-             |> LazyHTML.from_document()
-             |> LazyHTML.query("head script[nonce]")
-             |> Enum.to_list()
+    scripts = html |> LazyHTML.from_document() |> LazyHTML.query("head script[nonce]")
 
-    assert LazyHTML.attribute(script, "nonce") == [nonce]
+    assert Enum.count(scripts) == 2
+    assert LazyHTML.attribute(scripts, "nonce") == [nonce, nonce]
 
     assert policy == %{
              "default-src" => ["'self'"],
@@ -48,7 +45,7 @@ defmodule AbakusWeb.ContentSecurityPolicyTest do
     html = conn |> get(~p"/users/log-in") |> html_response(200)
     scripts = html |> LazyHTML.from_document() |> LazyHTML.query("script:not([src])")
 
-    assert Enum.count(scripts) == 1
+    assert Enum.count(scripts) == 2
     assert scripts |> LazyHTML.attribute("nonce") |> Enum.all?(&(&1 != ""))
   end
 

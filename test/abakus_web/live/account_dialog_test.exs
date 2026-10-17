@@ -48,9 +48,7 @@ defmodule AbakusWeb.AccountDialogTest do
       refute has_element?(view, "#side-account-#{c.old.id}-sidebar")
       refute has_element?(view, "#side-account-#{c.giro.id}-rail")
       refute has_element?(view, "#side-account-#{c.giro.id}-dock")
-      assert has_element?(view, "#side-add-account-sidebar", "Konto hinzufügen")
-      refute has_element?(view, "#side-add-account-rail")
-      refute has_element?(view, "#side-add-account-dock")
+      refute has_element?(view, "#side-add-account-sidebar")
 
       for entry <- ~w(budget depot-wealth all-accounts),
           do: assert(has_element?(view, "#side-#{entry}-dock"))
@@ -75,10 +73,14 @@ defmodule AbakusWeb.AccountDialogTest do
     end
   end
 
-  test "without accounts the sidebar still offers „Konto hinzufügen“", %{conn: conn} do
+  test "without accounts Alle Konten still offers „Konto hinzufügen“", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
 
-    view |> element("#side-add-account-sidebar") |> render_click()
+    assert has_element?(view, "#register-table", "Noch keine Konten")
+    assert has_element?(view, "#register-table", "Lege mit „Konto hinzufügen“ ein Konto an")
+    assert has_element?(view, "#register-cards", "Noch keine Konten")
+
+    view |> element("#add-account") |> render_click()
     assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
   end
 
@@ -91,11 +93,11 @@ defmodule AbakusWeb.AccountDialogTest do
   end
 
   describe "adding" do
-    test "opens from the sidebar and goes to the new account's register", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/budget")
+    test "opens from Alle Konten and goes to the new account's register", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
       refute has_element?(view, "#account-dialog")
 
-      view |> element("#side-add-account-sidebar") |> render_click()
+      view |> element("#add-account") |> render_click()
 
       assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
       assert has_element?(view, "#account-dialog dialog #account_name")
@@ -116,7 +118,7 @@ defmodule AbakusWeb.AccountDialogTest do
 
     test "shows what is missing", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
-      view |> element("#side-add-account-sidebar") |> render_click()
+      view |> element("#add-account") |> render_click()
 
       assert submit(view, %{name: " "}) =~ "Muss ausgefüllt werden"
       assert has_element?(view, "#account-dialog")
@@ -125,7 +127,7 @@ defmodule AbakusWeb.AccountDialogTest do
 
     test "takes only name, kind and note from the form", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
-      view |> element("#side-add-account-sidebar") |> render_click()
+      view |> element("#add-account") |> render_click()
 
       view
       |> element("#account-form")
@@ -139,11 +141,11 @@ defmodule AbakusWeb.AccountDialogTest do
     test "cancelling closes the form and adds nothing", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
 
-      view |> element("#side-add-account-sidebar") |> render_click()
+      view |> element("#add-account") |> render_click()
       view |> element("#account-cancel") |> render_click()
       refute has_element?(view, "#account-dialog")
 
-      view |> element("#side-add-account-sidebar") |> render_click()
+      view |> element("#add-account") |> render_click()
       render_keydown(view, "close_account_dialog", %{"key" => "Escape"})
       refute has_element?(view, "#account-dialog")
 

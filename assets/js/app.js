@@ -10,7 +10,7 @@ import { DividendChart, UpcomingDividendChart } from "./hooks/dividend_chart.js"
 import { NetWorthChart } from "./hooks/net_worth_chart.js"
 import { PasskeyLogin, PasskeyRegister } from "./hooks/passkey.js"
 import { PriceChart } from "./hooks/price_chart.js"
-import { EditRow } from "./hooks/register.js"
+import { EditRow, StickyBar, toggleMemo } from "./hooks/register.js"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const appHooks = {
@@ -21,8 +21,11 @@ const appHooks = {
   PasskeyLogin,
   PasskeyRegister,
   PriceChart,
+  StickyBar,
   UpcomingDividendChart,
 }
+
+window.addEventListener("abakus:toggle-memo", toggleMemo)
 
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
