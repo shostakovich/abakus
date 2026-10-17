@@ -72,3 +72,17 @@ export const BudgetLayout = {
     next ? next.focus() : input.blur()
   },
 }
+
+// LiveView leaves a focused field's value alone, so the saved name comes as data-saved. Escape puts it back and keeps
+// the dialog open; with nothing to put back, Escape closes the dialog.
+export const RenameField = {
+  mounted() {
+    this.el.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || this.el.value === this.el.dataset.saved) return
+      event.preventDefault()
+      event.stopPropagation()
+      // While a submitted name waits for its reply, data-saved is not yet the name being saved.
+      if (!this.el.form?.classList.contains("phx-submit-loading")) this.el.value = this.el.dataset.saved
+    })
+  },
+}

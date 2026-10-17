@@ -55,7 +55,7 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   was deleted meanwhile.
   """
   def save(scope, edit, name) do
-    case write(scope, edit, %{name: name}) do
+    case write(scope, edit, %{name: String.trim(name)}) do
       {:ok, _saved} -> :ok
       {:error, changeset} -> name_error(edit, changeset)
     end
@@ -265,7 +265,7 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   attr :edit, :map, required: true, doc: "the category's state, from `open/2`"
   attr :autofocus, :boolean, default: false
 
-  @doc "A category's name in its dialog; Enter saves."
+  @doc "A category's name in its dialog, renamed in place: Enter and leaving the field save, Escape puts it back."
   def category_name(assigns) do
     ~H"""
     <section id="category-name">
@@ -275,15 +275,16 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
           id="category-name-input"
           name="name"
           label="Name"
+          hide_label
           value={@edit.category.name}
           autocomplete="off"
           required
           errors={if @edit.step == :name, do: List.wrap(@edit.error), else: []}
           autofocus={@autofocus}
-          inline
-        >
-          <.button type="submit" class="join-item">Speichern</.button>
-        </.input>
+          phx-blur="edit_save"
+          phx-hook="RenameField"
+          data-saved={@edit.category.name}
+        />
       </form>
     </section>
     """

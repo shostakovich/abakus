@@ -8,7 +8,6 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   @nov ~D[2026-11-01]
 
   @monthly %{cadence: :monthly}
-  @by_date %{cadence: :by_date}
 
   defp row(attrs), do: struct!(CategoryMonth, Enum.into(attrs, %{month: @oct}))
 
@@ -43,12 +42,12 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   end
 
   describe "target_head/1" do
-    test "a monthly target says what it sets aside or refills, without a day" do
+    test "a monthly target in one sentence, setting aside or refilling" do
       assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: true}) ==
-               {"Jeden Monat weitere 50,00 € zurücklegen", nil}
+               "Jeden Monat weitere 50,00 € zurücklegen"
 
-      assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: false}) ==
-               {"Jeden Monat auffüllen bis 50,00 €", nil}
+      assert Status.target_head(%{cadence: :monthly, amount: 65_000, set_aside: false}) ==
+               "Jeden Monat auffüllen bis 650,00 €"
     end
 
     test "a target by a date names its date, a repeating one without the year" do
@@ -61,51 +60,41 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
       }
 
       assert Status.target_head(once) ==
-               {"1.200,00 € bis 1. Juni 2027 ansparen",
-                "Einmalig · weitere zurücklegen, verteilt auf die Monate bis dahin"}
+               "Bis zum 1. Juni 2027 weitere 1.200,00 € zurücklegen"
 
       assert Status.target_head(%{once | repeats_yearly: true, set_aside: false}) ==
-               {"1.200,00 € bis 1. Juni ansparen",
-                "Jedes Jahr · auffüllen bis, verteilt auf die Monate bis dahin"}
+               "Jedes Jahr bis zum 1. Juni auf 1.200,00 € ansparen"
     end
   end
 
   describe "target_status/1" do
-    test "overspent wins, with the exact amount" do
-      assert Status.target_status(row(target: @monthly, snoozed: true, available: -1_250)) ==
-               %{title: "Überzogen 12,50 €", tone: :error}
-    end
-
     test "nothing without a target, overspent or not" do
       assert Status.target_status(row(available: 500, activity: -100)) == nil
       assert Status.target_status(row(available: -1_250, activity: -1_250)) == nil
     end
 
-    test "snoozed, underfunded, funded with what is spent" do
-      assert %{title: "Pausiert", tone: :neutral} =
-               Status.target_status(row(target: @monthly, snoozed: true, underfunded: 10))
+    test "one sentence: overspent wins over snoozed, then paused, still missing, funded" do
+      assert Status.target_status(row(target: @monthly, snoozed: true, available: -18_020)) ==
+               %{text: "Überzogen um 180,20 €.", tone: :error, icon: nil}
 
-      assert %{title: "Noch 50,00 € nötig", tone: :warning} =
-               Status.target_status(row(target: @monthly, underfunded: 5_000))
+      assert Status.target_status(row(target: @monthly, snoozed: true, underfunded: 10)) ==
+               %{text: "Pausiert im Oktober.", tone: :muted, icon: "pause"}
 
-      assert %{title: "Finanziert, 10,00 € von 10,00 € ausgegeben", tone: :success} =
+      assert Status.target_status(row(target: @monthly, underfunded: 6_834)) ==
+               %{text: "Noch 68,34 € diesen Monat.", tone: :warning, icon: "clock"}
+
+      assert %{text: "Erfüllt.", tone: :success} =
                Status.target_status(row(target: @monthly, assigned: 1_000, activity: -1_000))
+    end
 
-      assert %{title: "Finanziert, 29,99 € von 105,55 € ausgegeben", tone: :success} =
-               Status.target_status(
-                 row(
-                   target: @monthly,
-                   carried: 5_555,
-                   assigned: 5_000,
-                   activity: -2_999,
-                   available: 7_556
-                 )
-               )
+    test "a target by a date is on track until its amount is saved" do
+      by_date = %{cadence: :by_date, amount: 120_000}
 
-      assert %{title: "Finanziert", tone: :success} =
-               Status.target_status(row(target: @monthly, assigned: 100, available: 100))
+      assert %{text: "Im Plan."} =
+               Status.target_status(row(target: by_date, saved: 8_000, available: 8_000))
 
-      assert %{title: "Im Plan"} = Status.target_status(row(target: @by_date, available: 100))
+      assert %{text: "Erfüllt."} =
+               Status.target_status(row(target: by_date, saved: 120_000, available: 120_000))
     end
   end
 

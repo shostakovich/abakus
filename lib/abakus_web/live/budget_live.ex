@@ -555,16 +555,30 @@ defmodule AbakusWeb.BudgetLive do
   def handle_event("edit_close", _params, socket),
     do: {:noreply, assign(socket, :editing, closed(socket.assigns.editing))}
 
-  def handle_event("edit_save", %{"name" => name}, %{assigns: %{editing: %{} = editing}} = socket) do
-    case CategoryEditor.save(
-           socket.assigns.current_scope,
-           %{editing | step: :name, error: nil},
-           name
-         ) do
-      :ok -> {:noreply, socket |> edited() |> renamed(socket.assigns.editing)}
-      result -> {:noreply, refused(socket, result)}
-    end
+  def handle_event(
+        "edit_save",
+        %{"value" => name},
+        %{assigns: %{editing: %{kind: :category}}} = socket
+      ),
+      do: handle_event("edit_save", %{"name" => name}, socket)
+
+  def handle_event(
+        "edit_save",
+        %{"name" => name},
+        %{assigns: %{editing: %{kind: :category, category: category} = editing}} = socket
+      )
+      when is_binary(name) do
+    if String.trim(name) == category.name,
+      do: {:noreply, unchanged(socket, editing)},
+      else: save_name(socket, editing, name)
   end
+
+  def handle_event(
+        "edit_save",
+        %{"name" => name},
+        %{assigns: %{editing: %{} = editing}} = socket
+      ),
+      do: save_name(socket, editing, name)
 
   def handle_event("edit_back", _params, %{assigns: %{editing: %{step: :delete}}} = socket),
     do: {:noreply, assign(socket, :editing, %{socket.assigns.editing | step: :name, error: nil})}
@@ -801,6 +815,22 @@ defmodule AbakusWeb.BudgetLive do
       editing -> editing
     end
   end
+
+  defp save_name(socket, editing, name) do
+    case CategoryEditor.save(
+           socket.assigns.current_scope,
+           %{editing | step: :name, error: nil},
+           name
+         ) do
+      :ok -> {:noreply, socket |> edited() |> renamed(editing)}
+      result -> {:noreply, refused(socket, result)}
+    end
+  end
+
+  defp unchanged(socket, %{step: :name} = editing),
+    do: assign(socket, :editing, %{editing | error: nil})
+
+  defp unchanged(socket, _editing), do: socket
 
   defp renamed(socket, %{kind: :category}), do: put_flash(socket, :info, "Name gespeichert.")
   defp renamed(socket, _editing), do: socket

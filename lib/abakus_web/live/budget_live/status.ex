@@ -1,8 +1,8 @@
 defmodule AbakusWeb.BudgetLive.Status do
   @moduledoc """
-  What the budget shows about a category or month, as in YNAB: the available cell, the target's status in the category dialog, and Zu verteilen with YNAB 4's calculation
-  and the later months it does not cover. A snoozed target counts as done. Colours are tones
-  (`:error`, `:warning`, `:success`, `:neutral`, `:muted`); the components map them to theme tokens.
+  What the budget shows about a category or month, as in YNAB: the available cell, the target in the category
+  dialog, and Zu verteilen with YNAB 4's calculation and the later months it does not cover. A snoozed target counts
+  as done. Colours are tones (`:error`, `:warning`, `:success`, `:muted`); the components map them to theme tokens.
   """
 
   import Abakus.Format,
@@ -44,54 +44,45 @@ defmodule AbakusWeb.BudgetLive.Status do
   defp underfunded?(row), do: open_need(row) > 0
 
   @doc """
-  A target's state as YNAB words it (overspent, paused, underfunded, funded): `%{title, tone}`, nil without a
-  target.
+  The target's state this month in one sentence, for the category dialog: `%{text, tone, icon}` (the icons of the
+  available cell), nil without a target. Overspending wins over snoozing.
   """
   def target_status(%CategoryMonth{target: nil}), do: nil
 
   def target_status(%CategoryMonth{available: available}) when available < 0,
-    do: %{title: "Überzogen #{Money.euros(-available)}", tone: :error}
+    do: %{text: "Überzogen um #{Money.euros(-available)}.", tone: :error, icon: nil}
 
-  def target_status(%CategoryMonth{} = row) do
-    spent = -row.activity
-    budgeted = row.carried + row.assigned
-    funded = if row.target.cadence == :by_date, do: "Im Plan", else: "Finanziert"
+  def target_status(%CategoryMonth{snoozed: true} = row),
+    do: %{text: "Pausiert im #{month_name(row.month)}.", tone: :muted, icon: "pause"}
 
-    cond do
-      row.snoozed ->
-        %{title: "Pausiert", tone: :neutral}
+  def target_status(%CategoryMonth{underfunded: underfunded}) when underfunded > 0,
+    do: %{text: "Noch #{Money.euros(underfunded)} diesen Monat.", tone: :warning, icon: "clock"}
 
-      row.underfunded > 0 ->
-        %{title: "Noch #{Money.euros(row.underfunded)} nötig", tone: :warning}
+  def target_status(%CategoryMonth{target: %{cadence: :by_date, amount: amount}, saved: saved})
+      when is_integer(saved) and saved < amount,
+      do: %{text: "Im Plan.", tone: :success, icon: "circle-check"}
 
-      spent > 0 ->
-        %{
-          title: "#{funded}, #{Money.euros(spent)} von #{Money.euros(budgeted)} ausgegeben",
-          tone: :success
-        }
-
-      true ->
-        %{title: funded, tone: :success}
-    end
-  end
+  def target_status(%CategoryMonth{}),
+    do: %{text: "Erfüllt.", tone: :success, icon: "circle-check"}
 
   @doc """
-  What a target asks for, as YNAB's target card says it: `{head, sub}`. A monthly target has no day; a repeating
-  target by a date names its day without the year.
+  What a target asks for, in one sentence. A repeating target by a date names its day without the year.
   """
   def target_head(%{cadence: :monthly, amount: amount, set_aside: true}),
-    do: {"Jeden Monat weitere #{Money.euros(amount)} zurücklegen", nil}
+    do: "Jeden Monat weitere #{Money.euros(amount)} zurücklegen"
 
   def target_head(%{cadence: :monthly, amount: amount, set_aside: false}),
-    do: {"Jeden Monat auffüllen bis #{Money.euros(amount)}", nil}
+    do: "Jeden Monat auffüllen bis #{Money.euros(amount)}"
 
   def target_head(%{cadence: :by_date} = target) do
-    due = if target.repeats_yearly, do: day_month(target.due_on), else: long_date(target.due_on)
-    every = if target.repeats_yearly, do: "Jedes Jahr", else: "Einmalig"
-    mode = if target.set_aside, do: "weitere zurücklegen", else: "auffüllen bis"
+    by =
+      if target.repeats_yearly,
+        do: "Jedes Jahr bis zum #{day_month(target.due_on)}",
+        else: "Bis zum #{long_date(target.due_on)}"
 
-    {"#{Money.euros(target.amount)} bis #{due} ansparen",
-     "#{every} · #{mode}, verteilt auf die Monate bis dahin"}
+    if target.set_aside,
+      do: "#{by} weitere #{Money.euros(target.amount)} zurücklegen",
+      else: "#{by} auf #{Money.euros(target.amount)} ansparen"
   end
 
   @doc """

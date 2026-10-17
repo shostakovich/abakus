@@ -46,7 +46,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       {:ok, view, _html} = open(c.conn)
 
-      assert has_element?(view, "#ready-2026-10", "1.000,00 €")
+      assert has_element?(view, "#ready-2026-10", "1.000,00\u00A0€")
 
       view |> element("#assign-#{c.groceries.id}-2026-10") |> render_blur(%{"value" => "250,5"})
 
@@ -60,7 +60,7 @@ defmodule AbakusWeb.BudgetLiveTest do
                "250,50"
              )
 
-      assert has_element?(view, "#ready-2026-10", "749,50 €")
+      assert has_element?(view, "#ready-2026-10", "749,50\u00A0€")
       assert has_element?(view, ~s|#assign-#{c.groceries.id}-2026-10[value="250,50"]|)
     end
 
@@ -92,7 +92,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       view |> element("#assign-#{c.rent.id}-2026-10") |> render_blur(%{"value" => "1.050"})
 
       assert assigned(c.rent, @october) == 105_000
-      assert has_element?(view, "#ready-2026-10", "−950,00 €")
+      assert has_element?(view, "#ready-2026-10", "−950,00\u00A0€")
       assert has_element?(view, "#month-2026-10.app-mcard-error", "Zu viel verteilt")
     end
 
@@ -167,8 +167,8 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       {:ok, view, _html} = open(c.conn, ~p"/budget", months: 2)
 
-      assert has_element?(view, "#ready-2026-10", "100,00 €")
-      warning = "November nicht gedeckt: es fehlen 300,00 €"
+      assert has_element?(view, "#ready-2026-10", "100,00\u00A0€")
+      warning = "November nicht gedeckt: es fehlen 300,00\u00A0€"
       assert has_element?(view, "#month-2026-10 #uncovered-2026-10", warning)
 
       view |> element("#assign-#{c.rent.id}-2026-11") |> render_blur(%{"value" => "200"})
@@ -185,10 +185,15 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(
                view,
                "#month-2026-10.is-focus[aria-current=date]",
-               "400,00 €"
+               "400,00\u00A0€"
              )
 
-      assert has_element?(view, "#month-2026-11:not(.is-focus):not([aria-current])", "400,00 €")
+      assert has_element?(
+               view,
+               "#month-2026-11:not(.is-focus):not([aria-current])",
+               "400,00\u00A0€"
+             )
+
       assert has_element?(view, "#month-2026-12:not(.is-focus)")
       assert has_element?(view, "#month-2026-10 #calc-2026-10", "Für spätere Monate")
       assert has_element?(view, "#calc-2026-10", "−300,00")
@@ -263,7 +268,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       refute has_element?(view, "#strip")
       refute has_element?(view, "#month-2026-11")
       assert has_element?(view, "#month-bar", "Oktober 2026")
-      assert has_element?(view, "#month-bar #ready-2026-10", "1.000,00 €")
+      assert has_element?(view, "#month-bar #ready-2026-10", "1.000,00\u00A0€")
       assert has_element?(view, "#month-bar #distribute-2026-10")
 
       assert has_element?(
@@ -324,7 +329,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       {:ok, view, _html} = open(c.conn)
 
-      assert has_element?(view, "#ready-2026-10", "3.240,00 €")
+      assert has_element?(view, "#ready-2026-10", "3.240,00\u00A0€")
       refute has_element?(view, "#group-income")
       refute render(view) =~ "Arbeitgeber"
     end
@@ -451,9 +456,11 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       view |> element("#select-#{c.category.id}") |> render_click()
 
-      assert has_element?(view, "#target-status", "Finanziert, 10,00 € von 10,00 € ausgegeben")
-      assert has_element?(view, ~s|#target-status progress[value="100"]|)
-      refute has_element?(view, "#target-rest")
+      assert has_element?(view, "#target-status.text-success-ink", "Erfüllt.")
+      refute has_element?(view, "#target-progress")
+      refute has_element?(view, "#target-assign")
+      refute has_element?(view, "#inspector-target", "ausgegeben")
+      refute has_element?(view, "#inspector-target", "Ziel diesen Monat")
     end
 
     test "turns red once more is spent than assigned", c do
@@ -464,8 +471,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       view |> element("#select-#{c.category.id}") |> render_click()
 
-      assert has_element?(view, "#target-status", "Überzogen 2,00 €")
-      assert has_element?(view, "#target-status .progress-error")
+      assert has_element?(view, "#target-status.text-error-ink", "Überzogen um 2,00\u00A0€.")
     end
   end
 

@@ -250,12 +250,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   defp target_section(assigns) do
     ~H"""
     <section id="inspector-target">
-      <.section_heading level={3}>
-        Ziel
-        <:actions :if={@cell.target && @cell.snoozed}>
-          <.badge>pausiert</.badge>
-        </:actions>
-      </.section_heading>
+      <.section_heading level={3}>Ziel</.section_heading>
       <TargetForm.editor :if={@form} form={@form} target={@cell.target} />
       <.target_view :if={!@form && @cell.target} cell={@cell} />
       <div :if={!@form && !@cell.target}>
@@ -273,48 +268,37 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   attr :cell, CategoryMonth, required: true
 
   defp target_view(assigns) do
-    assigns =
-      assign(assigns,
-        head: Status.target_head(assigns.cell.target),
-        status: Status.target_status(assigns.cell)
-      )
+    assigns = assign(assigns, :status, Status.target_status(assigns.cell))
 
     ~H"""
-    <p class="text-sm font-medium">{elem(@head, 0)}</p>
-    <p :if={elem(@head, 1)} class="text-sm text-base-content/70">{elem(@head, 1)}</p>
-    <.alert :if={@cell.snoozed} tone={:neutral} class="mt-3">
-      Im {month_name(@cell.month)} pausiert: das Ziel zählt diesen Monat nicht als unterfinanziert.
-    </.alert>
+    <p id="target-head" class="text-sm font-medium">{Status.target_head(@cell.target)}</p>
+    <div class="mt-2 flex min-h-8 flex-wrap items-center justify-between gap-2">
+      <p
+        id="target-status"
+        class={["flex items-center gap-1.5 text-sm", Components.tone_class(@status.tone)]}
+      >
+        <.icon :if={@status.icon} name={@status.icon} />{@status.text}
+      </p>
+      <.button
+        :if={!@cell.snoozed && @cell.available >= 0 && @cell.underfunded > 0}
+        id="target-assign"
+        size={:sm}
+        aria-label={"#{Money.euros(@cell.underfunded)} zuweisen"}
+        phx-click="assign_rest"
+      >
+        Zuweisen
+      </.button>
+    </div>
     <.bar
-      :if={!@cell.snoozed}
-      id="target-status"
-      class="mt-4"
-      label={@status.title}
+      :if={@cell.target.cadence == :by_date}
+      id="target-progress"
+      class="mt-3"
+      label={"Angespart #{Money.amount(@cell.saved || 0)} von #{Money.euros(@cell.target.amount)}"}
       value={round((@cell.progress || 0) * 100)}
-      tone={@status.tone}
+      tone={bar_tone(@status.tone)}
       target={Status.target_mark(@cell)}
       show_value
     />
-    <.alert
-      :if={!@cell.snoozed && @cell.underfunded > 0}
-      id="target-rest"
-      tone={:warning}
-      class="mt-3"
-    >
-      Weise noch <strong class="whitespace-nowrap">{Money.euros(@cell.underfunded)}</strong>
-      zu, um dein Ziel zu erreichen.
-      <:actions>
-        <.button id="target-assign" size={:sm} phx-click="assign_rest">Zuweisen</.button>
-      </:actions>
-    </.alert>
-    <.description_list :if={!@cell.snoozed} class="mt-3">
-      <:item :if={@cell.saved} label="Angespart">
-        <span class="whitespace-nowrap">
-          {Money.amount(@cell.saved)} von {Money.euros(@cell.target.amount)}
-        </span>
-      </:item>
-      <:item label="Ziel diesen Monat"><.amount value={@cell.needed} /></:item>
-    </.description_list>
     <div class="mt-4 flex flex-wrap gap-2">
       <.button
         id="target-snooze"
@@ -329,4 +313,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     </div>
     """
   end
+
+  defp bar_tone(:muted), do: :neutral
+  defp bar_tone(tone), do: tone
 end

@@ -120,6 +120,53 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     assert Repo.reload!(c.movies).name == "🍿 Kino & Streaming"
   end
 
+  test "the name is renamed in place: leaving the field saves, the same name saves nothing", c do
+    view = open(c.conn)
+    edit_category(view, c.movies)
+
+    refute has_element?(view, "#category-name-form button")
+
+    assert has_element?(
+             view,
+             ~s|#category-name-input[phx-hook=RenameField][data-saved="🎬 Kino"]|
+           )
+
+    view |> element("#category-name-input") |> render_blur(%{"value" => "🍿 Filme"})
+
+    assert Repo.reload!(c.movies).name == "🍿 Filme"
+    assert has_element?(view, ~s|#category-name-input[data-saved="🍿 Filme"]|)
+    assert has_element?(view, "#flash-info", "Name gespeichert.")
+
+    view |> element("#category-name-input") |> render_blur(%{"value" => ""})
+
+    assert has_element?(view, "#category-name-input-error-0", "Name muss ausgefüllt werden")
+
+    saved = Repo.reload!(c.movies).updated_at
+    render_click(view, "lv:clear-flash", %{"key" => "info"})
+    view |> element("#category-name-input") |> render_blur(%{"value" => " 🍿 Filme "})
+
+    refute has_element?(view, "#category-name-input-error-0")
+    refute has_element?(view, "#flash-info")
+    assert Repo.reload!(c.movies).updated_at == saved
+  end
+
+  test "a name is saved trimmed, so leaving the field again saves nothing", c do
+    view = open(c.conn)
+    edit_category(view, c.movies)
+
+    rename(view, "Miete ")
+
+    assert Repo.reload!(c.movies).name == "Miete"
+    assert has_element?(view, ~s|#category-name-input[data-saved="Miete"]|)
+
+    saved = Repo.reload!(c.movies).updated_at
+    render_click(view, "lv:clear-flash", %{"key" => "info"})
+    view |> element("#category-name-input") |> render_blur(%{"value" => "Miete "})
+
+    refute has_element?(view, "#flash-info")
+    assert Repo.reload!(c.movies).updated_at == saved
+  end
+
   test "on phones the sheet renames and deletes, with the same parts", c do
     {:ok, view, _html} =
       c.conn
