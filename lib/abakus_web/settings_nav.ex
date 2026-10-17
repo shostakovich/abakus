@@ -6,14 +6,13 @@ defmodule AbakusWeb.SettingsNav do
   """
   use AbakusWeb, :verified_routes
 
-  alias Abakus.Kasse.BudgetLink
   alias Abakus.Users.Scope
   alias AbakusWeb.Areas
 
   def on_mount(:default, _params, _session, socket),
     do: {:cont, assign_groups(socket)}
 
-  @doc "Assigns the groups again, e.g. once linking the Kasse to the budget hides YNAB."
+  @doc "Assigns the groups again, e.g. once a first portfolio shows Belegeingang."
   def assign_groups(socket),
     do: Phoenix.Component.assign(socket, :settings_groups, groups(socket.assigns.current_scope))
 
@@ -42,8 +41,6 @@ defmodule AbakusWeb.SettingsNav do
   defp ynab_import, do: entry(:ynab_import, "YNAB-Import", "history", ~p"/settings/budget/ynab")
 
   defp kasse(scope) do
-    linked? = BudgetLink.account(scope) != nil
-
     [
       kasse_entry(:kasse_group, "Gruppe", "house", ~p"/settings/kasse"),
       kasse_entry(:kasse_participants, "Teilnehmer", "users", ~p"/settings/kasse/participants"),
@@ -57,8 +54,7 @@ defmodule AbakusWeb.SettingsNav do
       kasse_entry(:kasse_rates, "Wechselkurse", "banknote", ~p"/settings/kasse/rates"),
       Scope.budget_owner?(scope) &&
         kasse_entry(:kasse_budget, "Budget-Verknüpfung", "link", ~p"/settings/kasse/budget"),
-      kasse_entry(:kasse_export, "Export", "archive", ~p"/settings/kasse/export"),
-      !linked? && kasse_entry(:kasse_ynab, "YNAB", "wallet", ~p"/settings/kasse/ynab")
+      kasse_entry(:kasse_export, "Export", "archive", ~p"/settings/kasse/export")
     ]
     |> Enum.filter(& &1)
   end

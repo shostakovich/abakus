@@ -6,9 +6,8 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
   import Abakus.KasseFixtures
   import AbakusWeb.PageText
 
-  alias Abakus.Kasse.{BudgetLink, Expenses, Ynab}
+  alias Abakus.Kasse.BudgetLink
   alias Abakus.Kasse.BudgetLink.LinkedTransaction
-  alias Abakus.Kasse.Ynab.Posting
   alias Abakus.Ledger.Transaction
   alias Abakus.Repo
   alias Setzkasten.Test.Confirm
@@ -77,104 +76,36 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
     end
   end
 
-  describe "switching from YNAB" do
-    setup c do
-      Repo.insert!(%Ynab.Connection{
-        participant_id: c.h.anna,
-        token: "token",
-        plan_id: "plan",
-        account_id: "geteilt",
-        start_date: ~D[2026-03-01]
-      })
-
-      :ok
-    end
-
-    test "links the imported transactions, books the rest and removes the YNAB connection", c do
+  describe "switching on" do
+    test "books every expense and links to the register", c do
       {:ok, _mapping} =
         BudgetLink.put_category_mapping(scope_of(c.h.anna), %{c.h.food => c.groceries.id})
 
       weekly =
         create!(equal(c.h, "Wocheneinkauf", 8742, "2026-03-05", c.h.ben, [c.h.anna, c.h.ben]))
 
-      cinema = create!(equal(c.h, "Kino", 2400, "2026-03-10", c.h.ben, [c.h.anna, c.h.ben]))
-
-      imported =
-        transaction_fixture(%{
-          account_id: c.account.id,
-          date: weekly.date,
-          amount: -4371,
-          payee_name: "Wocheneinkauf",
-          memo: Posting.memo(weekly),
-          category_id: c.treats.id,
-          cleared: :reconciled,
-          approved: true,
-          source: :ynab
-        })
+      cinema = create!(equal(c.h, "Kino", 2400, "2025-03-10", c.h.ben, [c.h.anna, c.h.ben]))
 
       {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
-
-      assert has_element?(view, "#budget-link-ynab", "seit dem 01.03.2026")
-      assert has_element?(view, "#budget-mapping-ynab", "Erst nach dem letzten YNAB-Import")
-      assert has_element?(view, ~s|#link_account_id option[selected][value="#{c.account.id}"]|)
-      assert has_element?(view, "#settings-kasse-ynab-sidebar")
-
-      Confirm.confirm_click(view, "#budget-link-submit", "Mit Budget verknüpfen?")
-      refute has_element?(view, "#settings-kasse-ynab-sidebar")
 
       assert has_element?(
                view,
-               "#flash-info",
-               "Mit dem Budget verknüpft: 1 Buchung übernommen, 1 Buchung neu angelegt."
+               "#budget-link-state",
+               "Jede bisherige Ausgabe bekommt eine Buchung."
              )
 
-      assert has_element?(view, ~s|#budget-link-state a[href="/budget/accounts/#{c.account.id}"]|)
-      refute has_element?(view, "#budget-link-form")
-
-      assert %{transaction_id: imported_id} =
-               Repo.get_by!(LinkedTransaction, expense_id: weekly.id)
-
-      assert imported_id == imported.id
-
-      assert %{category_id: treats, cleared: :reconciled, approved: true} =
-               Repo.reload!(imported)
-
-      assert treats == c.treats.id
-
-      assert %{transaction_id: created_id} =
-               Repo.get_by!(LinkedTransaction, expense_id: cinema.id)
-
-      assert %{amount: -1200, approved: false} = Repo.get!(Transaction, created_id)
-
-      assert Repo.all(Ynab.Connection) == []
-    end
-
-    test "counts the marked transactions it could not take over", c do
-      weekly =
-        create!(equal(c.h, "Wocheneinkauf", 8742, "2026-03-05", c.h.ben, [c.h.anna, c.h.ben]))
-
-      gone = create!(equal(c.h, "Pizza", 2000, "2026-03-06", c.h.ben, [c.h.anna, c.h.ben]))
-
-      for expense <- [weekly, weekly, gone] do
-        transaction_fixture(%{
-          account_id: c.account.id,
-          date: expense.date,
-          amount: -1000,
-          memo: Posting.memo(expense),
-          source: :ynab
-        })
-      end
-
-      {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), gone)
-      {:ok, view, _html} = live(c.conn, ~p"/settings/kasse/budget")
+      assert has_element?(view, ~s|#link_account_id option[selected][value="#{c.account.id}"]|)
 
       Confirm.confirm_click(view, "#budget-link-submit", "Mit Budget verknüpfen?")
 
-      assert flash(view, :info) ==
-               "Mit dem Budget verknüpft: 1 Buchung übernommen, 0 Buchungen neu angelegt. " <>
-                 "Unverknüpft geblieben: 1 Buchung mit Kasse-Kennung, die sich nicht übernehmen ließ " <>
-                 "(Aufteilung, Umbuchung oder doppelt) – bitte von Hand prüfen; " <>
-                 "1 Buchung mit Kasse-Kennung ohne passende Ausgabe."
+      assert flash(view, :info) == "Mit dem Budget verknüpft: 2 Buchungen angelegt."
+      assert has_element?(view, ~s|#budget-link-state a[href="/budget/accounts/#{c.account.id}"]|)
+      refute has_element?(view, "#budget-link-form")
+
+      for {expense, amount} <- [{weekly, -4371}, {cinema, -1200}] do
+        linked = Repo.get_by!(LinkedTransaction, expense_id: expense.id)
+        assert %{amount: ^amount, approved: false} = Repo.get!(Transaction, linked.transaction_id)
+      end
     end
 
     test "asks for an account", c do
@@ -185,17 +116,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       )
 
       assert has_element?(view, "#flash-error", "Bitte ein offenes Budget-Konto wählen.")
-      assert Repo.get(Ynab.Connection, c.h.anna)
-    end
-
-    test "offers YNAB no longer once linked", c do
-      link!(c)
-
-      {:ok, view, _html} = live(c.conn, ~p"/settings/kasse")
-      assert has_element?(view, "#settings-kasse-budget-sidebar")
-      refute has_element?(view, "#settings-kasse-ynab-sidebar")
-
-      assert_raise AbakusWeb.NotFoundError, fn -> live(c.conn, ~p"/settings/kasse/ynab") end
+      assert BudgetLink.account(scope_of(c.h.anna)) == nil
     end
   end
 

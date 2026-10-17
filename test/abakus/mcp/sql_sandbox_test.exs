@@ -3,7 +3,6 @@ defmodule Abakus.MCP.SqlSandboxTest do
 
   import Abakus.KasseFixtures
 
-  alias Abakus.Kasse.Ynab.Connections
   alias Abakus.MCP.SqlSandbox
   alias Abakus.{Repo, TestMigrations}
 
@@ -27,7 +26,6 @@ defmodule Abakus.MCP.SqlSandboxTest do
     TestMigrations.run!(repo)
     h = household()
     create!(equal(h, "Rewe", 3000, "2026-09-01", h.anna, [h.anna, h.ben]))
-    {:ok, _reset?} = Connections.put_token(h.anna, "secret-token-123")
     %{path: path}
   end
 
@@ -54,7 +52,7 @@ defmodule Abakus.MCP.SqlSandboxTest do
         do: assert(rows(path, query) == expected, query)
   end
 
-  test "sees the data, but no YNAB table", %{path: path} do
+  test "sees the data, but no other table", %{path: path} do
     assert rows(path, "SELECT title, amount_cents FROM kasse_expenses WHERE deleted_at IS NULL") ==
              [
                ["Rewe", 3000]
@@ -66,15 +64,11 @@ defmodule Abakus.MCP.SqlSandboxTest do
            ) ==
              Enum.map(Enum.sort(SqlSandbox.exposed_tables()), &[&1])
 
-    assert error(path, "SELECT * FROM kasse_ynab_connections") =~
-             "SQL error: no such table: kasse_ynab_connections"
+    assert error(path, "SELECT * FROM users_tokens") =~
+             "SQL error: no such table: users_tokens"
 
-    assert error(path, "SELECT * FROM main.kasse_ynab_connections") =~ "no such table"
+    assert error(path, "SELECT * FROM main.users_tokens") =~ "no such table"
     assert error(path, "SELECT * FROM src.kasse_expenses") =~ "no such table"
-
-    refute rows(path, "SELECT group_concat(sql) FROM sqlite_schema")
-           |> inspect()
-           |> String.downcase() =~ "ynab"
   end
 
   test "names columns as SQLite does and shows every kind of value", %{path: path} do
@@ -280,10 +274,5 @@ defmodule Abakus.MCP.SqlSandboxTest do
         do: assert(error(path, query) =~ "not authorized", query)
 
     assert files.() == before
-  end
-
-  test "no visible table holds a YNAB token", %{path: path} do
-    for table <- SqlSandbox.exposed_tables(),
-        do: refute(inspect(rows(path, ~s(SELECT * FROM "#{table}"))) =~ "secret-token-123", table)
   end
 end

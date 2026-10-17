@@ -65,7 +65,6 @@ defmodule AbakusWeb.SettingsLiveTest do
                "Wechselkurse",
                "Budget-Verknüpfung",
                "Export",
-               "YNAB",
                "Depot",
                "Depots",
                "Belegeingang"
@@ -87,7 +86,6 @@ defmodule AbakusWeb.SettingsLiveTest do
             kasse_rates: "banknote",
             kasse_budget: "link",
             kasse_export: "archive",
-            kasse_ynab: "wallet",
             depots: "briefcase",
             receipt_intake: "file-text"
           ] do
@@ -158,7 +156,6 @@ defmodule AbakusWeb.SettingsLiveTest do
                "Wiederkehrende Ausgaben",
                "Wechselkurse",
                "Export",
-               "YNAB",
                "Depot",
                "Depots"
              ]

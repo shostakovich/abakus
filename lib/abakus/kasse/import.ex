@@ -2,7 +2,7 @@ defmodule Abakus.Kasse.Import do
   @moduledoc """
   Brings the database file of the former shared-expenses app into the empty Kasse, once, keeping every id: people,
   categories (replacing the seeded ones), the group's name, recurring expenses, expenses with their shares, the
-  activity log, manual exchange rates and each person's YNAB connection, category mapping and synced transactions.
+  activity log and manual exchange rates.
 
   Each person becomes the user with the email address given for their name: an existing user, or a new one who gets
   no mail and asks for a sign-in link on the sign-in page. Abakus needs a user first, the budget owner.
@@ -16,8 +16,7 @@ defmodule Abakus.Kasse.Import do
   alias Exqlite.Sqlite3
 
   # In the order of their foreign keys; the old app's tables lack the prefix.
-  @tables ~w(categories settings participants recurring_expenses expenses expense_shares activities fx_rates
-             ynab_connections ynab_category_mappings ynab_transactions)
+  @tables ~w(categories settings participants recurring_expenses expenses expense_shares activities fx_rates)
   @guarded ~w(participants expenses recurring_expenses activities)
   @replaced ~w(categories settings)
   @chunk 200

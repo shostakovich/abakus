@@ -1,7 +1,7 @@
 defmodule Abakus.Kasse.BudgetLink.Link do
   @moduledoc """
-  A participant linked to the budget, with the account fed by shared expenses their shares are booked in and the
-  start date of the YNAB connection it replaced: an older expense gets a transaction only when entered later.
+  A participant linked to the budget, with the account fed by shared expenses their shares are booked in and a
+  start date: an expense dated before it gets a transaction only when entered or moved later; nil books all.
   """
 
   use Abakus.Schema

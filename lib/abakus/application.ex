@@ -16,7 +16,6 @@ defmodule Abakus.Application do
         # Sends sign-in links in the background; a flood of requests is dropped.
         {Task.Supervisor, name: Abakus.TaskSupervisor, max_children: 50},
         {Task.Supervisor, name: Abakus.Depot.TaskSupervisor},
-        Abakus.Kasse.Ynab.Cache,
         Abakus.Depot.Receipts.Recognition,
         AbakusWeb.Endpoint
       ] ++ jobs()
@@ -30,7 +29,6 @@ defmodule Abakus.Application do
         Abakus.ExchangeRates.Job,
         Abakus.Kasse.Recurring.Job,
         Abakus.Backup.Job,
-        Abakus.Kasse.Ynab.Scheduler,
         Abakus.Depot.MarketData.Job,
         Abakus.Depot.Receipts.PaperlessJob,
         {Task, &Receipts.resume_recognition/0}

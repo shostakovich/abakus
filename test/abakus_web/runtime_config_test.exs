@@ -108,25 +108,4 @@ defmodule AbakusWeb.RuntimeConfigTest do
     System.put_env(%{"MCP_SECRET" => "s3cret", "MCP_ALLOWED_CIDRS" => "garbage"})
     assert mcp(:test)[:secret] == nil
   end
-
-  test "development reaches YNAB for the Kasse only when YNAB_BASE_URL says so" do
-    previous = System.get_env("YNAB_BASE_URL")
-
-    on_exit(fn ->
-      if previous,
-        do: System.put_env("YNAB_BASE_URL", previous),
-        else: System.delete_env("YNAB_BASE_URL")
-    end)
-
-    System.delete_env("YNAB_BASE_URL")
-    assert dev_ynab_url() == "http://127.0.0.1:9"
-
-    System.put_env("YNAB_BASE_URL", "http://localhost:9999/v1")
-    assert dev_ynab_url() == "http://localhost:9999/v1"
-  end
-
-  defp dev_ynab_url do
-    config = Config.Reader.read!("config/dev.exs", env: :dev)[:abakus]
-    config[Abakus.Kasse.Ynab.Client][:base_url]
-  end
 end

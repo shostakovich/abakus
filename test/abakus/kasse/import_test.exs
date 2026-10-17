@@ -2,7 +2,6 @@ defmodule Abakus.Kasse.ImportTest do
   use Abakus.DataCase
 
   import Swoosh.TestAssertions
-  import Abakus.KasseFixtures, only: [scope_of: 1]
 
   alias Abakus.ExchangeRates
 
@@ -17,8 +16,6 @@ defmodule Abakus.Kasse.ImportTest do
     Settings
   }
 
-  alias Abakus.Kasse.FakeYnab
-  alias Abakus.Kasse.Ynab.{Connections, Sync, Transactions}
   alias Abakus.Repo
   alias Abakus.Users
   alias Abakus.Users.Scope
@@ -125,27 +122,6 @@ defmodule Abakus.Kasse.ImportTest do
     assert [%{field: "Notiz", old: "", new: "Urlaub"}] = update.details.changes
     assert {deletion.actor.name, deletion.details.title} == {"Ben", "Kino"}
     assert List.last(entries).details.text == "Person „Anna“ hinzugefügt"
-  end
-
-  test "keeps the YNAB state, so the next sync has nothing to do", %{path: path} do
-    import!(path)
-    fake = FakeYnab.start()
-
-    connection = Connections.get(1)
-
-    assert {connection.token, connection.plan_id, connection.account_id} ==
-             {FakeYnab.token(), FakeYnab.plan(), FakeYnab.account()}
-
-    assert connection.start_date == ~D[2026-09-01]
-    assert Connections.category_mapping(1) == %{1 => "cat-food", 4 => "cat-rent"}
-
-    assert for(t <- Transactions.list(1), do: {t.expense_id, t.ynab_transaction_id}) ==
-             [{7, "ynab-7"}, {9, "ynab-9"}, {15, "ynab-15"}]
-
-    outcome = Sync.sync_person(scope_of(1), true, now: ~U[2026-10-15 12:00:00Z])
-
-    assert {outcome.error, outcome.result.created, outcome.result.updated} == {nil, 0, 0}
-    assert FakeYnab.take_requests(fake) == []
   end
 
   test "refuses a Kasse that holds data already, and missing or unknown people", %{path: path} do

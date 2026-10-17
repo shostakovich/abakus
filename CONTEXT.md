@@ -305,13 +305,9 @@ _Avoid_: FX rate in UI text
 **Budget link**:
 The budget owner's participant linked to the budget: their share of every expense is a linked transaction in the
 account fed by `shared_expenses`, so its balance is their Kasse balance; each Kasse category maps to a budget
-category for it. Switching it on, after the final YNAB import, makes the chosen account the one fed by
-`shared_expenses`, links its transactions whose memo ends with the YNAB sync's marker to their expenses, whatever
-their date (keeping category, cleared state and approval), books every other expense since the start date of
-the owner's YNAB connection and removes the YNAB connection. A split, a transfer or a second marked transaction of
-an expense stays unlinked for the owner to check, and its expense gets no booking. Any other expense dated before
-that start date gets a linked transaction only when entered later or moved past it. UI "Mit Budget verknüpfen", the
-settings page "Budget-Verknüpfung".
+category for it. Switching it on makes the chosen account the one fed by `shared_expenses` and books every
+expense. A link with a start date books an expense dated before it only when entered later or moved past it.
+UI "Mit Budget verknüpfen", the settings page "Budget-Verknüpfung".
 _Avoid_: Sync, budget export
 
 **Linked transaction**:
@@ -321,11 +317,6 @@ linked participant's share of an expense, written with the expense: minus the sh
 the mapped category, a memo describing the expense, unapproved; a change of the expense's Kasse category writes the
 mapped category again. In the Depot, see Depot link.
 _Avoid_: Synced transaction, mirror
-
-**YNAB sync**:
-Until the switch to Abakus, each participant's share of every expense written into an account of their own YNAB plan,
-in the YNAB category mapped to the Kasse category; reimbursements stay out. UI "YNAB".
-_Avoid_: YNAB import (that brings the budget over), YNAB export
 
 ## Depot
 

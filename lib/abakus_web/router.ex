@@ -164,7 +164,6 @@ defmodule AbakusWeb.Router do
       live "/recurring/new", RecurringNewLive
       live "/rates", RatesLive
       live "/budget", BudgetLinkLive
-      live "/ynab", YnabLive
       live "/export", ExportLive
     end
 

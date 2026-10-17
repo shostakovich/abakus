@@ -299,12 +299,11 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   sections grouped by area; each group shows only to users of its area, whose settings answer 404 to others.
   Allgemein: Zugang (passkeys, email), Aussehen (theme, per device). Budget: YNAB-Import (what the import brought
   over). Kasse: Gruppe (the group's name), Teilnehmer (adding one invites their user), Kategorien, Wiederkehrende
-  Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget owner's only: switching the link on, its account and
-  which budget category each Kasse category's shares land in), Export (CSV/JSON) and YNAB (each participant's own
-  sync to YNAB, until they are linked). Depot, for everyone, so anyone may start one: Depots (the user's
-  portfolios and Verrechnungskonten with their roles, and for the budget owner the link to the budget) and Belegeingang
-  (Paperless-ngx and the receipt recognition; users with a portfolio). Categories and groups are edited in the
-  budget
+  Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget owner's only: switching the link on, its account and which
+  budget category each Kasse category's shares land in) and Export (CSV/JSON). Depot, for everyone, so anyone may
+  start one: Depots (the user's portfolios and Verrechnungskonten with their roles, and for the budget owner the
+  link to the budget) and Belegeingang (Paperless-ngx and the receipt recognition; users with a portfolio).
+  Categories and groups are edited in the budget
 
 State that should survive a reload (screen, month, account, filters) lives in the URL; the number of months
 follows the window.
@@ -342,10 +341,9 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
   copy (`VACUUM INTO`) goes to `/app/data/backups`, the newest seven are kept; copies elsewhere are the
   operator's job. The Depot's receipt files live in `receipts/` next to the database, in the data volume but
   outside the nightly backup
-- Jobs in the release: the ECB rates (daily at 17:00), recurring expenses (hourly), the Kasse's YNAB sync (shortly
-  after a change and hourly), the Depot's prices and DivvyDiary data (daily at 18:00), each user's
-  Paperless (every 15 minutes) and the backup, at the host's
-  local time (`TZ`, `Europe/Berlin` in the image); `jobs: false` turns them off in tests
+- Jobs in the release: the ECB rates (daily at 17:00), recurring expenses (hourly), the Depot's prices and
+  DivvyDiary data (daily at 18:00), each user's Paperless (every 15 minutes) and the backup, at the host's local
+  time (`TZ`, `Europe/Berlin` in the image); `jobs: false` turns them off in tests
 - Runs behind the operator's HTTPS reverse proxy, which sets `X-Forwarded-Proto`
 - Config via env: `PHX_HOST` (required: the public host, also the passkey relying party id), `SECRET_KEY_BASE`,
   SMTP, `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES`, `YNAB_TOKEN` (import only), `DIVVYDIARY_API_KEY`
