@@ -238,6 +238,7 @@ defmodule Abakus.Depot.DividendsTest do
 
     test "an announced dividend replaces the forecast up to its pay date" do
       dividends = [
+        stored(~D[2025-03-01], ~D[2025-03-15], 0.4),
         stored(~D[2025-12-01], ~D[2025-12-15], 0.4),
         stored(~D[2026-03-01], ~D[2026-03-15], 0.4),
         stored(~D[2026-12-04], ~D[2026-12-18], 0.45)
@@ -290,6 +291,114 @@ defmodule Abakus.Depot.DividendsTest do
                [~D[2026-10-11], ~D[2027-09-30]]
 
       assert upcoming([buy(~D[2024-01-05], 10)], [stored(nil, ~D[2027-10-01], 0.1)]) == []
+    end
+
+    test "with a year of dividends forecasts each one year later, not the latest" do
+      dividends = [
+        stored(~D[2025-09-01], ~D[2025-09-15], 0.3),
+        stored(~D[2025-12-01], ~D[2025-12-15], 0.3),
+        stored(~D[2026-03-01], ~D[2026-03-15], 0.4),
+        stored(~D[2026-06-01], ~D[2026-06-15], 0.5),
+        stored(~D[2026-09-01], ~D[2026-09-15], 0.6)
+      ]
+
+      assert upcoming([buy(~D[2024-01-05], 10)], dividends)
+             |> Enum.map(&{&1.pay_date, &1.per_share}) == [
+               {~D[2026-12-15], 30_000_000},
+               {~D[2027-03-15], 40_000_000},
+               {~D[2027-06-15], 50_000_000},
+               {~D[2027-09-15], 60_000_000}
+             ]
+    end
+
+    test "with less than a year of monthly dividends repeats the latest every month" do
+      dividends = [
+        stored(nil, ~D[2026-06-15], 0.03),
+        stored(nil, ~D[2026-07-15], 0.03),
+        stored(nil, ~D[2026-08-15], 0.03),
+        stored(nil, ~D[2026-09-15], 0.03),
+        stored(nil, ~D[2026-10-05], 0.04)
+      ]
+
+      forecasts = upcoming([buy(~D[2026-05-05], 10)], dividends)
+
+      assert Enum.map(forecasts, & &1.pay_date) ==
+               Enum.map(1..11, &Date.shift(~D[2026-10-05], month: &1))
+
+      assert Enum.all?(forecasts, &match?(%{kind: :forecast, per_share: 4_000_000}, &1))
+    end
+
+    test "with less than a year of quarterly dividends repeats the latest every third month" do
+      dividends = [
+        stored(~D[2026-03-10], ~D[2026-03-20], 0.5),
+        stored(~D[2026-06-10], ~D[2026-06-20], 0.5),
+        stored(~D[2026-09-10], ~D[2026-09-20], 0.6)
+      ]
+
+      forecasts = upcoming([buy(~D[2026-01-05], 10)], dividends)
+
+      assert Enum.map(forecasts, &{&1.ex_date, &1.pay_date, &1.per_share}) == [
+               {~D[2026-12-10], ~D[2026-12-20], 60_000_000},
+               {~D[2027-03-10], ~D[2027-03-20], 60_000_000},
+               {~D[2027-06-10], ~D[2027-06-20], 60_000_000},
+               {~D[2027-09-10], ~D[2027-09-20], 60_000_000}
+             ]
+    end
+
+    test "with less than a year of dividends repeats each one of the latest pay date" do
+      dividends = [
+        stored(nil, ~D[2026-07-15], 0.03),
+        stored(nil, ~D[2026-08-15], 0.03),
+        stored(nil, ~D[2026-09-15], 0.5),
+        stored(nil, ~D[2026-09-15], 0.03)
+      ]
+
+      forecasts = upcoming([buy(~D[2026-07-01], 10)], dividends)
+
+      assert forecasts |> Enum.take(2) |> Enum.map(&{&1.pay_date, &1.per_share}) |> Enum.sort() ==
+               [{~D[2026-10-15], 3_000_000}, {~D[2026-10-15], 50_000_000}]
+
+      assert length(forecasts) == 24
+    end
+
+    test "with dividends on only two pay dates within a year forecasts each one year later" do
+      transactions = [
+        buy(~D[2026-01-05], 10),
+        dividend(~D[2026-05-20], 10),
+        dividend(~D[2026-09-20], 10)
+      ]
+
+      assert upcoming(transactions, []) |> Enum.map(& &1.pay_date) ==
+               [~D[2027-05-20], ~D[2027-09-20]]
+    end
+
+    test "with less than a year of dividends repeats an announced one after it" do
+      dividends = [
+        stored(nil, ~D[2026-08-15], 0.03),
+        stored(nil, ~D[2026-09-15], 0.03),
+        stored(nil, ~D[2026-11-05], 0.05)
+      ]
+
+      assert [%{kind: :announced, pay_date: ~D[2026-11-05]} | forecasts] =
+               upcoming([buy(~D[2026-07-01], 10)], dividends)
+
+      assert Enum.map(forecasts, &{&1.pay_date, &1.per_share}) ==
+               Enum.map(1..10, &{Date.shift(~D[2026-11-05], month: &1), 5_000_000})
+    end
+
+    test "with less than a year of own distributions repeats the latest in its rhythm" do
+      transactions = [
+        buy(~D[2026-06-01], 10),
+        dividend(~D[2026-07-01], 10),
+        dividend(~D[2026-08-01], 10),
+        dividend(~D[2026-09-01], 10),
+        dividend(~D[2026-10-01], 12)
+      ]
+
+      forecasts = upcoming(transactions, [])
+
+      assert Enum.map(forecasts, &{&1.pay_date, &1.per_share}) ==
+               Enum.map(1..11, &{Date.shift(~D[2026-10-01], month: &1), 120_000_000})
     end
 
     test "without DivvyDiary dividends the user's own distributions stand in" do

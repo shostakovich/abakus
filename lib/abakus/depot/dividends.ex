@@ -10,6 +10,9 @@ defmodule Abakus.Depot.Dividends do
   alias Abakus.Depot.Valuation
   alias Abakus.Depot.Valuation.Market
 
+  @cadences [1, 3, 6, 12]
+  @days_per_month 365.25 / 12
+
   @doc """
   The dividends of `transactions`, newest first, each with its pay `date`, `security`, `shares`
   (0 where PP booked none), `gross`, `taxes`, `fees` and `net`.
@@ -68,8 +71,9 @@ defmodule Abakus.Depot.Dividends do
   - `kind: :announced`: a stored dividend paid after today, for the shares held at the end of its
     ex date, or today's when that is still to come or unknown
   - `kind: :forecast`: a stored dividend of the last 12 months one year later, for today's
-    shares, only after the month of the security's last stored one. Without stored dividends the
-    user's own distributions stand in.
+    shares, only after the month of the security's last stored one. A security whose dividends, on
+    at least three pay dates, all lie within the last year repeats those of its latest pay date in
+    its usual rhythm instead. Without stored dividends the user's own distributions stand in.
 
   Each has `security`, `ex_date` (may be nil), `pay_date`, `shares`, `per_share` in `currency`,
   `gross` and `net`: the gross times the security's net-to-gross ratio of the last 12 months, or
@@ -146,20 +150,55 @@ defmodule Abakus.Depot.Dividends do
     for {security_id, shares} <- held,
         known = known_dividends(security_id, stored, transactions, market),
         last = known |> Enum.map(& &1.pay_date) |> Enum.max(Date, fn -> nil end),
-        paid <- known,
-        paid.per_share != nil and not Date.after?(paid.pay_date, today),
-        pay_date = Date.shift(paid.pay_date, year: 1),
+        {paid, months} <- repeated(Enum.reject(known, &is_nil(&1.per_share)), today),
+        pay_date = Date.shift(paid.pay_date, month: months),
         Date.after?(pay_date, Date.end_of_month(last)) do
       %{
         kind: :forecast,
         security_id: security_id,
-        ex_date: paid.ex_date && Date.shift(paid.ex_date, year: 1),
+        ex_date: paid.ex_date && Date.shift(paid.ex_date, month: months),
         pay_date: pay_date,
         per_share: paid.per_share,
         currency: paid.currency,
         shares: shares
       }
     end
+  end
+
+  defp repeated(known, today) do
+    pay_dates = known |> Enum.map(& &1.pay_date) |> Enum.uniq() |> Enum.sort(Date)
+
+    if young?(pay_dates, today) do
+      cadence = cadence(pay_dates)
+      latest = List.last(pay_dates)
+
+      for paid <- known,
+          paid.pay_date == latest,
+          months <- cadence..24//cadence,
+          do: {paid, months}
+    else
+      for paid <- known, not Date.after?(paid.pay_date, today), do: {paid, 12}
+    end
+  end
+
+  defp young?([first, _, _ | _], today), do: Date.after?(first, Date.shift(today, year: -1))
+  defp young?(_pay_dates, _today), do: false
+
+  defp cadence(pay_dates) do
+    median =
+      pay_dates
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.map(fn [earlier, later] -> Date.diff(later, earlier) / @days_per_month end)
+      |> Enum.sort()
+      |> median()
+
+    Enum.min_by(@cadences, &abs(&1 - median))
+  end
+
+  defp median(sorted) do
+    count = length(sorted)
+    middle = Enum.slice(sorted, div(count - 1, 2), 2 - rem(count, 2))
+    Enum.sum(middle) / length(middle)
   end
 
   defp known_dividends(security_id, stored, transactions, market) do
