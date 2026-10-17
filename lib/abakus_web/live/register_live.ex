@@ -59,14 +59,7 @@ defmodule AbakusWeb.RegisterLive do
         <.fab id="new-transaction-fab" label="Buchung" phx-click="new" phx-value-layout="sheet" />
       </:fab>
       <div id="register">
-        <div class="flex items-start md:block">
-          <.link
-            id="register-back"
-            navigate={~p"/budget/accounts"}
-            class="btn btn-ghost btn-sm -ms-3 max-md:btn-square max-md:-ms-2"
-          >
-            <.icon name="chevron-left" /><span class="max-md:sr-only">Konten</span>
-          </.link>
+        <div>
           <.header class="min-w-0 grow pb-4 max-md:pb-3">
             <span id="register-title">{@page_title}</span>
             <:badge><Components.balances_compact account={@account} balances={@balances} /></:badge>
@@ -77,14 +70,6 @@ defmodule AbakusWeb.RegisterLive do
                 balances={@balances}
                 reconciling={!!@reconciling}
               />
-              <.button
-                :if={!@account}
-                id="add-account"
-                icon="plus"
-                phx-click="open_account_dialog"
-              >
-                Konto hinzufügen
-              </.button>
               <.button
                 :if={@account}
                 id="edit-account"

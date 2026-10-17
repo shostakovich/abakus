@@ -148,9 +148,6 @@ defmodule AbakusWeb.RegisterLiveTest do
              )
 
       assert has_element?(view, ~s|#edit-account[phx-value-id="#{c.giro.id}"]|)
-
-      {:ok, list, _html} = live(c.conn, ~p"/budget/accounts")
-      assert has_element?(list, ~s|#account-#{c.giro.id} a[href="/budget/accounts/#{c.giro.id}"]|)
     end
 
     test "an account fed by the Depot offers no manual entry", c do
@@ -292,13 +289,6 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#balance-working[phx-hook]")
       refute has_element?(view, "#balance-total[phx-hook]")
       refute has_element?(view, "#running-toggle")
-    end
-
-    test "the account list leads to it and shows the total", c do
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts")
-
-      assert has_element?(view, "#accounts-total", "3.923,71 €")
-      assert has_element?(view, ~s|a[href="/budget/accounts/all"]|, "Alle Konten")
     end
   end
 

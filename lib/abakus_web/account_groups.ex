@@ -1,6 +1,6 @@
 defmodule AbakusWeb.AccountGroups do
   @moduledoc """
-  Accounts as the sidebar and the account list group them: open budget accounts, open tracking accounts, then the
+  Accounts as the sidebar and the registers group them: open budget accounts, open tracking accounts, then the
   closed ones, each account with its working and cleared balance and how many of its transactions wait for approval,
   each group with its working balance. Empty groups are left out.
   """
