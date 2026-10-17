@@ -205,7 +205,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
       assert has_element?(lv, "#app-shell-sidebar-full", "Depots")
     end
 
-    test "lists the portfolios right after the accounts, and Alle Konten offers „Konto hinzufügen“",
+    test "lists the portfolios right after the accounts",
          ctx do
       portfolio = portfolio_fixture(ctx.owner, %{name: "Langfristig"})
       {:ok, lv, _html} = live(ctx.conn, ~p"/budget/accounts/all")
@@ -221,8 +221,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
       assert Enum.drop_while(ids, &(not String.starts_with?(&1, "side-depot-portfolio-"))) ==
                ["side-depot-portfolio-#{portfolio.id}", "side-settings"]
 
-      lv |> element("#add-account") |> render_click()
-      assert has_element?(lv, "#account-dialog h2", "Konto hinzufügen")
+      refute "side-add-account" in ids
     end
 
     test "updates the budget accounts' balances after a Depot booking", ctx do

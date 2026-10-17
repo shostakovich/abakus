@@ -1,11 +1,12 @@
 defmodule AbakusWeb.BudgetLive.Popover do
   @moduledoc """
-  The popovers of the budget, in the focus month: the available pill's, with "Decken" (while overspent) and
+  The popovers of the budget, in the focus month: the available cell's, with "Decken" (while overspent) and
   "Verschieben"; covering a category from the overspent list; and "In eine Kategorie …" from Verteilen, which
   assigns Zu verteilen to a category. One shared Setzkasten `popover`, anchored to what opened it.
 
-  The state is `%{kind: :pill | :cover | :pick, anchor, category_id, mode: :cover | :move, from, error, open}`
-  (`from`: the chosen source to cover from); a pick also has the category and amount it suggests. A closed popover stays rendered, so focus returns to its anchor.
+  The state is `%{kind: :available | :cover | :pick, anchor, category_id, mode: :cover | :move, from, error, open}`
+  (`from`: the chosen source to cover from); a pick also has the category and amount it suggests. A closed popover stays
+  rendered, so focus returns to its anchor.
   """
   use AbakusWeb, :html
 
@@ -14,7 +15,9 @@ defmodule AbakusWeb.BudgetLive.Popover do
   alias Abakus.Money
   alias AbakusWeb.BudgetLive.{Components, Inspector, Status}
 
-  @doc "Opens a popover at the anchor's element; a pill opens on \"Decken\" while its category is overspent."
+  @doc """
+  Opens a popover at the anchor's element; the available cell's opens on "Decken" while its category is overspent.
+  """
   def open(:pick, anchor, _entry, inspector) do
     suggested =
       Enum.find(inspector.categories, &(Status.open_need(&1.cell) > 0)) ||
@@ -92,8 +95,8 @@ defmodule AbakusWeb.BudgetLive.Popover do
       show={@popover.open}
       on_cancel={JS.push("close_popover", value: %{anchor: @popover.anchor})}
     >
-      <.pill_content
-        :if={@popover.kind == :pill}
+      <.available_content
+        :if={@popover.kind == :available}
         popover={@popover}
         entry={@entry}
         inspector={@inspector}
@@ -114,14 +117,14 @@ defmodule AbakusWeb.BudgetLive.Popover do
     do: "In eine Kategorie verteilen · #{month_name(inspector.month.month)}"
 
   defp title(_popover, nil, _inspector), do: nil
-  defp title(%{kind: :pill}, entry, _inspector), do: entry.category.name
+  defp title(%{kind: :available}, entry, _inspector), do: entry.category.name
   defp title(%{kind: :cover}, entry, _inspector), do: "Überzug decken · #{entry.category.name}"
 
-  defp pill_content(assigns) do
+  defp available_content(assigns) do
     ~H"""
     <div class="flex items-center justify-between gap-2">
       <p class="text-sm text-base-content/70">{month_year(@entry.cell.month)}</p>
-      <Components.pill cell={@entry.cell} />
+      <Components.available cell={@entry.cell} budgeting={@inspector.budgeting} />
     </div>
     <.segmented
       :if={@entry.cell.available < 0}

@@ -6,9 +6,9 @@ meant to replace YNAB for my own use. **The user interface is German.**
 
 ## Status
 
-Sign-in with magic link and passkeys, the budget math, the YNAB import, the budget view on desktop with its
-category dialog and month details (targets, auto-assign, covering and moving money), the account list, the
-register, where transactions are edited in place as in YNAB, reconciling, the OFX/QFX file import with match
+Sign-in with magic link and passkeys, the budget math, the YNAB import, the budget view on desktop with its month
+calculation, category dialog (targets), auto-assign and covering and moving money, the register for one account or
+all of them, where transactions are edited in place as in YNAB, reconciling, the OFX/QFX file import with match
 proposals and the settings, and the Kasse: the household's shared expenses, moved in from Zipfelkasse with its
 expenses, balances, activity log, recurring expenses, categories, exchange rates, CSV/JSON export, its sync to YNAB,
 its MCP server for AI assistants and the link that books the budget owner's shares in the budget, switched on in one

@@ -29,9 +29,7 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
     )
   end
 
-  defp rows(months, opts \\ []) do
-    Rows.new([@daily, @housing, @gone], months, income: Keyword.get(opts, :income, %{}))
-  end
+  defp rows(months), do: Rows.new([@daily, @housing, @gone], months)
 
   test "lists the groups and categories, those hidden in YNAB too, with their months and the groups' totals" do
     rows =
@@ -67,20 +65,5 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
 
     assert %{cells: %{@nov => %CategoryMonth{available: -999}}} =
              rows([month(@oct, %{}), month(@nov, %{}, %{activity: -999, available: -999})]).uncategorised
-  end
-
-  test "lists the income of the shown months per payee by name, the one without a payee last" do
-    income = %{
-      {"Zinsen", @oct} => 12,
-      {nil, @nov} => 5,
-      {"Arbeitgeber", @oct} => 300_000,
-      {"Alt", ~D[2026-09-01]} => 1
-    }
-
-    assert rows([month(@oct, %{}), month(@nov, %{})], income: income).income == [
-             %{payee: "Arbeitgeber", amounts: %{@oct => 300_000}},
-             %{payee: "Zinsen", amounts: %{@oct => 12}},
-             %{payee: nil, amounts: %{@nov => 5}}
-           ]
   end
 end

@@ -99,7 +99,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       submit(view, %{outflow: "12,34", memo: "Brötchen"})
 
       refute has_element?(view, "#tx-editor")
-      assert has_element?(view, "#flash-info", "Gebucht")
+      assert has_element?(view, "#flash-info", "Gespeichert.")
 
       transaction = newest(c.giro)
 
@@ -652,9 +652,9 @@ defmodule AbakusWeb.TransactionEditorTest do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       open_edit(view, old)
-      assert asked(view, "#tx-save").text == "Der abgeglichene Saldo kann sich dadurch ändern."
+      assert asked(view, "#tx-save").text == "Der gebuchte Saldo kann sich dadurch ändern."
 
-      confirm_click(view, "#tx-save", "Diese Buchung ist abgeschlossen. Trotzdem ändern?",
+      confirm_click(view, "#tx-save", "Diese Buchung ist abgeglichen. Trotzdem ändern?",
         with: %{transaction: %{memo: "Nachgetragen"}}
       )
 
@@ -666,7 +666,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       confirm_click(
         view,
         "#delete-selected",
-        "Diese Buchung ist abgeschlossen. Trotzdem löschen?"
+        "Diese Buchung ist abgeglichen. Trotzdem löschen?"
       )
 
       assert reload(old).deleted_at
@@ -692,7 +692,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       view |> element("#tx-#{transfer.id}-select") |> render_click()
-      assert asked(view, "#delete-selected").question =~ "abgeschlossen"
+      assert asked(view, "#delete-selected").question =~ "abgeglichen"
 
       # Without the confirmation nothing goes.
       render_click(view, "delete_selected", %{})

@@ -1,4 +1,4 @@
-defmodule AbakusWeb.AccountsLiveTest do
+defmodule AbakusWeb.AccountDialogTest do
   use AbakusWeb.ConnCase
 
   import Phoenix.LiveViewTest
@@ -8,7 +8,11 @@ defmodule AbakusWeb.AccountsLiveTest do
 
   setup :register_and_log_in_user
 
-  describe "the account list" do
+  test "the former account list opens the register of all accounts", %{conn: conn} do
+    assert conn |> get(~p"/budget/accounts") |> redirected_to() == ~p"/budget/accounts/all"
+  end
+
+  describe "the sidebar" do
     setup do
       giro = account_fixture(name: "💶 Girokonto", kind: :checking, note: "Gehalt")
       cash = account_fixture(name: "👛 Bargeld", kind: :cash)
@@ -22,55 +26,6 @@ defmodule AbakusWeb.AccountsLiveTest do
       transaction_fixture(account_id: old.id, amount: 300, cleared: :cleared)
 
       %{giro: giro, cash: cash, depot: depot, old: old}
-    end
-
-    test "says how many transactions of an account wait for approval", c do
-      transaction_fixture(account_id: c.cash.id, amount: -100, approved: false)
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts")
-
-      assert has_element?(view, "#account-#{c.cash.id} .badge", "1 zu bestätigen")
-      refute has_element?(view, "#account-#{c.giro.id} .badge")
-    end
-
-    test "groups the accounts into budget and tracking with working and cleared balance", c do
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts")
-
-      assert has_element?(view, "h1", "Konten")
-      assert has_element?(view, ~s|nav a[aria-current=page][href="/budget/accounts/all"]|)
-      refute has_element?(view, ~s|aside a[href="/budget/accounts"]|)
-
-      assert has_element?(view, "#group-budget h2", "Budget")
-      assert has_element?(view, "#group-budget-balance", "2.437,51 €")
-      assert has_element?(view, "#account-#{c.giro.id} span[aria-hidden]", "💶")
-      assert has_element?(view, ~s|#account-#{c.old.id} img[src^="/images/plush/piggy-bank"]|)
-      assert has_element?(view, "#account-#{c.giro.id}", "Girokonto\u2060\u00A0· Gehalt")
-      assert has_element?(view, "#account-#{c.giro.id}-balance", "2.450,01 €")
-      assert has_element?(view, "#account-#{c.giro.id}-cleared", "2.500,00 €")
-      assert has_element?(view, "#account-#{c.cash.id}-balance.text-error-ink", "−12,50 €")
-      assert has_element?(view, "#account-#{c.cash.id}-cleared", "0,00 €")
-      assert has_element?(view, "#group-tracking h2", "Tracking")
-      assert has_element?(view, "#account-#{c.depot.id}-cleared", "10.000,00 €")
-      assert has_element?(view, "#group-closed h2", "Geschlossen")
-      assert has_element?(view, "#accounts-total", "12.440,51 €")
-
-      assert view
-             |> render()
-             |> LazyHTML.from_document()
-             |> LazyHTML.query("#accounts > li[id]")
-             |> LazyHTML.attribute("id") == [
-               "group-budget",
-               "account-#{c.giro.id}",
-               "account-#{c.cash.id}",
-               "group-tracking",
-               "account-#{c.depot.id}",
-               "group-closed",
-               "account-#{c.old.id}"
-             ]
-
-      assert has_element?(
-               view,
-               ~s|#account-#{c.giro.id} a[href="/budget/accounts/#{c.giro.id}"]|
-             )
     end
 
     test "the sidebar lists the open accounts with their working balance", c do
@@ -118,12 +73,15 @@ defmodule AbakusWeb.AccountsLiveTest do
     end
   end
 
-  test "without accounts the list says so", %{conn: conn} do
-    {:ok, view, _html} = live(conn, ~p"/budget/accounts")
+  test "without accounts Alle Konten still offers „Konto hinzufügen“", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
 
-    assert has_element?(view, "main p", "Noch keine Konten")
-    assert has_element?(view, "main #add-account", "Konto hinzufügen")
-    refute has_element?(view, "#accounts")
+    assert has_element?(view, "#register-table", "Noch keine Konten")
+    assert has_element?(view, "#register-table", "Lege mit „Konto hinzufügen“ ein Konto an")
+    assert has_element?(view, "#register-cards", "Noch keine Konten")
+
+    view |> element("#add-account") |> render_click()
+    assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
   end
 
   defp submit(view, params), do: view |> form("#account-form", account: params) |> render_submit()
@@ -135,8 +93,8 @@ defmodule AbakusWeb.AccountsLiveTest do
   end
 
   describe "adding" do
-    test "opens over the account list and goes to the new account's register", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/budget/accounts")
+    test "opens from Alle Konten and goes to the new account's register", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
       refute has_element?(view, "#account-dialog")
 
       view |> element("#add-account") |> render_click()
@@ -158,20 +116,8 @@ defmodule AbakusWeb.AccountsLiveTest do
       assert {^path, %{"info" => "Konto angelegt."}} = assert_redirect(view)
     end
 
-    test "opens from Alle Konten", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
-
-      view |> element("#add-account") |> render_click()
-      assert has_element?(view, "#account-dialog h2", "Konto hinzufügen")
-
-      submit(view, %{name: "Giro", kind: "checking"})
-      assert [account] = Ledger.list_accounts(budget_scope())
-      path = ~p"/budget/accounts/#{account}"
-      assert {^path, _flash} = assert_redirect(view)
-    end
-
     test "shows what is missing", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/budget/accounts")
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
       view |> element("#add-account") |> render_click()
 
       assert submit(view, %{name: " "}) =~ "Muss ausgefüllt werden"
@@ -180,7 +126,7 @@ defmodule AbakusWeb.AccountsLiveTest do
     end
 
     test "takes only name, kind and note from the form", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/budget/accounts")
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
       view |> element("#add-account") |> render_click()
 
       view
@@ -193,7 +139,7 @@ defmodule AbakusWeb.AccountsLiveTest do
     end
 
     test "cancelling closes the form and adds nothing", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/budget/accounts")
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
 
       view |> element("#add-account") |> render_click()
       view |> element("#account-cancel") |> render_click()

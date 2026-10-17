@@ -5,12 +5,12 @@ defmodule AbakusWeb.BudgetLive do
   the current month, so that it is the user's own. Every month takes assignments, as in YNAB; Zu verteilen may go
   below zero.
 
-  As in Actual there is no inspector: a month's card opens its details (`MonthDetails`) and its Verteilen menu
+  As in Actual there is no inspector: a month's card shows how Zu verteilen adds up and its Verteilen menu
   auto-assigns or resets the month; a category's name or pencil opens its dialog (`Inspector`: name, target,
   deleting), on phones a sheet that also takes the assignment. Targets, snoozing, auto-assign, covering and moving
-  money work in the focus month; covering and moving through the available pill's popover (`Popover`). Groups are
-  added, renamed and deleted in popovers (`CategoryEditor`): "+ Gruppe" above the table (below it on phones), "+"
-  and the name on a group's row.
+  money work in the focus month; covering and moving through the available cell's popover (`Popover`), which makes
+  its month the focus. Groups are added, renamed and deleted in popovers (`CategoryEditor`): "+ Gruppe" above the
+  table (below it on phones), "+" and the name on a group's row.
   """
   use AbakusWeb, :live_view
 
@@ -20,7 +20,6 @@ defmodule AbakusWeb.BudgetLive do
     CategoryEditor,
     Components,
     Inspector,
-    MonthDetails,
     Popover,
     Rows,
     Status,
@@ -63,7 +62,6 @@ defmodule AbakusWeb.BudgetLive do
         <Components.month_bar
           :if={@fit.compact}
           month={focus_month(@months, @window)}
-          future={@future[@window.focus]}
           window={@window}
         />
         <div class="app-budget-wrap">
@@ -93,7 +91,6 @@ defmodule AbakusWeb.BudgetLive do
                 <th :for={month <- @months} colspan="3" class="app-ms">
                   <Components.month_card
                     month={month}
-                    future={@future[month.month]}
                     focus={month.month == @window.focus}
                     current={@current}
                   />
@@ -113,10 +110,10 @@ defmodule AbakusWeb.BudgetLive do
                 cells={@rows.uncategorised.cells}
                 months={@window.months}
                 focus={@window.focus}
-                current={@current}
                 invalid={@invalid}
                 assignable={false}
                 compact={@fit.compact}
+                budgeting={@budgeting}
               />
             </tbody>
             <Components.group
@@ -135,12 +132,11 @@ defmodule AbakusWeb.BudgetLive do
                 cells={cells}
                 months={@window.months}
                 focus={@window.focus}
-                current={@current}
                 invalid={@invalid}
                 compact={@fit.compact}
+                budgeting={@budgeting}
               />
             </Components.group>
-            <Components.income :if={@rows.income != []} rows={@rows.income} months={@months} />
             <tbody :if={@rows.groups == [] and is_nil(@rows.uncategorised)}>
               <tr>
                 <td colspan={1 + 3 * length(@months)} class="app-empty">
@@ -229,7 +225,6 @@ defmodule AbakusWeb.BudgetLive do
        page_title: "Budget",
        current: Date.beginning_of_month(LocalTime.today()),
        fit: fit(connect["fit"]),
-       income: Categories.income_by_payee(socket.assigns.current_scope),
        focus: nil,
        invalid: nil,
        selected: nil,
@@ -256,12 +251,8 @@ defmodule AbakusWeb.BudgetLive do
     {:noreply, socket |> assign(:fit, fit(params)) |> assign_view()}
   end
 
-  def handle_event("focus", %{"month" => param}, socket) do
-    case shown_month(socket, param) do
-      {:ok, month} -> {:noreply, socket |> assign(:focus, month) |> assign_view()}
-      :error -> {:noreply, socket}
-    end
-  end
+  def handle_event("focus", %{"month" => param}, socket),
+    do: {:noreply, focus_shown(socket, param)}
 
   def handle_event("show_month", %{"month" => param}, socket) do
     case Window.parse_param(param) do
@@ -316,7 +307,9 @@ defmodule AbakusWeb.BudgetLive do
   end
 
   def handle_event("open_popover", %{"kind" => kind, "category" => id} = params, socket)
-      when kind in ["pill", "cover"] do
+      when kind in ["available", "cover"] do
+    socket = focus_shown(socket, params["month"])
+
     case entry(socket, id) do
       nil ->
         {:noreply, socket}
@@ -347,7 +340,7 @@ defmodule AbakusWeb.BudgetLive do
 
   def handle_event("popover_mode", %{"value" => mode}, socket) when mode in ["cover", "move"] do
     case socket.assigns.popover do
-      %{kind: :pill} = popover ->
+      %{kind: :available} = popover ->
         {:noreply,
          assign(socket, :popover, %{popover | mode: String.to_existing_atom(mode), error: nil})}
 
@@ -358,7 +351,7 @@ defmodule AbakusWeb.BudgetLive do
 
   def handle_event("cover_change", %{"from" => from}, socket) do
     case socket.assigns.popover do
-      %{kind: kind} = popover when kind in [:pill, :cover] ->
+      %{kind: kind} = popover when kind in [:available, :cover] ->
         {:noreply, assign(socket, :popover, %{popover | from: from, error: nil})}
 
       _other ->
@@ -560,16 +553,30 @@ defmodule AbakusWeb.BudgetLive do
   def handle_event("edit_close", _params, socket),
     do: {:noreply, assign(socket, :editing, closed(socket.assigns.editing))}
 
-  def handle_event("edit_save", %{"name" => name}, %{assigns: %{editing: %{} = editing}} = socket) do
-    case CategoryEditor.save(
-           socket.assigns.current_scope,
-           %{editing | step: :name, error: nil},
-           name
-         ) do
-      :ok -> {:noreply, socket |> edited() |> renamed(socket.assigns.editing)}
-      result -> {:noreply, refused(socket, result)}
-    end
+  def handle_event(
+        "edit_save",
+        %{"value" => name},
+        %{assigns: %{editing: %{kind: :category}}} = socket
+      ),
+      do: handle_event("edit_save", %{"name" => name}, socket)
+
+  def handle_event(
+        "edit_save",
+        %{"name" => name},
+        %{assigns: %{editing: %{kind: :category, category: category} = editing}} = socket
+      )
+      when is_binary(name) do
+    if String.trim(name) == category.name,
+      do: {:noreply, unchanged(socket, editing)},
+      else: save_name(socket, editing, name)
   end
+
+  def handle_event(
+        "edit_save",
+        %{"name" => name},
+        %{assigns: %{editing: %{} = editing}} = socket
+      ),
+      do: save_name(socket, editing, name)
 
   def handle_event("edit_back", _params, %{assigns: %{editing: %{step: :delete}}} = socket),
     do: {:noreply, assign(socket, :editing, %{socket.assigns.editing | step: :name, error: nil})}
@@ -649,6 +656,16 @@ defmodule AbakusWeb.BudgetLive do
     case CategoryEditor.delete(socket.assigns.current_scope, edit, socket.assigns.groups) do
       :ok -> edited(socket)
       result -> refused(socket, result)
+    end
+  end
+
+  defp focus_shown(socket, param) do
+    case shown_month(socket, param) do
+      {:ok, month} when month != socket.assigns.window.focus ->
+        socket |> assign(:focus, month) |> assign_view()
+
+      _same_or_none ->
+        socket
     end
   end
 
@@ -797,6 +814,22 @@ defmodule AbakusWeb.BudgetLive do
     end
   end
 
+  defp save_name(socket, editing, name) do
+    case CategoryEditor.save(
+           socket.assigns.current_scope,
+           %{editing | step: :name, error: nil},
+           name
+         ) do
+      :ok -> {:noreply, socket |> edited() |> renamed(editing)}
+      result -> {:noreply, refused(socket, result)}
+    end
+  end
+
+  defp unchanged(socket, %{step: :name} = editing),
+    do: assign(socket, :editing, %{editing | error: nil})
+
+  defp unchanged(socket, _editing), do: socket
+
   defp renamed(socket, %{kind: :category}), do: put_flash(socket, :info, "Name gespeichert.")
   defp renamed(socket, _editing), do: socket
 
@@ -870,15 +903,15 @@ defmodule AbakusWeb.BudgetLive do
     shown = Enum.map(window.months, &by_month[&1])
 
     inspector =
-      Inspector.new(socket.assigns.groups, months, window.focus, socket.assigns.selected)
+      Inspector.new(socket.assigns.groups, months, window.focus, current, socket.assigns.selected)
 
     socket
     |> assign(
       window: window,
       months: shown,
-      future: Map.new(shown, &{&1.month, MonthDetails.future(months, &1)}),
       inspector: inspector,
-      rows: Rows.new(socket.assigns.groups, shown, income: socket.assigns.income)
+      budgeting: for(m <- shown, Status.budgeting?(m, current), into: MapSet.new(), do: m.month),
+      rows: Rows.new(socket.assigns.groups, shown)
     )
     |> keep_open(socket.assigns[:window])
   end

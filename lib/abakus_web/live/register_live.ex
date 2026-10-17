@@ -1,10 +1,12 @@
 defmodule AbakusWeb.RegisterLive do
   @moduledoc """
-  The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first,
-  below the balances. The view (`filter`), the search (`q`) and the running balance (`running`, one account in the
-  full list only) live in the URL; the selection does not.
+  The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first. Its
+  header has three rows, as in YNAB: the name with its meta line and the actions (pencil, "Abgleichen"; in Alle Konten
+  "Konto hinzufügen"), the balances, and the toolbar. The view (`filter`), the search (`q`) and the running balance
+  (`running`, one account in the full list only) live in the URL; the selection does not, and whether the memo column
+  shows is kept per device in the browser.
 
-  Here transactions are approved (one, the selected or all), categorised (the selected), flagged and toggled
+  Here transactions are approved (one, the selected or all), categorised (the selected) and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
   no manual entry and no reconcile, and a portfolio's account shows the Depots tabs as its Register tab.
@@ -12,8 +14,7 @@ defmodule AbakusWeb.RegisterLive do
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
   the transaction they match: "Zuordnen" merges them, "Trennen" keeps the import as a transaction of its own, and
-  "Alle Zuordnungen übernehmen" in the toolbar merges all. Approving all leaves them open, as that is a decision of
-  its own.
+  "Alle zuordnen" in the toolbar merges all. "Alle bestätigen" leaves them open, as that is a decision of its own.
 
   "Abgleichen" reconciles one account (`Reconcile`): its popover asks whether the balance is right, reconcile mode
   keeps the difference in a bar while transactions are cleared, until it is finished or cancelled.
@@ -40,8 +41,6 @@ defmodule AbakusWeb.RegisterLive do
 
   import TransactionEditor, only: [confirmed: 1]
 
-  @flags Ecto.Enum.dump_values(Abakus.Ledger.Transaction, :flag)
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -61,66 +60,43 @@ defmodule AbakusWeb.RegisterLive do
         <.fab id="new-transaction-fab" label="Buchung" phx-click="new" phx-value-layout="sheet" />
       </:fab>
       <div id="register">
-        <div class="flex items-start md:block">
-          <.link
-            id="register-back"
-            navigate={~p"/budget/accounts"}
-            class="btn btn-ghost btn-sm -ms-3 max-md:btn-square max-md:-ms-2"
-          >
-            <.icon name="chevron-left" /><span class="max-md:sr-only">Konten</span>
-          </.link>
-          <.header class="min-w-0 grow pb-4 max-md:pb-3">
-            <span id="register-title">{@page_title}</span>
-            <:badge><Components.balances_compact account={@account} balances={@balances} /></:badge>
-            <:subtitle><Components.meta account={@account} /></:subtitle>
-            <:actions>
-              <Components.balances
-                account={@account}
-                balances={@balances}
-                reconciling={!!@reconciling}
-              />
-              <.button
-                :if={!@account}
-                id="add-account"
-                icon="plus"
-                phx-click="open_account_dialog"
-              >
-                Konto hinzufügen
-              </.button>
-              <.button
-                :if={@account}
-                id="edit-account"
-                icon="pencil"
-                icon_only
-                label="Konto bearbeiten"
-                class="max-md:hidden"
-                phx-click="open_account_dialog"
-                phx-value-id={@account.id}
-              />
-              <Reconcile.editor
-                :if={@account && Account.reconcilable?(@account) && !@reconciling}
-                state={@reconcile}
-              />
-            </:actions>
-          </.header>
-        </div>
+        <.header class="app-reg-row pb-4 max-md:pb-3">
+          <span id="register-title">{@page_title}</span>
+          <:subtitle><Components.meta account={@account} /></:subtitle>
+          <:actions :if={!@account}>
+            <.button id="add-account" icon="plus" phx-click="open_account_dialog">
+              Konto hinzufügen
+            </.button>
+          </:actions>
+          <:actions :if={@account}>
+            <.button
+              id="edit-account"
+              icon="pencil"
+              icon_only
+              label="Konto bearbeiten"
+              variant={:ghost}
+              phx-click="open_account_dialog"
+              phx-value-id={@account.id}
+            />
+            <Reconcile.editor
+              :if={Account.reconcilable?(@account) && !@reconciling}
+              state={@reconcile}
+            />
+          </:actions>
+        </.header>
+        <Components.balances account={@account} balances={@balances} reconciling={!!@reconciling} />
         <DepotComponents.depots_tabs :if={@portfolio} tab={:register} portfolio={@portfolio} />
         <Components.toolbar
           account={@account}
           manual={@manual}
+          unapproved={@unapproved}
+          proposals={@proposals}
           filter={@filter}
           query={@query}
           running={@running}
           running_shown={@running_balances != nil}
           paths={@paths}
-        >
-          <Components.waiting
-            :if={@unapproved != [] or @proposals != []}
-            transactions={@unapproved}
-            proposals={@proposals}
-            show_path={@filter != :unapproved && @paths.filters.unapproved}
-          />
-        </Components.toolbar>
+        />
         <Reconcile.bar :if={@reconciling} mode={@reconciling} />
         <Components.table
           rows={@rows}
@@ -128,17 +104,18 @@ defmodule AbakusWeb.RegisterLive do
           accounts={@accounts}
           columns={@columns}
           selected={@selected}
-          flag_menu={@flag_menu}
           running={@running_balances}
           editor={@editor && @editor.layout == :row && @editor}
-          empty={empty_text(@transactions, @proposals)}
+          empty={empty_text(@accounts, @transactions, @proposals)}
+          empty_hint={empty_hint(@accounts)}
         />
         <Components.cards
           rows={@rows}
           proposals={@shown_proposals}
           accounts={@accounts}
           all={is_nil(@account)}
-          empty={empty_text(@transactions, @proposals)}
+          empty={empty_text(@accounts, @transactions, @proposals)}
+          empty_hint={empty_hint(@accounts)}
         />
         <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
         <Components.bulk
@@ -155,8 +132,16 @@ defmodule AbakusWeb.RegisterLive do
     """
   end
 
-  defp empty_text([], []), do: "Noch keine Buchungen"
-  defp empty_text(_transactions, _proposals), do: "Keine Buchungen in dieser Ansicht"
+  defp empty_text(accounts, _transactions, _proposals) when accounts == %{},
+    do: "Noch keine Konten"
+
+  defp empty_text(_accounts, [], []), do: "Noch keine Buchungen"
+  defp empty_text(_accounts, _transactions, _proposals), do: "Keine Buchungen in dieser Ansicht"
+
+  defp empty_hint(accounts) when accounts == %{},
+    do: "Lege mit „Konto hinzufügen“ ein Konto an, um Buchungen zu erfassen oder zu importieren."
+
+  defp empty_hint(_accounts), do: nil
 
   @impl true
   def mount(_params, _session, socket) do
@@ -166,7 +151,6 @@ defmodule AbakusWeb.RegisterLive do
        scope: nil,
        editor: nil,
        selected: MapSet.new(),
-       flag_menu: nil,
        reconcile: nil,
        reconciling: nil
      )}
@@ -452,34 +436,6 @@ defmodule AbakusWeb.RegisterLive do
   def handle_event("clear_selection", _params, socket),
     do: {:noreply, assign(socket, :selected, MapSet.new())}
 
-  def handle_event("flag_menu", %{"id" => id}, socket) do
-    case find(socket, id) do
-      nil -> {:noreply, socket}
-      %{id: id} when id == socket.assigns.flag_menu -> {:noreply, assign(socket, :flag_menu, nil)}
-      transaction -> {:noreply, assign(socket, :flag_menu, transaction.id)}
-    end
-  end
-
-  def handle_event("close_flag_menu", _params, socket),
-    do: {:noreply, assign(socket, :flag_menu, nil)}
-
-  def handle_event("set_flag", %{"id" => id, "flag" => flag} = params, socket)
-      when flag in ["" | @flags] do
-    socket
-    |> assign(:flag_menu, nil)
-    |> change(
-      id,
-      &Ledger.update_transaction(
-        socket.assigns.current_scope,
-        &1,
-        %{flag: blank_to_nil(flag)},
-        confirmed(params)
-      )
-    )
-  end
-
-  def handle_event("set_flag", _params, socket), do: {:noreply, socket}
-
   def handle_event(
         "reconcile_open",
         _params,
@@ -679,9 +635,6 @@ defmodule AbakusWeb.RegisterLive do
   defp toggled(:uncleared), do: :cleared
   defp toggled(:cleared), do: :uncleared
   defp toggled(:reconciled), do: :cleared
-
-  defp blank_to_nil(""), do: nil
-  defp blank_to_nil(flag), do: flag
 
   defp toggle(set, id), do: if(id in set, do: MapSet.delete(set, id), else: MapSet.put(set, id))
 

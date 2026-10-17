@@ -23,7 +23,6 @@ defmodule Abakus.Ledger.Transaction do
     field :memo, :string
     field :cleared, Ecto.Enum, values: [:uncleared, :cleared, :reconciled], default: :uncleared
     field :approved, :boolean, default: false
-    field :flag, Ecto.Enum, values: [:red, :orange, :yellow, :green, :blue, :purple]
 
     field :source, Ecto.Enum,
       values: [:manual, :ynab, :file, :bank, :api, :kasse, :depot],
@@ -60,8 +59,7 @@ defmodule Abakus.Ledger.Transaction do
     :counterpart_category_id,
     :memo,
     :cleared,
-    :approved,
-    :flag
+    :approved
   ]
 
   # Where a transaction came from and what it proposes to match are set once, on create.

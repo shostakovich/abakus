@@ -31,9 +31,13 @@ defmodule AbakusWeb.LayoutsTest do
              {["(prefers-color-scheme: dark)"], ["#202328"]}
            ]
 
-    [script] = document |> LazyHTML.query("head script[nonce]") |> Enum.to_list()
+    [script, device] = document |> LazyHTML.query("head script[nonce]") |> Enum.to_list()
     assert LazyHTML.text(script) =~ ~s|localStorage.getItem("setzkasten:theme")|
     assert LazyHTML.text(script) =~ ~s|localStorage.getItem("setzkasten:sidebar")|
+    assert LazyHTML.text(device) =~ ~s|localStorage.getItem("abakus:register-memo")|
+    assert LazyHTML.text(device) =~ ~s|setAttribute("data-register-memo", "hidden")|
+    assert LazyHTML.text(device) =~ ~s|localStorage.getItem("abakus:budget-calculation")|
+    assert LazyHTML.text(device) =~ ~s|setAttribute("data-budget-calculation", "shown")|
 
     assert document
            |> LazyHTML.query(

@@ -104,14 +104,13 @@ the rows of their caller's user (ADR 0019).
   changing a target keeps past months.
 - **Target snooze**: category, month; one per category and month (snoozing again returns the one there is)
 - **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
-  `reconciled`), approved (manual entries by default, imports not), flag (red, orange, yellow,
-  green, blue, purple), transfer counterpart (a transaction, or for a split's transfer its subtransaction), source
-  (`manual`, `ynab`, `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the
-  former YNAB-compatible API, `kasse` a share of a Kasse expense, `depot` a value change), matched transaction (see match
+  `reconciled`; UI "Vorgemerkt", "Gebucht", "Abgeglichen"), approved (manual entries by default, imports not),
+  transfer counterpart (a transaction, or for a split's transfer its subtransaction), source (`manual`, `ynab`,
+  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` a share of a Kasse expense, `depot` a value change), matched transaction (see match
   proposals), deleted at (soft delete; deleted transactions cannot be changed, only
   moved with their category into another). The register is what counts: transactions not deleted and no match
   proposal (`Ledger.in_register/1`).
-- **Reconciled lock**: the Ledger refuses any change that alters a reconciled transaction ("ist abgeschlossen"),
+- **Reconciled lock**: the Ledger refuses any change that alters a reconciled transaction ("ist abgeglichen"),
   leaving the reconciled state included, whether made on it directly or through a transfer: its counterpart's or a
   split's subtransaction's edit kept in step (amount, date, memo, account, category), released (payee no longer a
   transfer, subtransaction removed, turned into a split) or deleted with it. The caller passes
@@ -119,8 +118,8 @@ the rows of their caller's user (ADR 0019).
   `recategorize/4` (deleting a category) after asking; the UI asks first.
 - **Transfers**: a transaction or subtransaction is a transfer when its payee is a transfer payee; never to its own
   account, and a split is none as a whole. The Ledger alone creates and keeps the counterpart in the payee's
-  account (amount negated, same date and memo, payee = the other account's transfer payee; cleared, approved and
-  flag per side), moves it when payee or account change and removes it when the payee stops being a transfer
+  account (amount negated, same date and memo, payee = the other account's transfer payee; cleared and approved per
+  side), moves it when payee or account change and removes it when the payee stops being a transfer
   payee. Deleting either side deletes both, deleting a split deletes its subtransactions' counterparts; the
   counterpart of a subtransaction is changed and deleted in its split. Transfers to closed accounts are allowed.
 - **Category rule**, checked by `Ledger.create_transaction/2` and `update_transaction/4` with all accounts
@@ -156,9 +155,10 @@ Amounts are integers in cents.
 
 ## Budget rules
 
-YNAB's math as it is today. The method is YNAB's too: every euro gets assigned, and overspending is dealt with.
-The UI treats RTA > 0 and overspent categories as open tasks (green "assign" box, red pills on overspent categories
-whose popover covers them from a picked source category), and RTA = 0 with nothing overspent as the resting state.
+YNAB's math as it is today. The method is YNAB's too: every euro gets assigned, and overspending is dealt with. The UI
+treats RTA > 0 and overspent categories as open tasks (Zu verteilen in green on the neutral month card, red Verfügbar on
+overspent categories whose popover covers them from a picked source category), and RTA = 0 with nothing overspent as the
+resting state.
 
 - **Ready to Assign (RTA)** per month m, cumulative:
   RTA(m) = income up to and including m − assigned up to and including m − overspending of the months before m
@@ -168,7 +168,8 @@ whose popover covers them from a picked source category), and RTA = 0 with nothi
   is subtracted from that month's RTA. A negative available is never carried into the next month (YNAB 4 could).
   There are no credit cards, so YNAB's credit overspending and payment categories do not exist.
 - Shown as "Zu verteilen" in a month: RTA(m) − assigned in later months (as YNAB's UI does; the API's
-  `to_be_budgeted` is RTA(m) without that subtraction), with a line "assigned in future months"
+  `to_be_budgeted` is RTA(m) without that subtraction); the month card adds it up as YNAB 4 does: not assigned
+  and overspent last month, income and assigned this month, assigned in future months (open months only)
 - Both formulas reproduce YNAB's API numbers exactly (`to_be_budgeted`, category `balance`), checked against a
   real budget: every month and every category-month matched.
 - **Assignments are never refused**, as in YNAB: RTA can go below zero through assignments or overspending; then
@@ -191,8 +192,9 @@ whose popover covers them from a picked source category), and RTA = 0 with nothi
     API show it, but left out of the month's total and of filling); auto-assign fills the underfunded categories
     (all, or the selected one) from RTA (in budget order, snoozed ones skipped, as far as RTA reaches without what
     later months have assigned, in a closed month too)
-  - UI copied from YNAB: pill icons in the table; the category dialog shows the progress bar with its status
-    ("Finanziert", "Im Plan", "Noch 13,99 € nötig", "Überzogen")
+  - UI after YNAB: icons before Verfügbar in the table (clock, check, pause); the category dialog says the target
+    and its status in sentences ("Erfüllt.", "Im Plan.", "Noch 13,99 € diesen Monat.", "Überzogen um 2,00 €.",
+    "Pausiert im Oktober."), a bar only for a target by a date
   - other goal types (`TB`, `TBD`, `MF`, `DEBT`) only if needed later
 - All of this is one pure module (`Abakus.Budget`) computed from assignments and transactions; months are not
   stored as snapshots. It computes every month from the first with data to the month after the last with data,
@@ -265,7 +267,7 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 
 - One-shot via the YNAB API with a personal access token (`YNAB_TOKEN`): accounts, payees, category groups and
   categories with targets (`goal_*` fields), assignments per month, all transactions with splits and transfers,
-  cleared and reconciled state, flags; all from one request for the plan's export (`/plans/{plan_id}`)
+  cleared and reconciled state (YNAB's flags stay behind); all from one request for the plan's export (`/plans/{plan_id}`)
 - Repeatable until the switch: a re-import replaces the whole budget
   ([ADR 0002](../DECISIONS.md)); the run reports what differs from YNAB's numbers
 - The API keeps no target history: months before a target's creation month show it too but ask nothing, so a
@@ -278,7 +280,8 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
 ## Screens
 
 - **Budget**: multi-month view
-- **Konten**: account list, register, reconcile
+- **Konten**: the register of all accounts (the sidebar's Alle Konten) and of each account, reconcile;
+  "Konto hinzufügen" in Alle Konten
 - **Buchung**: transaction form (FAB on phones)
 - **Import & Sync**: tabs Bankdateien (file import with preview; the budget owner's), Belege (the receipt
   inbox and the PDF upload, its count on the tab and the sidebar entry; users with a portfolio) and Portfolio

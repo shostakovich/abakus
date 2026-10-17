@@ -6,7 +6,7 @@ defmodule Abakus.Ledger.ReconciledTest do
   alias Abakus.Ledger
   alias Abakus.Ledger.Transaction
 
-  @counterpart "betrifft eine abgeschlossene Gegenbuchung"
+  @counterpart "betrifft eine abgeglichene Gegenbuchung"
 
   setup do
     %{
@@ -59,9 +59,9 @@ defmodule Abakus.Ledger.ReconciledTest do
     test "changes only when confirmed", c do
       transaction = reconcile(transaction_fixture(account_id: c.checking.id, memo: "Miete"))
 
-      for attrs <- [%{memo: "Pacht"}, %{amount: 1}, %{flag: :red}, %{account_id: c.cash.id}] do
+      for attrs <- [%{memo: "Pacht"}, %{amount: 1}, %{account_id: c.cash.id}] do
         assert {:error, changeset} = Ledger.update_transaction(budget_scope(), transaction, attrs)
-        assert %{cleared: ["ist abgeschlossen"]} = errors_on(changeset)
+        assert %{cleared: ["ist abgeglichen"]} = errors_on(changeset)
       end
 
       assert reload(transaction).memo == "Miete"
@@ -78,7 +78,7 @@ defmodule Abakus.Ledger.ReconciledTest do
       assert {:error, changeset} =
                Ledger.update_transaction(budget_scope(), transaction, %{cleared: :cleared})
 
-      assert %{cleared: ["ist abgeschlossen"]} = errors_on(changeset)
+      assert %{cleared: ["ist abgeglichen"]} = errors_on(changeset)
 
       assert {:ok, %Transaction{cleared: :cleared}} =
                Ledger.update_transaction(budget_scope(), transaction, %{cleared: :cleared},
@@ -96,7 +96,7 @@ defmodule Abakus.Ledger.ReconciledTest do
       transaction = reconcile(transaction_fixture(account_id: c.checking.id))
 
       assert {:error, changeset} = Ledger.delete_transaction(budget_scope(), transaction)
-      assert %{cleared: ["ist abgeschlossen"]} = errors_on(changeset)
+      assert %{cleared: ["ist abgeglichen"]} = errors_on(changeset)
       refute reload(transaction).deleted_at
 
       assert {:ok, %Transaction{deleted_at: %DateTime{}}} =
@@ -132,7 +132,10 @@ defmodule Abakus.Ledger.ReconciledTest do
       %{outflow: outflow, inflow: inflow} = transfer(c)
 
       assert {:ok, _} =
-               Ledger.update_transaction(budget_scope(), outflow, %{cleared: :cleared, flag: :red})
+               Ledger.update_transaction(budget_scope(), outflow, %{
+                 cleared: :cleared,
+                 approved: false
+               })
 
       assert reload(inflow) == inflow
     end

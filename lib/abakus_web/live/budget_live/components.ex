@@ -1,7 +1,6 @@
 defmodule AbakusWeb.BudgetLive.Components do
   @moduledoc """
-  The budget view's parts: month strip, month cards (the month bar on narrow screens) and the table's rows. The
-  focus month shows pills; the other months stay quiet.
+  The budget view's parts: month strip, month cards (the month bar on narrow screens) and the table's rows.
   """
 
   use AbakusWeb, :html
@@ -11,7 +10,7 @@ defmodule AbakusWeb.BudgetLive.Components do
   alias Abakus.Budget.Month
   alias Abakus.Money
   alias Abakus.Names
-  alias AbakusWeb.BudgetLive.{CategoryEditor, MonthDetails, Status, Window}
+  alias AbakusWeb.BudgetLive.{CategoryEditor, Status, Window}
 
   @doc "The budget's path for the first month shown."
   def budget_path(first), do: ~p"/budget?#{[month: Window.param(first)]}"
@@ -65,125 +64,98 @@ defmodule AbakusWeb.BudgetLive.Components do
   end
 
   attr :month, Month, required: true
-  attr :future, :list, required: true, doc: "from `MonthDetails.future/2`"
   attr :focus, :boolean, required: true
   attr :current, Date, required: true
 
   @doc """
-  A month's card, as compact as Actual's: Zu verteilen on a fill that carries its state, a sign while later months
-  are not covered, and Verteilen. The rest opens in the month's popover.
+  A month's card, as YNAB 4's month header: the month and its Verteilen menu, YNAB 4's calculation (shown or hidden
+  per device) and Zu verteilen, which shows and hides the calculation in every month.
   """
   def month_card(assigns) do
-    assigns =
-      assign(assigns,
-        key: Window.param(assigns.month.month),
-        tone: elem(Status.ready(assigns.month), 0)
-      )
+    assigns = assign(assigns, :key, Window.param(assigns.month.month))
 
     ~H"""
     <div
       id={"month-#{@key}"}
-      class={["app-mcard", card_class(@tone), @focus && "is-focus"]}
+      class={["app-mcard", @focus && "is-focus"]}
       aria-current={@month.month == @current && "date"}
       phx-click={not @focus && "focus"}
       phx-value-month={@key}
     >
-      <.month_info key={@key} focus={@focus}>
+      <div class="app-mhead">
         <span class="app-mname">{title(@month.month, @current)}</span>
-        <.ready_to_assign month={@month} key={@key} focus={@focus} />
-      </.month_info>
-      <.distribute month={@month} key={@key} primary={@focus} />
+        <.distribute month={@month} key={@key} />
+      </div>
+      <.calculation month={@month} key={@key} />
+      <.ready_to_assign month={@month} key={@key} focus={@focus} />
     </div>
-    <MonthDetails.details
-      id={"month-details-#{@key}"}
-      anchor={"month-info-#{@key}"}
-      month={@month}
-      future={@future}
-    />
     """
   end
 
   attr :month, Month, required: true
-  attr :future, :list, required: true
   attr :window, Window, required: true
 
   @doc """
-  The focus month on narrow screens, as a bar that stays at the top: the month with arrows to step, and
-  Zu verteilen with its menu on a band like the month card.
+  The focus month on narrow screens, as a bar that stays at the top: the parts of the month card in the same order,
+  with arrows to step through the months.
   """
   def month_bar(assigns) do
-    assigns =
-      assign(assigns,
-        key: Window.param(assigns.month.month),
-        tone: elem(Status.ready(assigns.month), 0)
-      )
+    assigns = assign(assigns, :key, Window.param(assigns.month.month))
 
     ~H"""
     <div id="month-bar" class="app-mbar">
-      <div class="app-mbar-nav">
-        <.button
-          variant={:ghost}
-          size={:sm}
-          icon="chevron-left"
-          icon_only
-          label="Früher"
-          disabled={not @window.earlier}
-          phx-click="step"
-          phx-value-by="-1"
-        />
+      <div class="app-mhead">
         <span class="app-mname">{month_year(@month.month)}</span>
-        <.button
-          variant={:ghost}
-          size={:sm}
-          icon="chevron-right"
-          icon_only
-          label="Später"
-          disabled={not @window.later}
-          phx-click="step"
-          phx-value-by="1"
-        />
+        <div class="app-mbar-nav">
+          <.button
+            variant={:ghost}
+            size={:sm}
+            icon="chevron-left"
+            icon_only
+            label="Früher"
+            disabled={not @window.earlier}
+            phx-click="step"
+            phx-value-by="-1"
+          />
+          <.button
+            variant={:ghost}
+            size={:sm}
+            icon="chevron-right"
+            icon_only
+            label="Später"
+            disabled={not @window.later}
+            phx-click="step"
+            phx-value-by="1"
+          />
+          <.distribute month={@month} key={@key} />
+        </div>
       </div>
-      <div id={"month-#{@key}"} class={["app-mcard app-mbar-card", card_class(@tone)]}>
-        <.month_info key={@key} focus>
-          <.ready_to_assign month={@month} key={@key} focus />
-        </.month_info>
-        <.distribute month={@month} key={@key} primary />
-      </div>
-      <MonthDetails.details
-        id={"month-details-#{@key}"}
-        anchor={"month-info-#{@key}"}
-        month={@month}
-        future={@future}
-      />
+      <.calculation month={@month} key={@key} />
+      <.ready_to_assign month={@month} key={@key} focus />
     </div>
-    """
-  end
-
-  attr :key, :string, required: true
-  attr :focus, :boolean, required: true
-  slot :inner_block, required: true
-
-  defp month_info(assigns) do
-    assigns = assign(assigns, :open, show_popover("month-details-#{assigns.key}"))
-
-    ~H"""
-    <button
-      id={"month-info-#{@key}"}
-      type="button"
-      class="app-minfo"
-      aria-haspopup="dialog"
-      phx-click={
-        if @focus, do: @open, else: JS.push("focus", value: %{month: @key}) |> JS.concat(@open)
-      }
-    >
-      {render_slot(@inner_block)}
-    </button>
     """
   end
 
   attr :month, Month, required: true
   attr :key, :string, required: true
-  attr :primary, :boolean, default: false
+
+  defp calculation(assigns) do
+    ~H"""
+    <dl id={"calc-#{@key}"} class="app-mcalc">
+      <div :for={{line, index} <- Enum.with_index(Status.calculation(@month))}>
+        <dt>{line.label}</dt>
+        <dd><.amount value={line.value} signed={index > 0} class={tone_class(line.tone)} /></dd>
+      </div>
+      <div :for={line <- Status.uncovered(@month)} class="app-mcalc-warn">
+        <dt>{line.label}</dt>
+        <dd><.amount value={line.value} signed /></dd>
+      </div>
+    </dl>
+    """
+  end
+
+  attr :month, Month, required: true
+  attr :key, :string, required: true
 
   defp distribute(assigns) do
     assigns =
@@ -196,18 +168,21 @@ defmodule AbakusWeb.BudgetLive.Components do
     <.dropdown
       :if={@free or @assigned}
       id={"distribute-#{@key}"}
-      trigger_class={["btn-sm", @primary && @free && "btn-primary"]}
+      label="Verteilen"
+      variant={:ghost}
+      chevron={false}
+      trigger_class="btn-sm btn-square"
       class="app-distribute"
       align={:end}
     >
-      <:trigger>Verteilen</:trigger>
+      <:trigger><.icon name="ellipsis-vertical" /></:trigger>
       <:item
         :if={@free and @month.underfunded > 0}
         id={"distribute-underfunded-#{@key}"}
         icon="target"
         on_click={JS.push("auto", value: %{kind: "underfunded", month: @key})}
       >
-        Unterfinanzierte füllen
+        Unterfinanzierte füllen ({Money.euros(@month.underfunded)})
       </:item>
       <:item
         :if={@free}
@@ -235,10 +210,6 @@ defmodule AbakusWeb.BudgetLive.Components do
     """
   end
 
-  defp card_class(:success), do: "app-mcard-success"
-  defp card_class(:error), do: "app-mcard-error"
-  defp card_class(_tone), do: nil
-
   defp title(%Date{year: year} = month, %Date{year: year}), do: month_name(month)
   defp title(month, _current), do: month_year(month)
 
@@ -246,25 +217,34 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :key, :string, required: true
   attr :focus, :boolean, required: true
 
+  # aria-expanded follows the device's choice, which only the browser knows: the hook sets it.
   defp ready_to_assign(assigns) do
+    assigns = assign(assigns, :ready, Status.ready(assigns.month))
+
     ~H"""
-    <.amount
-      id={"ready-#{@key}"}
-      value={@month.ready_to_assign_shown}
-      animate={@focus}
-      class="app-rta-value"
-    />
-    <span class="app-rta-label">
-      {elem(Status.ready(@month), 1)}
-      <span :if={@month.uncovered != []} id={"uncovered-#{@key}"} class="app-uncovered">
-        <.icon name="triangle-alert" />nicht gedeckt
-      </span>
-    </span>
+    <button
+      id={"calc-toggle-#{@key}"}
+      type="button"
+      class="app-rta"
+      aria-expanded="false"
+      aria-controls={"calc-#{@key}"}
+      phx-hook="CalculationToggle"
+      phx-mounted={JS.ignore_attributes("aria-expanded")}
+    >
+      <span class="app-rta-label">{elem(@ready, 1)}<.icon name="chevron-down" /></span>
+      <.amount
+        id={"ready-#{@key}"}
+        value={@month.ready_to_assign_shown}
+        animate={@focus}
+        class={["app-rta-value", tone_class(elem(@ready, 0))]}
+      />
+    </button>
     """
   end
 
   @doc "The text colour of a tone (`Status`): only the ink tokens colour text."
   def tone_class(:error), do: "text-error-ink"
+  def tone_class(:warning), do: "text-warning-ink"
   def tone_class(:success), do: "text-success-ink"
   def tone_class(:muted), do: "text-base-content/70"
   def tone_class(_tone), do: nil
@@ -368,9 +348,6 @@ defmodule AbakusWeb.BudgetLive.Components do
             ]}
           >
             {totals[field] && Money.amount(totals[field])}
-            <span :if={field == :available and only_activity?(totals)} class="app-alt">
-              {Money.amount(totals.activity)}
-            </span>
           </td>
         <% end %>
       </tr>
@@ -382,10 +359,6 @@ defmodule AbakusWeb.BudgetLive.Components do
   defp group_columns(months, totals),
     do: for(month <- months, do: {Window.param(month), Map.get(totals, month, %{})})
 
-  # Income has activity alone; phones, which hide that column, show it under Verfügbar.
-  defp only_activity?(totals),
-    do: Map.has_key?(totals, :activity) and not Map.has_key?(totals, :available)
-
   defp total_class(_field, nil), do: nil
   defp total_class(_field, 0), do: "app-zero"
   defp total_class(:available, total) when total < 0, do: "text-error-ink"
@@ -396,7 +369,6 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :cells, :map, required: true, doc: "the category's `Abakus.Budget.CategoryMonth` per month"
   attr :months, :list, required: true
   attr :focus, Date, required: true
-  attr :current, Date, required: true
 
   attr :invalid, :any,
     required: true,
@@ -407,11 +379,12 @@ defmodule AbakusWeb.BudgetLive.Components do
     doc: "false for the uncategorised row, which takes no assignments and links to all accounts"
 
   attr :compact, :boolean, default: false, doc: "on phones, without the pencil"
+  attr :budgeting, :any, required: true, doc: "the months being budgeted (`Status.budgeting?/2`)"
 
   @doc """
-  A category on one line: name, then per month an assign input, activity and available (a pill in the focus
-  month, which opens the popover). The name, and on desktop a pencil shown on hover and focus, open the
-  category's dialog (name, target, delete).
+  A category on one line: name, then per month an assign input, activity and available, which opens the popover
+  for that month. Zero assigned and activity stay blank. The name, and on desktop a pencil shown on hover and
+  focus, open the category's dialog (name, target, delete).
   """
   def category_row(assigns) do
     assigns = assign(assigns, :parts, Names.split_emoji(assigns.name))
@@ -471,8 +444,8 @@ defmodule AbakusWeb.BudgetLive.Components do
           <input
             :if={@assignable}
             id={"assign-#{@id}-#{key}"}
-            class={["app-assign", cell.assigned == 0 && "app-zero"]}
-            value={typed || Money.amount(cell.assigned)}
+            class="app-assign"
+            value={typed || blank_zero(cell.assigned)}
             inputmode="decimal"
             autocomplete="off"
             aria-label={"#{@name}, zugewiesen im #{month_year(month)}"}
@@ -484,22 +457,15 @@ defmodule AbakusWeb.BudgetLive.Components do
             phx-value-month={key}
           />
         </td>
-        <td
-          id={"activity-#{@id}-#{key}"}
-          class={[
-            "app-num",
-            if(cell.activity == 0, do: "app-zero", else: "app-quiet")
-          ]}
-        >
-          {Money.amount(cell.activity)}
+        <td id={"activity-#{@id}-#{key}"} class="app-num app-quiet">
+          {blank_zero(cell.activity)}
         </td>
         <td id={"available-#{@id}-#{key}"} class="app-num">
-          <.pill
-            :if={month == @focus}
+          <.available
             cell={cell}
-            id={@assignable && "pill-#{@id}-#{key}"}
+            budgeting={month in @budgeting}
+            id={@assignable && "available-button-#{@id}-#{key}"}
           />
-          <.quiet :if={month != @focus} cell={cell} current={@current} />
         </td>
       <% end %>
     </tr>
@@ -513,103 +479,59 @@ defmodule AbakusWeb.BudgetLive.Components do
   defp typed({id, month, typed}, id, month), do: typed
   defp typed(_invalid, _id, _month), do: nil
 
-  attr :cell, :any, required: true
-  attr :id, :any, default: nil, doc: "set for a pill that opens the popover"
+  defp blank_zero(0), do: nil
+  defp blank_zero(amount), do: Money.amount(amount)
 
-  @doc "A cell's available amount as a pill coloured by its status."
-  def pill(assigns) do
-    assigns = assign(assigns, :status, Status.pill(assigns.cell))
+  attr :cell, :any, required: true
+  attr :budgeting, :boolean, required: true, doc: "whether its month is being budgeted"
+  attr :id, :any, default: nil, doc: "set for a cell that opens the popover"
+
+  @doc "A cell's available amount, coloured and marked by its status (`Status.available/2`)."
+  def available(assigns) do
+    assigns = assign(assigns, :status, Status.available(assigns.cell, assigns.budgeting))
 
     ~H"""
     <button
       :if={@id}
       id={@id}
       type="button"
-      class={["app-pill", pill_class(@status)]}
-      aria-label={pill_label(@status, @cell)}
+      class={["app-avail", available_class(@status.tone)]}
+      aria-label={available_label(@status, @cell)}
       phx-click="open_popover"
-      phx-value-kind="pill"
+      phx-value-kind="available"
       phx-value-category={@cell.category_id}
+      phx-value-month={Window.param(@cell.month)}
       phx-value-anchor={@id}
     >
-      <.pill_content status={@status} cell={@cell} />
+      <.available_content status={@status} cell={@cell} />
     </button>
-    <span :if={!@id} class={["app-pill", pill_class(@status)]}>
-      <.pill_content status={@status} cell={@cell} />
-      <span :if={@status != :zero && @status.label} class="sr-only">{@status.label}</span>
+    <span :if={!@id} class={["app-avail", available_class(@status.tone)]}>
+      <.available_content status={@status} cell={@cell} />
+      <span :if={@status.label} class="sr-only">{@status.label}</span>
     </span>
     """
   end
 
-  attr :status, :any, required: true
+  attr :status, :map, required: true
   attr :cell, :any, required: true
 
-  defp pill_content(%{status: :zero} = assigns), do: ~H"{Money.amount(0)}"
-
-  defp pill_content(assigns) do
+  defp available_content(assigns) do
     ~H"""
-    <.icon :if={@status.icon} name={@status.icon} />{Money.euros(@cell.available)}
+    <.icon :if={@status.icon} name={@status.icon} class={icon_class(@status.icon)} />{Money.amount(
+      @cell.available
+    )}
     """
   end
 
-  defp pill_class(:zero), do: "app-pill-zero"
-  defp pill_class(%{tone: tone}), do: "app-pill-#{tone}"
+  defp available_class(:muted), do: "app-zero"
+  defp available_class(tone), do: tone_class(tone)
 
-  defp pill_label(status, cell) do
-    state = if status != :zero && status.label, do: ", #{status.label}"
+  defp icon_class("circle-check"), do: "text-success-ink"
+  defp icon_class("pause"), do: "text-base-content/70"
+  defp icon_class(_icon), do: nil
+
+  defp available_label(status, cell) do
+    state = if status.label, do: ", #{status.label}"
     "Verfügbar #{Money.euros(cell.available)}#{state}, Geld verschieben"
-  end
-
-  attr :cell, :any, required: true
-  attr :current, Date, required: true
-
-  defp quiet(assigns) do
-    assigns = assign(assigns, :status, Status.quiet(assigns.cell, assigns.current))
-
-    ~H"""
-    <span class={quiet_class(@status.tone)}>
-      <span :if={@status.dot} class="app-udot" title="unterfinanziert">
-        <span class="sr-only">unterfinanziert</span>
-      </span>{Money.amount(
-        @cell.available
-      )}
-    </span>
-    """
-  end
-
-  defp quiet_class(:muted), do: "app-zero"
-  defp quiet_class(tone), do: tone_class(tone)
-
-  attr :rows, :list, required: true, doc: "income per payee: `%{payee, amounts}`"
-  attr :months, :list, required: true, doc: "the shown `Abakus.Budget.Month`s"
-
-  @doc "The income group: income per payee in the activity column."
-  def income(assigns) do
-    assigns =
-      assigns
-      |> assign(:totals, Map.new(assigns.months, &{&1.month, %{activity: &1.income}}))
-      |> assign(:months, Enum.map(assigns.months, & &1.month))
-
-    ~H"""
-    <.group id="group-income" name="💰 Einnahmen" months={@months} totals={@totals}>
-      <tr :for={row <- @rows} class="app-row app-inc">
-        <td class="app-cat">
-          <div class="app-catcell">
-            <span class="app-emoji" aria-hidden="true"></span>
-            <span class="app-catbtn">{row.payee || "Ohne Empfänger"}</span>
-          </div>
-        </td>
-        <%= for value <- Enum.map(@months, &Map.get(row.amounts, &1, 0)) do %>
-          <td class="app-ms"></td>
-          <td class={["app-num", if(value == 0, do: "app-zero", else: "app-quiet")]}>
-            {Money.amount(value)}
-          </td>
-          <td class="app-num app-quiet">
-            <span class="app-alt">{Money.amount(value)}</span>
-          </td>
-        <% end %>
-      </tr>
-    </.group>
-    """
   end
 end

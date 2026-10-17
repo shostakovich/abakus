@@ -136,8 +136,7 @@ defmodule Abakus.YnabImportTest do
       assert {saving.amount, saving.cleared, saving.memo} == {-20_000, :cleared, "Sparen"}
       counterpart = Repo.get!(Transaction, saving.transfer_transaction_id)
 
-      assert {counterpart.account_id, counterpart.cleared, counterpart.flag} ==
-               {tagesgeld.id, :uncleared, :purple}
+      assert {counterpart.account_id, counterpart.cleared} == {tagesgeld.id, :uncleared}
 
       assert origins(saving) == ["t08"] and origins(counterpart) == ["t09"]
 
@@ -149,7 +148,7 @@ defmodule Abakus.YnabImportTest do
       assert origins(part_counterpart) == ["t11"]
 
       investing = booking(giro, ~D[2026-09-20])
-      assert {investing.category_id, investing.flag} == {category("📈 Sparplan").id, :yellow}
+      assert investing.category_id == category("📈 Sparplan").id
       assert Repo.get!(Transaction, investing.transfer_transaction_id).account_id == depot.id
 
       assert Repo.all(from t in Transaction, select: t.source, distinct: true) == [:ynab]
@@ -502,7 +501,7 @@ defmodule Abakus.YnabImportTest do
         |> Repo.preload([:subtransactions, :origins])
         |> Enum.map(fn t ->
           {accounts[t.account_id], t.date, t.amount, payees[t.payee_id],
-           categories[t.category_id], t.memo, t.cleared, t.approved, t.flag, t.source,
+           categories[t.category_id], t.memo, t.cleared, t.approved, t.source,
            Enum.map(t.origins, & &1.external_id),
            Enum.map(
              t.subtransactions,

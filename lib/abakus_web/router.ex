@@ -58,6 +58,8 @@ defmodule AbakusWeb.Router do
   scope "/budget", AbakusWeb do
     pipe_through [:browser, :require_authenticated_user, :budget]
 
+    get "/accounts", PageController, :accounts
+
     live_session :budget,
       on_mount: [
         {AbakusWeb.UserAuth, :require_authenticated},
@@ -67,7 +69,6 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.Depot.Sidebar, :budget}
       ] do
       live "/", BudgetLive
-      live "/accounts", AccountsLive
       live "/accounts/all", RegisterLive, :all
       live "/accounts/:id", RegisterLive, :show
       live "/import", ImportLive

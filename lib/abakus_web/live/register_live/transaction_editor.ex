@@ -2,19 +2,20 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   @moduledoc """
   Edits a transaction as YNAB does, for a new one and an existing one alike. On desktops (`layout: :row`) it
   replaces the transaction's rows in the register on one line: inputs in every column, Cancel and Save (Approve for
-  one waiting for approval) where approve and C stand, Enter saves and Escape cancels; a split's subtransactions as
+  one waiting for approval) where approve and status stand, Enter saves and Escape cancels; a split's subtransactions as
   rows below, each with a payee field only where it differs from the transaction's. Its root is a `<tbody>`, the
   inputs outside the first row belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet
   from the bottom with the amount first. The form's state is `AbakusWeb.TransactionForm` params.
 
-  Payee and category are Setzkasten comboboxes; a choice arrives as a change of `payee_pick` (with `payee_new` for
-  a payee typed anew) or `category_pick`, "Aufteilen" among the categories splits the transaction. Transfers are picked as payees, the other open accounts above the payees, in a
-  split's subtransactions too. A payee suggests its last category, and a suggestion goes again when the payee
-  changes; a chosen category stays. A transfer between a budget and a tracking account takes a category and
-  suggests the one last used between the two. Changing or deleting a reconciled transaction, or one whose
-  counterpart is, asks first. A transaction linked to a Kasse expense (`expense_id`) links to it and keeps account,
-  date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006). So does whatever
-  the Depot booked (`source: :depot`): a value change, or a transaction linked to a Depot transaction (ADR 0018).
+  Payee and category are Setzkasten comboboxes; a choice arrives as a change of `payee_pick` (with `payee_new` for a
+  payee typed anew) or `category_pick`, "Aufteilen" among the categories splits the transaction. Transfers are picked as
+  payees, the other open accounts above the payees, in a split's subtransactions too. A payee suggests its last
+  category, and a suggestion goes again when the payee changes; a chosen category stays. A transfer between a budget and
+  a tracking account takes a category and suggests the one last used between the two. Changing or deleting a reconciled
+  transaction, or one whose counterpart is, asks first. A transaction linked to a Kasse expense (`expense_id`) links to
+  it and keeps account, date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006).
+  So does whatever the Depot booked (`source: :depot`): a value change, or a transaction linked to a Depot transaction
+  (ADR 0018).
 
   Tells its LiveView `{TransactionEditor, :done, message}` once the transaction is saved or deleted; the events
   `cancel_edit` (Cancel, Escape) go to the LiveView itself.
@@ -213,7 +214,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
               class="-ms-4 text-error-ink"
               confirm={
                 if @locked,
-                  do: "Diese Buchung ist abgeschlossen. Trotzdem löschen?",
+                  do: "Diese Buchung ist abgeglichen. Trotzdem löschen?",
                   else: "Buchung löschen?"
               }
               phx-click="delete"
@@ -479,8 +480,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         icon="check"
         icon_only
         label={@save_label}
-        confirm={if @locked, do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"}
-        confirm_text="Der abgeglichene Saldo kann sich dadurch ändern."
+        confirm={if @locked, do: "Diese Buchung ist abgeglichen. Trotzdem ändern?"}
+        confirm_text="Der gebuchte Saldo kann sich dadurch ändern."
         confirm_label="Ändern"
       />
     </.tooltip>
@@ -496,8 +497,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       type="submit"
       variant={:primary}
       phx-disable-with="Speichern …"
-      confirm={if @locked, do: "Diese Buchung ist abgeschlossen. Trotzdem ändern?"}
-      confirm_text="Der abgeglichene Saldo kann sich dadurch ändern."
+      confirm={if @locked, do: "Diese Buchung ist abgeglichen. Trotzdem ändern?"}
+      confirm_text="Der gebuchte Saldo kann sich dadurch ändern."
       confirm_label="Ändern"
     >
       {save_label(@transaction)}
@@ -1061,7 +1062,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
          {:ok, attrs} <- register_fields(attrs, socket.assigns),
          {:ok, _transaction} <-
            write(socket.assigns.current_scope, original, attrs, confirmed(event)) do
-      {:noreply, done(socket, if(original, do: "Gespeichert.", else: "Gebucht."))}
+      {:noreply, done(socket, "Gespeichert.")}
     else
       {:error, error} -> {:noreply, assign(socket, params: params, error: error_message(error))}
     end

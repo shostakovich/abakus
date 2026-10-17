@@ -68,7 +68,7 @@ defmodule Abakus.Ledger.TransfersTest do
 
   describe "creating a transfer" do
     test "creates the counterpart in the other account", c do
-      assert {:ok, outflow} = transfer(c.checking, c.savings, memo: "Sparen", flag: :red)
+      assert {:ok, outflow} = transfer(c.checking, c.savings, memo: "Sparen")
       inflow = counterpart(outflow)
 
       assert %Transaction{
@@ -78,7 +78,6 @@ defmodule Abakus.Ledger.TransfersTest do
                category_id: nil,
                cleared: :uncleared,
                approved: true,
-               flag: nil,
                source: :manual
              } = inflow
 
@@ -179,16 +178,16 @@ defmodule Abakus.Ledger.TransfersTest do
       assert_balanced()
     end
 
-    test "cleared state, approval and flag belong to each side", c do
+    test "cleared state and approval belong to each side", c do
       {:ok, outflow} = transfer(c.checking, c.savings)
 
       {:ok, _} =
         Ledger.update_transaction(budget_scope(), counterpart(outflow), %{
           cleared: :cleared,
-          flag: :green
+          approved: false
         })
 
-      assert %Transaction{cleared: :uncleared, flag: nil} = reload(outflow)
+      assert %Transaction{cleared: :uncleared, approved: true} = reload(outflow)
     end
 
     test "another transfer payee moves the counterpart", c do

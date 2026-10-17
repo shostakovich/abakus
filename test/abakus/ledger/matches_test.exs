@@ -111,7 +111,7 @@ defmodule Abakus.Ledger.MatchesTest do
                Map.put(attrs, :matched_transaction_id, reconciled.id)
              )
 
-    assert %{matched_transaction_id: ["ist abgeschlossen"]} = errors_on(changeset)
+    assert %{matched_transaction_id: ["ist abgeglichen"]} = errors_on(changeset)
   end
 
   test "deleting a proposal frees its transaction for the next one", c do
@@ -247,7 +247,7 @@ defmodule Abakus.Ledger.MatchesTest do
     {:ok, _} = Ledger.update_transaction(budget_scope(), c.manual, %{cleared: :reconciled})
 
     assert {:error, changeset} = Ledger.accept_match(budget_scope(), proposal)
-    assert %{matched_transaction_id: ["ist abgeschlossen"]} = errors_on(changeset)
+    assert %{matched_transaction_id: ["ist abgeglichen"]} = errors_on(changeset)
 
     {:ok, _} =
       Ledger.update_transaction(budget_scope(), c.manual, %{cleared: :cleared},
@@ -635,7 +635,7 @@ defmodule Abakus.Ledger.MatchesTest do
       )
 
       assert {:error, changeset} = Ledger.accept_matches(budget_scope(), [proposal, other])
-      assert %{matched_transaction_id: ["ist abgeschlossen"]} = errors_on(changeset)
+      assert %{matched_transaction_id: ["ist abgeglichen"]} = errors_on(changeset)
       assert length(Ledger.list_match_proposals(budget_scope(), c.account)) == 2
     end
   end

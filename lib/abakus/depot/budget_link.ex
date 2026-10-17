@@ -13,7 +13,7 @@ defmodule Abakus.Depot.BudgetLink do
 
   Only transactions dated on or after the link's start date count; a transfer out of a portfolio's cash in another
   currency counts with the euros the budget account received. The Depot leads amount, date, payee and account,
-  rewriting only what it changed since it wrote them last; category, memo, flag, cleared state and approval are the
+  rewriting only what it changed since it wrote them last; category, memo, cleared state and approval are the
   register's after the first write. `sync/1` runs in the database transaction of every Depot
   write, so a removed Depot transaction removes its linked one.
   """

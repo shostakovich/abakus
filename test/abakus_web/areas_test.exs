@@ -50,7 +50,7 @@ defmodule AbakusWeb.AreasTest do
     end
 
     test "opens the area used last, kept in the session", %{conn: conn} do
-      conn = get(conn, ~p"/budget/accounts")
+      conn = get(conn, ~p"/budget/accounts/all")
       assert get_session(conn, :area) == "finanzen"
 
       assert conn |> recycle() |> get(~p"/") |> redirected_to() == ~p"/budget"

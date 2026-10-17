@@ -11,7 +11,7 @@ defmodule Abakus.Ledger do
 
   Deleting either side of a transfer deletes both; deleting a split deletes the counterparts of its
   subtransactions. The counterpart of a subtransaction belongs to its split: it is changed and deleted there, so
-  only its own fields (cleared, approved, flag, category) change on it directly.
+  only its own fields (cleared, approved, category) change on it directly.
 
   A reconciled transaction is locked: the Ledger refuses any change to it, made directly, through a transfer
   (a counterpart kept in step, moved, released or deleted) or by moving its category (`recategorize/4`), unless the
@@ -552,34 +552,6 @@ defmodule Abakus.Ledger do
     sum_by_key(Repo.all(transactions) ++ Repo.all(subtransactions))
   end
 
-  @doc """
-  What the budget accounts' register adds up to in one category per `{payee_name, month}` (`nil` without a payee):
-  a split by its subtransactions, each under its own payee or else the split's.
-  """
-  def category_activity_by_payee(%Scope{} = scope, category_id) do
-    transactions =
-      from t in in_register(scope),
-        join: a in assoc(t, :account),
-        left_join: p in assoc(t, :payee),
-        where: a.kind in ^Account.budget_kinds() and t.category_id == ^category_id,
-        group_by: [p.name, month(t.date)],
-        select: {{p.name, month(t.date)}, sum(t.amount)}
-
-    subtransactions =
-      from s in Subtransaction,
-        join: t in subquery(in_register(scope)),
-        on: t.id == s.transaction_id,
-        join: a in Account,
-        on: a.id == t.account_id,
-        left_join: p in Payee,
-        on: p.id == coalesce(s.payee_id, t.payee_id),
-        where: a.kind in ^Account.budget_kinds() and s.category_id == ^category_id,
-        group_by: [p.name, month(t.date)],
-        select: {{p.name, month(t.date)}, sum(s.amount)}
-
-    sum_by_key(Repo.all(transactions) ++ Repo.all(subtransactions))
-  end
-
   @doc "Whether a reconciled transaction, not deleted, has the category, itself or in a split line."
   def reconciled_in_category?(%Scope{} = scope, category_id) do
     Repo.exists?(
@@ -721,7 +693,7 @@ defmodule Abakus.Ledger do
 
   @doc """
   Updates a transaction as stored (the struct only names it) and its counterparts. A deleted transaction cannot
-  be changed; the counterpart of a split's subtransaction changes only its own fields (cleared, approved, flag,
+  be changed; the counterpart of a split's subtransaction changes only its own fields (cleared, approved,
   category), the rest in its split. When the account changes, the origins move along. A change that alters a
   reconciled transaction or counterpart needs `reconciled: :confirmed`. The payee may be given by name, as for
   `create_transaction/2`.
@@ -845,8 +817,8 @@ defmodule Abakus.Ledger do
     end
   end
 
-  @reconciled "ist abgeschlossen"
-  @counterpart_reconciled "betrifft eine abgeschlossene Gegenbuchung"
+  @reconciled "ist abgeglichen"
+  @counterpart_reconciled "betrifft eine abgeglichene Gegenbuchung"
 
   # The counterpart's category is checked where it would change.
   defp validate_reconciled(

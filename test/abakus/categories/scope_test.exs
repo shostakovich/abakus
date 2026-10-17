@@ -43,7 +43,6 @@ defmodule Abakus.Categories.ScopeTest do
     assert Categories.target_for(c.other, c.category, @october) == nil
     refute Categories.target_snoozed?(c.other, c.category, @october)
     refute Categories.reconciled_transactions?(c.other, c.category)
-    assert Categories.income_by_payee(c.other) == %{}
 
     assert %{categories: [], activity: activity, assigned: assigned, targets: targets} =
              Categories.budget(c.other)
