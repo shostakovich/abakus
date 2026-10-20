@@ -573,22 +573,16 @@ defmodule AbakusWeb.RegisterLive.Components do
           </tr>
         </thead>
         <.live_component :if={@edited == :new} module={TransactionEditor} {@editor.assigns} />
-        <%= for transaction <- Rows.with_proposals(@rows, @proposals) do %>
-          <%= cond do %>
-            <% transaction.matched_transaction_id -> %>
-              <.proposal_row proposal={transaction} accounts={@accounts} columns={@columns} />
-            <% @edited == transaction.id -> %>
-              <.live_component module={TransactionEditor} {@editor.assigns} />
-            <% true -> %>
-              <.row
-                transaction={transaction}
-                accounts={@accounts}
-                columns={@columns}
-                selected={transaction.id in @selected}
-                running={@running}
-              />
-          <% end %>
-        <% end %>
+        <.entry
+          :for={transaction <- Rows.with_proposals(@rows, @proposals)}
+          :key={transaction.id}
+          transaction={transaction}
+          accounts={@accounts}
+          columns={@columns}
+          selected={transaction.id in @selected}
+          running={@running && @running[transaction.id]}
+          editor={@edited == transaction.id && @editor}
+        />
         <tbody :if={@rows == [] and @proposals == []}>
           <tr>
             <td colspan={@columns.count}>
@@ -613,7 +607,36 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
   attr :selected, :boolean, required: true
-  attr :running, :map, default: nil
+
+  attr :running, :integer,
+    default: nil,
+    doc: "the balance after it, while the running balance shows"
+
+  attr :editor, :any, required: true, doc: "the editor while this row is edited, else false"
+
+  defp entry(%{transaction: %{matched_transaction_id: id}} = assigns) when not is_nil(id),
+    do: ~H"<.proposal_row proposal={@transaction} accounts={@accounts} columns={@columns} />"
+
+  defp entry(%{editor: %{assigns: _}} = assigns),
+    do: ~H"<.live_component module={TransactionEditor} {@editor.assigns} />"
+
+  defp entry(assigns) do
+    ~H"""
+    <.row
+      transaction={@transaction}
+      accounts={@accounts}
+      columns={@columns}
+      selected={@selected}
+      running={@running}
+    />
+    """
+  end
+
+  attr :transaction, :map, required: true
+  attr :accounts, :map, required: true
+  attr :columns, :map, required: true
+  attr :selected, :boolean, required: true
+  attr :running, :integer, default: nil
 
   defp row(assigns) do
     ~H"""
@@ -674,7 +697,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           {inflow(@transaction.amount)}
         </td>
         <td :if={@running} class="text-end text-base-content/70 app-run">
-          {Money.amount(@running[@transaction.id])}
+          {Money.amount(@running)}
         </td>
         <td class="app-ok-col">
           <.approve
@@ -803,75 +826,89 @@ defmodule AbakusWeb.RegisterLive.Components do
   def cards(assigns) do
     ~H"""
     <.list id="register-cards" class="md:hidden">
-      <%= for transaction <- Rows.with_proposals(@rows, @proposals) do %>
-        <.list_row
-          :if={transaction.matched_transaction_id}
-          id={"proposal-card-#{transaction.id}"}
-          title={title(transaction, @accounts)}
-          trailing_on_phone={:title}
-          class="app-unapproved-item"
-        >
-          <:leading><.icon name="link" class="size-5 text-base-content/70" /></:leading>
-          <:meta>
-            {join_meta([
-              Format.date(transaction.date, year: false),
-              if(@all, do: @accounts[transaction.account_id].name),
-              match_text(transaction.matched_transaction, @accounts)
-            ])}
-          </:meta>
-          <:trailing><.signed amount={transaction.amount} /></:trailing>
-          <:action
-            id={"proposal-card-#{transaction.id}-accept"}
-            label="Zuordnen"
-            icon="link"
-            on_click={decision("accept_match", transaction)}
-            confirm={merge_question([transaction])}
-            confirm_text={merge_text()}
-            confirm_label="Zuordnen"
-          />
-          <:action
-            id={"proposal-card-#{transaction.id}-reject"}
-            label="Trennen"
-            icon="x"
-            on_click={JS.push("reject_match", value: %{id: to_string(transaction.id)})}
-          />
-        </.list_row>
-        <.list_row
-          :if={!transaction.matched_transaction_id}
-          id={"tx-card-#{transaction.id}"}
-          on_click={JS.push("edit", value: %{id: to_string(transaction.id)})}
-          trailing_on_phone={:title}
-          class={!transaction.approved && "app-unapproved-item"}
-        >
-          <span class={!transaction.approved && "font-semibold"}>{title(transaction, @accounts)}</span>
-          <:leading>
-            <.approve
-              :if={!transaction.approved}
-              id={"tx-card-#{transaction.id}-approve"}
-              transaction={transaction}
-              accounts={@accounts}
-            />
-            <.cleared
-              :if={transaction.approved}
-              id={"tx-card-#{transaction.id}-cleared"}
-              transaction={transaction}
-            />
-          </:leading>
-          <:meta>
-            {join_meta([
-              Format.date(transaction.date, year: false),
-              if(@all, do: @accounts[transaction.account_id].name),
-              category_text(transaction, @accounts),
-              transaction.memo
-            ])}
-          </:meta>
-          <:trailing><.signed amount={transaction.amount} /></:trailing>
-        </.list_row>
-      <% end %>
+      <.card_entry
+        :for={transaction <- Rows.with_proposals(@rows, @proposals)}
+        :key={transaction.id}
+        transaction={transaction}
+        accounts={@accounts}
+        all={@all}
+      />
       <li :if={@rows == [] and @proposals == []} class="px-4">
         <.empty title={@empty} hint={@empty_hint} />
       </li>
     </.list>
+    """
+  end
+
+  attr :transaction, Transaction, required: true
+  attr :accounts, :map, required: true
+  attr :all, :boolean, required: true
+
+  defp card_entry(assigns) do
+    ~H"""
+    <.list_row
+      :if={@transaction.matched_transaction_id}
+      id={"proposal-card-#{@transaction.id}"}
+      title={title(@transaction, @accounts)}
+      trailing_on_phone={:title}
+      class="app-unapproved-item"
+    >
+      <:leading><.icon name="link" class="size-5 text-base-content/70" /></:leading>
+      <:meta>
+        {join_meta([
+          Format.date(@transaction.date, year: false),
+          if(@all, do: @accounts[@transaction.account_id].name),
+          match_text(@transaction.matched_transaction, @accounts)
+        ])}
+      </:meta>
+      <:trailing><.signed amount={@transaction.amount} /></:trailing>
+      <:action
+        id={"proposal-card-#{@transaction.id}-accept"}
+        label="Zuordnen"
+        icon="link"
+        on_click={decision("accept_match", @transaction)}
+        confirm={merge_question([@transaction])}
+        confirm_text={merge_text()}
+        confirm_label="Zuordnen"
+      />
+      <:action
+        id={"proposal-card-#{@transaction.id}-reject"}
+        label="Trennen"
+        icon="x"
+        on_click={JS.push("reject_match", value: %{id: to_string(@transaction.id)})}
+      />
+    </.list_row>
+    <.list_row
+      :if={!@transaction.matched_transaction_id}
+      id={"tx-card-#{@transaction.id}"}
+      on_click={JS.push("edit", value: %{id: to_string(@transaction.id)})}
+      trailing_on_phone={:title}
+      class={!@transaction.approved && "app-unapproved-item"}
+    >
+      <span class={!@transaction.approved && "font-semibold"}>{title(@transaction, @accounts)}</span>
+      <:leading>
+        <.approve
+          :if={!@transaction.approved}
+          id={"tx-card-#{@transaction.id}-approve"}
+          transaction={@transaction}
+          accounts={@accounts}
+        />
+        <.cleared
+          :if={@transaction.approved}
+          id={"tx-card-#{@transaction.id}-cleared"}
+          transaction={@transaction}
+        />
+      </:leading>
+      <:meta>
+        {join_meta([
+          Format.date(@transaction.date, year: false),
+          if(@all, do: @accounts[@transaction.account_id].name),
+          category_text(@transaction, @accounts),
+          @transaction.memo
+        ])}
+      </:meta>
+      <:trailing><.signed amount={@transaction.amount} /></:trailing>
+    </.list_row>
     """
   end
 
