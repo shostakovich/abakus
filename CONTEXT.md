@@ -187,6 +187,22 @@ What the bank reports an account holds on a date, from a file's ledger balance o
 offers the latest. UI "Banksaldo".
 _Avoid_: Ledger balance (OFX's name, `LEDGERBAL`), statement balance
 
+**Bank connection**:
+The budget owner's access to one bank through Enable Banking (ADR 0020): its consent and the bank's accounts, each
+feeding an account that takes entries from its start date on, or unlinked. UI "Bankverbindung".
+_Avoid_: Requisition, bank link (links are the Kasse's and the Depot's), sync account
+
+**Fetch**:
+Bank sync asking the bank for a bank connection's transactions and balances: on schedule at 06:00 and 18:00, or on
+"Jetzt abrufen" with the owner present; each one is kept as a sync run with its counts or error. UI "Abruf".
+_Avoid_: Refresh, poll, sync (alone)
+
+**Consent**:
+What the budget owner grants at the bank for a bank connection: reading its accounts until a moment, as long as the
+bank allows (90 to 180 days). Reminded of by mail 14 and 3 days before it ends and by a banner in Finanzen; renewing
+it ("Freigabe erneuern") consents anew and keeps the linked accounts. An ended one is not fetched. UI "Freigabe".
+_Avoid_: Authorization, mandate, "Zustimmung"
+
 **Match**:
 An imported transaction that looks like an existing one, proposed for merging; never merged silently. Until it is
 decided, the proposal counts nowhere and both keep their account and amount. Accepting merges it into the existing
@@ -226,8 +242,8 @@ Sync for everyone with the budget or a portfolio. Code: `:finanzen`. UI "Finanze
 _Avoid_: Budget area, Depot area, finances
 
 **Import & Sync**:
-Finanzen's page for what comes in from outside, in tabs: Bankdateien (the budget owner's file import) and Belege (the
-inbox, for users with a portfolio). UI "Import & Sync".
+Finanzen's page for what comes in from outside, in tabs: Bankdateien (the budget owner's file import),
+Bankverbindungen (their bank connections) and Belege (the inbox, for users with a portfolio). UI "Import & Sync".
 _Avoid_: Settings (it is a task, not a setting)
 
 **Settings hub**:

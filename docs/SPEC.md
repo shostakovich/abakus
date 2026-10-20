@@ -147,8 +147,9 @@ the rows of their caller's user (ADR 0019).
   writing, so a missing one is a validation error ("existiert nicht"), not a constraint error.
 - **Bank balance**: account, source (`file`: a file's ledger balance, `bank`: bank sync), date, amount; one per
   account, source and date. Reconciling offers the latest.
-- **Bank connection**: provider, bank, session id, valid until, linked accounts (provider account id → account),
-  last sync, last error
+- **Bank connection**: user, provider, bank name and country, session id, valid until, reminders sent, last sync,
+  last error; linked accounts (provider account id, the bank's name and IBAN, account or none, start date, last
+  fetch); sync runs (started at, trigger scheduled or manual, counts new and matched, error)
 - **User**, **passkey**, **user token** (`phx.gen.auth` plus passkeys, see Login)
 
 Amounts are integers in cents.
@@ -203,11 +204,28 @@ resting state.
 
 ## Import
 
-All imports land as unapproved, `cleared`, with an external id. A transaction is never imported twice from the
-same source; across sources (and against manual entries) a match is proposed, never merged silently.
+All imports land as unapproved, `cleared` (the bank's pending ones `uncleared`), with an external id. A transaction
+is never imported twice from the same source; across sources (and against manual entries) a match is proposed, never
+merged silently.
 
-- **Bank sync** imports as the file import does: deduped by (account, source, external id) with the provider's
-  transaction id, match proposals, nothing dated up to the account's newest reconciled transaction
+- **Bank sync** imports as the file import does: deduped by (account, source, external id), match proposals,
+  nothing dated up to the account's newest reconciled transaction. External id the bank's `entry_reference`, else
+  `transaction_id`, else a key of date, amount and payee lookup key, numbered from the second that repeats it in one
+  fetch on (` 2`, ` 3`), so that alike transactions of a day all come in; payee the creditor of a debit, the debtor
+  of a credit, else the first remittance line; memo the remittance lines without their SEPA prefixes (`SVWZ+` and the
+  like); records without a date or amount are skipped. The bank balance is the closing booked balance, else the
+  interim booked one, dated by its reference date, else today. A linked account is fetched from its start date the
+  first time, later from 14 days before its last successful fetch, and takes nothing dated before its start date;
+  one fetch per connection at a time
+  - Pending transactions come in as Vorgemerkt (`uncleared`), their external id `pending:` plus the booked one's
+    rule, so a booked transaction with the same bank id is never mistaken for its pending one. One dated in the
+    fetched window and after the newest reconciled transaction (up to which the booked version is not imported)
+    that the bank no longer reports as pending is deleted while unapproved (its booked version comes
+    in as new, a cancelled one is just gone, ADR 0021); an approved one stays and is a match candidate like any
+    other transaction, so its booked version is proposed as its match. One whose booking differs in amount stays
+    for the owner to delete. An unapproved one's open match proposal makes way for a booked transaction that looks
+    like the same existing one: that is proposed instead, and the pending one stands on its own until the bank no
+    longer reports it
 - **Category suggestion**: the payee's last category
 - **CSV import**: only if a bank needs it later.
 - **Bank sync (v2)**: Enable Banking (free restricted mode: only the owner's linked accounts), the only free
@@ -218,9 +236,13 @@ same source; across sources (and against manual entries) a match is proposed, ne
   - Flow: `GET /aspsps` → `POST /auth` (bank, redirect URL, `valid_until` = the bank's
     `maximum_consent_validity`, not Actual's 90-day cap) → bank → callback with `code` → `POST /sessions` →
     `GET /accounts/{id}/balances`, `GET /accounts/{id}/transactions` (paging via `continuation_key`)
-  - Unattended sync at most 4 times per day per account (PSD2 limit), plus "sync now"
-  - Consent lasts 90–180 days depending on the bank; mail and banner 14 and 3 days before it expires; renewing
-    is one redirect
+  - Unattended sync at most 4 times per day per account (PSD2 limit): at 06:00 and 18:00, plus "Jetzt abrufen",
+    which sends the PSU headers (client IP through the trusted proxies, user agent) so it does not count
+  - Consent lasts 90–180 days depending on the bank; after the scheduled fetch a mail 14 and 3 days before its
+    last day, each once per consent; a banner in Finanzen while it ends within 14 days or has ended. An ended
+    consent is not fetched; one the bank refuses as ended (revoked early) ends with that fetch. Renewing is one
+    redirect through the same flow and keeps the linked accounts, found by the bank's account id, else the IBAN (the
+    ids may change with a new session)
   - The bank balance is stored per sync and offered when reconciling
 
 ## Tracking accounts
@@ -270,8 +292,11 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   "Konto hinzufügen" in Alle Konten
 - **Buchung**: transaction form (FAB on phones)
 - **Import & Sync**: tabs Bankdateien (file import with preview; the budget owner's) and Belege (the receipt
-  inbox and the PDF upload, its count on the tab and the sidebar entry; users with a portfolio); later bank
-  connections with consent expiry
+  inbox and the PDF upload, its count on the tab and the sidebar entry; users with a portfolio) and
+  Bankverbindungen (the budget owner's bank connections, each a card with its consent, last fetch, the last five
+  fetches with their counts, the error of a failed one, "Jetzt abrufen", "Freigabe erneuern" and the accounts its
+  bank accounts feed, and "Bank verbinden": pick a bank, consent there, assign each bank account to an account or
+  none with the date to fetch from, prefilled with the day after its last reconcile, else today)
 - **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement and Aktivität
 - **Vermögen and Depots** (Finanzen): Vermögen (net worth: for the budget owner all budget and tracking accounts
   but those closed with money left in them, its curve showing the Depot's value before the budget's first
@@ -326,15 +351,17 @@ Only offline entry: a queue in the PWA that creates transactions while offline a
   operator's job. The Depot's receipt files live in `receipts/` next to the database, in the data volume but
   outside the nightly backup
 - Jobs in the release: the ECB rates (daily at 17:00), recurring expenses (hourly), the Depot's prices and
-  DivvyDiary data (daily at 18:00), each user's Paperless (every 15 minutes) and the backup, at the host's local
-  time (`TZ`, `Europe/Berlin` in the image); `jobs: false` turns them off in tests
+  DivvyDiary data (daily at 18:00), each user's Paperless (every 15 minutes), bank sync (06:00 and 18:00) and the
+  backup, at the host's local time (`TZ`, `Europe/Berlin` in the image); `jobs: false` turns them off in tests
 - Runs behind the operator's HTTPS reverse proxy, which sets `X-Forwarded-Proto`
 - Config via env: `PHX_HOST` (required: the public host, also the passkey relying party id), `SECRET_KEY_BASE`,
   SMTP, `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES`, `DIVVYDIARY_API_KEY`
   (the Depot's countries, sectors and dividends; optional), `RECEIPT_MODEL_URL`, `RECEIPT_MODEL`,
   `RECEIPT_MODEL_KEY`, `RECEIPT_MODEL_THINKING` (the Depot's receipt recognition; optional),
-  `ENABLE_BANKING_APP_ID` and the private key as a read-only mounted file (v2)
-- `/up` checks the DB and, from v2, that no bank connection has failed for more than a day
+  `ENABLE_BANKING_APP_ID` and `ENABLE_BANKING_KEY_FILE`, the path of the private key, mounted read only (bank
+  sync; optional, without them Bankverbindungen says it is not set up)
+- `/up` checks the DB and, from v2, that no bank connection that is fetched (bank sync set up, consent not ended,
+  an account linked) has failed for more than a day
 
 ## Open
 

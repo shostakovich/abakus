@@ -60,10 +60,12 @@ Each user's Depot opens once they create a portfolio under Einstellungen › Dep
 - Before the first start: `mkdir data && chown 1000:1000 data`; the database lives there.
 - A reverse proxy must terminate HTTPS and send `X-Forwarded-Proto: https`. Plain HTTP still serves pages, but
   the live UI only connects from `https://$PHX_HOST`.
-- `/up` answers 200 while the app and its database are up, for health checks.
+- `/up` answers 200 while the app and its database are up, for health checks, and 503 while a bank connection that
+  is fetched (consent not ended, an account linked) has failed with no successful fetch for more than a day.
 - Every night at 03:00 a copy of the database goes to `data/backups` (mode 0600); the newest seven are kept.
 - `TZ` (default `Europe/Berlin`) is the local time of "today" in every area, of the Kasse's dates and of the jobs:
-  ECB rates at 17:00, recurring expenses hourly, the Depot's prices at 18:00, the backup.
+  ECB rates at 17:00, recurring expenses hourly, the Depot's prices at 18:00, bank sync at 06:00 and 18:00, the
+  backup.
 - `DIVVYDIARY_API_KEY` (optional) brings the Depot's countries, sectors and dividend dates from DivvyDiary.
 - The Depot's receipt recognition (optional): any OpenAI-compatible chat API such as Ollama with
   `RECEIPT_MODEL_URL` (e.g. `http://localhost:11434/v1`), `RECEIPT_MODEL` and, if the API wants one,
@@ -71,9 +73,13 @@ Each user's Depot opens once they create a portfolio under Einstellungen › Dep
   `pdftotext`. Without a model a receipt opens an empty form. Receipt PDFs live in `data/receipts`, next to the
   database, outside the nightly backup. Each user enters their Paperless-ngx under Einstellungen → Belegeingang;
   it is polled every 15 minutes.
+- Bank sync (optional): an application at [Enable Banking](https://enablebanking.com) with
+  `https://$PHX_HOST/budget/bank-connections/callback` as its redirect URL, its id in `ENABLE_BANKING_APP_ID` and
+  the path of its private key in `ENABLE_BANKING_KEY_FILE`, mounted read only. The budget owner connects banks
+  under Import & Sync › Bankverbindungen and is reminded by mail (SMTP) 14 and 3 days before a consent ends.
 - MCP ([docs/MCP.md](docs/MCP.md)): `MCP_SECRET` (empty turns it off; the endpoint is `/mcp/<MCP_SECRET>`),
   `MCP_ALLOWED_CIDRS` (who may call it, default `160.79.104.0/21`) and `TRUSTED_PROXIES` (proxies whose
-  `X-Forwarded-For` counts).
+  `X-Forwarded-For` counts, also for the client IP bank sync passes on with "Jetzt abrufen").
 
 Invite the first user with
 

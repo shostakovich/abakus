@@ -49,11 +49,20 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   other, except in what the budget calls of the budget link (`recategorize/3`, `expense_ids/2`), which
   takes a plain user scope. The budget link acts for the scope's person. Tests get a person's scope with
   `scope_of/1` from `Abakus.KasseFixtures`.
-- The budget: `Abakus.Ledger`, `Abakus.Categories` and `Abakus.FileImport` take `%Scope{}` and see only the rows
-  with the user's `user_id` (ADR 0019); each user's Ready to Assign comes with its first use. What writes into it
-  from another area writes with the budget owner's user, whichever way it gets that scope: the Depot's budget feed
-  (`Scope.for_budget_owner/0`) and link (the caller's) and the Kasse's budget link (the linked person's,
-  `Scope.for_participant/1`). Tests get the owner's scope with `budget_scope/0` from `Abakus.DomainFixtures`.
+- The budget: `Abakus.Ledger`, `Abakus.Categories`, `Abakus.FileImport` and the import core it shares with bank
+  sync, `Abakus.Import` (keyed by source), take `%Scope{}` and see only the rows with the user's `user_id` (ADR
+  0019); each user's Ready to Assign comes with its first use. What writes into it from another area writes with the
+  budget owner's user, whichever way it gets that scope: the Depot's budget feed (`Scope.for_budget_owner/0`) and
+  link (the caller's) and the Kasse's budget link (the linked person's, `Scope.for_participant/1`). Tests get the
+  owner's scope with `budget_scope/0` from `Abakus.DomainFixtures`.
+- Bank sync (`Abakus.BankSync`, `AbakusWeb.BankConnectionsLive`, tables `bank_connections`, `bank_linked_accounts`,
+  `bank_sync_runs`) is the budget owner's alone: what takes a scope raises `Abakus.BankSync.AccessError` for any
+  other, except the health check's `failing?/1`, which takes the system's alone; it imports through `Abakus.Import`
+  with the owner's scope, its job (`Abakus.BankSync.Job`) at 06:00 and 18:00, which then mails consent reminders
+  (the banner in Finanzen is `AbakusWeb.BankConsents`, passed to the layout). Its Enable Banking client is a
+  behaviour; tests swap it for `Abakus.BankSync.FakeClient`, which is not configured until `serve/1` starts it,
+  serves what `put_transactions/2` and `put_balances/2` give it and records `fetches/0`, and connect with
+  `connection_fixture/0` from `Abakus.BankSyncFixtures`.
 - Exchange rates (`Abakus.ExchangeRates`, tables `exchange_rates`, `exchange_rate_runs`) are shared: one daily job
   loads the ECB rates, each area looks them up by its own rule, manual rates are the Kasse's only; its rule and the
   logged changes to manual rates live in `Abakus.Kasse.Rates`. Tests swap the source in `config/test.exs`
