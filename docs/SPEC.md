@@ -147,9 +147,9 @@ the rows of their caller's user (ADR 0019).
   writing, so a missing one is a validation error ("existiert nicht"), not a constraint error.
 - **Bank balance**: account, source (`file`: a file's ledger balance, `bank`: bank sync), date, amount; one per
   account, source and date. Reconciling offers the latest.
-- **Bank connection**: user, provider, bank name and country, session id, valid until, reminders sent, last sync,
-  last error; linked accounts (provider account id, the bank's name and IBAN, account or none, start date, last
-  fetch); sync runs (started at, trigger scheduled or manual, counts new and matched, error)
+- **Bank connection**: user, provider, bank name and country, session id, valid until, last sync, last error;
+  linked accounts (provider account id, the bank's name and IBAN, account or none, start date, last fetch); sync
+  runs (started at, trigger scheduled or manual, counts new and matched, error)
 - **User**, **passkey**, **user token** (`phx.gen.auth` plus passkeys, see Login)
 
 Amounts are integers in cents.
@@ -238,11 +238,10 @@ merged silently.
     `GET /accounts/{id}/balances`, `GET /accounts/{id}/transactions` (paging via `continuation_key`)
   - Unattended sync at most 4 times per day per account (PSD2 limit): at 06:00 and 18:00, plus "Jetzt abrufen",
     which sends the PSU headers (client IP through the trusted proxies, user agent) so it does not count
-  - Consent lasts 90–180 days depending on the bank; after the scheduled fetch a mail 14 and 3 days before its
-    last day, each once per consent; a banner in Finanzen while it ends within 14 days or has ended. An ended
-    consent is not fetched; one the bank refuses as ended (revoked early) ends with that fetch. Renewing is one
-    redirect through the same flow and keeps the linked accounts, found by the bank's account id, else the IBAN (the
-    ids may change with a new session)
+  - Consent lasts 90–180 days depending on the bank; a banner in Finanzen while it ends within 14 days or has
+    ended. An ended consent is not fetched; one the bank refuses as ended (revoked early) ends with that fetch.
+    Renewing is one redirect through the same flow and keeps the linked accounts, found by the bank's account id,
+    else the IBAN (the ids may change with a new session)
   - The bank balance is stored per sync and offered when reconciling
 
 ## Tracking accounts
@@ -337,7 +336,7 @@ without a sync.
 
 ### v2 — bank sync and MCP
 
-Enable Banking connections, scheduled sync, consent reminders by mail, bank balance in reconcile; the budget's MCP tools.
+Enable Banking connections, scheduled sync, a banner before a consent ends, bank balance in reconcile; the budget's MCP tools.
 
 ### v3 — offline entry
 

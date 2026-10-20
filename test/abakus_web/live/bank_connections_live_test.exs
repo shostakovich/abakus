@@ -387,9 +387,7 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
          %{conn: conn, giro: giro} do
       connection = linked_connection(giro)
 
-      Repo.update_all(Connection,
-        set: [valid_until: ~U[2026-11-03 10:00:00.000000Z], reminders_sent: [14]]
-      )
+      Repo.update_all(Connection, set: [valid_until: ~U[2026-11-03 10:00:00.000000Z]])
 
       # The bank's account ids change with the new session; the IBAN stays.
       FakeClient.put_session("code-2", %{
@@ -427,7 +425,6 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
       assert renewed.id == connection.id
       assert renewed.session_id == "session-2"
       assert renewed.valid_until == ~U[2027-05-01 10:00:00.000000Z]
-      assert renewed.reminders_sent == []
 
       assert [
                %{provider_account_id: "uid-giro-2", start_date: ~D[2026-10-02]} = current,

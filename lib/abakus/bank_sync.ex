@@ -19,8 +19,8 @@ defmodule Abakus.BankSync do
   its match. A connection whose consent has ended is not fetched until it is renewed; one the bank says has ended
   ends then.
 
-  Before a consent ends, `remind_consents/1` mails the owner after the scheduled fetch, 14 and 3 days before, and
-  `expiring_consents/1` lists the connections for the banner in Finanzen.
+  From 14 days before a consent ends until it is renewed, `expiring_consents/1` lists its connection for the banner in
+  Finanzen.
   """
 
   import Ecto.Query
@@ -31,12 +31,12 @@ defmodule Abakus.BankSync do
   alias Abakus.BankSync.{AccessError, Connection, LinkedAccount, SyncRun}
   alias Abakus.{Format, Import, Ledger, LocalTime, Money, Names, Repo}
   alias Abakus.Ledger.{Account, TransactionOrigin}
-  alias Abakus.Users.{Scope, UserNotifier}
+  alias Abakus.Users.Scope
 
   @default_consent_seconds 90 * 24 * 60 * 60
   @refetch_days 14
   @recent_runs 5
-  @reminder_days [14, 3]
+  @expiring_days 14
   @sepa_prefixes ~r/(?<=^|\s)(?:EREF|KREF|MREF|CRED|DEBT|SVWZ|ABWA|ABWE|IBAN|BIC|COAM|OAMT|SQTP|PURP)\+/
 
   @doc "Whether bank sync is set up: the provider has its application id and private key."
@@ -103,7 +103,7 @@ defmodule Abakus.BankSync do
   @doc """
   Opens the session of the code the bank sent the user back with, for the consent `auth` of `authorize/3`, and keeps
   it as a bank connection with the bank's accounts, all unlinked. With the `auth` of `renew/3` it renews that
-  connection instead: the new session and consent, its reminders unsent, its error gone and its linked accounts kept,
+  connection instead: the new session and consent, its error gone and its linked accounts kept,
   each found by the bank's id, else by its IBAN; the session's other accounts come unlinked, and linked accounts it
   no longer has go.
   """
@@ -145,7 +145,6 @@ defmodule Abakus.BankSync do
           |> Ecto.Changeset.change(
             session_id: session.session_id,
             valid_until: valid_until(auth, session),
-            reminders_sent: [],
             last_error: nil
           )
           |> Repo.update!()
@@ -611,33 +610,6 @@ defmodule Abakus.BankSync do
     balance && %{amount: balance.amount, date: balance.date || LocalTime.today()}
   end
 
-  @doc """
-  Mails the owner before a consent ends, 14 and 3 days before its last day, each once per consent: one mail for the
-  nearest of these reached, which counts all reached as sent. None once the consent has ended; a mail that was not
-  delivered goes out with the next run.
-  """
-  def remind_consents(%Scope{} = scope) do
-    owner!(scope)
-    today = LocalTime.today()
-
-    for connection <- Repo.all(owned(Connection, scope)),
-        not Connection.expired?(connection),
-        days = Connection.days_left(connection, today),
-        due = Enum.filter(@reminder_days, &(days <= &1 and &1 not in connection.reminders_sent)),
-        due != [],
-        do: remind(scope.user, connection, days, due)
-
-    :ok
-  end
-
-  defp remind(user, connection, days, due) do
-    with {:ok, _email} <- UserNotifier.deliver_consent_reminder(user, connection, days) do
-      connection
-      |> Ecto.Changeset.change(reminders_sent: Enum.sort(connection.reminders_sent ++ due, :desc))
-      |> Repo.update!()
-    end
-  end
-
   @doc "The connections whose consent has ended or ends within 14 days, oldest first, for the banner in Finanzen."
   def expiring_consents(%Scope{} = scope) do
     owner!(scope)
@@ -646,7 +618,7 @@ defmodule Abakus.BankSync do
     from(c in owned(Connection, scope), order_by: c.id)
     |> Repo.all()
     |> Enum.filter(
-      &(Connection.expired?(&1) or Connection.days_left(&1, today) <= hd(@reminder_days))
+      &(Connection.expired?(&1) or Connection.days_left(&1, today) <= @expiring_days)
     )
   end
 

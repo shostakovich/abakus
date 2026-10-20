@@ -9,7 +9,6 @@ defmodule Abakus.Repo.Migrations.CreateBankConnections do
       add :bank_country, :string, null: false
       add :session_id, :string, null: false
       add :valid_until, :utc_datetime_usec, null: false
-      add :reminders_sent, {:array, :integer}, null: false, default: []
       add :last_sync_at, :utc_datetime_usec
       add :last_error, :string
 

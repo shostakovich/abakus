@@ -76,7 +76,7 @@ Each user's Depot opens once they create a portfolio under Einstellungen › Dep
 - Bank sync (optional): an application at [Enable Banking](https://enablebanking.com) with
   `https://$PHX_HOST/budget/bank-connections/callback` as its redirect URL, its id in `ENABLE_BANKING_APP_ID` and
   the path of its private key in `ENABLE_BANKING_KEY_FILE`, mounted read only. The budget owner connects banks
-  under Import & Sync › Bankverbindungen and is reminded by mail (SMTP) 14 and 3 days before a consent ends.
+  under Import & Sync › Bankverbindungen; a banner in Finanzen shows from 14 days before a consent ends.
 - MCP ([docs/MCP.md](docs/MCP.md)): `MCP_SECRET` (empty turns it off; the endpoint is `/mcp/<MCP_SECRET>`),
   `MCP_ALLOWED_CIDRS` (who may call it, default `160.79.104.0/21`) and `TRUSTED_PROXIES` (proxies whose
   `X-Forwarded-For` counts, also for the client IP bank sync passes on with "Jetzt abrufen").

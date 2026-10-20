@@ -199,7 +199,7 @@ _Avoid_: Refresh, poll, sync (alone)
 
 **Consent**:
 What the budget owner grants at the bank for a bank connection: reading its accounts until a moment, as long as the
-bank allows (90 to 180 days). Reminded of by mail 14 and 3 days before it ends and by a banner in Finanzen; renewing
+bank allows (90 to 180 days). A banner in Finanzen shows from 14 days before it ends until it is renewed; renewing
 it ("Freigabe erneuern") consents anew and keeps the linked accounts. An ended one is not fetched. UI "Freigabe".
 _Avoid_: Authorization, mandate, "Zustimmung"
 

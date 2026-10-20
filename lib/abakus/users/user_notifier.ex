@@ -4,7 +4,7 @@ defmodule Abakus.Users.UserNotifier do
 
   require Logger
 
-  alias Abakus.{Format, Mailer}
+  alias Abakus.Mailer
 
   defp deliver(recipient, subject, body) do
     email =
@@ -73,20 +73,4 @@ defmodule Abakus.Users.UserNotifier do
     Wenn du das nicht angefordert hast, ignoriere diese Mail.
     """)
   end
-
-  def deliver_consent_reminder(user, connection, days) do
-    deliver(user.email, "Abakus: Freigabe für #{connection.bank_name} endet #{in_days(days)}", """
-    Hallo,
-
-    die Freigabe für #{connection.bank_name} endet am #{Format.date(connection.valid_until)}. Danach ruft Abakus von
-    dieser Bank nichts mehr ab.
-
-    Erneuern kannst du sie in Abakus unter Import & Sync, Bankverbindungen: „Freigabe erneuern“ führt dich einmal
-    zur Bank und zurück.
-    """)
-  end
-
-  defp in_days(0), do: "heute"
-  defp in_days(1), do: "morgen"
-  defp in_days(days), do: "in #{days} Tagen"
 end

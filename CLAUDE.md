@@ -58,8 +58,8 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
 - Bank sync (`Abakus.BankSync`, `AbakusWeb.BankConnectionsLive`, tables `bank_connections`, `bank_linked_accounts`,
   `bank_sync_runs`) is the budget owner's alone: what takes a scope raises `Abakus.BankSync.AccessError` for any
   other, except the health check's `failing?/1`, which takes the system's alone; it imports through `Abakus.Import`
-  with the owner's scope, its job (`Abakus.BankSync.Job`) at 06:00 and 18:00, which then mails consent reminders
-  (the banner in Finanzen is `AbakusWeb.BankConsents`, passed to the layout). Its Enable Banking client is a
+  with the owner's scope, its job (`Abakus.BankSync.Job`) at 06:00 and 18:00; consents about to end show a banner
+  in Finanzen (`AbakusWeb.BankConsents`, passed to the layout). Its Enable Banking client is a
   behaviour; tests swap it for `Abakus.BankSync.FakeClient`, which is not configured until `serve/1` starts it,
   serves what `put_transactions/2` and `put_balances/2` give it and records `fetches/0`, and connect with
   `connection_fixture/0` from `Abakus.BankSyncFixtures`.

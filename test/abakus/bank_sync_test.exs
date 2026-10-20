@@ -5,7 +5,7 @@ defmodule Abakus.BankSyncTest do
   import Abakus.BankSyncFixtures
   import ExUnit.CaptureLog
 
-  alias Abakus.{BankSync, Ledger, LocalTime, Repo}
+  alias Abakus.{BankSync, Ledger, Repo}
   alias Abakus.BankSync.{AccessError, Connection, FakeClient, LinkedAccount}
   alias Abakus.Ledger.TransactionOrigin
   alias Abakus.Users.Scope
@@ -79,8 +79,7 @@ defmodule Abakus.BankSyncTest do
                bank_name: "Musterbank",
                bank_country: "DE",
                session_id: "session-1",
-               valid_until: ~U[2027-04-18 10:00:00.000000Z],
-               reminders_sent: []
+               valid_until: ~U[2027-04-18 10:00:00.000000Z]
              } = connection
 
       assert [
@@ -120,7 +119,7 @@ defmodule Abakus.BankSyncTest do
           savings.id => %{account_id: tagesgeld.id, start_date: ~D[2026-10-05]}
         })
 
-      Repo.update_all(Connection, set: [reminders_sent: [14, 3], last_error: "abgelaufen"])
+      Repo.update_all(Connection, set: [last_error: "abgelaufen"])
       %{connection: connection, giro: giro, tagesgeld: tagesgeld}
     end
 
@@ -153,7 +152,6 @@ defmodule Abakus.BankSyncTest do
                id: id,
                session_id: "session-2",
                valid_until: ~U[2027-05-01 10:00:00.000000Z],
-               reminders_sent: [],
                last_error: nil
              } = renewed
 
@@ -194,67 +192,6 @@ defmodule Abakus.BankSyncTest do
 
       assert BankSync.connect(budget_scope(), auth, "code-1") == {:error, :unknown_connection}
       assert BankSync.list_connections(budget_scope()) == []
-    end
-  end
-
-  describe "remind_consents/1" do
-    setup do
-      connection = connection_fixture()
-      %{connection: connection, owner: budget_scope().user.email}
-    end
-
-    defp consent_until(valid_until, reminders_sent \\ []),
-      do:
-        Repo.update_all(Connection,
-          set: [valid_until: valid_until, reminders_sent: reminders_sent]
-        )
-
-    test "mails once for the nearest threshold reached and marks those passed as sent",
-         %{connection: connection, owner: owner} do
-      consent_until(~U[2026-10-22 10:00:00.000000Z])
-
-      assert BankSync.remind_consents(budget_scope()) == :ok
-
-      assert_received {:email,
-                       %{
-                         subject: "Abakus: Freigabe für Musterbank endet in 2 Tagen",
-                         to: [{_, ^owner}]
-                       }}
-
-      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
-      assert Repo.get!(Connection, connection.id).reminders_sent == [14, 3]
-
-      assert BankSync.remind_consents(budget_scope()) == :ok
-      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
-    end
-
-    test "says so on the last day" do
-      consent_until(LocalTime.to_utc(~N[2026-10-20 23:00:00]), [14])
-
-      BankSync.remind_consents(budget_scope())
-
-      assert_received {:email, %{subject: "Abakus: Freigabe für Musterbank endet heute"}}
-    end
-
-    test "mails nothing before 14 days nor once the consent has ended", %{connection: connection} do
-      consent_until(~U[2026-11-04 10:00:00.000000Z])
-      BankSync.remind_consents(budget_scope())
-      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
-
-      consent_until(~U[2026-10-19 10:00:00.000000Z])
-      BankSync.remind_consents(budget_scope())
-      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
-      assert Repo.get!(Connection, connection.id).reminders_sent == []
-    end
-
-    test "mails nothing on the last day once the consent has ended", %{connection: connection} do
-      fix_now(LocalTime.to_utc(~N[2026-10-20 13:00:00]))
-      consent_until(LocalTime.to_utc(~N[2026-10-20 12:00:00]), [14])
-
-      BankSync.remind_consents(budget_scope())
-
-      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
-      assert Repo.get!(Connection, connection.id).reminders_sent == [14]
     end
   end
 
@@ -1100,7 +1037,6 @@ defmodule Abakus.BankSyncTest do
           fn -> BankSync.connect(other, auth, "code-1") end,
           fn -> BankSync.assign_accounts(other, connection, %{}) end,
           fn -> BankSync.start_date(other, account) end,
-          fn -> BankSync.remind_consents(Scope.system()) end,
           fn -> BankSync.expiring_consents(other) end,
           fn -> BankSync.failing?(budget_scope()) end,
           fn -> BankSync.accounts(Scope.system()) end
