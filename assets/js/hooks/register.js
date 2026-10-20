@@ -30,6 +30,40 @@ export const StickyBar = {
   },
 }
 
+// Loads the register's older transactions as its end comes near, below the table and the phone list alike: the one
+// hidden at this width never intersects. Observing anew after each load keeps tall screens filled.
+export const LoadMore = {
+  mounted() {
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        if (this.loading || !entries.some((entry) => entry.isIntersecting)) return
+        this.loading = true
+        this.pushEvent("load_more", {}).then(
+          () => {
+            this.loading = false
+            this.observe()
+          },
+          // Offline: `reconnected` asks again.
+          () => (this.loading = false),
+        )
+      },
+      { rootMargin: "0px 0px 800px 0px" },
+    )
+    this.observe()
+  },
+  reconnected() {
+    this.loading = false
+    this.observe()
+  },
+  observe() {
+    this.observer.unobserve(this.el)
+    this.observer.observe(this.el)
+  },
+  destroyed() {
+    this.observer.disconnect()
+  },
+}
+
 const memoKey = "abakus:register-memo"
 
 // The register's memo column, shown or hidden per device; the root layout applies the choice before paint.

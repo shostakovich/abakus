@@ -713,6 +713,39 @@ defmodule Abakus.Ledger.TransactionsTest do
     assert listed_newer.subtransactions == []
   end
 
+  test "list_transactions and count_transactions narrow by filter, ids and limit" do
+    account = account_fixture()
+    oldest = transaction_fixture(account_id: account.id, date: ~D[2026-10-01])
+
+    middle =
+      transaction_fixture(
+        account_id: account.id,
+        date: ~D[2026-10-02],
+        cleared: :cleared,
+        approved: false
+      )
+
+    newest = transaction_fixture(account_id: account.id, date: ~D[2026-10-03])
+    ids = &Enum.map(Ledger.list_transactions(budget_scope(), account, &1), fn t -> t.id end)
+
+    assert ids.(limit: 2) == [newest.id, middle.id]
+    assert ids.(filter: :all) == [newest.id, middle.id, oldest.id]
+    assert ids.(filter: :unapproved) == [middle.id]
+    assert ids.(filter: :uncleared, limit: 1) == [newest.id]
+    assert ids.(ids: [oldest.id, middle.id]) == [middle.id, oldest.id]
+    assert Ledger.count_transactions(budget_scope(), account) == 3
+    assert Ledger.count_transactions(budget_scope(), account, filter: :uncleared) == 2
+  end
+
+  test "list_transactions takes more ids than SQLite takes variables" do
+    account = account_fixture()
+    transaction = transaction_fixture(account_id: account.id)
+    ids = [transaction.id | Enum.to_list(1_000_000..1_040_000)]
+
+    assert [%{id: id}] = Ledger.list_transactions(budget_scope(), account, ids: ids)
+    assert id == transaction.id
+  end
+
   describe "payee by name" do
     test "takes the regular payee with that lookup key" do
       account = account_fixture()
