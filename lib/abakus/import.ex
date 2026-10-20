@@ -3,12 +3,13 @@ defmodule Abakus.Import do
   The core the file import (`Abakus.FileImport`) and bank sync share, keyed by source (`:file`, `:bank`): which of
   an account's entries come in, how, and the bank balance.
 
-  An entry is a map with `external_id`, `date`, `amount`, `payee_name` and `memo`; other keys stay as they are. An
-  external id the account has from the source already (deleted transactions included) is not imported again, nor one
-  that the entries repeat, nor an entry dated up to the account's newest reconciled transaction. One that looks like
-  a transaction in the register comes in as a match proposal for it, never merged silently. Imports land unapproved
-  and cleared; the payee comes from `payee_name` (the regular payee with its lookup key, else a new one), the memo
-  from `memo`. Everything goes through the Ledger with the caller's scope.
+  An entry is a map with `external_id`, `date`, `amount`, `payee_name`, `memo` and optionally `cleared`; other keys
+  stay as they are. An external id the account has from the source already (deleted transactions included) is not
+  imported again, nor one that the entries repeat, nor an entry dated up to the account's newest reconciled
+  transaction. One that looks like a transaction in the register comes in as a match proposal for it, never merged
+  silently. Imports land unapproved and cleared unless `cleared` says otherwise; the payee comes from `payee_name`
+  (the regular payee with its lookup key, else a new one), the memo from `memo`. Everything goes through the Ledger
+  with the caller's scope.
   """
 
   alias Abakus.{Ledger, Repo}
@@ -79,13 +80,15 @@ defmodule Abakus.Import do
   end
 
   defp create(scope, account, source, %{transaction: entry, status: status, match: match}) do
+    if match, do: Ledger.yield_proposal(scope, match, source)
+
     attrs = %{
       account_id: account.id,
       date: entry.date,
       amount: entry.amount,
       payee_name: entry.payee_name,
       memo: entry.memo,
-      cleared: :cleared,
+      cleared: Map.get(entry, :cleared, :cleared),
       source: source,
       matched_transaction_id: match && match.id
     }

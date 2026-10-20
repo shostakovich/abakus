@@ -12,8 +12,11 @@ defmodule Abakus.BankSync do
   Fetching (`fetch/3`, on schedule `fetch_all/1`): each linked account from its start date on the first time, later
   from 14 days before its last successful fetch, nothing dated before its start date, one failing account keeping none of the others from it; at most one
   fetch per connection at a time, each kept as a sync run once it is done (an unexpected failure as its error).
-  Booked transactions come in through the import core (`Abakus.Import`) from source `bank` with the owner's scope,
-  and the bank's balance becomes the account's bank balance.
+  Booked and pending transactions come in through the import core (`Abakus.Import`) from source `bank` with the
+  owner's scope, and the bank's balance becomes the account's bank balance. Pending ones clean up after themselves
+  (ADR 0021): one dated in the fetched window and after the newest reconciled transaction that the bank no longer
+  reports as pending is removed while it is unapproved; an approved one stays, and its booked version is proposed as
+  its match.
   """
 
   import Ecto.Query
@@ -23,7 +26,7 @@ defmodule Abakus.BankSync do
 
   alias Abakus.BankSync.{AccessError, Connection, LinkedAccount, SyncRun}
   alias Abakus.{Format, Import, Ledger, LocalTime, Money, Names, Repo}
-  alias Abakus.Ledger.Account
+  alias Abakus.Ledger.{Account, TransactionOrigin}
   alias Abakus.Users.Scope
 
   @default_consent_seconds 90 * 24 * 60 * 60
@@ -319,14 +322,16 @@ defmodule Abakus.BankSync do
   defp fetch_account(scope, linked, psu) do
     started = LocalTime.utc_now()
     uid = linked.provider_account_id
+    from = date_from(linked)
 
     with :ok <- takes_entries(linked.account),
-         {:ok, transactions} <- client().transactions(uid, date_from(linked), psu),
+         {:ok, transactions} <- client().transactions(uid, from, psu),
          {:ok, balances} <- client().balances(uid, psu) do
       entries =
         Enum.filter(entries(transactions), &(Date.compare(&1.date, linked.start_date) != :lt))
 
-      Repo.transact(fn -> import_account(scope, linked, entries, balances, started) end)
+      fetched = %{from: from, entries: entries, balances: balances}
+      Repo.transact(fn -> import_account(scope, linked, fetched, started) end)
     end
   rescue
     exception ->
@@ -338,9 +343,10 @@ defmodule Abakus.BankSync do
       {:error, :failed}
   end
 
-  defp import_account(scope, linked, entries, balances, started) do
-    with {:ok, counts} <- import_entries(scope, linked.account, entries),
-         :ok <- put_bank_balance(scope, linked.account, balances) do
+  defp import_account(scope, linked, fetched, started) do
+    with :ok <- remove_gone_pending(scope, linked.account, fetched),
+         {:ok, counts} <- import_entries(scope, linked.account, fetched.entries),
+         :ok <- put_bank_balance(scope, linked.account, fetched.balances) do
       # Only while it feeds the same account from the same date; reassigned meanwhile, it starts over.
       Repo.update_all(
         from(l in LinkedAccount,
@@ -366,6 +372,31 @@ defmodule Abakus.BankSync do
   defp date_from(%LinkedAccount{last_fetch_at: last_fetch_at, start_date: start_date}),
     do: Enum.max([start_date, Date.add(LocalTime.date(last_fetch_at), -@refetch_days)], Date)
 
+  # Not before the newest reconciled transaction, as the import skips the booked version there.
+  defp remove_gone_pending(scope, account, %{from: from, entries: entries}) do
+    reported = MapSet.new(entries, & &1.external_id)
+
+    from =
+      case Ledger.last_reconciled_date(scope, account) do
+        nil -> from
+        reconciled -> Enum.max([from, Date.add(reconciled, 1)], Date)
+      end
+
+    gone =
+      for {external_id, transaction} <- Ledger.list_pending_imports(scope, account, :bank, from),
+          external_id not in reported,
+          do: transaction
+
+    case Ledger.delete_transactions(scope, gone) do
+      {:ok, _deleted} ->
+        :ok
+
+      {:error, _changeset} ->
+        {:error,
+         "Ein vorgemerkter Umsatz, den die Bank nicht mehr meldet, ließ sich nicht entfernen."}
+    end
+  end
+
   defp import_entries(scope, account, entries) do
     case Import.import(scope, account, :bank, entries) do
       {:ok, counts} ->
@@ -378,15 +409,16 @@ defmodule Abakus.BankSync do
   end
 
   @doc """
-  The booked transactions as import entries: the external id is the bank's entry reference, else its transaction
-  id, else a key of date, amount and payee, numbered from the second on that repeats it (" 2"); the payee is the
-  creditor of a debit, the debtor of a credit, else the first remittance line; the memo the remittance lines without
-  their SEPA prefixes. Those without a date or amount are left out, as are pending ones.
+  The booked and pending transactions as import entries: the external id is the bank's entry reference, else its
+  transaction id, else a key of date, amount and payee, numbered from the second on that repeats it (" 2"), for a
+  pending one after `pending:`, so that its booked version never passes for it; the payee is the creditor of a debit, the debtor of a credit, else the first
+  remittance line; the memo the remittance lines without their SEPA prefixes. Booked ones are cleared, pending ones
+  uncleared. Those without a date or amount are left out, as are those neither booked nor pending.
   """
   def entries(transactions) do
     {entries, _keys} =
       for transaction <- transactions,
-          transaction.status == :booked,
+          transaction.status in [:booked, :pending],
           transaction.date != nil and transaction.amount != nil,
           reduce: {[], %{}} do
         {entries, keys} ->
@@ -406,6 +438,16 @@ defmodule Abakus.BankSync do
 
   defp number(entry, _bank_id, keys), do: {entry, keys}
 
+  defp entry(%{status: :pending} = transaction) do
+    entry = entry(%{transaction | status: :booked})
+
+    %{
+      entry
+      | external_id: TransactionOrigin.pending_prefix() <> entry.external_id,
+        cleared: :uncleared
+    }
+  end
+
   defp entry(transaction) do
     payee_name = payee_name(transaction)
 
@@ -416,7 +458,8 @@ defmodule Abakus.BankSync do
       date: transaction.date,
       amount: transaction.amount,
       payee_name: payee_name,
-      memo: memo(transaction.remittance)
+      memo: memo(transaction.remittance),
+      cleared: :cleared
     }
   end
 

@@ -280,16 +280,17 @@ defmodule Abakus.BankSyncTest do
       %{connection: connection, current: current, savings: savings, giro: giro}
     end
 
-    test "imports the linked accounts' booked transactions from their start dates", ctx do
+    test "imports the linked accounts' transactions from their start dates", ctx do
       assert {:ok, run} = BankSync.fetch(budget_scope(), ctx.connection)
-      assert {run.trigger, run.new, run.matched, run.error} == {:manual, 1, 0, nil}
+      assert {run.trigger, run.new, run.matched, run.error} == {:manual, 2, 0, nil}
 
       assert FakeClient.fetches() == [
                {:transactions, "uid-giro", ~D[2026-09-15], nil},
                {:balances, "uid-giro", nil}
              ]
 
-      assert [transaction] = Ledger.list_transactions(budget_scope(), ctx.giro)
+      assert [pending, transaction] = Ledger.list_transactions(budget_scope(), ctx.giro)
+      assert %{amount: -640, cleared: :uncleared} = pending
 
       assert %{
                date: ~D[2026-10-12],
@@ -325,7 +326,7 @@ defmodule Abakus.BankSyncTest do
       assert {:ok, %{new: 0, matched: 0}} = BankSync.fetch(budget_scope(), ctx.connection)
 
       assert {:transactions, "uid-giro", ~D[2026-10-06], nil} in FakeClient.fetches()
-      assert [_transaction] = Ledger.list_transactions(budget_scope(), ctx.giro)
+      assert [_pending, _booked] = Ledger.list_transactions(budget_scope(), ctx.giro)
     end
 
     test "takes nothing dated before the start date, whatever the bank reports", ctx do
@@ -443,7 +444,7 @@ defmodule Abakus.BankSyncTest do
                         {:error, "Tagesgeld: Der Abruf ist unerwartet fehlgeschlagen."}
              end) =~ "kaputt"
 
-      assert [%{new: 1, error: "Tagesgeld: Der Abruf ist unerwartet" <> _rest}] =
+      assert [%{new: 2, error: "Tagesgeld: Der Abruf ist unerwartet" <> _rest}] =
                BankSync.get_connection!(budget_scope(), connection.id).sync_runs
     end
 
@@ -466,7 +467,7 @@ defmodule Abakus.BankSyncTest do
       Process.exit(pid, :kill)
       assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
 
-      assert [_transaction] = Ledger.list_transactions(budget_scope(), ctx.giro)
+      assert [_pending, _booked] = Ledger.list_transactions(budget_scope(), ctx.giro)
       assert BankSync.get_connection!(budget_scope(), connection.id).sync_runs == []
     end
 
@@ -513,6 +514,162 @@ defmodule Abakus.BankSyncTest do
     end
   end
 
+  describe "fetch/3 with pending transactions" do
+    setup do
+      connection = connection_fixture()
+      [current, _savings] = connection.linked_accounts
+      giro = account_fixture(name: "Girokonto")
+
+      {:ok, connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{
+          current.id => %{account_id: giro.id, start_date: ~D[2026-10-01]}
+        })
+
+      %{connection: connection, current: current, giro: giro}
+    end
+
+    defp report(transactions), do: FakeClient.put_transactions("uid-giro", transactions)
+
+    defp pending(attrs),
+      do: FakeClient.transaction(Keyword.merge([status: :pending, date: ~D[2026-10-07]], attrs))
+
+    defp booked(attrs), do: FakeClient.transaction(Keyword.put_new(attrs, :date, ~D[2026-10-08]))
+
+    defp register(giro),
+      do: budget_scope() |> Ledger.list_transactions(giro) |> Enum.reverse()
+
+    defp approve(transaction, attrs \\ %{}) do
+      {:ok, approved} =
+        Ledger.update_transaction(budget_scope(), transaction, Map.put(attrs, :approved, true))
+
+      approved
+    end
+
+    test "imports a pending transaction once, as Vorgemerkt", ctx do
+      report([pending(amount: -4200, creditor: "Stadtwerke")])
+
+      assert {:ok, %{new: 1}} = BankSync.fetch(budget_scope(), ctx.connection)
+      assert {:ok, %{new: 0}} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert [transaction] = register(ctx.giro)
+
+      assert %{amount: -4200, cleared: :uncleared, approved: false, source: :bank} = transaction
+      assert transaction.payee.name == "Stadtwerke"
+
+      assert %{external_id: "pending:2026-10-07 -4200 stadtwerke"} =
+               Repo.get_by!(TransactionOrigin, transaction_id: transaction.id)
+    end
+
+    test "replaces an unapproved pending transaction by the booked one", ctx do
+      report([pending(transaction_id: "T-7", amount: -640, creditor: "Bäckerei Korn")])
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+      [vorgemerkt] = register(ctx.giro)
+
+      report([booked(transaction_id: "T-7", amount: -640, creditor: "BAECKEREI KORN")])
+
+      assert {:ok, %{new: 1, matched: 0}} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert Repo.reload!(vorgemerkt).deleted_at
+      assert [gebucht] = register(ctx.giro)
+      assert %{amount: -640, cleared: :cleared, approved: false} = gebucht
+      assert gebucht.payee.name == "BAECKEREI KORN"
+    end
+
+    test "proposes the booked transaction as a match for an approved pending one", ctx do
+      groceries = category_fixture(name: "Lebensmittel")
+      report([pending(amount: -5837, creditor: "Frischmarkt")])
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+      vorgemerkt = ctx.giro |> register() |> hd() |> approve(%{category_id: groceries.id})
+
+      report([booked(entry_reference: "E-8", amount: -5837, creditor: "FRISCHMARKT SAGT DANKE")])
+
+      assert {:ok, %{new: 0, matched: 1}} = BankSync.fetch(budget_scope(), ctx.connection)
+      assert [proposal] = Ledger.list_match_proposals(budget_scope(), ctx.giro)
+      assert proposal.matched_transaction_id == vorgemerkt.id
+
+      {:ok, _accepted} = Ledger.accept_match(budget_scope(), proposal)
+
+      assert [%{id: id, cleared: :cleared, category_id: category_id}] = register(ctx.giro)
+      assert {id, category_id} == {vorgemerkt.id, groceries.id}
+    end
+
+    test "proposes the booked transaction instead of its pending one while the bank reports both",
+         ctx do
+      manual = transaction_fixture(account_id: ctx.giro.id, date: ~D[2026-10-06], amount: -5837)
+      vorgemerkt = pending(amount: -5837, creditor: "Frischmarkt")
+      report([vorgemerkt])
+      assert {:ok, %{new: 0, matched: 1}} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      report([vorgemerkt, booked(entry_reference: "E-8", amount: -5837, creditor: "Frischmarkt")])
+      assert {:ok, %{new: 0, matched: 1}} = BankSync.fetch(budget_scope(), ctx.connection)
+      assert [%{id: id}, %{cleared: :uncleared, approved: false}] = register(ctx.giro)
+      assert id == manual.id
+
+      report([booked(entry_reference: "E-8", amount: -5837, creditor: "Frischmarkt")])
+      assert {:ok, %{new: 0, matched: 0}} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert [%{id: id}] = register(ctx.giro)
+      assert id == manual.id
+      assert [proposal] = Ledger.list_match_proposals(budget_scope(), ctx.giro)
+      assert proposal.matched_transaction_id == manual.id
+
+      {:ok, _accepted} = Ledger.accept_match(budget_scope(), proposal)
+      assert [%{id: ^id, cleared: :cleared}] = register(ctx.giro)
+
+      assert %{external_id: "E-8"} = Repo.get_by!(TransactionOrigin, transaction_id: id)
+    end
+
+    test "removes an unapproved pending transaction the bank no longer reports", ctx do
+      report([pending(transaction_id: "T-9", amount: -15_000, creditor: "Hotel Kaution")])
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      report([])
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert register(ctx.giro) == []
+    end
+
+    test "keeps an approved pending transaction whose booking differs", ctx do
+      report([pending(amount: -3000, creditor: "Restaurant")])
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+      ctx.giro |> register() |> hd() |> approve()
+
+      report([booked(entry_reference: "E-10", amount: -3300, creditor: "Restaurant")])
+
+      assert {:ok, %{new: 1, matched: 0}} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert [%{amount: -3000, cleared: :uncleared}, %{amount: -3300, cleared: :cleared}] =
+               register(ctx.giro)
+    end
+
+    test "keeps a pending transaction whose booked version is dated up to the last reconcile",
+         ctx do
+      report([pending(transaction_id: "T-11", amount: -2500, creditor: "Tankstelle")])
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+      transaction_fixture(account_id: ctx.giro.id, date: ~D[2026-10-09], cleared: :reconciled)
+
+      report([booked(transaction_id: "T-11", amount: -2500, creditor: "Tankstelle")])
+
+      assert {:ok, %{new: 0, matched: 0}} = BankSync.fetch(budget_scope(), ctx.connection)
+      assert [%{amount: -2500, cleared: :uncleared}, _reconciled] = register(ctx.giro)
+    end
+
+    test "keeps a pending transaction dated before the fetched window", ctx do
+      report([pending(date: ~D[2026-10-02], amount: -990, creditor: "Kiosk")])
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      LinkedAccount
+      |> Repo.get!(ctx.current.id)
+      |> Ecto.Changeset.change(last_fetch_at: ~U[2026-10-20 10:00:00.000000Z])
+      |> Repo.update!()
+
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert {:transactions, "uid-giro", ~D[2026-10-06], nil} in FakeClient.fetches()
+      assert [%{amount: -990}] = register(ctx.giro)
+    end
+  end
+
   describe "fetch_all/1" do
     test "fetches each connection with a linked account on schedule" do
       unlinked = connection_fixture()
@@ -532,10 +689,13 @@ defmodule Abakus.BankSyncTest do
   end
 
   describe "entries/1" do
-    test "keeps the booked transactions with a date and an amount" do
+    test "keeps the booked and pending transactions with a date and an amount" do
       booked = FakeClient.transaction(entry_reference: "E-1", date: ~D[2026-10-02], amount: -100)
 
-      assert [%{external_id: "E-1"}] =
+      assert [
+               %{external_id: "E-1", cleared: :cleared},
+               %{external_id: "pending:E-1", cleared: :uncleared}
+             ] =
                BankSync.entries([
                  booked,
                  %{booked | status: :pending},
@@ -549,14 +709,21 @@ defmodule Abakus.BankSyncTest do
       booked =
         FakeClient.transaction(date: ~D[2026-10-02], amount: -640, creditor: "Bäckerei Korn")
 
-      assert [%{external_id: "E-1"}, %{external_id: "T-1"}, %{external_id: key}] =
+      assert [
+               %{external_id: "E-1"},
+               %{external_id: "T-1"},
+               %{external_id: key},
+               %{external_id: pending_key}
+             ] =
                BankSync.entries([
                  %{booked | entry_reference: "E-1", transaction_id: "T-1"},
                  %{booked | transaction_id: "T-1"},
-                 booked
+                 booked,
+                 %{booked | status: :pending}
                ])
 
       assert key == "2026-10-02 -640 bäckerei korn"
+      assert pending_key == "pending:" <> key
     end
 
     test "numbers a key that repeats, but no bank id" do
@@ -565,16 +732,20 @@ defmodule Abakus.BankSyncTest do
 
       assert [
                "2026-10-02 -640 bäckerei korn",
+               "pending:2026-10-02 -640 bäckerei korn",
                "2026-10-02 -640 bäckerei korn 2",
                "E-1",
                "E-1",
+               "pending:2026-10-02 -640 bäckerei korn 2",
                "2026-10-02 -640 bäckerei korn 3"
              ] ==
                [
                  booked,
+                 %{booked | status: :pending},
                  booked,
                  %{booked | entry_reference: "E-1"},
                  %{booked | entry_reference: "E-1"},
+                 %{booked | status: :pending},
                  booked
                ]
                |> BankSync.entries()

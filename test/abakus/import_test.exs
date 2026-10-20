@@ -53,6 +53,15 @@ defmodule Abakus.ImportTest do
                MapSet.new(~w(B-1 B-2 B-3))
     end
 
+    test "takes the entry's cleared state where it has one", %{giro: giro} do
+      pending = entry("pending:P-1", ~D[2026-10-06], -990, %{cleared: :uncleared})
+
+      assert {:ok, %{new: 4}} = Import.import(budget_scope(), giro, :bank, [pending | entries()])
+
+      assert [:cleared, :cleared, :cleared, :uncleared] =
+               giro |> register() |> Enum.map(& &1.cleared)
+    end
+
     test "dedupes by account, source and external id", %{giro: giro} do
       {:ok, _counts} = Import.import(budget_scope(), giro, :bank, entries())
 

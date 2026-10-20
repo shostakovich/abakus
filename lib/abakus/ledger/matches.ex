@@ -20,10 +20,10 @@ defmodule Abakus.Ledger.Matches do
 
   @doc """
   The candidate each import matches, nil for none, in the imports' order: the same amount, at most `days/0` days
-  apart. The closest pairs are matched first, on a tie the older transaction (earlier date, then lower id), then the
-  older import; each import and each candidate is matched once.
+  apart, and one `takes?.(import, candidate)` allows. The closest pairs are matched first, on a tie the older
+  transaction (earlier date, then lower id), then the older import; each import and each candidate is matched once.
   """
-  def pick(imports, candidates) do
+  def pick(imports, candidates, takes? \\ fn _import, _candidate -> true end) do
     by_amount = Enum.group_by(candidates, & &1.amount)
 
     matches =
@@ -32,6 +32,7 @@ defmodule Abakus.Ledger.Matches do
       |> Enum.flat_map(fn {import, index} ->
         for candidate <- Map.get(by_amount, import.amount, []),
             distance(candidate, import) <= @days,
+            takes?.(import, candidate),
             do: {pair_order(import, index, candidate), index, candidate}
       end)
       |> Enum.sort_by(&elem(&1, 0))
