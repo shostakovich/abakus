@@ -2,7 +2,7 @@ defmodule AbakusWeb.RegisterLive.Rows do
   @moduledoc """
   Which transactions the register shows and what it shows beside them: the view (all, waiting for approval, not
   cleared), the search, the running balance and whether a transaction takes a category. Transactions come from
-  `Abakus.Ledger.list_transactions/2` (match proposals from `list_match_proposals/2`), newest first, with payee,
+  `Abakus.Ledger.list_transactions/3` (match proposals from `list_match_proposals/2`), newest first, with payee,
   category and subtransactions.
   """
 
@@ -30,6 +30,9 @@ defmodule AbakusWeb.RegisterLive.Rows do
       key -> Enum.filter(transactions, &matches?(&1, key))
     end
   end
+
+  @doc "Whether `search/2` narrows anything with the query."
+  def searching?(query), do: Names.lookup_key(query) != ""
 
   defp matches?(transaction, key) do
     sides = [transaction | transaction.subtransactions]

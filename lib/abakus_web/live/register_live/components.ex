@@ -495,6 +495,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   end
 
   attr :rows, :list, required: true
+  attr :count, :integer, required: true, doc: "how many transactions the view has, loaded or not"
   attr :proposals, :list, required: true, doc: "the match proposals shown among the rows"
   attr :accounts, :map, required: true
   attr :columns, :map, required: true, doc: "`%{all, category, running, count}`, see `columns/2`"
@@ -517,8 +518,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   def table(assigns) do
     assigns =
       assign(assigns,
-        all_selected:
-          assigns.rows != [] and MapSet.size(assigns.selected) == length(assigns.rows),
+        all_selected: assigns.count > 0 and MapSet.size(assigns.selected) == assigns.count,
         edited: assigns.editor && assigns.editor.row_id
       )
 
@@ -926,6 +926,13 @@ defmodule AbakusWeb.RegisterLive.Components do
       if merge_question([proposal]), do: Map.put(value, :reconciled, "confirmed"), else: value
 
     JS.push(event, value: value)
+  end
+
+  @doc "Below the rows while older ones wait: the `LoadMore` hook pushes `load_more` as it comes near the screen."
+  def load_more(assigns) do
+    ~H"""
+    <div id="register-more" phx-hook="LoadMore" class="h-px" aria-hidden="true"></div>
+    """
   end
 
   def legend(assigns) do

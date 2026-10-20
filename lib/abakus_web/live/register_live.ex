@@ -6,6 +6,10 @@ defmodule AbakusWeb.RegisterLive do
   (`running`, one account in the full list only) live in the URL; the selection does not, and whether the memo column
   shows is kept per device in the browser.
 
+  It shows the view's newest 100 transactions and loads 100 more as its end comes near (the `LoadMore` hook), so an
+  account opens as fast with thousands of transactions as with a few. A search goes through all of them, and "Alle
+  auswählen" takes the whole view, loaded or not.
+
   Here transactions are approved (one, the selected or all), categorised (the selected) and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
@@ -40,6 +44,8 @@ defmodule AbakusWeb.RegisterLive do
   alias Plug.Conn.Query
 
   import TransactionEditor, only: [confirmed: 1]
+
+  @page 100
 
   @impl true
   def render(assigns) do
@@ -100,13 +106,14 @@ defmodule AbakusWeb.RegisterLive do
         <Reconcile.bar :if={@reconciling} mode={@reconciling} />
         <Components.table
           rows={@rows}
+          count={@count}
           proposals={@shown_proposals}
           accounts={@accounts}
           columns={@columns}
           selected={@selected}
           running={@running_balances}
           editor={@editor && @editor.layout == :row && @editor}
-          empty={empty_text(@accounts, @transactions, @proposals)}
+          empty={empty_text(@accounts, @register_empty, @proposals)}
           empty_hint={empty_hint(@accounts)}
         />
         <Components.cards
@@ -114,13 +121,14 @@ defmodule AbakusWeb.RegisterLive do
           proposals={@shown_proposals}
           accounts={@accounts}
           all={is_nil(@account)}
-          empty={empty_text(@accounts, @transactions, @proposals)}
+          empty={empty_text(@accounts, @register_empty, @proposals)}
           empty_hint={empty_hint(@accounts)}
         />
+        <Components.load_more :if={@count > length(@rows)} />
         <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
         <Components.bulk
-          selected={if @editor, do: [], else: Enum.filter(@rows, &(&1.id in @selected))}
-          categories={@categories}
+          selected={if @editor, do: [], else: @selection}
+          categories={@categories || []}
         />
       </div>
       <.live_component
@@ -132,11 +140,11 @@ defmodule AbakusWeb.RegisterLive do
     """
   end
 
-  defp empty_text(accounts, _transactions, _proposals) when accounts == %{},
+  defp empty_text(accounts, _register_empty, _proposals) when accounts == %{},
     do: "Noch keine Konten"
 
-  defp empty_text(_accounts, [], []), do: "Noch keine Buchungen"
-  defp empty_text(_accounts, _transactions, _proposals), do: "Keine Buchungen in dieser Ansicht"
+  defp empty_text(_accounts, true, []), do: "Noch keine Buchungen"
+  defp empty_text(_accounts, _register_empty, _proposals), do: "Keine Buchungen in dieser Ansicht"
 
   defp empty_hint(accounts) when accounts == %{},
     do: "Lege mit „Konto hinzufügen“ ein Konto an, um Buchungen zu erfassen oder zu importieren."
@@ -151,6 +159,8 @@ defmodule AbakusWeb.RegisterLive do
        scope: nil,
        editor: nil,
        selected: MapSet.new(),
+       selection: [],
+       categories: nil,
        reconcile: nil,
        reconciling: nil
      )}
@@ -158,15 +168,24 @@ defmodule AbakusWeb.RegisterLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
+    view = %{scope: scope(params), filter: filter(params["filter"]), query: params["q"] || ""}
+
     {:noreply,
      socket
-     |> assign(
-       filter: filter(params["filter"]),
-       query: params["q"] || "",
-       running: params["running"] == "1"
-     )
-     |> load(scope(params))
+     |> assign(:running, params["running"] == "1")
+     |> show(view)
+     |> load_transactions()
      |> assign_rows()}
+  end
+
+  # Another view or search starts again at its newest transactions; the running balance changes neither.
+  defp show(socket, view) do
+    if Map.take(socket.assigns, [:scope, :filter, :query]) == view,
+      do: socket,
+      else:
+        socket
+        |> assign(filter: view.filter, query: view.query, limit: @page, selection: [])
+        |> load(view.scope)
   end
 
   defp scope(%{"id" => id}), do: {:account, id}
@@ -199,7 +218,6 @@ defmodule AbakusWeb.RegisterLive do
     socket
     |> assign(scope: :all, account: nil, portfolio: nil, selected: MapSet.new(), editor: nil)
     |> assign(reconcile: nil, reconciling: nil)
-    |> load_transactions()
   end
 
   defp load(socket, {:account, id} = scope) do
@@ -209,21 +227,42 @@ defmodule AbakusWeb.RegisterLive do
     |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
     |> assign(:portfolio, BudgetFeed.portfolio(socket.assigns.current_scope, account))
     |> assign(reconcile: nil, reconciling: nil)
-    |> load_transactions()
   end
 
+  # The view's newest `limit` transactions as rows; a search compares in memory, so it goes through all of them.
   defp load_transactions(socket) do
-    current_scope = socket.assigns.current_scope
-    register = socket.assigns.account || :all
+    %{current_scope: current_scope, filter: filter, limit: limit} = assigns = socket.assigns
+    register = register(assigns)
+
+    {rows, count} =
+      if Rows.searching?(assigns.query) do
+        found = view(assigns, [])
+        {Enum.take(found, limit), length(found)}
+      else
+        {view(assigns, limit: limit),
+         Ledger.count_transactions(current_scope, register, filter: filter)}
+      end
 
     assign(socket,
-      transactions: Ledger.list_transactions(current_scope, register),
+      rows: rows,
+      count: count,
+      register_empty: count == 0 and Ledger.count_transactions(current_scope, register) == 0,
+      unapproved: Ledger.list_transactions(current_scope, register, filter: :unapproved),
       proposals: Ledger.list_match_proposals(current_scope, register)
     )
   end
 
+  # The transactions in the view and search, newest first; `opts` narrow them as `Ledger.list_transactions/3` does.
+  defp view(assigns, opts) do
+    assigns.current_scope
+    |> Ledger.list_transactions(register(assigns), [filter: assigns.filter] ++ opts)
+    |> Rows.search(assigns.query)
+  end
+
+  defp register(assigns), do: assigns.account || :all
+
   defp assign_rows(socket) do
-    %{transactions: transactions, filter: filter, query: query} = socket.assigns
+    %{rows: rows, filter: filter, query: query} = socket.assigns
     account_rows = AccountGroups.rows(socket.assigns.account_groups)
     accounts = Map.new(account_rows, &{&1.account.id, &1.account})
     account = socket.assigns.account && Map.fetch!(accounts, socket.assigns.account.id)
@@ -231,26 +270,54 @@ defmodule AbakusWeb.RegisterLive do
     socket =
       assign(socket, account: account, page_title: (account && account.name) || "Alle Konten")
 
-    rows = transactions |> Rows.filter(filter) |> Rows.search(query)
     shown_proposals = socket.assigns.proposals |> Rows.filter(filter) |> Rows.search(query)
     balances = balances(account, account_rows)
     running = running_balances(socket.assigns, rows, balances)
     columns = Components.columns(account, running != nil)
 
-    assign(socket,
-      rows: rows,
+    socket
+    |> assign(
       shown_proposals: shown_proposals,
       accounts: accounts,
       manual: manual_entry?(account, accounts),
       columns: columns,
       editor: follow_rows(socket.assigns.editor, rows, accounts, columns),
-      categories: CategoryOptions.build(socket.assigns.current_scope, socket.assigns.today),
       balances: balances,
-      unapproved: Enum.reject(transactions, & &1.approved),
       running_balances: running,
-      paths: view_paths(Map.put(socket.assigns, :accounts, accounts)),
-      selected: MapSet.intersection(socket.assigns.selected, MapSet.new(rows, & &1.id))
+      paths: view_paths(Map.put(socket.assigns, :accounts, accounts))
     )
+    |> select(socket.assigns.selected)
+  end
+
+  # The selection as far as the view still shows it, from the rows and the selection itself while they are current,
+  # else from the database.
+  defp select(socket, %MapSet{} = ids) do
+    %{rows: rows, selection: selection} = socket.assigns
+    known = (rows ++ selection) |> Enum.filter(&(&1.id in ids)) |> Enum.uniq_by(& &1.id)
+
+    if length(known) == MapSet.size(ids),
+      do: select(socket, known),
+      else: select(socket, view(socket.assigns, ids: MapSet.to_list(ids)))
+  end
+
+  defp select(socket, transactions) when is_list(transactions) do
+    socket
+    |> assign(selected: MapSet.new(transactions, & &1.id), selection: transactions)
+    |> assign_categories()
+  end
+
+  # The selection bar's category picker reads the whole budget, so it is built only once something is selected.
+  defp assign_categories(%{assigns: assigns} = socket) do
+    cond do
+      MapSet.size(assigns.selected) == 0 ->
+        assign(socket, :categories, nil)
+
+      assigns.categories ->
+        socket
+
+      true ->
+        assign(socket, :categories, CategoryOptions.build(assigns.current_scope, assigns.today))
+    end
   end
 
   # The edited row goes when the view or search leaves it out; the editor sees the columns as they are now.
@@ -357,7 +424,7 @@ defmodule AbakusWeb.RegisterLive do
 
   # The selection stays until it is approved.
   def handle_event("approve_selected", params, socket) do
-    case Enum.reject(selected(socket.assigns), & &1.approved) do
+    case Enum.reject(socket.assigns.selection, & &1.approved) do
       [] ->
         {:noreply,
          put_flash(socket, :info, "Keine der ausgewählten Buchungen wartet auf Bestätigung.")}
@@ -368,7 +435,10 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   def handle_event("categorise_selected", %{"category_id" => id} = params, socket) do
-    case Enum.find(CategoryOptions.ids(socket.assigns.categories), &(Integer.to_string(&1) == id)) do
+    case Enum.find(
+           CategoryOptions.ids(socket.assigns.categories || []),
+           &(Integer.to_string(&1) == id)
+         ) do
       nil -> {:noreply, socket}
       category_id -> categorise(socket, category_id, params)
     end
@@ -387,7 +457,7 @@ defmodule AbakusWeb.RegisterLive do
       %{id: id} = transaction ->
         if id in socket.assigns.selected,
           do: {:noreply, open_editor(socket, transaction.id, :row, params["field"])},
-          else: {:noreply, assign(socket, :selected, MapSet.new([id]))}
+          else: {:noreply, select(socket, [transaction])}
     end
   end
 
@@ -406,7 +476,7 @@ defmodule AbakusWeb.RegisterLive do
   def handle_event("cancel_edit", _params, socket), do: {:noreply, assign(socket, :editor, nil)}
 
   def handle_event("delete_selected", params, socket) do
-    case selected(socket.assigns) do
+    case socket.assigns.selection do
       [] ->
         {:noreply, socket}
 
@@ -423,18 +493,25 @@ defmodule AbakusWeb.RegisterLive do
   def handle_event("select", %{"id" => id}, socket) do
     case find(socket, id) do
       nil -> {:noreply, socket}
-      transaction -> {:noreply, update(socket, :selected, &toggle(&1, transaction.id))}
+      transaction -> {:noreply, select(socket, toggle(socket.assigns.selected, transaction.id))}
     end
   end
 
-  def handle_event("select_all", _params, socket) do
-    shown = MapSet.new(socket.assigns.rows, & &1.id)
-    selected = if MapSet.equal?(socket.assigns.selected, shown), do: MapSet.new(), else: shown
-    {:noreply, assign(socket, :selected, selected)}
+  def handle_event("select_all", _params, %{assigns: assigns} = socket) do
+    if MapSet.size(assigns.selected) == assigns.count,
+      do: {:noreply, select(socket, [])},
+      else: {:noreply, select(socket, view(assigns, []))}
   end
 
-  def handle_event("clear_selection", _params, socket),
-    do: {:noreply, assign(socket, :selected, MapSet.new())}
+  def handle_event("clear_selection", _params, socket), do: {:noreply, select(socket, [])}
+
+  def handle_event("load_more", _params, %{assigns: assigns} = socket) do
+    if assigns.count > length(assigns.rows),
+      do:
+        {:noreply,
+         socket |> update(:limit, &(&1 + @page)) |> load_transactions() |> assign_rows()},
+      else: {:noreply, socket}
+  end
 
   def handle_event(
         "reconcile_open",
@@ -583,10 +660,7 @@ defmodule AbakusWeb.RegisterLive do
         row_id = if is_integer(id), do: id, else: String.to_integer(id)
 
         socket
-        |> assign(
-          :selected,
-          if(layout == :row, do: MapSet.new([row_id]), else: socket.assigns.selected)
-        )
+        |> then(&if(layout == :row, do: select(&1, MapSet.new([row_id])), else: &1))
         |> assign(
           :editor,
           editor(socket, row_id, transaction, split_of, layout, field || "payee")
@@ -674,7 +748,7 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp categorise(socket, category_id, params) do
-    case Enum.filter(selected(socket.assigns), &Rows.categorisable?(&1, socket.assigns.accounts)) do
+    case Enum.filter(socket.assigns.selection, &Rows.categorisable?(&1, socket.assigns.accounts)) do
       [] ->
         {:noreply,
          put_flash(socket, :error, "Keine der ausgewählten Buchungen nimmt eine Kategorie.")}
@@ -710,6 +784,7 @@ defmodule AbakusWeb.RegisterLive do
   defp refresh(socket) do
     socket
     |> assign(:account_groups, AccountGroups.load(socket.assigns.current_scope))
+    |> assign(categories: nil, selection: [])
     |> load_transactions()
     |> assign_rows()
     |> update(:reconciling, &follow_cleared(&1, socket.assigns))
@@ -727,9 +802,7 @@ defmodule AbakusWeb.RegisterLive do
   defp noreply(socket), do: {:noreply, socket}
 
   defp find(socket, id),
-    do: Enum.find(socket.assigns.transactions, &(Integer.to_string(&1.id) == id))
-
-  defp selected(assigns), do: Enum.filter(assigns.rows, &(&1.id in assigns.selected))
+    do: Enum.find(socket.assigns.rows, &(Integer.to_string(&1.id) == id))
 
   defp filter(param), do: Enum.find(Rows.filters(), :all, &(Atom.to_string(&1) == param))
 
