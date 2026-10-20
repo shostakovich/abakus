@@ -5,7 +5,7 @@ defmodule Abakus.BankSyncTest do
   import Abakus.BankSyncFixtures
   import ExUnit.CaptureLog
 
-  alias Abakus.{BankSync, Ledger, Repo}
+  alias Abakus.{BankSync, Ledger, LocalTime, Repo}
   alias Abakus.BankSync.{AccessError, Connection, FakeClient, LinkedAccount}
   alias Abakus.Ledger.TransactionOrigin
   alias Abakus.Users.Scope
@@ -104,6 +104,180 @@ defmodule Abakus.BankSyncTest do
 
       assert BankSync.connect(budget_scope(), auth, "unknown") == {:error, {:http_status, 400}}
       assert BankSync.list_connections(budget_scope()) == []
+    end
+  end
+
+  describe "renew/3" do
+    setup do
+      connection = connection_fixture()
+      [current, savings] = connection.linked_accounts
+      giro = account_fixture(name: "Girokonto")
+      tagesgeld = account_fixture(name: "Tagesgeld")
+
+      {:ok, connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{
+          current.id => %{account_id: giro.id, start_date: ~D[2026-10-01]},
+          savings.id => %{account_id: tagesgeld.id, start_date: ~D[2026-10-05]}
+        })
+
+      Repo.update_all(Connection, set: [reminders_sent: [14, 3], last_error: "abgelaufen"])
+      %{connection: connection, giro: giro, tagesgeld: tagesgeld}
+    end
+
+    test "starts a consent at the connection's bank that renews it", %{connection: connection} do
+      assert {:ok, %{url: url, auth: auth}} =
+               BankSync.renew(budget_scope(), connection, "https://abakus.example/callback")
+
+      assert url == "https://enablebanking.example/auth/#{auth.state}"
+      assert auth.connection_id == connection.id
+      assert %{bank_name: "Musterbank", bank_country: "DE"} = auth
+      assert auth.valid_until == ~U[2027-04-18 10:00:00Z]
+    end
+
+    test "keeps the linked accounts by the bank's id, else by IBAN, adds new ones and drops gone ones",
+         %{connection: connection, giro: giro} do
+      FakeClient.put_session("code-2", %{
+        session_id: "session-2",
+        valid_until: ~U[2027-05-01 10:00:00.000000Z],
+        accounts: [
+          %{uid: "uid-card", name: "Kreditkarte", iban: nil},
+          %{uid: "uid-giro-2", name: "Girokonto Plus", iban: "DE02100200300000004711"}
+        ]
+      })
+
+      {:ok, %{auth: auth}} = BankSync.renew(budget_scope(), connection, "https://x")
+
+      assert {:ok, renewed} = BankSync.connect(budget_scope(), auth, "code-2")
+
+      assert %{
+               id: id,
+               session_id: "session-2",
+               valid_until: ~U[2027-05-01 10:00:00.000000Z],
+               reminders_sent: [],
+               last_error: nil
+             } = renewed
+
+      assert id == connection.id
+
+      assert [
+               %{provider_account_id: "uid-giro-2", name: "Girokonto Plus"} = current,
+               %{provider_account_id: "uid-card", account_id: nil, start_date: nil}
+             ] = renewed.linked_accounts
+
+      assert current.account_id == giro.id
+      assert current.start_date == ~D[2026-10-01]
+      assert [_one] = BankSync.list_connections(budget_scope())
+    end
+
+    test "prefers the bank's id to the IBAN", %{connection: connection, giro: giro} do
+      FakeClient.put_session("code-2", %{
+        FakeClient.session()
+        | session_id: "session-2",
+          accounts: [
+            %{uid: "uid-other", name: "Unterkonto", iban: "DE02100200300000004711"},
+            %{uid: "uid-giro", name: "Girokonto", iban: "DE02100200300000004711"}
+          ]
+      })
+
+      {:ok, %{auth: auth}} = BankSync.renew(budget_scope(), connection, "https://x")
+      {:ok, renewed} = BankSync.connect(budget_scope(), auth, "code-2")
+
+      assert [%{provider_account_id: "uid-giro", account_id: account_id}, %{account_id: nil}] =
+               renewed.linked_accounts
+
+      assert account_id == giro.id
+    end
+
+    test "refuses once the connection is gone", %{connection: connection} do
+      {:ok, %{auth: auth}} = BankSync.renew(budget_scope(), connection, "https://x")
+      {:ok, _connection} = BankSync.delete_connection(budget_scope(), connection)
+
+      assert BankSync.connect(budget_scope(), auth, "code-1") == {:error, :unknown_connection}
+      assert BankSync.list_connections(budget_scope()) == []
+    end
+  end
+
+  describe "remind_consents/1" do
+    setup do
+      connection = connection_fixture()
+      %{connection: connection, owner: budget_scope().user.email}
+    end
+
+    defp consent_until(valid_until, reminders_sent \\ []),
+      do:
+        Repo.update_all(Connection,
+          set: [valid_until: valid_until, reminders_sent: reminders_sent]
+        )
+
+    test "mails once for the nearest threshold reached and marks those passed as sent",
+         %{connection: connection, owner: owner} do
+      consent_until(~U[2026-10-22 10:00:00.000000Z])
+
+      assert BankSync.remind_consents(budget_scope()) == :ok
+
+      assert_received {:email,
+                       %{
+                         subject: "Abakus: Freigabe für Musterbank endet in 2 Tagen",
+                         to: [{_, ^owner}]
+                       }}
+
+      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
+      assert Repo.get!(Connection, connection.id).reminders_sent == [14, 3]
+
+      assert BankSync.remind_consents(budget_scope()) == :ok
+      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
+    end
+
+    test "says so on the last day" do
+      consent_until(LocalTime.to_utc(~N[2026-10-20 23:00:00]), [14])
+
+      BankSync.remind_consents(budget_scope())
+
+      assert_received {:email, %{subject: "Abakus: Freigabe für Musterbank endet heute"}}
+    end
+
+    test "mails nothing before 14 days nor once the consent has ended", %{connection: connection} do
+      consent_until(~U[2026-11-04 10:00:00.000000Z])
+      BankSync.remind_consents(budget_scope())
+      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
+
+      consent_until(~U[2026-10-19 10:00:00.000000Z])
+      BankSync.remind_consents(budget_scope())
+      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
+      assert Repo.get!(Connection, connection.id).reminders_sent == []
+    end
+
+    test "mails nothing on the last day once the consent has ended", %{connection: connection} do
+      fix_now(LocalTime.to_utc(~N[2026-10-20 13:00:00]))
+      consent_until(LocalTime.to_utc(~N[2026-10-20 12:00:00]), [14])
+
+      BankSync.remind_consents(budget_scope())
+
+      refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
+      assert Repo.get!(Connection, connection.id).reminders_sent == [14]
+    end
+  end
+
+  describe "expiring_consents/1" do
+    test "lists the connections whose consent ends within 14 days or has ended" do
+      later = connection_fixture()
+      FakeClient.put_session("code-1", %{FakeClient.session() | session_id: "session-2"})
+      soon = connection_fixture()
+      FakeClient.put_session("code-1", %{FakeClient.session() | session_id: "session-3"})
+      ended = connection_fixture()
+
+      set_valid_until = fn connection, valid_until ->
+        Repo.update_all(from(c in Connection, where: c.id == ^connection.id),
+          set: [valid_until: valid_until]
+        )
+      end
+
+      set_valid_until.(later, ~U[2026-11-04 10:00:00.000000Z])
+      set_valid_until.(soon, ~U[2026-11-03 10:00:00.000000Z])
+      set_valid_until.(ended, ~U[2026-10-19 10:00:00.000000Z])
+
+      assert [%{id: soon_id}, %{id: ended_id}] = BankSync.expiring_consents(budget_scope())
+      assert {soon_id, ended_id} == {soon.id, ended.id}
     end
   end
 
@@ -387,6 +561,21 @@ defmodule Abakus.BankSyncTest do
       assert BankSync.get_connection!(budget_scope(), ctx.connection.id).last_error == nil
     end
 
+    test "ends the consent when the bank says it has ended", ctx do
+      FakeClient.fail_fetches(:consent_ended)
+
+      assert {:error,
+              "Girokonto: Die Bank hat den Abruf abgelehnt: die Freigabe gilt nicht mehr."} =
+               BankSync.fetch(budget_scope(), ctx.connection)
+
+      connection = BankSync.get_connection!(budget_scope(), ctx.connection.id)
+      assert connection.valid_until == ~U[2026-10-20 10:00:00.000000Z]
+      assert Connection.expired?(connection)
+      assert [%{id: id}] = BankSync.expiring_consents(budget_scope())
+      assert id == connection.id
+      assert BankSync.fetch_all(budget_scope()) == []
+    end
+
     test "refuses an account that no longer takes entries", ctx do
       {:ok, _closed} = Ledger.update_account(budget_scope(), ctx.giro, %{closed: true})
 
@@ -504,6 +693,16 @@ defmodule Abakus.BankSyncTest do
 
       :global.del_lock(lock, [node()])
       assert {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+    end
+
+    test "refuses a connection whose consent has ended, without a run", ctx do
+      Repo.update_all(Connection, set: [valid_until: ~U[2026-10-20 09:00:00.000000Z]])
+
+      assert {:error, "Die Freigabe ist abgelaufen" <> _rest} =
+               BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert FakeClient.fetches() == []
+      assert BankSync.get_connection!(budget_scope(), ctx.connection.id).sync_runs == []
     end
 
     test "lists the last five runs, newest first", ctx do
@@ -686,6 +885,21 @@ defmodule Abakus.BankSyncTest do
       assert id == linked.id
       assert BankSync.get_connection!(budget_scope(), unlinked.id).sync_runs == []
     end
+
+    test "skips a connection whose consent has ended" do
+      connection = connection_fixture()
+      [current, _savings] = connection.linked_accounts
+
+      {:ok, _connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{
+          current.id => %{account_id: account_fixture().id, start_date: ~D[2026-10-01]}
+        })
+
+      Repo.update_all(Connection, set: [valid_until: ~U[2026-10-19 10:00:00.000000Z]])
+
+      assert BankSync.fetch_all(budget_scope()) == []
+      assert FakeClient.fetches() == []
+    end
   end
 
   describe "entries/1" do
@@ -833,6 +1047,10 @@ defmodule Abakus.BankSyncTest do
 
       assert BankSync.failing?(Scope.system())
 
+      Repo.update_all(Connection, set: [valid_until: ~U[2026-10-20 10:00:00.000000Z]])
+      refute BankSync.failing?(Scope.system())
+
+      Repo.update_all(Connection, set: [valid_until: ~U[2027-01-18 10:00:00.000000Z]])
       [connection] = BankSync.list_connections(budget_scope())
 
       {:ok, _connection} =
@@ -878,9 +1096,12 @@ defmodule Abakus.BankSyncTest do
           fn -> BankSync.delete_connection(other, connection) end,
           fn -> BankSync.fetch(other, connection) end,
           fn -> BankSync.fetch_all(Scope.system()) end,
+          fn -> BankSync.renew(other, connection, "https://x") end,
           fn -> BankSync.connect(other, auth, "code-1") end,
           fn -> BankSync.assign_accounts(other, connection, %{}) end,
           fn -> BankSync.start_date(other, account) end,
+          fn -> BankSync.remind_consents(Scope.system()) end,
+          fn -> BankSync.expiring_consents(other) end,
           fn -> BankSync.failing?(budget_scope()) end,
           fn -> BankSync.accounts(Scope.system()) end
         ] do

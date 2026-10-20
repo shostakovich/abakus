@@ -383,6 +383,102 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
       assert has_element?(view, "#bank-connection-#{connection.id}-fetch[disabled]")
     end
 
+    test "Freigabe erneuern renews the consent at the bank and keeps the linked accounts",
+         %{conn: conn, giro: giro} do
+      connection = linked_connection(giro)
+
+      Repo.update_all(Connection,
+        set: [valid_until: ~U[2026-11-03 10:00:00.000000Z], reminders_sent: [14]]
+      )
+
+      # The bank's account ids change with the new session; the IBAN stays.
+      FakeClient.put_session("code-2", %{
+        session_id: "session-2",
+        valid_until: ~U[2027-05-01 10:00:00.000000Z],
+        accounts: [
+          %{uid: "uid-giro-2", name: "Girokonto", iban: "DE02100200300000004711"},
+          %{uid: "uid-card", name: "Kreditkarte", iban: nil}
+        ]
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/budget/bank-connections")
+      card = "#bank-connection-#{connection.id}"
+      assert has_element?(view, card, "Freigabe bis 03.11.2026")
+
+      assert {:error, {:redirect, %{to: authorize_path}}} =
+               view |> element("#{card}-renew", "Freigabe erneuern") |> render_click()
+
+      conn = get(conn, authorize_path)
+      assert redirected_to(conn) =~ "https://enablebanking.example/auth/"
+
+      request = List.last(FakeClient.auth_requests())
+      assert request.bank == %{name: "Musterbank", country: "DE"}
+      assert request.valid_until == ~U[2027-04-18 10:00:00Z]
+
+      conn =
+        get(conn, ~p"/budget/bank-connections/callback?#{[code: "code-2", state: request.state]}")
+
+      assert redirected_to(conn) == ~p"/budget/bank-connections"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
+               "Die Freigabe für Musterbank gilt jetzt bis 01.05.2027."
+
+      assert [renewed] = BankSync.list_connections(budget_scope())
+      assert renewed.id == connection.id
+      assert renewed.session_id == "session-2"
+      assert renewed.valid_until == ~U[2027-05-01 10:00:00.000000Z]
+      assert renewed.reminders_sent == []
+
+      assert [
+               %{provider_account_id: "uid-giro-2", start_date: ~D[2026-10-02]} = current,
+               %{provider_account_id: "uid-card", account_id: nil}
+             ] = renewed.linked_accounts
+
+      assert current.account_id == giro.id
+
+      {:ok, view, _html} = live(conn, ~p"/budget/bank-connections")
+      assert has_element?(view, card, "Freigabe bis 01.05.2027")
+    end
+
+    test "Finanzen shows a banner while a consent ends within 14 days", %{conn: conn} do
+      connection_fixture()
+
+      {:ok, view, _html} = live(conn, ~p"/budget")
+      refute has_element?(view, "#bank-consent-banner")
+
+      Repo.update_all(Connection, set: [valid_until: ~U[2026-11-03 10:00:00.000000Z]])
+
+      {:ok, view, _html} = live(conn, ~p"/budget")
+
+      assert has_element?(
+               view,
+               "#bank-consent-banner",
+               "Die Freigabe für Musterbank endet am 03.11.2026"
+             )
+
+      assert has_element?(
+               view,
+               ~s|#bank-consent-banner a[href="/budget/bank-connections"]|,
+               "Freigabe erneuern"
+             )
+
+      {:ok, view, _html} = live(conn, ~p"/depot")
+      assert has_element?(view, "#bank-consent-banner", "Musterbank")
+
+      Repo.update_all(Connection, set: [valid_until: ~U[2026-10-19 10:00:00.000000Z]])
+
+      {:ok, view, _html} = live(conn, ~p"/budget")
+
+      assert has_element?(
+               view,
+               "#bank-consent-banner",
+               "Die Freigabe für Musterbank ist abgelaufen"
+             )
+
+      {:ok, view, _html} = live(conn, ~p"/budget/bank-connections")
+      refute has_element?(view, "#bank-consent-banner")
+    end
+
     test "a connection can be removed", %{conn: conn} do
       connection = connection_fixture()
 

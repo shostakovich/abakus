@@ -5,8 +5,8 @@ defmodule Abakus.BankSync.JobTest do
   import Abakus.DomainFixtures
   import Abakus.BankSyncFixtures
 
-  alias Abakus.{BankSync, Ledger}
-  alias Abakus.BankSync.{FakeClient, Job}
+  alias Abakus.{BankSync, Ledger, Repo}
+  alias Abakus.BankSync.{Connection, FakeClient, Job}
 
   setup :register_and_log_in_user
 
@@ -62,6 +62,50 @@ defmodule Abakus.BankSync.JobTest do
 
     assert has_element?(view, "#reconcile-bank", "08.10.2026")
     assert has_element?(view, "#reconcile-bank", Abakus.Money.euros(120_800))
+  end
+
+  test "reminders go out once per threshold" do
+    Repo.update_all(Connection, set: [valid_until: ~U[2026-11-03 10:00:00.000000Z]])
+    owner = budget_scope().user.email
+
+    fix_today(~D[2026-10-20])
+    assert Job.run() == :ok
+
+    assert_received {:email,
+                     %{
+                       subject: "Abakus: Freigabe für Musterbank endet in 14 Tagen",
+                       to: [{_name, ^owner}],
+                       text_body: body
+                     }}
+
+    assert body =~ "03.11.2026"
+    assert body =~ "Freigabe erneuern"
+
+    fix_today(~D[2026-10-21])
+    assert Job.run() == :ok
+    refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
+
+    fix_today(~D[2026-10-31])
+    assert Job.run() == :ok
+    assert_received {:email, %{subject: "Abakus: Freigabe für Musterbank endet in 3 Tagen"}}
+    refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
+  end
+
+  test "an expired consent stops fetching", %{conn: conn, connection: connection} do
+    Repo.update_all(Connection, set: [valid_until: ~U[2026-10-19 10:00:00.000000Z]])
+
+    assert Job.run() == :ok
+
+    assert FakeClient.fetches() == []
+    assert BankSync.get_connection!(budget_scope(), connection.id).sync_runs == []
+    refute_received {:email, %{subject: "Abakus: Freigabe" <> _rest}}
+
+    {:ok, view, _html} = live(conn, ~p"/budget/bank-connections")
+
+    card = "#bank-connection-#{connection.id}"
+    assert has_element?(view, card, "Freigabe abgelaufen")
+    assert has_element?(view, "#{card}-renew", "Freigabe erneuern")
+    assert has_element?(view, "#{card}-fetch[disabled]")
   end
 
   test "reports a failed fetch for the log" do

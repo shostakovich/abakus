@@ -64,7 +64,8 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.Areas, {:require, :budget}},
         {AbakusWeb.AccountGroups, :assign},
         {AbakusWeb.AccountDialog, :attach},
-        {AbakusWeb.Depot.Sidebar, :budget}
+        {AbakusWeb.Depot.Sidebar, :budget},
+        {AbakusWeb.BankConsents, :assign}
       ] do
       live "/", BudgetLive
       live "/accounts/all", RegisterLive, :all
@@ -101,7 +102,8 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.AccountGroups, :assign},
         {AbakusWeb.AccountDialog, :attach},
         AbakusWeb.Depot.Sidebar,
-        AbakusWeb.Depot.TransactionDialog
+        AbakusWeb.Depot.TransactionDialog,
+        {AbakusWeb.BankConsents, :assign}
       ] do
       live "/", WealthLive
       live "/holdings", HoldingsLive

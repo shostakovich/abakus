@@ -48,6 +48,7 @@ defmodule AbakusWeb.BudgetLive do
       width={:full}
       account_groups={@account_groups}
       depot_sidebar={@depot_sidebar}
+      expiring_consents={@expiring_consents}
       account_dialog={@account_dialog}
     >
       <h1 class="sr-only">Budget</h1>

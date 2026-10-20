@@ -54,6 +54,7 @@ defmodule AbakusWeb.RegisterLive do
       width={:full}
       account_groups={@account_groups}
       depot_sidebar={@depot_sidebar}
+      expiring_consents={@expiring_consents}
       account_dialog={@account_dialog}
     >
       <:fab :if={@manual && !@editor}>

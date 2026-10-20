@@ -3,7 +3,7 @@ defmodule AbakusWeb.Layouts do
   use AbakusWeb, :html
 
   alias Abakus.Names
-  alias AbakusWeb.{AccountGroups, AccountMotif, Areas}
+  alias AbakusWeb.{AccountGroups, AccountMotif, Areas, BankConsents}
   alias AbakusWeb.Depot.{Components, Format, TransactionDialog}
 
   @budget_pages [:budget, :accounts, :all_accounts, :import]
@@ -45,6 +45,10 @@ defmodule AbakusWeb.Layouts do
   attr :account_dialog, :map,
     default: nil,
     doc: "the open account form from `AbakusWeb.AccountDialog`, if any"
+
+  attr :expiring_consents, :list,
+    default: [],
+    doc: "from `AbakusWeb.BankConsents`; Finanzen shows its banner above the page"
 
   attr :width, :atom,
     default: :default,
@@ -242,6 +246,7 @@ defmodule AbakusWeb.Layouts do
         <.user_menu place={place} email={@current_scope.user.email} />
       </:account>
       <:fab :if={@fab != []}>{render_slot(@fab)}</:fab>
+      <BankConsents.banner :if={@finanzen?} consents={@expiring_consents} />
       {render_slot(@inner_block)}
     </.app_shell>
 
@@ -438,6 +443,8 @@ defmodule AbakusWeb.Layouts do
     required: true,
     doc: "the portfolios, see `AbakusWeb.Depot.Sidebar`"
 
+  attr :expiring_consents, :list, default: [], doc: "from `AbakusWeb.BankConsents`"
+
   attr :current, :any,
     required: true,
     doc: """
@@ -466,6 +473,7 @@ defmodule AbakusWeb.Layouts do
       current={@page}
       depot_sidebar={@sidebar}
       depot_marked={@marked}
+      expiring_consents={@expiring_consents}
       width={:wide}
     >
       <:fab :if={@page == :depots}>

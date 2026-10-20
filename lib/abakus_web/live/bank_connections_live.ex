@@ -9,7 +9,9 @@ defmodule AbakusWeb.BankConnectionsLive do
 
   A card shows the connection's last fetch, its last five sync runs and the error of a failed one. "Jetzt abrufen"
   fetches at once with the PSU data of the owner's browser (the client's IP through the trusted proxies, its user
-  agent), so the bank does not count it against its unattended fetches.
+  agent), so the bank does not count it against its unattended fetches; a connection whose consent has ended does not
+  fetch. "Freigabe erneuern" sends the owner to the bank for a new consent of the connection, which keeps its linked
+  accounts.
   """
   use AbakusWeb, :live_view
 
@@ -145,6 +147,17 @@ defmodule AbakusWeb.BankConnectionsLive do
           phx-value-id={@connection.id}
         >
           Jetzt abrufen
+        </.button>
+        <.button
+          id={"bank-connection-#{@connection.id}-renew"}
+          size={:sm}
+          icon="key-round"
+          variant={if Connection.expired?(@connection), do: :primary, else: :neutral}
+          phx-click="renew"
+          phx-value-id={@connection.id}
+          phx-disable-with="Öffnet die Bank …"
+        >
+          Freigabe erneuern
         </.button>
         <.button
           id={"bank-connection-#{@connection.id}-assign"}
@@ -351,9 +364,9 @@ defmodule AbakusWeb.BankConnectionsLive do
   defp country_name(code), do: Map.get(@country_names, code, code)
 
   defp consent_text(connection) do
-    if DateTime.after?(connection.valid_until, DateTime.utc_now()),
-      do: "Freigabe bis #{Format.date(connection.valid_until)}",
-      else: "Freigabe abgelaufen"
+    if Connection.expired?(connection),
+      do: "Freigabe abgelaufen",
+      else: "Freigabe bis #{Format.date(connection.valid_until)}"
   end
 
   defp last_fetch_text(%{last_sync_at: nil}), do: "noch nicht abgerufen"
@@ -539,6 +552,25 @@ defmodule AbakusWeb.BankConnectionsLive do
   end
 
   def handle_event("connect", _params, socket), do: {:noreply, socket}
+
+  def handle_event("renew", %{"id" => id}, socket) do
+    %{current_scope: scope, redirect_url: redirect_url} = socket.assigns
+
+    with {:ok, id} <- Abakus.Schema.cast_id(id),
+         %{} = connection <- Enum.find(socket.assigns.connections, &(&1.id == id)) do
+      case BankSync.renew(scope, connection, redirect_url) do
+        {:ok, %{url: url, auth: auth}} ->
+          {:noreply,
+           redirect(socket, to: BankConnectionController.authorize_path(scope, url, auth))}
+
+        {:error, reason} ->
+          {:noreply,
+           put_flash(socket, :error, "Nicht erneuert: #{BankSync.error_message(reason)}")}
+      end
+    else
+      _missing -> {:noreply, socket}
+    end
+  end
 
   def handle_event("change_links", params, socket),
     do: {:noreply, assign(socket, :links, changed_links(socket, params["links"] || %{}))}

@@ -3,11 +3,12 @@ defmodule AbakusWeb.BankConnectionController do
   The way to the bank and back when connecting it. `authorize` keeps the consent's random state in the session and
   sends the user to the bank; it takes them from an encrypted, short-lived link of the Bankverbindungen tab, as a
   LiveView cannot write the session and a form may not lead off-site (CSP `form-action`). `callback` is where the
-  bank sends them back: only with the session's state does its code connect the bank.
+  bank sends them back: only with the session's state does its code connect the bank, or renew the consent of the
+  connection it was started for.
   """
   use AbakusWeb, :controller
 
-  alias Abakus.BankSync
+  alias Abakus.{BankSync, Format}
 
   @salt "bank-sync authorize"
   @max_age 5 * 60
@@ -67,15 +68,28 @@ defmodule AbakusWeb.BankConnectionController do
 
   defp connect(conn, auth, code) do
     case BankSync.connect(conn.assigns.current_scope, auth, code) do
-      {:ok, connection} ->
-        conn
-        |> put_flash(:info, "#{connection.bank_name} ist verbunden. Jetzt die Konten zuordnen.")
-        |> redirect(to: ~p"/budget/bank-connections/#{connection}/accounts")
-
-      {:error, reason} ->
-        back(conn, "Nicht verbunden: #{BankSync.error_message(reason)}")
+      {:ok, connection} -> connected(conn, connection, auth)
+      {:error, reason} -> back(conn, "#{refused(auth)}: #{BankSync.error_message(reason)}")
     end
   end
+
+  defp connected(conn, connection, %{connection_id: _id}) do
+    conn
+    |> put_flash(
+      :info,
+      "Die Freigabe für #{connection.bank_name} gilt jetzt bis #{Format.date(connection.valid_until)}."
+    )
+    |> redirect(to: ~p"/budget/bank-connections")
+  end
+
+  defp connected(conn, connection, _auth) do
+    conn
+    |> put_flash(:info, "#{connection.bank_name} ist verbunden. Jetzt die Konten zuordnen.")
+    |> redirect(to: ~p"/budget/bank-connections/#{connection}/accounts")
+  end
+
+  defp refused(%{connection_id: _id}), do: "Nicht erneuert"
+  defp refused(_auth), do: "Nicht verbunden"
 
   defp back(conn, message),
     do: conn |> put_flash(:error, message) |> redirect(to: ~p"/budget/bank-connections")

@@ -6,8 +6,8 @@ defmodule Abakus.BankSync do
   Connecting a bank: `authorize/3` starts a consent at the chosen bank for as long as the bank allows, with a random
   state the caller keeps (in the session) for the bank's way back; `connect/3` opens the session of the code it
   brings and keeps the bank connection with the bank's accounts, unlinked until `assign_accounts/3` gives each an
-  account that takes entries, with the date to fetch from. The client is a behaviour (`Abakus.BankSync.Client`),
-  configured as `:client`.
+  account that takes entries, with the date to fetch from. `renew/3` runs the same way for an existing connection,
+  which keeps its linked accounts. The client is a behaviour (`Abakus.BankSync.Client`), configured as `:client`.
 
   Fetching (`fetch/3`, on schedule `fetch_all/1`): each linked account from its start date on the first time, later
   from 14 days before its last successful fetch, nothing dated before its start date, one failing account keeping none of the others from it; at most one
@@ -16,7 +16,11 @@ defmodule Abakus.BankSync do
   owner's scope, and the bank's balance becomes the account's bank balance. Pending ones clean up after themselves
   (ADR 0021): one dated in the fetched window and after the newest reconciled transaction that the bank no longer
   reports as pending is removed while it is unapproved; an approved one stays, and its booked version is proposed as
-  its match.
+  its match. A connection whose consent has ended is not fetched until it is renewed; one the bank says has ended
+  ends then.
+
+  Before a consent ends, `remind_consents/1` mails the owner after the scheduled fetch, 14 and 3 days before, and
+  `expiring_consents/1` lists the connections for the banner in Finanzen.
   """
 
   import Ecto.Query
@@ -27,11 +31,12 @@ defmodule Abakus.BankSync do
   alias Abakus.BankSync.{AccessError, Connection, LinkedAccount, SyncRun}
   alias Abakus.{Format, Import, Ledger, LocalTime, Money, Names, Repo}
   alias Abakus.Ledger.{Account, TransactionOrigin}
-  alias Abakus.Users.Scope
+  alias Abakus.Users.{Scope, UserNotifier}
 
   @default_consent_seconds 90 * 24 * 60 * 60
   @refetch_days 14
   @recent_runs 5
+  @reminder_days [14, 3]
   @sepa_prefixes ~r/(?<=^|\s)(?:EREF|KREF|MREF|CRED|DEBT|SVWZ|ABWA|ABWE|IBAN|BIC|COAM|OAMT|SQTP|PURP)\+/
 
   @doc "Whether bank sync is set up: the provider has its application id and private key."
@@ -65,6 +70,18 @@ defmodule Abakus.BankSync do
     end
   end
 
+  @doc """
+  Starts a new consent at the connection's bank, as `authorize/3` does; `connect/3` then renews the connection with
+  it, as the auth carries the connection's id.
+  """
+  def renew(%Scope{} = scope, %Connection{} = connection, redirect_url) do
+    connection = own!(owner!(scope), connection)
+    bank = %{name: connection.bank_name, country: connection.bank_country}
+
+    with {:ok, started} <- authorize(scope, bank, redirect_url),
+         do: {:ok, put_in(started.auth[:connection_id], connection.id)}
+  end
+
   defp find_bank(banks, name) do
     case Enum.find(banks, &(&1.name == name)) do
       nil -> {:error, :unknown_bank}
@@ -85,25 +102,92 @@ defmodule Abakus.BankSync do
 
   @doc """
   Opens the session of the code the bank sent the user back with, for the consent `auth` of `authorize/3`, and keeps
-  it as a bank connection with the bank's accounts, all unlinked.
+  it as a bank connection with the bank's accounts, all unlinked. With the `auth` of `renew/3` it renews that
+  connection instead: the new session and consent, its reminders unsent, its error gone and its linked accounts kept,
+  each found by the bank's id, else by its IBAN; the session's other accounts come unlinked, and linked accounts it
+  no longer has go.
   """
   def connect(%Scope{} = scope, auth, code) do
     owner!(scope)
 
     with {:ok, session} <- client().create_session(code) do
-      connection =
-        Repo.insert!(%Connection{
-          user_id: user_id(scope),
-          provider: :enable_banking,
-          bank_name: auth.bank_name,
-          bank_country: auth.bank_country,
-          session_id: session.session_id,
-          valid_until: Abakus.Schema.usec(session.valid_until || auth.valid_until),
-          linked_accounts: Enum.map(session.accounts, &linked_account/1)
-        })
-
-      {:ok, preload(connection)}
+      case auth do
+        %{connection_id: id} -> renew_connection(scope, id, auth, session)
+        _new -> {:ok, insert_connection(scope, auth, session)}
+      end
     end
+  end
+
+  defp insert_connection(scope, auth, session) do
+    Repo.insert!(%Connection{
+      user_id: user_id(scope),
+      provider: :enable_banking,
+      bank_name: auth.bank_name,
+      bank_country: auth.bank_country,
+      session_id: session.session_id,
+      valid_until: valid_until(auth, session),
+      linked_accounts: Enum.map(session.accounts, &linked_account/1)
+    })
+    |> preload()
+  end
+
+  defp renew_connection(scope, id, auth, session) do
+    Repo.transact(fn ->
+      case Repo.get(owned(Connection, scope), id) do
+        nil ->
+          {:error, :unknown_connection}
+
+        connection ->
+          connection = Repo.preload(connection, :linked_accounts)
+          renew_accounts(connection, session.accounts)
+
+          connection
+          |> Ecto.Changeset.change(
+            session_id: session.session_id,
+            valid_until: valid_until(auth, session),
+            reminders_sent: [],
+            last_error: nil
+          )
+          |> Repo.update!()
+
+          {:ok, get_connection!(scope, id)}
+      end
+    end)
+  end
+
+  defp valid_until(auth, session), do: Abakus.Schema.usec(session.valid_until || auth.valid_until)
+
+  # The provider's account ids may change with a new session, so an account is also recognised by its IBAN.
+  defp renew_accounts(connection, accounts) do
+    {by_uid, linked_left, accounts_left} =
+      pair_accounts(connection.linked_accounts, accounts, &(&1.provider_account_id == &2.uid))
+
+    {by_iban, gone, new} =
+      pair_accounts(linked_left, accounts_left, &(&1.iban != nil and &1.iban == &2.iban))
+
+    Enum.each(gone, &Repo.delete!/1)
+
+    for {linked, account} <- by_uid ++ by_iban do
+      linked
+      |> Ecto.Changeset.change(
+        provider_account_id: account.uid,
+        name: account.name,
+        iban: account.iban
+      )
+      |> Repo.update!()
+    end
+
+    for account <- new,
+        do: Repo.insert!(%{linked_account(account) | connection_id: connection.id})
+  end
+
+  defp pair_accounts(linked_accounts, accounts, same?) do
+    Enum.reduce(linked_accounts, {[], [], accounts}, fn linked, {pairs, unpaired, left} ->
+      case Enum.find(left, &same?.(linked, &1)) do
+        nil -> {pairs, [linked | unpaired], left}
+        account -> {[{linked, account} | pairs], unpaired, List.delete(left, account)}
+      end
+    end)
   end
 
   defp linked_account(account),
@@ -240,13 +324,22 @@ defmodule Abakus.BankSync do
     trigger = Keyword.get(opts, :trigger, :manual)
     psu = if trigger == :manual, do: Keyword.get(opts, :psu)
 
-    case with_lock(id, fn -> fetch_connection(scope, get_connection!(scope, id), trigger, psu) end) do
+    case with_lock(id, fn -> fetch_unexpired(scope, get_connection!(scope, id), trigger, psu) end) do
       :locked -> {:error, "Der Abruf läuft schon."}
       result -> result
     end
   end
 
-  @doc "Fetches every connection with a linked account on schedule, `[{connection, result of fetch/3}]`."
+  defp fetch_unexpired(scope, connection, trigger, psu) do
+    if Connection.expired?(connection),
+      do: {:error, "Die Freigabe ist abgelaufen; nach dem Erneuern ruft Abakus wieder ab."},
+      else: fetch_connection(scope, connection, trigger, psu)
+  end
+
+  @doc """
+  Fetches every connection with a linked account and a consent that has not ended on schedule,
+  `[{connection, result of fetch/3}]`.
+  """
   def fetch_all(%Scope{} = scope) do
     for connection <- list_connections(scope), Connection.fetchable?(connection) do
       {connection, fetch(scope, connection, trigger: :scheduled)}
@@ -283,7 +376,7 @@ defmodule Abakus.BankSync do
         Map.put(fetch_counts(results), :error, error)
       )
 
-    with {:ok, run} <- finish(run, connection_changes(error, started_at)),
+    with {:ok, run} <- finish(run, connection_changes(results, error, started_at)),
          do: if(error, do: {:error, error}, else: {:ok, run})
   end
 
@@ -303,8 +396,18 @@ defmodule Abakus.BankSync do
     end
   end
 
-  defp connection_changes(nil, started_at), do: %{last_error: nil, last_sync_at: started_at}
-  defp connection_changes(error, _started_at), do: %{last_error: error}
+  defp connection_changes(results, error, started_at) do
+    cond do
+      error == nil ->
+        %{last_error: nil, last_sync_at: started_at}
+
+      Enum.any?(results, &match?({_linked, {:error, :consent_ended}}, &1)) ->
+        %{last_error: error, valid_until: LocalTime.utc_now()}
+
+      true ->
+        %{last_error: error}
+    end
+  end
 
   defp finish(run, changes) do
     Repo.transact(fn ->
@@ -506,6 +609,45 @@ defmodule Abakus.BankSync do
         Enum.find(balances, &(&1.type == :interim_booked))
 
     balance && %{amount: balance.amount, date: balance.date || LocalTime.today()}
+  end
+
+  @doc """
+  Mails the owner before a consent ends, 14 and 3 days before its last day, each once per consent: one mail for the
+  nearest of these reached, which counts all reached as sent. None once the consent has ended; a mail that was not
+  delivered goes out with the next run.
+  """
+  def remind_consents(%Scope{} = scope) do
+    owner!(scope)
+    today = LocalTime.today()
+
+    for connection <- Repo.all(owned(Connection, scope)),
+        not Connection.expired?(connection),
+        days = Connection.days_left(connection, today),
+        due = Enum.filter(@reminder_days, &(days <= &1 and &1 not in connection.reminders_sent)),
+        due != [],
+        do: remind(scope.user, connection, days, due)
+
+    :ok
+  end
+
+  defp remind(user, connection, days, due) do
+    with {:ok, _email} <- UserNotifier.deliver_consent_reminder(user, connection, days) do
+      connection
+      |> Ecto.Changeset.change(reminders_sent: Enum.sort(connection.reminders_sent ++ due, :desc))
+      |> Repo.update!()
+    end
+  end
+
+  @doc "The connections whose consent has ended or ends within 14 days, oldest first, for the banner in Finanzen."
+  def expiring_consents(%Scope{} = scope) do
+    owner!(scope)
+    today = LocalTime.today()
+
+    from(c in owned(Connection, scope), order_by: c.id)
+    |> Repo.all()
+    |> Enum.filter(
+      &(Connection.expired?(&1) or Connection.days_left(&1, today) <= hd(@reminder_days))
+    )
   end
 
   @doc """

@@ -32,6 +32,7 @@ defmodule AbakusWeb.ImportLive do
       current={:import}
       account_groups={@account_groups}
       depot_sidebar={@depot_sidebar}
+      expiring_consents={@expiring_consents}
       account_dialog={@account_dialog}
     >
       <ImportSync.import_header
