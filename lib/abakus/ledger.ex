@@ -271,24 +271,48 @@ defmodule Abakus.Ledger do
   The account's transactions, or with `:all` every account's, newest first, with payee, category (and its group)
   and subtransactions; without deleted ones and match proposals, which count nowhere (see
   `list_match_proposals/2`).
+
+  Options narrow the list: `filter: :unapproved` or `:uncleared` (`:all` for none), `ids:` and `limit:`, the newest
+  so many.
   """
-  def list_transactions(%Scope{} = scope, %Account{id: account_id}),
-    do: list_register(from(t in in_register(scope), where: t.account_id == ^account_id))
-
-  def list_transactions(%Scope{} = scope, :all), do: list_register(in_register(scope))
-
-  defp list_register(query) do
-    Repo.all(
-      from t in query,
-        order_by: [desc: t.date, desc: t.id],
-        preload: [
-          :payee,
-          :transfer_transaction,
-          category: :category_group,
-          subtransactions: [:payee, :transfer_transaction, category: :category_group]
-        ]
-    )
+  def list_transactions(%Scope{} = scope, register, opts \\ []) do
+    scope
+    |> register(register)
+    |> narrowed(opts)
+    |> order_by([t], desc: t.date, desc: t.id)
+    |> preload([
+      :payee,
+      :transfer_transaction,
+      category: :category_group,
+      subtransactions: [:payee, :transfer_transaction, category: :category_group]
+    ])
+    |> Repo.all()
   end
+
+  @doc "How many transactions `list_transactions/3` lists with the same register and options."
+  def count_transactions(%Scope{} = scope, register, opts \\ []),
+    do: scope |> register(register) |> narrowed(opts) |> Repo.aggregate(:count)
+
+  defp register(scope, %Account{id: account_id}),
+    do: from(t in in_register(scope), where: t.account_id == ^account_id)
+
+  defp register(scope, :all), do: in_register(scope)
+
+  defp narrowed(query, opts), do: Enum.reduce(opts, query, &narrow(&2, &1))
+
+  defp narrow(query, {:filter, :all}), do: query
+  defp narrow(query, {:filter, :unapproved}), do: where(query, [t], not t.approved)
+  defp narrow(query, {:filter, :uncleared}), do: where(query, [t], t.cleared == :uncleared)
+  # One JSON parameter, as SQLite takes at most 32766 variables and a selection can hold more ids.
+  defp narrow(query, {:ids, ids}),
+    do:
+      where(
+        query,
+        [t],
+        fragment("? IN (SELECT value FROM json_each(?))", t.id, ^JSON.encode!(ids))
+      )
+
+  defp narrow(query, {:limit, limit}), do: limit(query, ^limit)
 
   @doc """
   The category last used on a transfer between a budget account and the account of `transfer_payee_id`: on the
