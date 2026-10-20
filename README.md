@@ -1,107 +1,22 @@
 # Abakus
 
-Self-hosted envelope budgeting for one household: YNAB's budgeting rules, a multi-month budget view like
-[Actual Budget](https://actualbudget.org/), reconciling, OFX/QFX import and bank sync. It is
-meant to replace YNAB for my own use. **The user interface is German.**
-
-## Status
-
-Sign-in with magic link and passkeys, the budget math, the budget view on desktop with its month calculation,
-category dialog (targets), auto-assign and covering and moving money, the register for one account or all of them,
-where transactions are edited in place as in YNAB, reconciling, the OFX/QFX file import with match proposals and the
-settings, and the Kasse: the household's shared expenses with their balances, activity log, recurring expenses,
-categories, exchange rates, CSV/JSON export, its MCP server for AI assistants and the link that books the budget
-owner's shares in the budget; and the Depot, part of the area Finanzen with the budget: each user's Vermögen and
-portfolios with holdings, dividends, transactions, performance and securities, whose prices come from Yahoo every
-evening, a receipt inbox that reads bank PDFs, uploaded or taken from Paperless-ngx, each of the budget owner's
-portfolios as a tracking account with its daily value change, and its cash flows linked to the budget. Bank sync
-and the budget's MCP tools follow in v2.
-
-- [docs/MCP.md](docs/MCP.md): the MCP server, its access rules and tools
+Self-hosted envelope budgeting for one household, meant to replace YNAB for my own use. **The user interface is
+German.**
 
 ## Development
-
-Elixir and Erlang as in `.tool-versions`.
 
 ```sh
 mix setup
 mix phx.server
 ```
 
-Then open http://localhost:4000 (passkeys need `localhost`, not `127.0.0.1` or a LAN IP).
-
-Every page needs a sign-in and there is no sign-up, so invite the first user. In development the mails stay in
-the server's mailbox at http://localhost:4000/dev/mailbox, so invite from the running server:
-
-```sh
-iex -S mix phx.server
-iex> Abakus.Users.invite_user("you@example.com", &AbakusWeb.UserAuth.magic_link_url/1)
-```
-
-`mix abakus.invite you@example.com` works as well and prints the sign-in link, since its mail does not reach
-the server's mailbox. The first user owns the budget. After signing in, add a passkey under Einstellungen.
-
-The Kasse is for its participants only, so add yourself as the first one; more can then be added under
-Einstellungen › Kasse › Teilnehmer, which invites them by mail:
-
-```sh
-mix abakus.add_participant you@example.com "Your name"
-```
-
-Each user's Depot opens once they create a portfolio under Einstellungen › Depot › Depots.
-
 ## Deploy
 
-- Image: `ghcr.io/shostakovich/abakus`; `docker-compose.yml` is an example.
-- Required environment: `PHX_HOST` (the public host name) and `SECRET_KEY_BASE` (`openssl rand -hex 64`).
-- Mail for sign-in links: `SMTP_HOST`, `SMTP_PORT` (465 for TLS, otherwise STARTTLS), `SMTP_USERNAME`,
-  `SMTP_PASSWORD` and `MAIL_FROM`.
-- Before the first start: `mkdir data && chown 1000:1000 data`; the database lives there.
-- A reverse proxy must terminate HTTPS and send `X-Forwarded-Proto: https`. Plain HTTP still serves pages, but
-  the live UI only connects from `https://$PHX_HOST`.
-- `/up` answers 200 while the app and its database are up, for health checks, and 503 while a bank connection that
-  is fetched (consent not ended, an account linked) has failed with no successful fetch for more than a day.
-- Every night at 03:00 a copy of the database goes to `data/backups` (mode 0600); the newest seven are kept.
-- `TZ` (default `Europe/Berlin`) is the local time of "today" in every area, of the Kasse's dates and of the jobs:
-  ECB rates at 17:00, recurring expenses hourly, the Depot's prices at 18:00, bank sync at 06:00 and 18:00, the
-  backup.
-- `DIVVYDIARY_API_KEY` (optional) brings the Depot's countries, sectors and dividend dates from DivvyDiary.
-- The Depot's receipt recognition (optional): any OpenAI-compatible chat API such as Ollama with
-  `RECEIPT_MODEL_URL` (e.g. `http://localhost:11434/v1`), `RECEIPT_MODEL` and, if the API wants one,
-  `RECEIPT_MODEL_KEY`; `RECEIPT_MODEL_THINKING=on` lets the model think. The text comes from Paperless or else from
-  `pdftotext`. Without a model a receipt opens an empty form. Receipt PDFs live in `data/receipts`, next to the
-  database, outside the nightly backup. Each user enters their Paperless-ngx under Einstellungen → Belegeingang;
-  it is polled every 15 minutes.
-- Bank sync (optional): an application at [Enable Banking](https://enablebanking.com) with
-  `https://$PHX_HOST/budget/bank-connections/callback` as its redirect URL, its id in `ENABLE_BANKING_APP_ID` and
-  the path of its private key in `ENABLE_BANKING_KEY_FILE`, mounted read only. The budget owner connects banks
-  under Import & Sync › Bankverbindungen; a banner in Finanzen shows from 14 days before a consent ends.
-- MCP ([docs/MCP.md](docs/MCP.md)): `MCP_SECRET` (empty turns it off; the endpoint is `/mcp/<MCP_SECRET>`),
-  `MCP_ALLOWED_CIDRS` (who may call it, default `160.79.104.0/21`) and `TRUSTED_PROXIES` (proxies whose
-  `X-Forwarded-For` counts, also for the client IP bank sync passes on with "Jetzt abrufen").
-
-Invite the first user with
-
-```sh
-docker compose exec abakus bin/abakus eval 'Abakus.Release.invite("you@example.com")'
-```
-
-They get a sign-in link by mail (valid 15 minutes), own the budget and add a passkey under Einstellungen. The
-first participant of the Kasse, who invites the others from there:
-
-```sh
-docker compose exec abakus bin/abakus eval 'Abakus.Release.add_participant("you@example.com", "Your name")'
-```
+See `docker-compose.yml`.
 
 ## Before you use this
 
-- This is a personal project, built for my own household (one budget, 1–2 people, EUR).
-- I don't accept pull requests (benevolent dictator and all that), but forks are very welcome.
-
-## Stack
-
-Elixir, Phoenix LiveView, SQLite, Tailwind CSS and daisyUI with [Setzkasten](https://github.com/shostakovich/setzkasten);
-one container behind a reverse proxy.
+A personal project for my own household. I don't accept pull requests, but forks are very welcome.
 
 ## License
 
