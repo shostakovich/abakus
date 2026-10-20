@@ -31,6 +31,8 @@ config :abakus, Abakus.Depot.MarketData,
   symbol_search: Abakus.Depot.MarketData.Yahoo,
   symbol_source: Abakus.Depot.MarketData.DivvyDiary
 
+config :abakus, Abakus.BankSync, client: Abakus.BankSync.EnableBanking
+
 config :abakus, Abakus.Depot.Receipts,
   paperless: Abakus.Depot.Receipts.PaperlessAPI,
   model: Abakus.Depot.Receipts.ChatAPI,

@@ -14,6 +14,8 @@ config :abakus, jobs: false
 
 config :abakus, Abakus.ExchangeRates, source: Abakus.FakeExchangeRateSource
 
+config :abakus, Abakus.BankSync, client: Abakus.BankSync.FakeClient
+
 config :abakus, Abakus.Depot.MarketData,
   price_feed: Abakus.Depot.FakePriceFeed,
   symbol_search: Abakus.Depot.FakeSymbolSearch,

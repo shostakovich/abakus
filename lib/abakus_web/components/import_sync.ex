@@ -1,7 +1,7 @@
 defmodule AbakusWeb.ImportSync do
   @moduledoc """
-  Import & Sync in Finanzen: its title and tabs, Bankdateien for the budget owner and Belege for users with a
-  portfolio, with the count of the inbox; and the counts an import shows.
+  Import & Sync in Finanzen: its title and tabs, Bankdateien and Bankverbindungen for the budget owner and Belege for
+  users with a portfolio, with the count of the inbox; and the counts an import shows.
   """
   use Phoenix.Component
   use AbakusWeb, :verified_routes
@@ -13,7 +13,7 @@ defmodule AbakusWeb.ImportSync do
   alias Abakus.Format
   alias AbakusWeb.Areas
 
-  attr :tab, :atom, required: true, values: [:files, :receipts]
+  attr :tab, :atom, required: true, values: [:files, :bank_connections, :receipts]
   attr :current_scope, :map, required: true
   attr :inbox, :integer, default: 0, doc: "the recognised receipts in the inbox"
   slot :subtitle
@@ -50,6 +50,8 @@ defmodule AbakusWeb.ImportSync do
   defp shown_tabs(scope) do
     [
       Areas.allowed?(scope, :budget) && {:files, "Bankdateien", ~p"/budget/import"},
+      Areas.allowed?(scope, :budget) &&
+        {:bank_connections, "Bankverbindungen", ~p"/budget/bank-connections"},
       Areas.allowed?(scope, :depot) && {:receipts, "Belege", ~p"/depot/receipts"}
     ]
     |> Enum.filter(& &1)

@@ -4,7 +4,7 @@ defmodule AbakusWeb.RuntimeConfigTest do
 
   alias Abakus.Network
 
-  @mcp ~w(MCP_SECRET MCP_ALLOWED_CIDRS TRUSTED_PROXIES)
+  @mcp ~w(MCP_SECRET MCP_ALLOWED_CIDRS TRUSTED_PROXIES ENABLE_BANKING_APP_ID ENABLE_BANKING_KEY_FILE)
   @env %{
     "PHX_HOST" => "abakus.example.org",
     "DATABASE_PATH" => "/tmp/abakus-runtime-config-test.sqlite3",
@@ -107,5 +107,24 @@ defmodule AbakusWeb.RuntimeConfigTest do
   test "tests ignore the MCP variables" do
     System.put_env(%{"MCP_SECRET" => "s3cret", "MCP_ALLOWED_CIDRS" => "garbage"})
     assert mcp(:test)[:secret] == nil
+  end
+
+  defp enable_banking(env \\ :prod),
+    do:
+      Config.Reader.read!("config/runtime.exs", env: env)[:abakus][Abakus.BankSync.EnableBanking]
+
+  test "bank sync reads the application id and the key file trimmed, an empty value counting as unset" do
+    assert enable_banking() == [app_id: nil, key_file: nil]
+
+    System.put_env(%{
+      "ENABLE_BANKING_APP_ID" => " app-1 ",
+      "ENABLE_BANKING_KEY_FILE" => "/run/secrets/enable-banking.pem"
+    })
+
+    assert enable_banking() == [app_id: "app-1", key_file: "/run/secrets/enable-banking.pem"]
+    assert enable_banking(:test) == [app_id: nil, key_file: nil]
+
+    System.put_env("ENABLE_BANKING_APP_ID", "")
+    assert enable_banking()[:app_id] == nil
   end
 end

@@ -55,6 +55,8 @@ defmodule AbakusWeb.Router do
     pipe_through [:browser, :require_authenticated_user, :budget]
 
     get "/accounts", PageController, :accounts
+    get "/bank-connections/authorize", BankConnectionController, :authorize
+    get "/bank-connections/callback", BankConnectionController, :callback
 
     live_session :budget,
       on_mount: [
@@ -68,6 +70,8 @@ defmodule AbakusWeb.Router do
       live "/accounts/all", RegisterLive, :all
       live "/accounts/:id", RegisterLive, :show
       live "/import", ImportLive
+      live "/bank-connections", BankConnectionsLive, :index
+      live "/bank-connections/:id/accounts", BankConnectionsLive, :accounts
     end
   end
 
