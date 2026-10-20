@@ -6,11 +6,17 @@ defmodule AbakusWeb.BankConnectionsLive do
   owner assigns each bank account to an account or leaves it unlinked (`:accounts`), with the date to fetch from:
   choosing an account sets it to the day after its last reconcile, else today. Without the configuration the tab
   says bank sync is not set up.
+
+  A card shows the connection's last fetch, its last five sync runs and the error of a failed one. "Jetzt abrufen"
+  fetches at once with the PSU data of the owner's browser (the client's IP through the trusted proxies, its user
+  agent), so the bank does not count it against its unattended fetches.
   """
   use AbakusWeb, :live_view
 
   alias Abakus.{BankSync, Format}
+  alias Abakus.BankSync.Connection
   alias Abakus.Ledger.Account
+  alias Abakus.MCP.Access
   alias AbakusWeb.{BankConnectionController, ImportSync, NotFoundError}
 
   @countries [
@@ -98,7 +104,11 @@ defmodule AbakusWeb.BankConnectionsLive do
           >
             Nach dem Verbinden holt Abakus die Umsätze der zugeordneten Konten von selbst.
           </.empty_state>
-          <.connection :for={connection <- @connections} connection={connection} />
+          <.connection
+            :for={connection <- @connections}
+            connection={connection}
+            fetching={Map.has_key?(@fetching, connection.id)}
+          />
         </section>
         <.connect_form countries={@countries} country={@country} bank={@bank} banks={@banks} />
       </div>
@@ -107,6 +117,7 @@ defmodule AbakusWeb.BankConnectionsLive do
   end
 
   attr :connection, :map, required: true
+  attr :fetching, :boolean, required: true
 
   defp connection(assigns) do
     ~H"""
@@ -114,10 +125,27 @@ defmodule AbakusWeb.BankConnectionsLive do
       id={"bank-connection-#{@connection.id}"}
       bleed={:phone}
       title={@connection.bank_name}
-      subtitle={join_meta([country_name(@connection.bank_country), consent_text(@connection)])}
+      subtitle={
+        join_meta([
+          country_name(@connection.bank_country),
+          consent_text(@connection),
+          last_fetch_text(@connection)
+        ])
+      }
     >
       <:leading><.icon name="landmark" class="size-5 text-base-content/70" /></:leading>
       <:actions>
+        <.button
+          id={"bank-connection-#{@connection.id}-fetch"}
+          size={:sm}
+          icon="refresh-cw"
+          loading={@fetching}
+          disabled={!Connection.fetchable?(@connection)}
+          phx-click="fetch"
+          phx-value-id={@connection.id}
+        >
+          Jetzt abrufen
+        </.button>
         <.button
           id={"bank-connection-#{@connection.id}-assign"}
           size={:sm}
@@ -139,6 +167,15 @@ defmodule AbakusWeb.BankConnectionsLive do
           phx-value-id={@connection.id}
         />
       </:actions>
+      <.alert
+        :if={@connection.last_error}
+        id={"bank-connection-#{@connection.id}-error"}
+        tone={:error}
+        title="Der letzte Abruf ist fehlgeschlagen"
+        class="mt-2"
+      >
+        {@connection.last_error}
+      </.alert>
       <:list>
         <.list flush>
           <.list_row
@@ -156,6 +193,14 @@ defmodule AbakusWeb.BankConnectionsLive do
           </.list_row>
         </.list>
       </:list>
+      <:footer :if={@connection.sync_runs != []}>
+        <p class="font-medium text-base-content">Letzte Abrufe</p>
+        <ul id={"bank-connection-#{@connection.id}-runs"}>
+          <li :for={run <- @connection.sync_runs} id={"sync-run-#{run.id}"} class="wrap-anywhere">
+            {join_meta([Format.datetime(run.started_at), trigger_text(run.trigger), run_text(run)])}
+          </li>
+        </ul>
+      </:footer>
     </.card>
     """
   end
@@ -311,6 +356,24 @@ defmodule AbakusWeb.BankConnectionsLive do
       else: "Freigabe abgelaufen"
   end
 
+  defp last_fetch_text(%{last_sync_at: nil}), do: "noch nicht abgerufen"
+  defp last_fetch_text(%{last_sync_at: at}), do: "abgerufen #{Format.datetime(at)}"
+
+  defp trigger_text(:scheduled), do: "planmäßig"
+  defp trigger_text(:manual), do: "von Hand"
+
+  defp run_text(%{error: error}) when is_binary(error), do: "fehlgeschlagen: #{error}"
+  defp run_text(run), do: counts_text(run)
+
+  defp counts_text(%{new: 0, matched: 0}), do: "nichts Neues"
+
+  defp counts_text(%{new: new, matched: matched}),
+    do:
+      join_meta([
+        ImportSync.new_label(new),
+        matched > 0 && ImportSync.matched_label(matched)
+      ])
+
   # The account a bank account feeds stays selectable once it takes no entries, so that only choosing unlinks it.
   defp account_options(accounts, linked) do
     options = Enum.map(accounts, &{&1.name, &1.id})
@@ -351,11 +414,32 @@ defmodule AbakusWeb.BankConnectionsLive do
         connections: if(available, do: BankSync.list_connections(scope), else: []),
         accounts: [],
         connection: nil,
-        links: %{}
+        links: %{},
+        fetching: %{},
+        psu: psu(socket)
       )
 
     {:ok, if(available and connected?(socket), do: load_banks(socket, "DE"), else: socket)}
   end
+
+  # Read at mount, the only time the socket's connect info is there.
+  defp psu(socket) do
+    x_headers = get_connect_info(socket, :x_headers) || []
+
+    ip =
+      Access.client_ip(
+        peer_address(get_connect_info(socket, :peer_data)),
+        for({"x-forwarded-for", value} <- x_headers, do: value),
+        Enum.find_value(x_headers, fn {name, value} -> name == "x-real-ip" && value end),
+        Application.fetch_env!(:abakus, :mcp)[:trusted_proxies]
+      )
+
+    if ip,
+      do: %{ip_address: Access.format(ip), user_agent: get_connect_info(socket, :user_agent)}
+  end
+
+  defp peer_address(%{address: address}), do: address
+  defp peer_address(_unknown), do: nil
 
   @impl true
   def handle_params(%{"id" => id}, _uri, %{assigns: %{live_action: :accounts}} = socket) do
@@ -404,6 +488,27 @@ defmodule AbakusWeb.BankConnectionsLive do
   def handle_async(:banks, {:exit, _reason}, socket),
     do: {:noreply, assign(socket, :banks, {:error, "Die Banken ließen sich nicht laden."})}
 
+  def handle_async({:fetch, id}, result, socket) do
+    {bank_name, fetching} = Map.pop(socket.assigns.fetching, id)
+
+    {:noreply,
+     socket
+     |> assign(
+       fetching: fetching,
+       connections: BankSync.list_connections(socket.assigns.current_scope)
+     )
+     |> fetched(bank_name, result)}
+  end
+
+  defp fetched(socket, bank_name, {:ok, {:ok, run}}),
+    do: put_flash(socket, :info, "#{bank_name} abgerufen: #{counts_text(run)}.")
+
+  defp fetched(socket, bank_name, {:ok, {:error, message}}),
+    do: put_flash(socket, :error, "Abruf von #{bank_name} fehlgeschlagen. #{message}")
+
+  defp fetched(socket, bank_name, {:exit, _reason}),
+    do: put_flash(socket, :error, "Abruf von #{bank_name} fehlgeschlagen.")
+
   @impl true
   def handle_event("change_connect", %{"country" => country} = params, socket) do
     cond do
@@ -450,6 +555,21 @@ defmodule AbakusWeb.BankConnectionsLive do
 
       {:error, message} ->
         {:noreply, socket |> assign(:links, links) |> put_flash(:error, message)}
+    end
+  end
+
+  def handle_event("fetch", %{"id" => id}, socket) do
+    %{current_scope: scope, psu: psu, fetching: fetching} = socket.assigns
+
+    with {:ok, id} <- Abakus.Schema.cast_id(id),
+         false <- Map.has_key?(fetching, id),
+         %{} = connection <- Enum.find(socket.assigns.connections, &(&1.id == id)) do
+      {:noreply,
+       socket
+       |> assign(:fetching, Map.put(fetching, id, connection.bank_name))
+       |> start_async({:fetch, id}, fn -> BankSync.fetch(scope, connection, psu: psu) end)}
+    else
+      _running_or_missing -> {:noreply, socket}
     end
   end
 

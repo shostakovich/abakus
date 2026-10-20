@@ -3,9 +3,11 @@ defmodule Abakus.BankSyncTest do
 
   import Abakus.DomainFixtures
   import Abakus.BankSyncFixtures
+  import ExUnit.CaptureLog
 
-  alias Abakus.{BankSync, Repo}
-  alias Abakus.BankSync.{AccessError, FakeClient}
+  alias Abakus.{BankSync, Ledger, Repo}
+  alias Abakus.BankSync.{AccessError, Connection, FakeClient, LinkedAccount}
+  alias Abakus.Ledger.TransactionOrigin
   alias Abakus.Users.Scope
 
   setup do
@@ -212,6 +214,475 @@ defmodule Abakus.BankSyncTest do
     end
   end
 
+  describe "assign_accounts/3 and the last fetch" do
+    test "starts over at the start date only when the account or the date changes" do
+      connection = connection_fixture()
+      [current, _savings] = connection.linked_accounts
+      giro = account_fixture()
+      assignment = %{account_id: giro.id, start_date: ~D[2026-10-02]}
+
+      {:ok, _connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{current.id => assignment})
+
+      fetched =
+        Repo.update!(
+          Ecto.Changeset.change(Repo.reload!(current),
+            last_fetch_at: ~U[2026-10-20 06:00:00.000000Z]
+          )
+        )
+
+      {:ok, _connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{current.id => assignment})
+
+      assert Repo.reload!(fetched).last_fetch_at == ~U[2026-10-20 06:00:00.000000Z]
+
+      {:ok, _connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{
+          current.id => %{assignment | start_date: ~D[2026-09-01]}
+        })
+
+      assert Repo.reload!(fetched).last_fetch_at == nil
+    end
+  end
+
+  describe "fetch/3" do
+    setup do
+      connection = connection_fixture()
+      [current, savings] = connection.linked_accounts
+      giro = account_fixture(name: "Girokonto")
+
+      {:ok, connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{
+          current.id => %{account_id: giro.id, start_date: ~D[2026-09-15]}
+        })
+
+      FakeClient.put_transactions("uid-giro", [
+        FakeClient.transaction(
+          entry_reference: "E-1",
+          date: ~D[2026-10-12],
+          amount: -4200,
+          creditor: "Stadtwerke",
+          remittance: ["SVWZ+Abschlag Oktober"]
+        ),
+        FakeClient.transaction(
+          status: :pending,
+          transaction_id: "P-1",
+          date: ~D[2026-10-19],
+          amount: -640
+        )
+      ])
+
+      FakeClient.put_balances("uid-giro", [
+        %{type: :interim_booked, amount: 9900, date: ~D[2026-10-20]},
+        %{type: :closing_booked, amount: 12_000, date: ~D[2026-10-19]}
+      ])
+
+      %{connection: connection, current: current, savings: savings, giro: giro}
+    end
+
+    test "imports the linked accounts' booked transactions from their start dates", ctx do
+      assert {:ok, run} = BankSync.fetch(budget_scope(), ctx.connection)
+      assert {run.trigger, run.new, run.matched, run.error} == {:manual, 1, 0, nil}
+
+      assert FakeClient.fetches() == [
+               {:transactions, "uid-giro", ~D[2026-09-15], nil},
+               {:balances, "uid-giro", nil}
+             ]
+
+      assert [transaction] = Ledger.list_transactions(budget_scope(), ctx.giro)
+
+      assert %{
+               date: ~D[2026-10-12],
+               amount: -4200,
+               cleared: :cleared,
+               approved: false,
+               source: :bank,
+               memo: "Abschlag Oktober"
+             } = transaction
+
+      assert transaction.payee.name == "Stadtwerke"
+
+      assert %{source: :bank, external_id: "E-1"} =
+               Repo.get_by!(TransactionOrigin, transaction_id: transaction.id)
+
+      assert %{amount: 12_000, date: ~D[2026-10-19], source: :bank} =
+               Ledger.latest_bank_balance(budget_scope(), ctx.giro)
+
+      connection = BankSync.get_connection!(budget_scope(), ctx.connection.id)
+      assert connection.last_sync_at == run.started_at
+      assert connection.last_error == nil
+      assert [^run] = connection.sync_runs
+    end
+
+    test "fetches again from 14 days before the last fetch and imports nothing twice", ctx do
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+      linked = Repo.get!(LinkedAccount, ctx.current.id)
+
+      linked
+      |> Ecto.Changeset.change(last_fetch_at: ~U[2026-10-20 10:00:00.000000Z])
+      |> Repo.update!()
+
+      assert {:ok, %{new: 0, matched: 0}} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert {:transactions, "uid-giro", ~D[2026-10-06], nil} in FakeClient.fetches()
+      assert [_transaction] = Ledger.list_transactions(budget_scope(), ctx.giro)
+    end
+
+    test "takes nothing dated before the start date, whatever the bank reports", ctx do
+      FakeClient.put_transactions("uid-giro", fn ->
+        [
+          FakeClient.transaction(entry_reference: "E-0", date: ~D[2026-09-14], amount: -100),
+          FakeClient.transaction(entry_reference: "E-1", date: ~D[2026-09-15], amount: -200)
+        ]
+      end)
+
+      assert {:ok, %{new: 1}} = BankSync.fetch(budget_scope(), ctx.connection)
+      assert [%{amount: -200}] = Ledger.list_transactions(budget_scope(), ctx.giro)
+    end
+
+    test "imports two alike transactions without bank ids once each", ctx do
+      coffee = FakeClient.transaction(date: ~D[2026-10-14], amount: -350, creditor: "Café")
+      FakeClient.put_transactions("uid-giro", [coffee, coffee])
+
+      assert {:ok, %{new: 2}} = BankSync.fetch(budget_scope(), ctx.connection)
+      assert {:ok, %{new: 0}} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert [%{amount: -350}, %{amount: -350}] =
+               Ledger.list_transactions(budget_scope(), ctx.giro)
+    end
+
+    test "passes on the PSU data of a manual fetch, never of a scheduled one", ctx do
+      psu = %{ip_address: "203.0.113.7", user_agent: "Firefox"}
+
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection, psu: psu)
+      {:ok, run} = BankSync.fetch(budget_scope(), ctx.connection, trigger: :scheduled, psu: psu)
+
+      assert run.trigger == :scheduled
+
+      assert FakeClient.fetches() == [
+               {:transactions, "uid-giro", ~D[2026-09-15], psu},
+               {:balances, "uid-giro", psu},
+               {:transactions, "uid-giro", ~D[2026-10-06], nil},
+               {:balances, "uid-giro", nil}
+             ]
+    end
+
+    test "keeps a refused fetch's error until the next succeeds", ctx do
+      {:ok, ok_run} = BankSync.fetch(budget_scope(), ctx.connection)
+      FakeClient.fail_fetches(:rate_limited)
+
+      assert BankSync.fetch(budget_scope(), ctx.connection) ==
+               {:error,
+                "Girokonto: Die Bank hat den Abruf abgelehnt: für heute waren es zu viele Abrufe."}
+
+      connection = BankSync.get_connection!(budget_scope(), ctx.connection.id)
+      assert connection.last_error =~ "zu viele Abrufe"
+      assert connection.last_sync_at == ok_run.started_at
+      assert [%{error: "Girokonto: Die Bank" <> _rest}, ^ok_run] = connection.sync_runs
+
+      FakeClient.fail_fetches(nil)
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert BankSync.get_connection!(budget_scope(), ctx.connection.id).last_error == nil
+    end
+
+    test "refuses an account that no longer takes entries", ctx do
+      {:ok, _closed} = Ledger.update_account(budget_scope(), ctx.giro, %{closed: true})
+
+      assert {:error, "Girokonto: Das Konto ist geschlossen" <> _rest} =
+               BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert FakeClient.fetches() == []
+    end
+
+    test "fetches the other accounts when one fails and keeps every error", ctx do
+      tagesgeld = account_fixture(name: "Tagesgeld")
+
+      {:ok, connection} =
+        BankSync.assign_accounts(budget_scope(), ctx.connection, %{
+          ctx.savings.id => %{account_id: tagesgeld.id, start_date: ~D[2026-10-01]}
+        })
+
+      FakeClient.put_transactions("uid-savings", [
+        FakeClient.transaction(entry_reference: "S-1", date: ~D[2026-10-05], amount: 1000)
+      ])
+
+      {:ok, _closed} = Ledger.update_account(budget_scope(), ctx.giro, %{closed: true})
+
+      assert {:error, "Girokonto: Das Konto ist geschlossen" <> _rest = error} =
+               BankSync.fetch(budget_scope(), connection)
+
+      assert [%{amount: 1000}] = Ledger.list_transactions(budget_scope(), tagesgeld)
+
+      connection = BankSync.get_connection!(budget_scope(), connection.id)
+      assert [%{new: 1, matched: 0, error: ^error}] = connection.sync_runs
+      assert connection.last_error == error
+      assert connection.last_sync_at == nil
+
+      {:ok, _reopened} =
+        Ledger.update_account(budget_scope(), Repo.reload!(ctx.giro), %{closed: false})
+
+      FakeClient.fail_fetches(:rate_limited)
+
+      assert {:error, "Girokonto: " <> _rest = error} = BankSync.fetch(budget_scope(), connection)
+      assert error =~ "zu viele Abrufe. Tagesgeld: Die Bank hat den Abruf abgelehnt"
+    end
+
+    test "keeps an unexpected failure as the run's error", ctx do
+      tagesgeld = account_fixture(name: "Tagesgeld")
+
+      {:ok, connection} =
+        BankSync.assign_accounts(budget_scope(), ctx.connection, %{
+          ctx.savings.id => %{account_id: tagesgeld.id, start_date: ~D[2026-10-01]}
+        })
+
+      FakeClient.put_transactions("uid-savings", fn -> raise "kaputt" end)
+
+      assert capture_log(fn ->
+               assert BankSync.fetch(budget_scope(), connection) ==
+                        {:error, "Tagesgeld: Der Abruf ist unerwartet fehlgeschlagen."}
+             end) =~ "kaputt"
+
+      assert [%{new: 1, error: "Tagesgeld: Der Abruf ist unerwartet" <> _rest}] =
+               BankSync.get_connection!(budget_scope(), connection.id).sync_runs
+    end
+
+    test "keeps no run of a fetch that was stopped", ctx do
+      test = self()
+
+      {:ok, connection} =
+        BankSync.assign_accounts(budget_scope(), ctx.connection, %{
+          ctx.savings.id => %{account_id: account_fixture().id, start_date: ~D[2026-10-01]}
+        })
+
+      FakeClient.put_transactions("uid-savings", fn ->
+        send(test, {:fetching, self()})
+        Process.sleep(:infinity)
+      end)
+
+      spawn(fn -> BankSync.fetch(budget_scope(), connection) end)
+      assert_receive {:fetching, pid}
+      ref = Process.monitor(pid)
+      Process.exit(pid, :kill)
+      assert_receive {:DOWN, ^ref, :process, ^pid, :killed}
+
+      assert [_transaction] = Ledger.list_transactions(budget_scope(), ctx.giro)
+      assert BankSync.get_connection!(budget_scope(), connection.id).sync_runs == []
+    end
+
+    test "starts over at the start date an account gets while it is fetched", ctx do
+      FakeClient.put_transactions("uid-giro", fn ->
+        {:ok, _connection} =
+          BankSync.assign_accounts(budget_scope(), ctx.connection, %{
+            ctx.current.id => %{account_id: ctx.giro.id, start_date: ~D[2026-09-01]}
+          })
+
+        []
+      end)
+
+      assert {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+      assert Repo.reload!(ctx.current).last_fetch_at == nil
+    end
+
+    test "says so when the connection is removed while it is fetched", ctx do
+      FakeClient.put_transactions("uid-giro", fn ->
+        {:ok, _connection} = BankSync.delete_connection(budget_scope(), ctx.connection)
+        []
+      end)
+
+      assert BankSync.fetch(budget_scope(), ctx.connection) ==
+               {:error, "Die Bankverbindung gibt es nicht mehr."}
+    end
+
+    test "runs one fetch per connection at a time", ctx do
+      lock = {{BankSync, ctx.connection.id}, self()}
+      true = :global.set_lock(lock, [node()], 0)
+
+      assert Task.await(Task.async(fn -> BankSync.fetch(budget_scope(), ctx.connection) end)) ==
+               {:error, "Der Abruf läuft schon."}
+
+      :global.del_lock(lock, [node()])
+      assert {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+    end
+
+    test "lists the last five runs, newest first", ctx do
+      runs = for _fetch <- 1..6, do: elem(BankSync.fetch(budget_scope(), ctx.connection), 1)
+
+      assert BankSync.get_connection!(budget_scope(), ctx.connection.id).sync_runs ==
+               runs |> Enum.reverse() |> Enum.take(5)
+    end
+  end
+
+  describe "fetch_all/1" do
+    test "fetches each connection with a linked account on schedule" do
+      unlinked = connection_fixture()
+      FakeClient.put_session("code-1", %{FakeClient.session() | session_id: "session-2"})
+      linked = connection_fixture()
+      [current, _savings] = linked.linked_accounts
+
+      {:ok, _connection} =
+        BankSync.assign_accounts(budget_scope(), linked, %{
+          current.id => %{account_id: account_fixture().id, start_date: ~D[2026-10-01]}
+        })
+
+      assert [{%{id: id}, {:ok, %{trigger: :scheduled}}}] = BankSync.fetch_all(budget_scope())
+      assert id == linked.id
+      assert BankSync.get_connection!(budget_scope(), unlinked.id).sync_runs == []
+    end
+  end
+
+  describe "entries/1" do
+    test "keeps the booked transactions with a date and an amount" do
+      booked = FakeClient.transaction(entry_reference: "E-1", date: ~D[2026-10-02], amount: -100)
+
+      assert [%{external_id: "E-1"}] =
+               BankSync.entries([
+                 booked,
+                 %{booked | status: :pending},
+                 %{booked | status: :other},
+                 %{booked | date: nil},
+                 %{booked | amount: nil}
+               ])
+    end
+
+    test "takes the entry reference, else the transaction id, else a key as the external id" do
+      booked =
+        FakeClient.transaction(date: ~D[2026-10-02], amount: -640, creditor: "Bäckerei Korn")
+
+      assert [%{external_id: "E-1"}, %{external_id: "T-1"}, %{external_id: key}] =
+               BankSync.entries([
+                 %{booked | entry_reference: "E-1", transaction_id: "T-1"},
+                 %{booked | transaction_id: "T-1"},
+                 booked
+               ])
+
+      assert key == "2026-10-02 -640 bäckerei korn"
+    end
+
+    test "numbers a key that repeats, but no bank id" do
+      booked =
+        FakeClient.transaction(date: ~D[2026-10-02], amount: -640, creditor: "Bäckerei Korn")
+
+      assert [
+               "2026-10-02 -640 bäckerei korn",
+               "2026-10-02 -640 bäckerei korn 2",
+               "E-1",
+               "E-1",
+               "2026-10-02 -640 bäckerei korn 3"
+             ] ==
+               [
+                 booked,
+                 booked,
+                 %{booked | entry_reference: "E-1"},
+                 %{booked | entry_reference: "E-1"},
+                 booked
+               ]
+               |> BankSync.entries()
+               |> Enum.map(& &1.external_id)
+    end
+
+    test "names the creditor of a debit, the debtor of a credit, else the first remittance line" do
+      booked =
+        FakeClient.transaction(
+          entry_reference: "E-1",
+          date: ~D[2026-10-02],
+          creditor: "Stadtwerke",
+          debtor: "Robert",
+          remittance: ["EREF+123 SVWZ+Abschlag", "Oktober", "  "]
+        )
+
+      assert [
+               %{payee_name: "Stadtwerke", memo: "123 Abschlag Oktober"},
+               %{payee_name: "Robert"},
+               %{payee_name: "123 Abschlag"},
+               %{payee_name: "123 Abschlag"},
+               %{payee_name: nil, memo: nil}
+             ] =
+               BankSync.entries([
+                 %{booked | amount: -100},
+                 %{booked | amount: 100},
+                 %{booked | amount: -100, creditor: nil},
+                 %{booked | amount: 0},
+                 %{booked | amount: 100, debtor: nil, remittance: []}
+               ])
+    end
+  end
+
+  describe "bank_balance/1" do
+    test "is the closing booked balance, else the interim booked one, dated today without a date" do
+      closing = %{type: :closing_booked, amount: 100, date: ~D[2026-10-19]}
+      interim = %{type: :interim_booked, amount: 200, date: nil}
+      expected = %{type: :other, amount: 300, date: ~D[2026-10-20]}
+
+      assert BankSync.bank_balance([interim, closing, expected]) ==
+               %{amount: 100, date: ~D[2026-10-19]}
+
+      assert BankSync.bank_balance([interim, expected]) == %{amount: 200, date: ~D[2026-10-20]}
+      assert BankSync.bank_balance([expected]) == nil
+    end
+  end
+
+  describe "failing?/1" do
+    setup do
+      connection = connection_fixture()
+      [current, savings] = connection.linked_accounts
+
+      {:ok, _connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{
+          current.id => %{account_id: account_fixture().id, start_date: ~D[2026-10-01]}
+        })
+
+      %{current: current, savings: savings}
+    end
+
+    test "is whether a connection has an error and no successful fetch for more than a day" do
+      refute BankSync.failing?(Scope.system())
+
+      failing = fn attrs ->
+        Repo.update_all(Connection, set: attrs)
+        BankSync.failing?(Scope.system())
+      end
+
+      two_days_ago = ~U[2026-10-18 10:00:00.000000Z]
+      an_hour_ago = ~U[2026-10-20 09:00:00.000000Z]
+
+      refute failing.(last_error: "kaputt", last_sync_at: an_hour_ago)
+      assert failing.(last_error: "kaputt", last_sync_at: two_days_ago)
+      refute failing.(last_error: nil, last_sync_at: two_days_ago)
+      refute failing.(last_error: "kaputt", last_sync_at: nil)
+
+      Repo.update_all(Connection, set: [inserted_at: two_days_ago])
+      assert BankSync.failing?(Scope.system())
+    end
+
+    test "counts only connections that are fetched, and none without bank sync", ctx do
+      Repo.update_all(Connection,
+        set: [last_error: "kaputt", last_sync_at: ~U[2026-10-18 10:00:00.000000Z]]
+      )
+
+      assert BankSync.failing?(Scope.system())
+
+      [connection] = BankSync.list_connections(budget_scope())
+
+      {:ok, _connection} =
+        BankSync.assign_accounts(budget_scope(), connection, %{
+          ctx.current.id => %{account_id: nil},
+          ctx.savings.id => %{account_id: nil}
+        })
+
+      refute BankSync.failing?(Scope.system())
+      assert BankSync.fetch_all(budget_scope()) == []
+
+      Repo.update_all(from(l in LinkedAccount, where: l.id == ^ctx.current.id),
+        set: [account_id: account_fixture().id, start_date: ~D[2026-10-01]]
+      )
+
+      assert BankSync.failing?(Scope.system())
+      stop_supervised!(FakeClient)
+      refute BankSync.failing?(Scope.system())
+    end
+  end
+
   test "removes a connection with its accounts" do
     connection = connection_fixture()
 
@@ -234,9 +705,12 @@ defmodule Abakus.BankSyncTest do
           fn -> BankSync.list_connections(other) end,
           fn -> BankSync.get_connection!(other, connection.id) end,
           fn -> BankSync.delete_connection(other, connection) end,
+          fn -> BankSync.fetch(other, connection) end,
+          fn -> BankSync.fetch_all(Scope.system()) end,
           fn -> BankSync.connect(other, auth, "code-1") end,
           fn -> BankSync.assign_accounts(other, connection, %{}) end,
           fn -> BankSync.start_date(other, account) end,
+          fn -> BankSync.failing?(budget_scope()) end,
           fn -> BankSync.accounts(Scope.system()) end
         ] do
       assert_raise AccessError, call

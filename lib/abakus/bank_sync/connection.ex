@@ -24,4 +24,8 @@ defmodule Abakus.BankSync.Connection do
 
     timestamps()
   end
+
+  @doc "Whether the connection is fetched: an account of its feeds one (preloaded)."
+  def fetchable?(%__MODULE__{linked_accounts: linked_accounts}),
+    do: Enum.any?(linked_accounts, & &1.account_id)
 end

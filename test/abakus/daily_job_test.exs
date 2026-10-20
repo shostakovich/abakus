@@ -5,13 +5,10 @@ defmodule Abakus.DailyJobTest do
 
   alias Abakus.{DailyJob, LocalTime}
 
-  defp start(run, at_boot?) do
+  defp start(run, at_boot?, at \\ ~T[03:00:00]) do
     start_supervised!(
       {DailyJob,
-       name: :"job_#{System.unique_integer([:positive])}",
-       at: ~T[03:00:00],
-       run: run,
-       at_boot?: at_boot?}
+       name: :"job_#{System.unique_integer([:positive])}", at: at, run: run, at_boot?: at_boot?}
     )
   end
 
@@ -39,6 +36,24 @@ defmodule Abakus.DailyJobTest do
 
     assert_receive :ran
     assert :sys.get_state(job).due == NaiveDateTime.add(due, 1, :day)
+  end
+
+  test "runs at each of several times" do
+    test = self()
+    job = start(fn -> send(test, :ran) end, fn -> false end, [~T[15:00:00], ~T[03:00:00]])
+    %{due: due} = :sys.get_state(job)
+    now = LocalTime.now()
+
+    assert due ==
+             Enum.min(
+               [LocalTime.next_at(now, ~T[03:00:00]), LocalTime.next_at(now, ~T[15:00:00])],
+               NaiveDateTime
+             )
+
+    send(job, :run)
+
+    assert_receive :ran
+    assert :sys.get_state(job).due == NaiveDateTime.add(due, 12, :hour)
   end
 
   test "logs a failed run and goes on" do

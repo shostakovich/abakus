@@ -1,24 +1,35 @@
 defmodule Abakus.BankSync do
   @moduledoc """
-  Bank sync through Enable Banking (ADR 0020), the budget owner's alone: every function takes `%Scope{}` (ADR 0019)
-  and raises `Abakus.BankSync.AccessError` for anyone else.
+  Bank sync through Enable Banking (ADR 0020), the budget owner's alone: every function that takes `%Scope{}` (ADR
+  0019) raises `Abakus.BankSync.AccessError` for anyone else, except `failing?/1`, which takes the system's alone.
 
   Connecting a bank: `authorize/3` starts a consent at the chosen bank for as long as the bank allows, with a random
   state the caller keeps (in the session) for the bank's way back; `connect/3` opens the session of the code it
   brings and keeps the bank connection with the bank's accounts, unlinked until `assign_accounts/3` gives each an
   account that takes entries, with the date to fetch from. The client is a behaviour (`Abakus.BankSync.Client`),
   configured as `:client`.
+
+  Fetching (`fetch/3`, on schedule `fetch_all/1`): each linked account from its start date on the first time, later
+  from 14 days before its last successful fetch, nothing dated before its start date, one failing account keeping none of the others from it; at most one
+  fetch per connection at a time, each kept as a sync run once it is done (an unexpected failure as its error).
+  Booked transactions come in through the import core (`Abakus.Import`) from source `bank` with the owner's scope,
+  and the bank's balance becomes the account's bank balance.
   """
 
   import Ecto.Query
   import Abakus.Owned
 
-  alias Abakus.BankSync.{AccessError, Connection, LinkedAccount}
-  alias Abakus.{Import, Ledger, LocalTime, Repo}
+  require Logger
+
+  alias Abakus.BankSync.{AccessError, Connection, LinkedAccount, SyncRun}
+  alias Abakus.{Format, Import, Ledger, LocalTime, Money, Names, Repo}
   alias Abakus.Ledger.Account
   alias Abakus.Users.Scope
 
   @default_consent_seconds 90 * 24 * 60 * 60
+  @refetch_days 14
+  @recent_runs 5
+  @sepa_prefixes ~r/(?<=^|\s)(?:EREF|KREF|MREF|CRED|DEBT|SVWZ|ABWA|ABWE|IBAN|BIC|COAM|OAMT|SQTP|PURP)\+/
 
   @doc "Whether bank sync is set up: the provider has its application id and private key."
   def available?, do: client().available?()
@@ -95,7 +106,10 @@ defmodule Abakus.BankSync do
   defp linked_account(account),
     do: %LinkedAccount{provider_account_id: account.uid, name: account.name, iban: account.iban}
 
-  @doc "The bank connections, oldest first, with their accounts and the accounts these feed."
+  @doc """
+  The bank connections, oldest first, with their accounts, the accounts these feed and their last five sync runs,
+  newest first.
+  """
   def list_connections(%Scope{} = scope) do
     owner!(scope)
 
@@ -109,7 +123,27 @@ defmodule Abakus.BankSync do
     Connection |> owned(scope) |> Repo.get!(id) |> preload()
   end
 
-  defp preload(connection), do: Repo.preload(connection, [linked_accounts: :account], force: true)
+  defp preload(connection),
+    do:
+      Repo.preload(connection, [linked_accounts: :account, sync_runs: recent_runs()], force: true)
+
+  defp recent_runs do
+    ranked =
+      from r in SyncRun,
+        select: %{
+          id: r.id,
+          rank:
+            over(row_number(),
+              partition_by: r.connection_id,
+              order_by: [desc: r.started_at, desc: r.id]
+            )
+        }
+
+    from r in SyncRun,
+      join: x in subquery(ranked),
+      on: x.id == r.id and x.rank <= @recent_runs,
+      order_by: [desc: r.started_at, desc: r.id]
+  end
 
   @doc "Removes the bank connection, unless it is gone already; what it imported stays."
   def delete_connection(%Scope{} = scope, %Connection{} = connection) do
@@ -193,9 +227,269 @@ defmodule Abakus.BankSync do
 
   defp label(%LinkedAccount{name: name, iban: iban}), do: name || iban || "Ein Bankkonto"
 
+  @doc """
+  Fetches the connection's linked accounts and returns the sync run, or why it failed with a sentence; `trigger:` is
+  `:manual` ("Jetzt abrufen", the default) or `:scheduled`. Only a manual fetch passes on `psu:` (see
+  `Abakus.BankSync.Client`). A fetch of the connection that is still running refuses the next.
+  """
+  def fetch(%Scope{} = scope, %Connection{id: id}, opts \\ []) do
+    owner!(scope)
+    trigger = Keyword.get(opts, :trigger, :manual)
+    psu = if trigger == :manual, do: Keyword.get(opts, :psu)
+
+    case with_lock(id, fn -> fetch_connection(scope, get_connection!(scope, id), trigger, psu) end) do
+      :locked -> {:error, "Der Abruf läuft schon."}
+      result -> result
+    end
+  end
+
+  @doc "Fetches every connection with a linked account on schedule, `[{connection, result of fetch/3}]`."
+  def fetch_all(%Scope{} = scope) do
+    for connection <- list_connections(scope), Connection.fetchable?(connection) do
+      {connection, fetch(scope, connection, trigger: :scheduled)}
+    end
+  end
+
+  defp with_lock(id, fun) do
+    lock = {{__MODULE__, id}, self()}
+
+    if :global.set_lock(lock, [node()], 0) do
+      try do
+        fun.()
+      after
+        :global.del_lock(lock, [node()])
+      end
+    else
+      :locked
+    end
+  end
+
+  defp fetch_connection(scope, connection, trigger, psu) do
+    started_at = LocalTime.utc_now()
+
+    results =
+      for linked <- connection.linked_accounts,
+          linked.account,
+          do: {linked, fetch_account(scope, linked, psu)}
+
+    error = fetch_error(results)
+
+    run =
+      struct!(
+        %SyncRun{connection_id: connection.id, started_at: started_at, trigger: trigger},
+        Map.put(fetch_counts(results), :error, error)
+      )
+
+    with {:ok, run} <- finish(run, connection_changes(error, started_at)),
+         do: if(error, do: {:error, error}, else: {:ok, run})
+  end
+
+  defp fetch_counts(results) do
+    for {_linked, {:ok, counts}} <- results,
+        reduce: %{new: 0, matched: 0},
+        do: (sum -> Map.merge(sum, counts, fn _key, a, b -> a + b end))
+  end
+
+  defp fetch_error(results) do
+    case for(
+           {linked, {:error, reason}} <- results,
+           do: "#{linked.account.name}: #{error_message(reason)}"
+         ) do
+      [] -> nil
+      errors -> Enum.join(errors, " ")
+    end
+  end
+
+  defp connection_changes(nil, started_at), do: %{last_error: nil, last_sync_at: started_at}
+  defp connection_changes(error, _started_at), do: %{last_error: error}
+
+  defp finish(run, changes) do
+    Repo.transact(fn ->
+      case Repo.get(Connection, run.connection_id) do
+        nil ->
+          {:error, error_message(:unknown_connection)}
+
+        connection ->
+          Repo.update!(Ecto.Changeset.change(connection, changes))
+          {:ok, Repo.insert!(run)}
+      end
+    end)
+  end
+
+  defp fetch_account(scope, linked, psu) do
+    started = LocalTime.utc_now()
+    uid = linked.provider_account_id
+
+    with :ok <- takes_entries(linked.account),
+         {:ok, transactions} <- client().transactions(uid, date_from(linked), psu),
+         {:ok, balances} <- client().balances(uid, psu) do
+      entries =
+        Enum.filter(entries(transactions), &(Date.compare(&1.date, linked.start_date) != :lt))
+
+      Repo.transact(fn -> import_account(scope, linked, entries, balances, started) end)
+    end
+  rescue
+    exception ->
+      Logger.error(Exception.format(:error, exception, __STACKTRACE__))
+      {:error, :failed}
+  catch
+    :exit, reason ->
+      Logger.error("Fetching bank account #{linked.id} exited: #{inspect(reason)}")
+      {:error, :failed}
+  end
+
+  defp import_account(scope, linked, entries, balances, started) do
+    with {:ok, counts} <- import_entries(scope, linked.account, entries),
+         :ok <- put_bank_balance(scope, linked.account, balances) do
+      # Only while it feeds the same account from the same date; reassigned meanwhile, it starts over.
+      Repo.update_all(
+        from(l in LinkedAccount,
+          where:
+            l.id == ^linked.id and l.account_id == ^linked.account_id and
+              l.start_date == ^linked.start_date
+        ),
+        set: [last_fetch_at: started]
+      )
+
+      {:ok, counts}
+    end
+  end
+
+  defp takes_entries(account) do
+    if Account.takes_entries?(account),
+      do: :ok,
+      else: {:error, "Das Konto ist geschlossen oder nimmt keine Bankumsätze mehr."}
+  end
+
+  defp date_from(%LinkedAccount{last_fetch_at: nil, start_date: start_date}), do: start_date
+
+  defp date_from(%LinkedAccount{last_fetch_at: last_fetch_at, start_date: start_date}),
+    do: Enum.max([start_date, Date.add(LocalTime.date(last_fetch_at), -@refetch_days)], Date)
+
+  defp import_entries(scope, account, entries) do
+    case Import.import(scope, account, :bank, entries) do
+      {:ok, counts} ->
+        {:ok, counts}
+
+      {:error, {entry, _changeset}} ->
+        {:error,
+         "Der Umsatz vom #{Format.date(entry.date)} über #{Money.euros(entry.amount)} ließ sich nicht importieren."}
+    end
+  end
+
+  @doc """
+  The booked transactions as import entries: the external id is the bank's entry reference, else its transaction
+  id, else a key of date, amount and payee, numbered from the second on that repeats it (" 2"); the payee is the
+  creditor of a debit, the debtor of a credit, else the first remittance line; the memo the remittance lines without
+  their SEPA prefixes. Those without a date or amount are left out, as are pending ones.
+  """
+  def entries(transactions) do
+    {entries, _keys} =
+      for transaction <- transactions,
+          transaction.status == :booked,
+          transaction.date != nil and transaction.amount != nil,
+          reduce: {[], %{}} do
+        {entries, keys} ->
+          {entry, keys} = number(entry(transaction), transaction, keys)
+          {[entry | entries], keys}
+      end
+
+    Enum.reverse(entries)
+  end
+
+  # Repeated keys are told apart by their order in the response, which keeps all transactions of their date.
+  defp number(entry, %{entry_reference: nil, transaction_id: nil}, keys) do
+    count = Map.get(keys, entry.external_id, 0) + 1
+    numbered = if count == 1, do: entry.external_id, else: "#{entry.external_id} #{count}"
+    {%{entry | external_id: numbered}, Map.put(keys, entry.external_id, count)}
+  end
+
+  defp number(entry, _bank_id, keys), do: {entry, keys}
+
+  defp entry(transaction) do
+    payee_name = payee_name(transaction)
+
+    %{
+      external_id:
+        transaction.entry_reference || transaction.transaction_id ||
+          key(transaction, payee_name),
+      date: transaction.date,
+      amount: transaction.amount,
+      payee_name: payee_name,
+      memo: memo(transaction.remittance)
+    }
+  end
+
+  defp payee_name(%{amount: amount} = transaction) do
+    counterparty =
+      cond do
+        amount < 0 -> transaction.creditor
+        amount > 0 -> transaction.debtor
+        true -> nil
+      end
+
+    counterparty || transaction.remittance |> remittance_lines() |> List.first()
+  end
+
+  defp memo(remittance) do
+    case remittance_lines(remittance) do
+      [] -> nil
+      lines -> Enum.join(lines, " ")
+    end
+  end
+
+  defp remittance_lines(remittance) do
+    for line <- remittance,
+        text = line |> String.replace(@sepa_prefixes, "") |> String.trim(),
+        text != "",
+        do: text
+  end
+
+  defp key(transaction, payee_name),
+    do:
+      "#{Date.to_iso8601(transaction.date)} #{transaction.amount} #{Names.lookup_key(payee_name || "")}"
+
+  defp put_bank_balance(scope, account, balances) do
+    case Import.put_bank_balance(scope, account, :bank, bank_balance(balances)) do
+      :ok -> :ok
+      {:error, _changeset} -> {:error, "Der Banksaldo ließ sich nicht speichern."}
+    end
+  end
+
+  @doc "The bank balance among the bank's balances: the closing booked one, else the interim booked one; nil without."
+  def bank_balance(balances) do
+    balance =
+      Enum.find(balances, &(&1.type == :closing_booked)) ||
+        Enum.find(balances, &(&1.type == :interim_booked))
+
+    balance && %{amount: balance.amount, date: balance.date || LocalTime.today()}
+  end
+
+  @doc """
+  Whether a bank connection that is fetched (`Connection.fetchable?/1`) keeps failing: it has an error and no
+  successful fetch for more than a day, counted from its creation when it never had one; never while bank sync is not
+  set up. For the health check, with the system's scope.
+  """
+  def failing?(%Scope{system: true}) do
+    a_day_ago = DateTime.add(LocalTime.utc_now(), -1, :day)
+
+    available?() and
+      from(c in Connection,
+        where:
+          not is_nil(c.last_error) and
+            coalesce(c.last_sync_at, c.inserted_at) < type(^a_day_ago, :utc_datetime_usec),
+        preload: :linked_accounts
+      )
+      |> Repo.all()
+      |> Enum.any?(&Connection.fetchable?/1)
+  end
+
+  def failing?(%Scope{}), do: raise(AccessError)
+
   @doc "A sentence for why a request to the bank failed."
   def error_message(:not_configured), do: "Bank-Sync ist nicht eingerichtet."
   def error_message(:unknown_bank), do: "Diese Bank bietet Enable Banking nicht an."
+  def error_message(:unknown_connection), do: "Die Bankverbindung gibt es nicht mehr."
   def error_message(:invalid_key), do: "Der private Schlüssel für Enable Banking ist ungültig."
 
   def error_message(:key_unreadable),
@@ -205,6 +499,14 @@ defmodule Abakus.BankSync do
   def error_message(:unreachable), do: "Enable Banking ist nicht erreichbar."
   def error_message(:too_large), do: "Die Antwort von Enable Banking ist zu groß."
   def error_message(:invalid_response), do: "Enable Banking hat unerwartet geantwortet."
+
+  def error_message(:rate_limited),
+    do: "Die Bank hat den Abruf abgelehnt: für heute waren es zu viele Abrufe."
+
+  def error_message(:consent_ended),
+    do: "Die Bank hat den Abruf abgelehnt: die Freigabe gilt nicht mehr."
+
+  def error_message(:failed), do: "Der Abruf ist unerwartet fehlgeschlagen."
 
   def error_message({:http_status, status}),
     do: "Enable Banking hat die Anfrage abgelehnt (HTTP #{status})."

@@ -14,12 +14,14 @@ defmodule Abakus.BankSync.EnableBankingTest do
     def init(opts), do: opts
 
     @impl true
-    def call(conn, %{public_key: public_key, requests: requests}) do
+    def call(conn, %{public_key: public_key, requests: requests, psu: psu}) do
       conn = fetch_query_params(conn)
 
       if authorized?(conn, public_key) do
         {:ok, body, conn} = read_body(conn)
         Agent.update(requests, &(&1 ++ [{conn.method, conn.request_path, body}]))
+        psu_headers = for {"psu-" <> _name, _value} = header <- conn.req_headers, do: header
+        Agent.update(psu, &(&1 ++ [{conn.request_path, conn.query_params, psu_headers}]))
         conn |> assign(:body, body) |> route(conn.method, conn.path_info)
       else
         send_resp(conn, 401, ~s({"message": "Invalid JWT"}))
@@ -68,6 +70,76 @@ defmodule Abakus.BankSync.EnableBankingTest do
       })
     end
 
+    defp route(conn, "GET", ["accounts", "uid-1", "transactions"]) do
+      case conn.query_params do
+        %{"date_from" => "2026-10-01", "continuation_key" => "page 2"} ->
+          json(conn, 200, %{
+            transactions: [
+              %{
+                entry_reference: "E-2",
+                status: "PDNG",
+                transaction_amount: %{currency: "EUR", amount: "1250.5"},
+                credit_debit_indicator: "CRDT",
+                value_date: "2026-10-03",
+                debtor: %{name: "Arbeitgeber GmbH"}
+              },
+              %{status: "INFO", transaction_amount: %{amount: "1.234"}}
+            ],
+            continuation_key: nil
+          })
+
+        %{"date_from" => "2026-10-01"} ->
+          json(conn, 200, %{
+            transactions: [
+              %{
+                entry_reference: "E-1",
+                transaction_id: "T-1",
+                status: "BOOK",
+                transaction_amount: %{currency: "EUR", amount: "42.00"},
+                credit_debit_indicator: "DBIT",
+                booking_date: "2026-10-02",
+                value_date: "2026-10-01",
+                creditor: %{name: " Stadtwerke "},
+                debtor: %{name: ""},
+                remittance_information: ["SVWZ+Abschlag Oktober", "  "]
+              }
+            ],
+            continuation_key: "page 2"
+          })
+      end
+    end
+
+    defp route(conn, "GET", ["accounts", "uid-looping", "transactions"]) do
+      key = if conn.query_params["continuation_key"] == "page 2", do: "page 3", else: "page 2"
+      json(conn, 200, %{transactions: [], continuation_key: key})
+    end
+
+    defp route(conn, "GET", ["accounts", "uid-1", "balances"]) do
+      json(conn, 200, %{
+        balances: [
+          %{
+            balance_amount: %{currency: "EUR", amount: "-12.30"},
+            balance_type: "CLBD",
+            reference_date: "2026-10-19"
+          },
+          %{balance_amount: %{currency: "EUR", amount: "7"}, balance_type: "ITBD"},
+          %{balance_amount: %{currency: "EUR", amount: "none"}, balance_type: "XPCD"}
+        ]
+      })
+    end
+
+    defp route(conn, "GET", ["accounts", "uid-limited", _resource]),
+      do: json(conn, 429, %{error: "ASPSP_RATE_LIMIT_EXCEEDED"})
+
+    defp route(conn, "GET", ["accounts", "uid-busy", _resource]),
+      do: json(conn, 400, %{error: "ASPSP_RATE_LIMIT_EXCEEDED"})
+
+    defp route(conn, "GET", ["accounts", "uid-expired", _resource]),
+      do: json(conn, 401, %{error: "EXPIRED_SESSION", message: "Session expired"})
+
+    defp route(conn, "GET", ["accounts", "uid-broken", _resource]),
+      do: json(conn, 500, %{error: "ASPSP_ERROR"})
+
     defp json(conn, status, body) do
       conn |> put_resp_content_type("application/json") |> send_resp(status, JSON.encode!(body))
     end
@@ -88,11 +160,13 @@ defmodule Abakus.BankSync.EnableBankingTest do
       :public_key.pem_encode([:public_key.pem_entry_encode(:PrivateKeyInfo, key)])
     )
 
-    requests = start_supervised!({Agent, fn -> [] end})
+    requests = start_supervised!(Supervisor.child_spec({Agent, fn -> [] end}, id: :requests))
+    psu = start_supervised!(Supervisor.child_spec({Agent, fn -> [] end}, id: :psu))
 
     server =
       {Bandit,
-       plug: {Stub, %{public_key: {:RSAPublicKey, modulus, exponent}, requests: requests}},
+       plug:
+         {Stub, %{public_key: {:RSAPublicKey, modulus, exponent}, requests: requests, psu: psu}},
        ip: :loopback,
        port: 0,
        startup_log: false}
@@ -106,7 +180,7 @@ defmodule Abakus.BankSync.EnableBankingTest do
       File.rm_rf!(dir)
     end)
 
-    %{requests: requests, key_file: key_file}
+    %{requests: requests, psu: psu, key_file: key_file}
   end
 
   defp configure(config), do: Application.put_env(:abakus, EnableBanking, config)
@@ -184,5 +258,107 @@ defmodule Abakus.BankSync.EnableBankingTest do
 
     File.rm!(key_file)
     assert EnableBanking.banks("DE") == {:error, :key_unreadable}
+  end
+
+  describe "transactions/3" do
+    test "fetches all pages from the date on, without PSU headers on schedule", %{psu: psu} do
+      assert EnableBanking.transactions("uid-1", ~D[2026-10-01], nil) ==
+               {:ok,
+                [
+                  %{
+                    status: :booked,
+                    entry_reference: "E-1",
+                    transaction_id: "T-1",
+                    date: ~D[2026-10-02],
+                    amount: -4200,
+                    creditor: "Stadtwerke",
+                    debtor: nil,
+                    remittance: ["SVWZ+Abschlag Oktober"]
+                  },
+                  %{
+                    status: :pending,
+                    entry_reference: "E-2",
+                    transaction_id: nil,
+                    date: ~D[2026-10-03],
+                    amount: 125_050,
+                    creditor: nil,
+                    debtor: "Arbeitgeber GmbH",
+                    remittance: []
+                  },
+                  %{
+                    status: :other,
+                    entry_reference: nil,
+                    transaction_id: nil,
+                    date: nil,
+                    amount: nil,
+                    creditor: nil,
+                    debtor: nil,
+                    remittance: []
+                  }
+                ]}
+
+      assert [
+               {"/accounts/uid-1/transactions", %{"date_from" => "2026-10-01"}, []},
+               {"/accounts/uid-1/transactions",
+                %{"date_from" => "2026-10-01", "continuation_key" => "page 2"}, []}
+             ] = Agent.get(psu, & &1)
+    end
+
+    test "sends the PSU headers of a fetch asked for while present", %{psu: psu} do
+      {:ok, _transactions} =
+        EnableBanking.transactions("uid-1", ~D[2026-10-01], %{
+          ip_address: "203.0.113.7",
+          user_agent: "Firefox"
+        })
+
+      assert [{_, _, first}, {_, %{"continuation_key" => "page 2"}, next}] =
+               Agent.get(psu, & &1)
+
+      for headers <- [first, next] do
+        assert Enum.sort(headers) == [
+                 {"psu-ip-address", "203.0.113.7"},
+                 {"psu-user-agent", "Firefox"}
+               ]
+      end
+    end
+
+    test "tells a fetch the bank refuses" do
+      assert EnableBanking.transactions("uid-limited", ~D[2026-10-01], nil) ==
+               {:error, :rate_limited}
+
+      assert EnableBanking.transactions("uid-busy", ~D[2026-10-01], nil) ==
+               {:error, :rate_limited}
+
+      assert EnableBanking.transactions("uid-expired", ~D[2026-10-01], nil) ==
+               {:error, :consent_ended}
+
+      assert EnableBanking.transactions("uid-broken", ~D[2026-10-01], nil) ==
+               {:error, {:http_status, 500}}
+    end
+
+    test "stops at a continuation key that repeats", %{psu: psu} do
+      assert EnableBanking.transactions("uid-looping", ~D[2026-10-01], nil) ==
+               {:error, :invalid_response}
+
+      assert [nil, "page 2", "page 3"] =
+               Agent.get(
+                 psu,
+                 &Enum.map(&1, fn {_path, params, _headers} -> params["continuation_key"] end)
+               )
+    end
+  end
+
+  describe "balances/2" do
+    test "fetches the balances with their kind and reference date", %{psu: psu} do
+      assert EnableBanking.balances("uid-1", %{ip_address: "203.0.113.7", user_agent: nil}) ==
+               {:ok,
+                [
+                  %{type: :closing_booked, amount: -1230, date: ~D[2026-10-19]},
+                  %{type: :interim_booked, amount: 700, date: nil}
+                ]}
+
+      assert [{"/accounts/uid-1/balances", _query, [{"psu-ip-address", "203.0.113.7"}]}] =
+               Agent.get(psu, & &1)
+    end
   end
 end

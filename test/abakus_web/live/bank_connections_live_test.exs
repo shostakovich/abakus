@@ -5,8 +5,8 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
   import Abakus.DomainFixtures
   import Abakus.BankSyncFixtures
 
-  alias Abakus.{BankSync, Repo}
-  alias Abakus.BankSync.FakeClient
+  alias Abakus.{BankSync, Ledger, Repo}
+  alias Abakus.BankSync.{Connection, FakeClient}
 
   setup :register_and_log_in_user
 
@@ -140,9 +140,48 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
       card = "#bank-connection-#{connection.id}"
       assert has_element?(view, card, "Musterbank")
       assert has_element?(view, card, "Freigabe bis 18.04.2027")
+      assert has_element?(view, card, "noch nicht abgerufen")
       assert has_element?(view, "#{card} #linked-account-#{current.id}", "Girokonto")
       assert has_element?(view, "#{card} #linked-account-#{current.id}", "ab 15.09.2026")
       refute has_element?(view, "#bank-connections-empty")
+
+      FakeClient.put_transactions("uid-giro", [
+        FakeClient.transaction(
+          entry_reference: "E-1",
+          date: ~D[2026-10-05],
+          amount: -4200,
+          creditor: "Stadtwerke"
+        )
+      ])
+
+      FakeClient.put_transactions("uid-savings", [
+        FakeClient.transaction(
+          transaction_id: "T-1",
+          date: ~D[2026-10-20],
+          amount: 10_000,
+          debtor: "Robert"
+        ),
+        FakeClient.transaction(transaction_id: "T-0", date: ~D[2026-10-19], amount: 100)
+      ])
+
+      view |> element("#bank-connection-#{connection.id}-fetch") |> render_click()
+      render_async(view)
+
+      assert [
+               {:transactions, "uid-giro", ~D[2026-09-15], psu},
+               {:balances, "uid-giro", psu},
+               {:transactions, "uid-savings", ~D[2026-10-20], psu},
+               {:balances, "uid-savings", psu}
+             ] = FakeClient.fetches()
+
+      assert psu.ip_address == "127.0.0.1"
+      assert has_element?(view, "#flash-info", "Musterbank abgerufen: 2 neu")
+      assert has_element?(view, card, "abgerufen")
+      assert has_element?(view, "#{card}-runs li", "von Hand")
+      assert has_element?(view, "#{card}-runs li", "2 neu")
+
+      assert [%{payee: %{name: "Stadtwerke"}}] = imported(giro)
+      assert [%{payee: %{name: "Robert"}}] = imported(savings)
     end
 
     test "an account left unlinked stays unlinked", %{conn: conn, giro: giro} do
@@ -281,6 +320,69 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
       assert redirected_to(conn) == "https://enablebanking.example/auth/state-1"
     end
 
+    test "Jetzt abrufen sends the PSU data of the browser", %{conn: conn, giro: giro} do
+      linked_connection(giro)
+
+      {:ok, view, _html} =
+        conn |> put_req_header("user-agent", "Firefox/140") |> live(~p"/budget/bank-connections")
+
+      fetch(view)
+
+      assert [{:transactions, "uid-giro", _date, psu} | _balances] = FakeClient.fetches()
+      assert psu == %{ip_address: "127.0.0.1", user_agent: "Firefox/140"}
+    end
+
+    test "Jetzt abrufen takes the client's IP from a trusted proxy", %{conn: conn, giro: giro} do
+      mcp = Application.fetch_env!(:abakus, :mcp)
+      {:ok, trusted} = Abakus.Network.parse_list("127.0.0.1")
+      Application.put_env(:abakus, :mcp, Keyword.put(mcp, :trusted_proxies, trusted))
+      on_exit(fn -> Application.put_env(:abakus, :mcp, mcp) end)
+      linked_connection(giro)
+
+      {:ok, view, _html} =
+        conn
+        |> put_req_header("x-forwarded-for", "203.0.113.7")
+        |> live(~p"/budget/bank-connections")
+
+      fetch(view)
+
+      assert [{:transactions, "uid-giro", _date, %{ip_address: "203.0.113.7"}} | _balances] =
+               FakeClient.fetches()
+    end
+
+    test "a failing connection shows its error, and /up fails after a day",
+         %{conn: conn, giro: giro} do
+      connection = linked_connection(giro)
+      FakeClient.fail_fetches(:timeout)
+
+      {:ok, view, _html} = live(conn, ~p"/budget/bank-connections")
+      fetch(view)
+
+      card = "#bank-connection-#{connection.id}"
+      assert has_element?(view, "#flash-error", "Abruf von Musterbank fehlgeschlagen")
+      assert has_element?(view, "#{card}-error", "Der letzte Abruf ist fehlgeschlagen")
+      assert has_element?(view, "#{card}-error", "Girokonto: Enable Banking hat nicht")
+      assert has_element?(view, "#{card}-runs li", "fehlgeschlagen")
+
+      assert build_conn() |> get(~p"/up") |> json_response(200) == %{"status" => "up"}
+
+      Repo.update_all(Connection,
+        set: [inserted_at: ~U[2026-10-19 09:00:00.000000Z]]
+      )
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert build_conn() |> get(~p"/up") |> json_response(503) == %{"status" => "down"}
+      end)
+    end
+
+    test "a connection without a linked account cannot fetch", %{conn: conn} do
+      connection = connection_fixture()
+
+      {:ok, view, _html} = live(conn, ~p"/budget/bank-connections")
+
+      assert has_element?(view, "#bank-connection-#{connection.id}-fetch[disabled]")
+    end
+
     test "a connection can be removed", %{conn: conn} do
       connection = connection_fixture()
 
@@ -301,6 +403,32 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
       confirm_click(view, "#bank-connection-#{connection.id}-remove", "Musterbank trennen?")
 
       assert has_element?(view, "#flash-info", "Musterbank ist getrennt.")
+      refute has_element?(view, "#bank-connection-#{connection.id}")
+    end
+
+    test "a connection removed while it is fetched keeps its name in the flash",
+         %{conn: conn, giro: giro} do
+      connection = linked_connection(giro)
+      test = self()
+
+      FakeClient.put_transactions("uid-giro", fn ->
+        send(test, {:fetching, self()})
+        receive do: (:go -> [])
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/budget/bank-connections")
+      view |> element("#bank-connection-#{connection.id}-fetch") |> render_click()
+      assert_receive {:fetching, fetch}
+      confirm_click(view, "#bank-connection-#{connection.id}-remove", "Musterbank trennen?")
+      send(fetch, :go)
+      render_async(view)
+
+      assert has_element?(
+               view,
+               "#flash-error",
+               "Abruf von Musterbank fehlgeschlagen. Die Bankverbindung gibt es nicht mehr."
+             )
+
       refute has_element?(view, "#bank-connection-#{connection.id}")
     end
   end
@@ -343,6 +471,15 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
       )
 
     ~p"/budget/bank-connections/authorize?#{[token: token]}"
+  end
+
+  defp imported(account),
+    do: budget_scope() |> Ledger.list_transactions(account) |> Enum.filter(&(&1.source == :bank))
+
+  defp fetch(view) do
+    [connection] = BankSync.list_connections(budget_scope())
+    view |> element("#bank-connection-#{connection.id}-fetch") |> render_click()
+    render_async(view)
   end
 
   test "is the budget owner's" do

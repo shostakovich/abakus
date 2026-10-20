@@ -1,9 +1,10 @@
 defmodule Abakus.DailyJob do
   @moduledoc """
-  Runs a function every day at a local time, and once at boot when `:at_boot?` says a run is
-  missing. A failed run is logged; the next one comes the next day.
+  Runs a function every day at a local time, or at each of several, and once at boot when
+  `:at_boot?` says a run is missing. A failed run is logged; the next one comes at the next time.
 
-  Options: `:name`, `:at` (a `Time`), `:run` and `:at_boot?` (functions without arguments).
+  Options: `:name`, `:at` (a `Time` or a list of them), `:run` and `:at_boot?` (functions
+  without arguments).
   """
 
   use GenServer
@@ -66,7 +67,9 @@ defmodule Abakus.DailyJob do
   end
 
   defp schedule(state, from) do
-    due = LocalTime.next_at(from, state.at)
+    due =
+      state.at |> List.wrap() |> Enum.map(&LocalTime.next_at(from, &1)) |> Enum.min(NaiveDateTime)
+
     Process.send_after(self(), :run, LocalTime.ms_until(due))
     %{state | due: due}
   end
