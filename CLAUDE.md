@@ -1,7 +1,7 @@
 # CLAUDE.md – Abakus
 
-Self-hosted envelope budgeting; scope, domain and phases in [`docs/SPEC.md`](docs/SPEC.md), UI direction in
-[`docs/UI.md`](docs/UI.md). UI text is German; code, comments and docs English, sparse comments.
+Self-hosted envelope budgeting; UI direction in [`docs/UI.md`](docs/UI.md). UI text is German; code, comments and
+docs English, sparse comments.
 
 Domain terms are in [`CONTEXT.md`](CONTEXT.md) (use them in code), decisions in [`DECISIONS.md`](DECISIONS.md).
 
