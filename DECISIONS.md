@@ -232,3 +232,25 @@ Accepted, 2026-10-16 (#73).
 - **Consequences:** Each context must allow the system scope explicitly where it is valid, and the Kasse refuses a
   signed-in user who is not a person itself. Budget tables get their owner's `user_id`, so 0007's "budget tables
   carry no user" no longer holds, while the budget keeps one owner.
+
+## 0020. Bank sync through Enable Banking only
+
+Accepted, 2026-10-20 (#85).
+
+- **Context:** GoCardless closed sign-ups in 2025; FinTS needs a TAN for every fetch at some banks, and a bank's own
+  API like comdirect's loses its session after about 20 minutes without a refresh, so neither runs unattended.
+- **Decision:** One provider, Enable Banking in its free restricted mode (the owner's own linked accounts), read
+  only, behind a behaviour.
+- **Consequences:** Bank sync depends on one company and its free terms; banks it lacks (brokers like Scalable) stay
+  with files or manual entries, and FinTS is the fallback should it go.
+
+## 0021. Pending bank imports clean up after themselves
+
+Accepted, 2026-10-20 (#85).
+
+- **Context:** The owner wants pending transactions in the register, but banks often give them no stable id, change
+  them when booking and drop cancelled ones, while imports are otherwise never merged or removed silently.
+- **Decision:** Pending imports come in uncleared under a `pending:` external id; one the bank no longer reports is
+  deleted if unapproved, while an approved one stays and the booked transaction is proposed as its match.
+- **Consequences:** Abakus deletes transactions on its own for the first time, limited to unapproved pending bank
+  imports; an approved one whose booking differs in amount stays for the owner to delete.
