@@ -1,10 +1,8 @@
 defmodule Abakus.Depot.CashSide do
   @moduledoc """
-  The money of the Depot in the Ledger (ADR 0020). Every Verrechnungskonto has its Ledger account: the budget account
-  of its budget account role, else a tracking account of its own, named after it and closed when it is retired or
-  the cash of a retired portfolio. Each Depot transaction's cash side is a Ledger transaction it leads, written with
-  the user's scope; a cash transfer between two Verrechnungskonten is a Ledger transfer, led from its budget side if
-  it has one.
+  The money of the Depot in the Ledger (ADR 0020). Each Depot transaction's cash side is a Ledger transaction it
+  leads in the account it names, written with the user's scope; a cash transfer between two accounts is a Ledger
+  transfer, led from its budget side if it has one.
 
     * Into a tracking account goes the whole history, cleared and approved, without category.
     * Into a budget account go, while the Depot link is on (`Abakus.Depot.BudgetLink`), purchases, sales, dividends
@@ -21,7 +19,7 @@ defmodule Abakus.Depot.CashSide do
 
   alias Abakus.Categories
   alias Abakus.Depot.BudgetLink.Link
-  alias Abakus.Depot.Portfolios.{Account, Portfolio, Transaction}
+  alias Abakus.Depot.Portfolios.{Portfolio, Transaction}
   alias Abakus.Depot.Valuation
   alias Abakus.{Ledger, Repo}
   alias Abakus.Ledger.Transaction, as: LedgerTransaction
@@ -30,36 +28,19 @@ defmodule Abakus.Depot.CashSide do
 
   @budget_types [:buy, :sell, :dividend, :cash_transfer]
 
-  @labels %{
-    buy: "Kauf",
-    sell: "Verkauf",
-    cash_transfer: "Umbuchung",
-    deposit: "Einlage",
-    removal: "Entnahme",
-    dividend: "Dividende",
-    interest: "Zinsen",
-    interest_charge: "Zinsbelastung",
-    tax: "Steuern",
-    tax_refund: "Steuerrückerstattung",
-    fee: "Gebühren",
-    fee_refund: "Gebührenerstattung"
-  }
-
   @doc """
-  Opens the Ledger accounts of the scope's user's Verrechnungskonten and brings the Ledger transactions their Depot
-  transactions lead in line with them, inside the caller's database transaction. Returns `:ok` or
-  `{:error, message}`, in German.
+  Brings the Ledger transactions the scope's user's Depot transactions lead in line with them, inside the caller's
+  database transaction. Returns `:ok` or `{:error, message}`, in German.
   """
-  def sync(%Scope{} = scope) do
-    with :ok <- open_accounts(scope), do: book(scope)
-  end
-
-  defp book(%Scope{user: %User{id: user_id}} = scope) do
-    wanted = wanted_by_depot_transaction(context(scope))
+  def sync(%Scope{user: %User{id: user_id}} = scope) do
+    context = context(scope)
+    wanted = wanted_by_depot_transaction(context)
     led = Map.new(Repo.all(led_transactions(user_id)), &{&1.depot_transaction_id, &1})
 
     with :ok <- each(Map.drop(led, Map.keys(wanted)), &remove(scope, &1)) do
-      each(Enum.sort(wanted), fn {id, wanted} -> write(scope, id, led[id], wanted) end)
+      each(Enum.sort(wanted), fn {id, wanted} ->
+        write(scope, id, led[id], wanted, context.accounts)
+      end)
     end
   end
 
@@ -79,60 +60,13 @@ defmodule Abakus.Depot.CashSide do
           t.user_id == ^user_id and not is_nil(t.depot_transaction_id) and is_nil(t.deleted_at)
       )
 
-  # A budget account given up by one Verrechnungskonto and taken by another changes hands in this order.
-  defp open_accounts(%Scope{user: %User{id: user_id}} = scope) do
-    from(a in Account,
-      where: a.user_id == ^user_id,
-      preload: [:ledger_account, :cash_of_portfolio]
-    )
-    |> Repo.all()
-    |> Enum.sort_by(&(&1.budget_account_id != nil))
-    |> each(&open_account(scope, &1))
-  end
-
-  defp open_account(_scope, %Account{budget_account_id: id, ledger_account_id: id})
-       when id != nil,
-       do: :ok
-
-  defp open_account(_scope, %Account{budget_account_id: id} = account) when id != nil,
-    do: point(account, id)
-
-  defp open_account(_scope, %Account{ledger_account: %Ledger.Account{kind: :tracking}}), do: :ok
-
-  defp open_account(scope, account) do
-    with {:ok, ledger_account} <-
-           Ledger.create_account(scope, %{
-             name: account.name,
-             kind: :tracking,
-             closed: closed?(account)
-           }) do
-      point(account, ledger_account.id)
-    end
-  end
-
-  defp closed?(%Account{retired: retired, cash_of_portfolio: portfolio}),
-    do: retired or match?(%Portfolio{retired: true}, portfolio)
-
-  defp point(account, ledger_account_id) do
-    with {:ok, _account} <-
-           account |> Changeset.change(ledger_account_id: ledger_account_id) |> Repo.update(),
-         do: :ok
-  end
-
   defp context(%Scope{user: %User{id: user_id}} = scope) do
     link = Repo.get(Link, user_id)
 
     %{
       link: link,
       ready_to_assign_id: link && Categories.ready_to_assign!(scope).id,
-      accounts:
-        Repo.all(
-          from a in Account,
-            join: l in assoc(a, :ledger_account),
-            where: a.user_id == ^user_id,
-            preload: [ledger_account: {l, :transfer_payee}]
-        )
-        |> Map.new(&{&1.id, &1.ledger_account}),
+      accounts: Map.new(Ledger.list_accounts(scope), &{&1.id, &1}),
       portfolios:
         Map.new(Repo.all(from p in Portfolio, where: p.user_id == ^user_id), &{&1.id, &1.name}),
       user_id: user_id
@@ -221,8 +155,10 @@ defmodule Abakus.Depot.CashSide do
   defp payee(%Transaction{portfolio_id: id}, _account_id, context),
     do: {:name, context.portfolios[id]}
 
-  defp memo(%Transaction{type: type, security: %{name: name}}), do: "#{@labels[type]} #{name}"
-  defp memo(%Transaction{type: type}), do: @labels[type]
+  defp memo(%Transaction{type: type, security: %{name: name}}),
+    do: "#{Transaction.label(type)} #{name}"
+
+  defp memo(%Transaction{type: type}), do: Transaction.label(type)
 
   defp remove(scope, {id, led}) do
     with {:ok, _deleted} <- Ledger.delete_transaction(scope, led, opts(id)), do: :ok
@@ -241,7 +177,7 @@ defmodule Abakus.Depot.CashSide do
     end)
   end
 
-  defp write(scope, depot_transaction_id, nil, wanted) do
+  defp write(scope, depot_transaction_id, nil, wanted, _accounts) do
     attrs =
       wanted
       |> Map.take([:account_id, :amount, :date, :memo, :category_id, :cleared, :approved])
@@ -255,14 +191,15 @@ defmodule Abakus.Depot.CashSide do
          do: settle_counterpart(scope, transaction)
   end
 
-  defp write(scope, depot_transaction_id, led, wanted) do
+  defp write(scope, depot_transaction_id, led, wanted, accounts) do
     attrs =
       wanted
       |> Map.take([:account_id, :amount, :date])
       |> Map.merge(payee_attrs(scope, wanted.payee))
       |> Enum.reject(fn {field, value} -> Map.get(led, field) == value end)
       |> Map.new()
-      |> with_category(wanted)
+      |> with_category(led, wanted)
+      |> with_state(led, wanted, accounts)
 
     cond do
       attrs == %{} ->
@@ -277,11 +214,21 @@ defmodule Abakus.Depot.CashSide do
     end
   end
 
-  # A transaction moved to another account takes the category it would get there.
-  defp with_category(%{account_id: _moved} = attrs, wanted),
-    do: Map.put(attrs, :category_id, wanted.category_id)
+  # Moved to another account or turned from outflow to inflow, it takes the category it would get anew.
+  defp with_category(attrs, led, wanted) do
+    if Map.has_key?(attrs, :account_id) or led.amount < 0 != wanted.amount < 0,
+      do: Map.put(attrs, :category_id, wanted.category_id),
+      else: attrs
+  end
 
-  defp with_category(attrs, _wanted), do: attrs
+  defp with_state(%{account_id: id} = attrs, led, wanted, accounts) do
+    if Ledger.Account.budget_account?(accounts[id]) ==
+         Ledger.Account.budget_account?(accounts[led.account_id]),
+       do: attrs,
+       else: Map.merge(attrs, Map.take(wanted, [:cleared, :approved]))
+  end
+
+  defp with_state(attrs, _led, _wanted, _accounts), do: attrs
 
   defp rewrite(scope, led, attrs, depot_transaction_id),
     do: Ledger.update_transaction(scope, led, attrs, opts(depot_transaction_id))
@@ -310,7 +257,7 @@ defmodule Abakus.Depot.CashSide do
 
   defp payee_attrs(scope, {:name, name}) do
     case Ledger.find_payee_by_name(scope, name) do
-      %{transfer_account_id: nil, id: id} -> %{payee_id: id}
+      {:ok, %{transfer_account_id: nil, id: id}} -> %{payee_id: id}
       _none -> %{payee_name: name}
     end
   end

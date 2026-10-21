@@ -8,6 +8,7 @@ defmodule Abakus.Depot.CashMigrationTest do
 
   @moduletag :tmp_dir
   @before 20_261_021_160_000
+  @cash 20_261_021_180_000
   @now "'2026-10-01T10:00:00.000000Z'"
 
   setup %{tmp_dir: dir} do
@@ -58,16 +59,35 @@ defmodule Abakus.Depot.CashMigrationTest do
     )
 
     insert(
-      "depot_accounts (id, user_id, name, retired, budget_account_id, cash_of_portfolio_id, no_role, inserted_at, updated_at)",
+      "depot_accounts (id, user_id, name, note, retired, budget_account_id, cash_of_portfolio_id, no_role, inserted_at, updated_at)",
       [
-        "1, 1, 'Checking clearing', 0, 1, NULL, 0",
-        "2, 1, 'Broker cash', 0, NULL, 1, 0",
-        "3, 1, 'Old cash', 0, NULL, 2, 0",
-        "4, 1, 'Loose', 0, NULL, NULL, 1",
-        "5, 1, 'Retired loose', 1, NULL, NULL, 1",
-        "6, 2, 'Ben''s cash', 0, NULL, NULL, 1"
+        "1, 1, 'Checking clearing', NULL, 0, 1, NULL, 0",
+        "2, 1, 'Broker cash', 'At the broker', 0, NULL, 1, 0",
+        "3, 1, 'Old cash', NULL, 0, NULL, 2, 0",
+        "4, 1, 'Loose', NULL, 0, NULL, NULL, 1",
+        "5, 1, 'Retired loose', NULL, 1, NULL, NULL, 1",
+        "6, 2, 'Ben''s cash', NULL, 0, NULL, NULL, 1",
+        "7, 1, 'Unset', NULL, 0, NULL, NULL, 0"
       ]
     )
+
+    for {portfolio, account} <- [{1, 1}, {2, 3}, {3, 6}] do
+      Repo.query!("UPDATE depot_portfolios SET reference_account_id = ?2 WHERE id = ?1", [
+        portfolio,
+        account
+      ])
+    end
+
+    insert("depot_taxonomies (id, user_id, name, inserted_at, updated_at)", [
+      "1, 1, 'Asset classes'"
+    ])
+
+    insert(
+      "depot_classifications (id, taxonomy_id, name, weight, inserted_at, updated_at)",
+      ["1, 1, 'Cash', 10000"]
+    )
+
+    insert("depot_assignments (id, classification_id, account_id, weight)", ["1, 1, 4, 10000"])
 
     insert("depot_budget_links (user_id, category_id, start_date, inserted_at, updated_at)", [
       "1, 2, '2026-09-01'"
@@ -113,6 +133,11 @@ defmodule Abakus.Depot.CashMigrationTest do
       ])
     end
 
+    TestMigrations.run!(repo, to: @cash)
+    %{repo: repo, ids: ledger_account_ids()}
+  end
+
+  defp migrate(%{repo: repo}) do
     TestMigrations.run!(repo)
     :ok
   end
@@ -153,85 +178,157 @@ defmodule Abakus.Depot.CashMigrationTest do
     """)
   end
 
-  test "maps each role to the right kind of account and closes the accounts of retired portfolios" do
-    ids = ledger_account_ids()
-    assert ids[1] == 1
+  test "refuses to drop a Verrechnungskonto without an account in the Ledger", %{repo: repo} do
+    Repo.query!("UPDATE depot_accounts SET ledger_account_id = NULL WHERE id = 4")
 
-    accounts =
-      for id <- 2..6, into: %{} do
-        [row] =
-          rows("SELECT name, kind, closed, user_id, fed_by FROM accounts WHERE id = ?1", [ids[id]])
-
-        {id, row}
-      end
-
-    assert accounts == %{
-             2 => ["Broker cash", "tracking", 0, 1, nil],
-             3 => ["Old cash", "tracking", 1, 1, nil],
-             4 => ["Loose", "tracking", 0, 1, nil],
-             5 => ["Retired loose", "tracking", 1, 1, nil],
-             6 => ["Ben's cash", "tracking", 0, 2, nil]
-           }
-
-    for id <- 2..6 do
-      assert [[_payee]] =
-               rows("SELECT id FROM payees WHERE transfer_account_id = ?1 AND name = ?2", [
-                 ids[id],
-                 "Transfer : " <> Enum.at(accounts[id], 0)
-               ])
+    assert_raise RuntimeError, ~r/no account of their user in the Ledger: Loose/, fn ->
+      TestMigrations.run!(repo)
     end
+
+    assert ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
+    assert [[4, nil]] = rows("SELECT id, ledger_account_id FROM depot_accounts WHERE id = 4")
   end
 
-  test "a tracking account's balance is the Verrechnungskonto's balance as the Depot computes it" do
-    ids = ledger_account_ids()
-    depot = Valuation.balances(Repo.all(Transaction), ~D[2026-10-21])
+  describe "after the migrations" do
+    setup :migrate
 
-    for id <- 2..6, do: assert(ledger_balance(ids[id]) == Map.get(depot, id, 0))
-    assert ledger_balance(ids[2]) == 110_000
-  end
+    test "maps each role to the right kind of account and closes the accounts of retired portfolios",
+         %{
+           ids: ids
+         } do
+      assert ids[1] == 1
 
-  test "the budget account keeps the linked transactions and the bank lines, booking nothing twice" do
-    ids = ledger_account_ids()
+      accounts =
+        for id <- 2..7, into: %{} do
+          [row] =
+            rows("SELECT name, kind, closed, user_id, fed_by FROM accounts WHERE id = ?1", [
+              ids[id]
+            ])
 
-    checking =
-      rows("""
-      SELECT t.id, t.date, t.amount, p.name, t.category_id, t.depot_transaction_id, t.transfer_transaction_id
-      FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id
-      WHERE t.account_id = 1 AND t.deleted_at IS NULL ORDER BY t.id
-      """)
+          {id, row}
+        end
 
-    assert [
-             [41, "2026-09-10", -20_000, "Transfer : Broker cash", 2, 4, 42],
-             [51, "2026-09-15", -50_000, "Broker", 2, 5, nil],
-             [71, "2026-09-25", 1_500, "World ETF", 1, 7, nil],
-             [81, "2026-09-12", -15_000, "Transfer : Loose", 2, 8, loose_side],
-             [82, "2026-09-30", -15_000, nil, nil, nil, nil]
-           ] = checking
+      assert accounts == %{
+               2 => ["Broker cash", "tracking", 0, 1, nil],
+               3 => ["Old cash", "tracking", 1, 1, nil],
+               4 => ["Loose", "tracking", 0, 1, nil],
+               5 => ["Retired loose", "tracking", 1, 1, nil],
+               6 => ["Ben's cash", "tracking", 0, 2, nil],
+               7 => ["Unset", "tracking", 0, 1, nil]
+             }
 
-    assert [[42, 20_000, "cleared", 1, nil]] =
-             rows(
-               "SELECT id, amount, cleared, approved, category_id FROM transactions WHERE transfer_transaction_id = 41 AND account_id = ?1",
-               [ids[2]]
-             )
+      for id <- 2..7 do
+        assert [[_payee]] =
+                 rows("SELECT id FROM payees WHERE transfer_account_id = ?1 AND name = ?2", [
+                   ids[id],
+                   "Transfer : " <> Enum.at(accounts[id], 0)
+                 ])
+      end
+    end
 
-    assert [[15_000, 81]] =
-             rows("SELECT amount, transfer_transaction_id FROM transactions WHERE id = ?1", [
-               loose_side
-             ])
+    test "a tracking account's balance is the Verrechnungskonto's balance as the Depot computes it",
+         %{
+           ids: ids
+         } do
+      depot =
+        Transaction
+        |> Repo.all()
+        |> Enum.flat_map(&Valuation.cash_moved/1)
+        |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+        |> Map.new(fn {id, amounts} -> {id, Enum.sum(amounts)} end)
 
-    assert rows("SELECT id FROM transactions WHERE account_id = 2 AND deleted_at IS NULL") == []
+      for id <- 2..7, do: assert(ledger_balance(ids[id]) == Map.get(depot, ids[id], 0))
+      assert ledger_balance(ids[2]) == 110_000
+    end
 
-    assert [[1, nil]] =
-             rows(
-               "SELECT deleted_at IS NOT NULL, transfer_transaction_id FROM transactions WHERE id = 52"
-             )
-  end
+    test "the budget account keeps the linked transactions and the bank lines, booking nothing twice",
+         %{
+           ids: ids
+         } do
+      checking =
+        rows("""
+        SELECT t.id, t.date, t.amount, p.name, t.category_id, t.depot_transaction_id, t.transfer_transaction_id
+        FROM transactions t LEFT JOIN payees p ON p.id = t.payee_id
+        WHERE t.account_id = 1 AND t.deleted_at IS NULL ORDER BY t.id
+        """)
 
-  test "leaves nothing for the cash side to change" do
-    before = transactions()
+      assert [
+               [41, "2026-09-10", -20_000, "Transfer : Broker cash", 2, 4, 42],
+               [51, "2026-09-15", -50_000, "Broker", 2, 5, nil],
+               [71, "2026-09-25", 1_500, "World ETF", 1, 7, nil],
+               [81, "2026-09-12", -15_000, "Transfer : Loose", 2, 8, loose_side],
+               [82, "2026-09-30", -15_000, nil, nil, nil, nil]
+             ] = checking
 
-    for user <- Repo.all(User), do: :ok = CashSide.sync(Scope.for_user(user))
+      assert [[42, 20_000, "cleared", 1, nil]] =
+               rows(
+                 "SELECT id, amount, cleared, approved, category_id FROM transactions WHERE transfer_transaction_id = 41 AND account_id = ?1",
+                 [ids[2]]
+               )
 
-    assert transactions() == before
+      assert [[15_000, 81]] =
+               rows("SELECT amount, transfer_transaction_id FROM transactions WHERE id = ?1", [
+                 loose_side
+               ])
+
+      assert rows("SELECT id FROM transactions WHERE account_id = 2 AND deleted_at IS NULL") == []
+
+      assert [[1, nil]] =
+               rows(
+                 "SELECT deleted_at IS NOT NULL, transfer_transaction_id FROM transactions WHERE id = 52"
+               )
+    end
+
+    test "leaves nothing for the cash side to change" do
+      before = transactions()
+
+      for user <- Repo.all(User), do: :ok = CashSide.sync(Scope.for_user(user))
+
+      assert transactions() == before
+    end
+
+    test "the Depot's transactions, portfolios and assignments refer to the Ledger accounts", %{
+      ids: ids
+    } do
+      assert rows("SELECT id, account_id, other_account_id FROM depot_transactions ORDER BY id") ==
+               for(
+                 {id, account, other} <- [
+                   {1, 2, nil},
+                   {2, 1, 2},
+                   {3, 1, nil},
+                   {4, 1, 2},
+                   {5, 1, nil},
+                   {6, 2, nil},
+                   {7, 1, nil},
+                   {8, 1, 4},
+                   {9, 1, nil},
+                   {10, 3, nil},
+                   {11, 3, nil},
+                   {12, 5, nil},
+                   {13, 6, nil}
+                 ],
+                 do: [id, ids[account], other && ids[other]]
+               )
+
+      assert rows("SELECT id, reference_account_id FROM depot_portfolios ORDER BY id") ==
+               [[1, ids[1]], [2, ids[3]], [3, ids[6]]]
+
+      assert rows(
+               "SELECT portfolio_id, account_id FROM depot_cash_accounts ORDER BY portfolio_id"
+             ) ==
+               [[1, ids[2]], [2, ids[3]]]
+
+      assert rows("SELECT account_id FROM depot_assignments") == [[ids[4]]]
+      assert rows("SELECT note FROM accounts WHERE id = ?1", [ids[2]]) == [["At the broker"]]
+    end
+
+    test "drops the Verrechnungskonten" do
+      refute ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
+
+      for table <- ~w(depot_transactions depot_portfolios depot_assignments depot_cash_accounts) do
+        referenced = rows(~s|SELECT DISTINCT "table" FROM pragma_foreign_key_list(?1)|, [table])
+        refute ["depot_accounts"] in referenced
+      end
+    end
   end
 end

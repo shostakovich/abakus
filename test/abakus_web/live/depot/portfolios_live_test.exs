@@ -39,58 +39,11 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
     assert has_element?(lv, "#portfolio-menu a", "Ohne Namen")
   end
 
-  describe "the roles of the Verrechnungskonten" do
-    setup %{scope: scope} do
-      giro = Abakus.DomainFixtures.account_fixture(name: "Giro", kind: :checking)
-      portfolio = portfolio_fixture(scope, %{name: "Broker"})
-      account = account_fixture(scope, %{name: "Giro-Verrechnung"})
-      %{giro: giro, portfolio: portfolio, account: account}
-    end
-
-    test "sets a role in place", ctx do
-      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
-      row = "#clearing-account-#{ctx.account.id}"
-      assert has_element?(lv, row, "Rolle fehlt")
-
-      lv |> element("#{row} button", "Festlegen") |> render_click()
-
-      assert has_element?(
-               lv,
-               ~s|#account-role-form option[value="budget_account:#{ctx.giro.id}"]|
-             )
-
-      lv
-      |> form("#account-role-form", role: %{role: "budget_account:#{ctx.giro.id}"})
-      |> render_submit()
-
-      assert render(lv) =~ "Rolle von „Giro-Verrechnung“ gespeichert."
-      assert has_element?(lv, row, "ist Budgetkonto „Giro“")
-      refute has_element?(lv, row, "Rolle fehlt")
-
-      lv |> element("#{row} button", "Ändern") |> render_click()
-
-      lv
-      |> form("#account-role-form", role: %{role: "portfolio_cash:#{ctx.portfolio.id}"})
-      |> render_submit()
-
-      assert has_element?(lv, row, "Cash von Depot „Broker“")
-    end
-
-    test "shows why a role was refused", ctx do
-      {:ok, lv, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
-      lv |> element("#clearing-account-#{ctx.account.id} button", "Festlegen") |> render_click()
-      Repo.update!(Ecto.Changeset.change(ctx.giro, closed: true))
-
-      lv
-      |> form("#account-role-form", role: %{role: "budget_account:#{ctx.giro.id}"})
-      |> render_submit()
-
-      assert has_element?(lv, "#account-role-form", "Das ist kein offenes Budgetkonto.")
-    end
-  end
-
   describe "a new portfolio" do
-    test "comes with its Verrechnungskonto", %{conn: conn, scope: scope} do
+    test "comes with its Verrechnungskonto, a tracking account that is its cash", %{
+      conn: conn,
+      scope: scope
+    } do
       {:ok, lv, _html} = live(conn, ~p"/settings/depot/portfolios")
       refute has_element?(lv, "#depot-numbers")
 
@@ -102,8 +55,10 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
 
       assert render(lv) =~ "Depot „Langfristig“ angelegt."
       assert [%{name: "Langfristig"} = portfolio] = Portfolios.list_portfolios(scope)
-      assert [%{name: "Girokonto"} = account] = Portfolios.list_accounts(scope)
+      assert [%{name: "Girokonto", kind: :tracking} = account] = Portfolios.list_accounts(scope)
       assert portfolio.reference_account_id == account.id
+      assert [cash] = Repo.preload(portfolio, :cash_accounts).cash_accounts
+      assert cash.id == account.id
 
       assert has_element?(
                lv,

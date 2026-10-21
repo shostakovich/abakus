@@ -8,7 +8,7 @@ defmodule Abakus.Depot.PortfoliosTest do
   alias Abakus.Depot.Portfolios
   alias Abakus.Depot.Portfolios.TransactionUnit
   alias Abakus.Depot.Settings
-  alias Abakus.ExchangeRates
+  alias Abakus.{ExchangeRates, Ledger}
   alias Abakus.ExchangeRates.ExchangeRate
 
   @friday ~D[2026-10-02]
@@ -157,12 +157,16 @@ defmodule Abakus.Depot.PortfoliosTest do
     test "lists the portfolios with their securities' value and TTWROR since 1 January", ctx do
       account = account_fixture(ctx.scope, %{name: "Konto Langfristig"})
       portfolio = Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
+      cash_account_fixture(portfolio, account)
       deposit(ctx.scope, account, ~D[2025-06-01], 240)
       shares_fixture(ctx.scope, portfolio)
 
       savings = account_fixture(ctx.scope, %{name: "Konto Sparplan"})
       deposit(ctx.scope, savings, @friday, 1_500)
-      portfolio_fixture(ctx.scope, %{name: "Sparplan", reference_account_id: savings.id})
+
+      ctx.scope
+      |> portfolio_fixture(%{name: "Sparplan", reference_account_id: savings.id})
+      |> cash_account_fixture(savings)
 
       assert [langfristig, sparplan] = Portfolios.overview(ctx.scope, :max, @saturday).portfolios
 
@@ -192,7 +196,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert_in_delta row.ttwror, (1_020 + 10) / 1_000 - 1, 1.0e-12
     end
 
-    test "counts an account two portfolios settle against for the first of them", ctx do
+    test "counts a portfolio's cash accounts, not the reference account of another", ctx do
       account = account_fixture(ctx.scope)
       deposit(ctx.scope, account, @friday, 50)
 
@@ -200,6 +204,7 @@ defmodule Abakus.Depot.PortfoliosTest do
         for name <- ["A", "B"],
             do: portfolio_fixture(ctx.scope, %{name: name, reference_account_id: account.id})
 
+      cash_account_fixture(a, account)
       shares_fixture(ctx.scope, b, 1)
 
       assert [a_row, b_row, _langfristig] =
@@ -207,19 +212,6 @@ defmodule Abakus.Depot.PortfoliosTest do
 
       assert {a_row.portfolio.id, a_row.cash} == {a.id, money(50)}
       assert {b_row.portfolio.id, b_row.cash, b_row.value} == {b.id, nil, money(102)}
-    end
-
-    test "gives an account a retired portfolio settles against too the active one", ctx do
-      account = account_fixture(ctx.scope, %{name: "K"})
-      deposit(ctx.scope, account, @friday, 50)
-      Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
-      retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
-      Repo.update!(change(retired, reference_account_id: account.id))
-      shares_fixture(ctx.scope, retired, 1)
-
-      assert [alt, langfristig] = Portfolios.overview(ctx.scope, :max, @saturday).portfolios
-      assert {alt.portfolio.id, alt.cash} == {retired.id, nil}
-      assert langfristig.cash == money(50)
     end
 
     test "gives nothing but zeros without any transaction", ctx do
@@ -429,10 +421,11 @@ defmodule Abakus.Depot.PortfoliosTest do
       |> Enum.sort()
     end
 
-    test "gives each portfolio's holdings by value, then its reference account", ctx do
+    test "gives each portfolio's holdings by value, then its cash", ctx do
       account = account_fixture(ctx.scope, %{name: "Konto Langfristig"})
       deposit_on_friday(ctx.scope, account, 2_000)
       portfolio = Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
+      cash_account_fixture(portfolio, account)
       small = security_at(10, "Klein")
       large = security_at(100, "Groß")
       buy(ctx.scope, portfolio, small, 10, 120)
@@ -452,17 +445,18 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert {klein.value, klein.purchase_value, klein.gain} ==
                {money(100), money(120), money(-20)}
 
-      assert [%{account: ^account, value: 200_000}] = group.accounts
+      assert [%{account: %{id: account_id}, value: 200_000}] = group.accounts
+      assert account_id == account.id
 
       assert {group.value, group.purchase_value, group.gain} ==
                {money(3_100), money(920), money(180)}
     end
 
-    test "leaves out a Verrechnungskonto that is a budget account", ctx do
+    test "leaves out a budget account", ctx do
       giro = Abakus.DomainFixtures.account_fixture(name: "Giro")
-      account = account_fixture(ctx.scope, %{name: "Giro", budget_account_id: giro.id})
-      deposit_on_friday(ctx.scope, account, 2_000)
-      Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
+      Abakus.DomainFixtures.transaction_fixture(account_id: giro.id, date: @friday, amount: 2_000)
+      deposit_on_friday(ctx.scope, giro, 2_000)
+      Repo.update!(change(ctx.portfolio, reference_account_id: giro.id))
 
       holdings = Portfolios.holdings(ctx.scope, nil, @saturday)
 
@@ -471,7 +465,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert Enum.flat_map(holdings.groups, & &1.accounts) == []
     end
 
-    test "shows an account two portfolios settle against under the first or the selected", ctx do
+    test "shows a cash account under its portfolio, though another settles against it too", ctx do
       account = account_fixture(ctx.scope, %{name: "K"})
       deposit_on_friday(ctx.scope, account, 50)
 
@@ -479,10 +473,11 @@ defmodule Abakus.Depot.PortfoliosTest do
         for name <- ["A", "B"],
             do: portfolio_fixture(ctx.scope, %{name: name, reference_account_id: account.id})
 
+      cash_account_fixture(b, account)
       all = Portfolios.holdings(ctx.scope, nil, @saturday)
 
       assert group_names(all) == ["A", "B", "Langfristig"]
-      assert Enum.map(all.groups, &account_names/1) == [["K"], [], []]
+      assert Enum.map(all.groups, &account_names/1) == [[], ["K"], []]
       assert Enum.map(all.portfolios, & &1.name) == ["A", "B", "Langfristig"]
 
       selected = Portfolios.holdings(ctx.scope, b.id, @saturday)
@@ -492,14 +487,16 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert Enum.map(selected.groups, &account_names/1) == [["K"]]
       assert %{value: 5_000, purchase_value: 0, gain: 0} = selected.total
       assert selected.net_worth == money(50)
-      assert Portfolios.holdings(ctx.scope, a.id, @saturday).portfolio == a
+
+      assert %{portfolio: ^a, groups: [%{accounts: []}]} =
+               Portfolios.holdings(ctx.scope, a.id, @saturday)
     end
 
     test "groups the accounts of no portfolio last, without retired ones once empty", ctx do
       savings = account_fixture(ctx.scope, %{name: "Tagesgeld"})
       deposit_on_friday(ctx.scope, savings, 1_000)
-      account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
-      kept = account_fixture(ctx.scope, %{name: "Noch offen", retired: true})
+      account_fixture(ctx.scope, %{name: "Geschlossen", closed: true})
+      kept = account_fixture(ctx.scope, %{name: "Noch offen", closed: true})
       deposit_on_friday(ctx.scope, kept, 1)
       buy(ctx.scope, ctx.portfolio, security_at(100, "Groß"), 10, 1_000)
 
@@ -592,6 +589,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       account = account_fixture(ctx.scope)
       deposit_on_friday(ctx.scope, account, 1_000)
       plan = portfolio_fixture(ctx.scope, %{name: "Sparplan", reference_account_id: account.id})
+      cash_account_fixture(plan, account)
       world = security_at(100, "Welt")
       buy(ctx.scope, ctx.portfolio, world, 30, 3_000)
       buy(ctx.scope, plan, world, 10, 1_000)
@@ -967,13 +965,23 @@ defmodule Abakus.Depot.PortfoliosTest do
              } = Portfolios.sidebar(ctx.scope, @saturday)
     end
 
-    test "adds the balance of the portfolio's cash to its value", ctx do
-      cash = account_fixture(ctx.scope, %{name: "Cash", cash_of_portfolio_id: ctx.portfolio.id})
-      deposit_into(ctx.scope, cash, 300)
+    test "gives a portfolio's value as its holdings plus its cash accounts' balances in the Ledger",
+         ctx do
+      broker = account_fixture(ctx.scope, %{name: "Broker cash"})
+      plan = account_fixture(ctx.scope, %{name: "Savings plan cash"})
+      for account <- [broker, plan], do: cash_account_fixture(ctx.portfolio, account)
+      deposit_into(ctx.scope, broker, 300)
+      deposit_into(ctx.scope, account_fixture(ctx.scope, %{name: "Elsewhere"}), 50)
+
+      {:ok, _interest} =
+        Ledger.create_transaction(ctx.scope, %{account_id: plan.id, date: @friday, amount: 2_000})
+
       held(ctx.scope, ctx.portfolio, 10, 100)
 
-      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}, value: 130_000}]} =
+      assert %{portfolios: [%{portfolio: %{name: "Langfristig"}, value: value}]} =
                Portfolios.sidebar(ctx.scope, @saturday)
+
+      assert value == money(1_000) + money(300) + money(20)
     end
 
     test "leaves out retired portfolios, even while they hold something", ctx do

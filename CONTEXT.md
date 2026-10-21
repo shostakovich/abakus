@@ -333,10 +333,11 @@ _Avoid_: Synced transaction, mirror
 ## Depot
 
 Each user's portfolios: what they hold, what it is worth, what it paid and how it performed. Code lives in
-`Abakus.Depot` and `AbakusWeb.Depot`, tables start with `depot_`. Terms that the budget uses too (account,
-transaction, assignment, category) mean the Depot's here and are qualified in code (`Abakus.Depot.Portfolios.Account`,
-`Abakus.Depot.Taxonomies.Assignment`). Portfolios, Verrechnungskonten, transactions and taxonomies belong to
-one user, who alone sees them; securities, prices, exchange rates and compositions are shared by all.
+`Abakus.Depot` and `AbakusWeb.Depot`, tables start with `depot_`. Terms that the budget uses too (transaction,
+assignment, category) mean the Depot's here and are qualified in code (`Abakus.Depot.Portfolios.Transaction`,
+`Abakus.Depot.Taxonomies.Assignment`); its accounts are the budget's, the accounts in Finanzen. Portfolios,
+transactions and taxonomies belong to one user, who alone sees them; securities, prices, exchange rates and
+compositions are shared by all.
 
 **Depot**:
 The code area of the portfolios (`Abakus.Depot`, `/depot`), shown in Finanzen as Vermögen and Depots; a user without
@@ -358,27 +359,17 @@ The number the bank gives a portfolio, as its documents print it; only its digit
 "Depotnummer".
 
 **Verrechnungskonto**:
-A cash account of the Depot, in euros; it exists on its own, not as part of a portfolio. The one a portfolio's
+An account in Finanzen of its user that Depot transactions move money on (ADR 0020): a budget account, such as the
+checking account a portfolio pays from, or a tracking account for cash at the broker. The one a portfolio's
 purchases, sales and dividends settle against by default is its reference account; several portfolios may share one.
-In Finanzen it is an account of its user: the budget account of its budget account role, else a tracking account
-named after it, closed when it is retired or the cash of a retired portfolio. Code: `Abakus.Depot.Portfolios.Account`,
-its account `ledger_account`. UI "Verrechnungskonto", the reference account "Referenzkonto" where it is one.
-_Avoid_: Account unqualified in code (that is the budget's), cash account
-
-**Role** (of a Verrechnungskonto):
-What a Verrechnungskonto is in Finanzen, set under Einstellungen › Depots (ADR 0017): a budget account, the cash of a
-portfolio, or none; without a role set it shows as a warning on Vermögen. A portfolio's new Verrechnungskonto starts
-as its cash. Code: `Abakus.Depot.AccountRoles`, `Account.role/1`. UI "Rolle", "Rolle fehlt".
-
-**Budget account role**:
-The role of a Verrechnungskonto that is the same bank account as a budget account: the budget owner's only,
-at most one per budget account; it counts toward nothing else and is that budget account, which the Depot link
-writes into. UI "ist Budgetkonto „X“".
+A new portfolio comes with a new tracking account as its reference account and cash. Code: `Abakus.Ledger.Account`.
+UI "Verrechnungskonto", the reference account "Referenzkonto" where it is one.
+_Avoid_: Depot account, clearing account
 
 **Portfolio cash**:
-The role of a Verrechnungskonto that is cash held at the broker of one of the user's portfolios: its
-balance counts toward that portfolio's value in the sidebar and shows in its Bestand. UI
-"Cash von Depot „Y“", in the Bestand "davon Cash".
+The tracking accounts that hold the cash at the broker of one of the user's portfolios, each the cash of one: their
+balances count toward that portfolio's value in the sidebar and show in its Bestand. Code:
+`Portfolio.cash_accounts`. UI in the Bestand "Cash", "davon Cash".
 _Avoid_: Cash account (that is any Verrechnungskonto)
 
 **Holding**:
@@ -423,8 +414,8 @@ One business event, such as a purchase, a dividend or a transfer, with a portfol
 _Avoid_: Transaction unqualified in code (that is the budget's), entry
 
 **Cash side**:
-What a Depot transaction moves on its Verrechnungskonten, written into their accounts in Finanzen as a linked
-transaction it leads (ADR 0020), a cash transfer between two of them as a transfer, led from its budget side if it
+What a Depot transaction moves on its Verrechnungskonten, written there as a linked transaction it leads (ADR
+0020), a cash transfer between two of them as a transfer, led from its budget side if it
 has one, in the Depot change's database transaction: into a tracking account its whole history, cleared and
 approved, without category; into a budget account only through the Depot link. A purchase or sale is with the
 portfolio, another transaction with its security, and a cash transfer's side without the other with that account;
@@ -440,7 +431,7 @@ _Avoid_: Revaluation, market value adjustment
 **Depot link**:
 The budget owner's Depot linked to the budget (ADR 0020), switched on under Einstellungen › Depots with a start date
 and the category for purchases. From the start date on, the cash side of their purchases, sales, dividends and cash
-transfers on a Verrechnungskonto with the budget account role is written into that budget account, unapproved: an
+transfers on a budget account is written into that account, unapproved: an
 outflow in that category, an inflow to Ready to Assign, none for a transfer between budget accounts. Its other
 transactions there, and all before the start date, are the bank import's. Code: `Abakus.Depot.BudgetLink`. UI "Mit Budget verknüpfen".
 _Avoid_: Budget link (that is the Kasse's), sync

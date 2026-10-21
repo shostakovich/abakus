@@ -8,7 +8,7 @@ defmodule Abakus.Depot.BookingTest do
   alias Abakus.Depot.Portfolios.{Receipt, Transaction, TransactionForm}
   alias Abakus.Depot.Receipts.Fields
   alias Abakus.Depot.Valuation.Market
-  alias Abakus.LocalTime
+  alias Abakus.{Ledger, LocalTime}
 
   @day ~D[2026-10-01]
 
@@ -60,7 +60,7 @@ defmodule Abakus.Depot.BookingTest do
 
     %{
       holdings: for(h <- Valuation.holdings(transactions, @day), do: {h.portfolio_id, h.shares}),
-      balances: Valuation.balances(transactions, @day),
+      balances: Ledger.balances_through(ctx.scope, @day),
       invested_capital: invested
     }
   end
@@ -496,10 +496,10 @@ defmodule Abakus.Depot.BookingTest do
       assert errors_on(changeset).shares == ["übersteigt den Bestand von 5 Stück"]
     end
 
-    test "a transaction keeps its retired portfolio and account", ctx do
+    test "a transaction keeps its retired portfolio and closed account", ctx do
       {:ok, [purchase]} = book(ctx, "purchase", %{"shares" => "10", "price" => "100"})
       Repo.update!(Ecto.Changeset.change(ctx.portfolio, retired: true))
-      Repo.update!(Ecto.Changeset.change(ctx.account, retired: true))
+      Repo.update!(Ecto.Changeset.change(ctx.account, closed: true))
       assert %{portfolios: [], accounts: []} = Portfolios.transaction_choices(ctx.scope)
 
       purchase = Portfolios.get_transaction(ctx.scope, purchase.id)
@@ -780,7 +780,7 @@ defmodule Abakus.Depot.BookingTest do
 
     test "gives a portfolio's transactions with those of its cash and its reference account",
          ctx do
-      cash = account_fixture(ctx.scope, name: "Cash", cash_of_portfolio_id: ctx.portfolio.id)
+      cash = cash_account_fixture(ctx.portfolio, account_fixture(ctx.scope, name: "Cash"))
       other = account_fixture(ctx.scope, name: "Andere")
 
       [on_reference, on_cash, _other] =

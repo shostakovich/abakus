@@ -38,7 +38,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
   test "lists the views, the active portfolios, then the settings, but no accounts", ctx do
     retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
     holding(ctx.scope, retired, 5, 100)
-    closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
+    closed = account_fixture(ctx.scope, %{name: "Geschlossen", closed: true})
     deposit(ctx.scope, closed, 50)
     portfolio_fixture(ctx.scope, %{name: "Aktiv"})
     account_fixture(ctx.scope, %{name: "Tagesgeld"})
@@ -101,6 +101,24 @@ defmodule AbakusWeb.Depot.SidebarTest do
       assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.000,00"
       refute has_element?(lv, "aside nav", "Tagesgeld")
       assert lv |> element("#net-worth") |> render() =~ "2.240 €"
+    end
+
+    test "show a portfolio's value as its holdings plus its cash accounts' balances", ctx do
+      cash =
+        cash_account_fixture(ctx.portfolio, account_fixture(ctx.scope, %{name: "Broker cash"}))
+
+      deposit(ctx.scope, cash, 300)
+
+      {:ok, _interest} =
+        Ledger.create_transaction(ctx.scope, %{
+          account_id: cash.id,
+          date: Date.add(today(), -1),
+          amount: money(20)
+        })
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+
+      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.320,00"
     end
 
     test "stay out of the icon rail, which keeps the views and the settings", ctx do

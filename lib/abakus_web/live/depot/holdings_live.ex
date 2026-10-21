@@ -4,7 +4,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   import AbakusWeb.Depot.AllocationComponents
 
   alias Abakus.Depot.{MarketData, Portfolios}
-  alias Abakus.Depot.Portfolios.Account
   alias Abakus.{Format, LocalTime, Money}
   alias AbakusWeb.Depot.Format, as: DepotFormat
 
@@ -159,7 +158,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp row_link(%{type: :holding, entry: entry}), do: ~p"/depot/securities/#{entry.security}"
   defp row_link(_item), do: nil
 
-  # A group per portfolio, its securities, a note when it has none, and its reference account;
+  # A group per portfolio: its securities, a note when it has none, its cash and reference account;
   # last the accounts of no portfolio as „Konten“.
   defp groups(holdings), do: Enum.map(holdings.groups, &group/1)
 
@@ -189,7 +188,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
         type: :account,
         id: "account-#{entry.account.id}",
         entry: entry,
-        note: account_note(group, entry.account)
+        note: account_note(group, entry)
       }
     end
   end
@@ -378,14 +377,9 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp count(1, one, _many), do: "1\u00A0#{one}"
   defp count(count, _one, many), do: "#{count}\u00A0#{many}"
 
-  defp account_note(%{portfolio: nil}, _account), do: nil
-
-  defp account_note(_portfolio_group, account) do
-    case Account.role(account) do
-      {:portfolio_cash, _portfolio_id} -> "Cash"
-      _none -> "Referenzkonto"
-    end
-  end
+  defp account_note(%{portfolio: nil}, _entry), do: nil
+  defp account_note(_portfolio_group, %{cash_of: nil}), do: "Referenzkonto"
+  defp account_note(_portfolio_group, _entry), do: "Cash"
 
   defp price(%{price: price, security: security}), do: DepotFormat.price(price, security.currency)
 

@@ -1,7 +1,7 @@
 defmodule Abakus.Depot.Valuation do
   @moduledoc """
-  Holdings, account balances, net worth, invested capital and gross dividends, computed from
-  transactions and a `Market` on every request (ADR 0014). Pure, without the database, and
+  Holdings, the money transactions move on their accounts, net worth, invested capital and gross
+  dividends, computed from transactions and a `Market` on every request (ADR 0014). Pure, without the database, and
   computed as PP does so that the figures match PP's. Amounts in euro cents, shares and prices
   × 10⁸.
   """
@@ -50,13 +50,6 @@ defmodule Abakus.Depot.Valuation do
     do: [{t.portfolio_id, -t.shares}, {t.other_portfolio_id, t.shares}]
 
   defp shares_moved(_transaction), do: []
-
-  @doc "The balance of each account on `date`."
-  def balances(transactions, date) do
-    for t <- transactions, on_or_before?(t, date), reduce: %{} do
-      balances -> add(balances, cash_moved(t))
-    end
-  end
 
   @doc "The money a transaction moves on its accounts, as `[{account_id, cents}]`, a cash transfer's source first."
   def cash_moved(%Transaction{account_id: nil}), do: []

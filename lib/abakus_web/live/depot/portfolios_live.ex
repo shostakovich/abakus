@@ -1,15 +1,14 @@
 defmodule AbakusWeb.Depot.PortfoliosLive do
   @moduledoc """
   „Depots“ in the settings: the user's active portfolios with their depot numbers, which find a receipt's
-  portfolio, their Verrechnungskonten with their roles (`Abakus.Depot.AccountRoles`), each edited in place, and a
-  new portfolio with its Verrechnungskonto. The first one opens Finanzen. A portfolio of the budget owner is also a
-  tracking account (`Abakus.Depot.BudgetFeed`), and the budget owner links the Depot to the budget here
-  (`Abakus.Depot.BudgetLink`), so its cash side goes into budget accounts too (`Abakus.Depot.CashSide`).
+  portfolio, each edited in place, and a new portfolio with its Verrechnungskonto, a new tracking account in
+  Finanzen. The first one opens Finanzen. A portfolio of the budget owner is also a tracking account
+  (`Abakus.Depot.BudgetFeed`), and the budget owner links the Depot to the budget here (`Abakus.Depot.BudgetLink`),
+  so its cash side goes into budget accounts too (`Abakus.Depot.CashSide`).
   """
   use AbakusWeb, :depot_live_view
 
-  alias Abakus.Depot.{AccountRoles, BudgetLink, Portfolios, Receipts}
-  alias Abakus.Depot.Portfolios.Account
+  alias Abakus.Depot.{BudgetLink, Portfolios, Receipts}
   alias Abakus.Format
   alias Abakus.Users.Scope
   alias AbakusWeb.{Areas, SettingsNav}
@@ -40,24 +39,6 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
               :for={portfolio <- @active_portfolios}
               portfolio={portfolio}
               form={@editing == portfolio.id && @depot_number_form}
-            />
-          </.list>
-        </section>
-
-        <section :if={@accounts != []} id="clearing-accounts" aria-labelledby="accounts-title">
-          <.section_heading id="accounts-title" count={length(@accounts)}>
-            Verrechnungskonten
-          </.section_heading>
-          <p class="mb-3 max-w-prose text-sm text-base-content/70">
-            Jedes Verrechnungskonto ist ein Budgetkonto, wenn es dasselbe Bankkonto ist, oder das Cash
-            eines Depots, das zu dessen Wert zählt, oder keins von beiden.
-          </p>
-          <.list>
-            <.account_role_row
-              :for={account <- @accounts}
-              account={account}
-              form={@editing_role == account.id && @role_form}
-              options={@editing_role == account.id && @role_options}
             />
           </.list>
         </section>
@@ -232,109 +213,6 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     """
   end
 
-  attr :account, Account, required: true
-  attr :form, :any, required: true, doc: "the role's form while it is edited, else false"
-  attr :options, :any, required: true, doc: "the roles to choose from while it is edited"
-
-  defp account_role_row(%{form: false} = assigns) do
-    ~H"""
-    <.list_row id={"clearing-account-#{@account.id}"} title={@account.name}>
-      <:leading><.icon name="wallet" class="size-5 text-base-content/70" /></:leading>
-      <:meta>
-        <span :if={Account.role(@account)} class="whitespace-nowrap">{role_label(@account)}</span><.badge
-          :if={!Account.role(@account)}
-          tone={:warning}
-        >
-          Rolle fehlt
-        </.badge>
-      </:meta>
-      <:trailing>
-        <.button
-          size={:sm}
-          phx-click="edit_role"
-          phx-value-id={@account.id}
-          aria-label={"#{role_action(@account)}: Rolle von „#{@account.name}“"}
-        >
-          {role_action(@account)}
-        </.button>
-      </:trailing>
-    </.list_row>
-    """
-  end
-
-  defp account_role_row(assigns) do
-    ~H"""
-    <li id={"clearing-account-#{@account.id}"} class="list-row items-start">
-      <.icon name="wallet" class="mt-0.5 size-5 text-base-content/70" />
-      <.form
-        for={@form}
-        id="account-role-form"
-        class="list-col-grow min-w-0"
-        phx-submit="save_role"
-        phx-window-keydown="cancel_role"
-        phx-key="Escape"
-      >
-        <p class="font-medium wrap-anywhere">{@account.name}</p>
-        <div class="flex flex-col sm:flex-row sm:items-start sm:gap-2">
-          <div class="sm:max-w-md sm:flex-1">
-            <.input
-              field={@form[:role]}
-              type="select"
-              label={"Rolle von „#{@account.name}“"}
-              prompt="Rolle wählen"
-              options={@options}
-              phx-mounted={JS.focus()}
-            />
-          </div>
-          <div class="flex gap-2 sm:mt-1">
-            <.button type="submit" variant={:primary} phx-disable-with="Speichert …">
-              Speichern
-            </.button>
-            <.button variant={:ghost} phx-click="cancel_role">Abbrechen</.button>
-          </div>
-        </div>
-      </.form>
-    </li>
-    """
-  end
-
-  defp role_label(%Account{} = account) do
-    case Account.role(account) do
-      {:budget_account, _id} ->
-        "ist Budgetkonto „#{account.budget_account.name}“"
-
-      {:portfolio_cash, _id} ->
-        "Cash von Depot „#{DepotFormat.portfolio_name(account.cash_of_portfolio)}“"
-
-      :none ->
-        "keine Rolle"
-    end
-  end
-
-  defp role_action(account), do: if(Account.role(account), do: "Ändern", else: "Festlegen")
-
-  defp role_options(scope, account) do
-    %{budget_accounts: budget_accounts, portfolios: portfolios} =
-      AccountRoles.choices(scope, account)
-
-    [
-      {"Budgetkonto",
-       for(
-         a <- budget_accounts,
-         do: {"ist Budgetkonto „#{a.name}“", AccountRoles.param({:budget_account, a.id})}
-       )},
-      {"Cash",
-       for(
-         p <- portfolios,
-         do:
-           {"Cash von Depot „#{DepotFormat.portfolio_name(p)}“",
-            AccountRoles.param({:portfolio_cash, p.id})}
-       )},
-      {"Keine", [{"keine Rolle", AccountRoles.param(:none)}]}
-    ]
-    |> Enum.reject(fn {_group, options} -> options == [] end)
-  end
-
   defp depot_number_details(portfolio) do
     Enum.reject(
       [
@@ -356,9 +234,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     {:ok,
      socket
      |> assign(page_title: "Depots", editing: nil, depot_number_form: nil)
-     |> assign(editing_role: nil, role_form: nil, role_options: nil)
      |> load_link()
-     |> load_accounts()
      |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
      |> load_active_portfolios()}
   end
@@ -380,8 +256,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
          |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
          |> Areas.open_depot()
          |> SettingsNav.assign_groups()
-         |> load_active_portfolios()
-         |> load_accounts()}
+         |> load_active_portfolios()}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :new_form, to_form(changeset, as: :portfolio, action: :insert))}
@@ -411,30 +286,6 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
 
   def handle_event("cancel_depot_number", _params, socket),
     do: {:noreply, assign(socket, editing: nil, depot_number_form: nil)}
-
-  def handle_event("edit_role", %{"id" => id}, socket) do
-    case find_account(socket, id) do
-      nil ->
-        {:noreply, socket}
-
-      account ->
-        {:noreply,
-         assign(socket,
-           editing_role: account.id,
-           role_form: role_form(%{"role" => AccountRoles.param(Account.role(account))}),
-           role_options: role_options(socket.assigns.current_scope, account)
-         )}
-    end
-  end
-
-  def handle_event("save_role", %{"role" => params}, socket) do
-    case find_account(socket, socket.assigns.editing_role) do
-      nil -> {:noreply, socket}
-      account -> save_role(socket, account, params)
-    end
-  end
-
-  def handle_event("cancel_role", _params, socket), do: {:noreply, close_role(socket)}
 
   def handle_event("validate_link", %{"link" => params}, socket),
     do: {:noreply, assign(socket, :link_form, to_form(BudgetLink.change_link(params), as: :link))}
@@ -487,32 +338,6 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   end
 
   defp no_link(socket), do: assign(socket, link: nil, link_form: nil, category_options: [])
-
-  defp save_role(socket, account, params) do
-    case AccountRoles.set_role(socket.assigns.current_scope, account, params["role"]) do
-      {:ok, _account} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Rolle von „#{account.name}“ gespeichert.")
-         |> close_role()
-         |> load_accounts()}
-
-      {:error, message} ->
-        {:noreply, assign(socket, :role_form, role_form(params, role: {message, []}))}
-    end
-  end
-
-  defp role_form(params, errors \\ []),
-    do: to_form(params, as: :role, errors: errors, action: if(errors != [], do: :update))
-
-  defp close_role(socket),
-    do: assign(socket, editing_role: nil, role_form: nil, role_options: nil)
-
-  defp find_account(socket, id),
-    do: Enum.find(socket.assigns.accounts, &(to_string(&1.id) == to_string(id)))
-
-  defp load_accounts(socket),
-    do: assign(socket, :accounts, AccountRoles.list_accounts(socket.assigns.current_scope))
 
   defp save(socket, portfolio, params) do
     scope = socket.assigns.current_scope

@@ -3,14 +3,13 @@ defmodule AbakusWeb.Depot.WealthLive do
   „Vermögen“: net worth with its curve, the Depot's returns and dividends, and the portfolios. For
   the budget owner net worth is the Ledger's, all open budget and tracking accounts, and its curve
   shows the Depot's value on the days before the budget's first, see `Abakus.Depot.Wealth`; for
-  anyone else the value of their portfolios and Verrechnungskonten. A Verrechnungskonto without a
-  role set shows as a warning.
+  anyone else the value of their portfolios and Verrechnungskonten.
   """
   use AbakusWeb, :depot_live_view
 
   import AbakusWeb.Depot.DividendComponents
 
-  alias Abakus.Depot.{AccountRoles, Portfolios, Wealth}
+  alias Abakus.Depot.{Portfolios, Wealth}
   alias Abakus.{Format, Ledger, LocalTime}
   alias Abakus.Money
   alias AbakusWeb.Areas
@@ -58,21 +57,6 @@ defmodule AbakusWeb.Depot.WealthLive do
           />
         </:actions>
       </.header>
-
-      <.alert
-        :if={@without_role != []}
-        id="accounts-without-role"
-        tone={:warning}
-        title={without_role_title(@without_role)}
-        class="mb-4 md:mb-6"
-      >
-        {without_role_text(@without_role)}
-        <:actions>
-          <.button navigate={~p"/settings/depot/portfolios#clearing-accounts"} size={:sm}>
-            Rolle festlegen
-          </.button>
-        </:actions>
-      </.alert>
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <.stat id="net-worth" label="Vermögen" size={:sm}>
@@ -284,16 +268,6 @@ defmodule AbakusWeb.Depot.WealthLive do
   defp portfolio_note(%{securities: count, cash: cash}),
     do: join_meta([securities(count), cash && "Cash\u00A0#{Money.euros(cash)}"])
 
-  defp without_role_title([_account]), do: "Ein Verrechnungskonto ohne Rolle"
-  defp without_role_title(accounts), do: "#{length(accounts)} Verrechnungskonten ohne Rolle"
-
-  defp without_role_text(accounts) do
-    names = Enum.map_join(accounts, ", ", &"„#{&1.name}“")
-    each = if match?([_account], accounts), do: "", else: " für jedes"
-
-    "#{names}: Lege#{each} fest, ob es ein Budgetkonto ist, das Cash eines Depots oder keins von beiden."
-  end
-
   defp securities(0), do: "keine\u00A0Wertpapiere"
   defp securities(1), do: "1\u00A0Wertpapier"
   defp securities(count), do: "#{count}\u00A0Wertpapiere"
@@ -301,8 +275,7 @@ defmodule AbakusWeb.Depot.WealthLive do
   @impl true
   def mount(_params, _session, socket) do
     budget? = Areas.allowed?(socket.assigns.current_scope, :budget)
-    without_role = AccountRoles.without_role(socket.assigns.current_scope)
-    {:ok, assign(socket, page_title: "Vermögen", budget?: budget?, without_role: without_role)}
+    {:ok, assign(socket, page_title: "Vermögen", budget?: budget?)}
   end
 
   @impl true

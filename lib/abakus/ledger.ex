@@ -472,6 +472,20 @@ defmodule Abakus.Ledger do
   end
 
   @doc """
+  Each account's balance up to and including `through` by account id, as `balance/3`; accounts without any are
+  missing.
+  """
+  def balances_through(%Scope{} = scope, %Date{} = through) do
+    Repo.all(
+      from t in in_register(scope),
+        where: t.date <= ^through,
+        group_by: t.account_id,
+        select: {t.account_id, sum(t.amount)}
+    )
+    |> Map.new()
+  end
+
+  @doc """
   Net worth at the end of each day of `range`, as `[{date, cents}]`: the balance of all accounts, budget and
   tracking, but those closed with money left in them.
   """

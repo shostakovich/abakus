@@ -4,7 +4,7 @@ defmodule Abakus.Depot.CashSideTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{AccountRoles, BudgetLink, CashSide, Portfolios, Valuation}
+  alias Abakus.Depot.{BudgetLink, CashSide, Portfolios}
   alias Abakus.{DomainFixtures, Ledger}
   alias Abakus.Ledger.{Account, Transaction}
 
@@ -21,12 +21,9 @@ defmodule Abakus.Depot.CashSideTest do
       anna: anna,
       checking: checking,
       broker: broker,
-      broker_cash: Repo.get!(Portfolios.Account, broker.reference_account_id)
+      broker_cash: Repo.get!(Account, broker.reference_account_id)
     }
   end
-
-  defp ledger_account(depot_account),
-    do: Repo.get!(Account, Repo.reload!(depot_account).ledger_account_id)
 
   defp register(account) do
     Repo.all(
@@ -72,11 +69,10 @@ defmodule Abakus.Depot.CashSideTest do
         "price" => "100"
       })
 
-    broker_cash = ledger_account(c.broker_cash)
-    assert {broker_cash.name, broker_cash.kind} == {"Broker cash", :tracking}
+    assert {c.broker_cash.name, c.broker_cash.kind} == {"Broker cash", :tracking}
 
     assert [_deposit, %Transaction{amount: -50_000, date: @day} = purchase] =
-             register(broker_cash)
+             register(c.broker_cash)
 
     assert {purchase.payee.name, purchase.memo, purchase.category_id} ==
              {"Broker", "Kauf World ETF", nil}
@@ -85,7 +81,7 @@ defmodule Abakus.Depot.CashSideTest do
     assert budget_transactions(c.anna) == budget_before
   end
 
-  test "a tracking account holds the whole history, its balance the Depot's", c do
+  test "a tracking account holds the whole history", c do
     security = security_fixture(%{name: "World ETF", quote_feed: :manual, symbol: nil})
     cash = c.broker_cash
 
@@ -108,16 +104,50 @@ defmodule Abakus.Depot.CashSideTest do
 
     :ok = CashSide.sync(c.anna)
 
-    account = ledger_account(cash)
-    depot = Valuation.balances(Portfolios.list_transactions(c.anna), @day)
-
-    assert Ledger.balance(c.anna, account, @day) == depot[cash.id]
-    assert Ledger.balance(c.anna, account, @day) == 71_950
-    assert length(register(account)) == 7
-    assert Enum.all?(register(account), &(&1.source == :depot and &1.depot_transaction_id))
+    assert Ledger.balance(c.anna, cash, @day) == 71_950
+    assert length(register(cash)) == 7
+    assert Enum.all?(register(cash), &(&1.source == :depot and &1.depot_transaction_id))
   end
 
-  test "a cash transfer between two Verrechnungskonten outside the budget is a transfer", c do
+  test "a sync with nothing changed writes nothing", c do
+    security = security_fixture(%{name: "World ETF", quote_feed: :manual, symbol: nil})
+
+    transaction_fixture(c.anna, @day,
+      type: :dividend,
+      account_id: c.broker_cash.id,
+      security_id: security.id,
+      amount: 3_000
+    )
+
+    :ok = CashSide.sync(c.anna)
+    [%Transaction{payee: %{name: "World ETF"}} = before] = register(c.broker_cash)
+
+    handler = make_ref()
+    :telemetry.attach(handler, [:abakus, :repo, :query], &__MODULE__.report_query/4, self())
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    :ok = CashSide.sync(c.anna)
+    :telemetry.detach(handler)
+
+    assert [%Transaction{updated_at: updated_at}] = register(c.broker_cash)
+    assert updated_at == before.updated_at
+    queries = queries()
+    assert Enum.all?(queries, &match?({_source, "SELECT" <> _query}, &1))
+    assert Enum.count(queries, &match?({"transactions", _query}, &1)) == 1
+  end
+
+  def report_query(_event, _measurements, %{source: source, query: query}, test),
+    do: send(test, {:query, {source, query}})
+
+  defp queries do
+    receive do
+      {:query, query} -> [query | queries()]
+    after
+      0 -> []
+    end
+  end
+
+  test "a cash transfer between two tracking accounts is a transfer", c do
     other = account_fixture(c.anna, %{name: "Savings plan cash"})
     deposit(c, c.broker_cash, 50_000)
 
@@ -130,22 +160,19 @@ defmodule Abakus.Depot.CashSideTest do
 
     :ok = CashSide.sync(c.anna)
 
-    [_deposit, out] = register(ledger_account(c.broker_cash))
-    assert [into] = register(ledger_account(other))
+    [_deposit, out] = register(c.broker_cash)
+    assert [into] = register(other)
 
     assert {out.amount, into.amount, out.transfer_transaction_id} == {-20_000, 20_000, into.id}
-    assert out.payee.transfer_account_id == ledger_account(other).id
+    assert out.payee.transfer_account_id == other.id
     assert {into.cleared, into.approved} == {:cleared, true}
   end
 
   test "a cash transfer from a budget account is booked only on the tracking side before the link",
        c do
-    clearing = account_fixture(c.anna, %{name: "Checking clearing"})
-    {:ok, _} = AccountRoles.set_role(c.anna, clearing, "budget_account:#{c.checking.id}")
-
     transaction_fixture(c.anna, @day,
       type: :cash_transfer,
-      account_id: clearing.id,
+      account_id: c.checking.id,
       other_account_id: c.broker_cash.id,
       amount: 30_000
     )
@@ -155,44 +182,21 @@ defmodule Abakus.Depot.CashSideTest do
     assert register(c.checking) == []
 
     assert [%Transaction{amount: 30_000, transfer_transaction_id: nil} = into] =
-             register(ledger_account(c.broker_cash))
+             register(c.broker_cash)
 
     assert into.payee.name == "Checking"
   end
 
-  test "closes the accounts of retired Verrechnungskonten and of retired portfolios' cash", c do
-    retired = portfolio_fixture(c.anna, %{name: "Old", retired: true})
-    old_cash = account_fixture(c.anna, %{name: "Old cash", cash_of_portfolio_id: retired.id})
-    unused = account_fixture(c.anna, %{name: "Unused", retired: true, no_role: true})
-    loose = account_fixture(c.anna, %{name: "Loose", no_role: true})
-
-    :ok = CashSide.sync(c.anna)
-
-    for {depot_account, closed} <- [
-          {old_cash, true},
-          {unused, true},
-          {loose, false},
-          {c.broker_cash, false}
-        ] do
-      account = ledger_account(depot_account)
-
-      assert {account.name, account.kind, account.closed} ==
-               {depot_account.name, :tracking, closed}
-    end
-  end
-
-  test "another user's Verrechnungskonten are tracking accounts of theirs", c do
+  test "another user's portfolio books its cash in a tracking account of theirs", c do
     ben = user_scope_fixture()
 
     {:ok, portfolio} =
       Portfolios.create_portfolio(ben, %{name: "Ben's", account_name: "Ben's cash"})
 
-    cash = Repo.get!(Portfolios.Account, portfolio.reference_account_id)
-    deposit(%{anna: ben}, cash, 10_000)
-    :ok = CashSide.sync(ben)
+    account = Repo.get!(Account, portfolio.reference_account_id)
+    deposit(%{anna: ben}, account, 10_000)
 
-    account = ledger_account(cash)
-    assert account.user_id == ben.user.id
+    assert {account.user_id, account.kind} == {ben.user.id, :tracking}
     assert [%Transaction{amount: 10_000, user_id: user_id}] = register(account)
     assert user_id == ben.user.id
     assert Ledger.list_transactions(c.anna, :all) == []

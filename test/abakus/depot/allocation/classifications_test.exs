@@ -4,9 +4,9 @@ defmodule Abakus.Depot.Allocation.ClassificationsTest do
   import Abakus.Depot.PortfoliosFixtures, only: [money: 1]
 
   alias Abakus.Depot.Allocation.Classifications
-  alias Abakus.Depot.Portfolios.Account
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Taxonomies.{Assignment, Classification, Taxonomy}
+  alias Abakus.Ledger.Account
 
   # A taxonomy from `{id, parent_id, weight, assignments}` per classification below the root 1;
   # an assignment is `{:security | :account, id, weight}`, the rank is the position in the list.

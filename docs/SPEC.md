@@ -238,10 +238,10 @@ way YNAB tools post market values:
   (ADR 0017) and named after it; its register is the portfolio's tab Register, and the sidebar lists it only
   under Depots. An account fed by `portfolio` whose portfolio is gone is closed with its history, a last value
   change taking it to 0
-- Each Verrechnungskonto is an account of its user (ADR 0020): with the role "ist Budgetkonto X" that budget
-  account, else a tracking account named after it, closed when it is retired or the cash of a retired portfolio.
-  Each Depot transaction writes its cash side there, led by the Depot (`Abakus.Depot.CashSide`); a cash transfer
-  between two Verrechnungskonten is a transfer. Into a tracking account goes its whole history, cleared and
+- A Verrechnungskonto is an account of its user (ADR 0020): the budget account a portfolio pays from, or a tracking
+  account for cash at the broker; a new portfolio comes with a new tracking account as its cash and reference
+  account. Each Depot transaction writes its cash side there, led by the Depot (`Abakus.Depot.CashSide`); a cash
+  transfer between two accounts is a transfer. Into a tracking account goes its whole history, cleared and
   approved. Into a budget account go, once the budget owner links the Depot to the budget under Einstellungen ›
   Depots (start date, category for purchases), purchases, sales, dividends and cash transfers from the start date
   on, unapproved: outflows in that category, inflows to Ready to Assign; the bank import holds the rest. Purchases
@@ -251,11 +251,8 @@ way YNAB tools post market values:
   cleared, none without a difference, so a new account starts at the holdings' value; another run that day
   amends that transaction instead of booking a second one. Only it (`Abakus.Depot.BudgetFeed`) changes the
   account, as the cash has accounts of its own, and it cannot be reconciled
-- Each Verrechnungskonto has a role, set under Einstellungen › Depots: "ist Budgetkonto X" (the same bank account
-  as a budget account; the budget owner's only, at most one per budget account), counting toward nothing
-  else; "Cash von Depot Y" (cash at the broker of one of the user's portfolios), counting toward that portfolio's
-  value and shown in its Bestand as „davon Cash“; or none. One without a role shows as a warning on
-  Vermögen, linking to its setting
+- A portfolio's cash accounts (cash at its broker) count toward its value in the sidebar with their balance and show
+  in its Bestand as „davon Cash“
 - A tracking account nothing feeds is adjusted by hand
 
 ## MCP
@@ -292,8 +289,8 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   Allgemein: Zugang (passkeys, email), Aussehen (theme, per device). Kasse: Gruppe (the group's name), Teilnehmer
   (adding one invites their user), Kategorien, Wiederkehrende Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget
   owner's only: switching the link on, its account and which budget category each Kasse category's shares land in)
-  and Export (CSV/JSON). Depot, for everyone, so anyone may start one: Depots (the user's portfolios and
-  Verrechnungskonten with their roles, and for the budget owner the link to the budget) and Belegeingang
+  and Export (CSV/JSON). Depot, for everyone, so anyone may start one: Depots (the user's portfolios with
+  their depot numbers, and for the budget owner the link to the budget) and Belegeingang
   (Paperless-ngx and the receipt recognition; users with a portfolio).
   Categories and groups are edited in the budget
 

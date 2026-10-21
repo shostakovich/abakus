@@ -6,7 +6,7 @@ defmodule Abakus.Depot.BudgetFeedTest do
   import Abakus.UsersFixtures
   import ExUnit.CaptureLog
 
-  alias Abakus.Depot.{AccountRoles, BudgetFeed, FakePriceFeed, Portfolios}
+  alias Abakus.Depot.{BudgetFeed, FakePriceFeed, Portfolios}
   alias Abakus.Depot.MarketData.Job
   alias Abakus.Depot.Portfolios.Portfolio
   alias Abakus.{DomainFixtures, Ledger, LocalTime}
@@ -104,8 +104,11 @@ defmodule Abakus.Depot.BudgetFeedTest do
         Portfolios.create_portfolio(c.owner, %{name: "Neu", account_name: "Neu-Verrechnung"})
 
       assert %Account{name: "Neu", kind: :tracking, fed_by: :portfolio} = account_of(portfolio)
-      assert [cash_id] = AccountRoles.cash_account_ids(portfolio)
-      assert cash_id == portfolio.reference_account_id
+
+      assert [%Account{name: "Neu-Verrechnung", kind: :tracking, fed_by: nil} = cash] =
+               Repo.preload(portfolio, :cash_accounts).cash_accounts
+
+      assert cash.id == portfolio.reference_account_id
 
       member = user_scope_fixture()
       {:ok, theirs} = Portfolios.create_portfolio(member, %{name: "Ihr", account_name: "Konto"})
@@ -164,7 +167,7 @@ defmodule Abakus.Depot.BudgetFeedTest do
 
       assert account_of(c.portfolio).id == account.id
       assert %Account{closed: true} = Repo.reload!(account)
-      assert Repo.aggregate(Account, :count) == 1
+      assert Repo.aggregate(where(Account, fed_by: :portfolio), :count) == 1
     end
 
     test "keeps the Depot's value in the Vermögen history before the switch", c do
@@ -175,8 +178,8 @@ defmodule Abakus.Depot.BudgetFeedTest do
       :ok = BudgetFeed.book_value_changes(@day)
 
       assert Ledger.net_worth(budget_scope(), Date.range(~D[2026-10-15], @day)) == [
-               {~D[2026-10-15], 5_000_000},
-               {@day, 4_000_000}
+               {~D[2026-10-15], 5_000_000 + 1_081_234},
+               {@day, 4_000_000 + 1_081_234}
              ]
 
       assert Ledger.first_open_date(budget_scope()) == ~D[2026-10-01]
@@ -209,7 +212,7 @@ defmodule Abakus.Depot.BudgetFeedTest do
 
     test "counts only the holdings, as the portfolio's cash has an account of its own", c do
       holdings_fixture(c, manual_security(400))
-      {:ok, _cash} = AccountRoles.set_role(c.owner, c.cash, "portfolio_cash:#{c.portfolio.id}")
+      cash_account_fixture(c.portfolio, c.cash)
 
       :ok = BudgetFeed.book_value_changes(@day)
 

@@ -6,7 +6,8 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
 
   alias Abakus.Depot.FakeSymbolSource
   alias Abakus.Depot.Portfolios
-  alias Abakus.Depot.Portfolios.{Account, TransactionUnit}
+  alias Abakus.Depot.Portfolios.TransactionUnit
+  alias Abakus.Ledger.Account
   alias Abakus.LocalTime
   alias Abakus.Repo
 
@@ -447,7 +448,7 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     end
   end
 
-  describe "an account two portfolios settle against" do
+  describe "a reference account two portfolios settle against" do
     setup %{scope: scope} do
       account = account_fixture(scope, %{name: "K"})
       deposit(scope, account, 50)
@@ -463,6 +464,40 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     test "appears once, under the first portfolio, while all are shown", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
+      assert lv
+             |> element("#holdings-portfolio-#{ctx.a.id} #account-#{ctx.account.id}")
+             |> render() =~ "Referenzkonto"
+
+      refute has_element?(lv, "#holdings-portfolio-#{ctx.b.id} #account-#{ctx.account.id}")
+      refute has_element?(lv, "#holdings-accounts")
+      assert has_element?(lv, "tfoot:has(#holdings-total)", "150,00\u00A0€")
+    end
+
+    test "appears under the selected portfolio", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?portfolio=#{ctx.b.id}")
+
+      assert has_element?(lv, "#holdings-portfolio-#{ctx.b.id} #account-#{ctx.account.id}", "K")
+      assert has_element?(lv, "tfoot:has(#holdings-total)", "150,00\u00A0€")
+    end
+  end
+
+  describe "a cash account another portfolio settles against too" do
+    setup %{scope: scope} do
+      account = account_fixture(scope, %{name: "K"})
+      deposit(scope, account, 50)
+
+      [a, b] =
+        for name <- ["A", "B"],
+            do: portfolio_fixture(scope, %{name: name, reference_account_id: account.id})
+
+      cash_account_fixture(a, account)
+      deliver(scope, b, security(100), 1, 100)
+      %{account: account, a: a, b: b}
+    end
+
+    test "appears once, under its portfolio, while all are shown", ctx do
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
+
       assert has_element?(lv, "#portfolio-menu summary", "Gesamt")
       assert has_element?(lv, "#portfolio-menu a[href$='=#{ctx.b.id}']", "B")
       assert has_element?(lv, "#holdings-portfolio-#{ctx.a.id} #account-#{ctx.account.id}", "K")
@@ -471,16 +506,16 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
       assert has_element?(lv, "tfoot:has(#holdings-total)", "150,00\u00A0€")
     end
 
-    test "appears under the selected portfolio", ctx do
+    test "stays out of the other portfolio when that is selected", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
       lv |> element("#portfolio-menu a", "B") |> render_click()
 
       assert_patch(lv, ~p"/depot/holdings?portfolio=#{ctx.b.id}")
       assert has_element?(lv, "#portfolio-menu summary", "B")
-      assert has_element?(lv, "#holdings-portfolio-#{ctx.b.id} #account-#{ctx.account.id}", "K")
+      refute has_element?(lv, "#account-#{ctx.account.id}")
       refute has_element?(lv, "#holdings-portfolio-#{ctx.a.id}")
-      assert has_element?(lv, "tfoot:has(#holdings-total)", "150,00\u00A0€")
+      assert has_element?(lv, "tfoot:has(#holdings-total)", "100,00\u00A0€")
     end
 
     test "keeps the selected portfolio in the URL, so that it survives a reload", ctx do
@@ -504,23 +539,22 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
 
   describe "a portfolio's cash" do
     setup %{scope: scope} do
-      giro = account_fixture(scope, %{name: "Giro-Verrechnung", no_role: true})
+      giro = account_fixture(scope, %{name: "Giro-Verrechnung"})
       portfolio = portfolio_fixture(scope, %{name: "Broker", reference_account_id: giro.id})
-      cash = account_fixture(scope, %{name: "Broker-Cash", cash_of_portfolio_id: portfolio.id})
+      cash = cash_account_fixture(portfolio, account_fixture(scope, %{name: "Broker-Cash"}))
       deposit(scope, cash, 100)
       deposit(scope, giro, 2_000)
       deliver(scope, portfolio, security(90), 10, 900)
       %{portfolio: portfolio, cash: cash, giro: giro}
     end
 
-    test "shows in the portfolio's Bestand as „davon Cash“, its reference account with another role not",
-         ctx do
+    test "shows in the portfolio's Bestand with its reference account as „davon Cash“", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?portfolio=#{ctx.portfolio.id}")
 
-      assert has_element?(lv, "header", "davon Cash\u00A0100,00\u00A0€")
+      assert has_element?(lv, "header", "davon Cash\u00A02.100,00\u00A0€")
       assert lv |> element("#account-#{ctx.cash.id}") |> render() =~ "Cash"
-      refute has_element?(lv, "#account-#{ctx.giro.id}")
-      assert has_element?(lv, "tfoot:has(#holdings-total)", "1.000,00\u00A0€")
+      assert lv |> element("#account-#{ctx.giro.id}") |> render() =~ "Referenzkonto"
+      assert has_element?(lv, "tfoot:has(#holdings-total)", "3.000,00\u00A0€")
     end
 
     test "keeps what a purchase from it left as „davon Cash“", %{scope: scope, conn: conn} do
@@ -553,7 +587,8 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
       assert has_element?(lv, "#holdings-portfolio-#{ctx.portfolio.id} #account-#{ctx.cash.id}")
-      assert has_element?(lv, "#holdings-accounts #account-#{ctx.giro.id}")
+      assert has_element?(lv, "#holdings-portfolio-#{ctx.portfolio.id} #account-#{ctx.giro.id}")
+      refute has_element?(lv, "#holdings-accounts")
     end
   end
 
@@ -592,8 +627,8 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
     deliver(ctx.scope, retired, security(100), 1, 100)
     empty = portfolio_fixture(ctx.scope, %{name: "Leer", retired: true})
-    closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
-    kept = account_fixture(ctx.scope, %{name: "Noch offen", retired: true})
+    closed = account_fixture(ctx.scope, %{name: "Geschlossen", closed: true})
+    kept = account_fixture(ctx.scope, %{name: "Noch offen", closed: true})
     deposit(ctx.scope, kept, 1)
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")

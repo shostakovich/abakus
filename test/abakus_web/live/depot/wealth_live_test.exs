@@ -33,29 +33,6 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
     security
   end
 
-  test "warns of a Verrechnungskonto without a role and links to setting it", ctx do
-    portfolio_fixture(ctx.scope)
-    account = account_fixture(ctx.scope, %{name: "Giro-Verrechnung"})
-    account_fixture(ctx.scope, %{name: "Cash", no_role: true})
-
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
-
-    assert has_element?(lv, "#accounts-without-role", "Ein Verrechnungskonto ohne Rolle")
-    assert has_element?(lv, "#accounts-without-role", "„Giro-Verrechnung“")
-    refute has_element?(lv, "#accounts-without-role", "„Cash“")
-
-    assert has_element?(
-             lv,
-             ~s|#accounts-without-role a[href="/settings/depot/portfolios#clearing-accounts"]|,
-             "Rolle festlegen"
-           )
-
-    Repo.update!(Ecto.Changeset.change(account, no_role: true))
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
-
-    refute has_element?(lv, "#accounts-without-role")
-  end
-
   test "shows net worth and its change since yesterday", %{conn: conn, scope: scope} do
     holding_fixture(scope, 10)
 
@@ -338,7 +315,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
   end
 
   describe "Depots" do
-    # 240 € on the reference account since last year, 10 shares delivered yesterday at 100 €,
+    # 240 € on the portfolio's cash since last year, 10 shares delivered yesterday at 100 €,
     # 102 € today: the securities are worth 1,020 €, +2,0 % on 1,000 €.
     setup %{scope: scope} do
       account = account_fixture(scope, %{name: "Konto Langfristig"})
@@ -352,6 +329,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       portfolio =
         portfolio_fixture(scope, %{name: "Langfristig", reference_account_id: account.id})
 
+      cash_account_fixture(portfolio, account)
       deliver(scope, portfolio, 10, money(1_000))
       %{portfolio: portfolio}
     end
@@ -409,7 +387,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
     end
 
     test "leaves out a retired reference account once it is empty, as the sidebar does", ctx do
-      account = account_fixture(ctx.scope, %{name: "Konto Alt", retired: true})
+      account = account_fixture(ctx.scope, %{name: "Konto Alt", closed: true})
 
       portfolio =
         portfolio_fixture(ctx.scope, %{name: "Alt", reference_account_id: account.id})
@@ -486,7 +464,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
 
       transaction_fixture(scope, depot_first,
         type: :deposit,
-        account_id: account_fixture(scope).id,
+        account_id: DomainFixtures.account_fixture(name: "Giro").id,
         amount: money(1_000)
       )
 

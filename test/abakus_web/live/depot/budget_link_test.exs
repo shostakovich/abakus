@@ -4,9 +4,9 @@ defmodule AbakusWeb.Depot.BudgetLinkTest do
   import Abakus.DomainFixtures, only: [budget_scope: 0]
   import Phoenix.LiveViewTest
   import Ecto.Query, only: [from: 2]
-  import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
+  import Abakus.Depot.SecuritiesFixtures
 
-  alias Abakus.Depot.{AccountRoles, BudgetLink, Portfolios}
+  alias Abakus.Depot.{BudgetLink, Portfolios}
   alias Abakus.{DomainFixtures, Ledger, Repo}
   alias Setzkasten.Test.Confirm
 
@@ -19,9 +19,7 @@ defmodule AbakusWeb.Depot.BudgetLinkTest do
     {:ok, portfolio} =
       Portfolios.create_portfolio(scope, %{name: "Langfristig", account_name: "Cash"})
 
-    clearing = account_fixture(scope, %{name: "Giro-Verrechnung"})
-    {:ok, clearing} = AccountRoles.set_role(scope, clearing, "budget_account:#{giro.id}")
-    %{giro: giro, investieren: investieren, portfolio: portfolio, clearing: clearing}
+    %{giro: giro, investieren: investieren, portfolio: portfolio}
   end
 
   defp purchase(c) do
@@ -32,7 +30,7 @@ defmodule AbakusWeb.Depot.BudgetLinkTest do
       "date" => Date.to_iso8601(Abakus.LocalTime.today()),
       "portfolio_id" => c.portfolio.id,
       "security_id" => security.id,
-      "account_id" => c.clearing.id,
+      "account_id" => c.giro.id,
       "shares" => "9",
       "price" => "100"
     }
