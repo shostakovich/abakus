@@ -75,10 +75,10 @@ is its owner's ([ADR 0007](../DECISIONS.md)); its tables carry their owner's `us
 the rows of their caller's user (ADR 0019).
 
 - **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from the Depot,
-  `shared_expenses`: the budget owner's shares of the Kasse's expenses; either way the UI hides manual entry, file
-  import and reconcile for it, as its balance is the other area's; the Ledger accepts entries), closed, note,
-  position, last reconciled at, the file's account it takes imports from (`BANKID`, `ACCTID`). Budget account = not
-  tracking (derived; a kind never crosses that line). No credit cards or loans. Closed, never deleted.
+  `shared_expenses`: what the Kasse's expenses change in the budget owner's Kasse balance; either way the UI hides
+  manual entry, file import and reconcile for it, as its balance is the other area's; the Ledger accepts entries),
+  closed, note, position, last reconciled at, the file's account it takes imports from (`BANKID`, `ACCTID`). Budget
+  account = not tracking (derived; a kind never crosses that line). No credit cards or loans. Closed, never deleted.
 - **Payee**: name, transfer account, last used category. Each account has a transfer payee "Transfer : <account
   name>" as in YNAB, created and renamed with the account. Other payees are unique by lookup key.
 - **Category group** and **category**: name, hidden (kept, but the budget ignores it), position (new ones go to the

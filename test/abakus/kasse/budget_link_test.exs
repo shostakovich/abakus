@@ -6,7 +6,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
   import Abakus.DomainFixtures
   import Abakus.KasseFixtures
 
-  alias Abakus.{Categories, Ledger}
+  alias Abakus.{Budget, Categories, Ledger}
   alias Abakus.Categories.Category
   alias Abakus.Kasse.{AccessError, Balances, BudgetLink, Expenses, Recurring}
   alias Abakus.Kasse.BudgetLink.{Link, LinkedTransaction}
@@ -68,6 +68,48 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     expense
   end
 
+  defp activity(category_id, month) do
+    Categories.budget(budget_scope())
+    |> Budget.months(month, month)
+    |> Enum.find(&(&1.month == month))
+    |> Map.fetch!(:categories)
+    |> Enum.find(&(&1.category_id == category_id))
+    |> Map.fetch!(:activity)
+  end
+
+  describe "scenario: an expense the owner paid" do
+    test "books what the others owe her, so the category bears only her share", %{h: h} = c do
+      checking = account_fixture(%{name: "Checking", kind: :checking})
+
+      bank =
+        transaction_fixture(%{
+          account_id: checking.id,
+          date: ~D[2026-10-12],
+          amount: -2000,
+          category_id: c.groceries
+        })
+
+      market = create!(equal(h, "Market", 2000, "2026-10-12", h.anna, [h.anna, h.ben]), h.anna)
+
+      assert %{amount: 1000, category_id: groceries} = transaction(market)
+      assert groceries == c.groceries
+      assert %{amount: -2000, category_id: ^groceries} = Repo.reload!(bank)
+      assert activity(c.groceries, ~D[2026-10-01]) == -1000
+
+      assert Ledger.balances(budget_scope())[c.account.id].balance ==
+               Balances.balance(scope_of(h.anna))
+    end
+  end
+
+  describe "scenario: an expense the owner paid entirely for someone else" do
+    test "books the whole amount", %{h: h} = c do
+      gift = create!(equal(h, "Gift", 1500, "2026-10-12", h.anna, [h.ben]), h.anna)
+
+      assert %{amount: 1500, category_id: groceries} = transaction(gift)
+      assert groceries == c.groceries
+    end
+  end
+
   describe "an expense of a linked participant" do
     test "books their share in the shared-expenses account, unapproved", %{h: h} = context do
       expense =
@@ -101,12 +143,12 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       assert Ledger.list_transactions(scope_of(h.ben), :all) == []
     end
 
-    test "keeps the account's balance at minus the shares, whoever paid", %{h: h} = context do
+    test "keeps the account's balance at their Kasse balance, whoever paid", %{h: h} = context do
       create!(equal(h, "Pizza", 3000, "2026-10-10", h.anna, [h.anna, h.ben]))
       create!(equal(h, "Kino", 2400, "2026-10-11", h.ben, [h.anna, h.ben, h.cleo]))
 
-      assert Ledger.balances(budget_scope())[context.account.id].balance == -2300
-      assert Balances.balance(scope_of(h.anna)) == 3000 - 2300
+      assert Ledger.balances(budget_scope())[context.account.id].balance == 1500 - 800
+      assert Balances.balance(scope_of(h.anna)) == 1500 - 800
     end
 
     test "names the foreign amount in the memo", %{h: h} do
@@ -127,9 +169,22 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       assert transaction(expense).category_id == nil
     end
 
-    test "gives none without a share of theirs", %{h: h} = context do
+    test "gives none when it changes nothing for them", %{h: h} = context do
       create!(equal(h, "Bahn", 2000, "2026-10-01", h.ben, [h.ben, h.cleo]))
+      create!(equal(h, "Bäcker", 500, "2026-10-01", h.anna, [h.anna]))
       assert live_transactions(context.account) == []
+    end
+
+    test "follows a change of the payer", %{h: h} do
+      expense = create!(equal(h, "Kino", 2000, "2026-10-10", h.ben, [h.anna, h.ben]))
+      first = transaction(expense)
+
+      expense = update!(h.ben, expense, %{paid_by_id: h.anna})
+      assert %{amount: 1000, memo: "Gesamt 20,00 € · bezahlt von Anna"} = transaction(expense)
+
+      update!(h.ben, expense, %{parts: [%{participant_id: h.anna, weight: 0}]})
+      assert Repo.reload!(first).deleted_at
+      assert transaction(expense) == nil
     end
   end
 

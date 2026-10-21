@@ -24,6 +24,15 @@ defmodule Abakus.Kasse.LedgerTest do
     assert balances |> Map.values() |> Enum.sum() == 0
   end
 
+  test "changes a balance by what the person paid minus their share" do
+    market = entry(1, 2000, [{1, 1000}, {2, 1000}])
+
+    assert {Ledger.change(market, 1), Ledger.change(market, 2), Ledger.change(market, 3)} ==
+             {1000, -1000, 0}
+
+    assert Ledger.change(entry(1, 1500, [{2, 1500}]), 1) == 1500
+  end
+
   test "returns no balances for no entries" do
     assert Ledger.balances([]) == %{}
   end

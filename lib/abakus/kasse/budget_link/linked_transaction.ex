@@ -1,6 +1,6 @@
 defmodule Abakus.Kasse.BudgetLink.LinkedTransaction do
   @moduledoc """
-  The transaction a linked participant's share of an expense is booked as, with the category and memo the Kasse
+  The transaction an expense is booked as for a linked participant, with the category and memo the Kasse
   wrote last: where the transaction differs from them, the register overrode that field.
   """
 

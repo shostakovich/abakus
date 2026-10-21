@@ -31,7 +31,8 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
   end
 
   describe "switching on" do
-    test "gives every non-reimbursement expense with the owner's share a linked transaction", c do
+    test "gives every non-reimbursement expense that changes the owner's balance a linked transaction",
+         c do
       weekly = expense!(c.h, "Wocheneinkauf", 8742, "2026-03-05")
       cinema = expense!(c.h, "Kino", 2400, "2026-03-10", c.h.anna)
       older = expense!(c.h, "Altbau", 5000, "2025-02-20")
@@ -39,8 +40,10 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), gone)
       payback = create!(reimbursement(1000, "2026-03-15", c.h.anna, c.h.ben))
       others = create!(equal(c.h, "Bar", 3000, "2026-03-16", c.h.ben, [c.h.ben, c.h.cleo]))
+      own = create!(equal(c.h, "Bäcker", 500, "2026-03-17", c.h.anna, [c.h.anna]))
+      gift = create!(equal(c.h, "Geschenk", 1500, "2026-03-18", c.h.anna, [c.h.ben]))
 
-      assert switch_on(c) == {:ok, %{created: 3}}
+      assert switch_on(c) == {:ok, %{created: 4}}
 
       assert %{
                amount: -4371,
@@ -53,10 +56,11 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
              } = linked(weekly)
 
       assert groceries == c.groceries
-      assert %{amount: -1200, memo: "Gesamt 24,00 € · bezahlt von Anna"} = linked(cinema)
+      assert %{amount: 1200, memo: "Gesamt 24,00 € · bezahlt von Anna"} = linked(cinema)
       assert %{amount: -2500, date: ~D[2025-02-20]} = linked(older)
+      assert %{amount: 1500} = linked(gift)
 
-      for expense <- [gone, payback, others], do: assert(linked(expense) == nil)
+      for expense <- [gone, payback, others, own], do: assert(linked(expense) == nil)
 
       assert Repo.reload!(c.account).fed_by == :shared_expenses
       assert %Link{account_id: account_id, start_date: nil} = Repo.get!(Link, c.h.anna)

@@ -422,7 +422,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       Teil einer Aufteilung in {@accounts[@transaction.account_id].name}; hier steht die ganze Aufteilung.
     </p>
     <p :if={@expense_id} id="tx-expense" class="mr-auto text-sm text-base-content/70">
-      Dein Anteil an einer Ausgabe der Kasse: Betrag, Datum und Empfänger folgen der <.link
+      Was eine Ausgabe der Kasse an deinem Saldo ändert: Betrag, Datum und Empfänger folgen der <.link
         id="tx-expense-link"
         navigate={~p"/kasse/expenses/#{@expense_id}"}
         class="link link-primary"

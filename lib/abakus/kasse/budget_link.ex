@@ -1,11 +1,13 @@
 defmodule Abakus.Kasse.BudgetLink do
   @moduledoc """
-  Expenses linked to the budget (ADR 0006). A linked participant (the budget owner, once switched on) has their
-  share of every expense as a transaction in the account fed by `shared_expenses`, written through the Ledger with
-  their scope in the expense's database transaction: minus the share, dated as the expense, the title as payee, the
-  budget category the Kasse category is mapped to, a memo describing the expense, created cleared and unapproved.
-  Reimbursements and expenses without a share of theirs give none. An expense dated before the link's start date, if
-  it has one, gets none unless it is entered after the switch or moved to a later date.
+  Expenses linked to the budget (ADR 0006). A linked participant (the budget owner, once switched on) has what each
+  expense changes in their Kasse balance, paid minus share, as a transaction in the account fed by
+  `shared_expenses`, so its balance is their Kasse balance. It is written through the Ledger with their scope in the
+  expense's database transaction: dated as the expense, the title as payee, the budget category the Kasse category
+  is mapped to, a memo describing the expense, created cleared and unapproved. Their bank purchase of an expense
+  they paid stays a purchase in its category, which so bears only their share. Reimbursements and expenses that
+  change nothing for them give none. An expense dated before the link's start date, if it has one, gets none
+  unless it is entered after the switch or moved to a later date.
 
   The Kasse leads on what it changes: amount, date and payee follow every change of the expense. The register may
   change category, memo, cleared state and approval; a later Kasse change keeps a category or memo the
@@ -19,6 +21,7 @@ defmodule Abakus.Kasse.BudgetLink do
   import Ecto.Query
 
   alias Abakus.Categories.Category, as: BudgetCategory
+  alias Abakus.Kasse
   alias Abakus.Kasse.{Access, AccessError}
   alias Abakus.Kasse.BudgetLink.{CategoryMapping, Link, LinkedTransaction}
   alias Abakus.Kasse.Categories.Category
@@ -53,8 +56,8 @@ defmodule Abakus.Kasse.BudgetLink do
 
   @doc """
   Links the scope's person, the budget owner's participant, to the budget: the account `account_id` (one of
-  `account_choices/1`) becomes the one fed by shared expenses, and every expense with a share of theirs gets its
-  transaction. Returns `{:ok, %{created: count}}` or `{:error, reason}`: `:not_budget_owner`, `:linked`,
+  `account_choices/1`) becomes the one fed by shared expenses, and every expense that changes their balance gets
+  its transaction. Returns `{:ok, %{created: count}}` or `{:error, reason}`: `:not_budget_owner`, `:linked`,
   `:no_account` or a message in German.
   """
   def switch_on(%Scope{} = scope, account_id) do
@@ -118,7 +121,7 @@ defmodule Abakus.Kasse.BudgetLink do
     end
   end
 
-  @doc "The account the scope's person's shares are booked in; nil while they are not linked."
+  @doc "The account the scope's person's expenses are booked in; nil while they are not linked."
   def account(%Scope{} = scope) do
     id = Access.person!(scope).id
 
@@ -187,11 +190,11 @@ defmodule Abakus.Kasse.BudgetLink do
   defp wanted(nil, _link), do: nil
 
   defp wanted(%Expense{} = expense, link) do
-    share = Expense.share_of(expense, link.participant_id)
+    change = Kasse.Ledger.change(expense, link.participant_id)
 
-    if not Expense.deleted?(expense) and not expense.reimbursement and share > 0 do
+    if not Expense.deleted?(expense) and not expense.reimbursement and change != 0 do
       %{
-        amount: -share,
+        amount: change,
         date: expense.date,
         payee: expense.title,
         kasse_category_id: expense.category_id,

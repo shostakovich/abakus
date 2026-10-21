@@ -91,7 +91,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       assert has_element?(
                view,
                "#budget-link-state",
-               "Jede bisherige Ausgabe bekommt eine Buchung."
+               "Jede bisherige Ausgabe, die deinen Saldo ändert, bekommt eine Buchung."
              )
 
       assert has_element?(view, ~s|#link_account_id option[selected][value="#{c.account.id}"]|)
