@@ -1,12 +1,15 @@
 defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
   use AbakusWeb.ConnCase
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
   import Abakus.DomainFixtures
   import Abakus.KasseFixtures
   import AbakusWeb.PageText
 
-  alias Abakus.Kasse.BudgetLink
+  alias Abakus.Kasse.{BudgetLink, Expenses}
+  alias Abakus.Kasse.Expenses.Expense
+  alias Abakus.Ledger
   alias Abakus.Ledger.Transaction
   alias Abakus.Repo
   alias Setzkasten.Test.Confirm
@@ -89,7 +92,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       assert has_element?(
                view,
                "#budget-link-state",
-               "Jede bisherige Ausgabe, die deinen Saldo ändert, bekommt eine Buchung."
+               "Jede bisherige Ausgabe und Rückzahlung, die deinen Saldo ändert, bekommt eine Buchung."
              )
 
       assert has_element?(view, ~s|#link_account_id option[selected][value="#{c.account.id}"]|)
@@ -128,6 +131,15 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       assert has_element?(view, ~s|#expense-register[href="/budget/accounts/#{c.account.id}"]|)
     end
 
+    test "shows the account of a reimbursement", c do
+      link!(c)
+      payback = create!(reimbursement(2500, "2026-10-12", c.h.ben, c.h.anna), c.h.ben)
+      {:ok, view, _html} = live(c.conn, ~p"/kasse/expenses/#{payback}")
+
+      assert has_element?(view, "#expense-budget-facts", "Noch offen")
+      refute has_element?(view, "#expense-budget-facts", "Kategorie")
+    end
+
     test "shows the other members nothing of the budget", c do
       %{expense: expense} = link!(c)
 
@@ -135,6 +147,149 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
         live(log_in_participant(c.conn, c.h.ben), ~p"/kasse/expenses/#{expense}")
 
       refute has_element?(view, "#expense-budget")
+    end
+  end
+
+  describe "a reimbursement" do
+    setup c do
+      link!(c)
+      %{checking: account_fixture(name: "Checking", kind: :checking)}
+    end
+
+    defp submit_expense(view, params),
+      do: view |> form("#expense-form", expense: params) |> render_submit()
+
+    defp led_transfer(account),
+      do:
+        Repo.one!(
+          from t in Transaction,
+            where: t.account_id == ^account.id and is_nil(t.deleted_at),
+            preload: :payee
+        )
+
+    test "asks the budget owner for the account, also from a suggestion", c do
+      path =
+        ~p"/kasse/expenses/new?#{[reimbursement: 1, from: c.h.anna, to: c.h.ben, amount: 3000]}"
+
+      {:ok, view, _html} = live(c.conn, path)
+
+      assert has_element?(view, "#expense_budget_account_id option", "Noch offen")
+      assert has_element?(view, "#expense_budget_account_id option", "Checking")
+      refute has_element?(view, "#expense_budget_account_id option", "Geteilt")
+
+      submit_expense(view, %{budget_account_id: "#{c.checking.id}"})
+      assert_redirect(view, ~p"/kasse")
+
+      assert %{amount: -3000, payee: %{transfer_account_id: shared}} = led_transfer(c.checking)
+      assert shared == c.account.id
+    end
+
+    test "chooses the account of one the other person recorded", c do
+      payback = create!(reimbursement(2500, "2026-10-12", c.h.ben, c.h.anna), c.h.ben)
+      {:ok, view, _html} = live(c.conn, ~p"/kasse/expenses/#{payback}")
+
+      assert has_element?(view, "#expense_budget_account_id")
+      refute has_element?(view, "#expense_budget_account_id option[selected]")
+      submit_expense(view, %{budget_account_id: "#{c.checking.id}"})
+      assert_redirect(view, ~p"/kasse")
+
+      assert %{amount: 2500} = led_transfer(c.checking)
+
+      {:ok, view, _html} = live(c.conn, ~p"/kasse/expenses/#{payback}")
+      assert has_element?(view, "#expense_budget_account_id option[selected]", "Checking")
+    end
+
+    test "keeps an account closed since when saved again", c do
+      payback = create!(reimbursement(2500, "2026-10-12", c.h.ben, c.h.anna), c.h.ben)
+
+      {:ok, _payback} =
+        Expenses.update_expense(
+          scope_of(c.h.anna),
+          payback,
+          Expenses.input(payback),
+          budget_account_id: c.checking.id
+        )
+
+      {:ok, _closed} = Ledger.update_account(budget_scope(), c.checking, %{closed: true})
+      {:ok, view, _html} = live(c.conn, ~p"/kasse/expenses/#{payback}")
+
+      assert has_element?(view, "#expense_budget_account_id option[selected]", "Checking")
+      submit_expense(view, %{notes: "Bar"})
+      assert_redirect(view, ~p"/kasse")
+
+      assert %{amount: 2500} = led_transfer(c.checking)
+    end
+
+    test "asks only when it involves the budget owner", c do
+      {:ok, view, _html} =
+        live(c.conn, ~p"/kasse/expenses/new?#{[reimbursement: 1, from: c.h.ben, to: c.h.cleo]}")
+
+      refute has_element?(view, "#expense_budget_account_id")
+
+      {:ok, view, _html} =
+        live(
+          log_in_participant(c.conn, c.h.ben),
+          ~p"/kasse/expenses/new?#{[reimbursement: 1, to: c.h.anna]}"
+        )
+
+      refute has_element?(view, "#expense_budget_account_id")
+    end
+
+    test "booked as a transfer in the register asks for the person", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.checking}")
+      view |> element("#new-transaction") |> render_click()
+      refute has_element?(view, "#tx-person")
+
+      view
+      |> element("#tx-form")
+      |> render_change(%{
+        "transaction" => %{"payee_pick" => "a:#{c.account.id}"},
+        "_target" => ["transaction", "payee_pick"]
+      })
+
+      assert has_element?(view, "#tx-person option", "Ben")
+      assert has_element?(view, "#tx-person option", "Cleo")
+
+      view |> form("#tx-form", transaction: %{outflow: "30"}) |> render_submit()
+      assert has_element?(view, "#tx-error", "mit wem in der Kasse")
+
+      view
+      |> form("#tx-form", transaction: %{outflow: "30", person_id: "#{c.h.cleo}"})
+      |> render_submit()
+
+      refute has_element?(view, "#tx-editor")
+
+      assert %Expense{paid_by_id: anna, amount_cents: 3000} =
+               Repo.one!(from e in Expense, where: e.reimbursement)
+
+      assert anna == c.h.anna
+    end
+
+    test "a transfer moved past the link's start date asks for the person", c do
+      Repo.update_all(BudgetLink.Link, set: [start_date: ~D[2026-10-01]])
+
+      {:ok, transfer} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.checking.id,
+          date: ~D[2026-09-20],
+          amount: -3000,
+          payee_id: c.account.transfer_payee.id,
+          approved: true
+        })
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.checking}")
+      view |> element("#tx-#{transfer.id} td.app-payee") |> render_click()
+      view |> element("#tx-#{transfer.id} td.app-payee") |> render_click()
+      refute has_element?(view, "#tx-person")
+
+      view
+      |> element("#tx-form")
+      |> render_change(%{
+        "transaction" => %{"date" => "2026-10-12"},
+        "_target" => ["transaction", "date"]
+      })
+
+      assert has_element?(view, "#tx-person option", "Cleo")
     end
   end
 

@@ -75,7 +75,8 @@ is its owner's ([ADR 0007](../DECISIONS.md)); its tables carry their owner's `us
 the rows of their caller's user (ADR 0019).
 
 - **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from the Depot,
-  `shared_expenses`: what the Kasse's expenses change in the budget owner's Kasse balance; either way the UI hides
+  `shared_expenses`: what the Kasse's expenses and reimbursements change in the budget owner's Kasse balance, a
+  reimbursement as a transfer with a budget account; either way the UI hides
   manual entry, file import and reconcile for it, as its balance is the other area's; the Ledger accepts entries),
   closed, note, position, last reconciled at, the file's account it takes imports from (`BANKID`, `ACCTID`). Budget
   account = not tracking (derived; a kind never crosses that line). No credit cards or loans. Closed, never deleted.
@@ -106,8 +107,9 @@ the rows of their caller's user (ADR 0019).
 - **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
   `reconciled`; UI "Vorgemerkt", "Gebucht", "Abgeglichen"), approved (manual entries by default, imports not),
   transfer counterpart (a transaction, or for a split's transfer its subtransaction), source (`manual`, `ynab`,
-  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` a share of a Kasse expense, `depot` a value change), source reference (the Kasse expense
-  or Depot transaction that leads it, set once), matched transaction (see match proposals), deleted at (soft delete;
+  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` what a Kasse expense or reimbursement changes, `depot` a value change), source reference (the Kasse
+  expense or Depot transaction that leads it, set once: on create, or later for a transfer from the register that
+  becomes a reimbursement), matched transaction (see match proposals), deleted at (soft delete;
   deleted transactions cannot be changed, only moved with their category into another). The register is what counts: transactions not deleted and no match
   proposal (`Ledger.in_register/1`).
 - **Reconciled lock**: the Ledger refuses any change that alters a reconciled transaction ("ist abgeglichen"),

@@ -53,6 +53,7 @@ defmodule Abakus.Kasse.Expenses.Form do
     field :notes, :string, default: ""
     field :reimbursement, :boolean, default: false
     field :split_mode, Ecto.Enum, values: Split.modes(), default: :equal
+    field :budget_account_id, :integer
 
     embeds_many :rows, Row,
       primary_key: {:participant_id, :integer, autogenerate: false},
@@ -196,7 +197,14 @@ defmodule Abakus.Kasse.Expenses.Form do
   def restore(%__MODULE__{} = form, params) do
     form
     |> cast(params, @text_fields, empty_values: [])
-    |> cast(params, [:category_id, :paid_by_id, :rate_source, :split_mode, :reimbursement])
+    |> cast(params, [
+      :category_id,
+      :paid_by_id,
+      :rate_source,
+      :split_mode,
+      :reimbursement,
+      :budget_account_id
+    ])
     |> update_change(:split_mode, &(&1 || :equal))
     |> update_change(:reimbursement, &(&1 || false))
     |> cast_embed(:rows, with: &row_changeset/2)

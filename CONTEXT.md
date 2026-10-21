@@ -101,8 +101,9 @@ _Avoid_: Off-budget account, investment account
 **Fed account**:
 An account another area keeps up to date (`portfolio`: the tracking account that one of the budget owner's
 portfolios is, opened with the portfolio and closed once it is gone, its value kept by the value change;
-`shared_expenses`: its transactions are what Kasse expenses change in the budget owner's Kasse balance), so the UI offers no manual
-entry, file import or reconciling for it, as its balance is the other area's; the Ledger still accepts entries.
+`shared_expenses`: its transactions are what Kasse expenses and reimbursements change in the budget owner's Kasse
+balance), so the UI offers no manual entry, file import or reconciling for it, as its balance is the other area's;
+the Ledger still accepts entries, and transfers from other registers.
 _Avoid_: Synced account, linked account (that is bank sync)
 
 **Reconcile**:
@@ -262,7 +263,8 @@ _Avoid_: Transaction (that is the budget's), bill
 
 **Reimbursement**:
 A payment from one participant to another that settles a balance: an expense with a single share, the recipient's.
-UI "Rückzahlung".
+With the budget link, one that involves the budget owner is a transfer between the shared-expenses account and the
+budget account they choose for it, entered in the Kasse or as a transfer in the register. UI "Rückzahlung".
 _Avoid_: Transfer (that is the budget's), settlement
 
 **Share**:
@@ -305,9 +307,14 @@ _Avoid_: FX rate in UI text
 The budget owner's participant linked to the budget: what each expense changes in their Kasse balance, paid minus
 share, is a linked transaction in the account fed by `shared_expenses`, so its balance is their Kasse balance; each
 Kasse category maps to a budget category for it. Their bank purchase of an expense they paid stays a purchase in its
-category, which so bears only their share. Switching it on makes the chosen account the one fed by `shared_expenses`
-and books every expense that changes their balance. A link with a start date books an expense dated before it only
-when entered later or moved past it.
+category, which so bears only their share. A reimbursement with them is a transfer between that account and the
+budget account they choose in the reimbursement form; until they choose one, it is a transaction there that still
+needs an account. A transfer they book in the register between that account and a budget account becomes a
+reimbursement with the group's other active participant, or the one they pick when there are several; it completes
+an open reimbursement without account of the same amount, dated within the match window, instead. Switching it on
+makes the chosen account the one fed by `shared_expenses` and books every expense and reimbursement that changes
+their balance. A link with a start date books an expense dated before it only when entered later or moved past it,
+and a transfer dated before it creates nothing in the Kasse.
 UI "Mit Budget verknüpfen", the settings page "Budget-Verknüpfung".
 _Avoid_: Sync, budget export
 
@@ -316,10 +323,11 @@ A transaction another area writes into the budget and leads, referring to its so
 transaction (ADR 0020): amount, date, account, payee and transfer counterpart follow the source, and the Ledger
 refuses changes to them, and deleting it, to anyone else; category, memo, cleared state and approval are the
 register's, and a bank line matched to it keeps its date. A transfer's counterpart is led with it. In the Kasse, what
-an expense changes in a linked participant's balance, written with the expense: paid minus share (none when that is 0,
-and none for reimbursements), its date, its title as payee, the mapped category, a memo describing the expense,
-unapproved; a change of the expense's Kasse category writes the mapped category again, and the memo follows the
-expense while the register leaves it. In the Depot, see Depot link.
+an expense changes in a linked participant's balance, written with the expense: paid minus share (none when that is
+0), its date, its title as payee or for a reimbursement the transfer to its account, the mapped category (none for
+a reimbursement), a memo describing the expense, unapproved; a transfer booked in the register keeps its own memo,
+cleared state and approval when it becomes a reimbursement's. A change of the expense's Kasse category writes the
+mapped category again, and the memo follows the expense while the register leaves it. In the Depot, see Depot link.
 _Avoid_: Synced transaction, mirror
 
 ## Depot

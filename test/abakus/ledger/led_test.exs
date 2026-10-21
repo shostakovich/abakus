@@ -147,6 +147,52 @@ defmodule Abakus.Ledger.LedTest do
     assert Repo.get!(Transaction, transaction.id).amount == -2_000
   end
 
+  describe "lead/3" do
+    test "puts a source on a transaction, which it leads from then on", c do
+      transfer =
+        transaction_fixture(%{
+          account_id: c.account.id,
+          payee_id: account_fixture().transfer_payee.id
+        })
+
+      counterpart = Repo.get!(Transaction, transfer.transfer_transaction_id)
+
+      assert {:ok, %Transaction{kasse_expense_id: id}} =
+               Ledger.lead(c.scope, counterpart, c.kasse)
+
+      assert {:kasse_expense, id} == c.kasse
+      assert Ledger.led_by(c.scope, transfer) == c.kasse
+      assert {:error, _changeset} = Ledger.update_transaction(c.scope, transfer, %{amount: 5})
+    end
+
+    test "refuses a transaction that is led already", c do
+      transaction = led!(c, c.depot)
+
+      assert {:error, changeset} = Ledger.lead(c.scope, transaction, c.kasse)
+      assert [led_by: {"folgt der Buchung im Depot", []}] = changeset.errors
+
+      transfer = transaction_fixture(%{payee_id: c.account.transfer_payee.id})
+      {:ok, _led} = Ledger.lead(c.scope, transfer, source(c, :depot))
+      counterpart = Repo.get!(Transaction, transfer.transfer_transaction_id)
+
+      assert {:error, _changeset} = Ledger.lead(c.scope, counterpart, c.kasse)
+    end
+
+    test "refuses a source that leads another transaction", c do
+      led!(c, c.kasse)
+
+      assert {:error, changeset} = Ledger.lead(c.scope, transaction_fixture(), c.kasse)
+      assert Keyword.has_key?(changeset.errors, :kasse_expense_id)
+    end
+
+    test "refuses a deleted transaction", c do
+      {:ok, deleted} = Ledger.delete_transaction(c.scope, transaction_fixture())
+
+      assert {:error, changeset} = Ledger.lead(c.scope, deleted, c.kasse)
+      assert Keyword.has_key?(changeset.errors, :deleted_at)
+    end
+  end
+
   test "a match keeps the date its source leads", c do
     transaction = led!(c, c.depot, amount: -1_000)
 

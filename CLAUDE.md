@@ -46,9 +46,9 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   host's `TZ` (`Abakus.LocalTime`, no time zone database). Its jobs and the backup run in the release;
   `config/test.exs` turns them off (`jobs: false`). What the app, MCP, jobs and tasks call takes `%Scope{}`
   (ADR 0019): a person's, or `Scope.system()` for jobs, tasks and MCP reads; `Abakus.Kasse.Access` refuses any
-  other, except in what the budget calls of the budget link (`recategorize/3`), which takes a plain user
-  scope. The budget link acts for the scope's person. Tests get a person's scope with
-  `scope_of/1` from `Abakus.KasseFixtures`.
+  other, except in what the budget calls of the budget link (`recategorize/3`, `write_from_register/4`,
+  `reimbursement_people/1`), which take a plain user scope. The budget link acts for the scope's person. Tests get a
+  person's scope with `scope_of/1` from `Abakus.KasseFixtures`.
 - The budget: `Abakus.Ledger`, `Abakus.Categories` and `Abakus.FileImport` take `%Scope{}` and see only the rows
   with the user's `user_id` (ADR 0019); each user's Ready to Assign comes with its first use. What writes into it
   from another area writes with the budget owner's user, whichever way it gets that scope: the Depot's budget feed

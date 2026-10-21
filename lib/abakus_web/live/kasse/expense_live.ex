@@ -2,7 +2,8 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   @moduledoc """
   The form of an expense or reimbursement: new (`:new`, prefilled for a suggested reimbursement)
   or saved (`:edit`, read-only once deleted, with its history and, for the budget owner, the
-  transaction it is linked to in the budget). Every change goes through
+  transaction it is linked to in the budget). A linked budget owner chooses the budget account of
+  a reimbursement they pay or receive. Every change goes through
   `Abakus.Kasse.Expenses.Form`, which keeps the text as typed and fills in what an edit implies;
   the split shows live, and a foreign rate is looked up as currency or date change.
 
@@ -23,6 +24,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
         suggestions: Expenses.category_suggestions(socket.assigns.current_scope),
         people: Participants.list_participants(socket.assigns.current_scope, :all),
         categories: Categories.list_categories(socket.assigns.current_scope, :all),
+        budget_accounts: BudgetLink.reimbursement_accounts(socket.assigns.current_scope),
         errors: [],
         submitted: nil
       )
@@ -73,18 +75,35 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
 
     with {:ok, id} <- Abakus.Schema.cast_id(id),
          %Expense{} = expense <- Expenses.get_expense(scope, id) do
+      booking = BudgetLink.transaction_for(scope, expense.id)
+
+      data = %{
+        Expenses.edit_form(scope, expense)
+        | budget_account_id: booking_account_id(booking)
+      }
+
       assign(socket,
         page_title: expense.title,
         expense: expense,
         deleted?: Expense.deleted?(expense),
-        data: Expenses.edit_form(scope, expense),
+        data: data,
         history: Activities.list_activities(scope, expense_id: expense.id),
-        booking: BudgetLink.transaction_for(scope, expense.id)
+        booking: booking,
+        budget_accounts: with_booked_account(socket.assigns.budget_accounts, booking)
       )
     else
       _missing -> raise AbakusWeb.NotFoundError
     end
   end
+
+  defp booking_account_id(%{payee: %{transfer_account_id: id}}), do: id
+  defp booking_account_id(_booking), do: nil
+
+  # An account closed since stays an option, so saving keeps it.
+  defp with_booked_account(accounts, %{payee: %{transfer_account: %{id: id} = account}}),
+    do: if(Enum.any?(accounts, &(&1.id == id)), do: accounts, else: accounts ++ [account])
+
+  defp with_booked_account(accounts, _booking), do: accounts
 
   @impl true
   def handle_event("change", %{"expense" => params}, socket) do
@@ -115,7 +134,12 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
     data = socket |> changeset(params) |> Changeset.apply_changes()
     %{current_scope: scope, expense: expense} = socket.assigns
 
-    case Expenses.save_form(scope, data, expense) do
+    opts =
+      if budget_account?(socket.assigns, data),
+        do: [budget_account_id: data.budget_account_id],
+        else: []
+
+    case Expenses.save_form(scope, data, expense, opts) do
       {:ok, saved} ->
         kind = if saved.reimbursement, do: "Rückzahlung", else: "Ausgabe"
         verb = if expense, do: "gespeichert", else: "angelegt"
@@ -172,6 +196,15 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   defp changeset(socket, params),
     do: Form.changeset(socket.assigns.data, params, suggestions: socket.assigns.suggestions)
 
+  defp budget_account?(%{budget_accounts: []}, _data), do: false
+
+  defp budget_account?(%{current_scope: scope}, %Form{reimbursement: true} = data) do
+    me = scope.participant.id
+    data.paid_by_id == me or Enum.any?(data.rows, &(&1.selected and &1.participant_id == me))
+  end
+
+  defp budget_account?(_assigns, _data), do: false
+
   defp lookup_rate(socket) do
     %{current_scope: scope, data: data} = socket.assigns
     data = scope |> Expenses.lookup_form_rate(data) |> Changeset.apply_changes()
@@ -219,6 +252,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
       unit: unit,
       unit_label: unit_label(data, unit),
       weights?: not data.reimbursement and data.split_mode != :equal,
+      budget_account?: budget_account?(socket.assigns, data),
       all_selected?: Enum.all?(data.rows, & &1.selected)
     )
   end
@@ -226,7 +260,8 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
   # The form's values as params, so that errors count as entered and every field shows `data`.
   defp params(data) do
     fields =
-      ~w(title date category_id paid_by_id currency currency_other amount rate notes reimbursement split_mode)a
+      ~w(title date category_id paid_by_id currency currency_other amount rate notes reimbursement split_mode
+         budget_account_id)a
 
     rows =
       for {row, index} <- Enum.with_index(data.rows), into: %{} do
@@ -373,6 +408,15 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
                 label="Das ist eine Rückzahlung"
               />
             </div>
+            <.input
+              :if={@budget_account?}
+              field={@form[:budget_account_id]}
+              type="select"
+              label="Konto im Budget"
+              prompt="Noch offen"
+              options={Enum.map(@budget_accounts, &{&1.name, &1.id})}
+              help="Das Konto, von dem das Geld ging oder auf das es kam."
+            />
             <div class="md:col-span-2">
               <.input
                 field={@form[:notes]}
@@ -498,9 +542,14 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
       <section :if={@booking} aria-labelledby="expense-budget" class="mt-8">
         <.section_heading id="expense-budget">Im Budget</.section_heading>
         <.description_list id="expense-budget-facts">
-          <:item label="Dein Anteil"><.amount value={-@booking.amount} /></:item>
-          <:item label="Kategorie">
+          <:item label="Betrag"><.amount value={@booking.amount} /></:item>
+          <:item :if={!@expense.reimbursement} label="Kategorie">
             {if @booking.category, do: @booking.category.name, else: "Nicht kategorisiert"}
+          </:item>
+          <:item :if={@expense.reimbursement} label="Konto">
+            {if account = @booking.payee && @booking.payee.transfer_account,
+              do: account.name,
+              else: "Noch offen"}
           </:item>
         </.description_list>
         <.button

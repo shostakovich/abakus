@@ -247,9 +247,14 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     refute transaction(expense)
   end
 
-  test "A reimbursement gives no transaction", %{h: h} = context do
-    create!(reimbursement(8437, "2026-10-10", h.anna, h.ben), h.anna)
-    assert live_transactions(context.account) == []
+  test "A reimbursement books no category, though it has one in the Kasse", %{h: h} do
+    payback =
+      create!(
+        Map.put(reimbursement(8437, "2026-10-10", h.anna, h.ben), :category_id, h.food),
+        h.anna
+      )
+
+    assert %{amount: 8437, category_id: nil, payee: %{name: "Rückzahlung"}} = transaction(payback)
   end
 
   test "a share that goes away takes the transaction along, and a new one books anew", %{h: h} do
@@ -286,14 +291,23 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     assert %{amount: -1000, deleted_at: nil} = transaction(expense)
   end
 
-  test "a reconciled transaction follows the Kasse", %{h: h} do
+  test "a reconciled transaction stops the Kasse's change", %{h: h} do
     expense = create!(equal(h, "Kino", 2000, "2026-10-10", h.ben, [h.anna, h.ben]))
 
     {:ok, _locked} =
       Ledger.update_transaction(budget_scope(), transaction(expense), %{cleared: :reconciled})
 
-    update!(h.ben, expense, %{amount_cents: 3000, original_amount: 3000})
-    assert transaction(expense).amount == -1500
+    assert {:error, changeset} =
+             Expenses.update_expense(scope_of(h.ben), expense, %{
+               Expenses.input(expense)
+               | amount_cents: 3000,
+                 original_amount: 3000
+             })
+
+    assert [budget: {"Die Ausgabe ist im Budget im Konto „Geteilt“ abgeglichen" <> _rest, []}] =
+             changeset.errors
+
+    assert transaction(expense).amount == -1000
   end
 
   test "Recurring rent creates its expense and the linked transaction in one run", %{h: h} do

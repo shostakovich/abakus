@@ -891,6 +891,26 @@ defmodule Abakus.Ledger do
   defp source(transaction, counterpart),
     do: Transaction.led_by(transaction) || (counterpart && Transaction.led_by(counterpart))
 
+  @doc """
+  Puts a source on a transaction no source leads yet, itself or through its counterpart, such as a transfer booked in
+  the register that becomes a Kasse reimbursement; the source leads it from then on (`led_by/2`).
+  """
+  def lead(%Scope{} = scope, %Transaction{id: id}, led_by) do
+    transaction = Repo.get!(owned(Transaction, scope), id)
+    changeset = Transaction.reference_changeset(transaction, led_by)
+
+    cond do
+      transaction.deleted_at ->
+        {:error, failed(changeset, :deleted_at, "Die Buchung ist gelöscht")}
+
+      leading = led_by(scope, transaction) ->
+        {:error, failed(changeset, :led_by, follows(leading))}
+
+      true ->
+        Repo.update(changeset)
+    end
+  end
+
   defp validate_led(changeset, %{led_by: led_by, writer: writer})
        when is_nil(led_by) or led_by == writer,
        do: changeset

@@ -122,12 +122,15 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
               {@account.name}
             </.link>; ihr Saldo ist dein Saldo in der Kasse. Kategorie, Memo, Markierung und Bestätigung
             kannst du dort ändern. Die Kategorie setzt die Kasse neu, sobald sich die Kategorie der Ausgabe ändert.
+            Eine Rückzahlung mit dir ist eine Umbuchung zwischen diesem Konto und dem Konto, das du bei der
+            Rückzahlung wählst. Buchst du im Register eine Umbuchung mit diesem Konto, wird sie zur Rückzahlung in
+            der Kasse.
           </p>
           <div :if={!@account} class="flex flex-col gap-3">
             <p id="budget-link-state">
               Noch nicht mit dem Budget verknüpft. Danach ist, was eine Ausgabe an deinem Saldo ändert, eine
               Buchung im gewählten Konto, in der Kategorie, die du unten zuordnest.
-              Jede bisherige Ausgabe, die deinen Saldo ändert, bekommt eine Buchung.
+              Jede bisherige Ausgabe und Rückzahlung, die deinen Saldo ändert, bekommt eine Buchung.
             </p>
             <.form for={@link_form} id="budget-link-form" phx-submit="switch_on">
               <.input

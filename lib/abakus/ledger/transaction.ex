@@ -9,7 +9,7 @@ defmodule Abakus.Ledger.Transaction do
   transaction. It counts nowhere until the match is accepted (merged into the existing one) or rejected.
 
   A transaction another area writes and leads refers to its source: the Kasse expense (`kasse_expense_id`) or the
-  Depot transaction (`depot_transaction_id`), set once, on create; see `led_by/1`.
+  Depot transaction (`depot_transaction_id`), set on create or once later (`Abakus.Ledger.lead/3`); see `led_by/1`.
   """
 
   use Abakus.Schema
@@ -87,6 +87,15 @@ defmodule Abakus.Ledger.Transaction do
     |> validate_not_deleted()
     |> validate_split_counterpart()
     |> unique_constraint(:matched_transaction_id)
+    |> unique_references()
+  end
+
+  @doc "Changeset that puts the reference to a source as `led_by/1` gives it on a transaction."
+  def reference_changeset(transaction, led_by),
+    do: transaction |> change(source_reference(led_by)) |> unique_references()
+
+  defp unique_references(changeset) do
+    changeset
     |> unique_constraint(:kasse_expense_id, name: :transactions_kasse_expense_id_user_id_index)
     |> unique_constraint(:depot_transaction_id)
   end
