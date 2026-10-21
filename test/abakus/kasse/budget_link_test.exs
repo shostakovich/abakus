@@ -9,7 +9,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
   alias Abakus.{Budget, Categories, Ledger}
   alias Abakus.Categories.Category
   alias Abakus.Kasse.{AccessError, Balances, BudgetLink, Expenses, Recurring}
-  alias Abakus.Kasse.BudgetLink.{Link, LinkedTransaction}
+  alias Abakus.Kasse.BudgetLink.Link
   alias Abakus.Kasse.Categories, as: KasseCategories
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Ledger.Transaction
@@ -47,10 +47,11 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     do: Enum.find(KasseCategories.list_categories(Scope.system()), &(&1.name == name))
 
   defp transaction(expense) do
-    case Repo.get_by(LinkedTransaction, expense_id: expense.id) do
-      nil -> nil
-      link -> Repo.preload(Repo.get!(Transaction, link.transaction_id), :payee)
-    end
+    Repo.one(
+      from t in Transaction,
+        where: t.kasse_expense_id == ^expense.id and is_nil(t.deleted_at),
+        preload: :payee
+    )
   end
 
   defp live_transactions(account),
@@ -243,7 +244,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
 
     assert Repo.reload!(transaction).deleted_at
     assert live_transactions(context.account) == []
-    refute Repo.get_by(LinkedTransaction, expense_id: expense.id)
+    refute transaction(expense)
   end
 
   test "A reimbursement gives no transaction", %{h: h} = context do
@@ -268,11 +269,20 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     assert %{amount: -1000, deleted_at: nil} = transaction(expense)
   end
 
-  test "a transaction deleted beside the Kasse is booked anew on the next change", %{h: h} do
+  test "the transaction is neither changed nor deleted beside the Kasse", %{h: h} do
     expense = create!(equal(h, "Kino", 2000, "2026-10-10", h.ben, [h.anna, h.ben]))
-    {:ok, _deleted} = Ledger.delete_transaction(budget_scope(), transaction(expense))
+    linked = transaction(expense)
 
-    update!(h.ben, expense, %{title: "Kino am Abend"})
+    assert {:error, _changeset} = Ledger.delete_transaction(budget_scope(), linked)
+
+    assert {:error, changeset} =
+             Ledger.update_transaction(budget_scope(), linked, %{amount: -1, payee_name: "X"})
+
+    assert Enum.sort(changeset.errors) == [
+             amount: {"folgt der Ausgabe in der Kasse", []},
+             payee_id: {"folgt der Ausgabe in der Kasse", []}
+           ]
+
     assert %{amount: -1000, deleted_at: nil} = transaction(expense)
   end
 
@@ -362,13 +372,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
     end
 
     test "is the one whose budget the budget's questions are about", %{h: h} = context do
-      expense = create!(equal(h, "Markt", 1000, "2026-10-12", h.ben, [h.anna, h.ben]))
-      %Transaction{id: id} = transaction(expense)
-      owner = budget_scope()
       ben = scope_of(h.ben)
-
-      assert BudgetLink.expense_ids(owner, [id]) == %{id => expense.id}
-      assert BudgetLink.expense_ids(ben, [id]) == %{}
 
       :ok = BudgetLink.recategorize(ben, context.groceries, context.treats)
       assert BudgetLink.category_mapping(scope_of(h.anna))[h.food] == context.groceries

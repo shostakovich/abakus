@@ -215,7 +215,7 @@ The one user who owns the budget, the first one invited; only they see the budge
 _Avoid_: Admin, budget user
 
 **Area**:
-A part of the app with its own sidebar and dock: Finanzen and Kasse (ADR 0017). A user with both switches between
+A part of the app with its own sidebar and dock: Finanzen and Kasse (ADR 0020). A user with both switches between
 them at the top of the sidebar; `/` opens the area used last. Code areas such as `Abakus.Depot` are not areas of the
 UI. UI "Bereich".
 _Avoid_: Module, app, section (that is the sidebar's)
@@ -312,11 +312,14 @@ UI "Mit Budget verknüpfen", the settings page "Budget-Verknüpfung".
 _Avoid_: Sync, budget export
 
 **Linked transaction**:
-A transaction another area writes into the budget and leads: amount, date and payee follow it, the register keeps
-the category, memo and approval it set, and it is deleted only with what it is linked to. In the Kasse, what an
-expense changes in a linked participant's balance, written with the expense: paid minus share (none when that is 0,
+A transaction another area writes into the budget and leads, referring to its source, an expense or a Depot
+transaction (ADR 0020): amount, date, account, payee and transfer counterpart follow the source, and the Ledger
+refuses changes to them, and deleting it, to anyone else; category, memo, cleared state and approval are the
+register's, and a bank line matched to it keeps its date. A transfer's counterpart is led with it. In the Kasse, what
+an expense changes in a linked participant's balance, written with the expense: paid minus share (none when that is 0,
 and none for reimbursements), its date, its title as payee, the mapped category, a memo describing the expense,
-unapproved; a change of the expense's Kasse category writes the mapped category again. In the Depot, see Depot link.
+unapproved; a change of the expense's Kasse category writes the mapped category again, and the memo follows the
+expense while the register leaves it. In the Depot, see Depot link.
 _Avoid_: Synced transaction, mirror
 
 ## Depot
@@ -418,7 +421,7 @@ inside the portfolio; it cannot be reconciled. Code: `Abakus.Depot.BudgetFeed`. 
 _Avoid_: Revaluation, market value adjustment
 
 **Depot link**:
-The budget owner's Depot linked to the budget (ADR 0018), switched on under Einstellungen › Depots with a start date
+The budget owner's Depot linked to the budget (ADR 0020), switched on under Einstellungen › Depots with a start date
 and the category for purchases. Every Depot transaction since the start date between one of their portfolios
 and a Verrechnungskonto with the budget account role is a linked transaction in that budget account, written in the
 Depot change's database transaction: a purchase or a cash transfer into a portfolio's cash is

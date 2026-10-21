@@ -7,7 +7,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
 
   alias Abakus.{Categories, DomainFixtures, FileImport, Ledger}
   alias Abakus.Depot.{AccountRoles, BudgetFeed, BudgetLink, Portfolios}
-  alias Abakus.Depot.BudgetLink.LinkedTransaction
   alias Abakus.Depot.Portfolios.Portfolio
   alias Abakus.Ledger.{Account, Transaction}
 
@@ -77,6 +76,14 @@ defmodule Abakus.Depot.BudgetLinkTest do
         preload: [:payee, :category]
     )
   end
+
+  defp linked_transaction_ids,
+    do:
+      Repo.all(
+        from t in Transaction,
+          where: not is_nil(t.depot_transaction_id) and is_nil(t.deleted_at),
+          select: t.id
+      )
 
   defp linked_in(account), do: Enum.reject(register(account), &(&1.payee.name == "Wertänderung"))
 
@@ -254,15 +261,35 @@ defmodule Abakus.Depot.BudgetLinkTest do
                {outflow.id, other.id, "Mein Memo"}
     end
 
-    test "keeps the bank's date after a match until the Depot changes the date", c do
+    test "keeps its date when a bank line is matched to it", c do
       switch_on(c)
       purchase(c, 9)
       [outflow] = register(c.giro)
-      {:ok, _} = Ledger.update_transaction(budget_scope(), outflow, %{date: ~D[2026-10-05]})
 
+      {:ok, proposal} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.giro.id,
+          date: ~D[2026-10-05],
+          amount: outflow.amount,
+          source: :file,
+          matched_transaction_id: outflow.id
+        })
+
+      {:ok, _matched} = Ledger.accept_match(budget_scope(), proposal)
       :ok = BudgetLink.sync(c.owner)
 
-      assert [%Transaction{date: ~D[2026-10-05]}] = register(c.giro)
+      assert [%Transaction{date: @day, approved: true}] = register(c.giro)
+    end
+
+    test "the register cannot change what it leads", c do
+      switch_on(c)
+      purchase(c, 9)
+      [outflow] = register(c.giro)
+
+      assert {:error, changeset} =
+               Ledger.update_transaction(budget_scope(), outflow, %{date: ~D[2026-10-05]})
+
+      assert [date: {"folgt der Buchung im Depot", []}] = changeset.errors
     end
 
     test "deleting the Depot transaction deletes the linked one and its transfer", c do
@@ -273,7 +300,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
 
       assert register(c.giro) == []
       assert register(c.tracking) == []
-      assert Repo.aggregate(LinkedTransaction, :count) == 0
+      assert linked_transaction_ids() == []
     end
 
     test "deleting a cash transfer deletes its linked transaction", c do
@@ -294,7 +321,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
 
       assert register(c.giro) == []
       assert register(c.tracking) == []
-      assert Repo.aggregate(LinkedTransaction, :count) == 0
+      assert linked_transaction_ids() == []
     end
 
     test "an account that stops being a budget account takes its linked transactions along", c do
@@ -360,8 +387,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
 
       link = switch_on(c)
       purchase(c, 2)
-      ids = Repo.all(from l in LinkedTransaction, select: l.transaction_id)
-      assert ids != []
+      assert [linked_id | _] = linked_transaction_ids()
 
       assert [{_group, [{"Investieren", id}]}] = BudgetLink.category_options(c.owner)
       assert id == c.investieren.id
@@ -370,8 +396,9 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert {:error, %Ecto.Changeset{}} = BudgetLink.change_category(c.owner, own.id)
       assert {:error, :not_linked} = BudgetLink.change_category(member, own.id)
 
-      assert BudgetLink.linked_ids(c.owner, ids) == MapSet.new(ids)
-      assert BudgetLink.linked_ids(member, ids) == MapSet.new()
+      linked = %Transaction{id: linked_id}
+      assert {:depot_transaction, _id} = Ledger.led_by(budget_scope(), linked)
+      assert_raise Ecto.NoResultsError, fn -> Ledger.led_by(member, linked) end
 
       :ok = BudgetLink.recategorize(member, c.investieren.id, own.id)
       assert Repo.reload!(link).category_id == c.investieren.id

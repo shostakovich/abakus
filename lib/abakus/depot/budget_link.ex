@@ -1,6 +1,6 @@
 defmodule Abakus.Depot.BudgetLink do
   @moduledoc """
-  Depot cash flows linked to the budget (ADR 0018), as the Kasse's shares are (ADR 0006). Once the budget owner
+  Depot cash flows linked to the budget (ADR 0020), as the Kasse's expenses are. Once the budget owner
   switches it on, every flow between one of their portfolios and a Verrechnungskonto that is a budget account
   (`Abakus.Depot.AccountRoles`) is a linked transaction in that budget account, written through the Ledger with
   their scope:
@@ -11,19 +11,20 @@ defmodule Abakus.Depot.BudgetLink do
       the daily value change (`Abakus.Depot.BudgetFeed`) keeps only the market movement;
     * a dividend is an inflow to Ready to Assign from the security, as it leaves the portfolio's value alone.
 
-  Only transactions dated on or after the link's start date count. The Depot leads amount, date, payee and account,
-  rewriting only what it changed since it wrote them last; category, memo, cleared state and approval are the
-  register's after the first write. `sync/1` runs in the database transaction of every Depot
-  write, so a removed Depot transaction removes its linked one.
+  Only transactions dated on or after the link's start date count. The linked transaction refers to its Depot
+  transaction, which leads amount, date, payee and account: the Ledger refuses them to anyone else. Category, memo,
+  cleared state and approval are the register's after the first write. `sync/1` runs in the database transaction of
+  every Depot write; `release/2` removes a Depot transaction's linked one before the Depot transaction goes.
   """
 
   import Ecto.Query
 
   alias Abakus.Categories
   alias Abakus.Categories.Category
-  alias Abakus.Depot.BudgetLink.{Link, LinkedTransaction}
+  alias Abakus.Depot.BudgetLink.Link
   alias Abakus.Depot.Portfolios.{Account, Portfolio, Transaction}
   alias Abakus.{Ledger, LocalTime, Repo}
+  alias Abakus.Ledger.Transaction, as: LedgerTransaction
   alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
 
@@ -101,20 +102,6 @@ defmodule Abakus.Depot.BudgetLink do
     :ok
   end
 
-  @doc "Which of `transaction_ids` the Depot wrote as the user's linked transactions or their transfer counterparts."
-  def linked_ids(%Scope{user: %User{id: user_id}}, transaction_ids) do
-    Repo.all(
-      from l in LinkedTransaction,
-        join: t in assoc(l, :transaction),
-        where: l.user_id == ^user_id,
-        where: t.id in ^transaction_ids or t.transfer_transaction_id in ^transaction_ids,
-        select: [t.id, t.transfer_transaction_id]
-    )
-    |> List.flatten()
-    |> Enum.filter(&(&1 in transaction_ids))
-    |> MapSet.new()
-  end
-
   @doc """
   Brings the scope's user's linked transactions in line with their Depot transactions, inside the caller's
   database transaction. Returns `:ok` or `{:error, message}`, in German.
@@ -122,38 +109,35 @@ defmodule Abakus.Depot.BudgetLink do
   def sync(%Scope{user: %User{id: user_id}} = scope) do
     link = Repo.get(Link, user_id)
     wanted = if link, do: wanted_by_depot_transaction(link), else: %{}
-    linked = linked_transactions(user_id)
+    linked = Map.new(Repo.all(linked_transactions(user_id)), &{&1.depot_transaction_id, &1})
 
-    with :ok <- each(linked, &remove_unwanted(scope, &1, wanted)) do
-      kept = Map.new(Enum.filter(linked, &kept?(&1, wanted)), &{&1.depot_transaction_id, &1})
-      each(Enum.sort(wanted), fn {id, wanted} -> write(scope, link, id, kept[id], wanted) end)
+    with :ok <- each(Map.drop(linked, Map.keys(wanted)), &remove(scope, &1)) do
+      each(Enum.sort(wanted), fn {id, wanted} -> write(scope, link, id, linked[id], wanted) end)
     end
+  end
+
+  @doc """
+  Removes the linked transaction of the scope's user's Depot transaction, inside the caller's database transaction,
+  before the Depot transaction is deleted. Returns `:ok` or `{:error, message}`, in German.
+  """
+  def release(%Scope{user: %User{id: user_id}} = scope, %Transaction{id: id}) do
+    linked = Repo.all(where(linked_transactions(user_id), [t], t.depot_transaction_id == ^id))
+    each(Enum.map(linked, &{id, &1}), &remove(scope, &1))
   end
 
   defp linked_transactions(user_id),
-    do: Repo.all(from l in LinkedTransaction, where: l.user_id == ^user_id, preload: :transaction)
-
-  defp kept?(linked, wanted),
     do:
-      is_nil(linked.transaction.deleted_at) and Map.has_key?(wanted, linked.depot_transaction_id)
+      from(t in LedgerTransaction,
+        where:
+          t.user_id == ^user_id and not is_nil(t.depot_transaction_id) and is_nil(t.deleted_at)
+      )
 
-  defp remove_unwanted(scope, linked, wanted) do
-    cond do
-      linked.transaction.deleted_at ->
-        Repo.delete!(linked)
-        :ok
-
-      Map.has_key?(wanted, linked.depot_transaction_id) ->
-        :ok
-
-      true ->
-        with {:ok, _deleted} <-
-               Ledger.delete_transaction(scope, linked.transaction, reconciled: :confirmed) do
-          Repo.delete!(linked)
-          :ok
-        end
-    end
+  defp remove(scope, {id, linked}) do
+    with {:ok, _deleted} <- Ledger.delete_transaction(scope, linked, opts(id)), do: :ok
   end
+
+  defp opts(depot_transaction_id),
+    do: [reconciled: :confirmed, led_by: {:depot_transaction, depot_transaction_id}]
 
   defp each(items, fun) do
     Enum.reduce_while(items, :ok, fn item, :ok ->
@@ -166,49 +150,29 @@ defmodule Abakus.Depot.BudgetLink do
   end
 
   defp write(scope, link, depot_transaction_id, nil, wanted) do
-    with {:ok, transaction} <- Ledger.create_transaction(scope, new_attrs(scope, link, wanted)) do
-      %LinkedTransaction{user_id: link.user_id, depot_transaction_id: depot_transaction_id}
-      |> written(transaction, wanted)
-      |> Repo.insert!()
-
+    with {:ok, _transaction} <-
+           Ledger.create_transaction(scope, new_attrs(scope, link, wanted),
+             led_by: {:depot_transaction, depot_transaction_id}
+           ) do
       :ok
     end
   end
 
-  defp write(scope, _link, _id, linked, wanted) do
-    written = %{
-      account_id: linked.written_account_id,
-      amount: linked.written_amount,
-      date: linked.written_date,
-      payee_id: linked.written_payee_id
-    }
-
+  defp write(scope, _link, depot_transaction_id, linked, wanted) do
     attrs =
       wanted
       |> Map.take([:account_id, :amount, :date])
       |> Map.merge(payee_attrs(scope, wanted.payee))
-      |> Enum.reject(fn {field, value} -> Map.get(written, field) == value end)
+      |> Enum.reject(fn {field, value} -> Map.get(linked, field) == value end)
       |> Map.new()
 
-    if attrs == %{}, do: :ok, else: rewrite(scope, linked, attrs, wanted)
+    if attrs == %{},
+      do: :ok,
+      else: rewrite(scope, linked, attrs, opts(depot_transaction_id))
   end
 
-  defp rewrite(scope, linked, attrs, wanted) do
-    with {:ok, transaction} <-
-           Ledger.update_transaction(scope, linked.transaction, attrs, reconciled: :confirmed) do
-      linked |> written(transaction, wanted) |> Repo.insert_or_update!()
-      :ok
-    end
-  end
-
-  defp written(linked, transaction, wanted) do
-    Changeset.change(linked,
-      transaction_id: transaction.id,
-      written_account_id: wanted.account_id,
-      written_amount: wanted.amount,
-      written_date: wanted.date,
-      written_payee_id: transaction.payee_id
-    )
+  defp rewrite(scope, linked, attrs, opts) do
+    with {:ok, _transaction} <- Ledger.update_transaction(scope, linked, attrs, opts), do: :ok
   end
 
   defp new_attrs(scope, link, wanted) do

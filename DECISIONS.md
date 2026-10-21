@@ -72,7 +72,7 @@ Accepted, 2026-10-15; partly superseded by 0017, 2026-10-16
 
 ## 0006. Shared expenses are linked to the budget, not synced
 
-Accepted, 2026-10-15
+Accepted, 2026-10-15; superseded by 0020, 2026-10-21
 
 - **Context:** The budget owner's share of each expense belongs in the budget; with the Kasse and the budget in one
   database, a sync would only copy data the app already holds.
@@ -146,7 +146,7 @@ Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
 
 ## 0013. One Depot transaction per business event
 
-Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
+Accepted, 2026-10-16. From zipfelfolio, where it was decided first. Consequences amended by 0020, 2026-10-21.
 
 - **Context:** A purchase moves shares into a portfolio and cash out of an account at once; a transfer moves shares
   or cash between two of them.
@@ -193,7 +193,7 @@ Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
 
 ## 0017. A portfolio is a kind of account, not an area
 
-Accepted, 2026-10-16. Changes the three areas of 0005 into two (#56).
+Accepted, 2026-10-16. Changes the three areas of 0005 into two (#56). Superseded by 0020, 2026-10-21.
 
 - **Context:** With Budget and Depot as separate areas, one portfolio appeared as a Depot page, as part of a tracking
   account fed by `portfolio` and through its Verrechnungskonto, which is often the same bank account as a budget
@@ -207,7 +207,7 @@ Accepted, 2026-10-16. Changes the three areas of 0005 into two (#56).
 
 ## 0018. Depot cash flows are linked transactions in the budget
 
-Accepted, 2026-10-16 (#56).
+Accepted, 2026-10-16 (#56); superseded by 0020, 2026-10-21
 
 - **Context:** Money moved into a portfolio left a budget account uncategorised, and the daily value change of the
   portfolio's account booked it again, mixed with the market movement.
@@ -232,3 +232,26 @@ Accepted, 2026-10-16 (#73).
 - **Consequences:** Each context must allow the system scope explicitly where it is valid, and the Kasse refuses a
   signed-in user who is not a person itself. Budget tables get their owner's `user_id`, so 0007's "budget tables
   carry no user" no longer holds, while the budget keeps one owner.
+
+## 0020. One account book: the Kasse and the Depot write their money into the Ledger
+
+Accepted, 2026-10-21 (#94). Replaces 0006, 0017 and 0018, amends the consequences of 0013.
+
+- **Context:** The shared-expenses account booked only the owner's shares (0006) and drifted from their Kasse balance,
+  a Verrechnungskonto that is a budget account existed twice, kept in step by the Depot link (0018), and each
+  portfolio was a tracking account pulled to its value every day (0017). Each link kept its own table of what it
+  wrote, and only the register stopped edits of what the links lead.
+- **Decision:** The Ledger holds all money: every account in Finanzen is a budget or a tracking account, a
+  Verrechnungskonto becomes one of them, no account books a portfolio's value, and Vermögen is the Ledger's net
+  worth plus the value of the holdings. An expense writes paid minus share into the shared-expenses account, a
+  reimbursement is a transfer between it and a budget account, and a Depot transaction writes its cash side. Each
+  such Ledger transaction carries one reference to its source, and the Ledger itself refuses changes to amount,
+  date, account, payee and transfer counterpart, and deleting it, from anyone but that source; category, memo,
+  cleared state and approval stay the register's, and a change of the Kasse category writes the mapped category
+  again. Three rules of 0018 stay: investing is budget spending, inflows go to Ready to Assign, and the Depot link
+  writes nothing into budget accounts dated before its start date; the Kasse link writes what is dated before its
+  start date only when it is entered after the link was switched on. The areas of the UI stay Finanzen and Kasse.
+- **Consequences:** Every balance exists once and the shared-expenses account shows the owner's Kasse balance. A
+  Depot transaction stays one business event (0013), but its cash side is a Ledger transaction, or a transfer pair,
+  that every Depot write keeps in step in its database transaction. A bank line matched to a led transaction leaves
+  its date as the source wrote it, and adding a source means a reference column on `transactions`.

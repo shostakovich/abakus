@@ -7,7 +7,6 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
   import AbakusWeb.PageText
 
   alias Abakus.Kasse.BudgetLink
-  alias Abakus.Kasse.BudgetLink.LinkedTransaction
   alias Abakus.Ledger.Transaction
   alias Abakus.Repo
   alias Setzkasten.Test.Confirm
@@ -36,8 +35,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
     expense =
       create!(equal(c.h, "Wocheneinkauf", 8742, "2026-10-12", c.h.ben, [c.h.anna, c.h.ben]))
 
-    link = Repo.get_by!(LinkedTransaction, expense_id: expense.id)
-    %{expense: expense, transaction: Repo.get!(Transaction, link.transaction_id)}
+    %{expense: expense, transaction: Repo.get_by!(Transaction, kasse_expense_id: expense.id)}
   end
 
   describe "the budget page" do
@@ -103,8 +101,8 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       refute has_element?(view, "#budget-link-form")
 
       for {expense, amount} <- [{weekly, -4371}, {cinema, -1200}] do
-        linked = Repo.get_by!(LinkedTransaction, expense_id: expense.id)
-        assert %{amount: ^amount, approved: false} = Repo.get!(Transaction, linked.transaction_id)
+        assert %{amount: ^amount, approved: false} =
+                 Repo.get_by!(Transaction, kasse_expense_id: expense.id)
       end
     end
 

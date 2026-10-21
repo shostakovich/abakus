@@ -5,7 +5,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
   import Abakus.KasseFixtures
 
   alias Abakus.Kasse.{BudgetLink, Expenses}
-  alias Abakus.Kasse.BudgetLink.{Link, LinkedTransaction}
+  alias Abakus.Kasse.BudgetLink.Link
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
 
@@ -23,12 +23,11 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
   defp expense!(h, title, cents, date, payer \\ nil),
     do: create!(equal(h, title, cents, date, payer || h.ben, [h.anna, h.ben]))
 
-  defp linked(expense) do
-    case Repo.get_by(LinkedTransaction, expense_id: expense.id) do
-      nil -> nil
-      link -> Repo.get!(Transaction, link.transaction_id)
-    end
-  end
+  defp linked(expense),
+    do:
+      Repo.one(
+        from t in Transaction, where: t.kasse_expense_id == ^expense.id and is_nil(t.deleted_at)
+      )
 
   describe "switching on" do
     test "gives every non-reimbursement expense that changes the owner's balance a linked transaction",

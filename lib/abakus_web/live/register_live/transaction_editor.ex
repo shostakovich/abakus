@@ -12,10 +12,9 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   payees, the other open accounts above the payees, in a split's subtransactions too. A payee suggests its last
   category, and a suggestion goes again when the payee changes; a chosen category stays. A transfer between a budget and
   a tracking account takes a category and suggests the one last used between the two. Changing or deleting a reconciled
-  transaction, or one whose counterpart is, asks first. A transaction linked to a Kasse expense (`expense_id`) links to
-  it and keeps account, date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006).
-  So does whatever the Depot booked (`source: :depot`): a value change, or a transaction linked to a Depot transaction
-  (ADR 0018).
+  transaction, or one whose counterpart is, asks first. A transaction its source leads (`Ledger.led_by/2`, ADR 0020)
+  links to its Kasse expense or Depot transaction and keeps what the source leads (`Ledger.led_fields/0`); it is
+  neither split nor deleted here. So does a value change the Depot booked.
 
   Tells its LiveView `{TransactionEditor, :done, message}` once the transaction is saved or deleted; the events
   `cancel_edit` (Cancel, Escape) go to the LiveView itself.
@@ -23,8 +22,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   use AbakusWeb, :live_component
 
   alias Abakus.{Categories, Ledger, Names}
-  alias Abakus.Depot.BudgetLink, as: DepotLink
-  alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.Money
   alias AbakusWeb.{AccountGroups, CategoryOptions, TransactionForm}
@@ -947,17 +944,23 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       else: {:ok, load(socket, key)}
   end
 
-  # Account, date, amount and payee are another area's.
-  defp assign_fixed(%{assigns: assigns} = socket) do
-    depot = depot(assigns.current_scope, assigns.transaction)
-    assign(socket, depot: depot, fixed: depot != nil or assigns.expense_id != nil)
+  defp assign_fixed(%{assigns: %{current_scope: scope, transaction: transaction}} = socket) do
+    led_by = transaction && Ledger.led_by(scope, transaction)
+    depot = depot(transaction, led_by)
+
+    assign(socket,
+      expense_id: expense_id(led_by),
+      depot: depot,
+      fixed: led_by != nil or depot != nil
+    )
   end
 
-  defp depot(scope, %Transaction{source: :depot, id: id}) do
-    if MapSet.member?(DepotLink.linked_ids(scope, [id]), id), do: :linked, else: :value_change
-  end
+  defp expense_id({:kasse_expense, id}), do: id
+  defp expense_id(_led_by), do: nil
 
-  defp depot(_scope, _transaction), do: nil
+  defp depot(_transaction, {:depot_transaction, _id}), do: :linked
+  defp depot(%Transaction{source: :depot}, nil), do: :value_change
+  defp depot(_transaction, _led_by), do: nil
 
   defp load(socket, key) do
     %{transaction: transaction, accounts: accounts} = socket.assigns
@@ -1222,7 +1225,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     do: {:error, "Eine Buchung aus der Kasse lässt sich nicht aufteilen."}
 
   defp register_fields(attrs, _assigns),
-    do: {:ok, Map.take(attrs, BudgetLink.register_fields())}
+    do: {:ok, Map.drop(attrs, [:payee_name | Ledger.led_fields()])}
 
   defp write(current_scope, nil, attrs, _opts),
     do: Ledger.create_transaction(current_scope, attrs)

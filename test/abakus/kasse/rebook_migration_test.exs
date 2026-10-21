@@ -5,6 +5,7 @@ defmodule Abakus.Kasse.RebookMigrationTest do
 
   @moduletag :tmp_dir
   @before 20_261_017_220_000
+  @rebook 20_261_021_120_000
   @now "'2026-10-01T10:00:00.000000Z'"
 
   setup %{tmp_dir: dir} do
@@ -147,7 +148,7 @@ defmodule Abakus.Kasse.RebookMigrationTest do
     expense!(8, "Deleted", "2026-03-07", 1, 2000, [{1, 1000}, {2, 1000}])
     linked!(8, -1000, deleted_at: "2026-03-08T10:00:00.000000Z")
 
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @rebook)
 
     assert transaction(1) == {1000, false}
     assert transaction(9) == nil
@@ -195,7 +196,7 @@ defmodule Abakus.Kasse.RebookMigrationTest do
     linked!(1, -1000)
     expense!(2, "🛒 MARKET", "2026-02-11", 1, 1000, [{2, 1000}])
 
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @rebook)
 
     assert transaction(1) == {1000, false}
     assert transaction(2) == {1000, false}

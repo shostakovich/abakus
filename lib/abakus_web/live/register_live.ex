@@ -34,7 +34,6 @@ defmodule AbakusWeb.RegisterLive do
   use AbakusWeb, :live_view
 
   alias Abakus.Depot.BudgetFeed
-  alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.LocalTime
@@ -627,7 +626,7 @@ defmodule AbakusWeb.RegisterLive do
 
   defp refused_delete(scope, transactions) do
     cond do
-      BudgetLink.expense_ids(scope, Enum.map(transactions, & &1.id)) != %{} ->
+      Enum.any?(transactions, &match?({:kasse_expense, _id}, Ledger.led_by(scope, &1))) ->
         TransactionEditor.linked_delete()
 
       Enum.any?(transactions, &match?(%Transaction{source: :depot}, &1)) ->
@@ -690,10 +689,7 @@ defmodule AbakusWeb.RegisterLive do
         account: assigns.account,
         accounts: assigns.accounts,
         columns: assigns.columns,
-        today: assigns.today,
-        expense_id:
-          transaction &&
-            BudgetLink.expense_ids(assigns.current_scope, [transaction.id])[transaction.id]
+        today: assigns.today
       }
     }
   end

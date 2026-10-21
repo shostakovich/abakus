@@ -33,7 +33,7 @@ The context is `Abakus.Users` (an "account" is a bank account here):
   mails a sign-in link at once: `mix abakus.invite EMAIL`, in the container
   `bin/abakus eval 'Abakus.Release.invite("EMAIL")'`. The first user invited owns the budget
   ([ADR 0007](../DECISIONS.md))
-- Areas ([ADR 0017](../DECISIONS.md)): Finanzen (the budget under `/budget`, the Depot under `/depot`) and the
+- Areas ([ADR 0020](../DECISIONS.md)): Finanzen (the budget under `/budget`, the Depot under `/depot`) and the
   Kasse (`/kasse`), each with its own sidebar and dock on phones; a user sees only the areas they may use (the
   budget's pages: its owner; the Depot's: the budget owner and every user with a portfolio of their own; the
   Kasse: its active participants, [ADR 0008](../DECISIONS.md)), and anyone else gets 404 on their pages.
@@ -106,9 +106,9 @@ the rows of their caller's user (ADR 0019).
 - **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
   `reconciled`; UI "Vorgemerkt", "Gebucht", "Abgeglichen"), approved (manual entries by default, imports not),
   transfer counterpart (a transaction, or for a split's transfer its subtransaction), source (`manual`, `ynab`,
-  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` a share of a Kasse expense, `depot` a value change), matched transaction (see match
-  proposals), deleted at (soft delete; deleted transactions cannot be changed, only
-  moved with their category into another). The register is what counts: transactions not deleted and no match
+  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` a share of a Kasse expense, `depot` a value change), source reference (the Kasse expense
+  or Depot transaction that leads it, set once), matched transaction (see match proposals), deleted at (soft delete;
+  deleted transactions cannot be changed, only moved with their category into another). The register is what counts: transactions not deleted and no match
   proposal (`Ledger.in_register/1`).
 - **Reconciled lock**: the Ledger refuses any change that alters a reconciled transaction ("ist abgeglichen"),
   leaving the reconciled state included, whether made on it directly or through a transfer: its counterpart's or a
@@ -116,6 +116,10 @@ the rows of their caller's user (ADR 0019).
   transfer, subtransaction removed, turned into a split) or deleted with it. The caller passes
   `reconciled: :confirmed` to `update_transaction/4`, `delete_transaction/3`, `accept_match/3` or
   `recategorize/4` (deleting a category) after asking; the UI asks first.
+- **Source lock** ([ADR 0020](../DECISIONS.md)): the Ledger refuses changes to amount, date, account, payee and
+  transfer counterpart of a transaction with a source reference, or of its counterpart, and deleting it, unless the
+  caller passes that source as `led_by:`; a match accepted into it keeps its date. The register asks the Ledger
+  (`led_by/2`, `led_fields/0`) and offers only the rest.
 - **Transfers**: a transaction or subtransaction is a transfer when its payee is a transfer payee; never to its own
   account, and a split is none as a whole. The Ledger alone creates and keeps the counterpart in the payee's
   account (amount negated, same date and memo, payee = the other account's transfer payee; cleared and approved per
@@ -234,7 +238,7 @@ the way YNAB tools post market values:
   change taking it to 0
 - Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus: once the
   budget owner links the Depot to the budget under Einstellungen › Depots (start date, category for purchases;
-  ADR 0018), each flow between a portfolio and a Verrechnungskonto that is a budget account is a linked transaction
+  ADR 0020), each flow between a portfolio and a Verrechnungskonto that is a budget account is a linked transaction
   there, led by the Depot (`Abakus.Depot.BudgetLink`): purchases and cash moved into a portfolio's cash are outflows
   in that category, sales and cash moved back inflows to Ready to Assign, all transfers to the portfolio's account;
   dividends are inflows to Ready to Assign from the security. Depot transactions before the start date stay in the

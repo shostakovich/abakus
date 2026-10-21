@@ -17,6 +17,11 @@ defmodule Abakus.Ledger do
   (a counterpart kept in step, moved, released or deleted) or by moving its category (`recategorize/4`), unless the
   caller passes `reconciled: :confirmed` after asking. Leaving the reconciled state is a change too.
 
+  A transaction written by another area refers to its source (`led_by/2`), which leads amount, date, account, payee
+  and transfer counterpart (`led_fields/0`): the Ledger refuses changes to them, and deleting it, unless the caller
+  passes `led_by:` with that source. Both sides of a transfer are led by the source of either. Category, memo,
+  cleared state and approval stay anyone's.
+
   A match proposal (an import with `matched_transaction_id`, see `find_matches/4`) counts nowhere until
   `accept_match/3` merges it into the existing transaction or `reject_match/2` approves it as a transaction of its
   own. A transaction (or counterpart) cannot move into an account that has one of its external ids from the same
@@ -642,15 +647,19 @@ defmodule Abakus.Ledger do
   remembered as their payees' last categories.
 
   Instead of `payee_id`, `payee_name` names the payee, also in a subtransaction: the regular payee with that lookup
-  key, else a new one; a blank name means none. A refused write creates no payee.
+  key, else a new one; a blank name means none. A refused write creates no payee. `led_by:` names the source the
+  transaction refers to.
   """
-  def create_transaction(%Scope{} = scope, attrs) do
+  def create_transaction(%Scope{} = scope, attrs, opts \\ []) do
+    references = if led_by = opts[:led_by], do: Transaction.source_reference(led_by), else: %{}
+
     Repo.transact(fn ->
       with {:ok, attrs} <- put_payee_by_name(scope, attrs) do
         %Transaction{user_id: user_id(scope)}
+        |> struct!(references)
         |> Transaction.changeset(attrs)
         |> put_default_approval()
-        |> write(&Repo.insert/1, [])
+        |> write(&Repo.insert/1, opts)
       end
     end)
   end
@@ -719,8 +728,8 @@ defmodule Abakus.Ledger do
   Updates a transaction as stored (the struct only names it) and its counterparts. A deleted transaction cannot
   be changed; the counterpart of a split's subtransaction changes only its own fields (cleared, approved,
   category), the rest in its split. When the account changes, the origins move along. A change that alters a
-  reconciled transaction or counterpart needs `reconciled: :confirmed`. The payee may be given by name, as for
-  `create_transaction/2`.
+  reconciled transaction or counterpart needs `reconciled: :confirmed`, one of the `led_fields/0` of a led
+  transaction its source (`led_by:`). The payee may be given by name, as for `create_transaction/3`.
   """
   def update_transaction(%Scope{} = scope, %Transaction{id: id}, attrs, opts \\ []) do
     Repo.transact(fn ->
@@ -772,6 +781,7 @@ defmodule Abakus.Ledger do
     |> Matches.validate()
     |> validate_accounts(context)
     |> validate_reconciled(context.confirmed?)
+    |> validate_led(context)
     |> save(save, context)
   end
 
@@ -781,6 +791,7 @@ defmodule Abakus.Ledger do
     user_id = Changeset.get_field(changeset, :user_id)
     account_id = Changeset.get_field(changeset, :account_id)
     counterpart_ids = Enum.map(sides, &Changeset.get_field(&1, :transfer_transaction_id))
+    counterparts = Transfers.by_id(counterpart_ids)
 
     %{
       user_id: user_id,
@@ -790,8 +801,10 @@ defmodule Abakus.Ledger do
           user_id,
           Enum.map(sides, &Changeset.get_field(&1, :payee_id))
         ),
-      counterparts: Transfers.by_id(counterpart_ids),
-      confirmed?: Keyword.get(opts, :reconciled) == :confirmed
+      counterparts: counterparts,
+      confirmed?: Keyword.get(opts, :reconciled) == :confirmed,
+      led_by: source(changeset.data, counterparts[changeset.data.transfer_transaction_id]),
+      writer: opts[:led_by]
     }
   end
 
@@ -855,6 +868,46 @@ defmodule Abakus.Ledger do
   end
 
   defp validate_reconciled(changeset, _confirmed?), do: changeset
+
+  @led_fields [:account_id, :date, :amount, :payee_id, :subtransactions]
+
+  @doc "The fields a transaction's source leads (`led_by/2`); `payee_name` gives the payee too."
+  def led_fields, do: @led_fields
+
+  @doc """
+  The source that leads a transaction, its own or its transfer counterpart's: `{:kasse_expense, id}`,
+  `{:depot_transaction, id}` or nil.
+  """
+  def led_by(%Scope{} = scope, %Transaction{id: id}) do
+    transaction = Repo.get!(owned(Transaction, scope), id)
+
+    counterpart =
+      transaction.transfer_transaction_id &&
+        Repo.get(Transaction, transaction.transfer_transaction_id)
+
+    source(transaction, counterpart)
+  end
+
+  defp source(transaction, counterpart),
+    do: Transaction.led_by(transaction) || (counterpart && Transaction.led_by(counterpart))
+
+  defp validate_led(changeset, %{led_by: led_by, writer: writer})
+       when is_nil(led_by) or led_by == writer,
+       do: changeset
+
+  defp validate_led(changeset, %{led_by: led_by}) do
+    Enum.reduce(@led_fields, changeset, fn field, changeset ->
+      if Map.has_key?(changeset.changes, field),
+        do: Changeset.add_error(changeset, field, follows(led_by)),
+        else: changeset
+    end)
+  end
+
+  defp follows({:kasse_expense, _id}), do: "folgt der Ausgabe in der Kasse"
+  defp follows({:depot_transaction, _id}), do: "folgt der Buchung im Depot"
+
+  defp deleted_with({:kasse_expense, _id}), do: "wird mit ihrer Ausgabe in der Kasse gelöscht"
+  defp deleted_with({:depot_transaction, _id}), do: "wird mit ihrer Buchung im Depot gelöscht"
 
   @origin_taken "enthält diese Buchung schon aus derselben Quelle"
   @counterpart_origin_taken "führt in ein Konto, das diese Buchung schon aus derselben Quelle enthält"
@@ -950,39 +1003,55 @@ defmodule Abakus.Ledger do
   Soft-deletes a transaction with every transfer counterpart: deleting either side of a transfer deletes both,
   deleting a split deletes the counterparts of its subtransactions. The counterpart of a subtransaction is
   deleted with its split, so deleting it on its own is refused. Deleting a deleted transaction changes nothing.
-  Deleting a reconciled transaction, or one with a reconciled counterpart, needs `reconciled: :confirmed`.
+  Deleting a reconciled transaction, or one with a reconciled counterpart, needs `reconciled: :confirmed`, deleting a
+  led one its source (`led_by:`).
   """
   def delete_transaction(%Scope{} = scope, %Transaction{id: id}, opts \\ []) do
     confirmed? = Keyword.get(opts, :reconciled) == :confirmed
 
     Repo.transact(fn ->
       transaction = Transaction |> owned(scope) |> Repo.get!(id) |> Repo.preload(:subtransactions)
-      ids = pair_ids(transaction)
 
-      cond do
-        transaction.deleted_at ->
-          {:ok, transaction}
-
-        transaction.transfer_subtransaction_id ->
-          delete_failed(
-            transaction,
-            :transfer_subtransaction_id,
-            "wird mit ihrer Aufteilung gelöscht"
-          )
-
-        not confirmed? and transaction.cleared == :reconciled ->
-          delete_failed(transaction, :cleared, @reconciled, reconciled: true)
-
-        not confirmed? and Transfers.reconciled?(ids) ->
-          delete_failed(transaction, pair_field(transaction), @counterpart_reconciled,
-            reconciled: true
-          )
-
-        true ->
-          Transfers.soft_delete(ids)
-          {:ok, Transaction |> Repo.get!(id) |> Repo.preload(:subtransactions)}
-      end
+      with :ok <- check_writer(scope, transaction, opts[:led_by]),
+           do: soft_delete(transaction, confirmed?)
     end)
+  end
+
+  defp check_writer(_scope, %Transaction{deleted_at: %DateTime{}}, _writer), do: :ok
+
+  defp check_writer(scope, transaction, writer) do
+    case led_by(scope, transaction) do
+      led_by when is_nil(led_by) or led_by == writer -> :ok
+      led_by -> delete_failed(transaction, :led_by, deleted_with(led_by))
+    end
+  end
+
+  defp soft_delete(transaction, confirmed?) do
+    ids = pair_ids(transaction)
+
+    cond do
+      transaction.deleted_at ->
+        {:ok, transaction}
+
+      transaction.transfer_subtransaction_id ->
+        delete_failed(
+          transaction,
+          :transfer_subtransaction_id,
+          "wird mit ihrer Aufteilung gelöscht"
+        )
+
+      not confirmed? and transaction.cleared == :reconciled ->
+        delete_failed(transaction, :cleared, @reconciled, reconciled: true)
+
+      not confirmed? and Transfers.reconciled?(ids) ->
+        delete_failed(transaction, pair_field(transaction), @counterpart_reconciled,
+          reconciled: true
+        )
+
+      true ->
+        Transfers.soft_delete(ids)
+        {:ok, Transaction |> Repo.get!(transaction.id) |> Repo.preload(:subtransactions)}
+    end
   end
 
   @doc "Deletes several transactions with `delete_transaction/3`, all or none: the first refusal stops."
@@ -1009,9 +1078,9 @@ defmodule Abakus.Ledger do
 
   @doc """
   Accepts a match proposal: the existing transaction survives with its id, payee and amount, keeps its category
-  and memo where it has them (else takes the import's), takes the import's date (unless a split owns it) and
-  cleared state, is approved and gets the import's origins; the proposal is removed. The rules for a new proposal
-  are checked again, so a transaction reconciled meanwhile refuses it. `opts` go to `update_transaction/4`.
+  and memo where it has them (else takes the import's), takes the import's date (unless a split or a source owns
+  it) and cleared state, is approved and gets the import's origins; the proposal is removed. The rules for a new
+  proposal are checked again, so a transaction reconciled meanwhile refuses it. `opts` go to `update_transaction/4`.
   """
   def accept_match(%Scope{} = scope, %Transaction{id: id}, opts \\ []) do
     Repo.transact(fn ->
@@ -1020,15 +1089,14 @@ defmodule Abakus.Ledger do
            :ok <- check_match(proposal, existing),
            :ok <- take_origins(proposal, existing) do
         Repo.delete!(proposal)
-
-        update_transaction(
-          scope,
-          existing,
-          Matches.merged(Repo.preload(existing, :subtransactions), proposal),
-          opts
-        )
+        update_transaction(scope, existing, merged(scope, existing, proposal), opts)
       end
     end)
+  end
+
+  defp merged(scope, existing, proposal) do
+    merged = Matches.merged(Repo.preload(existing, :subtransactions), proposal)
+    if led_by(scope, existing), do: Map.drop(merged, @led_fields), else: merged
   end
 
   @doc "Accepts several match proposals with `accept_match/3`, all or none: the first refusal stops."

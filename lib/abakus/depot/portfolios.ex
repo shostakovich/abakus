@@ -1060,9 +1060,10 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   defp remove_transaction(scope, transaction) do
-    Repo.delete!(transaction, allow_stale: true)
-    unused = drop_unused_receipt(transaction.receipt_id)
-    with :ok <- BudgetLink.sync(scope), do: {:ok, unused}
+    with :ok <- BudgetLink.release(scope, transaction) do
+      Repo.delete!(transaction, allow_stale: true)
+      {:ok, drop_unused_receipt(transaction.receipt_id)}
+    end
   end
 
   defp check_editable(scope, transaction) do
