@@ -2,8 +2,7 @@ defmodule Abakus.Depot.Portfolios.Portfolio do
   @moduledoc """
   A securities account; purchases settle against its reference account by default, and its cash accounts hold its
   cash at the broker, both accounts in the Ledger. Its depot number, as the bank prints it, finds the portfolio of a
-  receipt; only its digits count. A portfolio of the budget owner is its `budget_account` in the budget
-  (`Abakus.Depot.BudgetFeed`).
+  receipt; only its digits count.
   """
   use Abakus.Schema
 
@@ -12,7 +11,6 @@ defmodule Abakus.Depot.Portfolios.Portfolio do
   schema "depot_portfolios" do
     belongs_to :user, Abakus.Users.User
     belongs_to :reference_account, Abakus.Ledger.Account
-    belongs_to :budget_account, Abakus.Ledger.Account
     field :name, :string
     field :note, :string
     field :retired, :boolean, default: false

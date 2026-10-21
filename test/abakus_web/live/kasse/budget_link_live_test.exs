@@ -16,7 +16,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
 
   setup %{conn: conn} do
     h = household()
-    account = account_fixture(name: "👫 Geteilt", kind: :cash, fed_by: :shared_expenses)
+    account = account_fixture(name: "👫 Geteilt", kind: :cash, shared_expenses: true)
     groceries = category_fixture(name: "🛒 Lebensmittel")
     treats = category_fixture(name: "🍷 Genuss")
 

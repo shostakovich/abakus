@@ -211,7 +211,7 @@ defmodule AbakusWeb.AccountDialog do
     socket
   end
 
-  # Closing has its own buttons; position and feeds are not the user's to set here.
+  # Closing has its own buttons; position and the shared-expenses mark are not the user's to set here.
   defp editable(params), do: Map.take(params, @editable)
 
   defp kind_options(%Account{id: nil}), do: options(AccountGroups.kinds())

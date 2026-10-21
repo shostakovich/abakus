@@ -51,9 +51,9 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   person's scope with `scope_of/1` from `Abakus.KasseFixtures`.
 - The budget: `Abakus.Ledger`, `Abakus.Categories` and `Abakus.FileImport` take `%Scope{}` and see only the rows
   with the user's `user_id` (ADR 0019); each user's Ready to Assign comes with its first use. What writes into it
-  from another area writes with the budget owner's user, whichever way it gets that scope: the Depot's budget feed
-  (`Scope.for_budget_owner/0`) and link (the caller's) and the Kasse's budget link (the linked person's,
-  `Scope.for_participant/1`). Tests get the owner's scope with `budget_scope/0` from `Abakus.DomainFixtures`.
+  from another area writes with the scope of the user whose Ledger it is: the Depot's cash side
+  (`Abakus.Depot.CashSide`) with the Depot user's own, the Kasse's budget link with the linked person's
+  (`Scope.for_participant/1`). Tests get the owner's scope with `budget_scope/0` from `Abakus.DomainFixtures`.
 - Exchange rates (`Abakus.ExchangeRates`, tables `exchange_rates`, `exchange_rate_runs`) are shared: one daily job
   loads the ECB rates, each area looks them up by its own rule, manual rates are the Kasse's only; its rule and the
   logged changes to manual rates live in `Abakus.Kasse.Rates`. Tests swap the source in `config/test.exs`
@@ -62,9 +62,9 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   the user's own data, except securities, prices and compositions, which all share. Outside
   services are behaviours swapped in `config/test.exs` (`Abakus.Depot.Fake…`); `:pdftotext` tests need poppler.
   Receipt files live in `receipts/` next to the database. Its accounts are the user's Ledger accounts, which hold
-  their balances; a portfolio's cash accounts are in `depot_cash_accounts`. Only `Abakus.Depot.BudgetFeed` (value
-  changes) writes to accounts fed by `portfolio`; `Abakus.Depot.CashSide` writes each Depot transaction's cash side
-  into its Ledger account in every Depot write's database transaction.
+  their balances; a portfolio's cash accounts are in `depot_cash_accounts`. `Abakus.Depot.CashSide` writes each Depot
+  transaction's cash side into its Ledger account in every Depot write's database transaction; nothing books a
+  portfolio's value, which Vermögen adds to the Ledger's net worth (`Abakus.Depot.Wealth`).
 - MCP (`Abakus.MCP`, `AbakusWeb.MCPPlug`, docs/MCP.md) lives outside the sign-in at `/mcp/<MCP_SECRET>`; tests go
   through `AbakusWeb.MCPCase`.
 - Dependencies: few and mature, each with a reason.

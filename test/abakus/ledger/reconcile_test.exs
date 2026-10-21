@@ -219,12 +219,12 @@ defmodule Abakus.Ledger.ReconcileTest do
                reload(adjustment)
     end
 
-    test "reconciles accounts fed by another app too" do
-      fed = account_fixture(kind: :checking, fed_by: :shared_expenses)
-      cleared(account_id: fed.id, amount: 1_000)
+    test "reconciles the shared-expenses account too" do
+      shared = account_fixture(kind: :checking, shared_expenses: true)
+      cleared(account_id: shared.id, amount: 1_000)
 
       assert {:ok, %{reconciled: 2, adjustment: %Transaction{amount: 1}}} =
-               Ledger.reconcile(budget_scope(), fed, today(1_001), adjust: 1)
+               Ledger.reconcile(budget_scope(), shared, today(1_001), adjust: 1)
     end
   end
 end

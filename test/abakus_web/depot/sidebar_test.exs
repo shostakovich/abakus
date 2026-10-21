@@ -1,11 +1,10 @@
 defmodule AbakusWeb.Depot.SidebarTest do
   use AbakusWeb.ConnCase
 
-  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
 
-  alias Abakus.Depot.{BudgetFeed, MarketData}
+  alias Abakus.Depot.MarketData
   alias Abakus.{DomainFixtures, Ledger, LocalTime, Repo}
   alias Abakus.Users.{Scope, User}
 
@@ -209,11 +208,8 @@ defmodule AbakusWeb.Depot.SidebarTest do
       assert lv |> element(sidebar_link(path)) |> render() =~ "1.100,00"
     end
 
-    test "shows a portfolio with the emoji of its account, under the section Depots", ctx do
-      portfolio = portfolio_fixture(ctx.owner, %{name: "Langfristig"})
-      :ok = BudgetFeed.sync_accounts()
-      account = Ledger.get_account!(budget_scope(), Repo.reload!(portfolio).budget_account_id)
-      {:ok, _account} = Ledger.update_account(budget_scope(), account, %{name: "📈 Langfristig"})
+    test "shows a portfolio with the emoji of its name, under the section Depots", ctx do
+      portfolio = portfolio_fixture(ctx.owner, %{name: "📈 Langfristig"})
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/budget")
       row = lv |> element("#side-depot-portfolio-#{portfolio.id}-sidebar") |> render()

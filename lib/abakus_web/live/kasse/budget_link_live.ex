@@ -29,12 +29,12 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
     scope = socket.assigns.current_scope
     account = BudgetLink.account(scope)
     choices = if account, do: [], else: BudgetLink.account_choices(scope)
-    fed = Enum.find(choices, &(&1.fed_by == :shared_expenses))
+    shared = Enum.find(choices, & &1.shared_expenses)
 
     assign(socket,
       account: account,
       account_options: Enum.map(choices, &{&1.name, &1.id}),
-      link_form: to_form(%{"account_id" => fed && fed.id}, as: :link)
+      link_form: to_form(%{"account_id" => shared && shared.id}, as: :link)
     )
   end
 

@@ -12,8 +12,8 @@ defmodule AbakusWeb.RegisterLive do
 
   Here transactions are approved (one, the selected or all), categorised (the selected) and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
-  `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
-  no manual entry and no reconcile, and a portfolio's account shows the Depots tabs as its Register tab.
+  `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. The shared-expenses account offers
+  no manual entry and no reconcile.
   Transactions linked to Kasse expenses are deleted only with their expense, those the Depot books not at all here.
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
@@ -33,12 +33,10 @@ defmodule AbakusWeb.RegisterLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Depot.BudgetFeed
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.LocalTime
   alias AbakusWeb.{AccountGroups, CategoryOptions}
-  alias AbakusWeb.Depot.Components, as: DepotComponents
   alias AbakusWeb.RegisterLive.{Balances, Components, Reconcile, Rows, TransactionEditor}
   alias Plug.Conn.Query
 
@@ -90,7 +88,6 @@ defmodule AbakusWeb.RegisterLive do
           </:actions>
         </.header>
         <Components.balances account={@account} balances={@balances} reconciling={!!@reconciling} />
-        <DepotComponents.depots_tabs :if={@portfolio} tab={:register} portfolio={@portfolio} />
         <Components.toolbar
           account={@account}
           manual={@manual}
@@ -124,7 +121,7 @@ defmodule AbakusWeb.RegisterLive do
           empty_hint={empty_hint(@accounts)}
         />
         <Components.load_more :if={@count > length(@rows)} />
-        <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
+        <Components.legend />
         <Components.bulk
           selected={if @editor, do: [], else: @selection}
           categories={@categories || []}
@@ -215,7 +212,7 @@ defmodule AbakusWeb.RegisterLive do
 
   defp load(socket, :all) do
     socket
-    |> assign(scope: :all, account: nil, portfolio: nil, selected: MapSet.new(), editor: nil)
+    |> assign(scope: :all, account: nil, selected: MapSet.new(), editor: nil)
     |> assign(reconcile: nil, reconciling: nil)
   end
 
@@ -224,7 +221,6 @@ defmodule AbakusWeb.RegisterLive do
 
     socket
     |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
-    |> assign(:portfolio, BudgetFeed.portfolio(socket.assigns.current_scope, account))
     |> assign(reconcile: nil, reconciling: nil)
   end
 
@@ -629,7 +625,7 @@ defmodule AbakusWeb.RegisterLive do
       Enum.any?(transactions, &match?({:kasse_expense, _id}, Ledger.led_by(scope, &1))) ->
         TransactionEditor.linked_delete()
 
-      Enum.any?(transactions, &match?(%Transaction{source: :depot}, &1)) ->
+      Enum.any?(transactions, &match?({:depot_transaction, _id}, Ledger.led_by(scope, &1))) ->
         TransactionEditor.depot_delete()
 
       true ->

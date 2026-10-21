@@ -487,10 +487,10 @@ defmodule Abakus.Ledger do
 
   @doc """
   Net worth at the end of each day of `range`, as `[{date, cents}]`: the balance of all accounts, budget and
-  tracking, but those closed with money left in them.
+  tracking, but those closed with money left in them, unless their ids are in `kept`.
   """
-  def net_worth(%Scope{} = scope, %Date.Range{first: first, last: last} = range) do
-    open = counted_in_net_worth(scope)
+  def net_worth(%Scope{} = scope, %Date.Range{first: first, last: last} = range, kept \\ []) do
+    open = counted_in_net_worth(scope, kept)
 
     opening =
       Repo.one(from t in open, where: t.date < ^first, select: coalesce(sum(t.amount), 0))
@@ -512,15 +512,15 @@ defmodule Abakus.Ledger do
     |> elem(0)
   end
 
-  @doc "The date of the first transaction that counts toward net worth, nil without any."
-  def first_open_date(%Scope{} = scope),
-    do: Repo.one(from t in counted_in_net_worth(scope), select: min(t.date))
+  @doc "The date of the first transaction that counts toward net worth (see `net_worth/3`), nil without any."
+  def first_open_date(%Scope{} = scope, kept \\ []),
+    do: Repo.one(from t in counted_in_net_worth(scope, kept), select: min(t.date))
 
-  defp counted_in_net_worth(scope) do
+  defp counted_in_net_worth(scope, kept) do
     left_with_money =
       from t in in_register(scope),
         join: a in assoc(t, :account),
-        where: a.closed,
+        where: a.closed and a.id not in ^kept,
         group_by: t.account_id,
         having: sum(t.amount) != 0,
         select: t.account_id

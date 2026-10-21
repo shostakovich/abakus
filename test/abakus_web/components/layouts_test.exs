@@ -90,7 +90,9 @@ defmodule AbakusWeb.LayoutsTest do
         ],
         scope: %Scope{user: %User{email: "kim@example.com", budget_owner: true}, depot: true},
         sidebar: %{
-          portfolios: [%{portfolio: %Portfolio{id: 7, name: "Langfristig"}, value: 100}],
+          portfolios: [
+            %{portfolio: %Portfolio{id: 7, name: "Langfristig"}, value: 100, cash_account_ids: []}
+          ],
           inbox: 0
         }
       }

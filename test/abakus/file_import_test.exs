@@ -153,12 +153,11 @@ defmodule Abakus.FileImportTest do
              ]) == {:error, "Zwei Konten der Datei gehen nicht in dasselbe Konto."}
     end
 
-    test "refuses accounts fed by another app and closed ones" do
+    test "refuses the shared-expenses account and closed ones" do
       statement = statement("girokonto_2026-09.ofx")
 
       for attrs <- [
-            %{fed_by: :shared_expenses},
-            %{fed_by: :portfolio, kind: :tracking},
+            %{shared_expenses: true},
             %{closed: true}
           ] do
         account = account_fixture(attrs)
@@ -282,11 +281,10 @@ defmodule Abakus.FileImportTest do
   end
 
   describe "accounts/1 and linked_account/2" do
-    test "offer the open accounts that are not fed by another app", %{giro: giro} do
+    test "offer the open accounts but the shared-expenses account", %{giro: giro} do
       cash = account_fixture(kind: :cash)
       depot = account_fixture(kind: :tracking)
-      account_fixture(fed_by: :shared_expenses)
-      account_fixture(kind: :tracking, fed_by: :portfolio)
+      account_fixture(shared_expenses: true)
       account_fixture(closed: true)
 
       assert Enum.map(FileImport.accounts(budget_scope()), & &1.id) == [

@@ -104,5 +104,14 @@ defmodule AbakusWeb.Depot.BudgetLinkTest do
     end
 
     refute has_element?(view, "#tx-delete")
+
+    view |> with_target("#tx-editor") |> render_click("delete", %{})
+    assert has_element?(view, "#tx-error", "bucht das Depot")
+
+    render_click(view, "clear_selection", %{})
+    render_click(view, "select", %{"id" => "#{outflow.id}"})
+    render_click(view, "delete_selected", %{})
+    assert has_element?(view, "#flash-error", "bucht das Depot")
+    refute Repo.reload!(outflow).deleted_at
   end
 end

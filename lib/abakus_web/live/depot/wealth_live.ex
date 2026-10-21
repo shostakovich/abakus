@@ -1,16 +1,15 @@
 defmodule AbakusWeb.Depot.WealthLive do
   @moduledoc """
   „Vermögen“: net worth with its curve, the Depot's returns and dividends, and the portfolios. For
-  the budget owner net worth is the Ledger's, all open budget and tracking accounts, and its curve
-  shows the Depot's value on the days before the budget's first, see `Abakus.Depot.Wealth`; for
-  anyone else the value of their portfolios and Verrechnungskonten.
+  the budget owner net worth is the money in all accounts plus the value of the holdings, see
+  `Abakus.Depot.Wealth`; for anyone else the value of their portfolios and Verrechnungskonten.
   """
   use AbakusWeb, :depot_live_view
 
   import AbakusWeb.Depot.DividendComponents
 
   alias Abakus.Depot.{Portfolios, Wealth}
-  alias Abakus.{Format, Ledger, LocalTime}
+  alias Abakus.{Format, LocalTime}
   alias Abakus.Money
   alias AbakusWeb.Areas
   alias AbakusWeb.Depot.{Benchmark, Periods}
@@ -98,10 +97,9 @@ defmodule AbakusWeb.Depot.WealthLive do
       <.chart_card
         id="history"
         title="Wertentwicklung"
-        subtitle={depot_note(@depot_only)}
         hook="NetWorthChart"
         height={:lg}
-        summary={chart_label(@period, @budget?, @benchmark_shown && @benchmark, @depot_only)}
+        summary={chart_label(@period, @budget?, @benchmark_shown && @benchmark)}
         class="mt-4 md:mt-6"
       >
         <:legend>
@@ -237,30 +235,15 @@ defmodule AbakusWeb.Depot.WealthLive do
   defp period_text(:one_year), do: "des letzten Jahres"
   defp period_text(:max), do: "seit der ersten Buchung"
 
-  defp chart_label(period, true = _budget?, _benchmark, nil = _depot_only),
-    do: "Vermögen aller offenen Konten #{period_text(period)}"
+  defp chart_label(period, true = _budget?, _benchmark),
+    do: "Vermögen aus Konten und Wertpapieren #{period_text(period)}"
 
-  defp chart_label(period, true = _budget?, _benchmark, :all),
-    do: "Vermögen der Depots #{period_text(period)}"
-
-  defp chart_label(period, true = _budget?, _benchmark, {:before, first}),
-    do:
-      "Vermögen #{period_text(period)}, bis #{Format.date(Date.add(first, -1))} der Depots, " <>
-        "ab #{Format.date(first)} aller offenen Konten"
-
-  defp chart_label(period, false = _budget?, %{security: security}, _depot_only),
+  defp chart_label(period, false = _budget?, %{security: security}),
     do:
       "Vermögen, investiertes Kapital und Schattendepot in #{security.name} #{period_text(period)}"
 
-  defp chart_label(period, false = _budget?, _hidden, _depot_only),
+  defp chart_label(period, false = _budget?, _hidden),
     do: "Vermögen und investiertes Kapital #{period_text(period)}"
-
-  defp depot_note(nil), do: nil
-  defp depot_note(:all), do: "Nur Depots, solange das Budget keine Buchungen hat."
-
-  defp depot_note({:before, first}),
-    do:
-      "Bis #{Format.date(Date.add(first, -1))} nur Depots, ab #{Format.date(first)} alle Konten."
 
   defp period_label(period), do: Periods.label(@periods, period)
 
@@ -307,19 +290,15 @@ defmodule AbakusWeb.Depot.WealthLive do
       benchmark: if(!budget?, do: overview.benchmark),
       net_worth: wealth.net_worth,
       change: change,
-      change_percent: change_percent(change, wealth.net_worth_yesterday),
-      depot_only: wealth.depot_only
+      change_percent: change_percent(change, wealth.net_worth_yesterday)
     )
     |> push_chart(wealth.chart)
   end
 
-  defp wealth(_scope, false = _budget?, overview, _period, _today),
-    do: Map.put(overview, :depot_only, nil)
+  defp wealth(_scope, false = _budget?, overview, _period, _today), do: overview
 
-  defp wealth(scope, true = _budget?, overview, period, today) do
-    first = Ledger.first_open_date(scope)
-    Wealth.of_budget_owner(overview, first, &Ledger.net_worth(scope, &1), period, today)
-  end
+  defp wealth(scope, true = _budget?, overview, period, today),
+    do: Wealth.of_budget_owner(scope, overview.first_day, period, today)
 
   defp load_upcoming_once(%{assigns: %{upcoming_dividends: _}} = socket), do: socket
   defp load_upcoming_once(socket), do: load_upcoming(socket)

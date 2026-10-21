@@ -62,17 +62,17 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
 
       for expense <- [gone, others, own], do: assert(linked(expense) == nil)
 
-      assert Repo.reload!(c.account).fed_by == :shared_expenses
+      assert Repo.reload!(c.account).shared_expenses
       assert %Link{account_id: account_id, start_date: nil} = Repo.get!(Link, c.h.anna)
       assert account_id == c.account.id
     end
 
-    test "moves the feed from another account fed by shared expenses", c do
-      before = account_fixture(%{name: "Alt", kind: :cash, fed_by: :shared_expenses})
+    test "moves the mark from another shared-expenses account", c do
+      before = account_fixture(%{name: "Alt", kind: :cash, shared_expenses: true})
 
       assert {:ok, _counts} = switch_on(c)
-      assert Repo.reload!(before).fed_by == nil
-      assert Repo.reload!(c.account).fed_by == :shared_expenses
+      refute Repo.reload!(before).shared_expenses
+      assert Repo.reload!(c.account).shared_expenses
     end
 
     test "links only the budget owner's participant", c do
@@ -85,12 +85,11 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       assert switch_on(c) == {:error, :linked}
     end
 
-    test "needs an open budget account not fed by another app", c do
+    test "needs an open budget account", c do
       closed = account_fixture(%{kind: :cash, closed: true})
       tracking = account_fixture(%{kind: :tracking})
-      depot = account_fixture(%{kind: :checking, fed_by: :portfolio})
 
-      for id <- [closed.id, tracking.id, depot.id, "", "x", -1] do
+      for id <- [closed.id, tracking.id, "", "x", -1] do
         assert BudgetLink.switch_on(scope_of(c.h.anna), id) == {:error, :no_account}
       end
 
@@ -112,7 +111,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       older = expense!(c.h, "Altbau", 5000, "2026-02-20")
 
       {:ok, _account} =
-        Ledger.update_account(budget_scope(), c.account, %{fed_by: :shared_expenses})
+        Ledger.update_account(budget_scope(), c.account, %{shared_expenses: true})
 
       Repo.insert!(%Link{
         participant_id: c.h.anna,

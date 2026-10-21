@@ -95,16 +95,15 @@ An account whose money belongs to the budget: checking, savings or cash. UI "Bud
 _Avoid_: On-budget account
 
 **Tracking account**:
-An account whose value is only tracked, outside the budget, e.g. a securities depot. UI "Tracking".
+An account whose value is only tracked, outside the budget, e.g. the cash at a broker. UI "Tracking".
 _Avoid_: Off-budget account, investment account
 
-**Fed account**:
-An account another area keeps up to date (`portfolio`: the tracking account that one of the budget owner's
-portfolios is, opened with the portfolio and closed once it is gone, its value kept by the value change;
-`shared_expenses`: its transactions are what Kasse expenses and reimbursements change in the budget owner's Kasse
-balance), so the UI offers no manual entry, file import or reconciling for it, as its balance is the other area's;
-the Ledger still accepts entries, and transfers from other registers.
-_Avoid_: Synced account, linked account (that is bank sync)
+**Shared-expenses account**:
+The budget account the Kasse's budget link books into (`Account.shared_expenses`): its transactions are what Kasse
+expenses and reimbursements change in the budget owner's Kasse balance, so the UI offers no manual entry, file
+import or reconciling for it, as its balance is the Kasse's; the Ledger still accepts entries, and transfers from
+other registers. No other account is kept by another area: a portfolio's value is no account's (ADR 0020).
+_Avoid_: Fed account, synced account, linked account (that is bank sync)
 
 **Reconcile**:
 Confirming that an account's cleared balance equals the bank's balance, which locks its cleared transactions (they
@@ -305,14 +304,14 @@ _Avoid_: FX rate in UI text
 
 **Budget link**:
 The budget owner's participant linked to the budget: what each expense changes in their Kasse balance, paid minus
-share, is a linked transaction in the account fed by `shared_expenses`, so its balance is their Kasse balance; each
+share, is a linked transaction in the shared-expenses account, so its balance is their Kasse balance; each
 Kasse category maps to a budget category for it. Their bank purchase of an expense they paid stays a purchase in its
 category, which so bears only their share. A reimbursement with them is a transfer between that account and the
 budget account they choose in the reimbursement form; until they choose one, it is a transaction there that still
 needs an account. A transfer they book in the register between that account and a budget account becomes a
 reimbursement with the group's other active participant, or the one they pick when there are several; it completes
 an open reimbursement without account of the same amount, dated within the match window, instead. Switching it on
-makes the chosen account the one fed by `shared_expenses` and books every expense and reimbursement that changes
+makes the chosen account the shared-expenses account and books every expense and reimbursement that changes
 their balance. A link with a start date books an expense dated before it only when entered later or moved past it,
 and a transfer dated before it creates nothing in the Kasse.
 UI "Mit Budget verknüpfen", the settings page "Budget-Verknüpfung".
@@ -346,8 +345,8 @@ _Avoid_: Portfolio app, investments, Depot area
 
 **Security**:
 A tradable instrument (ETF, fund, share) identified by its ISIN, with its own price history from Yahoo or manual;
-on one day a manual price wins over Yahoo's. No screen enters prices: prices are shared and feed the value change,
-so one user's price would move the budget. UI "Wertpapier".
+on one day a manual price wins over Yahoo's. No screen enters prices: prices are shared, so one user's price would
+move everyone's Vermögen. UI "Wertpapier".
 _Avoid_: Asset, instrument, position
 
 **Portfolio**:
@@ -368,7 +367,8 @@ _Avoid_: Depot account, clearing account
 
 **Portfolio cash**:
 The tracking accounts that hold the cash at the broker of one of the user's portfolios, each the cash of one: their
-balances count toward that portfolio's value in the sidebar and show in its Bestand. Code:
+balances count toward that portfolio's value in the sidebar, which so lists them only inside it, and show in its
+Bestand. Code:
 `Portfolio.cash_accounts`. UI in the Bestand "Cash", "davon Cash".
 _Avoid_: Cash account (that is any Verrechnungskonto)
 
@@ -378,8 +378,10 @@ holdings screen is "Bestand".
 _Avoid_: Position in code
 
 **Net worth**:
-The value of all of a user's holdings plus the balances of their Verrechnungskonten on a date, in euros. UI
-"Vermögen".
+The money in a user's accounts plus the value of all their holdings on a date, in euros, each counted once. For the
+budget owner the Ledger's net worth, all budget and tracking accounts but those closed with money left in them that
+the Depot does not use, plus the holdings, from the earlier of the budget's and the Depot's first day
+(`Abakus.Depot.Wealth`); for anyone else the balances of their Verrechnungskonten plus the holdings. UI "Vermögen".
 
 **Invested capital**:
 What came in from outside up to a date: deposits − removals + inbound deliveries − outbound deliveries; a purchase
@@ -420,13 +422,6 @@ has one, in the Depot change's database transaction: into a tracking account its
 approved, without category; into a budget account only through the Depot link. A purchase or sale is with the
 portfolio, another transaction with its security, and a cash transfer's side without the other with that account;
 the memo names the kind and the security. Code: `Abakus.Depot.CashSide`.
-
-**Value change**:
-The daily transaction, after the price job, in a portfolio's account (fed by `portfolio`): the value of the
-portfolio's holdings minus the account's balance, approved and cleared; none without a difference, so a new account
-starts at the holdings' value. One per day: another run that day amends it, and deletes it once nothing differs.
-Nothing else writes to the account, as the cash has accounts of its own; it cannot be reconciled. Code: `Abakus.Depot.BudgetFeed`. UI "Wertänderung" (its payee).
-_Avoid_: Revaluation, market value adjustment
 
 **Depot link**:
 The budget owner's Depot linked to the budget (ADR 0020), switched on under Einstellungen › Depots with a start date

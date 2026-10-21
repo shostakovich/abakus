@@ -28,7 +28,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
       giro: giro,
       investieren: investieren,
       portfolio: portfolio,
-      tracking: Repo.get!(Account, Repo.reload!(portfolio).budget_account_id),
       clearing: giro,
       broker_cash: Repo.get!(Account, portfolio.reference_account_id),
       security: security
@@ -95,7 +94,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert outflow.category_id == c.investieren.id
       assert {outflow.payee.name, outflow.transfer_transaction_id} == {"Langfristig", nil}
       assert outflow.memo == "Kauf Welt-ETF"
-      assert register(c.tracking) == []
     end
 
     test "an OFX line with its amount is proposed as the match of the linked outflow", c do
@@ -127,7 +125,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
     purchase(c, 9, %{"account_id" => c.broker_cash.id})
 
     assert register(c.giro) == []
-    assert register(c.tracking) == []
     assert Ledger.balance(budget_scope(), c.broker_cash, @day) == 10_000
   end
 
@@ -310,7 +307,6 @@ defmodule Abakus.Depot.BudgetLinkTest do
       {:ok, _} = Portfolios.delete_transaction(c.owner, purchase)
 
       assert register(c.giro) == []
-      assert register(c.tracking) == []
       assert linked_transaction_ids() == []
     end
 

@@ -10,13 +10,12 @@ Sign-in with magic link and passkeys, the budget math, the budget view on deskto
 category dialog (targets), auto-assign and covering and moving money, the register for one account or all of them,
 where transactions are edited in place as in YNAB, reconciling, the OFX/QFX file import with match proposals and the
 settings, and the Kasse: the household's shared expenses with their balances, activity log, recurring expenses,
-categories, exchange rates, CSV/JSON export, its MCP server for AI assistants and the link that books the budget
-owner's shares in the budget; and the Depot, part of the area Finanzen with the budget: each user's Vermögen and
-portfolios with holdings, dividends, transactions, performance and securities, whose prices come from Yahoo every
-evening, a receipt inbox that reads bank PDFs, uploaded or taken from Paperless-ngx, each of the budget owner's
-portfolios as a tracking account with its daily value change, and Depot transactions that book their cash into the
-accounts of Finanzen, budget accounts once the Depot is linked to the budget. Bank sync and the budget's
-MCP tools follow in v2.
+categories, exchange rates, CSV/JSON export, its MCP server for AI assistants and the link that books what each
+expense and reimbursement changes in the budget owner's Kasse balance in the budget; and the Depot, part of the area
+Finanzen with the budget: each user's Vermögen and portfolios with holdings, dividends, transactions, performance and
+securities, whose prices come from Yahoo every evening, a receipt inbox that reads bank PDFs, uploaded or taken from
+Paperless-ngx, and Depot transactions that book their cash into the accounts of Finanzen, budget accounts once the
+Depot is linked to the budget. Bank sync and the budget's MCP tools follow in v2.
 
 - [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, phases
 - [docs/MCP.md](docs/MCP.md): the MCP server, its access rules and tools

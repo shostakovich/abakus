@@ -2,9 +2,8 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   @moduledoc """
   „Depots“ in the settings: the user's active portfolios with their depot numbers, which find a receipt's
   portfolio, each edited in place, and a new portfolio with its Verrechnungskonto, a new tracking account in
-  Finanzen. The first one opens Finanzen. A portfolio of the budget owner is also a tracking account
-  (`Abakus.Depot.BudgetFeed`), and the budget owner links the Depot to the budget here (`Abakus.Depot.BudgetLink`),
-  so its cash side goes into budget accounts too (`Abakus.Depot.CashSide`).
+  Finanzen. The first one opens Finanzen. The budget owner links the Depot to the budget here
+  (`Abakus.Depot.BudgetLink`), so its cash side goes into budget accounts too (`Abakus.Depot.CashSide`).
   """
   use AbakusWeb, :depot_live_view
 

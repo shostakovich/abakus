@@ -10,7 +10,7 @@ defmodule Abakus.FileImport do
   else a new one), the memo from `MEMO`. The statement's ledger balance becomes the account's bank balance from the
   file.
 
-  Accounts fed by another app and closed ones take no file import. Everything goes through the Ledger with the
+  The shared-expenses account and closed accounts take no file import. Everything goes through the Ledger with the
   caller's scope.
   """
 

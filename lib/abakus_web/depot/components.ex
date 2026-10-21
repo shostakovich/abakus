@@ -18,7 +18,6 @@ defmodule AbakusWeb.Depot.Components do
 
   @tabs [
     holdings: "Bestand",
-    register: "Register",
     transactions: "Buchungen",
     dividends: "Dividenden",
     performance: "Performance",
@@ -73,7 +72,7 @@ defmodule AbakusWeb.Depot.Components do
 
   @doc """
   The Depots pages' tabs: Bestand, Buchungen, Dividenden, Performance, Wertpapiere for all portfolios;
-  for one the same without Wertpapiere, with Register, its account's register, if it has an account.
+  for one the same without Wertpapiere.
   """
   def depots_tabs(assigns) do
     assigns = assign(assigns, :tabs, shown_tabs(assigns.portfolio))
@@ -87,11 +86,9 @@ defmodule AbakusWeb.Depot.Components do
     """
   end
 
-  defp shown_tabs(nil), do: Keyword.delete(@tabs, :register)
-  defp shown_tabs(%{budget_account_id: nil}), do: Keyword.drop(@tabs, [:register, :securities])
+  defp shown_tabs(nil), do: @tabs
   defp shown_tabs(_portfolio), do: Keyword.delete(@tabs, :securities)
 
-  defp tab_path(:register, portfolio), do: ~p"/budget/accounts/#{portfolio.budget_account_id}"
   defp tab_path(tab, portfolio), do: depots_path(tab, portfolio && portfolio.id)
 
   @doc "A tab of the Depots pages, of all portfolios or of the one with `portfolio_id`."

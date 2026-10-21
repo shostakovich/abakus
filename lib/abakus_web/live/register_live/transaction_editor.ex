@@ -14,8 +14,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   a tracking account takes a category and suggests the one last used between the two. Changing or deleting a reconciled
   transaction, or one whose counterpart is, asks first. A transaction its source leads (`Ledger.led_by/2`, ADR 0020)
   links to its Kasse expense or Depot transaction and keeps what the source leads (`Ledger.led_fields/0`); it is
-  neither split nor deleted here. So does a value change the Depot booked. A transfer with the account fed by shared
-  expenses becomes a reimbursement in the Kasse (`Abakus.Kasse.BudgetLink.write_from_register/4`), which asks for
+  neither split nor deleted here. A transfer with the shared-expenses account becomes a reimbursement in the Kasse (`Abakus.Kasse.BudgetLink.write_from_register/4`), which asks for
   the person while the group has more than one besides the budget owner.
 
   Tells its LiveView `{TransactionEditor, :done, message}` once the transaction is saved or deleted; the events
@@ -422,7 +421,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :transaction, :any, required: true
   attr :accounts, :map, required: true
   attr :expense_id, :integer, default: nil
-  attr :depot, :atom, default: nil, doc: "`:value_change` or `:linked` for what the Depot booked"
+  attr :depot, :boolean, default: false, doc: "whether the Depot leads the transaction"
   attr :error, :string, default: nil
   attr :sheet, :boolean, default: false
 
@@ -438,10 +437,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         class="link link-primary"
       >Ausgabe oder Rückzahlung</.link>.
     </p>
-    <p :if={@depot == :value_change} id="tx-depot" class="mr-auto text-sm text-base-content/70">
-      Wertänderung des Depots: Betrag, Datum und Empfänger bucht das Depot.
-    </p>
-    <p :if={@depot == :linked} id="tx-depot" class="mr-auto text-sm text-base-content/70">
+    <p :if={@depot} id="tx-depot" class="mr-auto text-sm text-base-content/70">
       Aus dem Depot: Betrag, Datum und Empfänger folgen der <.link
         id="tx-depot-link"
         navigate={~p"/depot/transactions"}
@@ -976,21 +972,16 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   defp assign_fixed(%{assigns: %{current_scope: scope, transaction: transaction}} = socket) do
     led_by = transaction && Ledger.led_by(scope, transaction)
-    depot = depot(transaction, led_by)
 
     assign(socket,
       expense_id: expense_id(led_by),
-      depot: depot,
-      fixed: led_by != nil or depot != nil
+      depot: match?({:depot_transaction, _id}, led_by),
+      fixed: led_by != nil
     )
   end
 
   defp expense_id({:kasse_expense, id}), do: id
   defp expense_id(_led_by), do: nil
-
-  defp depot(_transaction, {:depot_transaction, _id}), do: :linked
-  defp depot(%Transaction{source: :depot}, nil), do: :value_change
-  defp depot(_transaction, _led_by), do: nil
 
   defp load(socket, key) do
     %{transaction: transaction, accounts: accounts} = socket.assigns
@@ -1147,7 +1138,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   def handle_event("delete", _event, %{assigns: %{expense_id: id}} = socket) when id != nil,
     do: {:noreply, assign(socket, :error, @linked_delete)}
 
-  def handle_event("delete", _event, %{assigns: %{depot: depot}} = socket) when depot != nil,
+  def handle_event("delete", _event, %{assigns: %{depot: true}} = socket),
     do: {:noreply, assign(socket, :error, @depot_delete)}
 
   def handle_event("delete", event, socket) do
@@ -1291,7 +1282,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   defp register_fields(attrs, %{fixed: false}), do: {:ok, attrs}
 
-  defp register_fields(%{subtransactions: [_ | _]}, %{depot: depot}) when depot != nil,
+  defp register_fields(%{subtransactions: [_ | _]}, %{depot: true}),
     do: {:error, "Eine Buchung aus dem Depot lässt sich nicht aufteilen."}
 
   defp register_fields(%{subtransactions: [_ | _]}, _assigns),

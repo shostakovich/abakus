@@ -1,8 +1,8 @@
 defmodule Abakus.Kasse.BudgetLink do
   @moduledoc """
   Expenses and reimbursements linked to the budget (ADR 0020). A linked participant (the budget owner, once switched
-  on) has what each expense changes in their Kasse balance, paid minus share, as a transaction in the account fed by
-  `shared_expenses`, so its balance is their Kasse balance. It is written through the Ledger with their scope in the
+  on) has what each expense changes in their Kasse balance, paid minus share, as a transaction in the shared-expenses
+  account, so its balance is their Kasse balance. It is written through the Ledger with their scope in the
   expense's database transaction: dated as the expense, the title as payee, the budget category the Kasse category
   is mapped to, a memo describing the expense, created cleared and unapproved. Their bank purchase of an expense
   they paid stays a purchase in its category, which so bears only their share. Expenses that change nothing for them
@@ -40,7 +40,7 @@ defmodule Abakus.Kasse.BudgetLink do
   alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
 
-  @doc "The accounts a participant can be linked to: open budget accounts not fed by another app, in order."
+  @doc "The accounts a participant can be linked to: open budget accounts, in order."
   def account_choices(%Scope{} = scope) do
     owner!(scope)
     choices(scope)
@@ -49,16 +49,14 @@ defmodule Abakus.Kasse.BudgetLink do
   defp choices(scope) do
     Repo.all(
       from a in Account,
-        where:
-          a.user_id == ^scope.user.id and a.kind in ^Account.budget_kinds() and not a.closed and
-            (is_nil(a.fed_by) or a.fed_by == :shared_expenses),
+        where: a.user_id == ^scope.user.id and a.kind in ^Account.budget_kinds() and not a.closed,
         order_by: [a.position, a.id]
     )
   end
 
   @doc """
-  The accounts the scope's person can choose for a reimbursement, open budget accounts not fed by another area, in
-  order; none while they are not linked.
+  The accounts the scope's person can choose for a reimbursement, open budget accounts but the shared-expenses
+  account, in order; none while they are not linked.
   """
   def reimbursement_accounts(%Scope{} = scope) do
     id = Access.person!(scope).id
@@ -79,14 +77,14 @@ defmodule Abakus.Kasse.BudgetLink do
       from a in Account,
         where:
           a.user_id == ^user_id and a.kind in ^Account.budget_kinds() and not a.closed and
-            is_nil(a.fed_by),
+            not a.shared_expenses,
         order_by: [a.position, a.id]
     )
   end
 
   @doc """
   Links the scope's person, the budget owner's participant, to the budget: the account `account_id` (one of
-  `account_choices/1`) becomes the one fed by shared expenses, and every expense and reimbursement that changes their
+  `account_choices/1`) becomes the shared-expenses account, and every expense and reimbursement that changes their
   balance gets its transaction. Returns `{:ok, %{created: count}}` or `{:error, reason}`: `:not_budget_owner`,
   `:linked`, `:no_account` or a message in German.
   """
@@ -117,12 +115,12 @@ defmodule Abakus.Kasse.BudgetLink do
          %Account{} = account <- Enum.find(choices(scope), &(&1.id == id)) do
       Repo.update_all(
         from(a in Account,
-          where: a.user_id == ^scope.user.id and a.fed_by == :shared_expenses and a.id != ^id
+          where: a.user_id == ^scope.user.id and a.shared_expenses and a.id != ^id
         ),
-        set: [fed_by: nil]
+        set: [shared_expenses: false]
       )
 
-      Ledger.update_account(scope, account, %{fed_by: :shared_expenses})
+      Ledger.update_account(scope, account, %{shared_expenses: true})
     else
       _none -> {:error, :no_account}
     end
@@ -367,7 +365,7 @@ defmodule Abakus.Kasse.BudgetLink do
 
   @doc """
   Writes a transaction of the register through the Ledger, `original` changed or a new one (nil), with `opts` for
-  the Ledger. When the write makes it a transfer between the account fed by shared expenses and a budget account,
+  the Ledger. When the write makes it a transfer between the shared-expenses account and a budget account,
   dated from the link's start date on, the scope's user's linked person gets a reimbursement in the same database
   transaction, which leads the transfer from then on: it completes an open one without account of the same amount,
   dated within the match window (`Abakus.Ledger.Matches.days/0`), or is a new one with `:person_id`, which may be left
@@ -388,8 +386,8 @@ defmodule Abakus.Kasse.BudgetLink do
   end
 
   @doc """
-  For the register: the account fed by shared expenses of the scope's user and the other active people of the group a
-  reimbursement can be with, by name; nil while the user is not linked.
+  For the register: the shared-expenses account of the scope's user, the link's start date and the other active
+  people of the group a reimbursement can be with, by name; nil while the user is not linked.
   """
   def reimbursement_people(%Scope{} = scope) do
     if link = user_link(scope),

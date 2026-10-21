@@ -67,8 +67,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 Setzkasten's rule: plush images (`AbakusWeb.Plush`, one WebP per motif in `priv/static/images/plush`) for the
 sidebar, dock and area switch, the settings hub, empty-state figures, Kasse categories, Depot booking rows and
 portfolio rows; Lucide for actions, status, warnings and chevrons. In the sidebar accounts show the
-emoji of their name, one without the plush of `AbakusWeb.AccountMotif` (receipt when the Kasse feeds it,
-briefcase for a portfolio's, else by kind: landmark, piggy-bank, banknote, trending-up); a portfolio without emoji
+emoji of their name, one without the plush of `AbakusWeb.AccountMotif` (receipt for the shared-expenses account,
+else by kind: landmark, piggy-bank, banknote, trending-up); a portfolio without emoji
 shows the briefcase. One motif per meaning, e.g. wallet for the budget and cash bookings, landmark for accounts,
 briefcase for portfolios and holdings, layers for securities and their trades, coins for dividends and interest,
 file-text for receipts, clipboard-list for the empty booking list.

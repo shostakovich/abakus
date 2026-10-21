@@ -4,7 +4,7 @@ defmodule AbakusWeb.ImportLive do
   the file's account, the bank balance it reports, the account it goes into and its transactions: new, there
   already, a match proposal for a transaction in the register, or before the last reconcile (skipped). A file
   account seen before has its linked account chosen; an unknown one asks for the account. The import remembers the
-  chosen one, so choosing another moves the link. Accounts fed by another app and closed ones are not offered. The
+  chosen one, so choosing another moves the link. The shared-expenses account and closed accounts are not offered. The
   preview lives in the LiveView only; the import checks again what is there.
   """
   use AbakusWeb, :live_view

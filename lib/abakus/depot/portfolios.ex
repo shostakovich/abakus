@@ -10,7 +10,6 @@ defmodule Abakus.Depot.Portfolios do
 
   alias Abakus.Depot.{
     Allocation,
-    BudgetFeed,
     CashSide,
     Costs,
     Distributions,
@@ -52,8 +51,7 @@ defmodule Abakus.Depot.Portfolios do
 
   @doc """
   Creates a portfolio of the user with a new tracking account in the Ledger as its Verrechnungskonto, which its
-  purchases, sales and dividends settle against and which is its cash, and for the budget owner the portfolio's
-  tracking account.
+  purchases, sales and dividends settle against and which is its cash.
   """
   def create_portfolio(%Scope{} = scope, attrs) do
     with {:ok, form} <- Ecto.Changeset.apply_action(change_new_portfolio(attrs), :insert) do
@@ -75,7 +73,7 @@ defmodule Abakus.Depot.Portfolios do
         %{portfolio_id: portfolio.id, account_id: account.id}
       ])
 
-      BudgetFeed.open_account(scope, portfolio)
+      {:ok, portfolio}
     end
   end
 
@@ -173,17 +171,15 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   @doc """
-  What the user's portfolios with `portfolio_ids` and accounts with `account_ids` are worth on `date`, in euro
-  cents: the value of the portfolios' holdings plus the accounts' balances.
+  The value of all the user's holdings on each of `dates` as `%{date => cents}`, in euros, without the accounts.
   """
-  def value(%Scope{} = scope, portfolio_ids, account_ids, %Date{} = date) do
+  def holdings_value(%Scope{} = scope, dates) do
     transactions = list_transactions(scope)
-    portfolios = Enum.filter(list_portfolios(scope), &(&1.id in portfolio_ids))
-    filter = Filter.new(portfolios, account_ids, transactions)
-    market = load_market(transactions, date)
+    market = load_market(transactions, Enum.min(dates, Date))
 
-    [%{net_worth: value}] = Valuation.history(transactions, market, [date], filter)
-    value
+    transactions
+    |> Valuation.history(market, dates, Filter.holdings())
+    |> Map.new(&{&1.date, &1.net_worth})
   end
 
   @doc """
@@ -602,7 +598,7 @@ defmodule Abakus.Depot.Portfolios do
   @doc """
   What the sidebar shows on `today`: the active portfolios by name, each with its `value` in euro
   cents, its securities valued as the holdings screen values all portfolios plus the balances of its
-  cash accounts in the Ledger; nothing retired, whatever it still holds.
+  `cash_account_ids` in the Ledger; nothing retired, whatever it still holds.
   """
   def sidebar(%Scope{} = scope, today) do
     transactions = list_transactions(scope)
@@ -618,13 +614,10 @@ defmodule Abakus.Depot.Portfolios do
           |> Enum.filter(&(&1.portfolio_id == portfolio.id))
           |> Enum.sum_by(&Valuation.value(&1, market, today))
 
-        cash =
-          for {account_id, portfolio_id} <- cash_of,
-              portfolio_id == portfolio.id,
-              reduce: 0,
-              do: (sum -> sum + Map.get(balances, account_id, 0))
+        cash_account_ids = for {account_id, id} <- cash_of, id == portfolio.id, do: account_id
+        cash = Enum.sum_by(cash_account_ids, &Map.get(balances, &1, 0))
 
-        %{portfolio: portfolio, value: securities + cash}
+        %{portfolio: portfolio, value: securities + cash, cash_account_ids: cash_account_ids}
       end
 
     %{portfolios: portfolios}

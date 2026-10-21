@@ -18,7 +18,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
 
   setup do
     h = household()
-    account = account_fixture(%{name: "Geteilt", kind: :cash, fed_by: :shared_expenses})
+    account = account_fixture(%{name: "Geteilt", kind: :cash, shared_expenses: true})
     group = category_group_fixture(%{name: "🏠 Alltag"})
     groceries = category_fixture(%{name: "🛒 Lebensmittel", category_group_id: group.id})
     treats = category_fixture(%{name: "🍷 Genuss", category_group_id: group.id})

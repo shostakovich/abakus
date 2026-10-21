@@ -28,6 +28,9 @@ defmodule Abakus.Depot.Valuation.Filter do
   @doc "All portfolios and accounts."
   def all, do: %__MODULE__{}
 
+  @doc "All portfolios and no account: the holdings alone."
+  def holdings, do: %__MODULE__{account_ids: MapSet.new()}
+
   @doc """
   `portfolios` and the accounts with `account_ids`; `transactions` tell which securities the
   portfolios ever held.

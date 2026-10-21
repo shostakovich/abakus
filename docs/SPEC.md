@@ -37,8 +37,8 @@ The context is `Abakus.Users` (an "account" is a bank account here):
   Kasse (`/kasse`), each with its own sidebar and dock on phones; a user sees only the areas they may use (the
   budget's pages: its owner; the Depot's: the budget owner and every user with a portfolio of their own; the
   Kasse: its active participants, [ADR 0008](../DECISIONS.md)), and anyone else gets 404 on their pages.
-  Finanzen lists Budget, Vermögen, Alle Konten, Import & Sync, the open accounts, then Depots with the active
-  portfolios; without the budget only Vermögen, Import & Sync and Depots. The Kasse lists Ausgaben, Salden and
+  Finanzen lists Budget, Vermögen, Alle Konten, Import & Sync, the open accounts but the portfolios' cash, then
+  Depots with the active portfolios; without the budget only Vermögen, Import & Sync and Depots. The Kasse lists Ausgaben, Salden and
   Aktivität. With one area the brand is its name; with more, a segmented switch tops the sidebar and the title in
   the top bar switches the area; switching opens the area's first page. `/` opens the area used last, kept in the
   session
@@ -74,10 +74,10 @@ Terms: [`CONTEXT.md`](../CONTEXT.md). Two contexts: `Abakus.Ledger` (accounts, p
 is its owner's ([ADR 0007](../DECISIONS.md)); its tables carry their owner's `user_id`, and both contexts see only
 the rows of their caller's user (ADR 0019).
 
-- **Account**: name, kind (checking, savings, cash, tracking), fed by (`portfolio`: value from the Depot,
-  `shared_expenses`: what the Kasse's expenses and reimbursements change in the budget owner's Kasse balance, a
-  reimbursement as a transfer with a budget account; either way the UI hides
-  manual entry, file import and reconcile for it, as its balance is the other area's; the Ledger accepts entries),
+- **Account**: name, kind (checking, savings, cash, tracking), shared expenses (the account the Kasse's budget link
+  books into: what the Kasse's expenses and reimbursements change in the budget owner's Kasse balance, a
+  reimbursement as a transfer with a budget account; the UI hides manual entry, file import and reconcile for it, as
+  its balance is the Kasse's; the Ledger accepts entries),
   closed, note, position, last reconciled at, the file's account it takes imports from (`BANKID`, `ACCTID`). Budget
   account = not tracking (derived; a kind never crosses that line). No credit cards or loans. Closed, never deleted.
 - **Payee**: name, transfer account, last used category. Each account has a transfer payee "Transfer : <account
@@ -107,7 +107,7 @@ the rows of their caller's user (ADR 0019).
 - **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
   `reconciled`; UI "Vorgemerkt", "Gebucht", "Abgeglichen"), approved (manual entries by default, imports not),
   transfer counterpart (a transaction, or for a split's transfer its subtransaction), source (`manual`, `ynab`,
-  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` what a Kasse expense or reimbursement changes, `depot` a value change or a Depot transaction's cash side), source reference (the Kasse
+  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` what a Kasse expense or reimbursement changes, `depot` a Depot transaction's cash side), source reference (the Kasse
   expense or Depot transaction that leads it, set once: on create, or later for a transfer from the register that
   becomes a reimbursement), matched transaction (see match proposals), deleted at (soft delete;
   deleted transactions cannot be changed, only moved with their category into another). The register is what counts: transactions not deleted and no match
@@ -231,13 +231,10 @@ same source; across sources (and against manual entries) a match is proposed, ne
 
 ## Tracking accounts
 
-Used for the portfolios and the Verrechnungskonten outside the budget, booked by the Depot; a portfolio's value the
-way YNAB tools post market values:
+Used for the Verrechnungskonten outside the budget, booked by the Depot. No account books a portfolio's value
+(ADR 0020): it is computed from its holdings and prices, and Vermögen is the money in all accounts plus the value
+of all holdings on each day, from the earlier of the budget's and the Depot's first day.
 
-- Each of the budget owner's portfolios is one tracking account fed by `portfolio`, opened with the portfolio
-  (ADR 0017) and named after it; its register is the portfolio's tab Register, and the sidebar lists it only
-  under Depots. An account fed by `portfolio` whose portfolio is gone is closed with its history, a last value
-  change taking it to 0
 - A Verrechnungskonto is an account of its user (ADR 0020): the budget account a portfolio pays from, or a tracking
   account for cash at the broker; a new portfolio comes with a new tracking account as its cash and reference
   account. Each Depot transaction writes its cash side there, led by the Depot (`Abakus.Depot.CashSide`); a cash
@@ -246,13 +243,8 @@ way YNAB tools post market values:
   Depots (start date, category for purchases), purchases, sales, dividends and cash transfers from the start date
   on, unapproved: outflows in that category, inflows to Ready to Assign; the bank import holds the rest. Purchases
   and sales are with the portfolio, dividends with the security
-- Every day after the price job, the Depot books the difference between the account's balance and the value of
-  its portfolio's holdings, as one transaction through the Ledger, payee "Wertänderung", approved and
-  cleared, none without a difference, so a new account starts at the holdings' value; another run that day
-  amends that transaction instead of booking a second one. Only it (`Abakus.Depot.BudgetFeed`) changes the
-  account, as the cash has accounts of its own, and it cannot be reconciled
-- A portfolio's cash accounts (cash at its broker) count toward its value in the sidebar with their balance and show
-  in its Bestand as „davon Cash“
+- A portfolio's cash accounts (cash at its broker) count toward its value in the sidebar with their balance, so the
+  sidebar lists them only inside it, and show in its Bestand as „davon Cash“
 - A tracking account nothing feeds is adjusted by hand
 
 ## MCP
@@ -278,17 +270,16 @@ At `/mcp/<MCP_SECRET>` (off without the secret), interface in English, data as e
   connections with consent expiry
 - **Kasse**: Ausgaben (list, search, the expense form), Salden with the settlement and Aktivität
 - **Vermögen and Depots** (Finanzen): Vermögen (net worth: for the budget owner all budget and tracking accounts
-  but those closed with money left in them, its curve showing the Depot's value before the budget's first
-  transaction, for anyone else their portfolios and Verrechnungskonten, optionally against the benchmark) and
-  Depots, for all portfolios or one, with „Buchung erfassen“ and the tabs Bestand (holdings and
-  Verrechnungskonten), for one portfolio of the budget owner Register (its account's register),
-  Buchungen, Dividenden, Performance and, for all portfolios, Wertpapiere (prices, quote feeds, the benchmark,
+  but those closed with money left in them that the Depot does not use, plus all holdings, its curve from the
+  earlier of the budget's and the Depot's first day, for anyone else their portfolios and Verrechnungskonten,
+  optionally against the benchmark) and Depots, for all portfolios or one, with „Buchung erfassen“ and the tabs
+  Bestand (holdings and Verrechnungskonten), Buchungen, Dividenden, Performance and, for all portfolios, Wertpapiere (prices, quote feeds, the benchmark,
   exchange rates); a page per security
 - **Einstellungen**: a mode of the sidebar under `/settings/…`, with the way back to the area used last and the
   sections grouped by area; each group shows only to users of its area, whose settings answer 404 to others.
   Allgemein: Zugang (passkeys, email), Aussehen (theme, per device). Kasse: Gruppe (the group's name), Teilnehmer
   (adding one invites their user), Kategorien, Wiederkehrende Ausgaben, Wechselkurse, Budget-Verknüpfung (the budget
-  owner's only: switching the link on, its account and which budget category each Kasse category's shares land in)
+  owner's only: switching the link on, its account and which budget category each Kasse category's expenses are booked in)
   and Export (CSV/JSON). Depot, for everyone, so anyone may start one: Depots (the user's portfolios with
   their depot numbers, and for the budget owner the link to the budget) and Belegeingang
   (Paperless-ngx and the receipt recognition; users with a portfolio).

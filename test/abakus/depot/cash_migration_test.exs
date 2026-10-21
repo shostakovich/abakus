@@ -9,6 +9,7 @@ defmodule Abakus.Depot.CashMigrationTest do
   @moduletag :tmp_dir
   @before 20_261_021_160_000
   @cash 20_261_021_180_000
+  @ledger_accounts 20_261_021_200_000
   @now "'2026-10-01T10:00:00.000000Z'"
 
   setup %{tmp_dir: dir} do
@@ -138,7 +139,7 @@ defmodule Abakus.Depot.CashMigrationTest do
   end
 
   defp migrate(%{repo: repo}) do
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @ledger_accounts)
     :ok
   end
 
@@ -279,7 +280,8 @@ defmodule Abakus.Depot.CashMigrationTest do
                )
     end
 
-    test "leaves nothing for the cash side to change" do
+    test "leaves nothing for the cash side to change", %{repo: repo} do
+      TestMigrations.run!(repo)
       before = transactions()
 
       for user <- Repo.all(User), do: :ok = CashSide.sync(Scope.for_user(user))
