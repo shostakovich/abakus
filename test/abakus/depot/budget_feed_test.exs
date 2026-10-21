@@ -207,22 +207,13 @@ defmodule Abakus.Depot.BudgetFeedTest do
       assert Ledger.list_transactions(member, :all) == []
     end
 
-    test "counts the balance of the portfolio's cash, and of no other Verrechnungskonto", c do
+    test "counts only the holdings, as the portfolio's cash has an account of its own", c do
       holdings_fixture(c, manual_security(400))
       {:ok, _cash} = AccountRoles.set_role(c.owner, c.cash, "portfolio_cash:#{c.portfolio.id}")
-      giro = account_fixture(c.owner, %{name: "Giro-Verrechnung"})
-
-      transaction_fixture(c.owner, ~D[2026-10-01],
-        type: :deposit,
-        account_id: giro.id,
-        amount: 50_000
-      )
-
-      {:ok, _giro} = AccountRoles.set_role(c.owner, giro, "none")
 
       :ok = BudgetFeed.book_value_changes(@day)
 
-      assert [%Transaction{amount: 5_081_234}] = value_changes(account_of(c.portfolio))
+      assert [%Transaction{amount: 4_000_000}] = value_changes(account_of(c.portfolio))
     end
 
     test "after the daily price fetch books the difference to the account's balance", c do

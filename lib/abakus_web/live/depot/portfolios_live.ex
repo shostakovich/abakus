@@ -3,8 +3,8 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   „Depots“ in the settings: the user's active portfolios with their depot numbers, which find a receipt's
   portfolio, their Verrechnungskonten with their roles (`Abakus.Depot.AccountRoles`), each edited in place, and a
   new portfolio with its Verrechnungskonto. The first one opens Finanzen. A portfolio of the budget owner is also a
-  tracking account (`Abakus.Depot.BudgetFeed`), and the budget owner links the Depot's cash flows to the budget here
-  (`Abakus.Depot.BudgetLink`).
+  tracking account (`Abakus.Depot.BudgetFeed`), and the budget owner links the Depot to the budget here
+  (`Abakus.Depot.BudgetLink`), so its cash side goes into budget accounts too (`Abakus.Depot.CashSide`).
   """
   use AbakusWeb, :depot_live_view
 
@@ -71,14 +71,14 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           <p :if={@link} id="budget-link-state" class="mb-3 max-w-prose text-sm text-base-content/70">
             Seit dem {Format.date(@link.start_date)} ist jeder Kauf, Verkauf und jede Dividende über ein
             Verrechnungskonto, das ein Budgetkonto ist, eine Buchung in diesem Budgetkonto, ebenso Geld,
-            das von dort ins Cash eines Depots geht oder zurück. Betrag, Datum und Empfänger folgen dem
-            Depot; Kategorie, Memo und Bestätigung änderst du im Budget.
+            das von dort auf ein anderes Verrechnungskonto geht oder zurück, als Umbuchung. Betrag, Datum
+            und Empfänger folgen dem Depot; Kategorie, Memo und Bestätigung änderst du im Budget.
           </p>
           <p :if={!@link} id="budget-link-state" class="mb-3 max-w-prose text-sm text-base-content/70">
             Noch nicht mit dem Budget verknüpft. Danach ist jeder Kauf, Verkauf und jede Dividende über ein
             Verrechnungskonto, das ein Budgetkonto ist, eine Buchung in diesem Budgetkonto: Käufe als Ausgabe
-            in der gewählten Kategorie, Einnahmen unter „Zu verteilen“. Buchungen vor dem Startdatum bleiben
-            nur im Depot.
+            in der gewählten Kategorie, Einnahmen unter „Zu verteilen“. Buchungen vor dem Startdatum kommen
+            nicht ins Budgetkonto.
           </p>
           <.form
             :if={!@link}

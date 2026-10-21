@@ -2,16 +2,16 @@ defmodule Abakus.Depot.BudgetFeed do
   @moduledoc """
   The budget owner's portfolios in the budget: each is one tracking account fed by `portfolio`, its
   `budget_account` (ADR 0017); an account fed by `portfolio` that no portfolio has is closed. Every day after the
-  price job, `book_value_changes/1` books the difference between a portfolio's value, its cash included
-  (`Abakus.Depot.AccountRoles`), and its account's balance as one value change through the Ledger; besides it, only
-  the transfers of `Abakus.Depot.BudgetLink` write to such an account. It writes with the budget owner's scope.
+  price job, `book_value_changes/1` books the difference between the value of a portfolio's holdings and its
+  account's balance as one value change through the Ledger; nothing else writes to such an account, as the cash has
+  accounts of its own (`Abakus.Depot.CashSide`). It writes with the budget owner's scope.
   """
 
   import Ecto.Query
 
   require Logger
 
-  alias Abakus.Depot.{AccountRoles, Portfolios}
+  alias Abakus.Depot.Portfolios
   alias Abakus.Depot.Portfolios.Portfolio
   alias Abakus.{Ledger, LocalTime, Names, Repo}
   alias Abakus.Ledger.Account
@@ -116,8 +116,8 @@ defmodule Abakus.Depot.BudgetFeed do
   end
 
   @doc """
-  Books into the open account of every portfolio of the budget owner the difference between the portfolio's value
-  with its cash on `date` and the account's balance up to `date`: one transaction dated `date`, payee
+  Books into the open account of every portfolio of the budget owner the difference between the value of the
+  portfolio's holdings on `date` and the account's balance up to `date`: one transaction dated `date`, payee
   "Wertänderung", approved and cleared; none without a difference, so a new account starts at its portfolio's value.
   Another run on the same day amends that transaction, and deletes it once its amount is 0. A refused booking is
   logged and leaves the other accounts alone. Syncs the accounts first (`sync_accounts/0`).
@@ -145,9 +145,7 @@ defmodule Abakus.Depot.BudgetFeed do
   end
 
   defp book_value_change(scope, portfolio, account, date) do
-    value =
-      Portfolios.value(scope, [portfolio.id], AccountRoles.cash_account_ids(portfolio), date)
-
+    value = Portfolios.value(scope, [portfolio.id], [], date)
     balance = Ledger.balance(scope, account, date)
     if value != balance, do: book(scope, account, value - balance, date), else: :ok
   end

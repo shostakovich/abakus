@@ -58,18 +58,19 @@ defmodule Abakus.Depot.Valuation do
     end
   end
 
-  defp cash_moved(%Transaction{account_id: nil}), do: []
+  @doc "The money a transaction moves on its accounts, as `[{account_id, cents}]`, a cash transfer's source first."
+  def cash_moved(%Transaction{account_id: nil}), do: []
 
-  defp cash_moved(%Transaction{type: type} = t) when type in @credits,
+  def cash_moved(%Transaction{type: type} = t) when type in @credits,
     do: [{t.account_id, t.amount}]
 
-  defp cash_moved(%Transaction{type: type} = t) when type in @debits,
+  def cash_moved(%Transaction{type: type} = t) when type in @debits,
     do: [{t.account_id, -t.amount}]
 
-  defp cash_moved(%Transaction{type: :cash_transfer} = t),
+  def cash_moved(%Transaction{type: :cash_transfer} = t),
     do: [{t.account_id, -t.amount}, {t.other_account_id, t.amount}]
 
-  defp cash_moved(_transaction), do: []
+  def cash_moved(_transaction), do: []
 
   defp on_or_before?(%Transaction{date_time: date_time}, date),
     do: not Date.after?(NaiveDateTime.to_date(date_time), date)

@@ -61,8 +61,9 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
 - The Depot (`Abakus.Depot`, `AbakusWeb.Depot`, tables `depot_…`): context functions take `%Scope{}` and see only
   the user's own data, except securities, prices and compositions, which all share. Outside
   services are behaviours swapped in `config/test.exs` (`Abakus.Depot.Fake…`); `:pdftotext` tests need poppler.
-  Receipt files live in `receipts/` next to the database. Only `Abakus.Depot.BudgetFeed` (value changes) and
-  `Abakus.Depot.BudgetLink` (transfers) write to accounts fed by `portfolio`.
+  Receipt files live in `receipts/` next to the database. Only `Abakus.Depot.BudgetFeed` (value changes) writes to
+  accounts fed by `portfolio`; `Abakus.Depot.CashSide` writes each Depot transaction's cash side into the
+  Verrechnungskonto's Ledger account in every Depot write's database transaction.
 - MCP (`Abakus.MCP`, `AbakusWeb.MCPPlug`, docs/MCP.md) lives outside the sign-in at `/mcp/<MCP_SECRET>`; tests go
   through `AbakusWeb.MCPCase`.
 - Dependencies: few and mature, each with a reason.

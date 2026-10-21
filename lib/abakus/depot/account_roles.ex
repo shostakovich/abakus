@@ -7,7 +7,7 @@ defmodule Abakus.Depot.AccountRoles do
 
   import Ecto.Query
 
-  alias Abakus.Depot.BudgetLink
+  alias Abakus.Depot.CashSide
   alias Abakus.Depot.Portfolios.{Account, Portfolio}
   alias Abakus.Ledger
   alias Abakus.Repo
@@ -97,7 +97,7 @@ defmodule Abakus.Depot.AccountRoles do
   defp save_role(scope, account, role) do
     case account |> Account.role_changeset(role) |> Repo.update() do
       {:ok, account} ->
-        with :ok <- BudgetLink.sync(scope), do: {:ok, account}
+        with :ok <- CashSide.sync(scope), do: {:ok, account}
 
       {:error, changeset} ->
         {:error, first_error(changeset)}

@@ -6,8 +6,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
   import Abakus.UsersFixtures
 
   alias Abakus.{Categories, DomainFixtures, FileImport, Ledger}
-  alias Abakus.Depot.{AccountRoles, BudgetFeed, BudgetLink, Portfolios}
-  alias Abakus.Depot.Portfolios.Portfolio
+  alias Abakus.Depot.{AccountRoles, BudgetLink, CashSide, Portfolios}
   alias Abakus.Ledger.{Account, Transaction}
 
   @start ~D[2026-10-01]
@@ -27,6 +26,8 @@ defmodule Abakus.Depot.BudgetLinkTest do
     security = security_fixture(%{name: "Welt-ETF", quote_feed: :manual, symbol: nil})
     price_fixture(security, @start, price(100), :manual)
 
+    broker_cash = Repo.get!(Portfolios.Account, portfolio.reference_account_id)
+
     %{
       owner: owner,
       giro: giro,
@@ -34,10 +35,14 @@ defmodule Abakus.Depot.BudgetLinkTest do
       portfolio: portfolio,
       tracking: Repo.get!(Account, Repo.reload!(portfolio).budget_account_id),
       clearing: clearing,
-      broker_cash: Repo.get!(Portfolios.Account, portfolio.reference_account_id),
+      broker_cash: broker_cash,
+      broker_cash_account: ledger_account(broker_cash),
       security: security
     }
   end
+
+  defp ledger_account(depot_account),
+    do: Repo.get!(Account, Repo.reload!(depot_account).ledger_account_id)
 
   defp switch_on(c, start \\ @start) do
     {:ok, link} =
@@ -85,14 +90,8 @@ defmodule Abakus.Depot.BudgetLinkTest do
           select: t.id
       )
 
-  defp linked_in(account), do: Enum.reject(register(account), &(&1.payee.name == "Wertänderung"))
-
-  defp value_changes(account),
-    do: Enum.filter(register(account), &(&1.payee.name == "Wertänderung"))
-
   describe "a purchase paid from a budget account" do
-    test "is a linked outflow in the purchase category, unapproved, transferred to the portfolio's account",
-         c do
+    test "is one linked outflow in the purchase category, unapproved, with the portfolio", c do
       switch_on(c)
       purchase(c, 9)
 
@@ -103,25 +102,9 @@ defmodule Abakus.Depot.BudgetLinkTest do
                register(c.giro)
 
       assert outflow.category_id == c.investieren.id
-      assert outflow.payee.transfer_account_id == c.tracking.id
+      assert {outflow.payee.name, outflow.transfer_transaction_id} == {"Langfristig", nil}
       assert outflow.memo == "Kauf Welt-ETF"
-
-      assert [%Transaction{amount: 90_000, date: @day}] = register(c.tracking)
-      assert Ledger.balance(budget_scope(), c.tracking, @day) == 90_000
-    end
-
-    test "leaves only the market movement to that night's value change", c do
-      switch_on(c)
-      purchase(c, 9)
-
-      :ok = BudgetFeed.book_value_changes(@day)
-      assert value_changes(c.tracking) == []
-
-      price_fixture(c.security, ~D[2026-10-03], price(110), :manual)
-      :ok = BudgetFeed.book_value_changes(~D[2026-10-03])
-
-      assert [%Transaction{amount: 9_000}] = value_changes(c.tracking)
-      assert [%Transaction{amount: 90_000}] = linked_in(c.tracking)
+      assert register(c.tracking) == []
     end
 
     test "an OFX line with its amount is proposed as the match of the linked outflow", c do
@@ -153,10 +136,8 @@ defmodule Abakus.Depot.BudgetLinkTest do
     purchase(c, 9, %{"account_id" => c.broker_cash.id})
 
     assert register(c.giro) == []
-    assert linked_in(c.tracking) == []
-
-    cash = AccountRoles.cash_account_ids(c.portfolio)
-    assert Portfolios.value(c.owner, [c.portfolio.id], cash, @day) == 100_000
+    assert register(c.tracking) == []
+    assert Ledger.balance(budget_scope(), c.broker_cash_account, @day) == 10_000
   end
 
   test "a dividend paid to a budget account is an inflow to Ready to Assign from the security",
@@ -171,19 +152,17 @@ defmodule Abakus.Depot.BudgetLinkTest do
     assert inflow.transfer_transaction_id == nil
   end
 
-  test "a sale paid to a budget account is an inflow transferred from the portfolio's account",
-       c do
+  test "a sale paid to a budget account is an inflow to Ready to Assign with the portfolio", c do
     switch_on(c)
     purchase(c, 9)
     book(c, "sale", %{"shares" => "4", "price" => "100"})
 
     assert [_outflow, %Transaction{amount: 40_000} = inflow] = register(c.giro)
     assert inflow.category_id == Categories.ready_to_assign!(budget_scope()).id
-    assert inflow.payee.transfer_account_id == c.tracking.id
-    assert Ledger.balance(budget_scope(), c.tracking, @day) == 50_000
+    assert {inflow.payee.name, inflow.transfer_transaction_id} == {"Langfristig", nil}
   end
 
-  test "money moved from a budget account into a portfolio's cash is an outflow, and back an inflow",
+  test "money moved from a budget account to the broker's cash is a transfer, an outflow in the purchase category",
        c do
     switch_on(c)
 
@@ -199,16 +178,30 @@ defmodule Abakus.Depot.BudgetLinkTest do
       )
     end
 
-    :ok = BudgetLink.sync(c.owner)
+    :ok = CashSide.sync(c.owner)
 
-    assert [%Transaction{amount: -30_000} = out, %Transaction{amount: 5_000}] = register(c.giro)
+    assert [%Transaction{amount: -30_000} = out, %Transaction{amount: 5_000} = back] =
+             register(c.giro)
+
     assert out.category_id == c.investieren.id
-    assert Ledger.balance(budget_scope(), c.tracking, @day) == 25_000
+    assert back.category_id == Categories.ready_to_assign!(budget_scope()).id
+    assert out.payee.transfer_account_id == c.broker_cash_account.id
+
+    assert [%Transaction{amount: 30_000, cleared: :cleared, approved: true}, %Transaction{}] =
+             register(c.broker_cash_account)
+
+    assert Ledger.balance(budget_scope(), c.broker_cash_account, @day) == 25_000
   end
 
   test "a linked transaction the Ledger refuses books nothing in the Depot either", c do
-    switch_on(c)
-    Repo.update!(Ecto.Changeset.change(c.giro, kind: :tracking))
+    link = switch_on(c)
+    member = user_scope_fixture()
+    {:ok, group} = Categories.create_category_group(member, %{name: "Fremd"})
+
+    {:ok, foreign} =
+      Categories.create_category(member, %{name: "Fremd", category_group_id: group.id})
+
+    Repo.update!(Ecto.Changeset.change(link, category_id: foreign.id))
 
     form = %{
       "kind" => "purchase",
@@ -220,7 +213,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
       "price" => "100"
     }
 
-    assert {:error, "Die Buchung im Budget ließ sich nicht schreiben" <> _rest} =
+    assert {:error, "Die Buchung in Finanzen ließ sich nicht schreiben" <> _rest} =
              Portfolios.book_transaction(c.owner, Portfolios.transaction_choices(c.owner), form)
 
     assert Portfolios.list_transactions(c.owner) == []
@@ -276,7 +269,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
         })
 
       {:ok, _matched} = Ledger.accept_match(budget_scope(), proposal)
-      :ok = BudgetLink.sync(c.owner)
+      :ok = CashSide.sync(c.owner)
 
       assert [%Transaction{date: @day, approved: true}] = register(c.giro)
     end
@@ -292,7 +285,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert [date: {"folgt der Buchung im Depot", []}] = changeset.errors
     end
 
-    test "deleting the Depot transaction deletes the linked one and its transfer", c do
+    test "deleting the Depot transaction deletes the linked one", c do
       switch_on(c)
       purchase = purchase(c, 9)
 
@@ -314,23 +307,27 @@ defmodule Abakus.Depot.BudgetLinkTest do
           amount: 30_000
         )
 
-      :ok = BudgetLink.sync(c.owner)
+      :ok = CashSide.sync(c.owner)
       assert [%Transaction{amount: -30_000}] = register(c.giro)
 
       {:ok, _} = Portfolios.delete_transaction(c.owner, transfer)
 
       assert register(c.giro) == []
-      assert register(c.tracking) == []
+      assert register(c.broker_cash_account) == []
       assert linked_transaction_ids() == []
     end
 
-    test "an account that stops being a budget account takes its linked transactions along", c do
+    test "an account that stops being a budget account takes its linked transactions to a tracking account of its own",
+         c do
       switch_on(c)
       purchase(c, 9)
 
       {:ok, _} = AccountRoles.set_role(c.owner, c.clearing, "none")
 
       assert register(c.giro) == []
+      own = ledger_account(c.clearing)
+      assert {own.name, own.kind} == {"Giro-Verrechnung", :tracking}
+      assert [%Transaction{amount: -90_000, category_id: nil}] = register(own)
     end
   end
 
@@ -412,16 +409,5 @@ defmodule Abakus.Depot.BudgetLinkTest do
 
       assert Repo.reload!(link).category_id == into.id
     end
-  end
-
-  test "a portfolio without its account yet gets a plain outflow named after it", c do
-    portfolio = portfolio_fixture(c.owner, %{name: "Kinder"})
-    assert %Portfolio{budget_account_id: nil} = portfolio
-    switch_on(c)
-
-    purchase(c, 1, %{"portfolio_id" => portfolio.id})
-
-    assert [%Transaction{amount: -10_000} = outflow] = register(c.giro)
-    assert outflow.payee.name == "Kinder"
   end
 end

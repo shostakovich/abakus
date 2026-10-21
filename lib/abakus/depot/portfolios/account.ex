@@ -1,7 +1,8 @@
 defmodule Abakus.Depot.Portfolios.Account do
   @moduledoc """
   A cash account in euros; it exists on its own, not as part of a portfolio. Its role, see `role/1`, says
-  what it is in Finanzen (`Abakus.Depot.AccountRoles`).
+  what it is in Finanzen (`Abakus.Depot.AccountRoles`), and `ledger_account` is where its money is booked
+  (`Abakus.Depot.CashSide`).
   """
   use Abakus.Schema
 
@@ -11,6 +12,7 @@ defmodule Abakus.Depot.Portfolios.Account do
     belongs_to :user, Abakus.Users.User
     belongs_to :budget_account, Abakus.Ledger.Account
     belongs_to :cash_of_portfolio, Abakus.Depot.Portfolios.Portfolio
+    belongs_to :ledger_account, Abakus.Ledger.Account
     field :no_role, :boolean, default: false
     field :name, :string
     field :note, :string

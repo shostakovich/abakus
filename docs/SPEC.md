@@ -107,7 +107,7 @@ the rows of their caller's user (ADR 0019).
 - **Transaction**: account, date, amount (signed), payee, category, memo, cleared (`uncleared`, `cleared`,
   `reconciled`; UI "Vorgemerkt", "Gebucht", "Abgeglichen"), approved (manual entries by default, imports not),
   transfer counterpart (a transaction, or for a split's transfer its subtransaction), source (`manual`, `ynab`,
-  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` what a Kasse expense or reimbursement changes, `depot` a value change), source reference (the Kasse
+  `file`, `bank`, `api`, `kasse`, `depot`: where it was created, set once; `api` from the former YNAB-compatible API, `kasse` what a Kasse expense or reimbursement changes, `depot` a value change or a Depot transaction's cash side), source reference (the Kasse
   expense or Depot transaction that leads it, set once: on create, or later for a transfer from the register that
   becomes a reimbursement), matched transaction (see match proposals), deleted at (soft delete;
   deleted transactions cannot be changed, only moved with their category into another). The register is what counts: transactions not deleted and no match
@@ -231,29 +231,30 @@ same source; across sources (and against manual entries) a match is proposed, ne
 
 ## Tracking accounts
 
-Only used for the portfolios (securities accounts and their cash accounts). Their value is booked by the Depot,
-the way YNAB tools post market values:
+Used for the portfolios and the Verrechnungskonten outside the budget, booked by the Depot; a portfolio's value the
+way YNAB tools post market values:
 
 - Each of the budget owner's portfolios is one tracking account fed by `portfolio`, opened with the portfolio
   (ADR 0017) and named after it; its register is the portfolio's tab Register, and the sidebar lists it only
   under Depots. An account fed by `portfolio` whose portfolio is gone is closed with its history, a last value
   change taking it to 0
-- Money moving into a portfolio is a transfer from a budget account, categorised (e.g. savings) in Abakus: once the
-  budget owner links the Depot to the budget under Einstellungen › Depots (start date, category for purchases;
-  ADR 0020), each flow between a portfolio and a Verrechnungskonto that is a budget account is a linked transaction
-  there, led by the Depot (`Abakus.Depot.BudgetLink`): purchases and cash moved into a portfolio's cash are outflows
-  in that category, sales and cash moved back inflows to Ready to Assign, all transfers to the portfolio's account;
-  dividends are inflows to Ready to Assign from the security. Depot transactions before the start date stay in the
-  Depot only
+- Each Verrechnungskonto is an account of its user (ADR 0020): with the role "ist Budgetkonto X" that budget
+  account, else a tracking account named after it, closed when it is retired or the cash of a retired portfolio.
+  Each Depot transaction writes its cash side there, led by the Depot (`Abakus.Depot.CashSide`); a cash transfer
+  between two Verrechnungskonten is a transfer. Into a tracking account goes its whole history, cleared and
+  approved. Into a budget account go, once the budget owner links the Depot to the budget under Einstellungen ›
+  Depots (start date, category for purchases), purchases, sales, dividends and cash transfers from the start date
+  on, unapproved: outflows in that category, inflows to Ready to Assign; the bank import holds the rest. Purchases
+  and sales are with the portfolio, dividends with the security
 - Every day after the price job, the Depot books the difference between the account's balance and the value of
-  its portfolio, its cash included, as one transaction through the Ledger, payee "Wertänderung", approved and
-  cleared, none without a difference, so a new account starts at the portfolio's value; another run that day
-  amends that transaction instead of booking a second one. Only it (`Abakus.Depot.BudgetFeed`) and the linked
-  transfers change the account, so the value change keeps the market movement, and it cannot be reconciled
+  its portfolio's holdings, as one transaction through the Ledger, payee "Wertänderung", approved and
+  cleared, none without a difference, so a new account starts at the holdings' value; another run that day
+  amends that transaction instead of booking a second one. Only it (`Abakus.Depot.BudgetFeed`) changes the
+  account, as the cash has accounts of its own, and it cannot be reconciled
 - Each Verrechnungskonto has a role, set under Einstellungen › Depots: "ist Budgetkonto X" (the same bank account
   as a budget account; the budget owner's only, at most one per budget account), counting toward nothing
   else; "Cash von Depot Y" (cash at the broker of one of the user's portfolios), counting toward that portfolio's
-  value and account and shown in its Bestand as „davon Cash“; or none. One without a role shows as a warning on
+  value and shown in its Bestand as „davon Cash“; or none. One without a role shows as a warning on
   Vermögen, linking to its setting
 - A tracking account nothing feeds is adjusted by hand
 

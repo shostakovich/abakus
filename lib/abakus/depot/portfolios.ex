@@ -12,7 +12,7 @@ defmodule Abakus.Depot.Portfolios do
     AccountRoles,
     Allocation,
     BudgetFeed,
-    BudgetLink,
+    CashSide,
     Costs,
     Distributions,
     Dividends,
@@ -55,26 +55,28 @@ defmodule Abakus.Depot.Portfolios do
 
   @doc """
   Creates a portfolio of the user with a new account as its Verrechnungskonto, which its
-  purchases, sales and dividends settle against and which is its cash, and for the budget owner its
-  tracking account.
+  purchases, sales and dividends settle against and which is its cash, with its tracking account in the Ledger, and
+  for the budget owner the portfolio's tracking account.
   """
   def create_portfolio(%Scope{} = scope, attrs) do
     with {:ok, form} <- Ecto.Changeset.apply_action(change_new_portfolio(attrs), :insert) do
-      Repo.transact(fn ->
-        account =
-          Repo.insert!(%Account{user_id: scope.user.id, name: form.account_name})
-
-        portfolio =
-          Repo.insert!(%Portfolio{
-            user_id: scope.user.id,
-            name: form.name,
-            reference_account_id: account.id
-          })
-
-        account |> Account.role_changeset({:portfolio_cash, portfolio.id}) |> Repo.update!()
-        BudgetFeed.open_account(scope, portfolio)
-      end)
+      Repo.transact(fn -> insert_portfolio(scope, form) end)
     end
+  end
+
+  defp insert_portfolio(scope, form) do
+    account = Repo.insert!(%Account{user_id: scope.user.id, name: form.account_name})
+
+    portfolio =
+      Repo.insert!(%Portfolio{
+        user_id: scope.user.id,
+        name: form.name,
+        reference_account_id: account.id
+      })
+
+    account |> Account.role_changeset({:portfolio_cash, portfolio.id}) |> Repo.update!()
+
+    with :ok <- CashSide.sync(scope), do: BudgetFeed.open_account(scope, portfolio)
   end
 
   @doc "The user's active portfolios by name with their reference accounts, for their depot numbers."
@@ -950,7 +952,7 @@ defmodule Abakus.Depot.Portfolios do
       | Enum.map(rest, &insert_transaction(scope, &1))
     ]
 
-    with :ok <- BudgetLink.sync(scope), do: {:ok, transactions}
+    with :ok <- CashSide.sync(scope), do: {:ok, transactions}
   end
 
   defp claim_ready_receipt(scope, receipt) do
@@ -1026,7 +1028,7 @@ defmodule Abakus.Depot.Portfolios do
 
       unused = if receipt_id, do: drop_unused_receipt(transaction.receipt_id)
 
-      with :ok <- BudgetLink.sync(scope),
+      with :ok <- CashSide.sync(scope),
            do: {:ok, {get_transaction(scope, transaction.id), unused}}
     end
   end
@@ -1060,7 +1062,7 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   defp remove_transaction(scope, transaction) do
-    with :ok <- BudgetLink.release(scope, transaction) do
+    with :ok <- CashSide.release(scope, transaction) do
       Repo.delete!(transaction, allow_stale: true)
       {:ok, drop_unused_receipt(transaction.receipt_id)}
     end
