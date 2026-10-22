@@ -62,47 +62,86 @@ defmodule Abakus.Depot.Portfolios do
   defp insert_portfolio(scope, form) do
     with {:ok, account} <-
            Ledger.create_account(scope, %{name: form.account_name, kind: :tracking}) do
-      portfolio =
-        Repo.insert!(%Portfolio{
-          user_id: scope.user.id,
-          name: form.name,
-          reference_account_id: account.id
-        })
-
-      Repo.insert_all("depot_cash_accounts", [
-        %{portfolio_id: portfolio.id, account_id: account.id}
-      ])
-
-      {:ok, portfolio}
+      {:ok,
+       Repo.insert!(%Portfolio{
+         user_id: scope.user.id,
+         name: form.name,
+         reference_account_id: account.id
+       })}
     end
   end
 
-  @doc "The user's active portfolios by name with their reference accounts, for their depot numbers."
-  def list_active_portfolios(%Scope{} = scope) do
+  @doc "The user's portfolios with their Verrechnungskonto, the active ones first, each by name, for their settings."
+  def list_portfolios_with_accounts(%Scope{} = scope) do
     Repo.all(
       from p in Portfolio,
-        where: p.user_id == ^scope.user.id and not p.retired,
-        order_by: p.name,
+        where: p.user_id == ^scope.user.id,
+        order_by: [p.retired, p.name, p.id],
         preload: :reference_account
     )
   end
 
-  @doc "The form of a portfolio's depot number."
-  def change_depot_number(%Scope{} = scope, %Portfolio{} = portfolio, attrs \\ %{}),
-    do:
-      Portfolio.depot_number_changeset(
-        portfolio,
-        attrs,
-        &depot_number_taken_by(scope, portfolio, &1)
-      )
+  @doc """
+  The accounts a portfolio of the user may take as its Verrechnungskonto, in the Ledger's order: as `accounts` the one
+  it has and their open accounts but the shared-expenses account and another portfolio's cash. `owners` gives the name
+  of the portfolio whose cash a tracking account is, by account id, the portfolio's own left out; `waiting_ids` are the
+  tracking accounts with transactions waiting for approval or a match decision, which no register shows once they are
+  a portfolio's cash.
+  """
+  def account_choices(%Scope{} = scope, %Portfolio{} = portfolio) do
+    names = Map.new(list_portfolios(scope), &{&1.id, &1.name})
 
-  @doc "Sets the depot number of a portfolio of the user; no two of them may share its digits."
-  def update_depot_number(%Scope{} = scope, %Portfolio{user_id: user_id} = portfolio, attrs)
-      when user_id == scope.user.id do
-    scope
-    |> change_depot_number(portfolio, attrs)
-    |> Repo.update()
+    owners =
+      for {account_id, id} <- cash_account_portfolios(scope),
+          id != portfolio.id,
+          into: %{},
+          do: {account_id, names[id]}
+
+    accounts = Ledger.list_accounts(scope)
+
+    tracking =
+      for a <- accounts, not Ledger.Account.budget_account?(a), into: MapSet.new(), do: a.id
+
+    %{
+      accounts:
+        Enum.filter(
+          accounts,
+          &(&1.id == portfolio.reference_account_id or
+              (Ledger.Account.takes_entries?(&1) and not Map.has_key?(owners, &1.id)))
+        ),
+      owners: owners,
+      waiting_ids:
+        for(
+          {id, %{unapproved: unapproved}} <- Ledger.balances(scope),
+          unapproved > 0 and id in tracking,
+          into: MapSet.new(),
+          do: id
+        )
+    }
   end
+
+  @doc """
+  The form of a portfolio's depot number and Verrechnungskonto, checked against `choices`, see `account_choices/2`.
+  """
+  def change_portfolio(%Scope{} = scope, %Portfolio{} = portfolio, attrs \\ %{}, choices \\ nil) do
+    choices = choices || account_choices(scope, portfolio)
+
+    Portfolio.changeset(portfolio, attrs, %{
+      taken_by: &depot_number_taken_by(scope, portfolio, &1),
+      account_ids: MapSet.new(choices.accounts, & &1.id),
+      owners: choices.owners,
+      waiting_ids: choices.waiting_ids
+    })
+  end
+
+  @doc """
+  Saves the form of a portfolio of the user, see `change_portfolio/4`; no two of their portfolios may share a depot
+  number's digits, nor a tracking account as Verrechnungskonto. What derives from the account follows on the next
+  read; the Depot's transactions keep the accounts they were booked on.
+  """
+  def update_portfolio(%Scope{} = scope, %Portfolio{user_id: user_id} = portfolio, attrs)
+      when user_id == scope.user.id,
+      do: Repo.transact(fn -> scope |> change_portfolio(portfolio, attrs) |> Repo.update() end)
 
   defp depot_number_taken_by(scope, portfolio, digits) do
     Repo.all(
@@ -114,8 +153,8 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   @doc """
-  The user's accounts the Depot uses, by name: the cash and reference accounts of their portfolios and those their
-  transactions book on.
+  The user's accounts the Depot uses, by name: the Verrechnungskonten of their portfolios and those their transactions
+  book on.
   """
   def list_accounts(%Scope{user: %User{id: user_id}}) do
     ids =
@@ -126,7 +165,7 @@ defmodule Abakus.Depot.Portfolios do
       ) ++
         Repo.all(
           from p in Portfolio, where: p.user_id == ^user_id, select: [p.reference_account_id]
-        ) ++ [Map.keys(cash_portfolio_ids(user_id))]
+        )
 
     ids = ids |> List.flatten() |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
@@ -137,16 +176,24 @@ defmodule Abakus.Depot.Portfolios do
     )
   end
 
-  defp cash_portfolio_ids(user_id) do
+  @doc """
+  The user's accounts whose money is the Depot's, as `%{account_id => portfolio_id}`: a tracking account as a
+  portfolio's Verrechnungskonto is its cash at the broker, the portfolio active or retired. The Depot counts it toward
+  that portfolio; the budget's registers, account pickers and file import leave it out. A budget account as
+  Verrechnungskonto stays the budget's.
+  """
+  def cash_account_portfolios(%Scope{} = scope) do
     Repo.all(
-      from c in "depot_cash_accounts",
-        join: p in Portfolio,
-        on: p.id == c.portfolio_id,
-        where: p.user_id == ^user_id,
-        select: {c.account_id, c.portfolio_id}
+      from p in Portfolio,
+        join: a in assoc(p, :reference_account),
+        where: p.user_id == ^scope.user.id and a.kind == :tracking,
+        select: {a.id, p.id}
     )
     |> Map.new()
   end
+
+  defp cash_of(scope, %Portfolio{id: id}),
+    do: for({account_id, ^id} <- cash_account_portfolios(scope), do: account_id)
 
   def list_transactions(%Scope{} = scope) do
     Repo.all(
@@ -199,7 +246,7 @@ defmodule Abakus.Depot.Portfolios do
     `cash`, the balance of its accounts as the holdings screen groups them for all portfolios
     (nil without any), the number of
     `securities` held, the `value` of the securities and their `ttwror` since 1 January, as PP
-    figures a portfolio without its reference account.
+    figures a portfolio without its cash.
   """
   def overview(%Scope{} = scope, period, today) do
     transactions = list_transactions(scope)
@@ -229,7 +276,7 @@ defmodule Abakus.Depot.Portfolios do
 
   @doc """
   What the performance screen shows for `period` up to `today`, of all portfolios and accounts or
-  of the portfolio with `portfolio_id` and its reference account:
+  of the portfolio with `portfolio_id` and its cash, see `cash_account_portfolios/1`:
 
   - `portfolios`: the portfolios to choose from, as the holdings screen lists them
   - `portfolio`: the chosen one of them, nil for all
@@ -250,7 +297,7 @@ defmodule Abakus.Depot.Portfolios do
     benchmark = get_benchmark(scope)
 
     market = load_market(transactions, all_time.first, benchmark: benchmark)
-    filter = performance_filter(portfolio, transactions)
+    filter = performance_filter(scope, portfolio, transactions)
     index = Performance.index(transactions, market, filter, interval)
 
     all_time_index =
@@ -282,10 +329,10 @@ defmodule Abakus.Depot.Portfolios do
   defp benchmark(security, index, market),
     do: %{security: security, ttwror: Performance.benchmark_ttwror(index, market, security.id)}
 
-  defp performance_filter(nil, _transactions), do: Filter.all()
+  defp performance_filter(_scope, nil, _transactions), do: Filter.all()
 
-  defp performance_filter(portfolio, transactions),
-    do: Filter.new([portfolio], List.wrap(portfolio.reference_account_id), transactions)
+  defp performance_filter(scope, portfolio, transactions),
+    do: Filter.new([portfolio], cash_of(scope, portfolio), transactions)
 
   defp first_transaction_day([first | _]), do: NaiveDateTime.to_date(first.date_time)
   defp first_transaction_day([]), do: nil
@@ -320,7 +367,7 @@ defmodule Abakus.Depot.Portfolios do
     }
 
     for %{portfolio: %Portfolio{} = portfolio} = group <- holding_groups(portfolios, nil, rows) do
-      # The securities alone, with the dividends on the reference account; purchases and sales are money in and out.
+      # The securities alone, with the dividends on the Verrechnungskonto; purchases and sales are money in and out.
       filter = Filter.new([portfolio], [], transactions)
       index = Performance.index(transactions, market, filter, year)
 
@@ -349,11 +396,10 @@ defmodule Abakus.Depot.Portfolios do
 
   - `portfolios`: the portfolios to choose from by name, retired ones only while they hold shares
   - `portfolio`: the chosen one of them, nil for all
-  - `groups`: each portfolio shown with its `holdings` by value and in `accounts` its cash
-    accounts and its reference account while that is no portfolio's cash; for all portfolios, a
-    reference account several settle against appears under the first active one, and the accounts
-    of no portfolio shown follow in a group without portfolio. Each group has the `value` of its rows, the `purchase_value` and `gain` of its
-    holdings and the `cash` of its accounts.
+  - `groups`: each portfolio shown with its `holdings` by value and in `accounts` its cash, see
+    `cash_account_portfolios/1`; for all portfolios, the accounts of no portfolio shown follow in a
+    group without portfolio. Each group has the `value` of its rows, the `purchase_value` and `gain`
+    of its holdings and the `cash` of its accounts.
   - `total`: `value`, `purchase_value` and `gain` of the groups shown, the `dividends` of their
     holdings and the `securities_value` they make up
   - `net_worth`: the value of all holdings and accounts, of which each row shows its share
@@ -436,7 +482,7 @@ defmodule Abakus.Depot.Portfolios do
 
   @doc """
   What the dividend screen shows on `today` for all portfolios, or for the one with `portfolio_id`
-  and its reference account; amounts in euro cents:
+  and its cash; amounts in euro cents:
 
   - `portfolios` and `portfolio`: as in `holdings/3`
   - `received`: every dividend booked, newest first, see `Dividends.received/2`
@@ -456,7 +502,9 @@ defmodule Abakus.Depot.Portfolios do
     held = Valuation.holdings(transactions, today)
     portfolios = choosable_portfolios(scope, held)
     portfolio = Enum.find(portfolios, &(&1.id == portfolio_id))
-    received = transactions |> of_portfolio(portfolio, transactions) |> Dividends.received(market)
+
+    received =
+      transactions |> of_portfolio(portfolio, scope, transactions) |> Dividends.received(market)
 
     upcoming =
       Dividends.upcoming(transactions, stored, market, today,
@@ -595,14 +643,19 @@ defmodule Abakus.Depot.Portfolios do
   @doc """
   What the sidebar shows on `today`: the active portfolios by name, each with its `value` in euro
   cents, its securities valued as the holdings screen values all portfolios plus the balances of its
-  `cash_account_ids` in the Ledger; nothing retired, whatever it still holds.
+  cash in the Ledger; nothing retired, whatever it still holds.
   """
   def sidebar(%Scope{} = scope, today) do
     transactions = list_transactions(scope)
     market = load_market(transactions, today)
     holdings = Valuation.holdings(transactions, today)
     balances = Ledger.balances_through(scope, today)
-    cash_of = cash_portfolio_ids(scope.user.id)
+
+    cash =
+      scope
+      |> cash_account_portfolios()
+      |> Enum.group_by(&elem(&1, 1), &Map.get(balances, elem(&1, 0), 0))
+      |> Map.new(&sum_values/1)
 
     portfolios =
       for portfolio <- list_portfolios(scope), not portfolio.retired do
@@ -611,10 +664,7 @@ defmodule Abakus.Depot.Portfolios do
           |> Enum.filter(&(&1.portfolio_id == portfolio.id))
           |> Enum.sum_by(&Valuation.value(&1, market, today))
 
-        cash_account_ids = for {account_id, id} <- cash_of, id == portfolio.id, do: account_id
-        cash = Enum.sum_by(cash_account_ids, &Map.get(balances, &1, 0))
-
-        %{portfolio: portfolio, value: securities + cash, cash_account_ids: cash_account_ids}
+        %{portfolio: portfolio, value: securities + Map.get(cash, portfolio.id, 0)}
       end
 
     %{portfolios: portfolios}
@@ -646,7 +696,7 @@ defmodule Abakus.Depot.Portfolios do
 
   defp account_rows(%Scope{} = scope, today) do
     balances = Ledger.balances_through(scope, today)
-    cash_of = cash_portfolio_ids(scope.user.id)
+    cash_of = cash_account_portfolios(scope)
 
     for account <- list_accounts(scope),
         not Ledger.Account.budget_account?(account),
@@ -656,53 +706,23 @@ defmodule Abakus.Depot.Portfolios do
   end
 
   defp holding_groups(_portfolios, %Portfolio{} = portfolio, rows),
-    do: [holding_group(portfolio, rows, &portfolio_account?(&1, portfolio))]
+    do: [holding_group(portfolio, rows)]
 
   defp holding_groups(portfolios, nil, rows) do
-    owners = account_owners(portfolios, rows.accounts)
+    shown = MapSet.new(portfolios, & &1.id)
+    groups = Enum.map(portfolios, &holding_group(&1, rows))
 
-    groups =
-      Enum.map(portfolios, fn portfolio ->
-        holding_group(portfolio, rows, &(owners[&1.account.id] == portfolio.id))
-      end)
-
-    case Enum.reject(rows.accounts, &Map.has_key?(owners, &1.account.id)) do
+    case Enum.reject(rows.accounts, &MapSet.member?(shown, &1.cash_of)) do
       [] -> groups
       accounts -> groups ++ [group(nil, [], accounts)]
     end
   end
 
-  defp portfolio_account?(%{cash_of: nil, account: account}, portfolio),
-    do: account.id == portfolio.reference_account_id
-
-  defp portfolio_account?(%{cash_of: id}, portfolio), do: id == portfolio.id
-
-  # A shared reference account goes to the first active portfolio by name, to a retired one only without one.
-  defp account_owners(portfolios, rows) do
-    shown = MapSet.new(portfolios, & &1.id)
-
-    references =
-      for %{reference_account_id: account_id, id: id} <-
-            portfolios |> Enum.sort_by(& &1.retired) |> Enum.reverse(),
-          into: %{},
-          do: {account_id, id}
-
-    for row <- rows,
-        owner = account_owner(row, shown, references),
-        into: %{},
-        do: {row.account.id, owner}
-  end
-
-  defp account_owner(%{cash_of: nil, account: account}, _shown, references),
-    do: references[account.id]
-
-  defp account_owner(%{cash_of: id}, shown, _references), do: MapSet.member?(shown, id) && id
-
-  defp holding_group(portfolio, rows, account?) do
+  defp holding_group(portfolio, rows) do
     group(
       portfolio,
       Enum.filter(rows.holdings, &(&1.portfolio_id == portfolio.id)),
-      Enum.filter(rows.accounts, account?)
+      Enum.filter(rows.accounts, &(&1.cash_of == portfolio.id))
     )
   end
 
@@ -782,7 +802,8 @@ defmodule Abakus.Depot.Portfolios do
   @doc """
   The user's transactions grouped by month, newest first, as `{first day of month, transactions}`;
   `filter` is nil for all, `:trades`, `:earnings` or `:account`; `portfolio` nil for all
-  portfolios, or one of them for its transactions and those of its cash and its reference account.
+  portfolios, or one of them for its transactions, those of its cash and its securities' dividends, taxes and fees on
+  its Verrechnungskonto.
   """
   def transactions_by_month(%Scope{} = scope, filter \\ nil, portfolio \\ nil) do
     from(t in Transaction,
@@ -797,23 +818,16 @@ defmodule Abakus.Depot.Portfolios do
     |> Enum.map(&{month_of(hd(&1)), &1})
   end
 
-  # Which securities the portfolio held comes from all the user's transactions, the scope's.
-  defp of_portfolio(transactions, nil, _all), do: transactions
+  defp of_portfolio(transactions, nil, _scope), do: transactions
 
-  defp of_portfolio(transactions, portfolio, %Scope{} = scope),
-    do: of_portfolio(transactions, portfolio, list_transactions(scope))
+  defp of_portfolio(transactions, portfolio, scope),
+    do: of_portfolio(transactions, portfolio, scope, list_transactions(scope))
 
-  defp of_portfolio(transactions, %Portfolio{} = portfolio, all) do
-    cash =
-      Repo.all(
-        from c in "depot_cash_accounts",
-          where: c.portfolio_id == ^portfolio.id,
-          select: c.account_id
-      )
+  # `all` tells which securities the portfolio held.
+  defp of_portfolio(transactions, nil, _scope, _all), do: transactions
 
-    accounts = Enum.uniq(cash ++ List.wrap(portfolio.reference_account_id))
-
-    filter = Filter.new([portfolio], accounts, all)
+  defp of_portfolio(transactions, portfolio, scope, all) do
+    filter = Filter.new([portfolio], cash_of(scope, portfolio), all)
     Enum.filter(transactions, &Filter.concerns?(filter, &1))
   end
 

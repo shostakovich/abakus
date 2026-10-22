@@ -94,30 +94,26 @@ defmodule AbakusWeb.Depot.SidebarTest do
       }
     end
 
-    test "show each portfolio's securities, while net worth holds the accounts too", ctx do
+    test "show each portfolio's securities and cash, while net worth holds the other accounts too",
+         ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
 
-      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.000,00"
+      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.240,00"
       refute has_element?(lv, "aside nav", "Tagesgeld")
       assert lv |> element("#net-worth") |> render() =~ "2.240 €"
     end
 
-    test "show a portfolio's value as its holdings plus its cash accounts' balances", ctx do
-      cash =
-        cash_account_fixture(ctx.portfolio, account_fixture(ctx.scope, %{name: "Broker cash"}))
-
-      deposit(ctx.scope, cash, 300)
-
+    test "show a portfolio's value as its holdings plus its cash's balance in the Ledger", ctx do
       {:ok, _interest} =
         Ledger.create_transaction(ctx.scope, %{
-          account_id: cash.id,
+          account_id: ctx.account.id,
           date: Date.add(today(), -1),
           amount: money(20)
         })
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
 
-      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.320,00"
+      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.260,00"
     end
 
     test "stay out of the icon rail, which keeps the views and the settings", ctx do
@@ -155,7 +151,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
 
       MarketData.run_daily()
 
-      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.100,00"
+      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.340,00"
     end
   end
 

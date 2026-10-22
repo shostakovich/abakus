@@ -63,16 +63,16 @@ defmodule Abakus.Depot.CashMigrationTest do
       "depot_accounts (id, user_id, name, note, retired, budget_account_id, cash_of_portfolio_id, no_role, inserted_at, updated_at)",
       [
         "1, 1, 'Checking clearing', NULL, 0, 1, NULL, 0",
-        "2, 1, 'Broker cash', 'At the broker', 0, NULL, 1, 0",
+        "2, 1, 'Broker cash', 'At the broker', 0, NULL, NULL, 0",
         "3, 1, 'Old cash', NULL, 0, NULL, 2, 0",
         "4, 1, 'Loose', NULL, 0, NULL, NULL, 1",
         "5, 1, 'Retired loose', NULL, 1, NULL, NULL, 1",
-        "6, 2, 'Ben''s cash', NULL, 0, NULL, NULL, 1",
+        "6, 2, 'Ben''s cash', NULL, 0, NULL, 3, 0",
         "7, 1, 'Unset', NULL, 0, NULL, NULL, 0"
       ]
     )
 
-    for {portfolio, account} <- [{1, 1}, {2, 3}, {3, 6}] do
+    for {portfolio, account} <- [{1, 1}, {3, 6}] do
       Repo.query!("UPDATE depot_portfolios SET reference_account_id = ?2 WHERE id = ?1", [
         portfolio,
         account
@@ -190,6 +190,53 @@ defmodule Abakus.Depot.CashMigrationTest do
     assert [[4, nil]] = rows("SELECT id, ledger_account_id FROM depot_accounts WHERE id = 4")
   end
 
+  test "refuses a portfolio whose cash is not its Verrechnungskonto", %{repo: repo} do
+    Repo.query!("UPDATE depot_accounts SET cash_of_portfolio_id = 1 WHERE id = 7")
+
+    assert_raise RuntimeError, ~r/would lose a cash account: Broker$/, fn ->
+      TestMigrations.run!(repo)
+    end
+
+    assert ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
+  end
+
+  test "refuses a portfolio with several cash accounts", %{repo: repo} do
+    Repo.query!("UPDATE depot_accounts SET cash_of_portfolio_id = 2 WHERE id = 7")
+
+    assert_raise RuntimeError, ~r/would lose a cash account: Old$/, fn ->
+      TestMigrations.run!(repo)
+    end
+
+    assert ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
+  end
+
+  test "refuses a tracking account as Verrechnungskonto of several portfolios", %{repo: repo} do
+    Repo.query!("UPDATE depot_portfolios SET reference_account_id = 3 WHERE id = 1")
+
+    assert_raise RuntimeError,
+                 ~r/Verrechnungskonto of several portfolios: Old cash \(Broker, Old\)$/,
+                 fn ->
+                   TestMigrations.run!(repo)
+                 end
+
+    assert ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
+  end
+
+  test "lets several portfolios share a budget account as Verrechnungskonto", %{
+    repo: repo,
+    ids: ids
+  } do
+    insert(
+      "depot_portfolios (id, user_id, name, retired, reference_account_id, inserted_at, updated_at)",
+      ["4, 1, 'Second', 0, 1"]
+    )
+
+    TestMigrations.run!(repo)
+
+    sharing = "SELECT id FROM depot_portfolios WHERE reference_account_id = ?1 ORDER BY id"
+    assert rows(sharing, [ids[1]]) == [[1], [4]]
+  end
+
   describe "after the migrations" do
     setup :migrate
 
@@ -289,9 +336,8 @@ defmodule Abakus.Depot.CashMigrationTest do
       assert transactions() == before
     end
 
-    test "the Depot's transactions, portfolios and assignments refer to the Ledger accounts", %{
-      ids: ids
-    } do
+    test "the Depot's transactions, portfolios and assignments refer to the Ledger accounts, a portfolio without a Verrechnungskonto to its cash",
+         %{ids: ids} do
       assert rows("SELECT id, account_id, other_account_id FROM depot_transactions ORDER BY id") ==
                for(
                  {id, account, other} <- [
@@ -315,11 +361,6 @@ defmodule Abakus.Depot.CashMigrationTest do
       assert rows("SELECT id, reference_account_id FROM depot_portfolios ORDER BY id") ==
                [[1, ids[1]], [2, ids[3]], [3, ids[6]]]
 
-      assert rows(
-               "SELECT portfolio_id, account_id FROM depot_cash_accounts ORDER BY portfolio_id"
-             ) ==
-               [[1, ids[2]], [2, ids[3]]]
-
       assert rows("SELECT account_id FROM depot_assignments") == [[ids[4]]]
       assert rows("SELECT note FROM accounts WHERE id = ?1", [ids[2]]) == [["At the broker"]]
     end
@@ -327,7 +368,7 @@ defmodule Abakus.Depot.CashMigrationTest do
     test "drops the Verrechnungskonten" do
       refute ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
 
-      for table <- ~w(depot_transactions depot_portfolios depot_assignments depot_cash_accounts) do
+      for table <- ~w(depot_transactions depot_portfolios depot_assignments) do
         referenced = rows(~s|SELECT DISTINCT "table" FROM pragma_foreign_key_list(?1)|, [table])
         refute ["depot_accounts"] in referenced
       end

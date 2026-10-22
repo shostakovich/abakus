@@ -1,16 +1,19 @@
 defmodule AbakusWeb.Depot.PortfoliosLive do
   @moduledoc """
-  „Depots“ in the settings: the user's active portfolios with their depot numbers, which find a receipt's
-  portfolio, each edited in place, and a new portfolio with its Verrechnungskonto, a new tracking account in
-  Finanzen. The first one opens Finanzen. The budget owner links the Depot to the budget here
-  (`Abakus.Depot.BudgetLink`), so its cash side goes into budget accounts too (`Abakus.Depot.CashSide`).
+  „Depots“ in the settings: the user's portfolios, the retired ones apart, with their depot numbers, which find a
+  receipt's portfolio, and their Verrechnungskonten, each edited in a dialog, and a new portfolio with its
+  Verrechnungskonto, a new tracking account in Finanzen. A Verrechnungskonto that is a tracking account is the
+  portfolio's cash, which no register shows, so it is renamed, closed and reopened here in `AbakusWeb.AccountDialog`; a
+  budget account is edited in the budget. The first portfolio opens Finanzen. The budget owner links the Depot to the
+  budget here (`Abakus.Depot.BudgetLink`), so its cash side goes into budget accounts too (`Abakus.Depot.CashSide`).
   """
   use AbakusWeb, :depot_live_view
 
   alias Abakus.Depot.{BudgetLink, Portfolios, Receipts}
-  alias Abakus.Format
+  alias Abakus.{Format, Ledger}
+  alias Abakus.Ledger.Account
   alias Abakus.Users.Scope
-  alias AbakusWeb.{Areas, SettingsNav}
+  alias AbakusWeb.{AccountDialog, Areas, SettingsNav}
   alias AbakusWeb.Depot.Format, as: DepotFormat
 
   @impl true
@@ -26,19 +29,24 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     >
       <.header>Depots</.header>
       <div class="flex flex-col gap-8">
-        <section :if={@active_portfolios != []} id="depot-numbers" aria-labelledby="depots-title">
-          <.section_heading id="depots-title" count={length(@active_portfolios)}>
+        <section :if={@active != []} id="portfolios" aria-labelledby="depots-title">
+          <.section_heading id="depots-title" count={length(@active)}>
             Deine Depots
           </.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
             Belege finden ihr Depot über die Depotnummer, wie die Bank sie druckt; nur die Ziffern zählen.
           </p>
           <.list>
-            <.depot_number_row
-              :for={portfolio <- @active_portfolios}
-              portfolio={portfolio}
-              form={@editing == portfolio.id && @depot_number_form}
-            />
+            <.portfolio_row :for={portfolio <- @active} portfolio={portfolio} />
+          </.list>
+        </section>
+
+        <section :if={@retired != []} id="retired-portfolios" aria-labelledby="retired-title">
+          <.section_heading id="retired-title" count={length(@retired)}>
+            Aufgelöste Depots
+          </.section_heading>
+          <.list>
+            <.portfolio_row :for={portfolio <- @retired} portfolio={portfolio} />
           </.list>
         </section>
 
@@ -136,106 +144,117 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
           </.form>
         </section>
       </div>
+      <.portfolio_dialog :if={@editing} portfolio={@editing} form={@form} choices={@choices} />
+      <.live_component
+        :if={@account_dialog}
+        module={AccountDialog}
+        id="account-dialog"
+        current_scope={@current_scope}
+        account={@account_dialog.account}
+        balance={@account_dialog.balance}
+      />
     </Layouts.settings>
     """
   end
 
   attr :portfolio, :map, required: true
-  attr :form, :any, required: true, doc: "the depot number's form while it is edited, else false"
 
-  defp depot_number_row(%{form: false} = assigns) do
+  defp portfolio_row(assigns) do
     ~H"""
-    <.list_row id={"depot-number-#{@portfolio.id}"} title={DepotFormat.portfolio_name(@portfolio)}>
+    <.list_row id={"portfolio-row-#{@portfolio.id}"} title={DepotFormat.portfolio_name(@portfolio)}>
       <:leading><.plush name="briefcase" size={:lg} /></:leading>
       <:meta>
-        <span :for={{part, index} <- Enum.with_index(depot_number_details(@portfolio))}><.meta_sep :if={
-          index > 0
-        } /><span class="whitespace-nowrap">{part}</span></span>
+        <span :for={{part, index} <- Enum.with_index(details(@portfolio))}><.meta_sep :if={index > 0} /><span class="whitespace-nowrap">{part}</span></span>
       </:meta>
-      <:trailing>
-        <.button
-          size={:sm}
-          phx-click="edit_depot_number"
-          phx-value-id={@portfolio.id}
-          aria-label={"#{depot_number_action(@portfolio)}: Depotnummer von „#{DepotFormat.portfolio_name(@portfolio)}“"}
-        >
-          {depot_number_action(@portfolio)}
-        </.button>
-      </:trailing>
+      <:action
+        id={"portfolio-#{@portfolio.id}-edit"}
+        label="Bearbeiten"
+        icon="pencil"
+        on_click={JS.push("edit", value: %{id: @portfolio.id})}
+      />
+      <:action
+        :if={cash?(@portfolio)}
+        id={"portfolio-#{@portfolio.id}-account"}
+        label="Verrechnungskonto bearbeiten"
+        icon="wallet"
+        on_click={JS.push("edit_account", value: %{id: @portfolio.id})}
+      />
     </.list_row>
     """
   end
 
-  defp depot_number_row(assigns) do
+  defp cash?(%{reference_account: %Account{} = account}), do: not Account.budget_account?(account)
+  defp cash?(_portfolio), do: false
+
+  attr :portfolio, :map, required: true
+  attr :form, :any, required: true
+  attr :choices, :map, required: true
+
+  defp portfolio_dialog(assigns) do
     ~H"""
-    <li id={"depot-number-#{@portfolio.id}"} class="list-row items-start">
-      <.plush name="briefcase" size={:lg} />
-      <.form
-        for={@form}
-        id="depot-number-form"
-        class="list-col-grow min-w-0"
-        phx-change="validate_depot_number"
-        phx-submit="save_depot_number"
-        phx-window-keydown="cancel_depot_number"
-        phx-key="Escape"
-      >
-        <p class="font-medium wrap-anywhere">{DepotFormat.portfolio_name(@portfolio)}</p>
-        <div class="flex flex-col sm:flex-row sm:items-start sm:gap-2">
-          <div class="sm:max-w-md sm:flex-1">
-            <.input
-              field={@form[:depot_number]}
-              label={"Depotnummer von „#{DepotFormat.portfolio_name(@portfolio)}“"}
-              inline
-              class="tabular-nums"
-              inputmode="numeric"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="z. B. 123 456 7890"
-              phx-mounted={JS.focus()}
-            >
-              <.button
-                type="submit"
-                variant={:primary}
-                class="join-item"
-                phx-disable-with="Speichert …"
-              >
-                Speichern
-              </.button>
-            </.input>
-          </div>
-          <.button variant={:ghost} class="sm:mt-1" phx-click="cancel_depot_number">
-            Abbrechen
+    <.modal
+      id="portfolio-dialog"
+      show
+      title={DepotFormat.portfolio_name(@portfolio)}
+      on_cancel={JS.push("cancel_edit")}
+    >
+      <.form for={@form} id="portfolio-form" phx-change="validate" phx-submit="save">
+        <.input
+          field={@form[:depot_number]}
+          label="Depotnummer"
+          class="tabular-nums"
+          inputmode="numeric"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="z. B. 123 456 7890"
+        />
+        <.input
+          field={@form[:reference_account_id]}
+          type="select"
+          label="Verrechnungskonto"
+          prompt="Konto wählen"
+          options={account_options(@choices.accounts)}
+          help="Käufe, Verkäufe und Dividenden laufen standardmäßig über dieses Konto. Ein Trackingkonto ist das Cash beim Broker und zählt zum Wert des Depots; ein Budgetkonto bleibt im Budget."
+        />
+        <.action_bar class="mt-4">
+          <.button phx-click="cancel_edit">Abbrechen</.button>
+          <.button type="submit" variant={:primary} phx-disable-with="Speichert …">
+            Speichern
           </.button>
-        </div>
+        </.action_bar>
       </.form>
-    </li>
+    </.modal>
     """
   end
 
-  defp depot_number_details(portfolio) do
-    Enum.reject(
-      [
-        if(portfolio.depot_number,
-          do: "Depotnummer #{DepotFormat.masked(portfolio.depot_number)}",
-          else: "Keine Depotnummer"
-        ),
-        portfolio.reference_account && "Verrechnungskonto „#{portfolio.reference_account.name}“"
-      ],
-      &is_nil/1
-    )
+  defp account_options(accounts) do
+    {budget, tracking} = Enum.split_with(accounts, &Account.budget_account?/1)
+
+    for {label, group} <- [{"Budgetkonten", budget}, {"Trackingkonten", tracking}],
+        group != [],
+        do: {label, Enum.map(group, &{&1.name, &1.id})}
   end
 
-  defp depot_number_action(%{depot_number: nil}), do: "Eintragen"
-  defp depot_number_action(_portfolio), do: "Ändern"
+  defp details(portfolio) do
+    [
+      if(portfolio.depot_number,
+        do: "Depotnummer #{DepotFormat.masked(portfolio.depot_number)}",
+        else: "Keine Depotnummer"
+      ),
+      portfolio.reference_account &&
+        "Verrechnungskonto „#{portfolio.reference_account.name}“"
+    ]
+    |> Enum.filter(& &1)
+  end
 
   @impl true
   def mount(_params, _session, socket) do
     {:ok,
      socket
-     |> assign(page_title: "Depots", editing: nil, depot_number_form: nil)
+     |> assign(page_title: "Depots", editing: nil, form: nil, choices: nil, account_dialog: nil)
      |> load_link()
      |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
-     |> load_active_portfolios()}
+     |> load_portfolios()}
   end
 
   @impl true
@@ -255,36 +274,49 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
          |> assign(:new_form, to_form(Portfolios.change_new_portfolio(), as: :portfolio))
          |> Areas.open_depot()
          |> SettingsNav.assign_groups()
-         |> load_active_portfolios()}
+         |> load_portfolios()}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :new_form, to_form(changeset, as: :portfolio, action: :insert))}
     end
   end
 
-  def handle_event("edit_depot_number", %{"id" => id}, socket) do
+  def handle_event("edit", %{"id" => id}, socket) do
     case find_portfolio(socket, id) do
       nil -> {:noreply, socket}
-      portfolio -> {:noreply, edit(socket, portfolio, %{})}
+      portfolio -> {:noreply, edit(socket, portfolio)}
     end
   end
 
-  def handle_event("validate_depot_number", %{"portfolio" => params}, socket) do
-    case find_portfolio(socket, socket.assigns.editing) do
-      nil -> {:noreply, socket}
-      portfolio -> {:noreply, edit(socket, portfolio, params, :validate)}
+  def handle_event("edit_account", %{"id" => id}, socket) do
+    case find_portfolio(socket, id) do
+      %{reference_account: account} = portfolio ->
+        if cash?(portfolio),
+          do: {:noreply, assign(socket, :account_dialog, account_dialog(socket, account))},
+          else: {:noreply, socket}
+
+      nil ->
+        {:noreply, socket}
     end
   end
 
-  def handle_event("save_depot_number", %{"portfolio" => params}, socket) do
-    case find_portfolio(socket, socket.assigns.editing) do
-      nil -> {:noreply, socket}
-      portfolio -> save(socket, portfolio, params)
-    end
+  def handle_event("close_account_dialog", _params, socket),
+    do: {:noreply, assign(socket, :account_dialog, nil)}
+
+  def handle_event("validate", %{"portfolio" => params}, %{assigns: %{editing: %{}}} = socket) do
+    %{current_scope: scope, editing: portfolio, choices: choices} = socket.assigns
+    changeset = Portfolios.change_portfolio(scope, portfolio, params, choices)
+
+    {:noreply, assign(socket, :form, to_form(changeset, id: "portfolio-form", action: :validate))}
   end
 
-  def handle_event("cancel_depot_number", _params, socket),
-    do: {:noreply, assign(socket, editing: nil, depot_number_form: nil)}
+  def handle_event("save", %{"portfolio" => params}, %{assigns: %{editing: %{}}} = socket),
+    do: save(socket, socket.assigns.editing, params)
+
+  def handle_event(event, _params, socket) when event in ~w(validate save), do: {:noreply, socket}
+
+  def handle_event("cancel_edit", _params, socket),
+    do: {:noreply, assign(socket, editing: nil, form: nil, choices: nil)}
 
   def handle_event("validate_link", %{"link" => params}, socket),
     do: {:noreply, assign(socket, :link_form, to_form(BudgetLink.change_link(params), as: :link))}
@@ -315,6 +347,20 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
     end
   end
 
+  @impl true
+  def handle_info({AccountDialog, :done, message, _result}, socket) do
+    {:noreply,
+     socket
+     |> assign(:account_dialog, nil)
+     |> put_flash(:info, message)
+     |> load_portfolios()}
+  end
+
+  defp account_dialog(socket, account) do
+    balances = Ledger.balances(socket.assigns.current_scope)
+    %{account: account, balance: get_in(balances, [account.id, :balance]) || 0}
+  end
+
   defp link_refused(:not_budget_owner), do: "Nur wer das Budget führt, kann es verknüpfen."
   defp link_refused(:linked), do: "Das Depot ist schon mit dem Budget verknüpft."
   defp link_refused(message) when is_binary(message), do: message
@@ -341,37 +387,47 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
   defp save(socket, portfolio, params) do
     scope = socket.assigns.current_scope
 
-    case Portfolios.update_depot_number(scope, portfolio, params) do
+    case Portfolios.update_portfolio(scope, portfolio, params) do
       {:ok, _portfolio} ->
         Receipts.recheck(scope)
 
         {:noreply,
          socket
-         |> put_flash(
-           :info,
-           "Depotnummer von „#{DepotFormat.portfolio_name(portfolio)}“ gespeichert."
-         )
-         |> assign(editing: nil, depot_number_form: nil)
-         |> load_active_portfolios()}
+         |> put_flash(:info, "Depot „#{DepotFormat.portfolio_name(portfolio)}“ gespeichert.")
+         |> assign(editing: nil, form: nil, choices: nil)
+         |> load_portfolios()}
 
       {:error, changeset} ->
-        {:noreply, assign(socket, :depot_number_form, to_form(changeset, action: :update))}
+        {:noreply,
+         assign(socket, :form, to_form(changeset, id: "portfolio-form", action: :update))}
     end
   end
 
-  defp edit(socket, portfolio, params, action \\ nil) do
-    changeset = Portfolios.change_depot_number(socket.assigns.current_scope, portfolio, params)
-    assign(socket, editing: portfolio.id, depot_number_form: to_form(changeset, action: action))
+  defp edit(socket, portfolio) do
+    scope = socket.assigns.current_scope
+    choices = Portfolios.account_choices(scope, portfolio)
+    changeset = Portfolios.change_portfolio(scope, portfolio, %{}, choices)
+
+    assign(socket,
+      editing: portfolio,
+      form: to_form(changeset, id: "portfolio-form"),
+      choices: choices
+    )
   end
 
   defp find_portfolio(socket, id),
-    do: Enum.find(socket.assigns.active_portfolios, &(to_string(&1.id) == to_string(id)))
-
-  defp load_active_portfolios(socket),
     do:
-      assign(
-        socket,
-        :active_portfolios,
-        Portfolios.list_active_portfolios(socket.assigns.current_scope)
+      Enum.find(
+        socket.assigns.active ++ socket.assigns.retired,
+        &(to_string(&1.id) == to_string(id))
       )
+
+  defp load_portfolios(socket) do
+    {retired, active} =
+      socket.assigns.current_scope
+      |> Portfolios.list_portfolios_with_accounts()
+      |> Enum.split_with(& &1.retired)
+
+    assign(socket, active: active, retired: retired)
+  end
 end

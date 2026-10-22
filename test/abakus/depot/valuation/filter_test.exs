@@ -143,7 +143,7 @@ defmodule Abakus.Depot.Valuation.FilterTest do
           do: assert(Filter.flows(with_account(), dividend(type, 10, security_id)) == [])
     end
 
-    test "a dividend on the reference account outside goes out at once, a tax or fee comes in" do
+    test "a dividend on the Verrechnungskonto outside goes out at once, a tax or fee comes in" do
       assert Filter.flows(without_account(), dividend(:dividend, 10, 20)) ==
                [{:outbound, money(100)}]
 
@@ -233,7 +233,7 @@ defmodule Abakus.Depot.Valuation.FilterTest do
              ]
     end
 
-    test "pays out a dividend on the reference account outside at once, and pays in a tax" do
+    test "pays out a dividend on the Verrechnungskonto outside at once, and pays in a tax" do
       dividend = dividend(:dividend, 10, 20)
       tax = dividend(:tax, 10, 20)
       plain = %{dividend | security_id: nil}

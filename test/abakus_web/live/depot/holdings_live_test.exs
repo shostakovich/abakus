@@ -445,49 +445,13 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     end
   end
 
-  describe "a reference account two portfolios settle against" do
+  describe "a portfolio's cash beside a portfolio on a budget account" do
     setup %{scope: scope} do
       account = account_fixture(scope, %{name: "K"})
       deposit(scope, account, 50)
-
-      [a, b] =
-        for name <- ["A", "B"],
-            do: portfolio_fixture(scope, %{name: name, reference_account_id: account.id})
-
-      deliver(scope, b, security(100), 1, 100)
-      %{account: account, a: a, b: b}
-    end
-
-    test "appears once, under the first portfolio, while all are shown", ctx do
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
-
-      assert lv
-             |> element("#holdings-portfolio-#{ctx.a.id} #account-#{ctx.account.id}")
-             |> render() =~ "Referenzkonto"
-
-      refute has_element?(lv, "#holdings-portfolio-#{ctx.b.id} #account-#{ctx.account.id}")
-      refute has_element?(lv, "#holdings-accounts")
-      assert has_element?(lv, "tfoot:has(#holdings-total)", "150,00\u00A0€")
-    end
-
-    test "appears under the selected portfolio", ctx do
-      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?portfolio=#{ctx.b.id}")
-
-      assert has_element?(lv, "#holdings-portfolio-#{ctx.b.id} #account-#{ctx.account.id}", "K")
-      assert has_element?(lv, "tfoot:has(#holdings-total)", "150,00\u00A0€")
-    end
-  end
-
-  describe "a cash account another portfolio settles against too" do
-    setup %{scope: scope} do
-      account = account_fixture(scope, %{name: "K"})
-      deposit(scope, account, 50)
-
-      [a, b] =
-        for name <- ["A", "B"],
-            do: portfolio_fixture(scope, %{name: name, reference_account_id: account.id})
-
-      cash_account_fixture(a, account)
+      giro = account_fixture(scope, %{name: "Giro", kind: :checking})
+      a = portfolio_fixture(scope, %{name: "A", reference_account_id: account.id})
+      b = portfolio_fixture(scope, %{name: "B", reference_account_id: giro.id})
       deliver(scope, b, security(100), 1, 100)
       %{account: account, a: a, b: b}
     end
@@ -536,21 +500,18 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
 
   describe "a portfolio's cash" do
     setup %{scope: scope} do
-      giro = account_fixture(scope, %{name: "Giro-Verrechnung"})
-      portfolio = portfolio_fixture(scope, %{name: "Broker", reference_account_id: giro.id})
-      cash = cash_account_fixture(portfolio, account_fixture(scope, %{name: "Broker-Cash"}))
-      deposit(scope, cash, 100)
-      deposit(scope, giro, 2_000)
+      cash = account_fixture(scope, %{name: "Broker-Cash"})
+      portfolio = portfolio_fixture(scope, %{name: "Broker", reference_account_id: cash.id})
+      deposit(scope, cash, 2_100)
       deliver(scope, portfolio, security(90), 10, 900)
-      %{portfolio: portfolio, cash: cash, giro: giro}
+      %{portfolio: portfolio, cash: cash}
     end
 
-    test "shows in the portfolio's Bestand with its reference account as „davon Cash“", ctx do
+    test "shows in the portfolio's Bestand as „davon Cash“", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?portfolio=#{ctx.portfolio.id}")
 
       assert has_element?(lv, "header", "davon Cash\u00A02.100,00\u00A0€")
       assert lv |> element("#account-#{ctx.cash.id}") |> render() =~ "Cash"
-      assert lv |> element("#account-#{ctx.giro.id}") |> render() =~ "Referenzkonto"
       assert has_element?(lv, "tfoot:has(#holdings-total)", "3.000,00\u00A0€")
     end
 
@@ -584,7 +545,6 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
       assert has_element?(lv, "#holdings-portfolio-#{ctx.portfolio.id} #account-#{ctx.cash.id}")
-      assert has_element?(lv, "#holdings-portfolio-#{ctx.portfolio.id} #account-#{ctx.giro.id}")
       refute has_element?(lv, "#holdings-accounts")
     end
   end

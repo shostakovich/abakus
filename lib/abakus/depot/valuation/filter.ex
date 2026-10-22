@@ -9,7 +9,7 @@ defmodule Abakus.Depot.Valuation.Filter do
     deposit. Transfers across the edge are deliveries, deposits or removals in the same way.
   - A dividend, tax or fee of a security the included portfolios never held is a deposit or
     removal.
-  - On the reference account of an included portfolio that is itself outside, a dividend of a
+  - On the Verrechnungskonto of an included portfolio that is itself outside, a dividend of a
     security the portfolios held is paid out at once and a tax or fee paid in, so that it counts
     for the portfolio's performance.
   """
@@ -73,12 +73,15 @@ defmodule Abakus.Depot.Valuation.Filter do
 
   @doc """
   Whether a transaction belongs to the portfolios and accounts: it moves shares of the portfolios,
-  or money of the accounts without a security or for one the portfolios held.
+  money of the accounts without a security or for one the portfolios held, or money for such a
+  security on the Verrechnungskonto of an included portfolio.
   """
   def concerns?(%__MODULE__{} = filter, %Transaction{} = t) do
     portfolio?(filter, t.portfolio_id) or portfolio?(filter, t.other_portfolio_id) or
       ((account?(filter, t.account_id) or account?(filter, t.other_account_id)) and
-         (t.security_id == nil or held?(filter, t.security_id)))
+         (t.security_id == nil or held?(filter, t.security_id))) or
+      (MapSet.member?(filter.reference_account_ids, t.account_id) and t.security_id != nil and
+         held?(filter, t.security_id))
   end
 
   @doc """
@@ -128,7 +131,7 @@ defmodule Abakus.Depot.Valuation.Filter do
   @doc """
   The transaction as the filter's portfolios and accounts book it, as PP's filtered client holds
   it: none when it happens outside, one as it is or converted where it crosses the edge, or, for a
-  dividend, tax or fee on the reference account outside, itself and the deposit or removal that
+  dividend, tax or fee on the Verrechnungskonto outside, itself and the deposit or removal that
   settles it. A deposit or removal from a conversion has no security and no units.
   """
   def view(%__MODULE__{} = filter, %Transaction{type: type} = t), do: view(filter, type, t)

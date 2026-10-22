@@ -14,7 +14,9 @@ defmodule Abakus.Repo.Migrations.PointTheDepotAtLedgerAccounts do
   def up do
     with_foreign_keys_off(fn ->
       refuse_unmapped!()
-      create_cash_accounts()
+      refuse_lost_cash!()
+      fill_references()
+      refuse_shared_cash!()
       keep_notes()
 
       for {table, columns} <- @references do
@@ -44,28 +46,49 @@ defmodule Abakus.Repo.Migrations.PointTheDepotAtLedgerAccounts do
         )
   end
 
-  defp create_cash_accounts do
+  defp refuse_lost_cash! do
+    lost =
+      rows("""
+      SELECT p.name FROM depot_portfolios p
+      WHERE (
+        SELECT count(*) FROM depot_accounts d
+        WHERE d.cash_of_portfolio_id = p.id AND d.id IS NOT p.reference_account_id
+      ) > (p.reference_account_id IS NULL)
+      ORDER BY p.id
+      """)
+
+    if lost != [],
+      do:
+        raise("These portfolios would lose a cash account: " <> Enum.map_join(lost, ", ", &hd/1))
+  end
+
+  # A portfolio's cash at the broker becomes its Verrechnungskonto where it has none.
+  defp fill_references do
     query!("""
-    CREATE TABLE "depot_cash_accounts" (
-      "portfolio_id" INTEGER NOT NULL CONSTRAINT "depot_cash_accounts_portfolio_id_fkey"
-        REFERENCES "depot_portfolios"("id") ON DELETE CASCADE,
-      "account_id" INTEGER NOT NULL CONSTRAINT "depot_cash_accounts_account_id_fkey"
-        REFERENCES "accounts"("id") ON DELETE CASCADE
-    )
+    UPDATE depot_portfolios
+    SET reference_account_id = (SELECT id FROM depot_accounts WHERE cash_of_portfolio_id = depot_portfolios.id)
+    WHERE reference_account_id IS NULL
     """)
+  end
 
-    query!(
-      ~s|CREATE UNIQUE INDEX "depot_cash_accounts_account_id_index" ON "depot_cash_accounts" ("account_id")|
-    )
+  defp refuse_shared_cash! do
+    shared =
+      rows("""
+      SELECT a.name, group_concat(p.name, ', ' ORDER BY p.id) FROM depot_portfolios p
+      JOIN depot_accounts d ON d.id = p.reference_account_id
+      JOIN accounts a ON a.id = d.ledger_account_id
+      WHERE a.kind = 'tracking'
+      GROUP BY a.id HAVING count(*) > 1 ORDER BY a.id
+      """)
 
-    query!(
-      ~s|CREATE INDEX "depot_cash_accounts_portfolio_id_index" ON "depot_cash_accounts" ("portfolio_id")|
-    )
-
-    query!("""
-    INSERT INTO depot_cash_accounts (portfolio_id, account_id)
-    SELECT cash_of_portfolio_id, ledger_account_id FROM depot_accounts WHERE cash_of_portfolio_id IS NOT NULL
-    """)
+    if shared != [],
+      do:
+        raise(
+          "These tracking accounts are the Verrechnungskonto of several portfolios: " <>
+            Enum.map_join(shared, ", ", fn [account, portfolios] ->
+              "#{account} (#{portfolios})"
+            end)
+        )
   end
 
   defp keep_notes do

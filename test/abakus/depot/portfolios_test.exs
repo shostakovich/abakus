@@ -157,16 +157,13 @@ defmodule Abakus.Depot.PortfoliosTest do
     test "lists the portfolios with their securities' value and TTWROR since 1 January", ctx do
       account = account_fixture(ctx.scope, %{name: "Konto Langfristig"})
       portfolio = Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
-      cash_account_fixture(portfolio, account)
       deposit(ctx.scope, account, ~D[2025-06-01], 240)
       shares_fixture(ctx.scope, portfolio)
 
       savings = account_fixture(ctx.scope, %{name: "Konto Sparplan"})
       deposit(ctx.scope, savings, @friday, 1_500)
 
-      ctx.scope
-      |> portfolio_fixture(%{name: "Sparplan", reference_account_id: savings.id})
-      |> cash_account_fixture(savings)
+      portfolio_fixture(ctx.scope, %{name: "Sparplan", reference_account_id: savings.id})
 
       assert [langfristig, sparplan] = Portfolios.overview(ctx.scope, :max, @saturday).portfolios
 
@@ -178,7 +175,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert %{cash: 150_000, securities: 0, value: 0, ttwror: +0.0} = sparplan
     end
 
-    test "counts a dividend paid into the reference account for the depot's TTWROR", ctx do
+    test "counts a dividend paid into the Verrechnungskonto for the depot's TTWROR", ctx do
       account = account_fixture(ctx.scope)
       portfolio = Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
       security = shares_fixture(ctx.scope, portfolio)
@@ -196,15 +193,13 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert_in_delta row.ttwror, (1_020 + 10) / 1_000 - 1, 1.0e-12
     end
 
-    test "counts a portfolio's cash accounts, not the reference account of another", ctx do
+    test "counts a portfolio's cash, not a budget account as Verrechnungskonto", ctx do
       account = account_fixture(ctx.scope)
       deposit(ctx.scope, account, @friday, 50)
-
-      [a, b] =
-        for name <- ["A", "B"],
-            do: portfolio_fixture(ctx.scope, %{name: name, reference_account_id: account.id})
-
-      cash_account_fixture(a, account)
+      giro = account_fixture(ctx.scope, %{name: "Giro", kind: :checking})
+      deposit(ctx.scope, giro, @friday, 70)
+      a = portfolio_fixture(ctx.scope, %{name: "A", reference_account_id: account.id})
+      b = portfolio_fixture(ctx.scope, %{name: "B", reference_account_id: giro.id})
       shares_fixture(ctx.scope, b, 1)
 
       assert [a_row, b_row, _langfristig] =
@@ -308,13 +303,53 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert_in_delta one_month.benchmark.ttwror, 0.04, 1.0e-12
     end
 
-    test "gives one portfolio with its reference account", ctx do
+    test "gives one portfolio with its Verrechnungskonto", ctx do
       performance = Portfolios.performance(ctx.scope, :one_month, ctx.other.id, @saturday)
 
       assert performance.portfolio.id == ctx.other.id
       assert performance.interval == Date.range(~D[2026-09-03], @saturday)
       assert %{initial_value: 0, transfers: 100_000, final_value: 100_000} = performance.breakdown
       assert performance.ttwror == 0.0
+    end
+
+    test "gives one portfolio on a budget account without its other money, with its dividends",
+         ctx do
+      giro = account_fixture(ctx.scope, %{name: "Giro", kind: :checking})
+
+      portfolio =
+        portfolio_fixture(ctx.scope, %{name: "Giro-Depot", reference_account_id: giro.id})
+
+      security = security_fixture(quote_feed: :manual)
+      price_fixture(security, ~D[2026-09-01], price(100), :manual)
+      price_fixture(security, @friday, price(102), :manual)
+
+      transaction_fixture(ctx.scope, ~D[2026-08-15],
+        type: :deposit,
+        account_id: giro.id,
+        amount: money(5_000)
+      )
+
+      transaction_fixture(ctx.scope, ~D[2026-09-01],
+        type: :buy,
+        portfolio_id: portfolio.id,
+        account_id: giro.id,
+        security_id: security.id,
+        shares: shares(10),
+        amount: money(1_000)
+      )
+
+      transaction_fixture(ctx.scope, @friday,
+        type: :dividend,
+        account_id: giro.id,
+        security_id: security.id,
+        amount: money(10)
+      )
+
+      performance = Portfolios.performance(ctx.scope, :max, portfolio.id, @saturday)
+
+      assert performance.portfolio.id == portfolio.id
+      assert %{earnings: 1_000, final_value: 102_000} = performance.breakdown
+      assert_in_delta performance.ttwror, (1_020 + 10) / 1_000 - 1, 1.0e-12
     end
 
     test "shows all portfolios for one of another user", ctx do
@@ -422,7 +457,6 @@ defmodule Abakus.Depot.PortfoliosTest do
       account = account_fixture(ctx.scope, %{name: "Konto Langfristig"})
       deposit_on_friday(ctx.scope, account, 2_000)
       portfolio = Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
-      cash_account_fixture(portfolio, account)
       small = security_at(10, "Klein")
       large = security_at(100, "Groß")
       buy(ctx.scope, portfolio, small, 10, 120)
@@ -462,15 +496,12 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert Enum.flat_map(holdings.groups, & &1.accounts) == []
     end
 
-    test "shows a cash account under its portfolio, though another settles against it too", ctx do
+    test "shows a portfolio's cash under it alone", ctx do
       account = account_fixture(ctx.scope, %{name: "K"})
       deposit_on_friday(ctx.scope, account, 50)
-
-      [a, b] =
-        for name <- ["A", "B"],
-            do: portfolio_fixture(ctx.scope, %{name: name, reference_account_id: account.id})
-
-      cash_account_fixture(b, account)
+      giro = account_fixture(ctx.scope, %{name: "Giro", kind: :checking})
+      a = portfolio_fixture(ctx.scope, %{name: "A", reference_account_id: giro.id})
+      b = portfolio_fixture(ctx.scope, %{name: "B", reference_account_id: account.id})
       all = Portfolios.holdings(ctx.scope, nil, @saturday)
 
       assert group_names(all) == ["A", "B", "Langfristig"]
@@ -586,7 +617,6 @@ defmodule Abakus.Depot.PortfoliosTest do
       account = account_fixture(ctx.scope)
       deposit_on_friday(ctx.scope, account, 1_000)
       plan = portfolio_fixture(ctx.scope, %{name: "Sparplan", reference_account_id: account.id})
-      cash_account_fixture(plan, account)
       world = security_at(100, "Welt")
       buy(ctx.scope, ctx.portfolio, world, 30, 3_000)
       buy(ctx.scope, plan, world, 10, 1_000)
@@ -720,7 +750,7 @@ defmodule Abakus.Depot.PortfoliosTest do
       assert {result.value, result.purchase_value} == {money(1_000), money(900)}
     end
 
-    test "gives one portfolio's dividends on its reference account and for its shares", ctx do
+    test "gives one portfolio's dividends on its Verrechnungskonto and for its shares", ctx do
       security = security_fixture(quote_feed: :manual)
       price_fixture(security, @friday, price(100), :manual)
       account = account_fixture(ctx.scope)
@@ -948,7 +978,7 @@ defmodule Abakus.Depot.PortfoliosTest do
     end
 
     test "gives the portfolios by name with the value of their securities", ctx do
-      account = account_fixture(ctx.scope, %{name: "Konto Langfristig"})
+      account = account_fixture(ctx.scope, %{name: "Konto Langfristig", kind: :checking})
       deposit_into(ctx.scope, account, 2_000)
       portfolio = Repo.update!(change(ctx.portfolio, reference_account_id: account.id))
       held(ctx.scope, portfolio, 10, 100)
@@ -962,16 +992,18 @@ defmodule Abakus.Depot.PortfoliosTest do
              } = Portfolios.sidebar(ctx.scope, @saturday)
     end
 
-    test "gives a portfolio's value as its holdings plus its cash accounts' balances in the Ledger",
-         ctx do
+    test "gives a portfolio's value as its holdings plus its cash's balance in the Ledger", ctx do
       broker = account_fixture(ctx.scope, %{name: "Broker cash"})
-      plan = account_fixture(ctx.scope, %{name: "Savings plan cash"})
-      for account <- [broker, plan], do: cash_account_fixture(ctx.portfolio, account)
+      Repo.update!(change(ctx.portfolio, reference_account_id: broker.id))
       deposit_into(ctx.scope, broker, 300)
       deposit_into(ctx.scope, account_fixture(ctx.scope, %{name: "Elsewhere"}), 50)
 
       {:ok, _interest} =
-        Ledger.create_transaction(ctx.scope, %{account_id: plan.id, date: @friday, amount: 2_000})
+        Ledger.create_transaction(ctx.scope, %{
+          account_id: broker.id,
+          date: @friday,
+          amount: 2_000
+        })
 
       held(ctx.scope, ctx.portfolio, 10, 100)
 

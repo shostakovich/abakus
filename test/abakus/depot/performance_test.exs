@@ -558,7 +558,7 @@ defmodule Abakus.Depot.PerformanceTest do
       assert_in_delta Performance.ttwror(index), 1_570 / 1_500 - 1, 1.0e-12
     end
 
-    test "counts a portfolio's dividends with or without its reference account", ctx do
+    test "counts a portfolio's dividends with or without its Verrechnungskonto", ctx do
       days = Date.range(@friday, @saturday)
 
       for {account_ids, ttwror} <- [{[10], 1_570 / 1_500 - 1}, {[], (1_050 + 20) / 1_000 - 1}] do

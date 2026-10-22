@@ -252,10 +252,7 @@ defmodule AbakusWeb.Depot.PerformanceLive do
 
   defp portfolio_name(nil), do: "alle Depots und Konten"
 
-  defp portfolio_name(%{reference_account_id: nil} = portfolio),
-    do: DepotFormat.portfolio_name(portfolio)
-
-  defp portfolio_name(portfolio), do: "#{DepotFormat.portfolio_name(portfolio)} mit Referenzkonto"
+  defp portfolio_name(portfolio), do: DepotFormat.portfolio_name(portfolio)
 
   attr :max, :float, required: true
   attr :from, Date, required: true

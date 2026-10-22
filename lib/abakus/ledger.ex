@@ -277,8 +277,8 @@ defmodule Abakus.Ledger do
   and subtransactions; without deleted ones and match proposals, which count nowhere (see
   `list_match_proposals/2`).
 
-  Options narrow the list: `filter: :unapproved` or `:uncleared` (`:all` for none), `ids:` and `limit:`, the newest
-  so many.
+  Options narrow the list: `filter: :unapproved` or `:uncleared` (`:all` for none), `ids:`, `without_accounts:`, the
+  ids of accounts to leave out, and `limit:`, the newest so many.
   """
   def list_transactions(%Scope{} = scope, register, opts \\ []) do
     scope
@@ -317,6 +317,7 @@ defmodule Abakus.Ledger do
         fragment("? IN (SELECT value FROM json_each(?))", t.id, ^JSON.encode!(ids))
       )
 
+  defp narrow(query, {:without_accounts, ids}), do: where(query, [t], t.account_id not in ^ids)
   defp narrow(query, {:limit, limit}), do: limit(query, ^limit)
 
   @doc """
@@ -361,12 +362,16 @@ defmodule Abakus.Ledger do
 
   @doc """
   The account's pending match proposals, or with `:all` every account's, newest first, with what the register
-  shows of them and the transactions they would merge into (with payee and counterparts).
+  shows of them and the transactions they would merge into (with payee and counterparts); options as for
+  `list_transactions/3`.
   """
-  def list_match_proposals(%Scope{} = scope, %Account{id: account_id}),
-    do: list_proposals(from t in proposals(scope), where: t.account_id == ^account_id)
+  def list_match_proposals(scope, register, opts \\ [])
 
-  def list_match_proposals(%Scope{} = scope, :all), do: list_proposals(proposals(scope))
+  def list_match_proposals(%Scope{} = scope, %Account{id: account_id}, opts),
+    do: list_proposals(from(t in proposals(scope), where: t.account_id == ^account_id), opts)
+
+  def list_match_proposals(%Scope{} = scope, :all, opts),
+    do: list_proposals(proposals(scope), opts)
 
   defp proposals(scope),
     do:
@@ -374,9 +379,9 @@ defmodule Abakus.Ledger do
         where: is_nil(t.deleted_at) and not is_nil(t.matched_transaction_id)
       )
 
-  defp list_proposals(query) do
+  defp list_proposals(query, opts) do
     Repo.all(
-      from t in query,
+      from t in narrowed(query, opts),
         order_by: [desc: t.date, desc: t.id],
         preload: [
           :payee,

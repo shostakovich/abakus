@@ -17,13 +17,6 @@ defmodule Abakus.Depot.PortfoliosFixtures do
     account
   end
 
-  @doc "Makes `account` the cash of `portfolio`."
-  def cash_account_fixture(%Portfolio{id: portfolio_id}, account) do
-    Repo.insert_all("depot_cash_accounts", [%{portfolio_id: portfolio_id, account_id: account.id}])
-
-    account
-  end
-
   @doc "A transaction on `date`, at noon, with its cash side in the Ledger; `attrs` needs at least `type`."
   def transaction_fixture(%Scope{user: user} = scope, date, attrs) do
     transaction =

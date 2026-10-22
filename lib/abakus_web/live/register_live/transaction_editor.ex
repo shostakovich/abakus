@@ -9,13 +9,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   Payee and category are Setzkasten comboboxes; a choice arrives as a change of `payee_pick` (with `payee_new` for a
   payee typed anew) or `category_pick`, "Aufteilen" among the categories splits the transaction. Transfers are picked as
-  payees, the other open accounts above the payees, in a split's subtransactions too. A payee suggests its last
-  category, and a suggestion goes again when the payee changes; a chosen category stays. A transfer between a budget and
-  a tracking account takes a category and suggests the one last used between the two. Changing or deleting a reconciled
-  transaction, or one whose counterpart is, asks first. A transaction its source leads (`Ledger.led_by/2`, ADR 0020)
-  links to its Kasse expense or Depot transaction and keeps what the source leads (`Ledger.led_fields/0`); it is
-  neither split nor deleted here. A transfer with the shared-expenses account becomes a reimbursement in the Kasse (`Abakus.Kasse.BudgetLink.write_from_register/4`), which asks for
-  the person while the group has more than one besides the budget owner.
+  payees, the other open accounts above the payees, in a split's subtransactions too; the portfolios' cash accounts
+  (`depot_cash`) only where the transaction uses one already. A payee suggests its last category, and a suggestion goes
+  again when the payee changes; a chosen category stays. A transfer between a budget and a tracking account takes a
+  category and suggests the one last used between the two. Changing or deleting a reconciled transaction, or one whose
+  counterpart is, asks first. A transaction its source leads (`Ledger.led_by/2`, ADR 0020) links to its Kasse expense or
+  Depot transaction and keeps what the source leads (`Ledger.led_fields/0`); it is neither split nor deleted here. A
+  transfer with the shared-expenses account becomes a reimbursement in the Kasse
+  (`Abakus.Kasse.BudgetLink.write_from_register/4`), which asks for the person while the group has more than one besides
+  the budget owner.
 
   Tells its LiveView `{TransactionEditor, :done, message}` once the transaction is saved or deleted; the events
   `cancel_edit` (Cancel, Escape) go to the LiveView itself.
@@ -960,10 +962,23 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @impl true
   def update(assigns, socket) do
-    socket = socket |> assign(assigns) |> assign_fixed()
+    socket = socket |> assign(assigns) |> assign_accounts() |> assign_fixed()
     key = assigns.transaction && assigns.transaction.id
     socket = if Map.get(socket.assigns, :loaded) == {key}, do: socket, else: load(socket, key)
     {:ok, assign_ask_person(socket)}
+  end
+
+  # A portfolio's cash is the Depot's: the editor knows it only where the transaction uses it.
+  defp assign_accounts(%{assigns: %{accounts: accounts, depot_cash: depot_cash}} = socket) do
+    used = used_accounts(socket.assigns.transaction)
+
+    assign(
+      socket,
+      :accounts,
+      Map.reject(accounts, fn {id, _account} ->
+        Map.has_key?(depot_cash, id) and id not in used
+      end)
+    )
   end
 
   defp assign_fixed(%{assigns: %{current_scope: scope, transaction: transaction}} = socket) do
@@ -1071,13 +1086,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   end
 
   # Accounts the transaction uses, which stay selectable though closed or fed.
-  defp kept_accounts(transaction, accounts) do
+  defp kept_accounts(transaction, accounts),
+    do: MapSet.intersection(used_accounts(transaction), MapSet.new(Map.keys(accounts)))
+
+  defp used_accounts(transaction) do
     sides(transaction)
     |> Enum.map(&(&1.payee && &1.payee.transfer_account_id))
     |> then(&[transaction && transaction.account_id | &1])
     |> Enum.reject(&is_nil/1)
     |> MapSet.new()
-    |> MapSet.intersection(MapSet.new(Map.keys(accounts)))
   end
 
   @impl true

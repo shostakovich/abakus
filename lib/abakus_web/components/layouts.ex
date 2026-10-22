@@ -296,13 +296,8 @@ defmodule AbakusWeb.Layouts do
     for group <- groups, {row, index} <- Enum.with_index(group.rows), do: {group, row, index == 0}
   end
 
-  defp sidebar_groups(true = _finanzen?, assigns),
-    do: AccountGroups.sidebar(assigns.account_groups, cash_account_ids(assigns.depot_sidebar))
-
+  defp sidebar_groups(true = _finanzen?, assigns), do: AccountGroups.open(assigns.account_groups)
   defp sidebar_groups(_finanzen?, _assigns), do: []
-
-  defp cash_account_ids(%{portfolios: rows}), do: Enum.flat_map(rows, & &1.cash_account_ids)
-  defp cash_account_ids(_sidebar), do: []
 
   defp portfolio_rows(true, %{portfolios: rows}) do
     for row <- rows do
@@ -324,13 +319,7 @@ defmodule AbakusWeb.Layouts do
         &(&1.account.id == account_id)
       )
 
-    portfolio = account_id && portfolio_of(assigns.depot_sidebar, account_id)
-
-    cond do
-      account_id && listed? -> {:account, account_id}
-      portfolio -> {:depot_portfolio, portfolio.id}
-      true -> :all_accounts
-    end
+    if account_id && listed?, do: {:account, account_id}, else: :all_accounts
   end
 
   defp nav_key(%{current: :depots, depot_marked: marked, depot_sidebar: sidebar})
@@ -341,11 +330,6 @@ defmodule AbakusWeb.Layouts do
 
   defp nav_key(%{current: :import_receipts}), do: :import
   defp nav_key(%{current: current}), do: current
-
-  defp portfolio_of(%{portfolios: rows}, account_id),
-    do: Enum.find_value(rows, &(account_id in &1.cash_account_ids && &1.portfolio))
-
-  defp portfolio_of(_sidebar, _account_id), do: nil
 
   defp initial(email), do: String.upcase(String.first(email) || "")
 

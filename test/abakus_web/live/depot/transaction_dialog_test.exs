@@ -27,7 +27,7 @@ defmodule AbakusWeb.Depot.TransactionDialogTest do
     |> render_change(%{"_target" => ["transaction", target]})
   end
 
-  test "opens from the Depots pages and on the phone with the portfolio's reference account",
+  test "opens from the Depots pages and on the phone with the portfolio's Verrechnungskonto",
        ctx do
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
     refute has_element?(lv, "#transaction-modal")

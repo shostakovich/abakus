@@ -367,7 +367,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp count(count, _one, many), do: "#{count}\u00A0#{many}"
 
   defp account_note(%{portfolio: nil}, _entry), do: nil
-  defp account_note(_portfolio_group, %{cash_of: nil}), do: "Referenzkonto"
   defp account_note(_portfolio_group, _entry), do: "Cash"
 
   defp price(%{price: price, security: security}), do: DepotFormat.price(price, security.currency)

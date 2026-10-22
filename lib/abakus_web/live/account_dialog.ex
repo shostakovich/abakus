@@ -7,7 +7,8 @@ defmodule AbakusWeb.AccountDialog do
   Every signed-in page of the budget owner has it through `on_mount(:attach, …)`: the event `open_account_dialog`
   opens it, with `id` to edit that account, without to add one; `close_account_dialog` closes it. `Layouts.app`
   renders it from `account_dialog`. A new account opens its register; after an edit or closing, the page stays as it
-  is and runs its URL's params again, so it shows the account as it is now.
+  is and runs its URL's params again, so it shows the account as it is now. The Depot's settings
+  (`AbakusWeb.Depot.PortfoliosLive`) render it themselves for a portfolio's cash, which no register shows.
   """
   use AbakusWeb, :live_component
 

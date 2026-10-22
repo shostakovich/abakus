@@ -17,8 +17,8 @@ defmodule Abakus.Depot.WealthTest do
     price_fixture(security, @depot_first, price(100), :manual)
     price_fixture(security, @repriced, price(120), :manual)
 
-    portfolio = portfolio_fixture(scope, %{name: "Broker"})
-    cash = cash_account_fixture(portfolio, account_fixture(scope, %{name: "Broker cash"}))
+    cash = account_fixture(scope, %{name: "Broker cash"})
+    portfolio = portfolio_fixture(scope, %{name: "Broker", reference_account_id: cash.id})
     holding = [portfolio_id: portfolio.id, security_id: security.id]
 
     transaction_fixture(
@@ -39,8 +39,8 @@ defmodule Abakus.Depot.WealthTest do
       [type: :buy, account_id: cash.id, shares: shares(5), amount: money(500)] ++ holding
     )
 
-    retired = portfolio_fixture(scope, %{name: "Old", retired: true})
-    old_cash = cash_account_fixture(retired, account_fixture(scope, %{name: "Old cash"}))
+    old_cash = account_fixture(scope, %{name: "Old cash"})
+    portfolio_fixture(scope, %{name: "Old", retired: true, reference_account_id: old_cash.id})
 
     transaction_fixture(scope, ~D[2022-01-03],
       type: :deposit,

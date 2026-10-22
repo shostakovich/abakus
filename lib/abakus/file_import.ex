@@ -10,10 +10,11 @@ defmodule Abakus.FileImport do
   else a new one), the memo from `MEMO`. The statement's ledger balance becomes the account's bank balance from the
   file.
 
-  The shared-expenses account and closed accounts take no file import. Everything goes through the Ledger with the
-  caller's scope.
+  The shared-expenses account, closed accounts and a portfolio's cash, whose money moves in the Depot, take no file
+  import. Everything goes through the Ledger with the caller's scope.
   """
 
+  alias Abakus.Depot.Portfolios
   alias Abakus.FileImport.OFX
   alias Abakus.{Ledger, Repo}
   alias Abakus.Ledger.Account
@@ -23,13 +24,20 @@ defmodule Abakus.FileImport do
   defdelegate read(content), to: OFX, as: :parse
 
   @doc "The accounts a statement can go into, in their order."
-  def accounts(%Scope{} = scope),
-    do: Enum.filter(Ledger.list_accounts(scope), &Account.takes_entries?/1)
+  def accounts(%Scope{} = scope) do
+    takes_import? = takes_import(scope)
+    Enum.filter(Ledger.list_accounts(scope), takes_import?)
+  end
 
   @doc "The account the statement's account is linked to, as long as it takes a file import."
   def linked_account(%Scope{} = scope, %{bank_id: bank_id, acct_id: acct_id}) do
     account = Ledger.get_account_by_ofx(scope, bank_id, acct_id)
-    if account && Account.takes_entries?(account), do: account
+    if account && takes_import(scope).(account), do: account
+  end
+
+  defp takes_import(scope) do
+    cash = Portfolios.cash_account_portfolios(scope)
+    &(Account.takes_entries?(&1) and not Map.has_key?(cash, &1.id))
   end
 
   @doc """
@@ -102,9 +110,10 @@ defmodule Abakus.FileImport do
       end)
 
     accounts = Enum.map(statements, &elem(&1, 1))
+    takes_import? = takes_import(scope)
 
     cond do
-      account = Enum.find(accounts, &(not Account.takes_entries?(&1))) ->
+      account = Enum.find(accounts, &(not takes_import?.(&1))) ->
         {:error, "#{account.name} nimmt keinen Datei-Import."}
 
       length(Enum.uniq_by(accounts, & &1.id)) < length(accounts) ->

@@ -2,6 +2,7 @@ defmodule Abakus.FileImportTest do
   use Abakus.DataCase
 
   import Abakus.DomainFixtures
+  import Abakus.Depot.PortfoliosFixtures, only: [portfolio_fixture: 2]
 
   alias Abakus.{FileImport, Ledger}
   alias Abakus.Ledger.{Account, BankBalance, Payee, Transaction}
@@ -292,6 +293,19 @@ defmodule Abakus.FileImportTest do
                cash.id,
                depot.id
              ]
+    end
+
+    test "a portfolio's cash takes no file import, also when a file is linked to it" do
+      broker = account_fixture(name: "Broker", kind: :tracking)
+      statement = statement("girokonto_2026-09.ofx")
+      {:ok, _counts} = FileImport.import(budget_scope(), [{statement, broker}])
+      portfolio_fixture(budget_scope(), %{name: "Langfristig", reference_account_id: broker.id})
+
+      refute broker.id in Enum.map(FileImport.accounts(budget_scope()), & &1.id)
+      assert FileImport.linked_account(budget_scope(), statement) == nil
+
+      assert FileImport.import(budget_scope(), [{statement("kreditkarte.ofx"), broker}]) ==
+               {:error, "Broker nimmt keinen Datei-Import."}
     end
 
     test "a linked account that no longer takes a file import is not offered", %{giro: giro} do

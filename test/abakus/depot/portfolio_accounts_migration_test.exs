@@ -55,8 +55,6 @@ defmodule Abakus.Depot.PortfolioAccountsMigrationTest do
       ["1, 1, 'Broker', 0, 2, 6", "2, 1, 'Old', 1, NULL, 6"]
     )
 
-    insert("depot_cash_accounts (portfolio_id, account_id)", ["1, 6"])
-
     insert(
       "depot_transactions (id, user_id, type, date_time, account_id, portfolio_id, security_id, shares, amount, source, inserted_at, updated_at)",
       [
@@ -152,7 +150,6 @@ defmodule Abakus.Depot.PortfolioAccountsMigrationTest do
            ]
 
     assert rows("SELECT id, amount FROM transactions WHERE account_id = 3") == [[26, 5000]]
-    assert rows("SELECT portfolio_id, account_id FROM depot_cash_accounts") == [[1, 6]]
     assert rows("SELECT count(*) FROM depot_transactions") == [[2]]
   end
 

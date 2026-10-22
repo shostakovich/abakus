@@ -328,7 +328,6 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       portfolio =
         portfolio_fixture(scope, %{name: "Langfristig", reference_account_id: account.id})
 
-      cash_account_fixture(portfolio, account)
       deliver(scope, portfolio, 10, money(1_000))
       %{portfolio: portfolio}
     end
@@ -385,7 +384,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       refute has_element?(lv, "#portfolio-#{empty.id}")
     end
 
-    test "leaves out a retired reference account once it is empty, as the sidebar does", ctx do
+    test "leaves out a closed Verrechnungskonto once it is empty, as the sidebar does", ctx do
       account = account_fixture(ctx.scope, %{name: "Konto Alt", closed: true})
 
       portfolio =

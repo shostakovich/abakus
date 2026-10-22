@@ -104,21 +104,18 @@ defmodule AbakusWeb.Depot.DepotsTest do
            )
   end
 
-  test "a portfolio's cash account stays out of the sidebar, and its register marks the portfolio",
+  test "a portfolio's cash stays out of the sidebar, a budget account as Verrechnungskonto not",
        ctx do
-    cash_id = ctx.long.reference_account_id
-    cash_account_fixture(ctx.long, %{id: cash_id})
-    holdings = ~p"/depot/holdings?#{[portfolio: ctx.long.id]}"
+    giro = account_fixture(ctx.scope, %{name: "Giro", kind: :checking})
+    portfolio_fixture(ctx.scope, %{name: "Giro-Depot", reference_account_id: giro.id})
 
-    {:ok, lv, _html} = live(ctx.conn, ~p"/budget/accounts/#{cash_id}")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/budget/accounts/all")
 
-    refute has_element?(lv, sidebar_link(~p"/budget/accounts/#{cash_id}"))
-    assert has_element?(lv, sidebar_link(~p"/budget/accounts/#{ctx.play.reference_account_id}"))
-    assert has_element?(lv, sidebar_link(holdings) <> "[aria-current=page]")
-    refute has_element?(lv, "#depots-tabs")
+    refute has_element?(lv, sidebar_link(~p"/budget/accounts/#{ctx.long.reference_account_id}"))
+    assert has_element?(lv, sidebar_link(~p"/budget/accounts/#{giro.id}"))
   end
 
-  test "Buchungen of a portfolio are its own and its reference account's", ctx do
+  test "Buchungen of a portfolio are its own and its cash's", ctx do
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions?#{[portfolio: ctx.long.id]}")
 
     for transaction <- [ctx.deposit, ctx.long_buy, ctx.long_dividend],
