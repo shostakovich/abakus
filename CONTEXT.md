@@ -189,10 +189,12 @@ _Avoid_: Ledger balance (OFX's name, `LEDGERBAL`), statement balance
 
 **Match**:
 An imported transaction that looks like an existing one, proposed for merging; never merged silently. Until it is
-decided, the proposal counts nowhere and both keep their account and amount. Accepting merges it into the existing
-transaction, which keeps its id and gets the import's origin; rejecting separates them and approves the import as a
-transaction of its own. Only imports from a file or the bank propose; one proposal per existing transaction in the
-register, in its account with its amount; a reconciled transaction takes none.
+decided, the proposal counts nowhere and both keep their account and amount, unless the transaction's source (the
+Depot or the Kasse) or a change to the other side of a transfer changes them: then the proposal is an ordinary import
+again. Accepting merges it into the existing transaction, which keeps its id and gets the import's origin; rejecting
+separates them and approves the import as a transaction of its own. Only imports from a file or the bank propose; one
+proposal per existing transaction in the register, in its account with its amount; a reconciled transaction takes
+none.
 UI "passt zu", "Zuordnungsvorschlag"; accept "Zuordnen", reject "Trennen".
 _Avoid_: Duplicate, merge
 
@@ -358,19 +360,18 @@ The number the bank gives a portfolio, as its documents print it; only its digit
 "Depotnummer".
 
 **Verrechnungskonto**:
-An account in Finanzen of its user that Depot transactions move money on (ADR 0020): a budget account, such as the
-checking account a portfolio pays from, or a tracking account for cash at the broker. The one a portfolio's
-purchases, sales and dividends settle against by default is its reference account; several portfolios may share one.
-A new portfolio comes with a new tracking account as its reference account and cash. Code: `Abakus.Ledger.Account`.
-UI "Verrechnungskonto", the reference account "Referenzkonto" where it is one.
-_Avoid_: Depot account, clearing account
-
-**Portfolio cash**:
-The tracking accounts that hold the cash at the broker of one of the user's portfolios, each the cash of one: their
-balances count toward that portfolio's value in the sidebar, which so lists them only inside it, and show in its
-Bestand. Code:
-`Portfolio.cash_accounts`. UI in the Bestand "Cash", "davon Cash".
-_Avoid_: Cash account (that is any Verrechnungskonto)
+The account in Finanzen a portfolio's purchases, sales and dividends settle against by default (ADR 0020); each
+portfolio has exactly one, and a Depot transaction may move money on any other account of its user. Its kind decides
+whose money it is, for active and retired portfolios alike. A budget account, such as the checking account a
+portfolio pays from, stays the budget's, and several portfolios may share it. A tracking account is the portfolio's
+cash at the broker and the Verrechnungskonto of no other portfolio: its balance counts toward the portfolio's value
+in the sidebar and shows in its Bestand; its money moves in the Depot, so the budget's registers leave it out, Alle
+Konten included, no account picker there and no file import offers it, and its own register leads to the portfolio,
+while a transfer from another account still shows in that account's register. A new portfolio comes with a new
+tracking account as its Verrechnungskonto; the Depot settings change it and rename, close and reopen a tracking one.
+Code: `Portfolio.reference_account`, the cash by `Abakus.Depot.Portfolios.cash_account_portfolios/1`. UI
+"Verrechnungskonto", in the Bestand the cash "Cash", "davon Cash".
+_Avoid_: Depot account, clearing account, reference account, Referenzkonto
 
 **Holding**:
 The shares of one security in one portfolio on a date, with their value and purchase value. UI "Position"; the

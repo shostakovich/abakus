@@ -62,7 +62,8 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
   the user's own data, except securities, prices and compositions, which all share. Outside
   services are behaviours swapped in `config/test.exs` (`Abakus.Depot.Fake…`); `:pdftotext` tests need poppler.
   Receipt files live in `receipts/` next to the database. Its accounts are the user's Ledger accounts, which hold
-  their balances; a portfolio's cash accounts are in `depot_cash_accounts`. `Abakus.Depot.CashSide` writes each Depot
+  their balances; a portfolio's Verrechnungskonto is its cash when it is a tracking account
+  (`Portfolios.cash_account_portfolios/1`). `Abakus.Depot.CashSide` writes each Depot
   transaction's cash side into its Ledger account in every Depot write's database transaction; nothing books a
   portfolio's value, which Vermögen adds to the Ledger's net worth (`Abakus.Depot.Wealth`).
 - MCP (`Abakus.MCP`, `AbakusWeb.MCPPlug`, docs/MCP.md) lives outside the sign-in at `/mcp/<MCP_SECRET>`; tests go
