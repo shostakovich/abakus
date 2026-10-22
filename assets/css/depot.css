@@ -1,15 +1,11 @@
-/* Monthly returns: a cell per month, green up and red down, the stronger the further from zero
-   (data-heat, 0 to 10); ±0,0 grey, months without returns outlined; the year's column set apart. On a
-   phone each year folds into its year with the year's return and two rows of six months, each with
-   its name. */
+/* Monthly returns: data-heat 0 to 10 sets a cell's strength; on a phone each year folds into two rows of six. */
 .app-heatmap {
   --heat-up-low: oklch(92.5% .065 145); --heat-up-high: oklch(72% .14 145);
   --heat-down-low: oklch(92.5% .055 15); --heat-down-high: oklch(69% .15 15);
   --heat-flat: oklch(93.5% .003 260); --heat-none: color-mix(in oklab, var(--color-base-content) 45%, transparent);
   --heat-ink: var(--color-base-content);
 }
-/* On a dark page the scale runs from a tint that still stands off the page to a full colour that
-   keeps light text at 4.5:1. */
+/* Dark: the low end still stands off the page, the high end keeps light text at 4.5:1. */
 .app-heatmap {
   @variant dark {
     --heat-up-low: oklch(35% .055 150); --heat-up-high: oklch(47% .125 148);
@@ -54,7 +50,6 @@
   .app-heat { flex-direction: column; gap: 1px; height: 2.5rem; line-height: 1.15; }
   .app-heat::before { display: block; font-size: .75rem; font-weight: 500; }
   .app-heat.app-heat-none::before { color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
-  /* The year's return as a paler bar over the last three columns, at most 40 % of the scale. */
   .app-heatmap-total .app-heat {
     flex-direction: row; justify-content: space-between; align-items: baseline; gap: .375rem; height: auto;
     padding: .125rem .625rem; font-size: .9375rem; line-height: 1.5rem;
@@ -64,9 +59,7 @@
   .app-heatmap-total .app-heat::before { font-size: .875em; }
 }
 
-/* „Beleg prüfen“: the receipt's text as on paper, the recognised values marked in the warning fill
-   with its own text colour, so they read in both themes. Wide lines scroll sideways behind an
-   always visible scrollbar (macOS hides overlay scrollbars), so no value is cut off unnoticed. */
+/* An always visible scrollbar: macOS hides overlay ones, and a value cut off would go unnoticed. */
 .app-receipt-lines { margin: 0; padding-bottom: .25rem; overflow-x: auto; font-family: ui-monospace, Menlo, monospace; font-size: .75rem; line-height: 1.45; white-space: pre; }
 .app-receipt-lines mark { padding: 0 .1rem; border-radius: .125rem; background: var(--color-warning); color: var(--color-warning-content); }
 .app-receipt-lines::-webkit-scrollbar { width: .5rem; height: .5rem; }
@@ -75,8 +68,7 @@
 @supports not selector(::-webkit-scrollbar) {
   .app-receipt-lines { scrollbar-color: color-mix(in oklab, var(--color-base-content) 40%, transparent) transparent; }
 }
-/* The receipt stays beside the form while it scrolls; below lg twelve lines fading out show that it
-   scrolls. */
+/* Below lg, twelve lines fading out show that the receipt scrolls. */
 @media (min-width: 64rem) {
   .app-receipt-pane { position: sticky; top: 0; align-self: flex-start; }
 }

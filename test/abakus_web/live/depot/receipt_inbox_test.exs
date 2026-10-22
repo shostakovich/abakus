@@ -50,7 +50,6 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
 
   defp pdf(id \\ System.unique_integer()), do: "%PDF-1.4\n% #{id}\n%%EOF\n"
 
-  # Uploads PDFs on Import & Sync's Belege and waits until the model has read them.
   defp upload_and_recognise(conn, files \\ [{"beleg.pdf", pdf()}]) do
     {:ok, lv, _html} = live(conn, ~p"/depot/receipts")
     upload(lv, files)

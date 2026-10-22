@@ -8,7 +8,6 @@ defmodule AbakusWeb.Depot.PerformanceLive do
 
   on_mount Benchmark
 
-  # URL parameter, period, button label and its accessible name; the default is the year to date.
   @periods [
     {"1m", :one_month, "1\u00A0M", "1 Monat"},
     {"6m", :six_months, "6\u00A0M", "6 Monate"},
@@ -104,8 +103,7 @@ defmodule AbakusWeb.Depot.PerformanceLive do
         />
       </div>
 
-      <%!-- Side by side only where the heatmap's months get room; else the heatmap under the
-           breakdown. --%>
+      <%!-- Side by side only where the heatmap's months get room. --%>
       <div class="mt-8 grid items-start gap-x-10 gap-y-8 2xl:grid-cols-[22rem_1fr]">
         <.breakdown breakdown={@performance.breakdown} interval={@performance.interval} />
         <.monthly_returns years={@performance.monthly_returns} />
@@ -117,8 +115,7 @@ defmodule AbakusWeb.Depot.PerformanceLive do
   attr :breakdown, :map, required: true
   attr :interval, Date.Range, required: true
 
-  # PP's performance calculation, from the initial to the final value. The changes carry their
-  # sign, the two values none.
+  # As Portfolio Performance calculates it; the changes carry their sign, the two values none.
   defp breakdown(assigns) do
     ~H"""
     <section id="breakdown" aria-labelledby="breakdown-title">
@@ -147,13 +144,10 @@ defmodule AbakusWeb.Depot.PerformanceLive do
     """
   end
 
-  # Month abbreviation and name.
   @months Enum.map(1..12, &{Format.month_abbr(&1), Format.month_name(&1)})
 
   attr :years, :list, required: true
 
-  # The TTWROR of every month since the first transaction as a heatmap, the newest year on top;
-  # on a phone each year folds into two rows of six months.
   defp monthly_returns(assigns) do
     assigns = assign(assigns, months: @months)
 
@@ -235,8 +229,7 @@ defmodule AbakusWeb.Depot.PerformanceLive do
     """
   end
 
-  # How strong a cell's colour is, in steps from 0 to 10 at `scale`; the root spreads the small
-  # rates, which are the most.
+  # The square root spreads the small rates, which are the most.
   defp strength(rate, scale), do: round(:math.sqrt(min(abs(rate) / scale, 1.0)) * 10)
 
   # Zero as ±0,0, so that it lines up with the signed figures.
@@ -282,7 +275,6 @@ defmodule AbakusWeb.Depot.PerformanceLive do
   defp days_count(1), do: "1 Tag"
   defp days_count(days), do: "#{days} Tage"
 
-  # A rate, a fraction, in percent.
   defp in_percent(rate), do: Decimal.from_float(rate * 100)
 
   defp performance_path(period, portfolio) do

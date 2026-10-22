@@ -6,8 +6,7 @@ defmodule Abakus.Depot.Valuation.FilterTest do
   alias Abakus.Depot.Portfolios.{Portfolio, Transaction, TransactionUnit}
   alias Abakus.Depot.Valuation.Filter
 
-  # Portfolio 1 settles against account 10 and holds security 20; portfolio 2 settles against
-  # account 11; security 21 only portfolio 2 ever held.
+  # Portfolio 1: account 10, security 20; portfolio 2: account 11 and the only one ever to hold security 21.
   @portfolio %Portfolio{id: 1, reference_account_id: 10}
 
   defp transaction(type, attrs) do

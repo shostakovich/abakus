@@ -1,5 +1,4 @@
-// Binary values travel as unpadded base64url, by hand: Safari got
-// PublicKeyCredential.parseCreationOptionsFromJSON() only recently.
+// Base64url by hand: Safari got PublicKeyCredential.parseCreationOptionsFromJSON() only recently.
 const toBytes = (text) => {
   const base64 = text.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(text.length / 4) * 4, "=")
   return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)).buffer
@@ -30,8 +29,7 @@ const postJSON = async (url, body) => {
     throw new Error("Keine Verbindung zum Server.")
   }
   const data = await response.json().catch(() => ({}))
-  // The session has ended (401, or 403 for the CSRF token of a lost session): reloading leads to
-  // the sign-in page and back here. Sudo mode is closing: sign in again, then back to settings.
+  // 401, or 403 for a lost session's CSRF token: reloading signs in and comes back; 403 sudo: sign in again.
   if (response.status === 401 || (response.status === 403 && !data.error)) {
     return leave(() => window.location.reload())
   }
@@ -74,8 +72,7 @@ const ceremony = async (hook, buttons, run) => {
   }
 }
 
-// A button that signs in with a discoverable passkey, then posts the assertion through the
-// form named in data-form, so the server answers with a regular redirect.
+// Posts the assertion through the form in data-form, so the server answers with a regular redirect.
 export const PasskeyLogin = {
   mounted() {
     if (!supported()) this.el.disabled = true
@@ -109,7 +106,6 @@ export const PasskeyLogin = {
   },
 }
 
-// A form with a name field that registers a new passkey for the signed-in user.
 export const PasskeyRegister = {
   mounted() {
     const button = this.el.querySelector("button")

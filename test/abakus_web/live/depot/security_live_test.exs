@@ -546,12 +546,10 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
 
   defp texts(lv, selector), do: lv |> query(selector) |> Enum.map(&text/1)
 
-  # The texts of the cells of each row.
   defp cells(lv, rows, cell) do
     for row <- query(lv, rows), do: row |> LazyHTML.query(cell) |> Enum.map(&text/1)
   end
 
-  # The texts of the parts of each row, joined.
   defp lines(lv, rows, parts), do: lv |> cells(rows, parts) |> Enum.map(&Enum.join(&1, " "))
 
   defp query(lv, selector),

@@ -10,8 +10,7 @@ defmodule AbakusWeb.Depot.SeparationTest do
 
   setup :register_and_log_in_user
 
-  # The signed-in user's own portfolio, and another user's portfolio, cash account and
-  # transactions in a security both may see.
+  # The user's own portfolio, and another user's portfolio, cash account and transactions in a shared security.
   setup %{scope: scope} do
     yesterday = Date.add(LocalTime.today(), -1)
     security = security_fixture(quote_feed: :manual, name: "Weltaktie")

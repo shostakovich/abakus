@@ -789,7 +789,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     end
   end
 
-  # A cell that selects its row, or opens the selected row for editing in that cell.
   defp cell(transaction, field),
     do: ["phx-click": "row_click", "phx-value-id": transaction.id, "phx-value-field": field]
 

@@ -16,8 +16,7 @@ defmodule AbakusWeb.Endpoint do
     plug AbakusWeb.ForwardedSSL
   end
 
-  # Every response, error pages and static files included; only the socket transports below are
-  # dispatched before the plugs.
+  # First, so error pages and static files carry the policy too.
   plug AbakusWeb.ContentSecurityPolicy
 
   socket "/live", Phoenix.LiveView.Socket,
@@ -69,8 +68,7 @@ defmodule AbakusWeb.Endpoint do
   def log_level(%Plug.Conn{path_info: ["users", "settings", "confirm-email", _token]}), do: false
   def log_level(_conn), do: :info
 
-  # Errors of these plugs are wrapped like the router's, so the error page keeps the headers set
-  # above.
+  # Wrapped like the router's errors, so the error page keeps the headers set above.
   defp serve_fonts(conn, _opts), do: keep_headers_on_error(conn, Plug.Static, @fonts)
   defp serve_static(conn, _opts), do: keep_headers_on_error(conn, Plug.Static, @static)
 

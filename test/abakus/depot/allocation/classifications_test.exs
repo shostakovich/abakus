@@ -8,8 +8,7 @@ defmodule Abakus.Depot.Allocation.ClassificationsTest do
   alias Abakus.Depot.Taxonomies.{Assignment, Classification, Taxonomy}
   alias Abakus.Ledger.Account
 
-  # A taxonomy from `{id, parent_id, weight, assignments}` per classification below the root 1;
-  # an assignment is `{:security | :account, id, weight}`, the rank is the position in the list.
+  # `{id, parent_id, weight, assignments}` below root 1, assignments `{:security | :account, id, weight}`.
   defp taxonomy(classifications, root_assignments \\ []) do
     rows =
       classifications

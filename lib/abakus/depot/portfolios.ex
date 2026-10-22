@@ -273,7 +273,6 @@ defmodule Abakus.Depot.Portfolios do
     }
   end
 
-  # The security the user compares with, nil for none.
   defp get_benchmark(scope) do
     if id = Settings.benchmark_id(scope), do: Securities.get_security(scope, id)
   end
@@ -321,8 +320,7 @@ defmodule Abakus.Depot.Portfolios do
     }
 
     for %{portfolio: %Portfolio{} = portfolio} = group <- holding_groups(portfolios, nil, rows) do
-      # The securities alone: purchases and sales are money in and out, dividends on the
-      # reference account count for them.
+      # The securities alone, with the dividends on the reference account; purchases and sales are money in and out.
       filter = Filter.new([portfolio], [], transactions)
       index = Performance.index(transactions, market, filter, year)
 
@@ -336,7 +334,6 @@ defmodule Abakus.Depot.Portfolios do
     end
   end
 
-  # Retired portfolios only while they hold shares.
   @doc "The portfolios the screens offer by name on `today`, retired ones only while they hold shares."
   def shown_portfolios(%Scope{} = scope, %Date{} = today),
     do: choosable_portfolios(scope, Valuation.holdings(list_transactions(scope), today))
@@ -623,7 +620,6 @@ defmodule Abakus.Depot.Portfolios do
     %{portfolios: portfolios}
   end
 
-  # The value of each holding, without the price and purchase value the holdings screen shows.
   defp value_rows(holdings, market, today) do
     for holding <- holdings,
         do: %{portfolio_id: holding.portfolio_id, value: Valuation.value(holding, market, today)}
@@ -719,7 +715,6 @@ defmodule Abakus.Depot.Portfolios do
     }
   end
 
-  # The holdings by value, and the purchase value and gain of the group.
   defp with_gains(%{holdings: holdings} = group) do
     Map.merge(group, %{
       cash: Enum.sum_by(group.accounts, & &1.value),
@@ -737,8 +732,6 @@ defmodule Abakus.Depot.Portfolios do
     }
   end
 
-  # The securities of the transactions, and the `:benchmark` if given, with their closes and the
-  # rates of their currencies and those of the `:dividends` from `date` on.
   defp load_market(transactions, date, opts \\ []) do
     benchmark = opts[:benchmark]
     dividends = Keyword.get(opts, :dividends, [])
@@ -760,8 +753,6 @@ defmodule Abakus.Depot.Portfolios do
       ExchangeRates.list_rates_since(currencies, date)
     )
   end
-
-  ## Transactions
 
   @filters %{
     trades: [:buy, :sell, :inbound_delivery, :outbound_delivery, :security_transfer],
@@ -848,8 +839,6 @@ defmodule Abakus.Depot.Portfolios do
   def get_receipt(%Scope{} = scope, id),
     do: Repo.get_by(Receipt, id: id, user_id: scope.user.id)
 
-  ## Booking
-
   @doc """
   What the transaction form offers: the user's portfolios by name, without retired ones, and their accounts in the
   Ledger in their order, without closed ones and those another area feeds, each but those of the transaction being
@@ -914,8 +903,6 @@ defmodule Abakus.Depot.Portfolios do
     |> Enum.min()
   end
 
-  # Without `t`, or with `replacement` instead, no portfolio `t` brings shares to may later hold
-  # fewer than none.
   defp keeps_holding?(scope, %Transaction{} = t, replacement) do
     date = NaiveDateTime.to_date(t.date_time)
 
@@ -964,7 +951,6 @@ defmodule Abakus.Depot.Portfolios do
     end)
   end
 
-  # The first transaction carries `first_attrs`, a dividend's removal is booked manually.
   defp insert_transactions(scope, form, first_attrs) do
     [first | rest] = TransactionForm.to_transactions(form)
 
@@ -1098,8 +1084,7 @@ defmodule Abakus.Depot.Portfolios do
   defp check_own(%Scope{user: %{id: user_id}}, %Transaction{user_id: user_id}), do: :ok
   defp check_own(_scope, _transaction), do: {:error, :read_only}
 
-  # Drops the receipt with `id` if no transaction uses it any more; returns the hash of its file if
-  # no user's receipt needs the file either.
+  # Returns the file's hash once no user's receipt needs the file any more.
   defp drop_unused_receipt(nil), do: nil
 
   defp drop_unused_receipt(id) do

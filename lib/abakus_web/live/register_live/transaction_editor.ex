@@ -741,7 +741,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     ])
   end
 
-  # The comboboxes' options, the same for every side: transfers to the other open accounts above the payees.
   defp assign_options(assigns) do
     transfers =
       for account <- transfer_options(assigns.params, assigns.accounts),
@@ -841,8 +840,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :label, :boolean, default: false
   attr :small, :boolean, default: false
 
-  # The category of a side: a combobox where it takes one, else what stands there instead. "Aufteilen" is offered
-  # for the transaction's own category only.
   defp category_cell(assigns) do
     side = TransactionForm.side(assigns.params, assigns.side)
     main? = assigns.side == "main"
@@ -895,7 +892,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :payee_options, :list, required: true
   attr :category_options, :list, required: true
 
-  # The option lists every side's comboboxes copy in; "Aufteilen" only for the transaction's own category.
+  # Shared by every side's comboboxes; "Aufteilen" only for the transaction's own category.
   defp option_lists(assigns) do
     ~H"""
     <.combobox_options id="tx-payee-list" options={@payee_options} />
@@ -929,8 +926,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :payee_options, :list, required: true
   attr :category_options, :list, required: true
 
-  # A tracking account's register has no category column, so a side that takes one there (a transfer to a budget
-  # account, or a part of a split opened from its counterpart) has it below the payee.
+  # A tracking account's register has no category column, so a side that takes one shows it below the payee.
   defp category_below(assigns) do
     ~H"""
     <div
@@ -1048,7 +1044,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   defp initial_params(%{transaction: transaction}),
     do: TransactionForm.from_transaction(transaction)
 
-  # The register's account if it takes manual entries, else the first that does, budget accounts first.
   defp default_account_id(%{account: account, accounts: accounts}) do
     if account && Account.takes_entries?(account) do
       account.id
@@ -1152,7 +1147,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @picks ~w(payee_pick payee_new category_pick)
 
-  # What the comboboxes chose, by side, apart from what was typed.
   defp picks(changed) do
     subs = changed["subtransactions"] || %{}
 
@@ -1312,7 +1306,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     |> Enum.join(", ")
   end
 
-  # The split's subtransactions have errors of their own each, or the split has them as a whole.
   defp messages(errors, prefix) when is_map(errors) do
     Enum.flat_map(errors, fn
       {:subtransactions, parts} when is_list(parts) ->
@@ -1335,7 +1328,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     |> grouped()
   end
 
-  # The other open accounts (and the closed ones the transaction uses), as the sidebar orders them.
   defp transfer_options(params, accounts) do
     own_id = TransactionForm.to_id(params["account_id"])
 
@@ -1356,7 +1348,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         do: {group.label, Enum.map(group.rows, &{&1.account.name, &1.account.id})}
   end
 
-  # The accounts grouped and ordered as in the sidebar.
   defp groups(accounts),
     do: accounts |> Enum.sort_by(&{&1.position, &1.id}) |> AccountGroups.build(%{})
 

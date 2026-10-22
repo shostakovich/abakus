@@ -157,7 +157,6 @@ defmodule Abakus.FileImport do
          do: :ok
   end
 
-  # The results of `fun` for each item, until it refuses one.
   defp collect(items, fun) do
     items
     |> Enum.reduce_while({:ok, []}, fn item, {:ok, done} ->

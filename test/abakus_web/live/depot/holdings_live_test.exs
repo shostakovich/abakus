@@ -179,7 +179,6 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     refute has_element?(lv, "#costs")
   end
 
-  # The text of each cell of the row at `selector`, with its whitespace collapsed.
   defp cells(lv, selector), do: texts(lv, "#{selector} > :is(th, td)")
 
   defp texts(lv, selector) do
@@ -190,7 +189,6 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     |> Enum.map(&(&1 |> LazyHTML.text() |> String.split() |> Enum.join(" ")))
   end
 
-  # A progress bar's value and max.
   defp progress(html) do
     [_, value] = Regex.run(~r/<progress[^>]* value="([\d.]+)"/, html)
     [_, max] = Regex.run(~r/<progress[^>]* max="([\d.]+)"/, html)
@@ -332,8 +330,7 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     # Each row as "name share Ziel target", with its deviation from the target.
     defp classifications(lv), do: texts(lv, "#allocation-rows > li")
 
-    # The bar's value and max and the target marker of a classification's row, in percent of
-    # the bar.
+    # {value, max, target marker} of a classification's bar, in percent of the bar.
     defp bar(lv, classification) do
       html = lv |> element("#classification-#{classification.id}") |> render()
       {value, max} = progress(html)
@@ -354,8 +351,8 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
 
       assert has_element?(lv, "#classification-#{ctx.real_estate.id} .badge", "unter Ziel")
       assert has_element?(lv, "#classification-#{ctx.risk_free.id} .badge", "über Ziel")
-      # The bar's value is the true share, the largest share or target fills it; the target
-      # marker sits at its exact share of the bar: 10 % of a bar that 80 % fills.
+
+      # Value is the true share; the largest share or target fills the bar; a 10 % target marks 12.5 % of 80 %.
       assert bar(lv, ctx.real_estate) == {"0.0", "80.0", "12.5"}
       assert bar(lv, ctx.risk_free) == {"20.0", "80.0", "12.5"}
       refute has_element?(lv, "#allocation", "Ohne Kategorie")

@@ -106,7 +106,6 @@ defmodule AbakusWeb.ImportLiveTest do
     {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-10.ofx")
 
-    # The file's account is known now.
     assert has_element?(view, "#statement-0-account option[selected]", "💶 Girokonto")
     refute has_element?(view, "#statement-0-account option", "Konto wählen")
     assert has_element?(view, "#statement-0-new", "2 neu")

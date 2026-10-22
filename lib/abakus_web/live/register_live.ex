@@ -224,7 +224,7 @@ defmodule AbakusWeb.RegisterLive do
     |> assign(reconcile: nil, reconciling: nil)
   end
 
-  # The view's newest `limit` transactions as rows; a search compares in memory, so it goes through all of them.
+  # A search compares in memory, so it goes through all of the view's transactions.
   defp load_transactions(socket) do
     %{current_scope: current_scope, filter: filter, limit: limit} = assigns = socket.assigns
     register = register(assigns)
@@ -247,7 +247,6 @@ defmodule AbakusWeb.RegisterLive do
     )
   end
 
-  # The transactions in the view and search, newest first; `opts` narrow them as `Ledger.list_transactions/3` does.
   defp view(assigns, opts) do
     assigns.current_scope
     |> Ledger.list_transactions(register(assigns), [filter: assigns.filter] ++ opts)
@@ -284,8 +283,6 @@ defmodule AbakusWeb.RegisterLive do
     |> select(socket.assigns.selected)
   end
 
-  # The selection as far as the view still shows it, from the rows and the selection itself while they are current,
-  # else from the database.
   defp select(socket, %MapSet{} = ids) do
     %{rows: rows, selection: selection} = socket.assigns
     known = (rows ++ selection) |> Enum.filter(&(&1.id in ids)) |> Enum.uniq_by(& &1.id)
@@ -315,7 +312,6 @@ defmodule AbakusWeb.RegisterLive do
     end
   end
 
-  # The edited row goes when the view or search leaves it out; the editor sees the columns as they are now.
   defp follow_rows(nil, _rows, _accounts, _columns), do: nil
 
   defp follow_rows(editor, rows, accounts, columns) do
@@ -417,7 +413,6 @@ defmodule AbakusWeb.RegisterLive do
     |> noreply()
   end
 
-  # The selection stays until it is approved.
   def handle_event("approve_selected", params, socket) do
     case Enum.reject(socket.assigns.selection, & &1.approved) do
       [] ->
@@ -562,8 +557,6 @@ defmodule AbakusWeb.RegisterLive do
   # Late clicks after the popover closed or the mode ended.
   def handle_event("reconcile_" <> _event, _params, socket), do: {:noreply, socket}
 
-  # The popover's question: about the newest bank balance and the cleared balance up to its date, else about the
-  # cleared balance as it is today.
   defp ask(socket, account) do
     %{current_scope: current_scope, today: today} = socket.assigns
 
@@ -782,7 +775,6 @@ defmodule AbakusWeb.RegisterLive do
     |> update(:reconciling, &follow_cleared(&1, socket.assigns))
   end
 
-  # Reconcile mode's cleared balance follows every change.
   defp follow_cleared(nil, _assigns), do: nil
 
   defp follow_cleared(%{bank: bank}, assigns),
@@ -811,7 +803,6 @@ defmodule AbakusWeb.RegisterLive do
 
   defp manual_entry?(account, _accounts), do: Account.takes_entries?(account)
 
-  # The register's URL with the view, search and running balance, changed by `changes`; defaults stay out.
   defp register_path(assigns, changes) do
     current = %{filter: assigns.filter, q: assigns.query, running: assigns.running}
     %{filter: filter, q: query, running: running} = Map.merge(current, Map.new(changes))

@@ -8,20 +8,18 @@ defmodule AbakusWeb.Depot.SecurityLive do
   alias AbakusWeb.Depot.{AttributeValue, Periods}
   alias AbakusWeb.Depot.Format, as: DepotFormat
 
-  # URL parameter, period, button label and its accessible name; the first is the default.
+  # The first is the default.
   @periods [
     {"1y", :one_year, "1\u00A0J", "1 Jahr"},
     {"5y", :five_years, "5\u00A0J", "5 Jahre"},
     {"max", :max, "Max", "Max, seit dem ersten Kurs"}
   ]
 
-  # Composition tab, also its URL parameter, and label; the first is the default.
+  # The first is the default.
   @composition_tabs [regions: "Regionen", sectors: "Sektoren"]
 
-  # The distributions shown until all are asked for.
   @recent_distributions 8
 
-  # The sidebar marks „Depots“, which the page belongs to.
   @current {:depots, nil}
 
   @impl true
@@ -142,7 +140,6 @@ defmodule AbakusWeb.Depot.SecurityLive do
   attr :holdings, :list, required: true
   attr :total, :map, required: true
 
-  # Over all portfolios, then per portfolio when it is in several.
   defp holding(assigns) do
     ~H"""
     <section id="holding" aria-labelledby="holding-title">
@@ -238,7 +235,6 @@ defmodule AbakusWeb.Depot.SecurityLive do
 
   attr :distributions, :list, required: true, doc: "see `Distributions.of/1`"
 
-  # The newest until all are asked for; the older rows stay hidden until then.
   defp distributions(assigns) do
     distributions = assigns.distributions
 
@@ -317,7 +313,6 @@ defmodule AbakusWeb.Depot.SecurityLive do
   attr :available, :boolean, required: true, doc: "whether DivvyDiary has its API key"
   attr :isin, :string, required: true
 
-  # Regions and sectors as the holdings show them, if DivvyDiary delivered them.
   defp composition(assigns) do
     assigns = assign(assigns, :shown, assigns.available and assigns.composition != nil)
 
@@ -345,8 +340,6 @@ defmodule AbakusWeb.Depot.SecurityLive do
   attr :security, :map, required: true
   attr :costs_per_year, :integer, required: true, doc: "of the user's holdings, nil without"
 
-  # TER and fund size as the costs on the holdings screen show them, then every other attribute
-  # under the name of its type.
   defp profile(assigns) do
     assigns = assign(assigns, :rows, profile_rows(assigns))
 
@@ -472,7 +465,6 @@ defmodule AbakusWeb.Depot.SecurityLive do
   defp composition_source(true, nil, isin) when isin in [nil, ""], do: "ohne ISIN"
   defp composition_source(true, nil, _isin), do: "keine Angaben"
 
-  # Regions and sectors; each keeps the period.
   defp composition_tabs(assigns) do
     for {tab, label} <- @composition_tabs do
       %{
@@ -483,7 +475,6 @@ defmodule AbakusWeb.Depot.SecurityLive do
     end
   end
 
-  # The security page with `period` and the composition `tab`, the defaults left out.
   defp security_path(security, period, tab) do
     query =
       Enum.filter(

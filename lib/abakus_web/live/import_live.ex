@@ -351,7 +351,6 @@ defmodule AbakusWeb.ImportLive do
      |> put_flash(:error, "Nicht importiert: #{error_text(reason)}")}
   end
 
-  # A chosen account stays while it is still offered.
   defp refreshed(scope, %{statement: statement, account: account}, accounts),
     do: item(scope, statement, Enum.find(accounts, &(&1.id == account.id)))
 

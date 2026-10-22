@@ -67,8 +67,6 @@ defmodule Abakus.Depot.PriceChart do
     %{date: date, type: t.type, shares: t.shares, price: price}
   end
 
-  # The last price on or before each of `days`, in order of date and each once; none before the
-  # first price.
   defp on(prices, days) do
     days
     |> Enum.uniq()

@@ -159,7 +159,6 @@ defmodule AbakusWeb.Depot.DividendsLive do
 
   slot :inner_block, required: true
 
-  # A remark before a key figure's value, such as „brutto“.
   defp quiet(assigns) do
     ~H"""
     <span class="text-sm font-normal text-base-content/70">{render_slot(@inner_block)}</span>
@@ -344,8 +343,6 @@ defmodule AbakusWeb.Depot.DividendsLive do
 
   attr :received, :list, required: true, doc: "see `Dividends.received/2`"
 
-  # A group per year; the older years show their totals, their payments stay hidden until asked
-  # for.
   defp received(assigns) do
     groups =
       assigns.received
@@ -416,7 +413,6 @@ defmodule AbakusWeb.Depot.DividendsLive do
   attr :year, :integer, required: true
   attr :rows, :list, required: true
 
-  # A year's group row: the year with its gross and net total.
   defp year_label(assigns) do
     ~H"""
     <span class="flex flex-wrap items-baseline justify-between gap-x-4">
@@ -429,8 +425,6 @@ defmodule AbakusWeb.Depot.DividendsLive do
     """
   end
 
-  # The months of this year paid so far: up to this month if anything came in yet, else the one
-  # before.
   defp paid_months(%{year: year, months: months}, amount, %Date{year: year} = today),
     do: if(Enum.at(months, today.month - 1)[amount] > 0, do: today.month, else: today.month - 1)
 
@@ -438,7 +432,6 @@ defmodule AbakusWeb.Depot.DividendsLive do
 
   defp open?(year, amount, today), do: paid_months(year, amount, today) < 12
 
-  # A month's amount, nil for one still to come.
   defp month_cell(year, index, amount, today) do
     if index < paid_months(year, amount, today), do: Enum.at(year.months, index)[amount]
   end

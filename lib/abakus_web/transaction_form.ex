@@ -371,8 +371,7 @@ defmodule AbakusWeb.TransactionForm do
   defp two_or_more(_subtransactions),
     do: {:error, "Eine Aufteilung braucht mindestens zwei Teile"}
 
-  # A transfer's payee is the other account's transfer payee; any other payee goes by name. The transaction drops
-  # its category in a tracking account; a subtransaction (`prefix` names it) keeps it for the Ledger to refuse.
+  # A subtransaction (`prefix` names it) keeps its category in a tracking account, for the Ledger to refuse.
   defp side_attrs(side, prefix, account, accounts) do
     cond do
       transfer?(side) ->

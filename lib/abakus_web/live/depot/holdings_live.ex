@@ -7,8 +7,7 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   alias Abakus.{Format, LocalTime, Money}
   alias AbakusWeb.Depot.Format, as: DepotFormat
 
-  # Allocation tab, also its URL parameter, and label; the first is the default. A taxonomy's tab
-  # is its id.
+  # The first is the default; a taxonomy's tab is its id.
   @allocation_tabs [regions: "Regionen", sectors: "Sektoren"]
   @allocation_params Map.new(@allocation_tabs, fn {tab, _label} -> {Atom.to_string(tab), tab} end)
   @default_tab @allocation_tabs |> hd() |> elem(0)
@@ -124,8 +123,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
 
   attr :item, :map, required: true, doc: "an item of `groups/2`"
 
-  # A security with its ISIN or, below xl, its shares and price; an account with what it is in its
-  # portfolio; the note of a portfolio without securities.
   defp position_name(%{item: %{type: :holding, entry: entry}} = assigns) do
     assigns = assign(assigns, :entry, entry)
 
@@ -158,8 +155,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp row_link(%{type: :holding, entry: entry}), do: ~p"/depot/securities/#{entry.security}"
   defp row_link(_item), do: nil
 
-  # A group per portfolio: its securities, a note when it has none, its cash and reference account;
-  # last the accounts of no portfolio as „Konten“.
   defp groups(holdings), do: Enum.map(holdings.groups, &group/1)
 
   defp group(%{portfolio: nil} = group),
@@ -218,7 +213,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   attr :tab, :atom, required: true
   attr :available, :boolean, required: true
 
-  # Regions or sectors from the compositions of the funds.
   defp composition(assigns) do
     assigns = assign(assigns, :rows, Map.fetch!(assigns.allocation, assigns.tab))
 
@@ -236,7 +230,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
 
   attr :allocation, :map, required: true, doc: "into a taxonomy, see `Classifications.of/3`"
 
-  # The top-level classifications of a taxonomy against their targets.
   defp classifications(assigns) do
     rows = assigns.allocation.classifications
 
@@ -311,7 +304,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     """
   end
 
-  # The holdings with `params`; nil and the default tab are left out.
   defp holdings_path(params) do
     query =
       params
@@ -325,7 +317,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp allocation_param(tab) when is_atom(tab), do: Atom.to_string(tab)
   defp allocation_param(taxonomy_id), do: Integer.to_string(taxonomy_id)
 
-  # Regions, sectors, then each taxonomy with value shown in it. A tab keeps the portfolio.
   defp allocation_tabs(assigns) do
     shown = shown_tab(assigns)
 
@@ -341,7 +332,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     end
   end
 
-  # The tab in the URL; the first for a taxonomy without value shown in it.
   defp shown_tab(%{allocation_tab: id, holdings: holdings}) when is_integer(id) do
     if taxonomy_allocation(holdings.allocation, id), do: id, else: @default_tab
   end
@@ -351,7 +341,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
   defp taxonomy_allocation(allocation, id),
     do: Enum.find(allocation.taxonomies, &(&1.taxonomy.id == id))
 
-  # The portfolio shown, nil for all, which the sidebar marks.
   defp shown_portfolio_id(%{holdings: %{portfolio: %{id: id}}}), do: id
   defp shown_portfolio_id(_assigns), do: nil
 
@@ -432,7 +421,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     |> then(&{:noreply, &1})
   end
 
-  # Regions, sectors or the id of a taxonomy.
   defp allocation_tab(param),
     do: Map.get(@allocation_params, param) || parse_id(param) || @default_tab
 
@@ -445,7 +433,6 @@ defmodule AbakusWeb.Depot.HoldingsLive do
     assign(socket, holdings: holdings, yields?: yields?(holdings))
   end
 
-  # The dividend yield column only when a position has one.
   defp yields?(holdings) do
     holdings.groups
     |> Enum.flat_map(& &1.holdings)

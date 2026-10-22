@@ -214,7 +214,6 @@ defmodule Abakus.Depot.CashSide do
     end
   end
 
-  # Moved to another account or turned from outflow to inflow, it takes the category it would get anew.
   defp with_category(attrs, led, wanted) do
     if Map.has_key?(attrs, :account_id) or led.amount < 0 != wanted.amount < 0,
       do: Map.put(attrs, :category_id, wanted.category_id),

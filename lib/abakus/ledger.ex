@@ -49,7 +49,6 @@ defmodule Abakus.Ledger do
   alias Abakus.Users.Scope
   alias Ecto.Changeset
 
-  # The first day of a date's month, in SQL.
   defmacrop month(date) do
     quote do: type(fragment("strftime('%Y-%m-01', ?)", unquote(date)), :date)
   end
@@ -768,7 +767,6 @@ defmodule Abakus.Ledger do
     end)
   end
 
-  # Applies `fun` to each item until one is refused, inside the caller's database transaction.
   defp all_or_none(transactions, fun) do
     transactions
     |> Enum.reduce_while({:ok, []}, &apply_next(&1, &2, fun))
@@ -785,8 +783,6 @@ defmodule Abakus.Ledger do
     end
   end
 
-  # Validates and saves inside the caller's database transaction; the accounts and counterparts involved are
-  # loaded once for both.
   defp write(changeset, save, opts) do
     context = context(changeset, opts)
 
@@ -1000,8 +996,7 @@ defmodule Abakus.Ledger do
     end
   end
 
-  # The side's field a counterpart's field follows: its account the payee, its payee the account, its category
-  # `counterpart_category_id`, the rest the same field. A split's follow its subtransactions, but for the date.
+  # The rest follow the same field; a split's counterparts follow its subtransactions, but for the date.
   @follows %{account_id: :payee_id, payee_id: :account_id, category_id: :counterpart_category_id}
 
   defp sync_failed(changeset, transaction, counterpart_field, message, opts \\ []) do

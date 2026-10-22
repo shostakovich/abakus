@@ -17,7 +17,7 @@ defmodule AbakusWeb.Depot.WealthLive do
 
   on_mount Benchmark
 
-  # URL parameter, period, button label and its accessible name; the first is the default.
+  # The first is the default.
   @periods [
     {"6m", :six_months, "6\u00A0M", "6 Monate"},
     {"ytd", :year_to_date, "YTD", "YTD, seit Jahresbeginn"},
@@ -308,7 +308,6 @@ defmodule AbakusWeb.Depot.WealthLive do
     assign(socket, upcoming_dividends: upcoming)
   end
 
-  # Relative to yesterday's net worth, when there was any.
   defp change_percent(_change, before) when before <= 0, do: nil
   defp change_percent(change, before), do: Format.percent_of(change, before)
 

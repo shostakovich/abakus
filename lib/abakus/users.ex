@@ -22,8 +22,6 @@ defmodule Abakus.Users do
     unknown: {30, 60 * @minute}
   ]
 
-  ## Users
-
   def get_user_by_email(email) when is_binary(email),
     do: Repo.get_by(User, email: User.normalize_email(email))
 
@@ -74,8 +72,6 @@ defmodule Abakus.Users do
 
   def sudo_mode?(_user, _minutes), do: false
 
-  ## Email
-
   def change_user_email(user, attrs \\ %{}, opts \\ []) do
     User.email_changeset(user, attrs, opts)
   end
@@ -104,8 +100,6 @@ defmodule Abakus.Users do
     Repo.insert!(user_token)
     UserNotifier.deliver_update_email_instructions(user, update_email_url_fun.(encoded_token))
   end
-
-  ## Session
 
   def generate_user_session_token(user) do
     {token, user_token} = UserToken.build_session_token(user)
@@ -136,8 +130,6 @@ defmodule Abakus.Users do
     Repo.delete_all(from(UserToken, where: [token: ^token, context: "session"]))
     :ok
   end
-
-  ## Magic link
 
   def get_user_by_magic_link_token(token) do
     with {:ok, query} <- UserToken.verify_magic_link_token_query(token),
@@ -228,8 +220,6 @@ defmodule Abakus.Users do
   defp limit_name({:login_link, _email}), do: "limit per address"
   defp limit_name(:login_links), do: "limit in total"
   defp limit_name(:unknown_login_links), do: "limit for unknown addresses"
-
-  ## Passkeys
 
   def list_passkeys(%User{} = user) do
     Repo.all(from p in Passkey, where: p.user_id == ^user.id, order_by: [asc: p.id])

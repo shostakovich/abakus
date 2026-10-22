@@ -237,9 +237,7 @@ defmodule Abakus.Depot.PortfoliosTest do
   end
 
   describe "performance/4" do
-    # A portfolio with its account and 10 shares bought at 100 € plus a 5 € fee on 1 September,
-    # at 90 € on 1 October and 99 € on Friday; another portfolio with 1,000 € in its account
-    # from 15 September.
+    # 10 shares at 100 € + 5 € fee on 1 Sep, 90 € on 1 Oct, 99 € on Friday; another portfolio's 1,000 € from 15 Sep.
     setup %{scope: scope, portfolio: portfolio} do
       account = account_fixture(scope, %{name: "Konto Langfristig"})
       portfolio = Repo.update!(change(portfolio, reference_account_id: account.id))
@@ -333,8 +331,7 @@ defmodule Abakus.Depot.PortfoliosTest do
   end
 
   describe "performance/4 monthly returns" do
-    # 1,000 € came in and bought 10 shares at 100 € on 31 December 2024; they closed at 110 € on
-    # 31 January and at 99 € on 28 February 2025, and have not moved since.
+    # 1,000 € bought 10 shares at 100 € on 31 Dec 2024; closes 110 € on 31 Jan, 99 € on 28 Feb 2025, unchanged since.
     setup %{scope: scope, portfolio: portfolio} do
       account = account_fixture(scope)
       security = security_fixture(quote_feed: :manual)

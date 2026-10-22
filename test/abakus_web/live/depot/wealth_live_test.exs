@@ -315,8 +315,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
   end
 
   describe "Depots" do
-    # 240 € on the portfolio's cash since last year, 10 shares delivered yesterday at 100 €,
-    # 102 € today: the securities are worth 1,020 €, +2,0 % on 1,000 €.
+    # 240 € cash since last year, 10 shares delivered yesterday at 100 €, 102 € today: 1,020 €, +2,0 % on 1,000 €.
     setup %{scope: scope} do
       account = account_fixture(scope, %{name: "Konto Langfristig"})
 

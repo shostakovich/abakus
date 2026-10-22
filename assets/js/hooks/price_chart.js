@@ -10,13 +10,10 @@ const sharesFormat = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 8 }
 // Prices and shares come × 10⁸.
 const unscaled = (value) => value / 100_000_000
 
-// A security's prices over the period, its purchases and sales as dots at their price per share;
-// the security page pushes them with the currency they are in. Nothing without prices.
 export const PriceChart = chartHook("price-chart", ({ currency, dates, prices, trades }, el) => {
   if (dates.length === 0) return null
 
   const color = (name) => cssColor(el, name)
-  // The price in series 1; purchases and sales in the ink of gains and losses.
   const primary = series(el, "chart-1").line
   const [success, danger, background] = ["--color-success-ink", "--color-error-ink", "--color-base-100"].map(color)
   const [muted, grid] = [inkColor(el, 70), inkColor(el, 10)]

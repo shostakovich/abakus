@@ -317,8 +317,6 @@ defmodule AbakusWeb.Layouts do
 
   defp label(name), do: name |> Names.split_emoji() |> elem(1)
 
-  # The account shown, or the portfolio whose cash it is, if the sidebar lists it; closed accounts belong to Alle
-  # Konten.
   defp nav_key(%{current: :accounts, account_id: account_id} = assigns) do
     listed? =
       Enum.any?(
@@ -335,7 +333,6 @@ defmodule AbakusWeb.Layouts do
     end
   end
 
-  # The portfolio the Depots pages show, if the sidebar lists it; a retired one belongs to Alle Depots.
   defp nav_key(%{current: :depots, depot_marked: marked, depot_sidebar: sidebar})
        when marked != nil and sidebar != nil do
     listed = Enum.map(sidebar.portfolios, &{:depot_portfolio, &1.portfolio.id})
@@ -352,8 +349,7 @@ defmodule AbakusWeb.Layouts do
 
   defp initial(email), do: String.upcase(String.first(email) || "")
 
-  # The budget's, the Kasse's and the Depot's pages and the settings have live_sessions of their own (Zugang a
-  # further one behind the sudo plug), so only links within one navigate; the others load the page.
+  # The areas and settings have live_sessions of their own; only links within one navigate.
   defp navigate(path, current) do
     if same_live_session?(path, current), do: path
   end
