@@ -17,7 +17,6 @@ securities, whose prices come from Yahoo every evening, a receipt inbox that rea
 Paperless-ngx, and Depot transactions that book their cash into the accounts of Finanzen, budget accounts once the
 Depot is linked to the budget. Bank sync and the budget's MCP tools follow in v2.
 
-- [docs/SPEC.md](docs/SPEC.md): scope, budget rules, import, phases
 - [docs/MCP.md](docs/MCP.md): the MCP server, its access rules and tools
 
 ## Development
