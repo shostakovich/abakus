@@ -204,7 +204,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     end
 
     test "fed and closed accounts take no manual entry", c do
-      shared = account_fixture(name: "👫 Geteilt", fed_by: :shared_expenses)
+      shared = account_fixture(name: "👫 Geteilt", shared_expenses: true)
       closed = account_fixture(name: "Alt", closed: true)
 
       for account <- [shared, closed] do

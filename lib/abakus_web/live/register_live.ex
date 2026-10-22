@@ -12,8 +12,8 @@ defmodule AbakusWeb.RegisterLive do
 
   Here transactions are approved (one, the selected or all), categorised (the selected) and toggled
   between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
-  `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. Accounts fed by another app offer
-  no manual entry and no reconcile, and a portfolio's account shows the Depots tabs as its Register tab.
+  `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. The shared-expenses account offers
+  no manual entry and no reconcile.
   Transactions linked to Kasse expenses are deleted only with their expense, those the Depot books not at all here.
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
@@ -24,7 +24,9 @@ defmodule AbakusWeb.RegisterLive do
   keeps the difference in a bar while transactions are cleared, until it is finished or cancelled.
 
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
-  `account_groups`, so it is as fresh as the sidebar.
+  `account_groups`, so it is as fresh as the sidebar. The portfolios' cash is the Depot's
+  (`Abakus.Depot.Portfolios.cash_account_portfolios/1`): Alle Konten leaves out its transactions, no account picker
+  offers it but where a transaction uses it already, and its own register leads to its portfolio in the Depot.
 
   Transactions are edited as in YNAB, without a URL (`TransactionEditor`): a click selects a row, a click into a
   cell of a selected row opens the row for editing, "Buchung" adds an empty row on top; one row at a time. Phones
@@ -33,8 +35,7 @@ defmodule AbakusWeb.RegisterLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Depot.BudgetFeed
-  alias Abakus.Kasse.BudgetLink
+  alias Abakus.Depot.Portfolios
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.LocalTime
@@ -91,7 +92,6 @@ defmodule AbakusWeb.RegisterLive do
           </:actions>
         </.header>
         <Components.balances account={@account} balances={@balances} reconciling={!!@reconciling} />
-        <DepotComponents.depots_tabs :if={@portfolio} tab={:register} portfolio={@portfolio} />
         <Components.toolbar
           account={@account}
           manual={@manual}
@@ -125,7 +125,7 @@ defmodule AbakusWeb.RegisterLive do
           empty_hint={empty_hint(@accounts)}
         />
         <Components.load_more :if={@count > length(@rows)} />
-        <Components.legend :if={!(@account && @account.fed_by == :portfolio)} />
+        <Components.legend />
         <Components.bulk
           selected={if @editor, do: [], else: @selection}
           categories={@categories || []}
@@ -153,8 +153,13 @@ defmodule AbakusWeb.RegisterLive do
 
   @impl true
   def mount(_params, _session, socket) do
+    scope = socket.assigns.current_scope
+    depot_cash = Portfolios.cash_account_portfolios(scope)
+
     {:ok,
      assign(socket,
+       depot_cash: depot_cash,
+       cash_accounts: Enum.filter(Ledger.list_accounts(scope), &Map.has_key?(depot_cash, &1.id)),
        today: LocalTime.today(),
        scope: nil,
        editor: nil,
@@ -168,15 +173,30 @@ defmodule AbakusWeb.RegisterLive do
 
   @impl true
   def handle_params(params, _uri, socket) do
-    view = %{scope: scope(params), filter: filter(params["filter"]), query: params["q"] || ""}
+    case depot_portfolio_id(socket.assigns.depot_cash, params) do
+      nil ->
+        view = %{scope: scope(params), filter: filter(params["filter"]), query: params["q"] || ""}
 
-    {:noreply,
-     socket
-     |> assign(:running, params["running"] == "1")
-     |> show(view)
-     |> load_transactions()
-     |> assign_rows()}
+        {:noreply,
+         socket
+         |> assign(:running, params["running"] == "1")
+         |> show(view)
+         |> load_transactions()
+         |> assign_rows()}
+
+      portfolio_id ->
+        {:noreply,
+         push_navigate(socket, to: DepotComponents.depots_path(:holdings, portfolio_id))}
+    end
   end
+
+  defp depot_portfolio_id(depot_cash, %{"id" => id}),
+    do:
+      Enum.find_value(depot_cash, fn {account_id, portfolio_id} ->
+        to_string(account_id) == id && portfolio_id
+      end)
+
+  defp depot_portfolio_id(_depot_cash, _params), do: nil
 
   # Another view or search starts again at its newest transactions; the running balance changes neither.
   defp show(socket, view) do
@@ -216,7 +236,7 @@ defmodule AbakusWeb.RegisterLive do
 
   defp load(socket, :all) do
     socket
-    |> assign(scope: :all, account: nil, portfolio: nil, selected: MapSet.new(), editor: nil)
+    |> assign(scope: :all, account: nil, selected: MapSet.new(), editor: nil)
     |> assign(reconcile: nil, reconciling: nil)
   end
 
@@ -225,14 +245,13 @@ defmodule AbakusWeb.RegisterLive do
 
     socket
     |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
-    |> assign(:portfolio, BudgetFeed.portfolio(socket.assigns.current_scope, account))
     |> assign(reconcile: nil, reconciling: nil)
   end
 
-  # The view's newest `limit` transactions as rows; a search compares in memory, so it goes through all of them.
+  # A search compares in memory, so it goes through all of the view's transactions.
   defp load_transactions(socket) do
     %{current_scope: current_scope, filter: filter, limit: limit} = assigns = socket.assigns
-    register = register(assigns)
+    {register, shown} = register(assigns)
 
     {rows, count} =
       if Rows.searching?(assigns.query) do
@@ -240,31 +259,40 @@ defmodule AbakusWeb.RegisterLive do
         {Enum.take(found, limit), length(found)}
       else
         {view(assigns, limit: limit),
-         Ledger.count_transactions(current_scope, register, filter: filter)}
+         Ledger.count_transactions(current_scope, register, [filter: filter] ++ shown)}
       end
 
     assign(socket,
       rows: rows,
       count: count,
-      register_empty: count == 0 and Ledger.count_transactions(current_scope, register) == 0,
-      unapproved: Ledger.list_transactions(current_scope, register, filter: :unapproved),
-      proposals: Ledger.list_match_proposals(current_scope, register)
+      register_empty:
+        count == 0 and Ledger.count_transactions(current_scope, register, shown) == 0,
+      unapproved:
+        Ledger.list_transactions(current_scope, register, [filter: :unapproved] ++ shown),
+      proposals: Ledger.list_match_proposals(current_scope, register, shown)
     )
   end
 
-  # The transactions in the view and search, newest first; `opts` narrow them as `Ledger.list_transactions/3` does.
   defp view(assigns, opts) do
+    {register, shown} = register(assigns)
+
     assigns.current_scope
-    |> Ledger.list_transactions(register(assigns), [filter: assigns.filter] ++ opts)
+    |> Ledger.list_transactions(register, [filter: assigns.filter] ++ shown ++ opts)
     |> Rows.search(assigns.query)
   end
 
-  defp register(assigns), do: assigns.account || :all
+  defp register(%{account: nil, depot_cash: depot_cash}),
+    do: {:all, without_accounts: Map.keys(depot_cash)}
+
+  defp register(%{account: account}), do: {account, []}
 
   defp assign_rows(socket) do
     %{rows: rows, filter: filter, query: query} = socket.assigns
     account_rows = AccountGroups.rows(socket.assigns.account_groups)
-    accounts = Map.new(account_rows, &{&1.account.id, &1.account})
+
+    accounts =
+      Map.new(Enum.map(account_rows, & &1.account) ++ socket.assigns.cash_accounts, &{&1.id, &1})
+
     account = socket.assigns.account && Map.fetch!(accounts, socket.assigns.account.id)
 
     socket =
@@ -279,7 +307,7 @@ defmodule AbakusWeb.RegisterLive do
     |> assign(
       shown_proposals: shown_proposals,
       accounts: accounts,
-      manual: manual_entry?(account, accounts),
+      manual: manual_entry?(account, account_rows),
       columns: columns,
       editor: follow_rows(socket.assigns.editor, rows, accounts, columns),
       balances: balances,
@@ -289,8 +317,6 @@ defmodule AbakusWeb.RegisterLive do
     |> select(socket.assigns.selected)
   end
 
-  # The selection as far as the view still shows it, from the rows and the selection itself while they are current,
-  # else from the database.
   defp select(socket, %MapSet{} = ids) do
     %{rows: rows, selection: selection} = socket.assigns
     known = (rows ++ selection) |> Enum.filter(&(&1.id in ids)) |> Enum.uniq_by(& &1.id)
@@ -320,7 +346,6 @@ defmodule AbakusWeb.RegisterLive do
     end
   end
 
-  # The edited row goes when the view or search leaves it out; the editor sees the columns as they are now.
   defp follow_rows(nil, _rows, _accounts, _columns), do: nil
 
   defp follow_rows(editor, rows, accounts, columns) do
@@ -422,7 +447,6 @@ defmodule AbakusWeb.RegisterLive do
     |> noreply()
   end
 
-  # The selection stays until it is approved.
   def handle_event("approve_selected", params, socket) do
     case Enum.reject(socket.assigns.selection, & &1.approved) do
       [] ->
@@ -567,8 +591,6 @@ defmodule AbakusWeb.RegisterLive do
   # Late clicks after the popover closed or the mode ended.
   def handle_event("reconcile_" <> _event, _params, socket), do: {:noreply, socket}
 
-  # The popover's question: about the newest bank balance and the cleared balance up to its date, else about the
-  # cleared balance as it is today.
   defp ask(socket, account) do
     %{current_scope: current_scope, today: today} = socket.assigns
 
@@ -627,10 +649,10 @@ defmodule AbakusWeb.RegisterLive do
 
   defp refused_delete(scope, transactions) do
     cond do
-      BudgetLink.expense_ids(scope, Enum.map(transactions, & &1.id)) != %{} ->
+      Enum.any?(transactions, &match?({:kasse_expense, _id}, Ledger.led_by(scope, &1))) ->
         TransactionEditor.linked_delete()
 
-      Enum.any?(transactions, &match?(%Transaction{source: :depot}, &1)) ->
+      Enum.any?(transactions, &match?({:depot_transaction, _id}, Ledger.led_by(scope, &1))) ->
         TransactionEditor.depot_delete()
 
       true ->
@@ -689,11 +711,9 @@ defmodule AbakusWeb.RegisterLive do
         focus: focus_id(focus),
         account: assigns.account,
         accounts: assigns.accounts,
+        depot_cash: assigns.depot_cash,
         columns: assigns.columns,
-        today: assigns.today,
-        expense_id:
-          transaction &&
-            BudgetLink.expense_ids(assigns.current_scope, [transaction.id])[transaction.id]
+        today: assigns.today
       }
     }
   end
@@ -790,7 +810,6 @@ defmodule AbakusWeb.RegisterLive do
     |> update(:reconciling, &follow_cleared(&1, socket.assigns))
   end
 
-  # Reconcile mode's cleared balance follows every change.
   defp follow_cleared(nil, _assigns), do: nil
 
   defp follow_cleared(%{bank: bank}, assigns),
@@ -814,12 +833,11 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   # With no account taking manual entries there is nothing to book in.
-  defp manual_entry?(nil, accounts),
-    do: Enum.any?(Map.values(accounts), &Account.takes_entries?/1)
+  defp manual_entry?(nil, account_rows),
+    do: Enum.any?(account_rows, &Account.takes_entries?(&1.account))
 
   defp manual_entry?(account, _accounts), do: Account.takes_entries?(account)
 
-  # The register's URL with the view, search and running balance, changed by `changes`; defaults stay out.
   defp register_path(assigns, changes) do
     current = %{filter: assigns.filter, q: assigns.query, running: assigns.running}
     %{filter: filter, q: query, running: running} = Map.merge(current, Map.new(changes))

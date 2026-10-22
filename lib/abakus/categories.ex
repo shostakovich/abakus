@@ -427,7 +427,6 @@ defmodule Abakus.Categories do
       where: s.category_id == ^category_id and s.month == ^month
   end
 
-  # A month given as any day of it, as a date or ISO 8601 string.
   defp month!(value) do
     case Ecto.Type.cast(:date, value) do
       {:ok, %Date{} = date} -> Date.beginning_of_month(date)

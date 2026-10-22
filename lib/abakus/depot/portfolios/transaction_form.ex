@@ -145,8 +145,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
       else: [{field, "hat höchstens #{places} Nachkommastellen"}]
   end
 
-  # Until the user overwrites it, the amount follows the other fields; a deposit's or removal's is
-  # entered.
+  # Until the user overwrites it, the amount follows the other fields; a deposit's or removal's is entered.
   defp put_amount(changeset) do
     entered? =
       get_field(changeset, :kind) in [:deposit, :removal] or

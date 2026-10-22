@@ -427,8 +427,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   attr :lookup, :any, required: true, doc: "nil, `:searching`, `:found` or `{:error, message}`"
   attr :myself, :any, required: true
 
-  # Inside the transaction form, as forms do not nest: its fields are sent as `security`. „Anlegen“
-  # comes first of the form's submit buttons, so Enter while it shows creates the security.
+  # Its fields are sent as `security`, as forms do not nest; „Anlegen“ comes first, so Enter creates it.
   defp new_security(assigns) do
     assigns =
       assign(assigns,
@@ -788,8 +787,6 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     |> put_form(Portfolios.change_transaction_form(scope, choices, params, transaction))
   end
 
-  # The portfolio is the one of the receipt's depot number, with its reference account; the user
-  # picks it for an unknown depot number. An unknown ISIN opens „Neues Wertpapier“ with it.
   defp open_receipt_for(socket, receipt) do
     scope = socket.assigns.current_scope
     choices = Portfolios.transaction_choices(scope)
@@ -865,7 +862,6 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     |> to_form(as: :security)
   end
 
-  # A new, valid ISIN is looked up at Yahoo; its name and symbol replace what is in the fields.
   defp change_new_security(
          %{assigns: %{new_security: %{} = new_security}} = socket,
          params,
@@ -1009,7 +1005,6 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     assign(socket, open: false, editing: nil, receipt: nil, new_security: nil)
   end
 
-  # A receipt whose depot number names no portfolio marks the select until one is picked.
   defp put_form(socket, changeset) do
     depot_number_warning =
       socket.assigns.receipt && Ecto.Changeset.get_field(changeset, :portfolio_id) == nil &&

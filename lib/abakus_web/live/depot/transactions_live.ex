@@ -172,8 +172,7 @@ defmodule AbakusWeb.Depot.TransactionsLive do
 
   defp type_plush(_type), do: "wallet"
 
-  # From the user's money's view: what comes into an account counts plus, what leaves it minus;
-  # deliveries and transfers move what is there already.
+  # Seen from the user's money; deliveries and transfers move what is there already, so they go unsigned.
   defp signed_cents(%Transaction{type: type, amount: amount}) when type in @outflows, do: -amount
   defp signed_cents(%Transaction{amount: amount}), do: amount
 

@@ -1,9 +1,9 @@
 defmodule Abakus.Depot.TaxonomiesFixtures do
   @moduledoc "Taxonomies, classifications and assignments for tests; weights in 1/100 percent."
 
-  alias Abakus.Depot.Portfolios.Account
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Taxonomies.{Assignment, Classification, Taxonomy}
+  alias Abakus.Ledger.Account
   alias Abakus.Repo
   alias Abakus.Users.Scope
 

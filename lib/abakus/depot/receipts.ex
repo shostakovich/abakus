@@ -389,8 +389,7 @@ defmodule Abakus.Depot.Receipts do
   defp score(:failed), do: 1
   defp score(_missing), do: 0
 
-  # Only a receipt still being recognised takes the result; it may be gone or discarded meanwhile,
-  # also between reading and writing it.
+  # Only a receipt still being recognised takes the result; it may be gone or discarded meanwhile.
   defp finish(receipt, text, fields) do
     with %Receipt{status: :recognising} = current <- Repo.get(Receipt, receipt.id),
          {:ok, _finished} <-
@@ -429,7 +428,6 @@ defmodule Abakus.Depot.Receipts do
     MapSet.new(Repo.all(from s in Security, where: not is_nil(s.isin), select: s.isin))
   end
 
-  # The user's active portfolios with a depot number, by its digits.
   defp portfolios_by_depot_number(user_id) do
     Repo.all(
       from p in Portfolio,
@@ -438,7 +436,6 @@ defmodule Abakus.Depot.Receipts do
     |> Map.new(&{Portfolio.digits(&1.depot_number), &1})
   end
 
-  # The day of the transaction booked from another receipt of the user with `reference`.
   defp booked_on(receipt, reference) do
     case Receipt.bank_reference(reference) do
       nil -> nil

@@ -4,8 +4,7 @@ defmodule AbakusWeb.Depot.DepotsTest do
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
 
-  alias Abakus.Depot.BudgetFeed
-  alias Abakus.{LocalTime, Repo}
+  alias Abakus.LocalTime
 
   setup :register_and_log_in_user
 
@@ -105,31 +104,18 @@ defmodule AbakusWeb.Depot.DepotsTest do
            )
   end
 
-  test "a portfolio of the budget owner is its account, whose register is its tab Register",
+  test "a portfolio's cash stays out of the sidebar, a budget account as Verrechnungskonto not",
        ctx do
-    :ok = BudgetFeed.sync_accounts()
-    long = Repo.reload!(ctx.long)
-    register = ~p"/budget/accounts/#{long.budget_account_id}"
-    holdings = ~p"/depot/holdings?#{[portfolio: long.id]}"
+    giro = account_fixture(ctx.scope, %{name: "Giro", kind: :checking})
+    portfolio_fixture(ctx.scope, %{name: "Giro-Depot", reference_account_id: giro.id})
 
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?#{[portfolio: long.id]}")
+    {:ok, lv, _html} = live(ctx.conn, ~p"/budget/accounts/all")
 
-    assert tab_paths(lv) ==
-             ["/depot/holdings?portfolio=#{long.id}", register] ++
-               Enum.map(
-                 ~w(transactions dividends performance),
-                 &"/depot/#{&1}?portfolio=#{long.id}"
-               )
-
-    {:ok, lv, _html} = live(ctx.conn, register)
-
-    assert has_element?(lv, ~s(#depots-tabs a[href="#{register}"][aria-current=page]), "Register")
-    assert has_element?(lv, ~s(#depots-tabs a[href="#{holdings}"]), "Bestand")
-    assert has_element?(lv, sidebar_link(holdings) <> "[aria-current=page]")
-    refute has_element?(lv, "#side-account-#{long.budget_account_id}")
+    refute has_element?(lv, sidebar_link(~p"/budget/accounts/#{ctx.long.reference_account_id}"))
+    assert has_element?(lv, sidebar_link(~p"/budget/accounts/#{giro.id}"))
   end
 
-  test "Buchungen of a portfolio are its own and its reference account's", ctx do
+  test "Buchungen of a portfolio are its own and its cash's", ctx do
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions?#{[portfolio: ctx.long.id]}")
 
     for transaction <- [ctx.deposit, ctx.long_buy, ctx.long_dividend],

@@ -1,6 +1,6 @@
 defmodule AbakusWeb.Areas do
   @moduledoc """
-  The app's areas, Finanzen and Kasse (ADR 0017), each with its own sidebar and dock on phones.
+  The app's areas, Finanzen and Kasse (ADR 0020), each with its own sidebar and dock on phones.
 
   Access is checked per part: the budget's pages (`/budget`) are its owner's (ADR 0007), the Kasse's (`/kasse`) its
   people's (ADR 0008), and the Depot's (`/depot`) everyone's in Finanzen, i.e. the budget owner and every user with

@@ -73,7 +73,6 @@ defmodule Abakus.Depot.Receipts.Correction do
   defp enumerate(values),
     do: Enum.join(Enum.drop(values, -1), ", ") <> " und " <> List.last(values)
 
-  # A recognised value with its name, e.g. „Kurs 145,76 €“.
   defp value(:price, %Fields{kind: :dividend, price: price}), do: "Dividende #{money(price)}"
   defp value(:date, %Fields{date: date}), do: "Datum #{Format.date(date)}"
 

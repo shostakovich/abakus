@@ -5,7 +5,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
   import Abakus.KasseFixtures
 
   alias Abakus.Kasse.{BudgetLink, Expenses}
-  alias Abakus.Kasse.BudgetLink.{Link, LinkedTransaction}
+  alias Abakus.Kasse.BudgetLink.Link
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
 
@@ -23,15 +23,15 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
   defp expense!(h, title, cents, date, payer \\ nil),
     do: create!(equal(h, title, cents, date, payer || h.ben, [h.anna, h.ben]))
 
-  defp linked(expense) do
-    case Repo.get_by(LinkedTransaction, expense_id: expense.id) do
-      nil -> nil
-      link -> Repo.get!(Transaction, link.transaction_id)
-    end
-  end
+  defp linked(expense),
+    do:
+      Repo.one(
+        from t in Transaction, where: t.kasse_expense_id == ^expense.id and is_nil(t.deleted_at)
+      )
 
   describe "switching on" do
-    test "gives every non-reimbursement expense with the owner's share a linked transaction", c do
+    test "gives every expense and reimbursement that changes the owner's balance a linked transaction",
+         c do
       weekly = expense!(c.h, "Wocheneinkauf", 8742, "2026-03-05")
       cinema = expense!(c.h, "Kino", 2400, "2026-03-10", c.h.anna)
       older = expense!(c.h, "Altbau", 5000, "2025-02-20")
@@ -39,8 +39,10 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       {:ok, _deleted} = Expenses.delete_expense(scope_of(c.h.ben), gone)
       payback = create!(reimbursement(1000, "2026-03-15", c.h.anna, c.h.ben))
       others = create!(equal(c.h, "Bar", 3000, "2026-03-16", c.h.ben, [c.h.ben, c.h.cleo]))
+      own = create!(equal(c.h, "Bäcker", 500, "2026-03-17", c.h.anna, [c.h.anna]))
+      gift = create!(equal(c.h, "Geschenk", 1500, "2026-03-18", c.h.anna, [c.h.ben]))
 
-      assert switch_on(c) == {:ok, %{created: 3}}
+      assert switch_on(c) == {:ok, %{created: 5}}
 
       assert %{
                amount: -4371,
@@ -53,22 +55,24 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
              } = linked(weekly)
 
       assert groceries == c.groceries
-      assert %{amount: -1200, memo: "Gesamt 24,00 € · bezahlt von Anna"} = linked(cinema)
+      assert %{amount: 1200, memo: "Gesamt 24,00 € · bezahlt von Anna"} = linked(cinema)
       assert %{amount: -2500, date: ~D[2025-02-20]} = linked(older)
+      assert %{amount: 1500} = linked(gift)
+      assert %{amount: 1000, transfer_transaction_id: nil, category_id: nil} = linked(payback)
 
-      for expense <- [gone, payback, others], do: assert(linked(expense) == nil)
+      for expense <- [gone, others, own], do: assert(linked(expense) == nil)
 
-      assert Repo.reload!(c.account).fed_by == :shared_expenses
+      assert Repo.reload!(c.account).shared_expenses
       assert %Link{account_id: account_id, start_date: nil} = Repo.get!(Link, c.h.anna)
       assert account_id == c.account.id
     end
 
-    test "moves the feed from another account fed by shared expenses", c do
-      before = account_fixture(%{name: "Alt", kind: :cash, fed_by: :shared_expenses})
+    test "moves the mark from another shared-expenses account", c do
+      before = account_fixture(%{name: "Alt", kind: :cash, shared_expenses: true})
 
       assert {:ok, _counts} = switch_on(c)
-      assert Repo.reload!(before).fed_by == nil
-      assert Repo.reload!(c.account).fed_by == :shared_expenses
+      refute Repo.reload!(before).shared_expenses
+      assert Repo.reload!(c.account).shared_expenses
     end
 
     test "links only the budget owner's participant", c do
@@ -81,12 +85,11 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       assert switch_on(c) == {:error, :linked}
     end
 
-    test "needs an open budget account not fed by another app", c do
+    test "needs an open budget account", c do
       closed = account_fixture(%{kind: :cash, closed: true})
       tracking = account_fixture(%{kind: :tracking})
-      depot = account_fixture(%{kind: :checking, fed_by: :portfolio})
 
-      for id <- [closed.id, tracking.id, depot.id, "", "x", -1] do
+      for id <- [closed.id, tracking.id, "", "x", -1] do
         assert BudgetLink.switch_on(scope_of(c.h.anna), id) == {:error, :no_account}
       end
 
@@ -108,7 +111,7 @@ defmodule Abakus.Kasse.BudgetLinkSwitchTest do
       older = expense!(c.h, "Altbau", 5000, "2026-02-20")
 
       {:ok, _account} =
-        Ledger.update_account(budget_scope(), c.account, %{fed_by: :shared_expenses})
+        Ledger.update_account(budget_scope(), c.account, %{shared_expenses: true})
 
       Repo.insert!(%Link{
         participant_id: c.h.anna,

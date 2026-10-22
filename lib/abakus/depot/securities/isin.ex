@@ -21,7 +21,6 @@ defmodule Abakus.Depot.Securities.ISIN do
   defp digit_value(char) when char in ?0..?9, do: char - ?0
   defp digit_value(char), do: char - ?A + 10
 
-  # From the right, every second digit counts double, with the digits of the product summed.
   defp luhn?(digits) do
     sum =
       digits

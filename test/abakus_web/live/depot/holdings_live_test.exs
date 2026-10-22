@@ -6,7 +6,8 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
 
   alias Abakus.Depot.FakeSymbolSource
   alias Abakus.Depot.Portfolios
-  alias Abakus.Depot.Portfolios.{Account, TransactionUnit}
+  alias Abakus.Depot.Portfolios.TransactionUnit
+  alias Abakus.Ledger.Account
   alias Abakus.LocalTime
   alias Abakus.Repo
 
@@ -178,7 +179,6 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     refute has_element?(lv, "#costs")
   end
 
-  # The text of each cell of the row at `selector`, with its whitespace collapsed.
   defp cells(lv, selector), do: texts(lv, "#{selector} > :is(th, td)")
 
   defp texts(lv, selector) do
@@ -189,7 +189,6 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     |> Enum.map(&(&1 |> LazyHTML.text() |> String.split() |> Enum.join(" ")))
   end
 
-  # A progress bar's value and max.
   defp progress(html) do
     [_, value] = Regex.run(~r/<progress[^>]* value="([\d.]+)"/, html)
     [_, max] = Regex.run(~r/<progress[^>]* max="([\d.]+)"/, html)
@@ -331,8 +330,7 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     # Each row as "name share Ziel target", with its deviation from the target.
     defp classifications(lv), do: texts(lv, "#allocation-rows > li")
 
-    # The bar's value and max and the target marker of a classification's row, in percent of
-    # the bar.
+    # {value, max, target marker} of a classification's bar, in percent of the bar.
     defp bar(lv, classification) do
       html = lv |> element("#classification-#{classification.id}") |> render()
       {value, max} = progress(html)
@@ -353,8 +351,8 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
 
       assert has_element?(lv, "#classification-#{ctx.real_estate.id} .badge", "unter Ziel")
       assert has_element?(lv, "#classification-#{ctx.risk_free.id} .badge", "über Ziel")
-      # The bar's value is the true share, the largest share or target fills it; the target
-      # marker sits at its exact share of the bar: 10 % of a bar that 80 % fills.
+
+      # Value is the true share; the largest share or target fills the bar; a 10 % target marks 12.5 % of 80 %.
       assert bar(lv, ctx.real_estate) == {"0.0", "80.0", "12.5"}
       assert bar(lv, ctx.risk_free) == {"20.0", "80.0", "12.5"}
       refute has_element?(lv, "#allocation", "Ohne Kategorie")
@@ -447,20 +445,18 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     end
   end
 
-  describe "an account two portfolios settle against" do
+  describe "a portfolio's cash beside a portfolio on a budget account" do
     setup %{scope: scope} do
       account = account_fixture(scope, %{name: "K"})
       deposit(scope, account, 50)
-
-      [a, b] =
-        for name <- ["A", "B"],
-            do: portfolio_fixture(scope, %{name: name, reference_account_id: account.id})
-
+      giro = account_fixture(scope, %{name: "Giro", kind: :checking})
+      a = portfolio_fixture(scope, %{name: "A", reference_account_id: account.id})
+      b = portfolio_fixture(scope, %{name: "B", reference_account_id: giro.id})
       deliver(scope, b, security(100), 1, 100)
       %{account: account, a: a, b: b}
     end
 
-    test "appears once, under the first portfolio, while all are shown", ctx do
+    test "appears once, under its portfolio, while all are shown", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
       assert has_element?(lv, "#portfolio-menu summary", "Gesamt")
@@ -471,16 +467,16 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
       assert has_element?(lv, "tfoot:has(#holdings-total)", "150,00\u00A0€")
     end
 
-    test "appears under the selected portfolio", ctx do
+    test "stays out of the other portfolio when that is selected", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
       lv |> element("#portfolio-menu a", "B") |> render_click()
 
       assert_patch(lv, ~p"/depot/holdings?portfolio=#{ctx.b.id}")
       assert has_element?(lv, "#portfolio-menu summary", "B")
-      assert has_element?(lv, "#holdings-portfolio-#{ctx.b.id} #account-#{ctx.account.id}", "K")
+      refute has_element?(lv, "#account-#{ctx.account.id}")
       refute has_element?(lv, "#holdings-portfolio-#{ctx.a.id}")
-      assert has_element?(lv, "tfoot:has(#holdings-total)", "150,00\u00A0€")
+      assert has_element?(lv, "tfoot:has(#holdings-total)", "100,00\u00A0€")
     end
 
     test "keeps the selected portfolio in the URL, so that it survives a reload", ctx do
@@ -504,23 +500,19 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
 
   describe "a portfolio's cash" do
     setup %{scope: scope} do
-      giro = account_fixture(scope, %{name: "Giro-Verrechnung", no_role: true})
-      portfolio = portfolio_fixture(scope, %{name: "Broker", reference_account_id: giro.id})
-      cash = account_fixture(scope, %{name: "Broker-Cash", cash_of_portfolio_id: portfolio.id})
-      deposit(scope, cash, 100)
-      deposit(scope, giro, 2_000)
+      cash = account_fixture(scope, %{name: "Broker-Cash"})
+      portfolio = portfolio_fixture(scope, %{name: "Broker", reference_account_id: cash.id})
+      deposit(scope, cash, 2_100)
       deliver(scope, portfolio, security(90), 10, 900)
-      %{portfolio: portfolio, cash: cash, giro: giro}
+      %{portfolio: portfolio, cash: cash}
     end
 
-    test "shows in the portfolio's Bestand as „davon Cash“, its reference account with another role not",
-         ctx do
+    test "shows in the portfolio's Bestand as „davon Cash“", ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings?portfolio=#{ctx.portfolio.id}")
 
-      assert has_element?(lv, "header", "davon Cash\u00A0100,00\u00A0€")
+      assert has_element?(lv, "header", "davon Cash\u00A02.100,00\u00A0€")
       assert lv |> element("#account-#{ctx.cash.id}") |> render() =~ "Cash"
-      refute has_element?(lv, "#account-#{ctx.giro.id}")
-      assert has_element?(lv, "tfoot:has(#holdings-total)", "1.000,00\u00A0€")
+      assert has_element?(lv, "tfoot:has(#holdings-total)", "3.000,00\u00A0€")
     end
 
     test "keeps what a purchase from it left as „davon Cash“", %{scope: scope, conn: conn} do
@@ -553,7 +545,7 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")
 
       assert has_element?(lv, "#holdings-portfolio-#{ctx.portfolio.id} #account-#{ctx.cash.id}")
-      assert has_element?(lv, "#holdings-accounts #account-#{ctx.giro.id}")
+      refute has_element?(lv, "#holdings-accounts")
     end
   end
 
@@ -592,8 +584,8 @@ defmodule AbakusWeb.Depot.HoldingsLiveTest do
     retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
     deliver(ctx.scope, retired, security(100), 1, 100)
     empty = portfolio_fixture(ctx.scope, %{name: "Leer", retired: true})
-    closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
-    kept = account_fixture(ctx.scope, %{name: "Noch offen", retired: true})
+    closed = account_fixture(ctx.scope, %{name: "Geschlossen", closed: true})
+    kept = account_fixture(ctx.scope, %{name: "Noch offen", closed: true})
     deposit(ctx.scope, kept, 1)
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/holdings")

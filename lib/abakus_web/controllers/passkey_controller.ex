@@ -36,8 +36,6 @@ defmodule AbakusWeb.PasskeyController do
     |> json(WebAuthn.authentication_options(relying_party(), challenge))
   end
 
-  # Takes the registration challenge out of the store and its id out of the session; `nil` once
-  # it was used or is older than the ceremony timeout.
   defp pop_registration_challenge(conn) do
     id = get_session(conn, :passkey_registration_challenge_id)
     user_id = conn.assigns.current_scope.user.id

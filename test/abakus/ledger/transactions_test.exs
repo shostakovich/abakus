@@ -737,6 +737,35 @@ defmodule Abakus.Ledger.TransactionsTest do
     assert Ledger.count_transactions(budget_scope(), account, filter: :uncleared) == 2
   end
 
+  test "list_transactions, count_transactions and list_match_proposals leave out accounts" do
+    giro = account_fixture()
+    broker = account_fixture(kind: :tracking)
+    kept = transaction_fixture(account_id: giro.id, amount: -500)
+    left_out = transaction_fixture(account_id: broker.id, amount: -700)
+
+    for {account, existing} <- [{giro, kept}, {broker, left_out}] do
+      {:ok, _proposal} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: account.id,
+          date: existing.date,
+          amount: existing.amount,
+          source: :file,
+          matched_transaction_id: existing.id
+        })
+    end
+
+    opts = [without_accounts: [broker.id]]
+
+    assert [%{id: id}] = Ledger.list_transactions(budget_scope(), :all, opts)
+    assert id == kept.id
+    assert Ledger.count_transactions(budget_scope(), :all, opts) == 1
+
+    assert [%{matched_transaction_id: ^id}] =
+             Ledger.list_match_proposals(budget_scope(), :all, opts)
+
+    assert length(Ledger.list_match_proposals(budget_scope(), :all)) == 2
+  end
+
   test "list_transactions takes more ids than SQLite takes variables" do
     account = account_fixture()
     transaction = transaction_fixture(account_id: account.id)

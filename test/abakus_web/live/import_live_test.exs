@@ -10,8 +10,8 @@ defmodule AbakusWeb.ImportLiveTest do
 
   setup do
     giro = account_fixture(name: "💶 Girokonto")
-    account_fixture(name: "Geteilt", fed_by: :shared_expenses)
-    account_fixture(name: "Depot", kind: :tracking, fed_by: :portfolio)
+    account_fixture(name: "Geteilt", shared_expenses: true)
+    account_fixture(name: "Depot", kind: :tracking)
     account_fixture(name: "Altes Konto", closed: true)
 
     %{giro: giro}
@@ -79,10 +79,9 @@ defmodule AbakusWeb.ImportLiveTest do
     assert has_element?(view, "#statement-0 tbody tr", "−6,40 €")
     assert has_element?(view, "#statement-0 tbody tr", "+2.500,00 €")
 
-    # The file's account is unknown, so the preview asks; fed and closed accounts are not offered.
+    # The file's account is unknown, so the preview asks; the shared-expenses account and closed ones are not offered.
     assert has_element?(view, "#statement-0-account option", "💶 Girokonto")
     refute has_element?(view, "#statement-0-account option", "Geteilt")
-    refute has_element?(view, "#statement-0-account option", "Depot")
     refute has_element?(view, "#statement-0-account option", "Altes Konto")
     assert has_element?(view, "#import-submit[disabled]")
 
@@ -107,7 +106,6 @@ defmodule AbakusWeb.ImportLiveTest do
     {:ok, view, _html} = live(conn, ~p"/budget/import")
     upload(view, "girokonto_2026-10.ofx")
 
-    # The file's account is known now.
     assert has_element?(view, "#statement-0-account option[selected]", "💶 Girokonto")
     refute has_element?(view, "#statement-0-account option", "Konto wählen")
     assert has_element?(view, "#statement-0-new", "2 neu")

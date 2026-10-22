@@ -48,7 +48,6 @@ defmodule Abakus.Budget.Target do
 
   defp cycle_start(version, _earlier, _month), do: version.from_month
 
-  # The due months a version reached while it was in effect, up to (not including) `until`.
   defp reached(%{repeats_yearly: false} = version, until),
     do: Enum.filter([due_month(version, version.from_month)], &Date.before?(&1, until))
 
@@ -83,8 +82,7 @@ defmodule Abakus.Budget.Target do
   defp need(:nothing, _assigned), do: {0, 0}
   defp need(asks, assigned), do: {max(asks, 0), max(asks - assigned, 0)}
 
-  # Returns what the month asks before its assignment, negative for a surplus or `:nothing` once a target by a
-  # date is over, and, for a target by a date, what counts as saved before this month.
+  # Returns {what the month asks (negative for a surplus, `:nothing` once a dated target is over), saved before}.
   defp asks(%{cadence: :monthly, amount: amount, set_aside: true}, _since, _row, _assigned_in),
     do: {amount, 0}
 

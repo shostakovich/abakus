@@ -72,8 +72,7 @@ defmodule Abakus.Release do
     end
   end
 
-  # The endpoint's URL is needed (links in mails), but the container's server already holds the port and runs the
-  # background jobs.
+  # The container's server holds the port and runs the jobs; the endpoint's URL is still needed for mail links.
   defp start_without_server do
     Application.load(@app)
     Application.put_env(@app, :jobs, false)

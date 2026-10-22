@@ -114,7 +114,6 @@ defmodule Abakus.Budget do
     months
   end
 
-  # Walks back from the last month: what later months have assigned, and which of them are short.
   defp look_ahead(months, current, last_data) do
     horizon = Enum.max([last_data, last_change(months)], Date)
 

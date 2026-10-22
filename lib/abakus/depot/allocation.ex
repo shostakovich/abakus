@@ -24,7 +24,6 @@ defmodule Abakus.Depot.Allocation do
   @doc "The regions and sectors of one fund's `composition`, as `of/2` gives them for it alone."
   def of_composition(%Composition{} = composition), do: allocation([{1, composition}])
 
-  # Each fund as `{value, composition}`.
   defp allocation(funds) do
     total = Enum.sum_by(funds, &elem(&1, 0))
 
@@ -62,7 +61,6 @@ defmodule Abakus.Depot.Allocation do
         do: {name, decimal(weight)}
   end
 
-  # The value of a fund under the key of each weight, in proportion to their sum.
   defp split(value, weights, _key_of) when map_size(weights) == 0, do: [{nil, Decimal.new(value)}]
 
   defp split(value, weights, key_of) do

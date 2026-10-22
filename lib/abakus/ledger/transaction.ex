@@ -7,6 +7,9 @@ defmodule Abakus.Ledger.Transaction do
 
   A transaction with `matched_transaction_id` is a match proposal: an import that looks like that existing
   transaction. It counts nowhere until the match is accepted (merged into the existing one) or rejected.
+
+  A transaction another area writes and leads refers to its source: the Kasse expense (`kasse_expense_id`) or the
+  Depot transaction (`depot_transaction_id`), set on create or once later (`Abakus.Ledger.lead/3`); see `led_by/1`.
   """
 
   use Abakus.Schema
@@ -29,6 +32,8 @@ defmodule Abakus.Ledger.Transaction do
       default: :manual
 
     field :deleted_at, :utc_datetime_usec
+    field :kasse_expense_id, :id
+    field :depot_transaction_id, :id
 
     # The category of the counterpart when it is the budget side of a transfer from a tracking account.
     field :counterpart_category_id, :id, virtual: true
@@ -82,7 +87,30 @@ defmodule Abakus.Ledger.Transaction do
     |> validate_not_deleted()
     |> validate_split_counterpart()
     |> unique_constraint(:matched_transaction_id)
+    |> unique_references()
   end
+
+  @doc "Changeset that puts the reference to a source as `led_by/1` gives it on a transaction."
+  def reference_changeset(transaction, led_by),
+    do: transaction |> change(source_reference(led_by)) |> unique_references()
+
+  defp unique_references(changeset) do
+    changeset
+    |> unique_constraint(:kasse_expense_id, name: :transactions_kasse_expense_id_user_id_index)
+    |> unique_constraint(:depot_transaction_id)
+  end
+
+  @doc "The source that leads the transaction itself, `{:kasse_expense, id}` or `{:depot_transaction, id}`; nil for none."
+  def led_by(%__MODULE__{kasse_expense_id: id}) when not is_nil(id), do: {:kasse_expense, id}
+
+  def led_by(%__MODULE__{depot_transaction_id: id}) when not is_nil(id),
+    do: {:depot_transaction, id}
+
+  def led_by(%__MODULE__{}), do: nil
+
+  @doc "The reference columns for a source as `led_by/1` gives it."
+  def source_reference({:kasse_expense, id}), do: %{kasse_expense_id: id}
+  def source_reference({:depot_transaction, id}), do: %{depot_transaction_id: id}
 
   defp create_fields(transaction) do
     if Ecto.get_meta(transaction, :state) == :built, do: @create_fields, else: []

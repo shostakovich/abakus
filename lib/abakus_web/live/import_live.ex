@@ -4,8 +4,8 @@ defmodule AbakusWeb.ImportLive do
   the file's account, the bank balance it reports, the account it goes into and its transactions: new, there
   already, a match proposal for a transaction in the register, or before the last reconcile (skipped). A file
   account seen before has its linked account chosen; an unknown one asks for the account. The import remembers the
-  chosen one, so choosing another moves the link. Accounts fed by another app and closed ones are not offered. The
-  preview lives in the LiveView only; the import checks again what is there.
+  chosen one, so choosing another moves the link. Only accounts that take a file import are offered
+  (`Abakus.FileImport.accounts/1`). The preview lives in the LiveView only; the import checks again what is there.
   """
   use AbakusWeb, :live_view
 
@@ -351,7 +351,6 @@ defmodule AbakusWeb.ImportLive do
      |> put_flash(:error, "Nicht importiert: #{error_text(reason)}")}
   end
 
-  # A chosen account stays while it is still offered.
   defp refreshed(scope, %{statement: statement, account: account}, accounts),
     do: item(scope, statement, Enum.find(accounts, &(&1.id == account.id)))
 

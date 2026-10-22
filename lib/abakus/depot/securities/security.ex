@@ -30,7 +30,6 @@ defmodule Abakus.Depot.Securities.Security do
     timestamps()
   end
 
-  # The keys of the built-in attributes.
   @ter "ter"
   @fund_size "aum"
 

@@ -7,9 +7,7 @@ defmodule Abakus.Depot.Allocation.Region do
 
   @type t :: :usa | :canada | :europe | :japan | :pacific_ex_japan | :emerging_markets
 
-  # MSCI's 23 developed markets by MSCI region, as of the MSCI 2026 Market Classification Review
-  # (msci.com, "Market Classification"). Israel is in MSCI's "Europe & Middle East"; Greece moves
-  # from emerging to developed at the May 2027 index review.
+  # MSCI's developed markets by its regions (Israel in Europe & Middle East) as of 2026; Greece joins in May 2027.
   @developed %{
     "US" => :usa,
     "CA" => :canada,

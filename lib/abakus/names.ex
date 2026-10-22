@@ -4,8 +4,7 @@ defmodule Abakus.Names do
   and the UI shows the leading emoji in a column of its own.
   """
 
-  # Keycap sequences ("1️⃣") go as a whole; then symbols, pictographs, skin tones, regional indicators (flags), ZWJ,
-  # variation selectors, the combining keycap and tag characters (subdivision flags).
+  # Keycap sequences ("1️⃣") go as a whole, before their single characters.
   defp emoji do
     ~r/
       [0-9#*]\x{FE0F}?\x{20E3}

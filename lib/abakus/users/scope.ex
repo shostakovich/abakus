@@ -28,11 +28,6 @@ defmodule Abakus.Users.Scope do
   def for_participant(%Participant{} = participant),
     do: for_user(Repo.preload(participant, :user).user, participant)
 
-  @doc "The scope of the user who owns the budget, for what writes into the budget on their behalf; nil without one."
-  def for_budget_owner do
-    if owner = Repo.get_by(User, budget_owner: true), do: for_user(owner)
-  end
-
   @doc "The scope of callers without a person: jobs, release and mix tasks, and MCP reads."
   def system, do: %__MODULE__{system: true}
 

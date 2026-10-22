@@ -1,13 +1,14 @@
 defmodule Abakus.DomainFixtures do
   @moduledoc "Accounts, payees, categories and transactions for tests."
 
-  alias Abakus.{Categories, Ledger, UsersFixtures}
-  alias Abakus.Users.Scope
+  alias Abakus.{Categories, Ledger, Repo, UsersFixtures}
+  alias Abakus.Users.{Scope, User}
 
   def unique_name(prefix), do: "#{prefix} #{System.unique_integer([:positive])}"
 
   @doc "The budget owner's scope; without any user, the first one is created and owns the budget."
-  def budget_scope, do: Scope.for_budget_owner() || Scope.for_user(UsersFixtures.user_fixture())
+  def budget_scope,
+    do: Scope.for_user(Repo.get_by(User, budget_owner: true) || UsersFixtures.user_fixture())
 
   def account_fixture(attrs \\ %{}) do
     {:ok, account} =

@@ -1,7 +1,7 @@
 defmodule Abakus.Depot.BudgetLink.Link do
   @moduledoc """
-  The budget owner's Depot linked to the budget: purchases get `category`, and Depot transactions dated before
-  `start_date` stay in the Depot only.
+  The budget owner's Depot linked to the budget: purchases get `category`, and the cash side of Depot transactions
+  dated before `start_date` stays out of budget accounts.
   """
 
   use Abakus.Schema

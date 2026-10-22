@@ -14,11 +14,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.RegisterLive.{Rows, TransactionEditor}
 
-  @feeds %{
-    portfolio: "Wert kommt aus dem Depot",
-    shared_expenses: "Buchungen kommen aus der Kasse"
-  }
-
   attr :account, Account, default: nil
 
   @doc "The line below the title: the account's kind, closed, last reconciled (with the lock) and note."
@@ -60,7 +55,7 @@ defmodule AbakusWeb.RegisterLive.Components do
     doc: "the difference animates then, not the balance"
 
   @doc """
-  The header's second row. One account: Gebucht + Vorgemerkt = Arbeitssaldo, or for a depot only its value. All
+  The header's second row. One account: Gebucht + Vorgemerkt = Arbeitssaldo. All
   accounts: that equation for the budget accounts, then tracking and the total. Phones get one compact line.
   """
   def balances(assigns) do
@@ -70,13 +65,6 @@ defmodule AbakusWeb.RegisterLive.Components do
       class="app-reg-row flex flex-wrap items-center gap-x-6 gap-y-2 max-md:hidden"
     >
       <%= cond do %>
-        <% portfolio?(@account) -> %>
-          <.figure
-            id="balance-working"
-            value={@balances.working}
-            label="Wert laut Depot"
-            animate={!@reconciling}
-          />
         <% @account -> %>
           <.equation balances={@balances} animate={!@reconciling} />
         <% true -> %>
@@ -92,8 +80,6 @@ defmodule AbakusWeb.RegisterLive.Components do
       class={["app-reg-row app-reg-line flex md:hidden", !@account && "app-reg-line-all"]}
     >
       <%= cond do %>
-        <% portfolio?(@account) -> %>
-          <.line_figure value={@balances.working} label="Wert laut Depot" />
         <% @account -> %>
           <.line_figure value={@balances.cleared} label="Gebucht" />
           <.line_figure op="+" value={@balances.uncleared} label="Vorgemerkt" tone={false} />
@@ -106,8 +92,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     </div>
     """
   end
-
-  defp portfolio?(account), do: match?(%Account{fed_by: :portfolio}, account)
 
   attr :balances, :map, required: true
   attr :animate, :boolean, default: false
@@ -352,9 +336,9 @@ defmodule AbakusWeb.RegisterLive.Components do
           </form>
         </div>
       </div>
-      <p :if={@account && @account.fed_by} id="feed-hint" class="app-reg-hint">
+      <p :if={@account && @account.shared_expenses} id="feed-hint" class="app-reg-hint">
         <.icon name="info" class="shrink-0" />
-        {feed_hint(@account)}, keine Buchungen von Hand oder per Datei
+        Buchungen kommen aus der Kasse, keine Buchungen von Hand oder per Datei
       </p>
       <p :if={@account && @running && !@running_shown} id="running-hint" class="app-reg-hint">
         Laufender Saldo nur in „Alle Buchungen“ ohne Suche
@@ -362,8 +346,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     </div>
     """
   end
-
-  defp feed_hint(account), do: @feeds[account.fed_by]
 
   defp filter_labels,
     do: [all: "Alle Buchungen", unapproved: "Zu bestätigen", uncleared: "Vorgemerkt"]
@@ -807,7 +789,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     end
   end
 
-  # A cell that selects its row, or opens the selected row for editing in that cell.
   defp cell(transaction, field),
     do: ["phx-click": "row_click", "phx-value-id": transaction.id, "phx-value-field": field]
 

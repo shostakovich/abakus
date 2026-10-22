@@ -29,12 +29,12 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
     scope = socket.assigns.current_scope
     account = BudgetLink.account(scope)
     choices = if account, do: [], else: BudgetLink.account_choices(scope)
-    fed = Enum.find(choices, &(&1.fed_by == :shared_expenses))
+    shared = Enum.find(choices, & &1.shared_expenses)
 
     assign(socket,
       account: account,
       account_options: Enum.map(choices, &{&1.name, &1.id}),
-      link_form: to_form(%{"account_id" => fed && fed.id}, as: :link)
+      link_form: to_form(%{"account_id" => shared && shared.id}, as: :link)
     )
   end
 
@@ -107,25 +107,30 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
     >
       <.header>
         Budget-Verknüpfung
-        <:subtitle>Deine Anteile an geteilten Ausgaben in deinem Budget.</:subtitle>
+        <:subtitle>Deine geteilten Ausgaben in deinem Budget.</:subtitle>
       </.header>
 
       <div class="flex flex-col gap-8">
         <section aria-labelledby="budget-link" class="max-w-prose">
           <.section_heading id="budget-link">Verknüpfung</.section_heading>
           <p :if={@account} id="budget-link-state">
-            Dein Anteil an jeder Ausgabe ist eine Buchung im Konto <.link
+            Was eine Ausgabe an deinem Saldo ändert, also was du bezahlt hast minus deinem Anteil, ist eine
+            Buchung im Konto <.link
               href={~p"/budget/accounts/#{@account}"}
               class="link link-primary"
             >
               {@account.name}
-            </.link>; ihr Saldo ist dein Saldo in der Kasse. Kategorie, Memo, Markierung und Bestätigung
-            kannst du dort ändern. Die Kategorie setzt die Kasse neu, sobald sich die Kategorie der Ausgabe ändert.
+            </.link>; ihr Saldo ist dein Saldo in der Kasse. Kategorie, Memo, ob gebucht oder vorgemerkt, und
+            die Bestätigung kannst du dort ändern. Die Kategorie setzt die Kasse neu, sobald sich die Kategorie der Ausgabe ändert.
+            Eine Rückzahlung mit dir ist eine Umbuchung zwischen diesem Konto und dem Konto, das du bei der
+            Rückzahlung wählst. Buchst du im Register eine Umbuchung mit diesem Konto, wird sie zur Rückzahlung in
+            der Kasse.
           </p>
           <div :if={!@account} class="flex flex-col gap-3">
             <p id="budget-link-state">
-              Noch nicht mit dem Budget verknüpft. Danach ist dein Anteil an jeder Ausgabe eine Buchung im
-              gewählten Konto, in der Kategorie, die du unten zuordnest. Jede bisherige Ausgabe bekommt eine Buchung.
+              Noch nicht mit dem Budget verknüpft. Danach ist, was eine Ausgabe an deinem Saldo ändert, eine
+              Buchung im gewählten Konto, in der Kategorie, die du unten zuordnest.
+              Jede bisherige Ausgabe und Rückzahlung, die deinen Saldo ändert, bekommt eine Buchung.
             </p>
             <.form for={@link_form} id="budget-link-form" phx-submit="switch_on">
               <.input
@@ -156,7 +161,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLive do
         <section aria-labelledby="budget-categories">
           <.section_heading id="budget-categories">Kategorien</.section_heading>
           <p class="mb-3 max-w-prose text-sm text-base-content/70">
-            In welcher Kategorie des Budgets landet dein Anteil? Ohne Zuordnung bleibt er unkategorisiert.
+            In welcher Kategorie des Budgets landen die Buchungen? Ohne Zuordnung bleiben sie unkategorisiert.
           </p>
           <.form for={@mapping_form} id="budget-mapping-form" phx-submit="map_categories">
             <.table id="budget-mapping" rows={@rows} row_id={&"budget-mapping-#{&1.id}"} size={:dense}>

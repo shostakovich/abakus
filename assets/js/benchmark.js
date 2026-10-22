@@ -1,6 +1,4 @@
-// Whether this device shows the benchmark on the overview and the performance screen: hidden unless
-// shown here before. Every page sends the choice when it connects, so that its first render has it,
-// and keeps it when the server says it changed (benchmark.ex).
+// Per device, hidden unless shown here before; each page sends it on connect so its first render has it (benchmark.ex).
 const KEY = "abakus:benchmark"
 
 // The choice made on this page, for a browser that keeps none, e.g. with storage blocked.

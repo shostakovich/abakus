@@ -58,11 +58,11 @@ defmodule AbakusWeb.Layouts do
   Signed-in pages in Setzkasten's sidebar shell, showing the current area's entries, then the settings.
 
   Finanzen: Budget, Vermögen, Alle Konten, Alle Depots and Import & Sync with the receipts waiting in the inbox, the
-  open budget and tracking accounts with their emoji (else `AbakusWeb.AccountMotif`), their balance and how many
-  transactions wait for approval; then the section Depots with the active portfolios and their values, each shown with
-  the leading emoji of its account in the budget, else the briefcase; a user without the budget sees only Vermögen, Alle
-  Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios stay out of the
-  icon rail and the dock. Entries show plush images, the Lucide icon only where a plush has no image.
+  open budget and tracking accounts but the portfolios' cash with their emoji (else `AbakusWeb.AccountMotif`), their
+  balance and how many transactions wait for approval; then the section Depots with the active portfolios and their
+  values, each shown with the leading emoji of its name, else the briefcase; a user without the budget sees only
+  Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios
+  stay out of the icon rail and the dock. Entries show plush images, the Lucide icon only where a plush has no image.
 
   With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
   brand is a menu that switches the area. On phones the dock holds the current area's pages; its "Mehr" opens
@@ -77,8 +77,8 @@ defmodule AbakusWeb.Layouts do
         budget?: finanzen? and Areas.allowed?(assigns.current_scope, :budget),
         depot?: finanzen? and Areas.allowed?(assigns.current_scope, :depot),
         kasse?: assigns.area == :kasse,
-        groups: if(finanzen?, do: AccountGroups.sidebar(assigns.account_groups), else: []),
-        portfolios: portfolio_rows(finanzen?, assigns.depot_sidebar, assigns.account_groups),
+        groups: sidebar_groups(finanzen?, assigns),
+        portfolios: portfolio_rows(finanzen?, assigns.depot_sidebar),
         import_path: import_path(assigns.current_scope),
         inbox: inbox(assigns.depot_sidebar),
         nav_key: nav_key(assigns)
@@ -296,44 +296,32 @@ defmodule AbakusWeb.Layouts do
     for group <- groups, {row, index} <- Enum.with_index(group.rows), do: {group, row, index == 0}
   end
 
-  defp portfolio_rows(true, %{portfolios: rows}, account_groups) do
-    names = Map.new(AccountGroups.rows(account_groups), &{&1.account.id, &1.account.name})
+  defp sidebar_groups(true = _finanzen?, assigns), do: AccountGroups.open(assigns.account_groups)
+  defp sidebar_groups(_finanzen?, _assigns), do: []
 
+  defp portfolio_rows(true, %{portfolios: rows}) do
     for row <- rows do
       name = Format.portfolio_name(row.portfolio)
-      account_name = names[row.portfolio.budget_account_id]
-
-      case account_name && glyph(account_name) do
-        nil -> Map.merge(row, %{label: name, glyph: nil})
-        emoji -> Map.merge(row, %{label: label(name), glyph: emoji})
-      end
+      Map.merge(row, %{label: label(name), glyph: glyph(name)})
     end
   end
 
-  defp portfolio_rows(_finanzen?, _sidebar, _account_groups), do: []
+  defp portfolio_rows(_finanzen?, _sidebar), do: []
 
   defp glyph(name), do: name |> Names.split_emoji() |> elem(0)
 
   defp label(name), do: name |> Names.split_emoji() |> elem(1)
 
-  # The account shown, or its portfolio, if the sidebar lists it; closed accounts belong to Alle Konten.
   defp nav_key(%{current: :accounts, account_id: account_id} = assigns) do
     listed? =
       Enum.any?(
-        AccountGroups.rows(AccountGroups.sidebar(assigns.account_groups)),
+        AccountGroups.rows(sidebar_groups(true, assigns)),
         &(&1.account.id == account_id)
       )
 
-    portfolio = account_id && portfolio_of(assigns.depot_sidebar, account_id)
-
-    cond do
-      account_id && listed? -> {:account, account_id}
-      portfolio -> {:depot_portfolio, portfolio.id}
-      true -> :all_accounts
-    end
+    if account_id && listed?, do: {:account, account_id}, else: :all_accounts
   end
 
-  # The portfolio the Depots pages show, if the sidebar lists it; a retired one belongs to Alle Depots.
   defp nav_key(%{current: :depots, depot_marked: marked, depot_sidebar: sidebar})
        when marked != nil and sidebar != nil do
     listed = Enum.map(sidebar.portfolios, &{:depot_portfolio, &1.portfolio.id})
@@ -343,15 +331,9 @@ defmodule AbakusWeb.Layouts do
   defp nav_key(%{current: :import_receipts}), do: :import
   defp nav_key(%{current: current}), do: current
 
-  defp portfolio_of(%{portfolios: rows}, account_id),
-    do: Enum.find_value(rows, &(&1.portfolio.budget_account_id == account_id && &1.portfolio))
-
-  defp portfolio_of(_sidebar, _account_id), do: nil
-
   defp initial(email), do: String.upcase(String.first(email) || "")
 
-  # The budget's, the Kasse's and the Depot's pages and the settings have live_sessions of their own (Zugang a
-  # further one behind the sudo plug), so only links within one navigate; the others load the page.
+  # The areas and settings have live_sessions of their own; only links within one navigate.
   defp navigate(path, current) do
     if same_live_session?(path, current), do: path
   end

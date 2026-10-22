@@ -75,8 +75,7 @@ defmodule Abakus.Depot.Valuation.PurchaseValueTest do
       transaction(:sell, 4, 2, 10, 0)
     ]
 
-    # Portfolio 2 holds 5 of the second purchase (600 €) and its own 10 (1,500 €), sells the
-    # 10 oldest: the 10 of the first purchase, already its own after the transfer.
+    # Portfolio 2 sells the 10 oldest, the first purchase's, and keeps 5 of the second (600 €) and its own 10 (1,500 €).
     assert purchase_values(transactions) == %{
              {1, 20} => money(600),
              {2, 20} => money(600) + money(1_500)

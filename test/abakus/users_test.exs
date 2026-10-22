@@ -54,7 +54,6 @@ defmodule Abakus.UsersTest do
       {:error, changeset} = Users.create_user(%{email: email})
       assert "has already been taken" in errors_on(changeset).email
 
-      # Now try with the uppercased email too, to check that email case is ignored.
       {:error, changeset} = Users.create_user(%{email: String.upcase(email)})
       assert "has already been taken" in errors_on(changeset).email
     end
@@ -105,10 +104,8 @@ defmodule Abakus.UsersTest do
       assert Users.sudo_mode?(%User{authenticated_at: DateTime.add(now, -9, :minute)})
       refute Users.sudo_mode?(%User{authenticated_at: DateTime.add(now, -11, :minute)})
 
-      # minute override
       assert Users.sudo_mode?(%User{authenticated_at: DateTime.add(now, -11, :minute)}, 20)
 
-      # not authenticated
       refute Users.sudo_mode?(%User{})
     end
   end
@@ -315,7 +312,6 @@ defmodule Abakus.UsersTest do
       assert user_token.context == "session"
       assert user_token.authenticated_at != nil
 
-      # Creating the same token for another user should fail
       assert_raise Ecto.ConstraintError, fn ->
         Repo.insert!(%UserToken{
           token: user_token.token,
@@ -399,7 +395,6 @@ defmodule Abakus.UsersTest do
       assert user.confirmed_at
       {encoded_token, _hashed_token} = generate_user_magic_link_token(user)
       assert {:ok, ^user} = Users.login_user_by_magic_link(encoded_token)
-      # one time use only
       assert {:error, :not_found} = Users.login_user_by_magic_link(encoded_token)
     end
   end

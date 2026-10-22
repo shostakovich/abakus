@@ -1,4 +1,3 @@
-// The edited row, as in YNAB: the cursor goes into the cell that was clicked, its text selected.
 export const EditRow = {
   mounted() {
     // Only inside the row: Escape in a dialog or an open list above it closes just that.
@@ -30,8 +29,8 @@ export const StickyBar = {
   },
 }
 
-// Loads the register's older transactions as its end comes near, below the table and the phone list alike: the one
-// hidden at this width never intersects. Observing anew after each load keeps tall screens filled.
+// Watches the table and the phone list alike: the one hidden at this width never intersects.
+// Observing anew after each load keeps tall screens filled.
 export const LoadMore = {
   mounted() {
     this.observer = new IntersectionObserver(

@@ -32,7 +32,8 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
         depot_number: "44 72"
       )
 
-    portfolio_fixture(scope, name: "Langfristig")
+    giro = account_fixture(scope, name: "Giro", kind: :checking)
+    portfolio_fixture(scope, name: "Langfristig", reference_account_id: giro.id)
     security = security_fixture(name: "Vanguard FTSE All-World", isin: "IE00BK5BQT80")
     FakeTextExtractor.stub(receipt_text())
     %{account: account, portfolio: portfolio, security: security}
@@ -50,7 +51,6 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
 
   defp pdf(id \\ System.unique_integer()), do: "%PDF-1.4\n% #{id}\n%%EOF\n"
 
-  # Uploads PDFs on Import & Sync's Belege and waits until the model has read them.
   defp upload_and_recognise(conn, files \\ [{"beleg.pdf", pdf()}]) do
     {:ok, lv, _html} = live(conn, ~p"/depot/receipts")
     upload(lv, files)
@@ -226,10 +226,13 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     langfristig = Enum.find(Portfolios.list_portfolios(ctx.scope), &(&1.name == "Langfristig"))
 
     {:ok, portfolios_page, _html} = live(ctx.conn, ~p"/settings/depot/portfolios")
-    portfolios_page |> element("#depot-number-#{langfristig.id} button") |> render_click()
 
     portfolios_page
-    |> form("#depot-number-form", portfolio: %{depot_number: "08159999"})
+    |> element("#portfolio-#{langfristig.id}-edit")
+    |> render_click()
+
+    portfolios_page
+    |> form("#portfolio-form", portfolio: %{depot_number: "08159999"})
     |> render_submit()
 
     assert has_element?(lv, "#receipt-#{receipt.id}-status", "Geprüft")

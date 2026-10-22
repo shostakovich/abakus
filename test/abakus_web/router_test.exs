@@ -25,7 +25,6 @@ defmodule AbakusWeb.RouterTest do
     assert Enum.any?(routes, &(&1.verb == :post))
 
     for %{verb: verb, path: path} <- routes do
-      # Fill in route parameters such as `:token`.
       concrete = String.replace(path, ~r"[:*]\w+", "x")
       method = verb |> to_string() |> String.upcase()
       conn = dispatch(build_conn(), @endpoint, method, concrete, nil)
@@ -34,7 +33,6 @@ defmodule AbakusWeb.RouterTest do
     end
   end
 
-  # Pages redirect to the sign-in page; the JSON endpoints of the passkey hooks answer 401.
   defp turned_away?(conn) do
     case conn.status do
       302 -> get_resp_header(conn, "location") == [~p"/users/log-in"]

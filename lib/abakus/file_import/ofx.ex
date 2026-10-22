@@ -150,7 +150,7 @@ defmodule Abakus.FileImport.OFX do
     end
   end
 
-  # The text inside each aggregate `tag`, which always has an end tag; an opener without one is left out.
+  # An aggregate always has an end tag; an opener without one is left out.
   defp aggregates(text, tag) do
     pair(text, offsets(text, ~r/<#{tag}>/i), offsets(text, ~r/<\/#{tag}>/i))
   end
