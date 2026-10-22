@@ -272,6 +272,37 @@ defmodule Abakus.Kasse.ReimbursementLinkTest do
       balances_agree(c)
     end
 
+    test "a change wins over an open match proposal on its counterpart", c do
+      {:ok, payback} =
+        Expenses.update_expense(scope_of(c.anna), c.payback, Expenses.input(c.payback),
+          budget_account_id: c.checking.id
+        )
+
+      [counterpart] = live(c.checking)
+
+      {:ok, proposal} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.checking.id,
+          date: ~D[2026-10-14],
+          amount: 2500,
+          source: :file,
+          matched_transaction_id: counterpart.id
+        })
+
+      assert {:ok, _payback} =
+               Expenses.update_expense(scope_of(c.ben), payback, %{
+                 Expenses.input(payback)
+                 | amount_cents: 2000
+               })
+
+      assert [%{id: id, amount: 2000}, %{id: import_id, amount: 2500} = import] =
+               live(c.checking)
+
+      assert {id, import_id} == {counterpart.id, proposal.id}
+      assert %{matched_transaction_id: nil, approved: false} = import
+      balances_agree(c)
+    end
+
     test "drops a category the register gave it once it gets an account", c do
       {:ok, _categorised} =
         Ledger.update_transaction(budget_scope(), led(c.payback), %{

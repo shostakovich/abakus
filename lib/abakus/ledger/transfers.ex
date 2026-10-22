@@ -38,9 +38,10 @@ defmodule Abakus.Ledger.Transfers do
   what the Ledger loaded to validate the write: the transaction's `account`, the `transfer_accounts` of its payees,
   its existing `counterparts` by id, and `confirmed?`.
 
-  Fails with `:origin_taken` when a counterpart would move into an account that has one of its external ids, with
-  `{:match_pending, field}` when the account or amount of a counterpart with an open match proposal would change,
-  and with `{:reconciled, field}` when a reconciled counterpart would change without `confirmed?`.
+  A change of a counterpart's account or amount dissolves an open match proposal for it, which becomes an ordinary
+  import again, as when the counterpart is deleted. Fails with `:origin_taken` when a counterpart would move into an
+  account that has one of its external ids, and with `{:reconciled, field}` when a reconciled counterpart would change
+  without `confirmed?`.
   """
   def sync(%Transaction{transfer_subtransaction_id: id} = transaction, _loaded)
       when not is_nil(id),
@@ -156,24 +157,17 @@ defmodule Abakus.Ledger.Transfers do
   defp back_pointer(%Subtransaction{id: id}), do: %{transfer_subtransaction_id: id}
 
   defp update_counterpart(side, existing, fields, context) do
-    with :ok <- check_open_match(existing, fields),
-         :ok <- check_reconciled(existing, fields, context.confirmed?),
+    with :ok <- check_reconciled(existing, fields, context.confirmed?),
+         :ok <- dissolve_moved_proposals(existing, fields),
          {:ok, counterpart} <- existing |> Changeset.change(fields) |> Repo.update(),
          :ok <- move_counterpart_origins(existing, counterpart) do
       {:ok, side}
     end
   end
 
-  defp check_open_match(existing, fields) do
-    field =
-      cond do
-        fields.account_id != existing.account_id -> :account_id
-        fields.amount != existing.amount -> :amount
-        true -> nil
-      end
-
-    if field && Matches.pending?(existing.id),
-      do: {:error, {:match_pending, field}},
+  defp dissolve_moved_proposals(existing, fields) do
+    if fields.account_id != existing.account_id or fields.amount != existing.amount,
+      do: Matches.dissolve(existing.id),
       else: :ok
   end
 

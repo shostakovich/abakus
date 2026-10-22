@@ -242,6 +242,40 @@ defmodule Abakus.Depot.BudgetLinkTest do
                {outflow.id, other.id, "Mein Memo"}
     end
 
+    test "a change wins over an open match proposal, which is an ordinary import again", c do
+      switch_on(c)
+      purchase = purchase(c, 9)
+      [outflow] = register(c.giro)
+
+      {:ok, proposal} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.giro.id,
+          date: ~D[2026-10-05],
+          amount: outflow.amount,
+          source: :file,
+          matched_transaction_id: outflow.id
+        })
+
+      params =
+        purchase
+        |> Portfolios.transaction_form_params()
+        |> Map.merge(%{"amount" => "950", "amount_set" => "true"})
+
+      assert {:ok, _purchase} =
+               Portfolios.update_transaction(
+                 c.owner,
+                 Portfolios.transaction_choices(c.owner, purchase),
+                 purchase,
+                 params
+               )
+
+      assert [%Transaction{amount: -95_000} = changed, %Transaction{amount: -90_000} = import] =
+               register(c.giro)
+
+      assert {changed.id, import.id} == {outflow.id, proposal.id}
+      assert %{matched_transaction_id: nil, approved: false} = import
+    end
+
     test "a purchase changed into a sale goes to Ready to Assign", c do
       switch_on(c)
       purchase = purchase(c, 9)

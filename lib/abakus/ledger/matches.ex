@@ -3,7 +3,9 @@ defmodule Abakus.Ledger.Matches do
   The rules for match proposals, for `Abakus.Ledger`. A proposal is an import with `matched_transaction_id`: in the
   account and with the amount of the existing transaction, which is in the register (not deleted, no proposal
   itself) and not reconciled; one per transaction. Only imports from a file or the bank propose matches. A proposal
-  counts nowhere, so it is no transfer and no split. While it is open, account and amount of both sides are fixed.
+  counts nowhere, so it is no transfer and no split. While it is open, account and amount of both sides are fixed,
+  but for a change by the transaction's source or through a transfer's other side (`Abakus.Ledger.Transfers`), which
+  dissolves it.
   """
 
   import Ecto.Query
@@ -52,12 +54,25 @@ defmodule Abakus.Ledger.Matches do
 
   defp distance(candidate, import), do: abs(Date.diff(candidate.date, import.date))
 
-  @doc "Checks a new proposal's transaction and that an open proposal or its transaction keeps account and amount."
-  def validate(changeset) do
+  @doc """
+  Checks a new proposal's transaction and that an open proposal or its transaction keeps account and amount, unless
+  the transaction's source is `leading?` the change, which then dissolves the proposal (`dissolve/1`).
+  """
+  def validate(changeset, leading?) do
     case Changeset.get_change(changeset, :matched_transaction_id) do
+      nil when leading? -> changeset
       nil -> validate_locked(changeset)
       id -> changeset |> validate_source() |> validate_target(target(changeset, id))
     end
+  end
+
+  @doc "Makes the open proposals for the transaction ordinary imports again."
+  def dissolve(transaction_id) do
+    Repo.update_all(from(t in Transaction, where: t.matched_transaction_id == ^transaction_id),
+      set: [matched_transaction_id: nil, updated_at: DateTime.utc_now()]
+    )
+
+    :ok
   end
 
   defp target(changeset, id),
@@ -112,15 +127,11 @@ defmodule Abakus.Ledger.Matches do
   defp open?(%Transaction{deleted_at: nil, matched_transaction_id: id}) when not is_nil(id),
     do: true
 
-  defp open?(%Transaction{id: id}), do: pending?(id)
-
-  @doc "Whether an open proposal points at the transaction."
-  def pending?(transaction_id) do
-    Repo.exists?(
-      from t in Transaction,
-        where: t.matched_transaction_id == ^transaction_id and is_nil(t.deleted_at)
-    )
-  end
+  defp open?(%Transaction{id: id}),
+    do:
+      Repo.exists?(
+        from t in Transaction, where: t.matched_transaction_id == ^id and is_nil(t.deleted_at)
+      )
 
   @doc "A proposal counts nowhere, so it cannot have counterparts."
   def validate_proposal(changeset, transfer_accounts) do

@@ -24,8 +24,9 @@ defmodule Abakus.Ledger do
 
   A match proposal (an import with `matched_transaction_id`, see `find_matches/4`) counts nowhere until
   `accept_match/3` merges it into the existing transaction or `reject_match/2` approves it as a transaction of its
-  own. A transaction (or counterpart) cannot move into an account that has one of its external ids from the same
-  source already.
+  own; a change of its transaction's account or amount by the transaction's source or through the transfer's other
+  side dissolves it. A transaction (or counterpart) cannot move into an account that has one of its external ids from
+  the same source already.
   """
 
   import Ecto.Query
@@ -788,7 +789,7 @@ defmodule Abakus.Ledger do
 
     changeset
     |> validate_references(context.user_id)
-    |> Matches.validate()
+    |> Matches.validate(context.leading?)
     |> validate_accounts(context)
     |> validate_reconciled(context.confirmed?)
     |> validate_led(context)
@@ -802,6 +803,7 @@ defmodule Abakus.Ledger do
     account_id = Changeset.get_field(changeset, :account_id)
     counterpart_ids = Enum.map(sides, &Changeset.get_field(&1, :transfer_transaction_id))
     counterparts = Transfers.by_id(counterpart_ids)
+    led_by = source(changeset.data, counterparts[changeset.data.transfer_transaction_id])
 
     %{
       user_id: user_id,
@@ -813,8 +815,9 @@ defmodule Abakus.Ledger do
         ),
       counterparts: counterparts,
       confirmed?: Keyword.get(opts, :reconciled) == :confirmed,
-      led_by: source(changeset.data, counterparts[changeset.data.transfer_transaction_id]),
-      writer: opts[:led_by]
+      led_by: led_by,
+      writer: opts[:led_by],
+      leading?: not is_nil(led_by) and led_by == opts[:led_by]
     }
   end
 
@@ -941,10 +944,10 @@ defmodule Abakus.Ledger do
 
   @origin_taken "enthält diese Buchung schon aus derselben Quelle"
   @counterpart_origin_taken "führt in ein Konto, das diese Buchung schon aus derselben Quelle enthält"
-  @counterpart_locked "kann nicht geändert werden, solange die Gegenbuchung einen offenen Zuordnungsvorschlag hat"
 
   defp save(changeset, save, context) do
     with :ok <- release_removed(changeset, context),
+         :ok <- dissolve_moved_proposals(changeset, context),
          {:ok, transaction} <- save.(changeset),
          :ok <- move_origins(changeset, transaction),
          {:ok, transaction} <- sync(changeset, transaction, context) do
@@ -952,6 +955,17 @@ defmodule Abakus.Ledger do
       {:ok, transaction}
     end
   end
+
+  defp dissolve_moved_proposals(%Changeset{data: %Transaction{id: id}} = changeset, %{
+         leading?: true
+       })
+       when not is_nil(id) do
+    if Changeset.changed?(changeset, :account_id) or Changeset.changed?(changeset, :amount),
+      do: Matches.dissolve(id),
+      else: :ok
+  end
+
+  defp dissolve_moved_proposals(_changeset, _context), do: :ok
 
   defp release_removed(changeset, context) do
     case Transfers.release_removed(changeset, context.confirmed?) do
@@ -983,9 +997,6 @@ defmodule Abakus.Ledger do
     case Transfers.sync(transaction, context) do
       {:error, :origin_taken} ->
         {:error, sync_failed(changeset, transaction, :account_id, @counterpart_origin_taken)}
-
-      {:error, {:match_pending, field}} ->
-        {:error, sync_failed(changeset, transaction, field, @counterpart_locked)}
 
       {:error, {:reconciled, field}} ->
         {:error,
