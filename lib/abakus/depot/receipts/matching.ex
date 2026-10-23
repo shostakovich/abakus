@@ -23,8 +23,7 @@ defmodule Abakus.Depot.Receipts.Matching do
   @right_bound "(?![\\p{L}\\d]|[.,]\\d)"
   @shares_word "(?i:stück|stk\\.?|st\\.|anzahl|pcs?\\.)"
 
-  # An amount of money in German or English notation, such as 1.125,00 or 1,125.00, not a
-  # percentage.
+  # An amount of money in German or English notation, such as 1.125,00 or 1,125.00, not a percentage.
   @money ~r/(?<![\p{L}\d])(?<!\d[.,])(?:(?:\d{1,3}(?:\.\d{3})+|\d+),\d{2}|(?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?![\p{L}\d]|[.,]\d|\s*%)/u
   @longest_run 5
 

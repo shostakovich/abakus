@@ -16,18 +16,26 @@ defmodule Abakus.Kasse.Ledger do
   @spec balances([entry()]) :: %{integer() => integer()}
   def balances(entries) do
     Enum.reduce(entries, %{}, fn entry, balances ->
-      balances =
-        Map.update(balances, entry.paid_by_id, entry.amount_cents, &(&1 + entry.amount_cents))
-
-      Enum.reduce(entry.shares, balances, fn share, balances ->
-        Map.update(
-          balances,
-          share.participant_id,
-          -share.amount_cents,
-          &(&1 - share.amount_cents)
-        )
+      entry
+      |> people()
+      |> Enum.reduce(balances, fn id, balances ->
+        Map.update(balances, id, change(entry, id), &(&1 + change(entry, id)))
       end)
     end)
+  end
+
+  defp people(entry),
+    do: Enum.uniq([entry.paid_by_id | Enum.map(entry.shares, & &1.participant_id)])
+
+  @doc "What `entry` changes in the balance of one person: what they paid minus their share."
+  @spec change(entry(), integer()) :: integer()
+  def change(entry, participant_id) do
+    paid = if entry.paid_by_id == participant_id, do: entry.amount_cents, else: 0
+
+    share =
+      Enum.find_value(entry.shares, 0, &(&1.participant_id == participant_id && &1.amount_cents))
+
+    paid - share
   end
 
   @doc """

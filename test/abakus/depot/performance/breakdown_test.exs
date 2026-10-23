@@ -55,9 +55,6 @@ defmodule Abakus.Depot.Performance.BreakdownTest do
   end
 
   test "breaks the change in value down into gains, earnings, fees, taxes and money in or out" do
-    # 10 shares bought at 100 € before the period; in it 5 more for 500 € plus a 5 € fee, 6
-    # sold for 660 € less 10 € tax and 2 € fee, a dividend of 20 € less 5 € tax, a 3 € account
-    # fee and 1 € interest; 120 € a share at the end.
     transactions = [
       transaction(:deposit, ~D[2026-09-30], account_id: 10, amount: money(1_000)),
       buy(~D[2026-09-30], 1, 10, 1_000),
@@ -105,7 +102,6 @@ defmodule Abakus.Depot.Performance.BreakdownTest do
   end
 
   test "moves the cost of transferred shares with them" do
-    # 4 of 10 shares bought at 100 € move to portfolio 2 and are sold there for 440 €.
     transactions = [
       transaction(:deposit, ~D[2026-09-30], account_id: 10, amount: money(1_000)),
       buy(~D[2026-09-30], 1, 10, 1_000),
@@ -148,10 +144,7 @@ defmodule Abakus.Depot.Performance.BreakdownTest do
   end
 
   test "orders the trades of each security on their own, as PP does" do
-    # Portfolio 1 holds 10 shares at 100 € and portfolio 2 buys 10 at 150 €. At 09:00 portfolio
-    # 2 sells its 10 for 160 €, at 10:00 portfolio 1's move over; an untimed transfer of
-    # security 22 the same day comes between them by kind, not by time. In this order of the
-    # transactions, sorting all trades together put the move first.
+    # 22's untimed transfer sorts between the 09:00 sale and 10:00 move; sorting all trades put the move first.
     at = fn time -> NaiveDateTime.new!(~D[2026-10-03], time) end
     transfer = [portfolio_id: 1, other_portfolio_id: 2, shares: shares(10), amount: money(1_000)]
 

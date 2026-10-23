@@ -106,6 +106,11 @@ defmodule AbakusWeb.RegisterLive.RowsTest do
     end
   end
 
+  test "searching?/1 tells whether the query narrows anything" do
+    assert Rows.searching?("Rewe")
+    refute Rows.searching?("  ")
+  end
+
   test "running/2 gives the balance after each transaction, newest first" do
     rows = [
       transaction(3, amount: -500),

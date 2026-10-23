@@ -70,8 +70,6 @@ defmodule Abakus.Depot.Securities do
     end
   end
 
-  ## Securities from Yahoo
-
   @doc """
   A form for creating a security from a Yahoo symbol such as `IUSQ.DE`, in capitals and without
   spaces around it.
@@ -232,8 +230,6 @@ defmodule Abakus.Depot.Securities do
   def record_fetch_error(%Security{} = security, message, now),
     do: security |> change(fetch_error: message, checked_at: now) |> Repo.update!()
 
-  ## Compositions
-
   @doc "The securities DivvyDiary may know: those with an ISIN, without retired ones."
   def list_securities_with_isin do
     Repo.all(
@@ -259,8 +255,6 @@ defmodule Abakus.Depot.Securities do
     |> Map.new(&{&1.security_id, &1})
   end
 
-  ## DivvyDiary dividends
-
   @doc "Stores the dividends of a security, fetched at `now`, in place of those before."
   def replace_dividends(%Security{id: id}, dividends, now) do
     rows =
@@ -285,8 +279,6 @@ defmodule Abakus.Depot.Securities do
         order_by: [d.pay_date, d.security_id]
     )
   end
-
-  ## Profile
 
   @attributes_of_securities "name.abuchen.portfolio.model.Security"
 

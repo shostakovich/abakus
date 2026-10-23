@@ -7,7 +7,7 @@ defmodule Abakus.FileImport do
   the payee from `NAME` and the memo from `MEMO`. The statement's ledger balance becomes the account's bank balance
   from the file.
 
-  Accounts fed by another app and closed ones take no file import. Everything goes through the Ledger with the
+  Only the accounts of `Abakus.Import.accounts/1` take a file import. Everything goes through the Ledger with the
   caller's scope.
   """
 
@@ -25,7 +25,7 @@ defmodule Abakus.FileImport do
   @doc "The account the statement's account is linked to, as long as it takes a file import."
   def linked_account(%Scope{} = scope, %{bank_id: bank_id, acct_id: acct_id}) do
     account = Ledger.get_account_by_ofx(scope, bank_id, acct_id)
-    if account && Account.takes_entries?(account), do: account
+    if account && Import.takes_import(scope).(account), do: account
   end
 
   @doc """
@@ -67,9 +67,10 @@ defmodule Abakus.FileImport do
       end)
 
     accounts = Enum.map(statements, &elem(&1, 1))
+    takes_import? = Import.takes_import(scope)
 
     cond do
-      account = Enum.find(accounts, &(not Account.takes_entries?(&1))) ->
+      account = Enum.find(accounts, &(not takes_import?.(&1))) ->
         {:error, "#{account.name} nimmt keinen Datei-Import."}
 
       length(Enum.uniq_by(accounts, & &1.id)) < length(accounts) ->

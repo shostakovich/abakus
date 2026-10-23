@@ -12,8 +12,7 @@ defmodule AbakusWeb.HealthControllerTest do
   end
 
   test "GET /up answers 503 when the database cannot be reached and logs why", %{conn: conn} do
-    # A second repo for this test process only, below a regular file, so it cannot connect. It
-    # starts and stops inside capture_log, as its connection errors are logged asynchronously.
+    # A second repo below a regular file cannot connect; it lives in capture_log as its errors log asynchronously.
     log =
       capture_log(fn ->
         repo =

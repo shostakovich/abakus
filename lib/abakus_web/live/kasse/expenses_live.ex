@@ -7,7 +7,7 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
 
   alias Abakus.LocalTime
 
-  alias Abakus.Kasse.{Balances, Categories, Expenses, Participants, Periods}
+  alias Abakus.Kasse.{Balances, Categories, Expenses, Ledger, Participants, Periods}
   alias Abakus.Kasse.Expenses.Expense
   alias Abakus.Money
   alias AbakusWeb.Kasse.{CategoryIcon, PeriodHeadings}
@@ -157,8 +157,6 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
 
   defp row(assigns, %Expense{} = expense) do
     me = assigns.current_scope.participant.id
-    share = Expense.share_of(expense, me)
-    paid = if expense.paid_by_id == me, do: expense.amount_cents, else: 0
 
     %{
       kind: :expense,
@@ -168,7 +166,7 @@ defmodule AbakusWeb.Kasse.ExpensesLive do
       who: who(assigns, expense),
       involved?:
         expense.paid_by_id == me or Enum.any?(expense.shares, &(&1.participant_id == me)),
-      balance: paid - share
+      balance: Ledger.change(expense, me)
     }
   end
 

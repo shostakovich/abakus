@@ -152,9 +152,10 @@ defmodule Abakus.Kasse.Expenses do
   end
 
   @doc """
-  Creates an expense from its input. Options: `:text` for the activity entry and
-  `:recurring_expense_id`, the rule it is an occurrence of; `{:error, :rule_changed}` when that
-  rule is paused, gone or no longer due on the expense's date.
+  Creates an expense from its input. Options: `:text` for the activity entry,
+  `:recurring_expense_id`, the rule it is an occurrence of (`{:error, :rule_changed}` when that
+  rule is paused, gone or no longer due on the expense's date), and `:budget_account_id` and
+  `:adopt` for the budget link (`Abakus.Kasse.BudgetLink.expense_written/3`).
   """
   def create_expense(%Scope{} = scope, attrs, opts \\ []) do
     actor_id = Access.actor_id!(scope)
@@ -167,7 +168,7 @@ defmodule Abakus.Kasse.Expenses do
            {:ok, expense} <- Repo.insert(changeset),
            {:ok, shares} <- Expense.shares(expense, expense.id),
            :ok <- insert_shares(expense.id, shares),
-           :ok <- link_budget(changeset, nil, reload(expense)),
+           :ok <- link_budget(changeset, nil, reload(expense), link_opts(actor_id, opts)),
            {:ok, _activity} <-
              Activities.log(actor_id, :expense_created, expense.id, %{
                title: expense.title,
@@ -192,9 +193,10 @@ defmodule Abakus.Kasse.Expenses do
 
   @doc """
   Saves a new input for a live expense. Saved unchanged, nothing is written: no time stamp, no
-  activity entry, no broadcast. A deleted expense gives `{:error, :deleted}`.
+  activity entry, no broadcast; only a `:budget_account_id` (see `create_expense/3`) still goes to
+  the budget link. A deleted expense gives `{:error, :deleted}`.
   """
-  def update_expense(%Scope{} = scope, %Expense{id: id}, attrs) do
+  def update_expense(%Scope{} = scope, %Expense{id: id}, attrs, opts \\ []) do
     actor_id = Access.actor_id!(scope)
 
     Repo.transact(fn ->
@@ -203,21 +205,27 @@ defmodule Abakus.Kasse.Expenses do
            {:ok, new} <- Changeset.apply_action(changeset, :update),
            {:ok, shares} <- Expense.shares(new, id) do
         changes = Changes.expense(old, %{new | shares: shares}, names(), category_names())
-        update(actor_id, old, changeset, shares, changes)
+        update(old, changeset, shares, changes, link_opts(actor_id, opts))
       end
     end)
     |> committed()
   end
 
-  defp update(_actor_id, old, _changeset, _shares, []), do: {:ok, {old, false}}
+  defp update(old, changeset, _shares, [], link_opts) do
+    if Keyword.has_key?(link_opts, :budget_account_id) do
+      with :ok <- link_budget(changeset, old, old, link_opts), do: {:ok, {old, false}}
+    else
+      {:ok, {old, false}}
+    end
+  end
 
-  defp update(actor_id, old, changeset, shares, changes) do
+  defp update(old, changeset, shares, changes, link_opts) do
     with {:ok, expense} <- Repo.update(changeset, force: true),
          {_deleted, _} <- Repo.delete_all(where(ExpenseShare, expense_id: ^expense.id)),
          :ok <- insert_shares(expense.id, shares),
-         :ok <- link_budget(changeset, old, reload(expense)),
+         :ok <- link_budget(changeset, old, reload(expense), link_opts),
          {:ok, _activity} <-
-           Activities.log(actor_id, :expense_updated, expense.id, %{
+           Activities.log(link_opts[:by], :expense_updated, expense.id, %{
              title: expense.title,
              amount_cents: expense.amount_cents,
              changes: changes
@@ -251,8 +259,11 @@ defmodule Abakus.Kasse.Expenses do
 
   defp reload(expense), do: Repo.preload(expense, [:paid_by, :shares], force: true)
 
-  defp link_budget(changeset, old, new) do
-    case BudgetLink.expense_written(old, new) do
+  defp link_opts(actor_id, opts),
+    do: [{:by, actor_id} | Keyword.take(opts, [:budget_account_id, :adopt])]
+
+  defp link_budget(changeset, old, new, opts \\ []) do
+    case BudgetLink.expense_written(old, new, opts) do
       :ok -> :ok
       {:error, message} -> {:error, Changeset.add_error(changeset, :budget, message)}
     end
@@ -371,18 +382,20 @@ defmodule Abakus.Kasse.Expenses do
   @doc """
   Saves the form as a new expense or as `existing`. A foreign amount without a rate takes the
   rate of its date, as does one whose rate was looked up before, unless currency, date and rate
-  are those saved; any other rate counts as manual. Errors come back on the form. Option
-  `:today`.
+  are those saved; any other rate counts as manual. Errors come back on the form. Options
+  `:today` and `:budget_account_id` (see `create_expense/3`).
   """
   def save_form(%Scope{} = scope, %Form{} = form, existing \\ nil, opts \\ []) do
     Access.check!(scope)
 
     with {:ok, input} <- Form.input(form),
          {:ok, form, input} <- resolve_rate(scope, form, input, existing, opts) do
+      link_opts = Keyword.take(opts, [:budget_account_id])
+
       result =
         if existing,
-          do: update_expense(scope, existing, input),
-          else: create_expense(scope, input)
+          do: update_expense(scope, existing, input, link_opts),
+          else: create_expense(scope, input, link_opts)
 
       case result do
         {:error, %Changeset{} = changeset} -> {:error, Form.put_errors(form, changeset)}

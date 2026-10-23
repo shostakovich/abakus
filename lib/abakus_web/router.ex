@@ -13,7 +13,6 @@ defmodule AbakusWeb.Router do
     plug :fetch_current_scope_for_user
   end
 
-  # JSON for the passkey hooks; same session and CSRF protection as the pages.
   pipeline :browser_json do
     plug :accepts, ["json"]
     plug :fetch_session
@@ -37,8 +36,7 @@ defmodule AbakusWeb.Router do
     plug :require_part, :kasse
   end
 
-  # Public without a session: the health check and `/mcp/<secret>`, which checks its callers itself. Everything
-  # else requires a signed-in user.
+  # Public: the health check, and the MCP, which checks its callers itself.
   scope "/", AbakusWeb do
     get "/up", HealthController, :show
     forward "/mcp", MCPPlug, [], log: false

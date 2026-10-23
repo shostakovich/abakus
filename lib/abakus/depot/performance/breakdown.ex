@@ -58,7 +58,6 @@ defmodule Abakus.Depot.Performance.Breakdown do
     end)
   end
 
-  # What a transaction adds to each item.
   defp items(%{type: type} = t) when type in [:dividend, :interest],
     do: [earnings: Valuation.gross_value(t), fees: units(t, :fee), taxes: units(t, :tax)]
 

@@ -12,13 +12,23 @@ defmodule Abakus.Import do
   with the caller's scope.
   """
 
+  alias Abakus.Depot.Portfolios
   alias Abakus.{Ledger, Repo}
   alias Abakus.Ledger.Account
   alias Abakus.Users.Scope
 
-  @doc "The accounts entries can come into, in their order: open and fed by no other area."
+  @doc """
+  The accounts entries can come into, in their order: open, not the shared-expenses account and no portfolio's cash,
+  whose money moves in the Depot.
+  """
   def accounts(%Scope{} = scope),
-    do: Enum.filter(Ledger.list_accounts(scope), &Account.takes_entries?/1)
+    do: Enum.filter(Ledger.list_accounts(scope), takes_import(scope))
+
+  @doc "Whether an account takes entries by the rule of `accounts/1`, as a function of the account."
+  def takes_import(%Scope{} = scope) do
+    cash = Portfolios.cash_account_portfolios(scope)
+    &(Account.takes_entries?(&1) and not Map.has_key?(cash, &1.id))
+  end
 
   @doc """
   The unique entries, each with its status in the account: `:existing` (its external id is there), `:reconciled`

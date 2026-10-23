@@ -50,7 +50,6 @@ defmodule Abakus.Depot.MarketData do
     )
   end
 
-  # Exchanges that quote in euros, Xetra first.
   @euro_exchanges ~w(GER FRA STU MUN DUS HAM BER AMS PAR MIL BRU MCE VIE)
 
   @doc """

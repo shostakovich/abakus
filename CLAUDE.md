@@ -32,6 +32,8 @@ CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versio
 - Amounts are read and written by `Abakus.Money`; dates, times, counts and other numbers by `Abakus.Format`.
 - Context functions take `%Scope{}` and see only the user's rows (ADR 0019); jobs, tasks and MCP reads use
   `Scope.system()`.
+- What another area (the Depot's cash side, the Kasse's budget link, bank sync) writes into the Ledger, it writes
+  with the scope of the user whose Ledger it is.
 - Local time is the host's `TZ` through `Abakus.LocalTime` (no time zone database).
 - Outside services are behaviours swapped for fakes in `config/test.exs`, where the jobs are off.
 - Dependencies: few and mature, each with a reason.

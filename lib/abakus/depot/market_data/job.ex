@@ -1,31 +1,19 @@
 defmodule Abakus.Depot.MarketData.Job do
   @moduledoc """
-  Runs `Abakus.Depot.MarketData.run_daily/1` every day at 18:00 local time, then books the value
-  changes into the budget (`Abakus.Depot.BudgetFeed`): Xetra closes at 17:30, and the ECB rates
-  come at 17:00 (`Abakus.ExchangeRates.Job`). At boot it runs at once when the last run is older
-  than the last 18:00 slot, and otherwise books only the value changes, which open the accounts
-  of new portfolios, e.g. after an update. There are no retries; the next run fills the gaps.
+  Runs `Abakus.Depot.MarketData.run_daily/1` every day at 18:00 local time: Xetra closes at 17:30, and the ECB rates
+  come at 17:00 (`Abakus.ExchangeRates.Job`). At boot it runs at once when the last run is older than the last 18:00
+  slot. There are no retries; the next run fills the gaps.
   """
 
   alias Abakus.{DailyJob, LocalTime}
-  alias Abakus.Depot.{BudgetFeed, MarketData}
+  alias Abakus.Depot.MarketData
 
   @at ~T[18:00:00]
 
   def child_spec(_opts),
-    do: DailyJob.child_spec(name: __MODULE__, at: @at, run: &run/0, at_boot?: &boot/0)
+    do: DailyJob.child_spec(name: __MODULE__, at: @at, run: &run/0, at_boot?: &due?/0)
 
-  @doc "One run: the prices, then the value changes in the budget."
-  def run do
-    MarketData.run_daily()
-    BudgetFeed.book_value_changes()
-  end
-
-  defp boot do
-    due? = due?()
-    if !due?, do: BudgetFeed.book_value_changes()
-    due?
-  end
+  defp run, do: MarketData.run_daily()
 
   defp due? do
     last_run = MarketData.last_run()

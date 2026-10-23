@@ -8,7 +8,7 @@ defmodule Abakus.Depot.BookingTest do
   alias Abakus.Depot.Portfolios.{Receipt, Transaction, TransactionForm}
   alias Abakus.Depot.Receipts.Fields
   alias Abakus.Depot.Valuation.Market
-  alias Abakus.LocalTime
+  alias Abakus.{Ledger, LocalTime}
 
   @day ~D[2026-10-01]
 
@@ -60,7 +60,7 @@ defmodule Abakus.Depot.BookingTest do
 
     %{
       holdings: for(h <- Valuation.holdings(transactions, @day), do: {h.portfolio_id, h.shares}),
-      balances: Valuation.balances(transactions, @day),
+      balances: Ledger.balances_through(ctx.scope, @day),
       invested_capital: invested
     }
   end
@@ -496,10 +496,10 @@ defmodule Abakus.Depot.BookingTest do
       assert errors_on(changeset).shares == ["übersteigt den Bestand von 5 Stück"]
     end
 
-    test "a transaction keeps its retired portfolio and account", ctx do
+    test "a transaction keeps its retired portfolio and closed account", ctx do
       {:ok, [purchase]} = book(ctx, "purchase", %{"shares" => "10", "price" => "100"})
       Repo.update!(Ecto.Changeset.change(ctx.portfolio, retired: true))
-      Repo.update!(Ecto.Changeset.change(ctx.account, retired: true))
+      Repo.update!(Ecto.Changeset.change(ctx.account, closed: true))
       assert %{portfolios: [], accounts: []} = Portfolios.transaction_choices(ctx.scope)
 
       purchase = Portfolios.get_transaction(ctx.scope, purchase.id)
@@ -778,13 +778,11 @@ defmodule Abakus.Depot.BookingTest do
       assert Portfolios.transactions_by_month(user_scope_fixture()) == []
     end
 
-    test "gives a portfolio's transactions with those of its cash and its reference account",
-         ctx do
-      cash = account_fixture(ctx.scope, name: "Cash", cash_of_portfolio_id: ctx.portfolio.id)
+    test "gives a portfolio's transactions with those of its cash", ctx do
       other = account_fixture(ctx.scope, name: "Andere")
 
-      [on_reference, on_cash, _other] =
-        for account <- [ctx.account, cash, other],
+      [on_cash, _other] =
+        for account <- [ctx.account, other],
             do:
               transaction_fixture(ctx.scope, @day,
                 type: :deposit,
@@ -798,7 +796,42 @@ defmodule Abakus.Depot.BookingTest do
             transaction <- transactions,
             do: transaction.id
 
-      assert Enum.sort(ids) == Enum.sort([on_reference.id, on_cash.id])
+      assert ids == [on_cash.id]
+    end
+
+    test "gives a portfolio's dividends on a budget account as Verrechnungskonto, not its other money",
+         ctx do
+      giro = account_fixture(ctx.scope, name: "Giro", kind: :checking)
+
+      portfolio =
+        Repo.update!(Ecto.Changeset.change(ctx.portfolio, reference_account_id: giro.id))
+
+      purchase =
+        transaction_fixture(ctx.scope, @day,
+          type: :buy,
+          portfolio_id: portfolio.id,
+          account_id: giro.id,
+          security_id: ctx.security.id,
+          shares: shares(1),
+          amount: 100
+        )
+
+      dividend =
+        transaction_fixture(ctx.scope, @day,
+          type: :dividend,
+          account_id: giro.id,
+          security_id: ctx.security.id,
+          amount: 10
+        )
+
+      transaction_fixture(ctx.scope, @day, type: :deposit, account_id: giro.id, amount: 100)
+
+      ids =
+        for {_month, transactions} <- Portfolios.transactions_by_month(ctx.scope, nil, portfolio),
+            transaction <- transactions,
+            do: transaction.id
+
+      assert Enum.sort(ids) == Enum.sort([purchase.id, dividend.id])
     end
   end
 end

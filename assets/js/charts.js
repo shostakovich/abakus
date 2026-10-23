@@ -1,6 +1,4 @@
-// Chart.js 4.5.1, the UMD build from https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js
-// with every chart type registered. The time axis is linear in days, with German labels of its own
-// instead of a date adapter.
+// Chart.js 4.5.1 UMD build; time axes are linear in days with German labels of their own, no date adapter.
 import Chart from "../vendor/chart.umd.min.js"
 
 const DAY = 86_400_000
@@ -18,13 +16,10 @@ export const formatDay = (day) =>
 
 export const formatEuros = (euros) => euroFormat.format(euros)
 
-// Axis labels: "80 T€" from a thousand on.
 export const formatAxisEuros = (euros) =>
   Math.abs(euros) >= 1000 ? `${numberFormat.format(euros / 1000)}\u00a0T€` : `${numberFormat.format(euros)}\u00a0€`
 
-// Ticks on the first of every month, two, three or six months, or every year or few years, with
-// the year in January; for a short period on single days. As many as fit about every 56 pixels.
-// A single day gets one on either side, so that its point has room.
+// A single day gets a day on either side, so that its point has room.
 export function timeAxis(first, last, tickOptions = {}) {
   const single = first === last
   return {
@@ -62,8 +57,7 @@ function ticks(min, max, count) {
   return result
 }
 
-// A theme colour as the canvas needs it, resolved for the current light or dark theme: a custom
-// property such as "--color-chart-1" or any CSS colour, e.g. a color-mix() of tokens.
+// `color` is a custom property such as "--color-chart-1" or any CSS colour, resolved for the current theme.
 export function cssColor(el, color) {
   el.style.color = color.startsWith("--") ? `var(${color})` : color
   const resolved = getComputedStyle(el).color
@@ -73,8 +67,7 @@ export function cssColor(el, color) {
 
 let pixel
 
-// The browser computes the theme's colours as oklch() or oklab(), which Chart.js cannot parse to
-// lighten them on hover; one pixel painted in the colour reads back as rgba().
+// Chart.js cannot parse the computed oklch()/oklab() to lighten on hover; a painted pixel reads back as rgba().
 function rgba(color) {
   pixel ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true })
   pixel.clearRect(0, 0, 1, 1)
@@ -84,23 +77,19 @@ function rgba(color) {
   return `rgba(${r}, ${g}, ${b}, ${Math.round((a / 255) * 1000) / 1000})`
 }
 
-// A chart series of setzkasten as a token name such as "chart-1": its fill for bars, areas and
-// dots, its line for lines and outlines.
+// A Setzkasten series such as "chart-1": fill for bars, areas and dots, line for lines and outlines.
 export const series = (el, name) => ({ fill: cssColor(el, `--color-${name}-fill`), line: cssColor(el, `--color-${name}`) })
 
 // The page's text colour at `percent` strength: axes and their labels at 70, grid lines at 10.
 export const inkColor = (el, percent) =>
   cssColor(el, `color-mix(in oklab, var(--color-base-content) ${percent}%, transparent)`)
 
-// A theme colour with transparency, e.g. a series' fill under its line.
 export const transparent = (el, color, alpha) =>
   cssColor(el, `color-mix(in oklab, ${color} ${alpha * 100}%, transparent)`)
 
 export const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches
 
-// A LiveView hook for one chart: draws what `config(data, el)` gives for the data the page pushes
-// as `event`, and again in the other colours when the theme changes, by the device's light or dark
-// mode or by a theme set on <html>. Without a config there is nothing to draw.
+// Redraws on a theme change, by the device's colour scheme or data-theme on <html>.
 export function chartHook(event, config) {
   return {
     mounted() {

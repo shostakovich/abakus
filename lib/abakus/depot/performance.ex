@@ -63,7 +63,6 @@ defmodule Abakus.Depot.Performance do
     %__MODULE__{days: days, cash_flows: cash_flows}
   end
 
-  # `{date, kind, cents}` per side of each transaction in the interval, in order of time.
   defp flows(transactions, filter, interval) do
     for t <- Enum.sort_by(transactions, & &1.date_time, NaiveDateTime),
         date = NaiveDateTime.to_date(t.date_time),
@@ -194,7 +193,6 @@ defmodule Abakus.Depot.Performance do
     end
   end
 
-  # The accumulated TTWROR of every day, 0 on the reference day.
   defp accumulated(index) do
     index
     |> daily_returns()
@@ -204,7 +202,6 @@ defmodule Abakus.Depot.Performance do
     |> then(&[0.0 | &1])
   end
 
-  # The return of every day after the reference day.
   defp daily_returns(%__MODULE__{days: [reference_day | days]}) do
     days
     |> Enum.map_reduce(reference_day.value, fn day, previous ->

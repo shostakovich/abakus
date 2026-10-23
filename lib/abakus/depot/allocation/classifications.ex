@@ -43,7 +43,6 @@ defmodule Abakus.Depot.Allocation.Classifications do
     }
   end
 
-  # The value of each security and account, as `%{{:security | :account, id} => cents}`.
   defp values(holdings, accounts) do
     Enum.map(holdings, &{{:security, &1.security.id}, &1.value})
     |> Enum.concat(Enum.map(accounts, &{{:account, &1.account.id}, &1.value}))
@@ -51,8 +50,6 @@ defmodule Abakus.Depot.Allocation.Classifications do
     |> Map.new(fn {vehicle, values} -> {vehicle, Enum.sum(values)} end)
   end
 
-  # The assignments below a top-level classification of what has a value, as `{top-level id,
-  # vehicle, weight}`.
   defp assignments(classifications, values) do
     top_level_ids = top_level_ids(classifications)
 
@@ -68,7 +65,6 @@ defmodule Abakus.Depot.Allocation.Classifications do
   defp vehicle(%{security_id: nil, account_id: id}), do: {:account, id}
   defp vehicle(%{security_id: id}), do: {:security, id}
 
-  # The children of the root, by rank.
   defp top_levels(classifications) do
     roots = for %{parent_id: nil, id: id} <- classifications, into: MapSet.new(), do: id
 
@@ -77,8 +73,7 @@ defmodule Abakus.Depot.Allocation.Classifications do
     |> Enum.sort_by(&{&1.rank, &1.id})
   end
 
-  # The top-level classification of each one below it, itself included, as `%{id => top-level
-  # id}`; it walks down from the root, so a broken parent never loops.
+  # Walks down from the root, so a broken parent never loops.
   defp top_level_ids(classifications) do
     children = Enum.group_by(classifications, & &1.parent_id)
 
@@ -101,8 +96,7 @@ defmodule Abakus.Depot.Allocation.Classifications do
     end)
   end
 
-  # The part of each value its assignments leave, as PP counts it: none when assigned 100 % or
-  # more.
+  # As PP counts it: nothing is left of a value assigned 100 % or more.
   defp unassigned_value(values, assignments) do
     weights =
       Enum.group_by(assignments, fn {_, vehicle, _} -> vehicle end, fn {_, _, weight} ->

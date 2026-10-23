@@ -68,8 +68,7 @@ defmodule AbakusWeb.UserLive.Login do
 
   @impl true
   def handle_event("send_link", %{"user" => %{"email" => email}}, socket) do
-    # Sent in the background and answered the same in every case, so neither the text nor the
-    # response time tells which addresses exist or whether a limit was reached.
+    # Same answer in every case, sent in the background: neither text nor timing tells which addresses exist.
     if is_binary(email), do: request_login_link(email)
 
     {:noreply,

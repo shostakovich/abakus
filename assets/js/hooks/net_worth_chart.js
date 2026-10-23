@@ -1,11 +1,8 @@
 import { chartHook, cssColor, inkColor, day, series, formatAxisEuros, formatDay, formatEuros, reducedMotion, timeAxis, transparent } from "../charts.js"
 
-// Net worth against invested capital and, while the benchmark is shown, the shadow portfolio in it;
-// Vermögen pushes the days of its period with the amounts in cents, the invested capital unless
-// net worth is the budget's, and the benchmark's line for a user who picked one.
+// Amounts in cents; no invested capital when net worth is the budget's, no benchmark without a pick.
 const chart = chartHook("net-worth-chart", (data, el) => {
   const { dates, net_worth, invested_capital, benchmark, benchmark_name, benchmark_shown } = data
-  // Net worth in series 1, invested capital in 8, the benchmark in 2.
   const [netWorth, invested, mark] = ["chart-1", "chart-8", "chart-2"].map((name) => series(el, name))
   const background = cssColor(el, "--color-base-100")
   const [line, secondary, mustard] = [netWorth.line, invested.line, mark.line]

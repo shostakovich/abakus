@@ -795,7 +795,6 @@ defmodule AbakusWeb.BudgetLive do
   defp target_errors(socket, params, errors),
     do: assign(socket, :target_form, TargetForm.to_target_form(params, errors))
 
-  # The selected category's dialog keeps its state, from the reloaded category.
   defp edited(socket) do
     socket = socket |> assign(:editing, closed(socket.assigns.editing)) |> assign_budget()
 
@@ -917,7 +916,6 @@ defmodule AbakusWeb.BudgetLive do
     |> keep_open(socket.assigns[:window])
   end
 
-  # The popover and the target editor belong to the focus month and their category.
   defp keep_open(socket, %Window{focus: focus}) when focus == socket.assigns.window.focus do
     %{popover: popover, inspector: inspector} = socket.assigns
 

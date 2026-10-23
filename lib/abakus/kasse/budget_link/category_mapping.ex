@@ -1,5 +1,5 @@
 defmodule Abakus.Kasse.BudgetLink.CategoryMapping do
-  @moduledoc "The budget category the linked shares of a Kasse category are booked in."
+  @moduledoc "The budget category the linked transactions of a Kasse category are booked in."
 
   use Abakus.Schema
 

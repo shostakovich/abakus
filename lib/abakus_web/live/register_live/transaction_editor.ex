@@ -9,13 +9,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   Payee and category are Setzkasten comboboxes; a choice arrives as a change of `payee_pick` (with `payee_new` for a
   payee typed anew) or `category_pick`, "Aufteilen" among the categories splits the transaction. Transfers are picked as
-  payees, the other open accounts above the payees, in a split's subtransactions too. A payee suggests its last
-  category, and a suggestion goes again when the payee changes; a chosen category stays. A transfer between a budget and
-  a tracking account takes a category and suggests the one last used between the two. Changing or deleting a reconciled
-  transaction, or one whose counterpart is, asks first. A transaction linked to a Kasse expense (`expense_id`) links to
-  it and keeps account, date, amount and payee as the Kasse wrote them; it is neither split nor deleted here (ADR 0006).
-  So does whatever the Depot booked (`source: :depot`): a value change, or a transaction linked to a Depot transaction
-  (ADR 0018).
+  payees, the other open accounts above the payees, in a split's subtransactions too; the portfolios' cash accounts
+  (`depot_cash`) only where the transaction uses one already. A payee suggests its last category, and a suggestion goes
+  again when the payee changes; a chosen category stays. A transfer between a budget and a tracking account takes a
+  category and suggests the one last used between the two. Changing or deleting a reconciled transaction, or one whose
+  counterpart is, asks first. A transaction its source leads (`Ledger.led_by/2`, ADR 0020) links to its Kasse expense or
+  Depot transaction and keeps what the source leads (`Ledger.led_fields/0`); it is neither split nor deleted here. A
+  transfer with the shared-expenses account becomes a reimbursement in the Kasse
+  (`Abakus.Kasse.BudgetLink.write_from_register/4`), which asks for the person while the group has more than one besides
+  the budget owner.
 
   Tells its LiveView `{TransactionEditor, :done, message}` once the transaction is saved or deleted; the events
   `cancel_edit` (Cancel, Escape) go to the LiveView itself.
@@ -23,7 +25,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   use AbakusWeb, :live_component
 
   alias Abakus.{Categories, Ledger, Names}
-  alias Abakus.Depot.BudgetLink, as: DepotLink
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.Money
@@ -89,6 +90,11 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
             depot={@depot}
             error={@error}
             sheet
+          />
+          <.person_select
+            :if={@ask_person}
+            people={@reimbursement.people}
+            value={@params["person_id"]}
           />
           <fieldset class="fieldset min-w-0">
             <label class="fieldset-legend" for="tx-amount">Betrag</label>
@@ -392,8 +398,13 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
           </div>
         </td>
       </tr>
-      <tr :if={@split_of || @expense_id || @depot || @error} class="app-edit-notes">
+      <tr :if={@split_of || @expense_id || @depot || @error || @ask_person} class="app-edit-notes">
         <td colspan={@columns.count}>
+          <.person_select
+            :if={@ask_person}
+            people={@reimbursement.people}
+            value={@params["person_id"]}
+          />
           <.notes
             split_of={@split_of}
             transaction={@transaction}
@@ -412,7 +423,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :transaction, :any, required: true
   attr :accounts, :map, required: true
   attr :expense_id, :integer, default: nil
-  attr :depot, :atom, default: nil, doc: "`:value_change` or `:linked` for what the Depot booked"
+  attr :depot, :boolean, default: false, doc: "whether the Depot leads the transaction"
   attr :error, :string, default: nil
   attr :sheet, :boolean, default: false
 
@@ -422,16 +433,13 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       Teil einer Aufteilung in {@accounts[@transaction.account_id].name}; hier steht die ganze Aufteilung.
     </p>
     <p :if={@expense_id} id="tx-expense" class="mr-auto text-sm text-base-content/70">
-      Dein Anteil an einer Ausgabe der Kasse: Betrag, Datum und Empfänger folgen der <.link
+      Aus der Kasse: Betrag, Datum, Konto, Empfänger und Gegenbuchung folgen der <.link
         id="tx-expense-link"
         navigate={~p"/kasse/expenses/#{@expense_id}"}
         class="link link-primary"
-      >Ausgabe</.link>.
+      >Ausgabe oder Rückzahlung</.link>.
     </p>
-    <p :if={@depot == :value_change} id="tx-depot" class="mr-auto text-sm text-base-content/70">
-      Wertänderung des Depots: Betrag, Datum und Empfänger bucht das Depot.
-    </p>
-    <p :if={@depot == :linked} id="tx-depot" class="mr-auto text-sm text-base-content/70">
+    <p :if={@depot} id="tx-depot" class="mr-auto text-sm text-base-content/70">
       Aus dem Depot: Betrag, Datum und Empfänger folgen der <.link
         id="tx-depot-link"
         navigate={~p"/depot/transactions"}
@@ -447,6 +455,25 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     >
       <.icon name="circle-alert" class="shrink-0" />{@error}
     </p>
+    """
+  end
+
+  attr :people, :list, required: true
+  attr :value, :any, required: true
+
+  defp person_select(assigns) do
+    ~H"""
+    <.input
+      id="tx-person"
+      type="select"
+      form="tx-form"
+      name="transaction[person_id]"
+      value={@value}
+      label="Rückzahlung in der Kasse mit"
+      prompt="Person wählen"
+      options={Enum.map(@people, &{&1.name, &1.id})}
+      class="max-w-xs"
+    />
     """
   end
 
@@ -716,7 +743,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     ])
   end
 
-  # The comboboxes' options, the same for every side: transfers to the other open accounts above the payees.
   defp assign_options(assigns) do
     transfers =
       for account <- transfer_options(assigns.params, assigns.accounts),
@@ -816,8 +842,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :label, :boolean, default: false
   attr :small, :boolean, default: false
 
-  # The category of a side: a combobox where it takes one, else what stands there instead. "Aufteilen" is offered
-  # for the transaction's own category only.
   defp category_cell(assigns) do
     side = TransactionForm.side(assigns.params, assigns.side)
     main? = assigns.side == "main"
@@ -870,7 +894,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :payee_options, :list, required: true
   attr :category_options, :list, required: true
 
-  # The option lists every side's comboboxes copy in; "Aufteilen" only for the transaction's own category.
+  # Shared by every side's comboboxes; "Aufteilen" only for the transaction's own category.
   defp option_lists(assigns) do
     ~H"""
     <.combobox_options id="tx-payee-list" options={@payee_options} />
@@ -904,8 +928,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :payee_options, :list, required: true
   attr :category_options, :list, required: true
 
-  # A tracking account's register has no category column, so a side that takes one there (a transfer to a budget
-  # account, or a part of a split opened from its counterpart) has it below the payee.
+  # A tracking account's register has no category column, so a side that takes one shows it below the payee.
   defp category_below(assigns) do
     ~H"""
     <div
@@ -939,25 +962,37 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @impl true
   def update(assigns, socket) do
-    socket = socket |> assign(assigns) |> assign_fixed()
+    socket = socket |> assign(assigns) |> assign_accounts() |> assign_fixed()
     key = assigns.transaction && assigns.transaction.id
-
-    if Map.get(socket.assigns, :loaded) == {key},
-      do: {:ok, socket},
-      else: {:ok, load(socket, key)}
+    socket = if Map.get(socket.assigns, :loaded) == {key}, do: socket, else: load(socket, key)
+    {:ok, assign_ask_person(socket)}
   end
 
-  # Account, date, amount and payee are another area's.
-  defp assign_fixed(%{assigns: assigns} = socket) do
-    depot = depot(assigns.current_scope, assigns.transaction)
-    assign(socket, depot: depot, fixed: depot != nil or assigns.expense_id != nil)
+  # A portfolio's cash is the Depot's: the editor knows it only where the transaction uses it.
+  defp assign_accounts(%{assigns: %{accounts: accounts, depot_cash: depot_cash}} = socket) do
+    used = used_accounts(socket.assigns.transaction)
+
+    assign(
+      socket,
+      :accounts,
+      Map.reject(accounts, fn {id, _account} ->
+        Map.has_key?(depot_cash, id) and id not in used
+      end)
+    )
   end
 
-  defp depot(scope, %Transaction{source: :depot, id: id}) do
-    if MapSet.member?(DepotLink.linked_ids(scope, [id]), id), do: :linked, else: :value_change
+  defp assign_fixed(%{assigns: %{current_scope: scope, transaction: transaction}} = socket) do
+    led_by = transaction && Ledger.led_by(scope, transaction)
+
+    assign(socket,
+      expense_id: expense_id(led_by),
+      depot: match?({:depot_transaction, _id}, led_by),
+      fixed: led_by != nil
+    )
   end
 
-  defp depot(_scope, _transaction), do: nil
+  defp expense_id({:kasse_expense, id}), do: id
+  defp expense_id(_led_by), do: nil
 
   defp load(socket, key) do
     %{transaction: transaction, accounts: accounts} = socket.assigns
@@ -977,6 +1012,45 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       locked: locked?(transaction),
       kept_accounts: kept_accounts(transaction, accounts)
     )
+    |> assign_reimbursement()
+  end
+
+  defp assign_reimbursement(socket) do
+    reimbursement = BudgetLink.reimbursement_people(socket.assigns.current_scope)
+
+    assign(socket,
+      reimbursement: reimbursement,
+      shared_before: shared_transfer?(socket.assigns.params, reimbursement)
+    )
+  end
+
+  # Only such a transfer dated from the link's start date on becomes a reimbursement.
+  defp shared_transfer?(_params, nil), do: false
+
+  defp shared_transfer?(params, %{account_id: shared, start_date: start}) do
+    params["split"] != "true" and TransactionForm.transfer?(params) and
+      shared in [
+        TransactionForm.to_id(params["account_id"]),
+        TransactionForm.to_id(params["transfer_account_id"])
+      ] and
+      started?(params["date"], start)
+  end
+
+  defp started?(_date, nil), do: true
+
+  defp started?(date, start) do
+    case Date.from_iso8601(date || "") do
+      {:ok, date} -> not Date.before?(date, start)
+      {:error, _reason} -> true
+    end
+  end
+
+  defp assign_ask_person(%{assigns: assigns} = socket) do
+    ask? =
+      match?(%{people: [_, _ | _]}, assigns.reimbursement) and not assigns.fixed and
+        not assigns.shared_before and shared_transfer?(assigns.params, assigns.reimbursement)
+
+    assign(socket, :ask_person, ask?)
   end
 
   defp initial_params(%{transaction: nil} = assigns),
@@ -985,7 +1059,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   defp initial_params(%{transaction: transaction}),
     do: TransactionForm.from_transaction(transaction)
 
-  # The register's account if it takes manual entries, else the first that does, budget accounts first.
   defp default_account_id(%{account: account, accounts: accounts}) do
     if account && Account.takes_entries?(account) do
       account.id
@@ -1013,13 +1086,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   end
 
   # Accounts the transaction uses, which stay selectable though closed or fed.
-  defp kept_accounts(transaction, accounts) do
+  defp kept_accounts(transaction, accounts),
+    do: MapSet.intersection(used_accounts(transaction), MapSet.new(Map.keys(accounts)))
+
+  defp used_accounts(transaction) do
     sides(transaction)
     |> Enum.map(&(&1.payee && &1.payee.transfer_account_id))
     |> then(&[transaction && transaction.account_id | &1])
     |> Enum.reject(&is_nil/1)
     |> MapSet.new()
-    |> MapSet.intersection(MapSet.new(Map.keys(accounts)))
   end
 
   @impl true
@@ -1033,7 +1108,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         nil -> after_change(socket, params, event["_target"])
       end
 
-    {:noreply, assign(socket, :error, nil)}
+    {:noreply, socket |> assign(:error, nil) |> assign_ask_person()}
   end
 
   def handle_event("split", _params, socket),
@@ -1058,20 +1133,24 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     {_picks, changed} = picks(event["transaction"] || %{})
     params = TransactionForm.change(socket.assigns.params, changed, accounts)
 
+    opts = confirmed(event) ++ [person_id: TransactionForm.to_id(params["person_id"])]
+
     with {:ok, attrs} <- TransactionForm.to_attrs(params, accounts, original),
          {:ok, attrs} <- register_fields(attrs, socket.assigns),
          {:ok, _transaction} <-
-           write(socket.assigns.current_scope, original, attrs, confirmed(event)) do
+           BudgetLink.write_from_register(socket.assigns.current_scope, original, attrs, opts) do
       {:noreply, done(socket, "Gespeichert.")}
     else
-      {:error, error} -> {:noreply, assign(socket, params: params, error: error_message(error))}
+      {:error, error} ->
+        {:noreply,
+         socket |> assign(params: params, error: error_message(error)) |> assign_ask_person()}
     end
   end
 
   def handle_event("delete", _event, %{assigns: %{expense_id: id}} = socket) when id != nil,
     do: {:noreply, assign(socket, :error, @linked_delete)}
 
-  def handle_event("delete", _event, %{assigns: %{depot: depot}} = socket) when depot != nil,
+  def handle_event("delete", _event, %{assigns: %{depot: true}} = socket),
     do: {:noreply, assign(socket, :error, @depot_delete)}
 
   def handle_event("delete", event, socket) do
@@ -1085,7 +1164,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   @picks ~w(payee_pick payee_new category_pick)
 
-  # What the comboboxes chose, by side, apart from what was typed.
   defp picks(changed) do
     subs = changed["subtransactions"] || %{}
 
@@ -1215,20 +1293,14 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
 
   defp register_fields(attrs, %{fixed: false}), do: {:ok, attrs}
 
-  defp register_fields(%{subtransactions: [_ | _]}, %{depot: depot}) when depot != nil,
+  defp register_fields(%{subtransactions: [_ | _]}, %{depot: true}),
     do: {:error, "Eine Buchung aus dem Depot lässt sich nicht aufteilen."}
 
   defp register_fields(%{subtransactions: [_ | _]}, _assigns),
     do: {:error, "Eine Buchung aus der Kasse lässt sich nicht aufteilen."}
 
   defp register_fields(attrs, _assigns),
-    do: {:ok, Map.take(attrs, BudgetLink.register_fields())}
-
-  defp write(current_scope, nil, attrs, _opts),
-    do: Ledger.create_transaction(current_scope, attrs)
-
-  defp write(current_scope, original, attrs, opts),
-    do: Ledger.update_transaction(current_scope, original, attrs, opts)
+    do: {:ok, Map.drop(attrs, [:payee_name | Ledger.led_fields()])}
 
   @doc "The Ledger's opts for an event: `reconciled: :confirmed` once the browser asked about a reconciled change."
   def confirmed(%{"reconciled" => "confirmed"}), do: [reconciled: :confirmed]
@@ -1251,7 +1323,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     |> Enum.join(", ")
   end
 
-  # The split's subtransactions have errors of their own each, or the split has them as a whole.
   defp messages(errors, prefix) when is_map(errors) do
     Enum.flat_map(errors, fn
       {:subtransactions, parts} when is_list(parts) ->
@@ -1274,7 +1345,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     |> grouped()
   end
 
-  # The other open accounts (and the closed ones the transaction uses), as the sidebar orders them.
   defp transfer_options(params, accounts) do
     own_id = TransactionForm.to_id(params["account_id"])
 
@@ -1295,7 +1365,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         do: {group.label, Enum.map(group.rows, &{&1.account.name, &1.account.id})}
   end
 
-  # The accounts grouped and ordered as in the sidebar.
   defp groups(accounts),
     do: accounts |> Enum.sort_by(&{&1.position, &1.id}) |> AccountGroups.build(%{})
 

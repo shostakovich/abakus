@@ -1,6 +1,6 @@
 defmodule Abakus.BankSync.EnableBanking do
   @moduledoc """
-  Enable Banking's API (ADR 0020), as the application `ENABLE_BANKING_APP_ID` with the private key in the file
+  Enable Banking's API (ADR 0021), as the application `ENABLE_BANKING_APP_ID` with the private key in the file
   `ENABLE_BANKING_KEY_FILE`; each request carries a fresh `Abakus.BankSync.JWT`. Personal accounts only.
 
   A fetch asked for while present carries the PSU headers (`Psu-Ip-Address`, `Psu-User-Agent`), so the bank does not

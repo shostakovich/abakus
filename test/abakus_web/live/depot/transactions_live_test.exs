@@ -199,7 +199,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     assert html =~ "250"
   end
 
-  test "edits a transaction on a retired portfolio and account", ctx do
+  test "edits a transaction on a retired portfolio and closed account", ctx do
     [purchase] =
       book(ctx, %{
         "kind" => "purchase",
@@ -210,7 +210,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
       })
 
     Repo.update!(Ecto.Changeset.change(ctx.portfolio, retired: true))
-    Repo.update!(Ecto.Changeset.change(ctx.account, retired: true))
+    Repo.update!(Ecto.Changeset.change(ctx.account, closed: true))
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
     lv |> element("#transaction-#{purchase.id} button") |> render_click()

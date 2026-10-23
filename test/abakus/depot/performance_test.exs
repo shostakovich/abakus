@@ -519,8 +519,6 @@ defmodule Abakus.Depot.PerformanceTest do
   end
 
   describe "index/5" do
-    # 1,000 € deposited on Thursday buy 10 shares at 100 € on Friday; on Saturday they close at
-    # 105 €, 500 € more come in and a dividend of 20 € is paid.
     setup do
       transactions = [
         transaction(:deposit, @thursday, account_id: 10, amount: money(1_000)),
@@ -560,7 +558,7 @@ defmodule Abakus.Depot.PerformanceTest do
       assert_in_delta Performance.ttwror(index), 1_570 / 1_500 - 1, 1.0e-12
     end
 
-    test "counts a portfolio's dividends with or without its reference account", ctx do
+    test "counts a portfolio's dividends with or without its Verrechnungskonto", ctx do
       days = Date.range(@friday, @saturday)
 
       for {account_ids, ttwror} <- [{[10], 1_570 / 1_500 - 1}, {[], (1_050 + 20) / 1_000 - 1}] do

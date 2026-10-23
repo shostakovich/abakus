@@ -116,7 +116,6 @@ defmodule AbakusWeb.UserLive.SettingsTest do
       refute Users.get_user_by_email(user.email)
       assert Users.get_user_by_email(email)
 
-      # use confirm token again
       {:error, redirect} = live(conn, ~p"/users/settings/confirm-email/#{token}")
       assert {:live_redirect, %{to: path, flash: flash}} = redirect
       assert path == ~p"/settings/access"

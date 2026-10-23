@@ -7,7 +7,7 @@ defmodule Abakus.Kasse.Balances do
   import Ecto.Query
 
   alias Abakus.Kasse.{Access, Ledger, Periods}
-  alias Abakus.Kasse.Expenses.{Expense, ExpenseShare}
+  alias Abakus.Kasse.Expenses.Expense
   alias Abakus.{LocalTime, Repo}
   alias Abakus.Users.Scope
 
@@ -18,28 +18,7 @@ defmodule Abakus.Kasse.Balances do
     all()
   end
 
-  defp all do
-    paid =
-      from e in Expense,
-        where: is_nil(e.deleted_at),
-        group_by: e.paid_by_id,
-        select: {e.paid_by_id, sum(e.amount_cents)}
-
-    shared =
-      from s in ExpenseShare,
-        join: e in assoc(s, :expense),
-        where: is_nil(e.deleted_at),
-        group_by: s.participant_id,
-        select: {s.participant_id, sum(s.amount_cents)}
-
-    balances = Map.new(Repo.all(paid))
-
-    shared
-    |> Repo.all()
-    |> Enum.reduce(balances, fn {id, cents}, balances ->
-      Map.update(balances, id, -cents, &(&1 - cents))
-    end)
-  end
+  defp all, do: nil |> dated_entries() |> Enum.map(&elem(&1, 1)) |> Ledger.balances()
 
   @doc "The balance of the scope's person."
   @spec balance(Scope.t()) :: integer()

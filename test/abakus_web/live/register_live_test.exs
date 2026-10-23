@@ -13,7 +13,7 @@ defmodule AbakusWeb.RegisterLiveTest do
   setup do
     giro = account_fixture(name: "💶 Girokonto", kind: :checking, note: "Gehalt")
     savings = account_fixture(name: "🏦 Sparkonto", kind: :savings)
-    depot = account_fixture(name: "📈 Depot", kind: :tracking, fed_by: :portfolio)
+    depot = account_fixture(name: "📈 Depot", kind: :tracking)
     groceries = category_fixture(name: "🛒 Lebensmittel")
     market = payee_fixture(name: "Frischmarkt")
     employer = payee_fixture(name: "Arbeitgeber")
@@ -150,21 +150,17 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, ~s|#edit-account[phx-value-id="#{c.giro.id}"]|)
     end
 
-    test "an account fed by the Depot offers no manual entry", c do
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.depot}")
-
-      assert has_element?(view, "#feed-hint", "Wert kommt aus dem Depot")
-      assert has_element?(view, "#balance-working", "1.125,00 €")
-      refute has_element?(view, "#balance-cleared")
-
-      shared = account_fixture(name: "👫 Geteilt", fed_by: :shared_expenses)
+    test "the shared-expenses account offers no manual entry and no reconcile", c do
+      shared = account_fixture(name: "👫 Geteilt", shared_expenses: true)
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{shared}")
       assert has_element?(view, "#feed-hint", "aus der Kasse")
       assert has_element?(view, "#balance-cleared")
-
       refute has_element?(view, "#new-transaction")
+      refute has_element?(view, "#reconcile-open")
+      render_click(view, "reconcile_open", %{})
+      refute has_element?(view, "#reconcile-question")
 
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.depot}")
       refute has_element?(view, "#feed-hint")
       assert has_element?(view, "#new-transaction")
 
@@ -172,76 +168,12 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       assert has_element?(view, "#new-transaction")
 
-      for account <- [c.giro, c.savings],
+      for account <- [c.giro, c.savings, c.depot],
           do: {:ok, _} = Ledger.update_account(budget_scope(), account, %{closed: true})
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
       refute has_element?(view, "#new-transaction")
       refute has_element?(view, "#new-transaction-fab")
-    end
-
-    test "an account fed by the Depot offers no reconcile", c do
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.depot}")
-
-      refute has_element?(view, "#reconcile-open")
-      render_click(view, "reconcile_open", %{})
-      refute has_element?(view, "#reconcile-question")
-    end
-
-    test "keeps account, date, amount and payee of the Depot's value change", c do
-      {:ok, change} =
-        Ledger.create_transaction(budget_scope(), %{
-          account_id: c.depot.id,
-          date: ~D[2026-10-09],
-          amount: 5_000,
-          payee_name: "Wertänderung",
-          cleared: :cleared,
-          approved: true,
-          source: :depot
-        })
-
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.depot}")
-      view |> element("#tx-#{change.id} td.app-payee") |> render_click()
-      view |> element("#tx-#{change.id} td.app-payee") |> render_click()
-
-      assert has_element?(view, "#tx-depot", "bucht das Depot")
-
-      for field <- ~w(tx-date tx-outflow tx-inflow) do
-        assert has_element?(view, "##{field}[disabled]")
-      end
-
-      assert has_element?(view, "#tx-payee-combobox input[disabled]")
-      refute has_element?(view, "#tx-delete")
-
-      view
-      |> element("#tx-form")
-      |> render_submit(%{
-        "transaction" => %{
-          "memo" => "Kursplus",
-          "inflow" => "99",
-          "date" => "2026-01-01",
-          "payee_new" => "Jemand"
-        }
-      })
-
-      assert %{amount: 5_000, date: ~D[2026-10-09], memo: "Kursplus", account_id: depot_id} =
-               change = Repo.preload(reload(change), :payee)
-
-      assert depot_id == c.depot.id
-      assert change.payee.name == "Wertänderung"
-
-      render_click(view, "clear_selection", %{})
-      render_click(view, "select", %{"id" => "#{change.id}"})
-      render_click(view, "delete_selected", %{})
-      assert has_element?(view, "#flash-error", "bucht das Depot")
-
-      render_click(view, "clear_selection", %{})
-      view |> element("#tx-#{change.id} td.app-payee") |> render_click()
-      view |> element("#tx-#{change.id} td.app-payee") |> render_click()
-      view |> with_target("#tx-editor") |> render_click("delete", %{})
-      assert has_element?(view, "#tx-error", "bucht das Depot")
-
-      refute reload(change).deleted_at
     end
 
     test "without transactions it says so", c do

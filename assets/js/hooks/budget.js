@@ -1,5 +1,4 @@
-// Months from the budget's width, as in Actual: two from 760 px (a window of about 1100 px with the sidebar), three
-// from 1110 px (about 1450 px); below lg one month in a bar. The strip above the months lists as many as fit.
+// Months by the budget's width, as in Actual: two from 760 px, three from 1110 px; below lg one month in a bar.
 const TWO_MONTHS = 760
 const THREE_MONTHS = 1110
 const CATEGORY_MIN = 224
@@ -73,8 +72,7 @@ export const BudgetLayout = {
   },
 }
 
-// LiveView leaves a focused field's value alone, so the saved name comes as data-saved. Escape puts it back and keeps
-// the dialog open; with nothing to put back, Escape closes the dialog.
+// LiveView leaves a focused field's value alone, so Escape restores the saved name from data-saved.
 export const RenameField = {
   mounted() {
     this.el.addEventListener("keydown", (event) => {
@@ -90,8 +88,7 @@ export const RenameField = {
 const calculationKey = "abakus:budget-calculation"
 const calculationShown = () => document.documentElement.getAttribute("data-budget-calculation") === "shown"
 
-// Zu verteilen shows or hides the calculation in every month, per device; the root layout applies the choice before
-// paint.
+// Per device; the root layout applies the choice before paint.
 export const CalculationToggle = {
   mounted() {
     this.el.addEventListener("click", () => this.toggle())

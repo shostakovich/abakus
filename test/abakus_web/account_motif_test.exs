@@ -9,10 +9,9 @@ defmodule AbakusWeb.AccountMotifTest do
         {%Account{kind: :savings}, "piggy-bank"},
         {%Account{kind: :cash}, "banknote"},
         {%Account{kind: :tracking}, "trending-up"},
-        {%Account{kind: :checking, fed_by: :shared_expenses}, "receipt"},
-        {%Account{kind: :tracking, fed_by: :portfolio}, "briefcase"}
+        {%Account{kind: :checking, shared_expenses: true}, "receipt"}
       ] do
-    test "#{inspect(Map.take(account, [:kind, :fed_by]))} shows #{plush}" do
+    test "#{inspect(Map.take(account, [:kind, :shared_expenses]))} shows #{plush}" do
       assert AccountMotif.for_account(unquote(Macro.escape(account))) == unquote(plush)
       assert unquote(plush) in AbakusWeb.Plush.names()
     end

@@ -3,6 +3,7 @@ defmodule Abakus.BankSyncTest do
 
   import Abakus.DomainFixtures
   import Abakus.BankSyncFixtures
+  import Abakus.Depot.PortfoliosFixtures, only: [portfolio_fixture: 2]
   import ExUnit.CaptureLog
 
   alias Abakus.{BankSync, Ledger, Repo}
@@ -294,9 +295,13 @@ defmodule Abakus.BankSyncTest do
     end
 
     test "refuses an account that takes no entries", ctx do
+      broker = account_fixture(name: "Broker", kind: :tracking)
+      portfolio_fixture(budget_scope(), %{name: "Langfristig", reference_account_id: broker.id})
+
       for account <- [
-            account_fixture(fed_by: :shared_expenses),
-            account_fixture(closed: true)
+            account_fixture(shared_expenses: true),
+            account_fixture(closed: true),
+            broker
           ] do
         assert BankSync.assign_accounts(budget_scope(), ctx.connection, %{
                  ctx.current.id => %{account_id: account.id, start_date: ~D[2026-10-02]}

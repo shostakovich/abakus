@@ -1,7 +1,8 @@
 defmodule Abakus.Ledger.Account do
   @moduledoc """
   A place money is kept. Budget accounts (checking, savings, cash) count towards the budget; tracking accounts
-  only track a value. Accounts are closed, never deleted.
+  only track a value. Accounts are closed, never deleted. The shared-expenses account is the budget account the
+  Kasse's budget link books into (`Abakus.Kasse.BudgetLink`), whose balance is the Kasse's.
   """
 
   use Abakus.Schema
@@ -15,9 +16,7 @@ defmodule Abakus.Ledger.Account do
   schema "accounts" do
     field :name, :string
     field :kind, Ecto.Enum, values: @budget_kinds ++ [:tracking]
-
-    # Another area fills the account; the UI hides manual entry and file import for it.
-    field :fed_by, Ecto.Enum, values: [:portfolio, :shared_expenses]
+    field :shared_expenses, :boolean, default: false
     field :closed, :boolean, default: false
     field :note, :string
     field :position, :integer, default: 0
@@ -46,19 +45,19 @@ defmodule Abakus.Ledger.Account do
   def takes_category?(account, %__MODULE__{} = other),
     do: budget_account?(account) and not budget_account?(other)
 
-  @doc "Whether the UI offers manual entry and file import for the account: open and not fed by another app."
-  def takes_entries?(%__MODULE__{closed: closed, fed_by: fed_by}),
-    do: not closed and is_nil(fed_by)
+  @doc "Whether the UI offers manual entry and file import for the account: open and not the shared-expenses account."
+  def takes_entries?(%__MODULE__{closed: closed, shared_expenses: shared_expenses}),
+    do: not closed and not shared_expenses
 
-  @doc "Whether the UI offers reconciling: not for an account fed by another area, whose balance is that area's."
-  def reconcilable?(%__MODULE__{fed_by: fed_by}), do: is_nil(fed_by)
+  @doc "Whether the UI offers reconciling: not for the shared-expenses account, whose balance is the Kasse's."
+  def reconcilable?(%__MODULE__{shared_expenses: shared_expenses}), do: not shared_expenses
 
   @doc "The kinds of budget accounts."
   def budget_kinds, do: @budget_kinds
 
   def changeset(account, attrs) do
     account
-    |> cast(attrs, [:name, :kind, :fed_by, :closed, :note, :position])
+    |> cast(attrs, [:name, :kind, :shared_expenses, :closed, :note, :position])
     |> validate_required([:user_id, :name, :kind])
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_budget_side()

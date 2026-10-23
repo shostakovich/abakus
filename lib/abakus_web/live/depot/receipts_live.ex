@@ -98,7 +98,6 @@ defmodule AbakusWeb.Depot.ReceiptsLive do
      )}
   end
 
-  # Each PDF goes into the inbox once it is up; once all of them are, one flash sums them up.
   defp uploaded(:receipts, entry, socket) do
     if entry.done? do
       scope = socket.assigns.current_scope

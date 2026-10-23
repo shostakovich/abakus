@@ -136,7 +136,7 @@ defmodule Abakus.Depot.ValuationTest do
     end
   end
 
-  describe "balances/2" do
+  describe "cash_moved/1" do
     for {type, sign} <- [
           deposit: 1,
           removal: -1,
@@ -151,23 +151,13 @@ defmodule Abakus.Depot.ValuationTest do
           fee_refund: 1
         ] do
       test "#{type} books #{if sign > 0, do: "a credit", else: "a debit"}" do
-        transactions = [transaction(unquote(type), @friday, account_id: 10, amount: money(100))]
+        transaction = transaction(unquote(type), @friday, account_id: 10, amount: money(100))
 
-        assert Valuation.balances(transactions, @friday) == %{10 => unquote(sign) * money(100)}
+        assert Valuation.cash_moved(transaction) == [{10, unquote(sign) * money(100)}]
       end
     end
 
-    test "add up per account" do
-      transactions = [
-        transaction(:deposit, @thursday, account_id: 10, amount: money(1_000)),
-        in_portfolio(:buy, @friday, 1, 20, 10, account_id: 10, amount: money(900)),
-        transaction(:deposit, @friday, account_id: 11, amount: money(5))
-      ]
-
-      assert Valuation.balances(transactions, @friday) == %{10 => money(100), 11 => money(5)}
-    end
-
-    test "a cash transfer moves the amount to the other account" do
+    test "a cash transfer moves the amount to the other account, its source first" do
       transfer =
         transaction(:cash_transfer, @friday,
           account_id: 10,
@@ -175,13 +165,12 @@ defmodule Abakus.Depot.ValuationTest do
           amount: money(500)
         )
 
-      assert Valuation.balances([transfer], @friday) == %{10 => -money(500), 11 => money(500)}
+      assert Valuation.cash_moved(transfer) == [{10, -money(500)}, {11, money(500)}]
     end
 
-    test "count no transaction after the day" do
-      transactions = [transaction(:deposit, @saturday, account_id: 10, amount: money(1))]
-
-      assert Valuation.balances(transactions, @friday) == %{}
+    test "moves nothing without an account" do
+      assert Valuation.cash_moved(in_portfolio(:buy, @friday, 1, 20, 10, amount: money(900))) ==
+               []
     end
   end
 

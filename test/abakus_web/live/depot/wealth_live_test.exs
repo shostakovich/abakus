@@ -33,29 +33,6 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
     security
   end
 
-  test "warns of a Verrechnungskonto without a role and links to setting it", ctx do
-    portfolio_fixture(ctx.scope)
-    account = account_fixture(ctx.scope, %{name: "Giro-Verrechnung"})
-    account_fixture(ctx.scope, %{name: "Cash", no_role: true})
-
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
-
-    assert has_element?(lv, "#accounts-without-role", "Ein Verrechnungskonto ohne Rolle")
-    assert has_element?(lv, "#accounts-without-role", "„Giro-Verrechnung“")
-    refute has_element?(lv, "#accounts-without-role", "„Cash“")
-
-    assert has_element?(
-             lv,
-             ~s|#accounts-without-role a[href="/settings/depot/portfolios#clearing-accounts"]|,
-             "Rolle festlegen"
-           )
-
-    Repo.update!(Ecto.Changeset.change(account, no_role: true))
-    {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
-
-    refute has_element?(lv, "#accounts-without-role")
-  end
-
   test "shows net worth and its change since yesterday", %{conn: conn, scope: scope} do
     holding_fixture(scope, 10)
 
@@ -338,8 +315,7 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
   end
 
   describe "Depots" do
-    # 240 € on the reference account since last year, 10 shares delivered yesterday at 100 €,
-    # 102 € today: the securities are worth 1,020 €, +2,0 % on 1,000 €.
+    # 240 € cash since last year, 10 shares delivered yesterday at 100 €, 102 € today: 1,020 €, +2,0 % on 1,000 €.
     setup %{scope: scope} do
       account = account_fixture(scope, %{name: "Konto Langfristig"})
 
@@ -408,8 +384,8 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       refute has_element?(lv, "#portfolio-#{empty.id}")
     end
 
-    test "leaves out a retired reference account once it is empty, as the sidebar does", ctx do
-      account = account_fixture(ctx.scope, %{name: "Konto Alt", retired: true})
+    test "leaves out a closed Verrechnungskonto once it is empty, as the sidebar does", ctx do
+      account = account_fixture(ctx.scope, %{name: "Konto Alt", closed: true})
 
       portfolio =
         portfolio_fixture(ctx.scope, %{name: "Alt", reference_account_id: account.id})
@@ -448,67 +424,59 @@ defmodule AbakusWeb.Depot.WealthLiveTest do
       %{conn: log_in_user(build_conn(), owner)}
     end
 
-    test "Vermögen is the sum of the open budget and tracking accounts", %{conn: conn} do
+    test "Vermögen is the money in all accounts plus the holdings", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/depot")
 
       assert has_element?(lv, "h1", "Vermögen")
-      assert lv |> element("#net-worth") |> render() =~ "3.400\u00A0€"
+      assert lv |> element("#net-worth") |> render() =~ "4.420\u00A0€"
 
       assert has_element?(
                lv,
                "#net-worth .text-error-ink",
-               "−100\u00A0€ heute (−2,86\u00A0%)"
+               "−80\u00A0€ heute (−1,78\u00A0%)"
              )
     end
 
-    test "draws the accounts' total from the first transaction, without invested capital or benchmark",
+    test "draws it from the first transaction, without invested capital or benchmark",
          %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/depot")
 
       assert_push_event(lv, "net-worth-chart", chart)
       assert chart.dates == Enum.to_list(Date.range(Date.shift(today(), month: -2), today()))
       assert hd(chart.net_worth) == 250_000
-      assert List.last(chart.net_worth) == 340_000
-      assert Enum.at(chart.net_worth, -2) == 350_000
+      assert List.last(chart.net_worth) == 442_000
+      assert Enum.at(chart.net_worth, -2) == 450_000
       assert chart.invested_capital == nil
       assert chart.benchmark == nil
       refute has_element?(lv, "#benchmark-toggle")
       assert has_element?(lv, "#history-legend", "Vermögen")
       refute has_element?(lv, "#history-legend", "Investiert")
-      refute has_element?(lv, "#history", "nur Depots")
     end
 
-    test "draws the Depot's value before the budget's first day and says so", %{conn: conn} do
-      owner = Repo.get_by!(User, budget_owner: true)
-      scope = Scope.for_user(owner)
+    test "reaches back to the Depot's first day before the budget's", %{conn: conn} do
+      scope = Scope.for_user(Repo.get_by!(User, budget_owner: true))
       depot_first = Date.shift(today(), month: -4)
-      budget_first = Date.shift(today(), month: -2)
+      security = security_fixture(name: "Early ETF", quote_feed: :manual)
+      price_fixture(security, depot_first, price(80), :manual)
 
       transaction_fixture(scope, depot_first,
-        type: :deposit,
-        account_id: account_fixture(scope).id,
-        amount: money(1_000)
+        type: :inbound_delivery,
+        portfolio_id: portfolio_fixture(scope).id,
+        security_id: security.id,
+        shares: shares(1)
       )
 
       {:ok, lv, _html} = live(conn, ~p"/depot?period=max")
 
       assert_push_event(lv, "net-worth-chart", chart)
       assert hd(chart.dates) == depot_first
-      assert hd(chart.net_worth) == money(1_000)
-      assert List.last(chart.net_worth) == 340_000
-
-      day_before = Abakus.Format.date(Date.add(budget_first, -1))
-      first = Abakus.Format.date(budget_first)
+      assert hd(chart.net_worth) == money(80)
+      assert List.last(chart.net_worth) == 442_000 + money(80)
+      refute has_element?(lv, "#history p")
 
       assert has_element?(
                lv,
-               "#history p",
-               "Bis #{day_before} nur Depots, ab #{first} alle Konten."
-             )
-
-      assert has_element?(
-               lv,
-               ~s|#history [role="img"][aria-label="Vermögen seit der ersten Buchung, bis #{day_before} der Depots, ab #{first} aller offenen Konten"]|
+               ~s|#history [role="img"][aria-label="Vermögen aus Konten und Wertpapieren seit der ersten Buchung"]|
              )
     end
   end

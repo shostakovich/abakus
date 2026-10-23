@@ -2,7 +2,7 @@
 
 ## 0001. External ids live in their own table
 
-Accepted, 2026-10-09
+Accepted, 2026-10-09. Amended 2026-10-22: two changes dissolve an open proposal.
 
 External ids are kept in `transaction_origins` (transaction, account, source, external id; unique per account,
 source and external id) instead of a column on the transaction. When an import is matched to an existing
@@ -10,12 +10,14 @@ transaction, the existing one survives with its id (API clients hold it) and get
 so a re-import still finds it and is not imported twice; `source` on the transaction stays where it was first
 created.
 
-Until the match is decided, the import is a row of its own with `matched_transaction_id`: a pending proposal that
-counts nowhere (listings and balances skip it), one per existing transaction, with its account and amount fixed
-while it is open. Accepting moves its origins to the existing transaction, which takes the import's date and cleared
-state and keeps its category and memo where it has them, and removes the row; rejecting ("Trennen") clears the
-pointer and approves the import as a transaction of its own. Origins follow their transaction when it moves to
-another account; a move into an account that has the same external id from the same source is refused.
+Until the match is decided, the import is a row of its own with `matched_transaction_id`: a pending proposal that counts
+nowhere (listings and balances skip it), one per existing transaction, with its account and amount fixed while it is
+open, except against a change by the transaction's source (the Depot or the Kasse, 0020) or through the other side of
+its transfer: that change applies and the proposal becomes an ordinary import again. Accepting moves its origins to the
+existing transaction, which takes the import's date and cleared state and keeps its category and memo where it has them,
+and removes the row; rejecting ("Trennen") clears the pointer and approves the import as a transaction of its own.
+Origins follow their transaction when it moves to another account; a move into an account that has the same external id
+from the same source is refused.
 
 ### Considered options
 
@@ -72,7 +74,7 @@ Accepted, 2026-10-15; partly superseded by 0017, 2026-10-16
 
 ## 0006. Shared expenses are linked to the budget, not synced
 
-Accepted, 2026-10-15
+Accepted, 2026-10-15; superseded by 0020, 2026-10-21
 
 - **Context:** The budget owner's share of each expense belongs in the budget; with the Kasse and the budget in one
   database, a sync would only copy data the app already holds.
@@ -146,7 +148,7 @@ Accepted, 2026-10-15. From Zipfelkasse, where it was decided first.
 
 ## 0013. One Depot transaction per business event
 
-Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
+Accepted, 2026-10-16. From zipfelfolio, where it was decided first. Consequences amended by 0020, 2026-10-21.
 
 - **Context:** A purchase moves shares into a portfolio and cash out of an account at once; a transfer moves shares
   or cash between two of them.
@@ -193,7 +195,7 @@ Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
 
 ## 0017. A portfolio is a kind of account, not an area
 
-Accepted, 2026-10-16. Changes the three areas of 0005 into two (#56).
+Accepted, 2026-10-16. Changes the three areas of 0005 into two (#56). Superseded by 0020, 2026-10-21.
 
 - **Context:** With Budget and Depot as separate areas, one portfolio appeared as a Depot page, as part of a tracking
   account fed by `portfolio` and through its Verrechnungskonto, which is often the same bank account as a budget
@@ -207,7 +209,7 @@ Accepted, 2026-10-16. Changes the three areas of 0005 into two (#56).
 
 ## 0018. Depot cash flows are linked transactions in the budget
 
-Accepted, 2026-10-16 (#56).
+Accepted, 2026-10-16 (#56); superseded by 0020, 2026-10-21
 
 - **Context:** Money moved into a portfolio left a budget account uncategorised, and the daily value change of the
   portfolio's account booked it again, mixed with the market movement.
@@ -233,7 +235,30 @@ Accepted, 2026-10-16 (#73).
   signed-in user who is not a person itself. Budget tables get their owner's `user_id`, so 0007's "budget tables
   carry no user" no longer holds, while the budget keeps one owner.
 
-## 0020. Bank sync through Enable Banking only
+## 0020. One account book: the Kasse and the Depot write their money into the Ledger
+
+Accepted, 2026-10-21 (#94). Replaces 0006, 0017 and 0018, amends the consequences of 0013.
+
+- **Context:** The shared-expenses account booked only the owner's shares (0006) and drifted from their Kasse balance,
+  a Verrechnungskonto that is a budget account existed twice, kept in step by the Depot link (0018), and each
+  portfolio was a tracking account pulled to its value every day (0017). Each link kept its own table of what it
+  wrote, and only the register stopped edits of what the links lead.
+- **Decision:** The Ledger holds all money: every account in Finanzen is a budget or a tracking account, a
+  Verrechnungskonto becomes one of them, no account books a portfolio's value, and Vermögen is the Ledger's net
+  worth plus the value of the holdings. An expense writes paid minus share into the shared-expenses account, a
+  reimbursement is a transfer between it and a budget account, and a Depot transaction writes its cash side. Each
+  such Ledger transaction carries one reference to its source, and the Ledger itself refuses changes to amount,
+  date, account, payee and transfer counterpart, and deleting it, from anyone but that source; category, memo,
+  cleared state and approval stay the register's, and a change of the Kasse category writes the mapped category
+  again. Three rules of 0018 stay: investing is budget spending, inflows go to Ready to Assign, and the Depot link
+  writes nothing into budget accounts dated before its start date; the Kasse link writes what is dated before its
+  start date only when it is entered after the link was switched on. The areas of the UI stay Finanzen and Kasse.
+- **Consequences:** Every balance exists once and the shared-expenses account shows the owner's Kasse balance. A
+  Depot transaction stays one business event (0013), but its cash side is a Ledger transaction, or a transfer pair,
+  that every Depot write keeps in step in its database transaction. A bank line matched to a led transaction leaves
+  its date as the source wrote it, and adding a source means a reference column on `transactions`.
+
+## 0021. Bank sync through Enable Banking only
 
 Accepted, 2026-10-20 (#85).
 
@@ -244,7 +269,7 @@ Accepted, 2026-10-20 (#85).
 - **Consequences:** Bank sync depends on one company and its free terms; banks it lacks (brokers like Scalable) stay
   with files or manual entries, and FinTS is the fallback should it go.
 
-## 0021. Pending bank imports clean up after themselves
+## 0022. Pending bank imports clean up after themselves
 
 Accepted, 2026-10-20 (#85).
 

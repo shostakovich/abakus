@@ -25,8 +25,7 @@ config :abakus, :mcp,
 # Countries, sectors and dividends of the Depot's securities; without a key DivvyDiary is never asked.
 config :abakus, Abakus.Depot.MarketData.DivvyDiary, api_key: System.get_env("DIVVYDIARY_API_KEY")
 
-# The Depot's receipt recognition by any OpenAI-compatible chat API, e.g. http://ollama:11434/v1; without URL and
-# model, receipts still land in the inbox and open an empty form.
+# Receipt recognition by any OpenAI-compatible chat API, e.g. http://ollama:11434/v1; without URL and model it is off.
 config :abakus, Abakus.Depot.Receipts.ChatAPI,
   url: System.get_env("RECEIPT_MODEL_URL"),
   model: System.get_env("RECEIPT_MODEL"),
@@ -60,8 +59,7 @@ if config_env() == :prod do
 
   host = env!.("PHX_HOST", "abakus.example.org")
 
-  # The browser's Origin header names the public https URL even behind the proxy, so the
-  # scheme is compared as well.
+  # Behind the proxy the browser's Origin still names the public https URL, so the scheme is checked too.
   config :abakus, AbakusWeb.Endpoint,
     url: [host: host, port: 443, scheme: "https"],
     http: [ip: {0, 0, 0, 0}, port: port],

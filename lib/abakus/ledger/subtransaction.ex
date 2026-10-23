@@ -18,7 +18,6 @@ defmodule Abakus.Ledger.Subtransaction do
     field :amount, :integer
     field :memo, :string
 
-    # See Transaction: the counterpart's category for a transfer from a tracking account.
     field :counterpart_category_id, :id, virtual: true
 
     belongs_to :transaction, Transaction

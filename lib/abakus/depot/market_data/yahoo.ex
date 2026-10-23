@@ -13,8 +13,7 @@ defmodule Abakus.Depot.MarketData.Yahoo do
   @url "https://query1.finance.yahoo.com/v8/finance/chart/"
   @search_url "https://query1.finance.yahoo.com/v1/finance/search"
 
-  # Daily candles start at the open or at local midnight. Older ones use today's UTC offset, which
-  # may be an hour off across daylight saving time, so their day is read a few hours in.
+  # Older daily candles use today's UTC offset, an hour off across DST, so their day is read a few hours in.
   @day_slack 3 * 60 * 60
 
   @impl true
@@ -67,7 +66,6 @@ defmodule Abakus.Depot.MarketData.Yahoo do
   defp currency("ZAc"), do: "ZAC"
   defp currency(code), do: code
 
-  # The start of the trading day that has not closed yet at `now`, if any.
   defp open_since(%{"currentTradingPeriod" => %{"regular" => regular}}, now) do
     if DateTime.to_unix(now) < regular["end"], do: regular["start"]
   end

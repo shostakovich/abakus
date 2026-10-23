@@ -28,7 +28,6 @@ defmodule Abakus.Depot.Valuation.PurchaseValue do
     end)
   end
 
-  # The lots of one security, oldest first, as `%{portfolio_id, shares, cost}`.
   defp book(lots, %Transaction{type: type} = t) when type in @purchases,
     do: lots ++ [%{portfolio_id: t.portfolio_id, shares: t.shares, cost: t.amount}]
 

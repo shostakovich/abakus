@@ -298,7 +298,6 @@ defmodule Abakus.Money do
 
   def format_rate(_rate), do: ""
 
-  # The significant digits of Erlang's shortest form ("1.7e4") and the position of the point.
   defp digits_and_point(short) do
     {mantissa, exponent} =
       case String.split(short, "e") do

@@ -22,7 +22,6 @@ defmodule AbakusWeb.UserAuth do
     http_only: true
   ]
 
-  # An active user gets a fresh session token once the current one is this old.
   @session_reissue_age_in_days 7
 
   @doc "The link in sign-in mails, for a token from `Abakus.Users`."
@@ -118,9 +117,7 @@ defmodule AbakusWeb.UserAuth do
     end
   end
 
-  # A new session clears the old one (session fixation); an extended one keeps it. A reissued
-  # token leaves the old one valid until it expires, as requests with the old cookie may still
-  # be on their way.
+  # A reissued token leaves the old one valid, as requests with the old cookie may still be on their way.
   defp create_or_extend_session(conn, user) do
     token = Users.generate_user_session_token(user)
 
@@ -130,8 +127,7 @@ defmodule AbakusWeb.UserAuth do
     |> put_resp_cookie(@remember_me_cookie, token, @remember_me_options)
   end
 
-  # The same user signing in again keeps the session and its CSRF token, which the sockets of
-  # open tabs are checked against.
+  # The same user keeps the session and its CSRF token, which the sockets of open tabs are checked against.
   defp renew_session(conn, user) do
     if same_user?(conn, user) do
       conn

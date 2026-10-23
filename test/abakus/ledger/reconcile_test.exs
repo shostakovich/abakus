@@ -78,7 +78,6 @@ defmodule Abakus.Ledger.ReconcileTest do
 
   describe "reconcile/4" do
     test "a bank balance counts up to its date", %{giro: giro} do
-      # Scenario: A file balance counts up to its date
       early = cleared(account_id: giro.id, date: ~D[2026-10-01], amount: 20_000)
       due = cleared(account_id: giro.id, date: ~D[2026-10-08], amount: -6_752)
       later = cleared(account_id: giro.id, date: ~D[2026-10-09], amount: -1_000)
@@ -99,7 +98,6 @@ defmodule Abakus.Ledger.ReconcileTest do
     end
 
     test "a balance as of today leaves later cleared transactions alone", %{giro: giro} do
-      # Scenario: A balance entered by hand counts as of today
       first = cleared(account_id: giro.id, date: ~D[2026-10-01], amount: 10_000)
       second = cleared(account_id: giro.id, date: @today, amount: 5_000)
       future = cleared(account_id: giro.id, date: ~D[2026-11-01], amount: 700)
@@ -171,7 +169,6 @@ defmodule Abakus.Ledger.ReconcileTest do
 
     test "books the expected difference as an approved, reconciled adjustment to Ready to Assign",
          %{giro: giro} do
-      # Scenario: A difference becomes an adjustment
       transaction = cleared(account_id: giro.id, date: ~D[2026-10-01], amount: 1_000)
       open = transaction_fixture(account_id: giro.id, date: ~D[2026-10-02], amount: -250)
 
@@ -219,12 +216,12 @@ defmodule Abakus.Ledger.ReconcileTest do
                reload(adjustment)
     end
 
-    test "reconciles accounts fed by another app too" do
-      fed = account_fixture(kind: :checking, fed_by: :shared_expenses)
-      cleared(account_id: fed.id, amount: 1_000)
+    test "reconciles the shared-expenses account too" do
+      shared = account_fixture(kind: :checking, shared_expenses: true)
+      cleared(account_id: shared.id, amount: 1_000)
 
       assert {:ok, %{reconciled: 2, adjustment: %Transaction{amount: 1}}} =
-               Ledger.reconcile(budget_scope(), fed, today(1_001), adjust: 1)
+               Ledger.reconcile(budget_scope(), shared, today(1_001), adjust: 1)
     end
   end
 end

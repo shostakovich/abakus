@@ -36,8 +36,7 @@ defmodule Abakus.Depot.Receipts.Fields do
     field :bank_reference, :string
   end
 
-  # In the order the model answers: a model writes the shares, price, fees and taxes before
-  # the amount they add up to.
+  # In the order the model answers: shares, price, fees and taxes before the amount they add up to.
   @descriptions [
     kind: "purchase, sale or dividend; other for any other receipt",
     date: "the trade or payment date, YYYY-MM-DD",
@@ -154,9 +153,7 @@ defmodule Abakus.Depot.Receipts.Fields do
 
   defp magnitude(other, _notation), do: other
 
-  # The last of two separators, or a lone one before other than three digits, is the decimal
-  # one; a lone one before three digits is the notation's: 1.200 is 1200 in German, 1.2 in
-  # English, and a separator repeated is between thousands.
+  # The last of two separators is decimal; a lone one before three digits follows the notation (1.200 vs 1.2).
   defp decimal(digits, notation) do
     separators = for <<char <- digits>>, char in [?., ?,], uniq: true, do: char
 

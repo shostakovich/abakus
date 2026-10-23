@@ -1,7 +1,7 @@
 defmodule Abakus.Depot.Valuation do
   @moduledoc """
-  Holdings, account balances, net worth, invested capital and gross dividends, computed from
-  transactions and a `Market` on every request (ADR 0014). Pure, without the database, and
+  Holdings, the money transactions move on their accounts, net worth, invested capital and gross
+  dividends, computed from transactions and a `Market` on every request (ADR 0014). Pure, without the database, and
   computed as PP does so that the figures match PP's. Amounts in euro cents, shares and prices
   × 10⁸.
   """
@@ -33,7 +33,6 @@ defmodule Abakus.Depot.Valuation do
     |> Enum.reject(&(&1.shares == 0))
   end
 
-  # `{portfolio_id, shares, transaction}` for every change of shares up to `date`.
   defp share_movements(transactions, date) do
     for t <- transactions, on_or_before?(t, date), {portfolio_id, shares} <- shares_moved(t) do
       {portfolio_id, shares, t}
@@ -51,25 +50,19 @@ defmodule Abakus.Depot.Valuation do
 
   defp shares_moved(_transaction), do: []
 
-  @doc "The balance of each account on `date`."
-  def balances(transactions, date) do
-    for t <- transactions, on_or_before?(t, date), reduce: %{} do
-      balances -> add(balances, cash_moved(t))
-    end
-  end
+  @doc "The money a transaction moves on its accounts, as `[{account_id, cents}]`, a cash transfer's source first."
+  def cash_moved(%Transaction{account_id: nil}), do: []
 
-  defp cash_moved(%Transaction{account_id: nil}), do: []
-
-  defp cash_moved(%Transaction{type: type} = t) when type in @credits,
+  def cash_moved(%Transaction{type: type} = t) when type in @credits,
     do: [{t.account_id, t.amount}]
 
-  defp cash_moved(%Transaction{type: type} = t) when type in @debits,
+  def cash_moved(%Transaction{type: type} = t) when type in @debits,
     do: [{t.account_id, -t.amount}]
 
-  defp cash_moved(%Transaction{type: :cash_transfer} = t),
+  def cash_moved(%Transaction{type: :cash_transfer} = t),
     do: [{t.account_id, -t.amount}, {t.other_account_id, t.amount}]
 
-  defp cash_moved(_transaction), do: []
+  def cash_moved(_transaction), do: []
 
   defp on_or_before?(%Transaction{date_time: date_time}, date),
     do: not Date.after?(NaiveDateTime.to_date(date_time), date)
@@ -146,8 +139,7 @@ defmodule Abakus.Depot.Valuation do
     if t.type in @purchases, do: t.amount - fees_and_taxes, else: t.amount + fees_and_taxes
   end
 
-  # The transactions up to a day, added up: the balance per account, the shares and the last
-  # transaction that moved them per security over the portfolios, and invested capital.
+  # Per security over the portfolios: the `shares` and the `last` transaction that moved them.
   @empty_ledger %{balances: %{}, shares: %{}, last: %{}, invested_capital: 0}
 
   @doc """
@@ -199,8 +191,7 @@ defmodule Abakus.Depot.Valuation do
 
   defp inside(moved, included?), do: Enum.filter(moved, fn {id, _amount} -> included?.(id) end)
 
-  # The later of two transactions; of two at the same time the one with the larger amount, as PP
-  # orders them.
+  # Of two at the same time the one with the larger amount is later, as PP orders them.
   defp latest(last, t) do
     case NaiveDateTime.compare(t.date_time, last.date_time) do
       :gt -> t
@@ -209,8 +200,7 @@ defmodule Abakus.Depot.Valuation do
     end
   end
 
-  # PP values one joint holding per security over all portfolios; its price without any close
-  # needs only the last of its transactions.
+  # PP values one joint holding per security over all portfolios; without a close its last transaction prices it.
   defp net_worth(ledger, market, date) do
     balances = ledger.balances |> Map.values() |> Enum.sum()
 

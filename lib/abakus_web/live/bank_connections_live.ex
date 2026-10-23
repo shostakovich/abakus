@@ -1,6 +1,6 @@
 defmodule AbakusWeb.BankConnectionsLive do
   @moduledoc """
-  Import & Sync's Bankverbindungen, the budget owner's bank connections through Enable Banking (ADR 0020): a card
+  Import & Sync's Bankverbindungen, the budget owner's bank connections through Enable Banking (ADR 0021): a card
   per connection with its consent and the accounts its bank accounts feed, and "Bank verbinden", which picks a bank
   and sends the owner there to consent (through `AbakusWeb.BankConnectionController`). Back from the bank, the
   owner assigns each bank account to an account or leaves it unlinked (`:accounts`), with the date to fetch from:

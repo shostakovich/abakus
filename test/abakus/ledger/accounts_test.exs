@@ -15,23 +15,23 @@ defmodule Abakus.Ledger.AccountsTest do
                account.transfer_payee
 
       assert Repo.get_by!(Payee, transfer_account_id: account.id).id == account.transfer_payee.id
-      assert %Account{closed: false, position: 0, fed_by: nil, note: nil} = account
+      assert %Account{closed: false, position: 0, shared_expenses: false, note: nil} = account
     end
 
     test "stores every field" do
       assert {:ok, account} =
                Ledger.create_account(budget_scope(), %{
-                 name: "Depot",
-                 kind: "tracking",
-                 fed_by: "portfolio",
+                 name: "Geteilt",
+                 kind: "checking",
+                 shared_expenses: "true",
                  closed: true,
                  note: "Wertpapiere",
                  position: 3
                })
 
       assert %Account{
-               kind: :tracking,
-               fed_by: :portfolio,
+               kind: :checking,
+               shared_expenses: true,
                closed: true,
                note: "Wertpapiere",
                position: 3
@@ -67,18 +67,16 @@ defmodule Abakus.Ledger.AccountsTest do
       assert Repo.aggregate(Payee, :count) == 0
     end
 
-    test "rejects unknown kinds, feeders and negative positions" do
+    test "rejects unknown kinds and negative positions" do
       assert {:error, changeset} =
                Ledger.create_account(budget_scope(), %{
                  name: "Karte",
                  kind: :credit_card,
-                 fed_by: :mint,
                  position: -1
                })
 
       assert %{
                kind: ["is invalid"],
-               fed_by: ["is invalid"],
                position: ["must be greater than or equal to 0"]
              } =
                errors_on(changeset)
@@ -246,7 +244,7 @@ defmodule Abakus.Ledger.AccountsTest do
     assert_raise Ecto.ConstraintError, fn -> Repo.delete(account) end
   end
 
-  describe "net_worth/2" do
+  describe "net_worth/3" do
     test "adds up the open budget and tracking accounts at the end of each day" do
       checking = account_fixture(kind: :checking)
       depot = account_fixture(kind: :tracking)
@@ -276,6 +274,16 @@ defmodule Abakus.Ledger.AccountsTest do
              ]
 
       assert Ledger.first_open_date(budget_scope()) == ~D[2026-10-01]
+    end
+
+    test "counts a closed account with money left when its id is kept" do
+      closed = account_fixture(kind: :tracking, closed: true)
+      transaction_fixture(account_id: closed.id, date: ~D[2026-10-02], amount: 5_000)
+      range = Date.range(~D[2026-10-02], ~D[2026-10-02])
+
+      assert Ledger.net_worth(budget_scope(), range, [closed.id]) == [{~D[2026-10-02], 5_000}]
+      assert Ledger.first_open_date(budget_scope(), [closed.id]) == ~D[2026-10-02]
+      assert Ledger.first_open_date(budget_scope()) == nil
     end
 
     test "is nothing without transactions" do

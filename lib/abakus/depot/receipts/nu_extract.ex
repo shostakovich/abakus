@@ -62,7 +62,6 @@ defmodule Abakus.Depot.Receipts.NuExtract do
     )
   end
 
-  # Every field, the date without a time.
   defp answer_json(content, schema) do
     case JSON.decode(String.trim(content)) do
       {:ok, %{} = json} ->

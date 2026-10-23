@@ -10,13 +10,11 @@ function niceAxis(peak) {
   return fits.reduce((best, s) => (s.max < best.max || (s.max === best.max && s.step > best.step) ? s : best))
 }
 
-// The decimal places of a step such as 0.25.
 const places = (step) => {
   const [, fraction = ""] = String(Number(step.toPrecision(6))).split(".")
   return fraction.length
 }
 
-// Tick labels with the unit and as many decimals as the step needs: "0,25 €", "2,5 T€".
 function euroTicks(step) {
   const scale = step >= 1000 ? 1000 : 1
   const digits = places(step / scale)
@@ -94,7 +92,6 @@ export const DividendChart = chartHook("dividend-chart", ({ years }, el) => {
 })
 
 export const UpcomingDividendChart = chartHook("upcoming-dividend-chart", ({ months }, el) => {
-  // Announced in series 1, the forecast in its fill mixed lighter, both outlined in its line.
   const now = series(el, "chart-1")
   const compact = el.clientWidth < 360
   const announced = months.map((month) => month.announced / 100)

@@ -2,7 +2,7 @@ defmodule Abakus.Ledger.TransactionOrigin do
   @moduledoc """
   Where a transaction was imported from: the external id per account and source (FITID, the bank's or YNAB's
   id). A transaction that an import was matched to keeps the import's origin, so a re-import still finds it
-  (see DECISIONS.md, ADR 0001). An external id starting with `pending:` is that of a pending import (ADR 0021).
+  (see DECISIONS.md, ADR 0001). An external id starting with `pending:` is that of a pending import (ADR 0022).
   """
 
   use Abakus.Schema

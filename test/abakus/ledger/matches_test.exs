@@ -202,7 +202,7 @@ defmodule Abakus.Ledger.MatchesTest do
     assert account_id == c.account.id
   end
 
-  test "a counterpart with an open proposal keeps its account and amount", c do
+  test "a change through a transfer dissolves its counterpart's open proposal", c do
     savings = account_fixture(kind: :savings)
     cash = account_fixture(kind: :cash)
 
@@ -214,7 +214,7 @@ defmodule Abakus.Ledger.MatchesTest do
         payee_id: savings.transfer_payee.id
       })
 
-    {:ok, _} =
+    {:ok, proposal} =
       Ledger.create_transaction(budget_scope(), %{
         account_id: savings.id,
         date: ~D[2026-10-02],
@@ -223,22 +223,29 @@ defmodule Abakus.Ledger.MatchesTest do
         matched_transaction_id: outflow.transfer_transaction_id
       })
 
-    assert {:error, changeset} = Ledger.update_transaction(budget_scope(), outflow, %{amount: -1})
+    assert {:ok, _outflow} = Ledger.update_transaction(budget_scope(), outflow, %{amount: -1})
 
-    assert %{
-             amount: [
-               "kann nicht geändert werden, solange die Gegenbuchung einen offenen Zuordnungsvorschlag hat"
-             ]
-           } =
-             errors_on(changeset)
+    assert %{matched_transaction_id: nil, approved: false, amount: 10_000} =
+             Repo.reload!(proposal)
 
-    assert {:error, changeset} =
+    assert %{amount: 1, account_id: savings_id} =
+             Repo.get!(Transaction, outflow.transfer_transaction_id)
+
+    assert savings_id == savings.id
+
+    {:ok, proposal} =
+      Ledger.update_transaction(budget_scope(), proposal, %{
+        amount: 1,
+        matched_transaction_id: outflow.transfer_transaction_id
+      })
+
+    assert {:ok, _outflow} =
              Ledger.update_transaction(budget_scope(), outflow, %{
                payee_id: cash.transfer_payee.id
              })
 
-    assert %{payee_id: [_]} = errors_on(changeset)
-    assert Repo.get!(Transaction, outflow.transfer_transaction_id).account_id == savings.id
+    assert Repo.reload!(proposal).matched_transaction_id == nil
+    assert Repo.get!(Transaction, outflow.transfer_transaction_id).account_id == cash.id
   end
 
   test "accepting re-checks the proposal and its transaction", c do

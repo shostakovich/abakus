@@ -7,10 +7,8 @@ defmodule Abakus.Depot.Settings.Setting do
 
   schema "depot_settings" do
     belongs_to :user, Abakus.Users.User
-    # The security the user compares their portfolios with, nil for none.
     belongs_to :benchmark, Abakus.Depot.Securities.Security
 
-    # Where the user's receipts come from (ADR 0016): Paperless' URL, API token and tag.
     field :paperless_url, :string
     field :paperless_token, :string, redact: true
     field :paperless_tag, :string

@@ -1,11 +1,10 @@
 defmodule AbakusWeb.Depot.SidebarTest do
   use AbakusWeb.ConnCase
 
-  import Abakus.DomainFixtures, only: [budget_scope: 0]
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
 
-  alias Abakus.Depot.{BudgetFeed, MarketData}
+  alias Abakus.Depot.MarketData
   alias Abakus.{DomainFixtures, Ledger, LocalTime, Repo}
   alias Abakus.Users.{Scope, User}
 
@@ -38,7 +37,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
   test "lists the views, the active portfolios, then the settings, but no accounts", ctx do
     retired = portfolio_fixture(ctx.scope, %{name: "Alt", retired: true})
     holding(ctx.scope, retired, 5, 100)
-    closed = account_fixture(ctx.scope, %{name: "Geschlossen", retired: true})
+    closed = account_fixture(ctx.scope, %{name: "Geschlossen", closed: true})
     deposit(ctx.scope, closed, 50)
     portfolio_fixture(ctx.scope, %{name: "Aktiv"})
     account_fixture(ctx.scope, %{name: "Tagesgeld"})
@@ -95,12 +94,26 @@ defmodule AbakusWeb.Depot.SidebarTest do
       }
     end
 
-    test "show each portfolio's securities, while net worth holds the accounts too", ctx do
+    test "show each portfolio's securities and cash, while net worth holds the other accounts too",
+         ctx do
       {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
 
-      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.000,00"
+      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.240,00"
       refute has_element?(lv, "aside nav", "Tagesgeld")
       assert lv |> element("#net-worth") |> render() =~ "2.240 €"
+    end
+
+    test "show a portfolio's value as its holdings plus its cash's balance in the Ledger", ctx do
+      {:ok, _interest} =
+        Ledger.create_transaction(ctx.scope, %{
+          account_id: ctx.account.id,
+          date: Date.add(today(), -1),
+          amount: money(20)
+        })
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot")
+
+      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.260,00"
     end
 
     test "stay out of the icon rail, which keeps the views and the settings", ctx do
@@ -138,7 +151,7 @@ defmodule AbakusWeb.Depot.SidebarTest do
 
       MarketData.run_daily()
 
-      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.100,00"
+      assert lv |> element(sidebar_link(ctx.portfolio_path)) |> render() =~ "1.340,00"
     end
   end
 
@@ -191,11 +204,8 @@ defmodule AbakusWeb.Depot.SidebarTest do
       assert lv |> element(sidebar_link(path)) |> render() =~ "1.100,00"
     end
 
-    test "shows a portfolio with the emoji of its account, under the section Depots", ctx do
-      portfolio = portfolio_fixture(ctx.owner, %{name: "Langfristig"})
-      :ok = BudgetFeed.sync_accounts()
-      account = Ledger.get_account!(budget_scope(), Repo.reload!(portfolio).budget_account_id)
-      {:ok, _account} = Ledger.update_account(budget_scope(), account, %{name: "📈 Langfristig"})
+    test "shows a portfolio with the emoji of its name, under the section Depots", ctx do
+      portfolio = portfolio_fixture(ctx.owner, %{name: "📈 Langfristig"})
 
       {:ok, lv, _html} = live(ctx.conn, ~p"/budget")
       row = lv |> element("#side-depot-portfolio-#{portfolio.id}-sidebar") |> render()

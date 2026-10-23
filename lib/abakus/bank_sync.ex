@@ -1,6 +1,6 @@
 defmodule Abakus.BankSync do
   @moduledoc """
-  Bank sync through Enable Banking (ADR 0020), the budget owner's alone: every function that takes `%Scope{}` (ADR
+  Bank sync through Enable Banking (ADR 0021), the budget owner's alone: every function that takes `%Scope{}` (ADR
   0019) raises `Abakus.BankSync.AccessError` for anyone else, except `failing?/1`, which takes the system's alone.
 
   Connecting a bank: `authorize/3` starts a consent at the chosen bank for as long as the bank allows, with a random
@@ -14,7 +14,7 @@ defmodule Abakus.BankSync do
   fetch per connection at a time, each kept as a sync run once it is done (an unexpected failure as its error).
   Booked and pending transactions come in through the import core (`Abakus.Import`) from source `bank` with the
   owner's scope, and the bank's balance becomes the account's bank balance. Pending ones clean up after themselves
-  (ADR 0021): one dated in the fetched window and after the newest reconciled transaction that the bank no longer
+  (ADR 0022): one dated in the fetched window and after the newest reconciled transaction that the bank no longer
   reports as pending is removed while it is unapproved; an approved one stays, and its booked version is proposed as
   its match. A connection whose consent has ended is not fetched until it is renewed; one the bank says has ended
   ends then.
@@ -426,7 +426,7 @@ defmodule Abakus.BankSync do
     uid = linked.provider_account_id
     from = date_from(linked)
 
-    with :ok <- takes_entries(linked.account),
+    with :ok <- takes_entries(scope, linked.account),
          {:ok, transactions} <- client().transactions(uid, from, psu),
          {:ok, balances} <- client().balances(uid, psu) do
       entries =
@@ -463,8 +463,8 @@ defmodule Abakus.BankSync do
     end
   end
 
-  defp takes_entries(account) do
-    if Account.takes_entries?(account),
+  defp takes_entries(scope, account) do
+    if Import.takes_import(scope).(account),
       do: :ok,
       else: {:error, "Das Konto ist geschlossen oder nimmt keine Bankumsätze mehr."}
   end

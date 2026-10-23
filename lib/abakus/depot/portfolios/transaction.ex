@@ -1,13 +1,14 @@
 defmodule Abakus.Depot.Portfolios.Transaction do
   @moduledoc """
-  One business event with a portfolio side, an account side or both (ADR 0013). A buy has a
-  portfolio and an account; a security transfer goes from `portfolio` to `other_portfolio`, a cash
-  transfer from `account` to `other_account`. Amounts in euro cents, shares × 10⁸. `source` says where
-  it came from: booked in the Depot or from a receipt.
+  One business event with a portfolio side, an account side or both (ADR 0013), its accounts the Ledger's. A buy
+  has a portfolio and an account; a security transfer goes from `portfolio` to `other_portfolio`, a cash transfer
+  from `account` to `other_account`. Amounts in euro cents, shares × 10⁸. `source` says where it came from: booked
+  in the Depot or from a receipt.
   """
   use Abakus.Schema
 
-  alias Abakus.Depot.Portfolios.{Account, Portfolio, TransactionUnit}
+  alias Abakus.Depot.Portfolios.{Portfolio, TransactionUnit}
+  alias Abakus.Ledger.Account
 
   @types [
     :buy,
@@ -49,6 +50,27 @@ defmodule Abakus.Depot.Portfolios.Transaction do
   end
 
   def types, do: @types
+
+  @labels %{
+    buy: "Kauf",
+    sell: "Verkauf",
+    inbound_delivery: "Einlieferung",
+    outbound_delivery: "Auslieferung",
+    security_transfer: "Depotwechsel",
+    cash_transfer: "Umbuchung",
+    deposit: "Einlage",
+    removal: "Entnahme",
+    dividend: "Dividende",
+    interest: "Zinsen",
+    interest_charge: "Zinsbelastung",
+    tax: "Steuern",
+    tax_refund: "Steuerrückerstattung",
+    fee: "Gebühren",
+    fee_refund: "Gebührenerstattung"
+  }
+
+  @doc "The German name of a type, e.g. „Depotwechsel“."
+  def label(type), do: Map.fetch!(@labels, type)
 
   @doc "Whether the transaction form can edit the transaction: one of a type it knows. Any type can be deleted."
   def editable?(%__MODULE__{type: type}),

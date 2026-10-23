@@ -1,12 +1,13 @@
 defmodule Abakus.Depot.MigrationTest do
   use ExUnit.Case
 
-  alias Abakus.Depot.Portfolios.{Account, Transaction, TransactionUnit}
+  alias Abakus.Depot.Portfolios.{Transaction, TransactionUnit}
   alias Abakus.{Repo, TestMigrations}
 
   @moduletag :tmp_dir
   @before 20_261_017_200_000
   @before_euros_only 20_261_017_210_000
+  @euros_only 20_261_017_220_000
   @now "'2026-10-01T10:00:00.000000Z'"
 
   test "the imported transactions become manual and editable, the prices stay, savings plans go",
@@ -106,12 +107,14 @@ defmodule Abakus.Depot.MigrationTest do
     end
 
     test "keeps the euro bookings and drops their currency", %{repo: repo} do
-      TestMigrations.run!(repo)
+      TestMigrations.run!(repo, to: @euros_only)
 
       assert %Transaction{amount: 500, units: [%TransactionUnit{type: :tax, amount: 100}]} =
                Transaction |> Repo.get!(1) |> Repo.preload(:units)
 
-      assert %Account{name: "Verrechnungskonto"} = Repo.get!(Account, 1)
+      assert Repo.query!("SELECT name FROM depot_accounts WHERE id = 1").rows == [
+               ["Verrechnungskonto"]
+             ]
 
       for table <- ~w(depot_accounts depot_transactions depot_transaction_units) do
         columns = Repo.query!("SELECT name FROM pragma_table_info('#{table}')").rows

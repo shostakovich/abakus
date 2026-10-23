@@ -14,11 +14,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.RegisterLive.{Rows, TransactionEditor}
 
-  @feeds %{
-    portfolio: "Wert kommt aus dem Depot",
-    shared_expenses: "Buchungen kommen aus der Kasse"
-  }
-
   attr :account, Account, default: nil
 
   @doc "The line below the title: the account's kind, closed, last reconciled (with the lock) and note."
@@ -60,7 +55,7 @@ defmodule AbakusWeb.RegisterLive.Components do
     doc: "the difference animates then, not the balance"
 
   @doc """
-  The header's second row. One account: Gebucht + Vorgemerkt = Arbeitssaldo, or for a depot only its value. All
+  The header's second row. One account: Gebucht + Vorgemerkt = Arbeitssaldo. All
   accounts: that equation for the budget accounts, then tracking and the total. Phones get one compact line.
   """
   def balances(assigns) do
@@ -70,13 +65,6 @@ defmodule AbakusWeb.RegisterLive.Components do
       class="app-reg-row flex flex-wrap items-center gap-x-6 gap-y-2 max-md:hidden"
     >
       <%= cond do %>
-        <% portfolio?(@account) -> %>
-          <.figure
-            id="balance-working"
-            value={@balances.working}
-            label="Wert laut Depot"
-            animate={!@reconciling}
-          />
         <% @account -> %>
           <.equation balances={@balances} animate={!@reconciling} />
         <% true -> %>
@@ -92,8 +80,6 @@ defmodule AbakusWeb.RegisterLive.Components do
       class={["app-reg-row app-reg-line flex md:hidden", !@account && "app-reg-line-all"]}
     >
       <%= cond do %>
-        <% portfolio?(@account) -> %>
-          <.line_figure value={@balances.working} label="Wert laut Depot" />
         <% @account -> %>
           <.line_figure value={@balances.cleared} label="Gebucht" />
           <.line_figure op="+" value={@balances.uncleared} label="Vorgemerkt" tone={false} />
@@ -106,8 +92,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     </div>
     """
   end
-
-  defp portfolio?(account), do: match?(%Account{fed_by: :portfolio}, account)
 
   attr :balances, :map, required: true
   attr :animate, :boolean, default: false
@@ -352,9 +336,9 @@ defmodule AbakusWeb.RegisterLive.Components do
           </form>
         </div>
       </div>
-      <p :if={@account && @account.fed_by} id="feed-hint" class="app-reg-hint">
+      <p :if={@account && @account.shared_expenses} id="feed-hint" class="app-reg-hint">
         <.icon name="info" class="shrink-0" />
-        {feed_hint(@account)}, keine Buchungen von Hand oder per Datei
+        Buchungen kommen aus der Kasse, keine Buchungen von Hand oder per Datei
       </p>
       <p :if={@account && @running && !@running_shown} id="running-hint" class="app-reg-hint">
         Laufender Saldo nur in „Alle Buchungen“ ohne Suche
@@ -362,8 +346,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     </div>
     """
   end
-
-  defp feed_hint(account), do: @feeds[account.fed_by]
 
   defp filter_labels,
     do: [all: "Alle Buchungen", unapproved: "Zu bestätigen", uncleared: "Vorgemerkt"]
@@ -495,6 +477,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   end
 
   attr :rows, :list, required: true
+  attr :count, :integer, required: true, doc: "how many transactions the view has, loaded or not"
   attr :proposals, :list, required: true, doc: "the match proposals shown among the rows"
   attr :accounts, :map, required: true
   attr :columns, :map, required: true, doc: "`%{all, category, running, count}`, see `columns/2`"
@@ -517,8 +500,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   def table(assigns) do
     assigns =
       assign(assigns,
-        all_selected:
-          assigns.rows != [] and MapSet.size(assigns.selected) == length(assigns.rows),
+        all_selected: assigns.count > 0 and MapSet.size(assigns.selected) == assigns.count,
         edited: assigns.editor && assigns.editor.row_id
       )
 
@@ -573,22 +555,16 @@ defmodule AbakusWeb.RegisterLive.Components do
           </tr>
         </thead>
         <.live_component :if={@edited == :new} module={TransactionEditor} {@editor.assigns} />
-        <%= for transaction <- Rows.with_proposals(@rows, @proposals) do %>
-          <%= cond do %>
-            <% transaction.matched_transaction_id -> %>
-              <.proposal_row proposal={transaction} accounts={@accounts} columns={@columns} />
-            <% @edited == transaction.id -> %>
-              <.live_component module={TransactionEditor} {@editor.assigns} />
-            <% true -> %>
-              <.row
-                transaction={transaction}
-                accounts={@accounts}
-                columns={@columns}
-                selected={transaction.id in @selected}
-                running={@running}
-              />
-          <% end %>
-        <% end %>
+        <.entry
+          :for={transaction <- Rows.with_proposals(@rows, @proposals)}
+          :key={transaction.id}
+          transaction={transaction}
+          accounts={@accounts}
+          columns={@columns}
+          selected={transaction.id in @selected}
+          running={@running && @running[transaction.id]}
+          editor={@edited == transaction.id && @editor}
+        />
         <tbody :if={@rows == [] and @proposals == []}>
           <tr>
             <td colspan={@columns.count}>
@@ -613,7 +589,36 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
   attr :selected, :boolean, required: true
-  attr :running, :map, default: nil
+
+  attr :running, :integer,
+    default: nil,
+    doc: "the balance after it, while the running balance shows"
+
+  attr :editor, :any, required: true, doc: "the editor while this row is edited, else false"
+
+  defp entry(%{transaction: %{matched_transaction_id: id}} = assigns) when not is_nil(id),
+    do: ~H"<.proposal_row proposal={@transaction} accounts={@accounts} columns={@columns} />"
+
+  defp entry(%{editor: %{assigns: _}} = assigns),
+    do: ~H"<.live_component module={TransactionEditor} {@editor.assigns} />"
+
+  defp entry(assigns) do
+    ~H"""
+    <.row
+      transaction={@transaction}
+      accounts={@accounts}
+      columns={@columns}
+      selected={@selected}
+      running={@running}
+    />
+    """
+  end
+
+  attr :transaction, :map, required: true
+  attr :accounts, :map, required: true
+  attr :columns, :map, required: true
+  attr :selected, :boolean, required: true
+  attr :running, :integer, default: nil
 
   defp row(assigns) do
     ~H"""
@@ -674,7 +679,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           {inflow(@transaction.amount)}
         </td>
         <td :if={@running} class="text-end text-base-content/70 app-run">
-          {Money.amount(@running[@transaction.id])}
+          {Money.amount(@running)}
         </td>
         <td class="app-ok-col">
           <.approve
@@ -784,7 +789,6 @@ defmodule AbakusWeb.RegisterLive.Components do
     end
   end
 
-  # A cell that selects its row, or opens the selected row for editing in that cell.
   defp cell(transaction, field),
     do: ["phx-click": "row_click", "phx-value-id": transaction.id, "phx-value-field": field]
 
@@ -803,75 +807,89 @@ defmodule AbakusWeb.RegisterLive.Components do
   def cards(assigns) do
     ~H"""
     <.list id="register-cards" class="md:hidden">
-      <%= for transaction <- Rows.with_proposals(@rows, @proposals) do %>
-        <.list_row
-          :if={transaction.matched_transaction_id}
-          id={"proposal-card-#{transaction.id}"}
-          title={title(transaction, @accounts)}
-          trailing_on_phone={:title}
-          class="app-unapproved-item"
-        >
-          <:leading><.icon name="link" class="size-5 text-base-content/70" /></:leading>
-          <:meta>
-            {join_meta([
-              Format.date(transaction.date, year: false),
-              if(@all, do: @accounts[transaction.account_id].name),
-              match_text(transaction.matched_transaction, @accounts)
-            ])}
-          </:meta>
-          <:trailing><.signed amount={transaction.amount} /></:trailing>
-          <:action
-            id={"proposal-card-#{transaction.id}-accept"}
-            label="Zuordnen"
-            icon="link"
-            on_click={decision("accept_match", transaction)}
-            confirm={merge_question([transaction])}
-            confirm_text={merge_text()}
-            confirm_label="Zuordnen"
-          />
-          <:action
-            id={"proposal-card-#{transaction.id}-reject"}
-            label="Trennen"
-            icon="x"
-            on_click={JS.push("reject_match", value: %{id: to_string(transaction.id)})}
-          />
-        </.list_row>
-        <.list_row
-          :if={!transaction.matched_transaction_id}
-          id={"tx-card-#{transaction.id}"}
-          on_click={JS.push("edit", value: %{id: to_string(transaction.id)})}
-          trailing_on_phone={:title}
-          class={!transaction.approved && "app-unapproved-item"}
-        >
-          <span class={!transaction.approved && "font-semibold"}>{title(transaction, @accounts)}</span>
-          <:leading>
-            <.approve
-              :if={!transaction.approved}
-              id={"tx-card-#{transaction.id}-approve"}
-              transaction={transaction}
-              accounts={@accounts}
-            />
-            <.cleared
-              :if={transaction.approved}
-              id={"tx-card-#{transaction.id}-cleared"}
-              transaction={transaction}
-            />
-          </:leading>
-          <:meta>
-            {join_meta([
-              Format.date(transaction.date, year: false),
-              if(@all, do: @accounts[transaction.account_id].name),
-              category_text(transaction, @accounts),
-              transaction.memo
-            ])}
-          </:meta>
-          <:trailing><.signed amount={transaction.amount} /></:trailing>
-        </.list_row>
-      <% end %>
+      <.card_entry
+        :for={transaction <- Rows.with_proposals(@rows, @proposals)}
+        :key={transaction.id}
+        transaction={transaction}
+        accounts={@accounts}
+        all={@all}
+      />
       <li :if={@rows == [] and @proposals == []} class="px-4">
         <.empty title={@empty} hint={@empty_hint} />
       </li>
     </.list>
+    """
+  end
+
+  attr :transaction, Transaction, required: true
+  attr :accounts, :map, required: true
+  attr :all, :boolean, required: true
+
+  defp card_entry(assigns) do
+    ~H"""
+    <.list_row
+      :if={@transaction.matched_transaction_id}
+      id={"proposal-card-#{@transaction.id}"}
+      title={title(@transaction, @accounts)}
+      trailing_on_phone={:title}
+      class="app-unapproved-item"
+    >
+      <:leading><.icon name="link" class="size-5 text-base-content/70" /></:leading>
+      <:meta>
+        {join_meta([
+          Format.date(@transaction.date, year: false),
+          if(@all, do: @accounts[@transaction.account_id].name),
+          match_text(@transaction.matched_transaction, @accounts)
+        ])}
+      </:meta>
+      <:trailing><.signed amount={@transaction.amount} /></:trailing>
+      <:action
+        id={"proposal-card-#{@transaction.id}-accept"}
+        label="Zuordnen"
+        icon="link"
+        on_click={decision("accept_match", @transaction)}
+        confirm={merge_question([@transaction])}
+        confirm_text={merge_text()}
+        confirm_label="Zuordnen"
+      />
+      <:action
+        id={"proposal-card-#{@transaction.id}-reject"}
+        label="Trennen"
+        icon="x"
+        on_click={JS.push("reject_match", value: %{id: to_string(@transaction.id)})}
+      />
+    </.list_row>
+    <.list_row
+      :if={!@transaction.matched_transaction_id}
+      id={"tx-card-#{@transaction.id}"}
+      on_click={JS.push("edit", value: %{id: to_string(@transaction.id)})}
+      trailing_on_phone={:title}
+      class={!@transaction.approved && "app-unapproved-item"}
+    >
+      <span class={!@transaction.approved && "font-semibold"}>{title(@transaction, @accounts)}</span>
+      <:leading>
+        <.approve
+          :if={!@transaction.approved}
+          id={"tx-card-#{@transaction.id}-approve"}
+          transaction={@transaction}
+          accounts={@accounts}
+        />
+        <.cleared
+          :if={@transaction.approved}
+          id={"tx-card-#{@transaction.id}-cleared"}
+          transaction={@transaction}
+        />
+      </:leading>
+      <:meta>
+        {join_meta([
+          Format.date(@transaction.date, year: false),
+          if(@all, do: @accounts[@transaction.account_id].name),
+          category_text(@transaction, @accounts),
+          @transaction.memo
+        ])}
+      </:meta>
+      <:trailing><.signed amount={@transaction.amount} /></:trailing>
+    </.list_row>
     """
   end
 
@@ -889,6 +907,13 @@ defmodule AbakusWeb.RegisterLive.Components do
       if merge_question([proposal]), do: Map.put(value, :reconciled, "confirmed"), else: value
 
     JS.push(event, value: value)
+  end
+
+  @doc "Below the rows while older ones wait: the `LoadMore` hook pushes `load_more` as it comes near the screen."
+  def load_more(assigns) do
+    ~H"""
+    <div id="register-more" phx-hook="LoadMore" class="h-px" aria-hidden="true"></div>
+    """
   end
 
   def legend(assigns) do

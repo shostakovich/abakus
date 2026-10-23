@@ -1,6 +1,6 @@
 defmodule Abakus.BankSync.Client do
   @moduledoc """
-  The bank sync's provider, Enable Banking (ADR 0020): the banks of a country, the start of a consent at one of them
+  The bank sync's provider, Enable Banking (ADR 0021): the banks of a country, the start of a consent at one of them
   and the session its code opens, with the bank's accounts, and their transactions and balances. Read only.
   """
 

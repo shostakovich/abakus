@@ -229,14 +229,13 @@ defmodule AbakusWeb.Depot.SecuritiesLive do
   defp symbol_form(changeset \\ Securities.change_yahoo_symbol(%{"symbol" => @symbol})),
     do: to_form(changeset, as: :yahoo)
 
-  # Loads the data and resets every form.
   defp load(socket) do
     socket
     |> assign(feed_forms: %{})
     |> reload()
   end
 
-  # Loads the data and keeps the forms, so an update in the background spares what is typed.
+  # Keeps the forms, so an update in the background spares what is typed.
   defp reload(socket) do
     scope = socket.assigns.current_scope
     {retired, active} = scope |> Securities.list_securities() |> Enum.split_with(& &1.retired)

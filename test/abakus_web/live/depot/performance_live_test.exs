@@ -12,9 +12,8 @@ defmodule AbakusWeb.Depot.PerformanceLiveTest do
 
   defp today, do: LocalTime.today()
 
-  # Two years ago 1,000 € came into the account of „Langfristig“, which bought 10 shares at
-  # 100 € plus a 2 € fee; they closed at 90 € a year ago and are quoted at 110 € today.
-  # „Sparplan“ holds 500 € in its account since yesterday.
+  # „Langfristig“: 10 shares at 100 € + 2 € fee two years ago, 90 € a year ago, 110 € today.
+  # „Sparplan“: 500 € since yesterday.
   setup %{scope: scope} do
     account = account_fixture(scope, %{name: "Konto Langfristig"})
     portfolio = portfolio_fixture(scope, %{name: "Langfristig", reference_account_id: account.id})

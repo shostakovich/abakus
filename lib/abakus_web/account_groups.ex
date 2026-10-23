@@ -2,9 +2,11 @@ defmodule AbakusWeb.AccountGroups do
   @moduledoc """
   Accounts as the sidebar and the registers group them: open budget accounts, open tracking accounts, then the
   closed ones, each account with its working and cleared balance and how many of its transactions wait for approval,
-  each group with its working balance. Empty groups are left out.
+  each group with its working balance. Empty groups are left out, and so is the portfolios' cash
+  (`Abakus.Depot.Portfolios.cash_account_portfolios/1`), whose money moves in the Depot.
   """
 
+  alias Abakus.Depot.Portfolios
   alias Abakus.Ledger
   alias Abakus.Ledger.Account
   alias Abakus.Users.Scope
@@ -25,7 +27,14 @@ defmodule AbakusWeb.AccountGroups do
     {:cont, Phoenix.Component.assign(socket, :account_groups, groups)}
   end
 
-  def load(%Scope{} = scope), do: build(Ledger.list_accounts(scope), Ledger.balances(scope))
+  def load(%Scope{} = scope) do
+    cash = Portfolios.cash_account_portfolios(scope)
+
+    scope
+    |> Ledger.list_accounts()
+    |> Enum.reject(&Map.has_key?(cash, &1.id))
+    |> build(Ledger.balances(scope))
+  end
 
   def build(accounts, balances) do
     rows = Enum.map(accounts, &row(&1, balances))
@@ -38,16 +47,8 @@ defmodule AbakusWeb.AccountGroups do
     |> Enum.reject(&(&1.rows == []))
   end
 
-  @doc "The groups without the closed accounts."
+  @doc "The groups without the closed accounts, as the sidebar lists them."
   def open(groups), do: Enum.reject(groups, &(&1.key == :closed))
-
-  @doc "The open groups as the sidebar lists them: without the portfolios' accounts, which it lists under Depots."
-  def sidebar(groups) do
-    for group <- open(groups),
-        rows = Enum.reject(group.rows, &(&1.account.fed_by == :portfolio)),
-        rows != [],
-        do: group(group.key, group.label, rows)
-  end
 
   @doc "Every account's row, the closed ones included."
   def rows(groups), do: Enum.flat_map(groups, & &1.rows)

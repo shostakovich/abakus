@@ -41,7 +41,7 @@ defmodule AbakusWeb.BankConnectionsLiveTest do
 
       giro = account_fixture(name: "Girokonto")
       savings = account_fixture(name: "Tagesgeld")
-      account_fixture(name: "Geteilt", fed_by: :shared_expenses)
+      account_fixture(name: "Geteilt", shared_expenses: true)
       account_fixture(name: "Altes Konto", closed: true)
 
       transaction_fixture(account_id: giro.id, date: ~D[2026-10-01], cleared: :reconciled)

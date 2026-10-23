@@ -96,7 +96,6 @@ defmodule AbakusWeb.Depot.ReceiptComponents do
     """
   end
 
-  # What a receipt needs next: wait, discard, book as recognised, check a warning, or type it.
   defp state(%Receipt{status: :recognising}), do: :recognising
   defp state(%Receipt{status: :unsupported}), do: :unsupported
   defp state(%Receipt{fields: nil}), do: :unrecognised
