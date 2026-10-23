@@ -83,6 +83,8 @@ defmodule AbakusWeb.ConnCase do
     ExUnit.Callbacks.on_exit(fn -> Application.delete_env(:abakus, :today) end)
   end
 
+  defdelegate fix_now(now), to: Abakus.DataCase
+
   @doc "Waits until the tasks started under `Abakus.TaskSupervisor` (e.g. sign-in mails) are done."
   def await_background_tasks do
     for pid <- Task.Supervisor.children(Abakus.TaskSupervisor) do

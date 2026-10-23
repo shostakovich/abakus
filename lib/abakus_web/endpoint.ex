@@ -19,9 +19,12 @@ defmodule AbakusWeb.Endpoint do
   # First, so error pages and static files carry the policy too.
   plug AbakusWeb.ContentSecurityPolicy
 
+  # The peer, X-headers and user agent tell bank sync who asks for "Jetzt abrufen".
+  @connect_info [:peer_data, :x_headers, :user_agent, session: @session_options]
+
   socket "/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [session: @session_options]],
-    longpoll: [connect_info: [session: @session_options]]
+    websocket: [connect_info: @connect_info],
+    longpoll: [connect_info: @connect_info]
 
   @fonts Plug.Static.init(at: "/setzkasten", from: {:setzkasten, "priv/static"}, only: ~w(fonts))
 

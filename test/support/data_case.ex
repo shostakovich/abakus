@@ -37,6 +37,12 @@ defmodule Abakus.DataCase do
     Challenges.reset()
   end
 
+  @doc "Fixes `Abakus.LocalTime.utc_now/0` and `today/0` for the rest of the test; for synchronous tests only."
+  def fix_now(%DateTime{} = now) do
+    Application.put_env(:abakus, :now, now)
+    ExUnit.Callbacks.on_exit(fn -> Application.delete_env(:abakus, :now) end)
+  end
+
   @doc """
   Turns changeset errors into a map of messages.
 

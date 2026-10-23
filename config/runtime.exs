@@ -4,21 +4,21 @@ if System.get_env("PHX_SERVER") do
   config :abakus, AbakusWeb.Endpoint, server: true
 end
 
-# Trimmed; an empty value counts as unset. Tests configure the MCP themselves.
-mcp_env = fn name ->
+# Trimmed; an empty value counts as unset. Tests configure the MCP and bank sync themselves.
+optional_env = fn name ->
   value = if config_env() != :test, do: name |> System.get_env("") |> String.trim(), else: ""
   if value != "", do: value
 end
 
 networks! = fn name, default ->
-  case Abakus.Network.parse_list(mcp_env.(name) || default) do
+  case Abakus.Network.parse_list(optional_env.(name) || default) do
     {:ok, networks} -> networks
     {:error, reason} -> raise "invalid #{name}: #{reason}"
   end
 end
 
 config :abakus, :mcp,
-  secret: mcp_env.("MCP_SECRET"),
+  secret: optional_env.("MCP_SECRET"),
   allowed_cidrs: networks!.("MCP_ALLOWED_CIDRS", "160.79.104.0/21"),
   trusted_proxies: networks!.("TRUSTED_PROXIES", "")
 
@@ -31,6 +31,12 @@ config :abakus, Abakus.Depot.Receipts.ChatAPI,
   model: System.get_env("RECEIPT_MODEL"),
   api_key: System.get_env("RECEIPT_MODEL_KEY"),
   thinking: System.get_env("RECEIPT_MODEL_THINKING") in ~w(on true 1)
+
+# Bank sync through Enable Banking: the application's id and the path of its private key, mounted read only;
+# without both the tab Bankverbindungen says bank sync is not set up.
+config :abakus, Abakus.BankSync.EnableBanking,
+  app_id: optional_env.("ENABLE_BANKING_APP_ID"),
+  key_file: optional_env.("ENABLE_BANKING_KEY_FILE")
 
 port = String.to_integer(System.get_env("PORT", "4000"))
 

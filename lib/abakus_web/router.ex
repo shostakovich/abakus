@@ -53,6 +53,8 @@ defmodule AbakusWeb.Router do
     pipe_through [:browser, :require_authenticated_user, :budget]
 
     get "/accounts", PageController, :accounts
+    get "/bank-connections/authorize", BankConnectionController, :authorize
+    get "/bank-connections/callback", BankConnectionController, :callback
 
     live_session :budget,
       on_mount: [
@@ -60,12 +62,15 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.Areas, {:require, :budget}},
         {AbakusWeb.AccountGroups, :assign},
         {AbakusWeb.AccountDialog, :attach},
-        {AbakusWeb.Depot.Sidebar, :budget}
+        {AbakusWeb.Depot.Sidebar, :budget},
+        {AbakusWeb.BankConsents, :assign}
       ] do
       live "/", BudgetLive
       live "/accounts/all", RegisterLive, :all
       live "/accounts/:id", RegisterLive, :show
       live "/import", ImportLive
+      live "/bank-connections", BankConnectionsLive, :index
+      live "/bank-connections/:id/accounts", BankConnectionsLive, :accounts
     end
   end
 
@@ -95,7 +100,8 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.AccountGroups, :assign},
         {AbakusWeb.AccountDialog, :attach},
         AbakusWeb.Depot.Sidebar,
-        AbakusWeb.Depot.TransactionDialog
+        AbakusWeb.Depot.TransactionDialog,
+        {AbakusWeb.BankConsents, :assign}
       ] do
       live "/", WealthLive
       live "/holdings", HoldingsLive

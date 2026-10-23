@@ -1120,6 +1120,39 @@ defmodule Abakus.Ledger.TransactionsTest do
                MapSet.new(["F40000"])
     end
 
+    test "list an account's unapproved pending imports from a source and a date on" do
+      account = account_fixture()
+
+      import = fn date, external_id, attrs ->
+        attrs = Enum.into(attrs, %{account_id: account.id, date: date, source: :bank})
+        transaction = transaction_fixture(attrs)
+        {:ok, _} = Ledger.add_origin(budget_scope(), transaction, :bank, external_id)
+        transaction
+      end
+
+      pending = import.(~D[2026-10-07], "pending:P-1", cleared: :uncleared)
+      import.(~D[2026-10-04], "pending:P-2", [])
+      import.(~D[2026-10-07], "E-1", [])
+      import.(~D[2026-10-07], "pending:P-3", approved: true)
+      deleted = import.(~D[2026-10-07], "pending:P-4", [])
+      {:ok, _} = Ledger.delete_transaction(budget_scope(), deleted)
+      import.(~D[2026-10-07], "pending:P-5", cleared: :reconciled)
+
+      {:ok, _} =
+        Ledger.add_origin(
+          budget_scope(),
+          transaction_fixture(date: ~D[2026-10-07]),
+          :bank,
+          "pending:P-6"
+        )
+
+      assert [{"pending:P-1", %Transaction{id: id}}] =
+               Ledger.list_pending_imports(budget_scope(), account, :bank, ~D[2026-10-05])
+
+      assert id == pending.id
+      assert Ledger.list_pending_imports(budget_scope(), account, :file, ~D[2026-10-05]) == []
+    end
+
     test "go with the transaction row" do
       transaction = transaction_fixture()
       {:ok, _} = Ledger.add_origin(budget_scope(), transaction, :ynab, "abc")

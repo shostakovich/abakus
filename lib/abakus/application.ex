@@ -31,6 +31,7 @@ defmodule Abakus.Application do
         Abakus.Backup.Job,
         Abakus.Depot.MarketData.Job,
         Abakus.Depot.Receipts.PaperlessJob,
+        Abakus.BankSync.Job,
         {Task, &Receipts.resume_recognition/0}
       ],
       else: []

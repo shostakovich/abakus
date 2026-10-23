@@ -32,6 +32,7 @@ defmodule AbakusWeb.ImportLive do
       current={:import}
       account_groups={@account_groups}
       depot_sidebar={@depot_sidebar}
+      expiring_consents={@expiring_consents}
       account_dialog={@account_dialog}
     >
       <ImportSync.import_header
@@ -153,15 +154,17 @@ defmodule AbakusWeb.ImportLive do
         </form>
       </div>
       <div class="flex flex-wrap gap-2 px-6 pb-4">
-        <.badge id={"statement-#{@index}-new"} tone={:success}>{@item.preview.new} neu</.badge>
+        <.badge id={"statement-#{@index}-new"} tone={:success}>
+          {ImportSync.new_label(@item.preview.new)}
+        </.badge>
         <.badge :if={@item.preview.matched > 0} id={"statement-#{@index}-matched"} tone={:info}>
-          {matched_label(@item.preview.matched)}
+          {ImportSync.matched_label(@item.preview.matched)}
         </.badge>
         <.badge id={"statement-#{@index}-existing"}>
-          {@item.preview.existing} bereits vorhanden
+          {Format.number(@item.preview.existing)} bereits vorhanden
         </.badge>
         <.badge :if={@item.preview.reconciled > 0} id={"statement-#{@index}-reconciled"}>
-          {@item.preview.reconciled} vor dem letzten Abgleich
+          {Format.number(@item.preview.reconciled)} vor dem letzten Abgleich
         </.badge>
       </div>
       <.table
@@ -229,12 +232,9 @@ defmodule AbakusWeb.ImportLive do
     "#{Format.date(first)}–#{Format.date(last)}"
   end
 
-  defp matched_label(1), do: "1 Zuordnungsvorschlag"
-  defp matched_label(count), do: "#{count} Zuordnungsvorschläge"
-
   defp import_label(0), do: "Importieren"
   defp import_label(1), do: "1 Buchung importieren"
-  defp import_label(count), do: "#{count} Buchungen importieren"
+  defp import_label(count), do: "#{Format.number(count)} Buchungen importieren"
 
   @impl true
   def mount(_params, _session, socket) do
@@ -373,7 +373,7 @@ defmodule AbakusWeb.ImportLive do
 
   defp matched_text(0), do: ""
   defp matched_text(1), do: ", 1 davon passt zu einer vorhandenen Buchung"
-  defp matched_text(count), do: ", #{count} davon passen zu vorhandenen Buchungen"
+  defp matched_text(count), do: ", #{Format.number(count)} davon passen zu vorhandenen Buchungen"
 
   defp target_text(count, [%{account: account}]) when count > 0,
     do: ", zur Bestätigung in #{account.name}"

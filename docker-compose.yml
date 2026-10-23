@@ -1,6 +1,10 @@
-# Example: secrets (SECRET_KEY_BASE, SMTP, ...) go in .env next to this file.
+# Example: secrets go in .env next to this file.
+#   Required: SECRET_KEY_BASE (openssl rand -hex 64), SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, MAIL_FROM
+#   Optional: TZ (default Europe/Berlin), DIVVYDIARY_API_KEY, RECEIPT_MODEL_URL, RECEIPT_MODEL, RECEIPT_MODEL_KEY,
+#             ENABLE_BANKING_APP_ID, ENABLE_BANKING_KEY_FILE, MCP_SECRET, MCP_ALLOWED_CIDRS, TRUSTED_PROXIES
 # Put the app behind your HTTPS reverse proxy; it expects X-Forwarded-Proto.
 # Before the first start: mkdir data && chown 1000:1000 data
+# First user: docker compose exec abakus bin/abakus eval 'Abakus.Release.invite("you@example.com")'
 services:
   abakus:
     image: ghcr.io/shostakovich/abakus:${ABAKUS_TAG:-latest}

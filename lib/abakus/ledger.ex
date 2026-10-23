@@ -54,6 +54,13 @@ defmodule Abakus.Ledger do
     quote do: type(fragment("strftime('%Y-%m-01', ?)", unquote(date)), :date)
   end
 
+  # Whether an external id is a pending import's, in SQL; instr, unlike LIKE, minds the case.
+  defmacrop pending?(external_id) do
+    quote do
+      fragment("instr(?, ?) = 1", unquote(external_id), ^TransactionOrigin.pending_prefix())
+    end
+  end
+
   @doc "The accounts in their order, with their transfer payees."
   def list_accounts(%Scope{} = scope),
     do:
@@ -399,13 +406,23 @@ defmodule Abakus.Ledger do
   @doc """
   The register transactions that imports from `source` look like, one per import (nil for none) in their order:
   in the account with the same amount, dated within 10 days, the closest pairs first and on a tie the older
-  transaction (see `Abakus.Ledger.Matches.pick/2`). Each is matched once, and only while it is not reconciled, has
-  no open proposal and no external id from `source` yet. Imports are maps with `:date` and `:amount`.
+  transaction (see `Abakus.Ledger.Matches.pick/3`). Each is matched once, and only while it is not reconciled, has
+  no open proposal and no external id from `source` yet, but for the pending one of an approved transaction
+  (ADR 0022). An open proposal of an unapproved pending import from `source` makes way for an import that is not
+  pending (`yield_proposal/3`). Imports are maps with `:date`, `:amount` and optionally `:external_id`.
   """
   def find_matches(%Scope{}, %Account{}, _source, []), do: []
 
   def find_matches(%Scope{} = scope, %Account{id: account_id}, source, imports) do
     {first, last} = imports |> Enum.map(& &1.date) |> Enum.min_max_by(&Date.to_gregorian_days/1)
+
+    yielding =
+      Repo.all(
+        from p in yielding_proposals(scope, source),
+          where: p.account_id == ^account_id,
+          select: p.matched_transaction_id
+      )
+      |> MapSet.new()
 
     candidates =
       imports
@@ -419,16 +436,58 @@ defmodule Abakus.Ledger do
                 t.date >= ^Date.add(first, -Matches.days()) and
                 t.date <= ^Date.add(last, Matches.days()),
             where:
-              t.id not in subquery(from p in proposals(scope), select: p.matched_transaction_id),
+              t.id not in subquery(
+                from p in proposals(scope),
+                  where: p.approved or p.id not in subquery(pending_imports(source)),
+                  select: p.matched_transaction_id
+              ),
             where:
               t.id not in subquery(
-                from o in TransactionOrigin, where: o.source == ^source, select: o.transaction_id
+                from o in TransactionOrigin,
+                  where: o.source == ^source and not pending?(o.external_id),
+                  select: o.transaction_id
               ),
+            where:
+              t.approved or
+                t.id not in subquery(
+                  from o in TransactionOrigin,
+                    where: o.source == ^source,
+                    select: o.transaction_id
+                ),
             preload: :payee
         )
       end)
 
-    Matches.pick(imports, candidates)
+    Matches.pick(imports, candidates, &(not (pending_import?(&1) and &2.id in yielding)))
+  end
+
+  defp pending_import?(import),
+    do: String.starts_with?(import[:external_id] || "", TransactionOrigin.pending_prefix())
+
+  defp yielding_proposals(scope, source),
+    do:
+      from(p in proposals(scope),
+        where: not p.approved and p.id in subquery(pending_imports(source))
+      )
+
+  defp pending_imports(source),
+    do:
+      from(o in TransactionOrigin,
+        where: o.source == ^source and pending?(o.external_id),
+        select: o.transaction_id
+      )
+
+  @doc """
+  Makes way for an import's proposal onto the transaction: the open proposal onto it of an unapproved pending import
+  from `source` becomes an ordinary import again, which goes once the bank no longer reports it (ADR 0022).
+  """
+  def yield_proposal(%Scope{} = scope, %Transaction{id: id}, source) do
+    Repo.update_all(
+      from(p in yielding_proposals(scope, source), where: p.matched_transaction_id == ^id),
+      set: [matched_transaction_id: nil, updated_at: DateTime.utc_now()]
+    )
+
+    :ok
   end
 
   @doc "The date of the newest reconciled transaction in the account's register, nil without one."
@@ -1208,6 +1267,23 @@ defmodule Abakus.Ledger do
       )
     end)
     |> MapSet.new()
+  end
+
+  @doc """
+  The account's pending imports from `source` dated from `from` on that are still unapproved, neither deleted nor
+  reconciled, with their external ids: `[{external_id, transaction}]`.
+  """
+  def list_pending_imports(%Scope{} = scope, %Account{id: account_id}, source, %Date{} = from) do
+    Repo.all(
+      from t in owned(Transaction, scope),
+        join: o in assoc(t, :origins),
+        where:
+          t.account_id == ^account_id and is_nil(t.deleted_at) and not t.approved and
+            t.cleared != :reconciled and t.date >= ^from,
+        where: o.account_id == ^account_id and o.source == ^source and pending?(o.external_id),
+        order_by: t.id,
+        select: {o.external_id, t}
+    )
   end
 
   # SQLite takes at most 32766 variables in a statement.

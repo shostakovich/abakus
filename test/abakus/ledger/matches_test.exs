@@ -571,6 +571,40 @@ defmodule Abakus.Ledger.MatchesTest do
       refute reconciled.id in ids(Ledger.find_matches(budget_scope(), c.account, :bank, rows))
     end
 
+    test "takes a pending import from the source once it is approved", c do
+      at = ~D[2026-10-03]
+      pending = transaction_fixture(account_id: c.account.id, date: at, source: :bank)
+      {:ok, _} = Ledger.add_origin(budget_scope(), pending, :bank, "pending:P-1")
+      rows = [import_row(at, -1_250)]
+
+      assert Ledger.find_matches(budget_scope(), c.account, :bank, rows) == [nil]
+
+      {:ok, approved} = Ledger.update_transaction(budget_scope(), pending, %{approved: true})
+      assert ids(Ledger.find_matches(budget_scope(), c.account, :bank, rows)) == [approved.id]
+
+      {:ok, _} = Ledger.add_origin(budget_scope(), approved, :bank, "E-1")
+      assert Ledger.find_matches(budget_scope(), c.account, :bank, rows) == [nil]
+    end
+
+    test "an unapproved pending import's proposal makes way for an import that is not pending",
+         c do
+      pending = propose(c, external_id: "pending:P-1")
+      rows = [%{date: ~D[2026-10-04], amount: -4_875, external_id: "E-1"}]
+      pending_rows = [%{date: ~D[2026-10-04], amount: -4_875, external_id: "pending:P-2"}]
+
+      assert Ledger.find_matches(budget_scope(), c.account, :bank, pending_rows) == [nil]
+      assert Ledger.find_matches(budget_scope(), c.account, :file, rows) == [nil]
+      assert ids(Ledger.find_matches(budget_scope(), c.account, :bank, rows)) == [c.manual.id]
+
+      assert :ok = Ledger.yield_proposal(budget_scope(), c.manual, :bank)
+      assert Repo.get!(Transaction, pending.id).matched_transaction_id == nil
+
+      booked = propose(c, external_id: "E-1")
+      assert ids(Ledger.find_matches(budget_scope(), c.account, :bank, rows)) == [nil]
+      assert :ok = Ledger.yield_proposal(budget_scope(), c.manual, :bank)
+      assert Repo.get!(Transaction, booked.id).matched_transaction_id == c.manual.id
+    end
+
     test "looks up more amounts than SQLite takes variables", c do
       rows = Enum.map(1..40_000, &import_row(~D[2026-10-03], -&1))
 

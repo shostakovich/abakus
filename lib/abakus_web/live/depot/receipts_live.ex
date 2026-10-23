@@ -19,6 +19,7 @@ defmodule AbakusWeb.Depot.ReceiptsLive do
       flash={@flash}
       current_scope={@current_scope}
       sidebar={@depot_sidebar}
+      expiring_consents={@expiring_consents}
       areas={@areas}
       area={@area}
       account_groups={@account_groups}
