@@ -12,7 +12,7 @@ defmodule Abakus.FileImport do
   """
 
   alias Abakus.FileImport.OFX
-  alias Abakus.{Import, Ledger, Repo}
+  alias Abakus.{Import, Ledger, Sync}
   alias Abakus.Ledger.Account
   alias Abakus.Users.Scope
 
@@ -52,7 +52,7 @@ defmodule Abakus.FileImport do
   `{transaction, changeset}`.
   """
   def import(%Scope{} = scope, statements) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with {:ok, statements} <- fresh_accounts(scope, statements),
            {:ok, counts} <- Import.collect(statements, &import_statement(scope, &1)) do
         {:ok, Enum.reduce(counts, %{new: 0, matched: 0}, &add_counts/2)}

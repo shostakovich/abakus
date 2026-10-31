@@ -1,8 +1,9 @@
 defmodule AbakusWeb.SettingsNav do
   @moduledoc """
-  The settings hub: the sections the sidebar lists in its settings mode, grouped by area. Allgemein is everyone's, Kasse
-  its participants'; Depot is everyone's, since anyone may start a Depot there, with Belegeingang only once they have
-  a portfolio. An `on_mount` hook assigns them as `@settings_groups`.
+  The settings hub: the sections the sidebar lists in its settings mode, grouped by area. Allgemein is everyone's,
+  but Geräte only the budget owner's, who alone signs apps in; Kasse its participants'; Depot is everyone's, since
+  anyone may start a Depot there, with Belegeingang only once they have a portfolio. An `on_mount` hook assigns them
+  as `@settings_groups`.
   """
   use AbakusWeb, :verified_routes
 
@@ -22,7 +23,8 @@ defmodule AbakusWeb.SettingsNav do
   """
   def groups(scope) do
     [
-      {"Allgemein", [access(), appearance()]},
+      {"Allgemein",
+       Enum.filter([access(), appearance(), Scope.budget_owner?(scope) && devices()], & &1)},
       Areas.allowed?(scope, :kasse) && {"Kasse", kasse(scope)},
       {"Depot", depot(scope)}
     ]
@@ -36,6 +38,8 @@ defmodule AbakusWeb.SettingsNav do
   end
 
   defp appearance, do: entry(:appearance, "Aussehen", "palette", ~p"/settings/appearance")
+
+  defp devices, do: entry(:devices, "Geräte", "smartphone", ~p"/settings/devices")
 
   defp kasse(scope) do
     [

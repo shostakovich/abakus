@@ -117,6 +117,19 @@ defmodule Abakus.Ledger.LedTest do
              Ledger.delete_transaction(c.scope, transaction, led_by: c.kasse)
   end
 
+  test "a proposal it leads is not accepted, as accepting deletes the proposal", c do
+    existing = transaction_fixture(account_id: c.account.id, date: ~D[2026-10-01], amount: 1_000)
+    proposal = led!(c, c.kasse)
+
+    Repo.update_all(from(t in Transaction, where: t.id == ^proposal.id),
+      set: [matched_transaction_id: existing.id]
+    )
+
+    assert {:error, changeset} = Ledger.accept_match(c.scope, proposal)
+    assert [led_by: {"wird mit ihrer Ausgabe in der Kasse gelöscht", []}] = changeset.errors
+    assert Repo.reload(proposal).deleted_at == nil
+  end
+
   test "leads the counterpart of a transfer it writes", c do
     category = category_fixture()
 

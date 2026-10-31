@@ -11,7 +11,7 @@ defmodule Abakus.Depot.BudgetLink.Link do
   @primary_key false
   schema "depot_budget_links" do
     belongs_to :user, Abakus.Users.User, primary_key: true
-    belongs_to :category, Abakus.Categories.Category
+    belongs_to :category, Abakus.Categories.Category, type: Ecto.UUID
     field :start_date, :date
 
     timestamps()

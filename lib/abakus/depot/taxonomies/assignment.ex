@@ -5,7 +5,7 @@ defmodule Abakus.Depot.Taxonomies.Assignment do
   schema "depot_assignments" do
     belongs_to :classification, Abakus.Depot.Taxonomies.Classification
     belongs_to :security, Abakus.Depot.Securities.Security
-    belongs_to :account, Abakus.Ledger.Account
+    belongs_to :account, Abakus.Ledger.Account, type: Ecto.UUID
     field :weight, :integer
     field :rank, :integer, default: 0
   end

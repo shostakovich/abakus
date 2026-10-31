@@ -13,7 +13,7 @@ defmodule Abakus.Import do
   """
 
   alias Abakus.Depot.Portfolios
-  alias Abakus.{Ledger, Repo}
+  alias Abakus.{Ledger, Sync}
   alias Abakus.Ledger.Account
   alias Abakus.Users.Scope
 
@@ -78,7 +78,7 @@ defmodule Abakus.Import do
   `%{new, matched}`; refuses an entry the Ledger refuses with `{entry, changeset}`.
   """
   def import(%Scope{} = scope, %Account{} = account, source, entries) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       rows =
         scope |> rows(account, source, entries) |> Enum.filter(&(&1.status in [:new, :matched]))
 

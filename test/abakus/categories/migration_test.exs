@@ -4,6 +4,7 @@ defmodule Abakus.Categories.MigrationTest do
   alias Abakus.{Repo, TestMigrations}
 
   @moduletag :tmp_dir
+  @before_uuids 20_261_021_220_000
   @before 20_261_017_140_000
   @tables ~w(category_groups categories assignments target_versions target_snoozes)
   @now "'2026-10-01T10:00:00.000000Z'"
@@ -64,7 +65,7 @@ defmodule Abakus.Categories.MigrationTest do
   test "gives every row of the categories to the budget owner and keeps the rest", %{repo: repo} do
     insert_users()
     insert_budget()
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
 
     for table <- @tables do
       assert Repo.query!(~s|SELECT DISTINCT user_id FROM "#{table}"|).rows == [[2]], table
@@ -83,7 +84,7 @@ defmodule Abakus.Categories.MigrationTest do
 
   test "without an owner drops the internal rows, which come with each user's first use",
        %{repo: repo} do
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
 
     assert Repo.query!("SELECT count(*) FROM categories").rows == [[0]]
     assert Repo.query!("SELECT count(*) FROM category_groups").rows == [[0]]
@@ -95,7 +96,7 @@ defmodule Abakus.Categories.MigrationTest do
     Repo.query!("UPDATE users SET budget_owner = 0")
 
     assert_raise RuntimeError, ~r/No user owns the budget.*category_groups, categories/, fn ->
-      TestMigrations.run!(repo)
+      TestMigrations.run!(repo, to: @before_uuids)
     end
 
     refute ["user_id"] in Repo.query!("SELECT name FROM pragma_table_info('categories')").rows
@@ -103,7 +104,7 @@ defmodule Abakus.Categories.MigrationTest do
 
   test "requires an owner for every new row and one internal group per user", %{repo: repo} do
     insert_users()
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
 
     assert_raise Exqlite.Error, ~r/NOT NULL constraint failed: category_groups.user_id/, fn ->
       Repo.query!("""

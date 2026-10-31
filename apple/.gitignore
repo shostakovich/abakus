@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+*.xcodeproj
+.DS_Store
+/.pkgtest/
+/.claude/
+/build/
+/*.png

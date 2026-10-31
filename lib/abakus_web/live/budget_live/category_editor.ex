@@ -30,7 +30,7 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
 
   def open(%{"edit" => "category", "category" => id}, groups) do
     Enum.find_value(groups, fn group ->
-      category = Enum.find(group.categories, &(Integer.to_string(&1.id) == id))
+      category = Enum.find(group.categories, &(&1.id == id))
       category && state(:category, group, category)
     end)
   end
@@ -48,7 +48,7 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
       anchor: nil
     }
 
-  defp find_group(groups, id), do: Enum.find(groups, &(Integer.to_string(&1.id) == id))
+  defp find_group(groups, id), do: Enum.find(groups, &(&1.id == id))
 
   @doc """
   Creates or renames as the popover says: `:ok`, the state with the name's error, or `:gone` when what it names
@@ -125,9 +125,6 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
       {:error, :reconciled} ->
         {:error, %{edit | reconciled: true}}
 
-      {:error, %Ecto.Changeset{}} ->
-        {:error, %{edit | error: "Zusammen sind die Zuweisungen zu groß."}}
-
       {:error, _gone} ->
         :gone
     end
@@ -138,7 +135,7 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
 
     groups
     |> Enum.flat_map(& &1.categories)
-    |> Enum.find(&(Integer.to_string(&1.id) == id and &1.id in offered))
+    |> Enum.find(&(&1.id == id and &1.id in offered))
   end
 
   attr :edit, :map,

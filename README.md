@@ -24,6 +24,11 @@ Open http://localhost:4000 (passkeys need `localhost`); the sign-in mail is at h
 The first user owns the budget. `mix abakus.add_participant you@example.com "Your name"` adds the first person to
 the Kasse.
 
+## Abakus for the Mac
+
+A native macOS client in [`apple/`](apple/), a Swift package with its own setup and gates in
+[`apple/README.md`](apple/README.md).
+
 ## Deploy
 
 - Image `ghcr.io/shostakovich/abakus`; `docker-compose.yml` is an example. The database lives in `data/`
@@ -49,6 +54,7 @@ very welcome.
 
 ## Stack and license
 
-Elixir, Phoenix LiveView, SQLite and [Setzkasten](https://github.com/shostakovich/setzkasten). Public domain
-([The Unlicense](LICENSE)). Bank sync follows Actual Budget's Enable Banking integration (MIT). Lucide icons (ISC, partly Feather, MIT) and Chart.js (MIT) in `assets/vendor`; the plush
-images in `priv/static/images` were made for Zipfelkasse and Abakus.
+Elixir, Phoenix LiveView, SQLite and [Setzkasten](https://github.com/shostakovich/setzkasten); Swift and SwiftUI for the
+Mac. Public domain ([The Unlicense](LICENSE)). Bank sync follows Actual Budget's Enable Banking integration (MIT).
+Lucide icons (ISC, partly Feather, MIT) and Chart.js (MIT) in `assets/vendor`; the plush images in `priv/static/images`
+were made for Zipfelkasse and Abakus.

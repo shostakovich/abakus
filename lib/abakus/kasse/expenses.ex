@@ -18,6 +18,7 @@ defmodule Abakus.Kasse.Expenses do
   alias Abakus.Kasse.Recurring.RecurringExpense
   alias Abakus.Money
   alias Abakus.Repo
+  alias Abakus.Sync
   alias Abakus.Users.Scope
   alias Ecto.Changeset
   alias Phoenix.PubSub
@@ -162,7 +163,7 @@ defmodule Abakus.Kasse.Expenses do
     rule_id = opts[:recurring_expense_id]
     changeset = Expense.changeset(%Expense{recurring_expense_id: rule_id}, attrs)
 
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with :ok <- due_rule(rule_id, Changeset.get_field(changeset, :date)),
            {:ok, changeset} <- validate_references(changeset, :insert),
            {:ok, expense} <- Repo.insert(changeset),
@@ -199,7 +200,7 @@ defmodule Abakus.Kasse.Expenses do
   def update_expense(%Scope{} = scope, %Expense{id: id}, attrs, opts \\ []) do
     actor_id = Access.actor_id!(scope)
 
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with {:ok, old} <- fetch_live(id),
            {:ok, changeset} <- validate_references(Expense.changeset(old, attrs), :update),
            {:ok, new} <- Changeset.apply_action(changeset, :update),
@@ -238,7 +239,7 @@ defmodule Abakus.Kasse.Expenses do
   def delete_expense(%Scope{} = scope, %Expense{id: id}) do
     actor_id = Access.actor_id!(scope)
 
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with {:ok, old} <- fetch_live(id),
            changeset = Changeset.change(old, deleted_at: DateTime.utc_now()),
            {:ok, expense} <- Repo.update(changeset),

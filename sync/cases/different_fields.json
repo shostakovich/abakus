@@ -1,0 +1,227 @@
+{
+  "name": "Edits of different fields both stay",
+  "setup": [
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "name",
+      "value": "Girokonto",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "kind",
+      "value": "checking",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "closed",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "shared_expenses",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "position",
+      "value": 0,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "category_groups",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
+      "column": "name",
+      "value": "Alltag",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "category_groups",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
+      "column": "hidden",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "category_groups",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
+      "column": "internal",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "category_groups",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
+      "column": "position",
+      "value": 0,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000003",
+      "column": "category_group_id",
+      "value": "01a0f5c0-0000-7000-8000-000000000002",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000003",
+      "column": "name",
+      "value": "Lebensmittel",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000003",
+      "column": "hidden",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000003",
+      "column": "internal",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000003",
+      "column": "position",
+      "value": 0,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000004",
+      "column": "category_group_id",
+      "value": "01a0f5c0-0000-7000-8000-000000000002",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000004",
+      "column": "name",
+      "value": "Haushalt",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000004",
+      "column": "hidden",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000004",
+      "column": "internal",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000004",
+      "column": "position",
+      "value": 1,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "transactions",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+      "column": "account_id",
+      "value": "01a0f5c0-0000-7000-8000-000000000001",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "transactions",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+      "column": "date",
+      "value": "2026-11-02",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "transactions",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+      "column": "amount",
+      "value": -4210,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "transactions",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+      "column": "cleared",
+      "value": "uncleared",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "transactions",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+      "column": "approved",
+      "value": true,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "transactions",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+      "column": "source",
+      "value": "manual",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "transactions",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+      "column": "category_id",
+      "value": "01a0f5c0-0000-7000-8000-000000000003",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    }
+  ],
+  "devices": {
+    "mac": [
+      {
+        "table": "transactions",
+        "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+        "column": "memo",
+        "value": "Wocheneinkauf",
+        "clock": "2026-11-02T10:05:00.000Z-0000-mac"
+      }
+    ],
+    "web": [
+      {
+        "table": "transactions",
+        "row_id": "01a0f5c0-0000-7000-8000-000000000010",
+        "column": "category_id",
+        "value": "01a0f5c0-0000-7000-8000-000000000004",
+        "clock": "2026-11-02T10:00:00.000Z-0000-web"
+      }
+    ]
+  },
+  "rows": {
+    "transactions": {
+      "01a0f5c0-0000-7000-8000-000000000010": {
+        "memo": "Wocheneinkauf",
+        "category_id": "01a0f5c0-0000-7000-8000-000000000004",
+        "amount": -4210
+      }
+    }
+  },
+  "budget": {
+    "2026-11-01": {
+      "01a0f5c0-0000-7000-8000-000000000003": {
+        "activity": 0
+      },
+      "01a0f5c0-0000-7000-8000-000000000004": {
+        "activity": -4210,
+        "available": -4210
+      }
+    }
+  }
+}

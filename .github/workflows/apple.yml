@@ -1,0 +1,36 @@
+name: Apple
+
+on:
+  pull_request:
+    paths:
+      - "apple/**"
+      - "sync/**"
+      - ".github/workflows/apple.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apple/**"
+      - "sync/**"
+      - ".github/workflows/apple.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: apple
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Build
+        run: swift build -Xswiftc -warnings-as-errors
+
+      - name: Run tests
+        run: swift test
+
+      - name: Check formatting
+        run: swift format lint --strict --recursive Package.swift Sources Tests

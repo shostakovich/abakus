@@ -130,6 +130,18 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert %Transaction{amount: 10_000, category_id: ^rta} = newest(c.giro)
     end
 
+    test "a hidden payee is no longer suggested, but its name still books it", c do
+      {:ok, _hidden} = Ledger.update_payee(budget_scope(), c.market, %{hidden: true})
+      view = open_new(c, c.giro)
+      refute render(view) =~ ~s|data-value="p:Frischmarkt"|
+
+      create_payee(view, "main", "Frischmarkt")
+      assert category(view, c.groceries.id)
+      submit(view, %{outflow: "5,00"})
+
+      assert newest(c.giro).payee_id == c.market.id
+    end
+
     test "a payee suggests its last category, which goes when the payee changes", c do
       view = open_new(c, c.giro)
       assert render(view) =~ ~s|data-value="p:Frischmarkt"|
@@ -713,13 +725,13 @@ defmodule AbakusWeb.TransactionEditorTest do
     test "a transaction that never was is not found either", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      for id <- ["#{c.shopping.id + 1_000}", "x"] do
+      for id <- [Ecto.UUID.generate(), "x"] do
         render_click(view, "edit", %{"id" => id})
         refute has_element?(view, "#tx-editor")
         assert has_element?(view, "#flash-error", "Buchung nicht gefunden")
       end
 
-      render_click(view, "row_click", %{"id" => "#{c.shopping.id + 1_000}", "field" => "memo"})
+      render_click(view, "row_click", %{"id" => Ecto.UUID.generate(), "field" => "memo"})
       refute has_element?(view, "#tx-editor")
     end
   end

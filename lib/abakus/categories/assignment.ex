@@ -1,19 +1,20 @@
 defmodule Abakus.Categories.Assignment do
   @moduledoc "Money assigned to a category in a month; may be negative, as in YNAB."
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
-  alias Abakus.Amount
+  alias Abakus.{Amount, Ids}
   alias Abakus.Categories.Category
 
   schema "assignments" do
     field :month, :date
+    field :deleted_at, :utc_datetime_usec
     field :amount, :integer
 
     belongs_to :category, Category
-    belongs_to :user, Abakus.Users.User
+    belongs_to :user, Abakus.Users.User, type: :id
 
     timestamps()
   end
@@ -26,5 +27,6 @@ defmodule Abakus.Categories.Assignment do
     |> validate_required([:category_id, :user_id, :month, :amount])
     |> Amount.validate()
     |> unique_constraint([:category_id, :month])
+    |> Ids.put_named_id(:month, &Ids.assignment/2)
   end
 end

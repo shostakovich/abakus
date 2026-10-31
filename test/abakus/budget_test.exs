@@ -179,6 +179,29 @@ defmodule Abakus.BudgetTest do
                row(months[@oct], 1)
     end
 
+    test "a version without the amount or date its cadence needs is no target" do
+      for version <- [
+            target(amount: nil),
+            target(cadence: :by_date, amount: nil, due_on: @dec),
+            target(cadence: :by_date, amount: 5_000, due_on: nil),
+            yearly(amount: 5_000, due_on: nil)
+          ] do
+        months = months(budget(targets: %{1 => [version]}))
+        assert %CategoryMonth{target: nil, needed: 0} = row(months[@oct], 1), inspect(version)
+      end
+    end
+
+    test "an earlier version without its date ends a run of dated ones" do
+      targets = %{
+        1 => [
+          target(cadence: :by_date, amount: 5_000, due_on: nil),
+          target(from_month: @oct, cadence: :by_date, amount: 6_000, due_on: @dec)
+        ]
+      }
+
+      assert %CategoryMonth{needed: 2_000} = row(months(budget(targets: targets))[@oct], 1)
+    end
+
     test "monthly refill needs what is missing from the carry" do
       months =
         months(

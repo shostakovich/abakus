@@ -38,7 +38,7 @@ defmodule AbakusWeb.RegisterLive do
   alias Abakus.Depot.Portfolios
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
-  alias Abakus.LocalTime
+  alias Abakus.{LocalTime, Sync}
   alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.Depot.Components, as: DepotComponents
   alias AbakusWeb.RegisterLive.{Balances, Components, Reconcile, Rows, TransactionEditor}
@@ -156,6 +156,7 @@ defmodule AbakusWeb.RegisterLive do
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     depot_cash = Portfolios.cash_account_portfolios(scope)
+    if connected?(socket), do: Sync.subscribe(scope)
 
     {:ok,
      assign(socket,
@@ -211,16 +212,6 @@ defmodule AbakusWeb.RegisterLive do
 
   defp scope(%{"id" => id}), do: {:account, id}
   defp scope(_params), do: :all
-
-  defp fetch_transaction(current_scope, id) when is_integer(id),
-    do: Ledger.get_transaction(current_scope, id)
-
-  defp fetch_transaction(current_scope, id) do
-    case Integer.parse(id) do
-      {id, ""} -> Ledger.get_transaction(current_scope, id)
-      _other -> nil
-    end
-  end
 
   defp editable(_current_scope, nil), do: :error
 
@@ -387,6 +378,8 @@ defmodule AbakusWeb.RegisterLive do
      |> refresh()}
   end
 
+  def handle_info({:synced, _device}, socket), do: {:noreply, refresh(socket)}
+
   @impl true
   def handle_event("search", %{"q" => query}, socket),
     do: {:noreply, push_patch(socket, to: register_path(socket.assigns, q: query))}
@@ -460,10 +453,7 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   def handle_event("categorise_selected", %{"category_id" => id} = params, socket) do
-    case Enum.find(
-           CategoryOptions.ids(socket.assigns.categories || []),
-           &(Integer.to_string(&1) == id)
-         ) do
+    case Enum.find(CategoryOptions.ids(socket.assigns.categories || []), &(&1 == id)) do
       nil -> {:noreply, socket}
       category_id -> categorise(socket, category_id, params)
     end
@@ -678,9 +668,11 @@ defmodule AbakusWeb.RegisterLive do
   defp open_editor(socket, id, layout, field) do
     current_scope = socket.assigns.current_scope
 
-    case editable(current_scope, fetch_transaction(current_scope, id)) do
+    row = Ledger.get_transaction(current_scope, id)
+
+    case editable(current_scope, row) do
       {:ok, transaction, split_of} ->
-        row_id = if is_integer(id), do: id, else: String.to_integer(id)
+        row_id = row.id
 
         socket
         |> then(&if(layout == :row, do: select(&1, MapSet.new([row_id])), else: &1))
@@ -762,7 +754,7 @@ defmodule AbakusWeb.RegisterLive do
     do: " #{length(proposals)} Zuordnungsvorschläge bleiben offen: Zuordnen oder Trennen."
 
   defp decide(socket, id, fun, message) do
-    case Enum.find(socket.assigns.proposals, &(Integer.to_string(&1.id) == id)) do
+    case Enum.find(socket.assigns.proposals, &(&1.id == id)) do
       nil -> {:noreply, socket}
       proposal -> socket |> saved(fun.(proposal), message) |> noreply()
     end
@@ -822,7 +814,7 @@ defmodule AbakusWeb.RegisterLive do
   defp noreply(socket), do: {:noreply, socket}
 
   defp find(socket, id),
-    do: Enum.find(socket.assigns.rows, &(Integer.to_string(&1.id) == id))
+    do: Enum.find(socket.assigns.rows, &(&1.id == id))
 
   defp filter(param), do: Enum.find(Rows.filters(), :all, &(Atom.to_string(&1) == param))
 

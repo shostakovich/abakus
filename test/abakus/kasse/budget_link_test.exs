@@ -6,7 +6,7 @@ defmodule Abakus.Kasse.BudgetLinkTest do
   import Abakus.DomainFixtures
   import Abakus.KasseFixtures
 
-  alias Abakus.{Budget, Categories, Ledger}
+  alias Abakus.{Budget, Categories, Ledger, Sync}
   alias Abakus.Categories.Category
   alias Abakus.Kasse.{AccessError, Balances, BudgetLink, Expenses, Recurring}
   alias Abakus.Kasse.BudgetLink.Link
@@ -416,6 +416,12 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       assert mapping == %{context.kasse_household => context.household_goods}
     end
 
+    test "follows a budget category a device deletes into another", %{h: h} = context do
+      delete_on_device(context.groceries, context.treats)
+
+      assert BudgetLink.category_mapping(scope_of(h.anna))[h.food] == context.treats
+    end
+
     test "follows a budget category deleted into another", %{h: h} = context do
       expense = create!(equal(h, "Markt", 1000, "2026-10-12", h.ben, [h.anna, h.ben]))
       groceries = Repo.get!(Category, context.groceries)
@@ -429,5 +435,20 @@ defmodule Abakus.Kasse.BudgetLinkTest do
       assert %{amount: -1000, category_id: treats_id} = transaction(expense)
       assert treats_id == context.treats
     end
+  end
+
+  defp delete_on_device(category_id, into_id) do
+    messages =
+      for {column, value} <- [deleted_at: "2026-10-12T10:00:00.000000Z", successor_id: into_id] do
+        %{
+          "table" => "categories",
+          "row_id" => category_id,
+          "column" => to_string(column),
+          "value" => value,
+          "clock" => "2026-10-12T10:00:00.000Z-0000-mac"
+        }
+      end
+
+    {:ok, 2} = Sync.apply_messages(budget_scope(), "mac", messages)
   end
 end

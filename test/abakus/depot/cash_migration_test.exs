@@ -7,6 +7,7 @@ defmodule Abakus.Depot.CashMigrationTest do
   alias Abakus.Users.{Scope, User}
 
   @moduletag :tmp_dir
+  @before_uuids 20_261_021_220_000
   @before 20_261_021_160_000
   @cash 20_261_021_180_000
   @ledger_accounts 20_261_021_200_000
@@ -183,7 +184,7 @@ defmodule Abakus.Depot.CashMigrationTest do
     Repo.query!("UPDATE depot_accounts SET ledger_account_id = NULL WHERE id = 4")
 
     assert_raise RuntimeError, ~r/no account of their user in the Ledger: Loose/, fn ->
-      TestMigrations.run!(repo)
+      TestMigrations.run!(repo, to: @before_uuids)
     end
 
     assert ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -194,7 +195,7 @@ defmodule Abakus.Depot.CashMigrationTest do
     Repo.query!("UPDATE depot_accounts SET cash_of_portfolio_id = 1 WHERE id = 7")
 
     assert_raise RuntimeError, ~r/would lose a cash account: Broker$/, fn ->
-      TestMigrations.run!(repo)
+      TestMigrations.run!(repo, to: @before_uuids)
     end
 
     assert ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -204,7 +205,7 @@ defmodule Abakus.Depot.CashMigrationTest do
     Repo.query!("UPDATE depot_accounts SET cash_of_portfolio_id = 2 WHERE id = 7")
 
     assert_raise RuntimeError, ~r/would lose a cash account: Old$/, fn ->
-      TestMigrations.run!(repo)
+      TestMigrations.run!(repo, to: @before_uuids)
     end
 
     assert ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -216,7 +217,7 @@ defmodule Abakus.Depot.CashMigrationTest do
     assert_raise RuntimeError,
                  ~r/Verrechnungskonto of several portfolios: Old cash \(Broker, Old\)$/,
                  fn ->
-                   TestMigrations.run!(repo)
+                   TestMigrations.run!(repo, to: @before_uuids)
                  end
 
     assert ["depot_accounts"] in rows("SELECT name FROM sqlite_master WHERE type = 'table'")
@@ -231,7 +232,7 @@ defmodule Abakus.Depot.CashMigrationTest do
       ["4, 1, 'Second', 0, 1"]
     )
 
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
 
     sharing = "SELECT id FROM depot_portfolios WHERE reference_account_id = ?1 ORDER BY id"
     assert rows(sharing, [ids[1]]) == [[1], [4]]

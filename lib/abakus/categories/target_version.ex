@@ -8,11 +8,11 @@ defmodule Abakus.Categories.TargetVersion do
   false means "refill up to" (available counts).
   """
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
-  alias Abakus.Amount
+  alias Abakus.{Amount, Ids}
   alias Abakus.Categories.Category
 
   schema "target_versions" do
@@ -22,12 +22,24 @@ defmodule Abakus.Categories.TargetVersion do
     field :due_on, :date
     field :repeats_yearly, :boolean, default: false
     field :set_aside, :boolean, default: true
+    field :deleted_at, :utc_datetime_usec
 
     belongs_to :category, Category
-    belongs_to :user, Abakus.Users.User
+    belongs_to :user, Abakus.Users.User, type: :id
 
     timestamps()
   end
+
+  @doc """
+  Whether a version sets a target: messages merged field by field may leave one without the amount or the date its
+  cadence needs, and that one counts as none.
+  """
+  def complete?(%{cadence: :monthly, amount: amount}), do: is_integer(amount)
+
+  def complete?(%{cadence: :by_date, amount: amount, due_on: due_on}),
+    do: is_integer(amount) and not is_nil(due_on)
+
+  def complete?(_version), do: false
 
   @doc "A yearly due date moved on by whole years until it is not before `month`; that is the same target."
   def next_due(due_on, month) do
@@ -52,6 +64,7 @@ defmodule Abakus.Categories.TargetVersion do
     |> validate_cadence()
     |> check_constraint(:amount, name: :target_versions_amount_positive)
     |> unique_constraint([:category_id, :from_month])
+    |> Ids.put_named_id(:from_month, &Ids.target_version/2)
   end
 
   defp validate_cadence(changeset) do

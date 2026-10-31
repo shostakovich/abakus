@@ -15,6 +15,7 @@ defmodule Abakus.Ledger.AccountsTest do
                account.transfer_payee
 
       assert Repo.get_by!(Payee, transfer_account_id: account.id).id == account.transfer_payee.id
+      assert account.transfer_payee.id == Abakus.Ids.transfer_payee(account.id)
       assert %Account{closed: false, position: 0, shared_expenses: false, note: nil} = account
     end
 

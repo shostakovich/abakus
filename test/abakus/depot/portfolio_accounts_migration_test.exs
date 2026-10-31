@@ -4,6 +4,7 @@ defmodule Abakus.Depot.PortfolioAccountsMigrationTest do
   alias Abakus.{Repo, TestMigrations}
 
   @moduletag :tmp_dir
+  @before_uuids 20_261_021_220_000
   @before 20_261_021_200_000
   @now "'2026-10-01T10:00:00.000000Z'"
 
@@ -100,7 +101,7 @@ defmodule Abakus.Depot.PortfolioAccountsMigrationTest do
       ]
     )
 
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
     :ok
   end
 

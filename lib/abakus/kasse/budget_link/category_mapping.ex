@@ -9,6 +9,6 @@ defmodule Abakus.Kasse.BudgetLink.CategoryMapping do
   @primary_key false
   schema "kasse_budget_category_mappings" do
     belongs_to :category, Category, primary_key: true
-    belongs_to :budget_category, BudgetCategory
+    belongs_to :budget_category, BudgetCategory, type: Ecto.UUID
   end
 end

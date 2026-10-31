@@ -4,6 +4,7 @@ defmodule Abakus.Ledger.SourceMigrationTest do
   alias Abakus.{Repo, TestMigrations}
 
   @moduletag :tmp_dir
+  @before_uuids 20_261_021_220_000
   @before 20_261_021_120_000
   @now "'2026-10-01T10:00:00.000000Z'"
   @deleted "'2026-10-02T10:00:00.000000Z'"
@@ -121,7 +122,7 @@ defmodule Abakus.Ledger.SourceMigrationTest do
     depot_link!(nil, 4)
     transaction!(5, 2, "manual")
 
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
 
     assert sources() == [
              [1, 10, nil],
@@ -141,7 +142,7 @@ defmodule Abakus.Ledger.SourceMigrationTest do
     transaction!(3, 2, "depot", @deleted)
     depot_link!(20, 3)
 
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
     sql!("DELETE FROM depot_transactions WHERE id = 20")
 
     assert sources() == [[3, nil, nil]]

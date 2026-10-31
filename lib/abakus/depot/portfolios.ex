@@ -37,7 +37,7 @@ defmodule Abakus.Depot.Portfolios do
 
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Valuation.{Filter, Market, PurchaseValue}
-  alias Abakus.{ExchangeRates, Ledger, Repo}
+  alias Abakus.{ExchangeRates, Ledger, Repo, Sync}
   alias Abakus.Users.{Scope, User}
 
   @doc "Whether the user has a portfolio, which opens the Depot to them."
@@ -55,7 +55,7 @@ defmodule Abakus.Depot.Portfolios do
   """
   def create_portfolio(%Scope{} = scope, attrs) do
     with {:ok, form} <- Ecto.Changeset.apply_action(change_new_portfolio(attrs), :insert) do
-      Repo.transact(fn -> insert_portfolio(scope, form) end)
+      Sync.write(fn -> insert_portfolio(scope, form) end)
     end
   end
 
@@ -946,7 +946,7 @@ defmodule Abakus.Depot.Portfolios do
   def book_transaction(%Scope{} = scope, choices, attrs, %Receipt{} = receipt) do
     changeset = change_transaction_form(scope, choices, attrs)
 
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with {:ok, form} <- Ecto.Changeset.apply_action(changeset, :insert),
            :ok <- claim_ready_receipt(scope, receipt) do
         insert_transactions(scope, form, %{receipt_id: receipt.id, source: :receipt})
@@ -1076,7 +1076,7 @@ defmodule Abakus.Depot.Portfolios do
   def delete_transaction(%Scope{} = scope, %Transaction{} = transaction) do
     with :ok <- check_own(scope, transaction),
          true <- keeps_holding?(scope, transaction, nil) || {:error, :holding},
-         {:ok, unused} <- Repo.transact(fn -> remove_transaction(scope, transaction) end) do
+         {:ok, unused} <- Sync.write(fn -> remove_transaction(scope, transaction) end) do
       remove_receipt_file(unused)
       {:ok, transaction}
     end
@@ -1120,7 +1120,7 @@ defmodule Abakus.Depot.Portfolios do
 
   # A receipt's file is written before its record commits; it goes again if none is committed.
   defp transact_with_receipt(receipt, fun) do
-    Repo.transact(fun)
+    Sync.write(fun)
   after
     remove_orphan_receipt_file(receipt)
   end

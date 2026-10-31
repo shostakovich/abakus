@@ -29,7 +29,7 @@ defmodule Abakus.BankSync do
   require Logger
 
   alias Abakus.BankSync.{AccessError, Connection, LinkedAccount, SyncRun}
-  alias Abakus.{Format, Import, Ledger, LocalTime, Money, Names, Repo}
+  alias Abakus.{Format, Import, Ledger, LocalTime, Money, Names, Repo, Sync}
   alias Abakus.Ledger.{Account, TransactionOrigin}
   alias Abakus.Users.Scope
 
@@ -433,7 +433,7 @@ defmodule Abakus.BankSync do
         Enum.filter(entries(transactions), &(Date.compare(&1.date, linked.start_date) != :lt))
 
       fetched = %{from: from, entries: entries, balances: balances}
-      Repo.transact(fn -> import_account(scope, linked, fetched, started) end)
+      Sync.write(fn -> import_account(scope, linked, fetched, started) end)
     end
   rescue
     exception ->

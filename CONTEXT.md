@@ -16,9 +16,14 @@ A named, ordered set of categories in the budget, e.g. "🏠 Wohnen". UI "Katego
 _Avoid_: Master category
 
 **Category**:
-An envelope money is assigned to and spent from, e.g. "🛒 Lebensmittel"; deleted only into another category, which
-takes over its transactions and money. UI "Kategorie".
+An envelope money is assigned to and spent from, e.g. "🛒 Lebensmittel"; deleted only into another category, its
+successor, which takes over its transactions and money. UI "Kategorie".
 _Avoid_: Envelope, budget item
+
+**Successor**:
+The category a deleted category was deleted into, or the payee a merged payee was merged into: whatever still points
+at the deleted one counts for it, or for its own successor while that is deleted too.
+_Avoid_: Replacement, merge target
 
 **Internal category**:
 A category the app needs for itself and does not list with the others; Ready to Assign is the only one.
@@ -125,8 +130,15 @@ One booking in an account with a date and a signed amount (negative is an outflo
 _Avoid_: Entry, booking (in code), posting
 
 **Payee**:
-Who a transaction is with; remembers the category last used with it (match proposals do not count). UI "Empfänger".
+Who a transaction is with; remembers the category last used with it (match proposals do not count). A hidden payee
+is no longer suggested; payees that come to share a lookup key through sync are merged into the oldest. UI
+"Empfänger".
 _Avoid_: Merchant, counterparty, vendor
+
+**Payee rename rule**:
+A payee's ordered conditions, each an operator (contains, is, starts with, ends with) and a text, under which a
+payee name is renamed to that payee. Data for the apps; the web does not apply them yet.
+_Avoid_: Alias, payee mapping
 
 **Register**:
 An account's transactions that count for listings and balances: not deleted and no match proposal.
@@ -167,10 +179,16 @@ A person has looked at an imported or Kasse-created transaction and accepted it;
 "Bestätigt", the action "Bestätigen".
 _Avoid_: Confirmed, reviewed; "gebucht", "abgeglichen" (those are cleared states)
 
+**Scheduled transaction**:
+A transaction the Ledger enters every day it falls due, once or repeating from daily to every other year, twice a
+month on two days; entered unapproved, recording the scheduled transaction and date, at most once per date.
+UI "Geplante Buchung".
+_Avoid_: Recurring transaction, standing order (that is the bank's); Recurring expense (that is the Kasse's)
+
 ### Import
 
 **Source**:
-Where a transaction came from: manual, YNAB, file, bank, API, the Kasse or the Depot.
+Where a transaction came from: manual, YNAB, file, bank, API, the Kasse, the Depot or a scheduled transaction.
 _Avoid_: Channel, provider
 
 **Origin**:
@@ -232,6 +250,11 @@ _Avoid_: Account (that is where money is kept), member
 The one user who owns the budget, the first one invited; only they see the budget's pages in Finanzen.
 _Avoid_: Admin, budget user
 
+**Device**:
+One sign-in of an app, e.g. Abakus for the Mac on a MacBook, by the budget owner with their passkey: it holds the
+whole budget and syncs it, and is listed with its name, sign-in and last sync until it is signed out. UI "Gerät".
+_Avoid_: Client (that is the app as OAuth knows it), session (that is the browser's), app
+
 **Area**:
 A part of the app with its own sidebar and dock: Finanzen and Kasse (ADR 0020). A user with both switches between
 them at the top of the sidebar; `/` opens the area used last. Code areas such as `Abakus.Depot` are not areas of the
@@ -250,8 +273,8 @@ _Avoid_: Settings (it is a task, not a setting)
 
 **Settings hub**:
 The sidebar's settings mode: a way back to the area used last, then the sections grouped by area, Allgemein for
-everyone, Kasse for its participants; Depot for everyone, so anyone may start a Depot, with Belegeingang once they
-have a portfolio. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI "Einstellungen".
+everyone with Geräte for the budget owner, Kasse for its participants; Depot for everyone, so anyone may start a
+Depot, with Belegeingang once they have a portfolio. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI "Einstellungen".
 _Avoid_: Settings page, Mehr (that is the dock's button)
 
 ## Kasse
@@ -308,7 +331,7 @@ _Avoid_: Unqualified Category in code (that is the budget's)
 **Recurring expense**:
 A rule that creates the same expense weekly, monthly or yearly, catching up on missed dates. UI "Wiederkehrende
 Ausgabe".
-_Avoid_: Scheduled transaction, template (that is the rule's copy of the expense)
+_Avoid_: Scheduled transaction (that is the Ledger's), template (that is the rule's copy of the expense)
 
 **Activity entry**:
 Who created, changed or deleted what in the Kasse, with the changes as old and new values. UI "Aktivität".
@@ -338,13 +361,14 @@ _Avoid_: Sync, budget export
 **Linked transaction**:
 A transaction another area writes into the budget and leads, referring to its source, an expense or a Depot
 transaction (ADR 0020): amount, date, account, payee and transfer counterpart follow the source, and the Ledger
-refuses changes to them, and deleting it, to anyone else; category, memo, cleared state and approval are the
-register's, and a bank line matched to it keeps its date. A transfer's counterpart is led with it. In the Kasse, what
-an expense changes in a linked participant's balance, written with the expense: paid minus share (none when that is
-0), its date, its title as payee or for a reimbursement the transfer to its account, the mapped category (none for
-a reimbursement), a memo describing the expense, unapproved; a transfer booked in the register keeps its own memo,
-cleared state and approval when it becomes a reimbursement's. A change of the expense's Kasse category writes the
-mapped category again, and the memo follows the expense while the register leaves it. In the Depot, see Cash side.
+refuses changes to them, and deleting it, to anyone else, a device included; category, memo, cleared state and
+approval are the register's, and a bank line matched to it keeps its date. A transfer's counterpart is led with it.
+In the Kasse, what an expense changes in a linked participant's balance, written with the expense: paid minus share
+(none when that is 0), its date, its title as payee or for a reimbursement the transfer to its account, the mapped
+category (none for a reimbursement), a memo describing the expense, unapproved; a transfer booked in the register
+keeps its own memo, cleared state and approval when it becomes a reimbursement's. A change of the expense's Kasse
+category writes the mapped category again, and the memo follows the expense while the register leaves it. In the
+Depot, see Cash side.
 _Avoid_: Synced transaction, mirror
 
 ## Depot

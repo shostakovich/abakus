@@ -314,7 +314,7 @@ defmodule AbakusWeb.TransactionFormTest do
       assert [kept, transfer] = Ledger.get_transaction!(budget_scope(), split.id).subtransactions
 
       assert {kept.id, kept.payee_id, kept.memo} ==
-               {String.to_integer(groceries["id"]), rewe.id, "Wocheneinkauf"}
+               {groceries["id"], rewe.id, "Wocheneinkauf"}
 
       assert transfer.transfer_transaction_id
     end

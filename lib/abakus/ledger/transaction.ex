@@ -8,11 +8,15 @@ defmodule Abakus.Ledger.Transaction do
   A transaction with `matched_transaction_id` is a match proposal: an import that looks like that existing
   transaction. It counts nowhere until the match is accepted (merged into the existing one) or rejected.
 
+  A transaction entered from a scheduled transaction records it and the date of the occurrence
+  (`scheduled_transaction_id`, `scheduled_date`); its id is named after them (`Abakus.Ids.entered_transaction/2`).
+
   A transaction another area writes and leads refers to its source: the Kasse expense (`kasse_expense_id`) or the
   Depot transaction (`depot_transaction_id`), set on create or once later (`Abakus.Ledger.lead/3`); see `led_by/1`.
+  The field `led_by` names that area for the devices, which do not see the references.
   """
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
@@ -28,25 +32,29 @@ defmodule Abakus.Ledger.Transaction do
     field :approved, :boolean, default: false
 
     field :source, Ecto.Enum,
-      values: [:manual, :ynab, :file, :bank, :api, :kasse, :depot],
+      values: [:manual, :ynab, :file, :bank, :api, :kasse, :depot, :scheduled],
       default: :manual
 
     field :deleted_at, :utc_datetime_usec
+    field :scheduled_date, :date
     field :kasse_expense_id, :id
     field :depot_transaction_id, :id
+    field :led_by, Ecto.Enum, values: [:kasse, :depot]
 
     # The category of the counterpart when it is the budget side of a transfer from a tracking account.
-    field :counterpart_category_id, :id, virtual: true
+    field :counterpart_category_id, Ecto.UUID, virtual: true
 
-    belongs_to :user, Abakus.Users.User
+    belongs_to :user, Abakus.Users.User, type: :id
     belongs_to :account, Account
     belongs_to :payee, Payee
     belongs_to :category, Category
     belongs_to :transfer_transaction, __MODULE__
     belongs_to :transfer_subtransaction, Subtransaction
     belongs_to :matched_transaction, __MODULE__
+    belongs_to :scheduled_transaction, Abakus.Ledger.ScheduledTransaction
 
     has_many :subtransactions, Subtransaction,
+      where: [deleted_at: nil],
       on_replace: :delete,
       preload_order: [asc: :position, asc: :id]
 
@@ -108,9 +116,9 @@ defmodule Abakus.Ledger.Transaction do
 
   def led_by(%__MODULE__{}), do: nil
 
-  @doc "The reference columns for a source as `led_by/1` gives it."
-  def source_reference({:kasse_expense, id}), do: %{kasse_expense_id: id}
-  def source_reference({:depot_transaction, id}), do: %{depot_transaction_id: id}
+  @doc "The reference to a source as `led_by/1` gives it, with its area as `led_by`."
+  def source_reference({:kasse_expense, id}), do: %{kasse_expense_id: id, led_by: :kasse}
+  def source_reference({:depot_transaction, id}), do: %{depot_transaction_id: id, led_by: :depot}
 
   defp create_fields(transaction) do
     if Ecto.get_meta(transaction, :state) == :built, do: @create_fields, else: []
@@ -121,6 +129,23 @@ defmodule Abakus.Ledger.Transaction do
     changeset
     |> get_assoc(:subtransactions)
     |> Enum.reject(&(&1.action in [:replace, :delete]))
+  end
+
+  @doc """
+  Takes the subtransactions the changeset removes out of it, so they are deleted as tombstones instead:
+  `{changeset, removed_ids}`.
+  """
+  def take_removed_subtransactions(changeset) do
+    case get_change(changeset, :subtransactions) do
+      nil ->
+        {changeset, []}
+
+      subtransactions ->
+        {removed, kept} = Enum.split_with(subtransactions, &(&1.action in [:replace, :delete]))
+
+        {%{changeset | changes: Map.put(changeset.changes, :subtransactions, kept)},
+         Enum.map(removed, & &1.data.id)}
+    end
   end
 
   @doc "Applies `fun` to the changed subtransactions that stay, keeping the parent's `valid?` in step."

@@ -10,7 +10,11 @@ defmodule AbakusWeb.RouterTest do
     {:post, "/users/passkeys/options"},
     {:delete, "/users/log-out"},
     # The MCP checks its callers itself: secret path, allowed addresses, no browsers.
-    {:*, "/mcp"}
+    {:*, "/mcp"},
+    # An app signing in: the token endpoints check the client and its codes and tokens themselves.
+    {:get, "/.well-known/oauth-authorization-server"},
+    {:post, "/oauth/token"},
+    {:post, "/oauth/revoke"}
   ]
 
   defp public?(%{verb: verb, path: path}) do
@@ -35,9 +39,14 @@ defmodule AbakusWeb.RouterTest do
 
   defp turned_away?(conn) do
     case conn.status do
-      302 -> get_resp_header(conn, "location") == [~p"/users/log-in"]
-      401 -> JSON.decode!(conn.resp_body) == %{"error" => "session"}
-      _other -> false
+      302 ->
+        get_resp_header(conn, "location") == [~p"/users/log-in"]
+
+      401 ->
+        JSON.decode!(conn.resp_body) in [%{"error" => "session"}, %{"error" => "invalid_token"}]
+
+      _other ->
+        false
     end
   end
 

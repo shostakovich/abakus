@@ -112,9 +112,10 @@ defmodule Abakus.Users do
     token |> UserToken.verify_session_token_query() |> Repo.one()
   end
 
+  @doc "Deletes the user's expired tokens, and the devices left without a sign-in by them."
   def delete_expired_user_tokens(%User{} = user) do
     Repo.delete_all(UserToken.expired_tokens_query(user.id))
-    :ok
+    Abakus.Devices.delete_stale(user.id)
   end
 
   @doc "The session tokens of the user with `user_id`."

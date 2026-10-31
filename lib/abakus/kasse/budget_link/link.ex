@@ -12,7 +12,7 @@ defmodule Abakus.Kasse.BudgetLink.Link do
   @primary_key false
   schema "kasse_budget_links" do
     belongs_to :participant, Participant, primary_key: true
-    belongs_to :account, Account
+    belongs_to :account, Account, type: Ecto.UUID
     field :start_date, :date
 
     timestamps()

@@ -64,8 +64,10 @@ defmodule AbakusWeb.Endpoint do
   plug AbakusWeb.Router
 
   @doc false
-  # Health checks poll /up and would flood the log; the paths of mailed links and of the MCP hold a secret.
+  # Health checks poll /up and apps /api/sync and would flood the log; the paths of mailed links and of the MCP hold
+  # a secret.
   def log_level(%Plug.Conn{path_info: ["up"]}), do: false
+  def log_level(%Plug.Conn{path_info: ["api", "sync"]}), do: false
   def log_level(%Plug.Conn{path_info: ["mcp" | _rest]}), do: false
   def log_level(%Plug.Conn{path_info: ["users", "log-in", _token]}), do: false
   def log_level(%Plug.Conn{path_info: ["users", "settings", "confirm-email", _token]}), do: false

@@ -11,7 +11,7 @@ defmodule Abakus.Ledger.Matches do
   import Ecto.Query
 
   alias Abakus.Ledger.Transaction
-  alias Abakus.{References, Repo}
+  alias Abakus.{References, Repo, Sync}
   alias Ecto.Changeset
 
   @locked "kann bei einem offenen Zuordnungsvorschlag nicht geändert werden"
@@ -69,7 +69,7 @@ defmodule Abakus.Ledger.Matches do
 
   @doc "Makes the open proposals for the transaction ordinary imports again."
   def dissolve(transaction_id) do
-    Repo.update_all(from(t in Transaction, where: t.matched_transaction_id == ^transaction_id),
+    Sync.update_all(from(t in Transaction, where: t.matched_transaction_id == ^transaction_id),
       set: [matched_transaction_id: nil, updated_at: DateTime.utc_now()]
     )
 

@@ -160,7 +160,10 @@ defmodule Abakus.CategoriesTest do
                errors_on(changeset)
 
       assert {:error, changeset} =
-               Categories.create_category(budget_scope(), %{name: "X", category_group_id: -1})
+               Categories.create_category(budget_scope(), %{
+                 name: "X",
+                 category_group_id: Ecto.UUID.generate()
+               })
 
       assert %{category_group_id: ["does not exist"]} = errors_on(changeset)
       assert german(changeset, :category_group_id) == ["existiert nicht"]
@@ -321,6 +324,26 @@ defmodule Abakus.CategoriesTest do
       assert Repo.get!(Assignment, id).amount == -500
     end
 
+    test "names the assignment, like a target version and a snooze, after its category and month" do
+      category = category_fixture()
+      scope = budget_scope()
+
+      assert {:ok, %{id: assignment}} = Categories.assign(scope, category, ~D[2026-10-15], 1)
+      assert assignment == Abakus.Ids.assignment(category.id, ~D[2026-10-01])
+
+      assert {:ok, %{id: version}} =
+               Categories.set_target(scope, category, %{
+                 from_month: ~D[2026-10-15],
+                 cadence: :monthly,
+                 amount: 100
+               })
+
+      assert version == Abakus.Ids.target_version(category.id, ~D[2026-10-01])
+
+      assert {:ok, %{id: snooze}} = Categories.snooze_target(scope, category, ~D[2026-10-15])
+      assert snooze == Abakus.Ids.target_snooze(category.id, ~D[2026-10-01])
+    end
+
     test "any day stands for its month" do
       category = category_fixture()
 
@@ -399,7 +422,12 @@ defmodule Abakus.CategoriesTest do
 
     test "needs an existing category" do
       assert {:error, changeset} =
-               Categories.assign(budget_scope(), %Category{id: -1}, ~D[2026-10-01], 1)
+               Categories.assign(
+                 budget_scope(),
+                 %Category{id: Ecto.UUID.generate()},
+                 ~D[2026-10-01],
+                 1
+               )
 
       assert %{category_id: ["does not exist"]} = errors_on(changeset)
     end

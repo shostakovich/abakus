@@ -182,6 +182,7 @@ defmodule AbakusWeb.RegisterWindowTest do
       for place <- 1..count do
         Map.merge(
           %{
+            id: Ecto.UUID.generate(),
             user_id: budget_scope().user.id,
             account_id: account.id,
             date: Date.add(~D[2026-10-15], -place),

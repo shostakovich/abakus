@@ -214,7 +214,7 @@ defmodule AbakusWeb.AccountDialogTest do
       account = account_fixture()
       {:ok, view, _html} = live(conn, ~p"/budget/accounts/#{account}")
 
-      render_click(view, "open_account_dialog", %{"id" => "#{account.id + 1_000}"})
+      render_click(view, "open_account_dialog", %{"id" => Ecto.UUID.generate()})
       refute has_element?(view, "#account-dialog")
     end
   end

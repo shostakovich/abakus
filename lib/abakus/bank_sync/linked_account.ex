@@ -20,7 +20,7 @@ defmodule Abakus.BankSync.LinkedAccount do
     field :last_fetch_at, :utc_datetime_usec
 
     belongs_to :connection, Connection
-    belongs_to :account, Account
+    belongs_to :account, Account, type: Ecto.UUID
 
     timestamps()
   end

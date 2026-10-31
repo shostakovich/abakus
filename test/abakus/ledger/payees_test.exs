@@ -4,7 +4,7 @@ defmodule Abakus.Ledger.PayeesTest do
   import Abakus.DomainFixtures
 
   alias Abakus.Ledger
-  alias Abakus.Ledger.Payee
+  alias Abakus.Ledger.{Payee, PayeeRenameCondition}
 
   describe "create_payee/2" do
     test "stores the name as entered with its lookup key" do
@@ -64,12 +64,17 @@ defmodule Abakus.Ledger.PayeesTest do
 
     test "the last category must exist" do
       assert {:error, changeset} =
-               Ledger.create_payee(budget_scope(), %{name: "Aldi", last_category_id: -1})
+               Ledger.create_payee(budget_scope(), %{
+                 name: "Aldi",
+                 last_category_id: Ecto.UUID.generate()
+               })
 
       assert %{last_category_id: ["does not exist"]} = errors_on(changeset)
 
       assert {:error, changeset} =
-               Ledger.update_payee(budget_scope(), payee_fixture(), %{last_category_id: -1})
+               Ledger.update_payee(budget_scope(), payee_fixture(), %{
+                 last_category_id: Ecto.UUID.generate()
+               })
 
       assert %{last_category_id: ["does not exist"]} = errors_on(changeset)
     end
@@ -137,5 +142,47 @@ defmodule Abakus.Ledger.PayeesTest do
     payee_fixture(name: "Aldi")
 
     assert ["Aldi", "🛒 Rewe"] = Enum.map(Ledger.list_payees(budget_scope()), & &1.name)
+  end
+
+  describe "merge_duplicate_payees/2" do
+    test "merges payees with one lookup key into the oldest, which takes over what pointed at the others" do
+      category = category_fixture()
+      oldest = payee_fixture(name: "Bäckerei Korn")
+
+      newer =
+        Repo.insert!(%Payee{
+          user_id: oldest.user_id,
+          name: "BÄCKEREI KORN",
+          lookup_key: oldest.lookup_key,
+          last_category_id: category.id
+        })
+
+      booked = transaction_fixture(payee_id: newer.id)
+
+      condition =
+        Repo.insert!(%PayeeRenameCondition{
+          user_id: oldest.user_id,
+          payee_id: newer.id,
+          operator: :contains,
+          text: "KORN"
+        })
+
+      assert :ok = Ledger.merge_duplicate_payees(budget_scope(), [newer.id])
+
+      assert Repo.reload(booked).payee_id == oldest.id
+      assert Repo.reload(condition).payee_id == oldest.id
+      assert %Payee{deleted_at: %DateTime{}, successor_id: successor_id} = Repo.reload(newer)
+      assert successor_id == oldest.id
+      assert Repo.reload(oldest).last_category_id == category.id
+      assert [%Payee{id: id}] = Ledger.list_payees(budget_scope())
+      assert id == oldest.id
+    end
+
+    test "leaves a payee alone whose lookup key is its own" do
+      payee = payee_fixture(name: "Aldi")
+
+      assert :ok = Ledger.merge_duplicate_payees(budget_scope(), [payee.id])
+      assert Repo.reload(payee).deleted_at == nil
+    end
   end
 end

@@ -66,7 +66,7 @@ defmodule AbakusWeb.BudgetLive.Popover do
       for %{category: category, cell: cell} <- inspector.categories,
           category.id != category_id,
           cell.available > 0 do
-        {Integer.to_string(category.id), category.name, cell.available}
+        {category.id, category.name, cell.available}
       end
 
     rta ++ Enum.sort_by(categories, &elem(&1, 2), :desc)

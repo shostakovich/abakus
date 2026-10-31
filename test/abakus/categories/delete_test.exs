@@ -31,14 +31,18 @@ defmodule Abakus.Categories.DeleteTest do
     end)
   end
 
-  defp assignments(category) do
-    Repo.all(
-      from a in Assignment,
-        where: a.category_id == ^category.id,
-        order_by: a.month,
-        select: {a.month, a.amount}
-    )
+  defp assigned(category) do
+    Categories.budget(budget_scope()).assigned
+    |> Enum.filter(fn {{id, _month}, _amount} -> id == category.id end)
+    |> Enum.map(fn {{_id, month}, amount} -> {month, amount} end)
+    |> Enum.sort_by(&elem(&1, 0), Date)
   end
+
+  defp alive?(schema, category),
+    do:
+      Repo.exists?(
+        from r in schema, where: r.category_id == ^category.id and is_nil(r.deleted_at)
+      )
 
   describe "scenario: deleting moves everything to the chosen category" do
     setup c do
@@ -111,17 +115,20 @@ defmodule Abakus.Categories.DeleteTest do
              ) == [c.leisure.id, c.leisure.id]
 
       assert Repo.get_by!(Payee, name: "Kino am Markt").last_category_id == c.leisure.id
-      assert assignments(c.leisure) == [{@september, 3_000}, {@october, 7_000}]
+      assert assigned(c.leisure) == [{@september, 3_000}, {@october, 7_000}]
       assert totals() == before
 
-      refute Repo.reload(c.movies)
+      assert %Category{deleted_at: %DateTime{}, successor_id: successor_id} =
+               Repo.reload(c.movies)
+
+      assert successor_id == c.leisure.id
 
       assert [%CategoryGroup{categories: [%Category{name: "🎳 Freizeit"}]}] =
                Categories.list_category_groups(budget_scope())
 
-      refute Repo.exists?(from a in Assignment, where: a.category_id == ^c.movies.id)
-      refute Repo.exists?(from v in TargetVersion, where: v.category_id == ^c.movies.id)
-      refute Repo.exists?(from s in TargetSnooze, where: s.category_id == ^c.movies.id)
+      assert alive?(Assignment, c.movies)
+      refute alive?(TargetVersion, c.movies)
+      refute alive?(TargetSnooze, c.movies)
     end
   end
 
@@ -185,7 +192,7 @@ defmodule Abakus.Categories.DeleteTest do
       Categories.assign(budget_scope(), c.movies, @october, 1_000)
 
       assert {:ok, _category} = Categories.delete_category(budget_scope(), c.movies, other)
-      assert assignments(other) == [{@october, 1_000}]
+      assert assigned(other) == [{@october, 1_000}]
     end
 
     test "refuses Ready to Assign, the category itself and a category that is gone", c do
@@ -212,7 +219,7 @@ defmodule Abakus.Categories.DeleteTest do
       group = category_group_fixture()
 
       assert {:ok, %CategoryGroup{}} = Categories.delete_category_group(budget_scope(), group)
-      refute Repo.reload(group)
+      assert Repo.reload(group).deleted_at
     end
 
     test "refuses a group with categories and the internal one", c do
