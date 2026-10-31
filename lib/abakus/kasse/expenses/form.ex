@@ -53,7 +53,7 @@ defmodule Abakus.Kasse.Expenses.Form do
     field :notes, :string, default: ""
     field :reimbursement, :boolean, default: false
     field :split_mode, Ecto.Enum, values: Split.modes(), default: :equal
-    field :budget_account_id, :integer
+    field :budget_account_id, Ecto.UUID
 
     embeds_many :rows, Row,
       primary_key: {:participant_id, :integer, autogenerate: false},

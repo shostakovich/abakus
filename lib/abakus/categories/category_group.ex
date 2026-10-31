@@ -1,7 +1,7 @@
 defmodule Abakus.Categories.CategoryGroup do
   @moduledoc "A group of categories in the budget. Internal groups hold Ready to Assign and are not listed."
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
@@ -14,7 +14,7 @@ defmodule Abakus.Categories.CategoryGroup do
     field :position, :integer, default: 0
     field :note, :string
 
-    belongs_to :user, Abakus.Users.User
+    belongs_to :user, Abakus.Users.User, type: :id
     has_many :categories, Category
 
     timestamps()

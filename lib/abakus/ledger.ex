@@ -46,7 +46,7 @@ defmodule Abakus.Ledger do
     Transfers
   }
 
-  alias Abakus.{Names, References, Repo}
+  alias Abakus.{Ids, Names, References, Repo}
   alias Abakus.Users.Scope
   alias Ecto.Changeset
 
@@ -71,8 +71,12 @@ defmodule Abakus.Ledger do
   def get_account!(%Scope{} = scope, id), do: Repo.get!(owned(Account, scope), id)
 
   @doc "Like `get_account!/2`, but nil for an id that is no account."
-  def get_account(%Scope{} = scope, id) when is_integer(id),
-    do: Repo.get(owned(Account, scope), id)
+  def get_account(%Scope{} = scope, id) do
+    case Ids.cast(id) do
+      {:ok, id} -> Repo.get(owned(Account, scope), id)
+      :error -> nil
+    end
+  end
 
   def change_account(%Account{} = account, attrs \\ %{}), do: Account.changeset(account, attrs)
 
@@ -507,8 +511,13 @@ defmodule Abakus.Ledger do
     do: Transaction |> owned(scope) |> Repo.get!(id) |> preload_for_form()
 
   @doc "Like `get_transaction!/2`, but nil for an id that is no transaction."
-  def get_transaction(%Scope{} = scope, id) when is_integer(id) do
-    if transaction = Repo.get(owned(Transaction, scope), id), do: preload_for_form(transaction)
+  def get_transaction(%Scope{} = scope, id) do
+    with {:ok, id} <- Ids.cast(id),
+         %Transaction{} = transaction <- Repo.get(owned(Transaction, scope), id) do
+      preload_for_form(transaction)
+    else
+      _none -> nil
+    end
   end
 
   defp preload_for_form(transaction) do
@@ -726,7 +735,8 @@ defmodule Abakus.Ledger do
 
   Instead of `payee_id`, `payee_name` names the payee, also in a subtransaction: the regular payee with that lookup
   key, else a new one; a blank name means none. A refused write creates no payee. `led_by:` names the source the
-  transaction refers to.
+  transaction refers to, `entered_from: {scheduled_transaction_id, date}` the occurrence of a scheduled
+  transaction it is entered as.
   """
   def create_transaction(%Scope{} = scope, attrs, opts \\ []) do
     references = if led_by = opts[:led_by], do: Transaction.source_reference(led_by), else: %{}
@@ -735,11 +745,22 @@ defmodule Abakus.Ledger do
       with {:ok, attrs} <- put_payee_by_name(scope, attrs) do
         %Transaction{user_id: user_id(scope)}
         |> struct!(references)
+        |> struct!(entered_from(opts[:entered_from]))
         |> Transaction.changeset(attrs)
         |> put_default_approval()
         |> write(&Repo.insert/1, opts)
       end
     end)
+  end
+
+  defp entered_from(nil), do: %{}
+
+  defp entered_from({scheduled_transaction_id, date}) do
+    %{
+      id: Ids.entered_transaction(scheduled_transaction_id, date),
+      scheduled_transaction_id: scheduled_transaction_id,
+      scheduled_date: date
+    }
   end
 
   defp put_payee_by_name(scope, attrs) do

@@ -59,7 +59,7 @@ defmodule AbakusWeb.AccountDialog do
   defp handle_page_info(_message, socket), do: {:cont, socket}
 
   defp opened(%{"id" => id}, groups) do
-    case Enum.find(AccountGroups.rows(groups), &(Integer.to_string(&1.account.id) == id)) do
+    case Enum.find(AccountGroups.rows(groups), &(&1.account.id == id)) do
       nil -> nil
       row -> %{account: row.account, balance: row.balance}
     end

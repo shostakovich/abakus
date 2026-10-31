@@ -4,6 +4,7 @@ defmodule Abakus.Ledger.MigrationTest do
   alias Abakus.{Repo, TestMigrations}
 
   @moduletag :tmp_dir
+  @before_uuids 20_261_021_220_000
   @before 20_261_017_120_000
   @tables ~w(accounts payees transactions bank_balances transaction_origins)
 
@@ -61,7 +62,7 @@ defmodule Abakus.Ledger.MigrationTest do
 
   test "gives every row of the ledger to the budget owner and keeps the rest", %{repo: repo} do
     insert_budget()
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
 
     for table <- @tables do
       assert Repo.query!(~s|SELECT DISTINCT user_id FROM "#{table}"|).rows == [[2]], table
@@ -87,14 +88,14 @@ defmodule Abakus.Ledger.MigrationTest do
     Repo.query!("UPDATE users SET budget_owner = 0")
 
     assert_raise RuntimeError, ~r/No user owns the budget.*accounts, payees, transactions/, fn ->
-      TestMigrations.run!(repo)
+      TestMigrations.run!(repo, to: @before_uuids)
     end
 
     refute ["user_id"] in Repo.query!("SELECT name FROM pragma_table_info('accounts')").rows
   end
 
   test "requires an owner for every new row", %{repo: repo} do
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
 
     assert_raise Exqlite.Error, ~r/NOT NULL constraint failed: accounts.user_id/, fn ->
       Repo.query!("""

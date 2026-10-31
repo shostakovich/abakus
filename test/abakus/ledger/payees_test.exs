@@ -64,12 +64,17 @@ defmodule Abakus.Ledger.PayeesTest do
 
     test "the last category must exist" do
       assert {:error, changeset} =
-               Ledger.create_payee(budget_scope(), %{name: "Aldi", last_category_id: -1})
+               Ledger.create_payee(budget_scope(), %{
+                 name: "Aldi",
+                 last_category_id: Ecto.UUID.generate()
+               })
 
       assert %{last_category_id: ["does not exist"]} = errors_on(changeset)
 
       assert {:error, changeset} =
-               Ledger.update_payee(budget_scope(), payee_fixture(), %{last_category_id: -1})
+               Ledger.update_payee(budget_scope(), payee_fixture(), %{
+                 last_category_id: Ecto.UUID.generate()
+               })
 
       assert %{last_category_id: ["does not exist"]} = errors_on(changeset)
     end

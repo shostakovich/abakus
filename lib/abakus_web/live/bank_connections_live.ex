@@ -664,7 +664,7 @@ defmodule AbakusWeb.BankConnectionsLive do
   end
 
   defp parse_id(text) when is_binary(text) do
-    case Abakus.Schema.cast_id(text) do
+    case Abakus.Ids.cast(text) do
       {:ok, id} -> id
       :error -> nil
     end

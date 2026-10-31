@@ -113,7 +113,9 @@ defmodule Abakus.Ledger.TransfersTest do
       assert {:error, changeset} = transfer(c.depot, c.checking)
       assert %{counterpart_category_id: ["can't be blank"]} = errors_on(changeset)
 
-      assert {:error, changeset} = transfer(c.depot, c.checking, counterpart_category_id: -1)
+      assert {:error, changeset} =
+               transfer(c.depot, c.checking, counterpart_category_id: Ecto.UUID.generate())
+
       assert %{counterpart_category_id: ["does not exist"]} = errors_on(changeset)
 
       {:ok, outflow} = transfer(c.depot, c.checking, counterpart_category_id: c.category.id)

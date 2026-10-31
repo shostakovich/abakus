@@ -441,8 +441,7 @@ defmodule AbakusWeb.TransactionForm do
          {:ok, side} <- side_attrs(sub, prefix, account, accounts) do
       side = Map.merge(side, %{amount: amount, memo: blank_to_nil(sub["memo"])})
 
-      {:ok,
-       if(sub["id"] in kept, do: Map.put(side, :id, String.to_integer(sub["id"])), else: side)}
+      {:ok, if(sub["id"] in kept, do: Map.put(side, :id, sub["id"]), else: side)}
     end
   end
 
@@ -494,14 +493,10 @@ defmodule AbakusWeb.TransactionForm do
   defp to_param(id), do: to_string(id)
 
   @doc "The id in a param, nil when there is none."
-  def to_id(id) when is_integer(id), do: id
-
-  def to_id(text) when is_binary(text) do
-    case Integer.parse(text) do
-      {id, ""} -> id
-      _other -> nil
+  def to_id(text) do
+    case Abakus.Ids.cast(text) do
+      {:ok, id} -> id
+      :error -> nil
     end
   end
-
-  def to_id(_none), do: nil
 end

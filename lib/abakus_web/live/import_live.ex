@@ -296,7 +296,7 @@ defmodule AbakusWeb.ImportLive do
     with %{} = preview <- socket.assigns.preview,
          {index, ""} <- Integer.parse(index),
          %{} = item <- Enum.at(preview.statements, index) do
-      account = Enum.find(socket.assigns.accounts, &(Integer.to_string(&1.id) == id))
+      account = Enum.find(socket.assigns.accounts, &(&1.id == id))
 
       statements =
         List.replace_at(

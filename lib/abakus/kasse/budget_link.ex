@@ -111,7 +111,7 @@ defmodule Abakus.Kasse.BudgetLink do
   end
 
   defp feed(scope, account_id) do
-    with {:ok, id} <- Abakus.Schema.cast_id(account_id),
+    with {:ok, id} <- Abakus.Ids.cast(account_id),
          %Account{} = account <- Enum.find(choices(scope), &(&1.id == id)) do
       Repo.update_all(
         from(a in Account,
@@ -674,8 +674,8 @@ defmodule Abakus.Kasse.BudgetLink do
 
   defp cast_mapping(mapping) do
     Enum.reduce_while(mapping, {:ok, %{}}, fn {id, budget_id}, {:ok, cast} ->
-      with {:ok, id} <- cast_id(id),
-           {:ok, budget_id} <- cast_optional_id(budget_id) do
+      with {:ok, id} <- Abakus.Schema.cast_id(id),
+           {:ok, budget_id} <- cast_budget_id(budget_id) do
         {:cont, {:ok, Map.put(cast, id, budget_id)}}
       else
         :error -> {:halt, {:error, "Unbekannte Kategorie."}}
@@ -683,10 +683,8 @@ defmodule Abakus.Kasse.BudgetLink do
     end)
   end
 
-  defp cast_optional_id(blank) when blank in [nil, ""], do: {:ok, nil}
-  defp cast_optional_id(id), do: cast_id(id)
-
-  defp cast_id(id), do: Abakus.Schema.cast_id(id)
+  defp cast_budget_id(blank) when blank in [nil, ""], do: {:ok, nil}
+  defp cast_budget_id(id), do: Abakus.Ids.cast(id)
 
   @doc "Moves the mapping from one of the user's budget categories to another, as deleting `from_id` does."
   def recategorize(%Scope{user: %User{id: user_id}}, from_id, to_id) do

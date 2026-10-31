@@ -8,11 +8,11 @@ defmodule Abakus.Categories.TargetVersion do
   false means "refill up to" (available counts).
   """
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
-  alias Abakus.Amount
+  alias Abakus.{Amount, Ids}
   alias Abakus.Categories.Category
 
   schema "target_versions" do
@@ -24,7 +24,7 @@ defmodule Abakus.Categories.TargetVersion do
     field :set_aside, :boolean, default: true
 
     belongs_to :category, Category
-    belongs_to :user, Abakus.Users.User
+    belongs_to :user, Abakus.Users.User, type: :id
 
     timestamps()
   end
@@ -52,7 +52,20 @@ defmodule Abakus.Categories.TargetVersion do
     |> validate_cadence()
     |> check_constraint(:amount, name: :target_versions_amount_positive)
     |> unique_constraint([:category_id, :from_month])
+    |> put_named_id()
   end
+
+  defp put_named_id(%{data: %{id: nil}} = changeset) do
+    case {get_field(changeset, :category_id), get_field(changeset, :from_month)} do
+      {category_id, %Date{} = month} when is_binary(category_id) ->
+        put_change(changeset, :id, Ids.target_version(category_id, month))
+
+      _incomplete ->
+        changeset
+    end
+  end
+
+  defp put_named_id(changeset), do: changeset
 
   defp validate_cadence(changeset) do
     case get_field(changeset, :cadence) do

@@ -10,7 +10,7 @@ defmodule Abakus.Depot.Portfolios.Portfolio do
 
   schema "depot_portfolios" do
     belongs_to :user, Abakus.Users.User
-    belongs_to :reference_account, Abakus.Ledger.Account
+    belongs_to :reference_account, Abakus.Ledger.Account, type: Ecto.UUID
     field :name, :string
     field :note, :string
     field :retired, :boolean, default: false

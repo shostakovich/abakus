@@ -677,20 +677,14 @@ defmodule AbakusWeb.BudgetLive do
     end
   end
 
-  defp entry(socket, id) when is_binary(id) do
-    case Integer.parse(id) do
-      {id, ""} -> Inspector.find(socket.assigns.inspector, id)
-      _ -> nil
-    end
-  end
+  defp entry(socket, id) when is_binary(id), do: Inspector.find(socket.assigns.inspector, id)
 
   defp entry(_socket, _id), do: nil
 
   defp cover_source(inspector, "rta", _entry), do: {:ready_to_assign, inspector.free}
 
   defp cover_source(inspector, id, entry) when is_binary(id) do
-    with {id, ""} <- Integer.parse(id),
-         true <- id != entry.category.id,
+    with true <- id != entry.category.id,
          %{category: category, cell: cell} <- Inspector.find(inspector, id),
          do: {category, cell.available}
   end
@@ -874,7 +868,7 @@ defmodule AbakusWeb.BudgetLive do
 
   defp find_category(groups, id) do
     Enum.find_value(groups, fn group ->
-      Enum.find(group.categories, &(Integer.to_string(&1.id) == id))
+      Enum.find(group.categories, &(&1.id == id))
     end)
   end
 

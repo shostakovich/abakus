@@ -748,7 +748,10 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       for account <- transfer_options(assigns.params, assigns.accounts),
           do: %{label: TransactionForm.transfer_label(account), value: "a:#{account.id}"}
 
-    payees = for payee <- assigns.payees, do: %{label: payee.name, value: "p:#{payee.name}"}
+    payees =
+      for payee <- assigns.payees,
+          not payee.hidden,
+          do: %{label: payee.name, value: "p:#{payee.name}"}
 
     categories =
       for group <- assigns.categories do
@@ -1133,7 +1136,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     {_picks, changed} = picks(event["transaction"] || %{})
     params = TransactionForm.change(socket.assigns.params, changed, accounts)
 
-    opts = confirmed(event) ++ [person_id: TransactionForm.to_id(params["person_id"])]
+    opts = confirmed(event) ++ [person_id: person_id(params["person_id"])]
 
     with {:ok, attrs} <- TransactionForm.to_attrs(params, accounts, original),
          {:ok, attrs} <- register_fields(attrs, socket.assigns),
@@ -1305,6 +1308,13 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   @doc "The Ledger's opts for an event: `reconciled: :confirmed` once the browser asked about a reconciled change."
   def confirmed(%{"reconciled" => "confirmed"}), do: [reconciled: :confirmed]
   def confirmed(_event), do: []
+
+  defp person_id(param) do
+    case Abakus.Schema.cast_id(param) do
+      {:ok, id} -> id
+      :error -> nil
+    end
+  end
 
   defp done(socket, message) do
     send(self(), {__MODULE__, :done, message})

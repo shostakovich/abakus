@@ -5,7 +5,7 @@ defmodule Abakus.Ledger.Subtransaction do
   Subtransactions go with their transaction: deleted with its row, and soft-deleted with it.
   """
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
@@ -18,7 +18,7 @@ defmodule Abakus.Ledger.Subtransaction do
     field :amount, :integer
     field :memo, :string
 
-    field :counterpart_category_id, :id, virtual: true
+    field :counterpart_category_id, Ecto.UUID, virtual: true
 
     belongs_to :transaction, Transaction
     belongs_to :category, Category

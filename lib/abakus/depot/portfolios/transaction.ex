@@ -33,9 +33,9 @@ defmodule Abakus.Depot.Portfolios.Transaction do
     field :type, Ecto.Enum, values: @types
     field :date_time, :naive_datetime
     belongs_to :portfolio, Portfolio
-    belongs_to :account, Account
+    belongs_to :account, Account, type: Ecto.UUID
     belongs_to :other_portfolio, Portfolio
-    belongs_to :other_account, Account
+    belongs_to :other_account, Account, type: Ecto.UUID
     belongs_to :security, Abakus.Depot.Securities.Security
     field :shares, :integer
     field :amount, :integer

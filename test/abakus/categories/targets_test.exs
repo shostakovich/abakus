@@ -248,7 +248,7 @@ defmodule Abakus.Categories.TargetsTest do
       assert {:error, changeset} =
                Categories.set_target(
                  budget_scope(),
-                 %Category{id: -1},
+                 %Category{id: Ecto.UUID.generate()},
                  monthly(~D[2026-10-01], 1)
                )
 
@@ -342,7 +342,11 @@ defmodule Abakus.Categories.TargetsTest do
       refute Categories.target_snoozed?(budget_scope(), category, ~D[2026-10-01])
 
       assert {:error, changeset} =
-               Categories.snooze_target(budget_scope(), %Category{id: -1}, ~D[2026-10-01])
+               Categories.snooze_target(
+                 budget_scope(),
+                 %Category{id: Ecto.UUID.generate()},
+                 ~D[2026-10-01]
+               )
 
       assert %{category_id: ["does not exist"]} = errors_on(changeset)
     end

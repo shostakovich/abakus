@@ -32,7 +32,7 @@ defmodule Abakus.Depot.Portfolios.TransactionForm do
     field :taxes, DecimalInput, default: Decimal.new(0)
     field :amount, DecimalInput
     field :amount_set, :boolean, default: false
-    field :account_id, :integer
+    field :account_id, Ecto.UUID
     field :remove_at_once, :boolean, default: false
     field :expected_amount, :decimal
   end

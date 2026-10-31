@@ -5,7 +5,7 @@ defmodule Abakus.Ledger.Account do
   Kasse's budget link books into (`Abakus.Kasse.BudgetLink`), whose balance is the Kasse's.
   """
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
@@ -26,7 +26,7 @@ defmodule Abakus.Ledger.Account do
     field :ofx_bank_id, :string
     field :ofx_acct_id, :string
 
-    belongs_to :user, Abakus.Users.User
+    belongs_to :user, Abakus.Users.User, type: :id
     has_one :transfer_payee, Payee, foreign_key: :transfer_account_id
 
     timestamps()

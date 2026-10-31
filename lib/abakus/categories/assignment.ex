@@ -1,11 +1,11 @@
 defmodule Abakus.Categories.Assignment do
   @moduledoc "Money assigned to a category in a month; may be negative, as in YNAB."
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
-  alias Abakus.Amount
+  alias Abakus.{Amount, Ids}
   alias Abakus.Categories.Category
 
   schema "assignments" do
@@ -13,7 +13,7 @@ defmodule Abakus.Categories.Assignment do
     field :amount, :integer
 
     belongs_to :category, Category
-    belongs_to :user, Abakus.Users.User
+    belongs_to :user, Abakus.Users.User, type: :id
 
     timestamps()
   end
@@ -26,5 +26,18 @@ defmodule Abakus.Categories.Assignment do
     |> validate_required([:category_id, :user_id, :month, :amount])
     |> Amount.validate()
     |> unique_constraint([:category_id, :month])
+    |> put_named_id()
   end
+
+  defp put_named_id(%{data: %{id: nil}} = changeset) do
+    case {get_field(changeset, :category_id), get_field(changeset, :month)} do
+      {category_id, %Date{} = month} when is_binary(category_id) ->
+        put_change(changeset, :id, Ids.assignment(category_id, month))
+
+      _incomplete ->
+        changeset
+    end
+  end
+
+  defp put_named_id(changeset), do: changeset
 end

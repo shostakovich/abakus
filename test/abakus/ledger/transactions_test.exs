@@ -155,7 +155,7 @@ defmodule Abakus.Ledger.TransactionsTest do
     test "the account must exist" do
       assert {:error, changeset} =
                Ledger.create_transaction(budget_scope(), %{
-                 account_id: -1,
+                 account_id: Ecto.UUID.generate(),
                  date: ~D[2026-10-09],
                  amount: 1
                })
@@ -169,13 +169,16 @@ defmodule Abakus.Ledger.TransactionsTest do
       assert {:error, changeset} =
                Ledger.create_transaction(
                  budget_scope(),
-                 attrs(account, payee_id: -1, category_id: -2)
+                 attrs(account, payee_id: Ecto.UUID.generate(), category_id: Ecto.UUID.generate())
                )
 
       assert %{payee_id: ["does not exist"], category_id: ["does not exist"]} =
                errors_on(changeset)
 
-      subtransactions = [%{amount: -1_000, payee_id: -1}, %{amount: -250, category_id: -2}]
+      subtransactions = [
+        %{amount: -1_000, payee_id: Ecto.UUID.generate()},
+        %{amount: -250, category_id: Ecto.UUID.generate()}
+      ]
 
       assert {:error, changeset} =
                Ledger.create_transaction(
@@ -193,7 +196,9 @@ defmodule Abakus.Ledger.TransactionsTest do
       transaction = transaction_fixture(account_id: account.id)
 
       assert {:error, changeset} =
-               Ledger.update_transaction(budget_scope(), transaction, %{payee_id: -1})
+               Ledger.update_transaction(budget_scope(), transaction, %{
+                 payee_id: Ecto.UUID.generate()
+               })
 
       assert %{payee_id: ["does not exist"]} = errors_on(changeset)
     end
@@ -364,16 +369,19 @@ defmodule Abakus.Ledger.TransactionsTest do
     end
 
     test "is a pure function of the accounts", c do
+      payee_id = Ecto.UUID.generate()
+
       changeset =
         Transaction.changeset(
           %Transaction{user_id: c.checking.user_id},
-          attrs(c.checking, payee_id: 42)
+          attrs(c.checking, payee_id: payee_id)
         )
 
-      refute Transaction.validate_accounts(changeset, c.checking, %{42 => c.depot}).valid?
-      assert Transaction.validate_accounts(changeset, c.checking, %{42 => c.savings}).valid?
+      refute Transaction.validate_accounts(changeset, c.checking, %{payee_id => c.depot}).valid?
+      assert Transaction.validate_accounts(changeset, c.checking, %{payee_id => c.savings}).valid?
       assert Transaction.validate_accounts(changeset, %Account{kind: :tracking}, %{}).valid?
-      refute Transaction.validate_accounts(changeset, c.checking, %{42 => c.checking}).valid?
+
+      refute Transaction.validate_accounts(changeset, c.checking, %{payee_id => c.checking}).valid?
     end
 
     test "a split is no transfer as a whole", c do
@@ -938,13 +946,13 @@ defmodule Abakus.Ledger.TransactionsTest do
       assert {:ok, %Transaction{transfer_subtransaction_id: nil}} =
                Ledger.create_transaction(
                  budget_scope(),
-                 attrs(account, transfer_subtransaction_id: 1)
+                 attrs(account, transfer_subtransaction_id: Ecto.UUID.generate())
                )
 
       assert {:error, changeset} =
                Ledger.create_transaction(
                  budget_scope(),
-                 attrs(account, source: :bank, matched_transaction_id: -1)
+                 attrs(account, source: :bank, matched_transaction_id: Ecto.UUID.generate())
                )
 
       assert %{matched_transaction_id: ["does not exist"]} = errors_on(changeset)

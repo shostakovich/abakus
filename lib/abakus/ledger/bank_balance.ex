@@ -16,7 +16,7 @@ defmodule Abakus.Ledger.BankBalance do
     field :date, :date
     field :amount, :integer
 
-    belongs_to :account, Account
+    belongs_to :account, Account, type: Ecto.UUID
     belongs_to :user, Abakus.Users.User
 
     timestamps()

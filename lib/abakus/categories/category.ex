@@ -6,7 +6,7 @@ defmodule Abakus.Categories.Category do
   (`Abakus.Categories.ready_to_assign!/1`) and cannot be changed.
   """
 
-  use Abakus.Schema
+  use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
@@ -24,7 +24,7 @@ defmodule Abakus.Categories.Category do
     field :note, :string
 
     belongs_to :category_group, CategoryGroup
-    belongs_to :user, Abakus.Users.User
+    belongs_to :user, Abakus.Users.User, type: :id
     has_many :target_versions, TargetVersion
 
     timestamps()

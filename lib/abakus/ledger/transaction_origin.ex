@@ -15,8 +15,8 @@ defmodule Abakus.Ledger.TransactionOrigin do
     field :source, Ecto.Enum, values: [:ynab, :file, :bank, :api]
     field :external_id, :string
 
-    belongs_to :transaction, Transaction
-    belongs_to :account, Account
+    belongs_to :transaction, Transaction, type: Ecto.UUID
+    belongs_to :account, Account, type: Ecto.UUID
     belongs_to :user, Abakus.Users.User
 
     timestamps()

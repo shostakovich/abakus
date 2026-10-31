@@ -1,11 +1,20 @@
 defmodule Abakus.Schema do
   @moduledoc false
 
-  defmacro __using__(_opts) do
+  @doc """
+  With `uuid: true` the schema has UUIDv7 ids and its references are UUIDs (ADR 0025); a reference to an integer
+  id, such as the user's, then needs `type: :id`.
+  """
+  defmacro __using__(opts) do
     quote do
       use Ecto.Schema
 
       @timestamps_opts [type: :utc_datetime_usec]
+
+      if unquote(Keyword.get(opts, :uuid, false)) do
+        @primary_key {:id, Ecto.UUID, autogenerate: [version: 7, precision: :monotonic]}
+        @foreign_key_type Ecto.UUID
+      end
     end
   end
 

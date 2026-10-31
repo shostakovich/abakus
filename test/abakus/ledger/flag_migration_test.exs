@@ -4,6 +4,7 @@ defmodule Abakus.Ledger.FlagMigrationTest do
   alias Abakus.{Repo, TestMigrations}
 
   @moduletag :tmp_dir
+  @before_uuids 20_261_021_220_000
   @before 20_261_017_160_000
 
   test "drops the flags and keeps the transactions", %{tmp_dir: dir} do
@@ -26,7 +27,7 @@ defmodule Abakus.Ledger.FlagMigrationTest do
     VALUES (1, 1, 1, '2026-10-01', -5000, 'red', #{now}, #{now})
     """)
 
-    TestMigrations.run!(repo)
+    TestMigrations.run!(repo, to: @before_uuids)
 
     refute ["flag"] in Repo.query!("SELECT name FROM pragma_table_info('transactions')").rows
     assert Repo.query!("SELECT id, amount FROM transactions").rows == [[1, -5000]]

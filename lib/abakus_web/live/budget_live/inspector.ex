@@ -143,7 +143,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
 
   defp cover(category, anchor) do
     JS.push("open_popover",
-      value: %{kind: "cover", category: Integer.to_string(category.id), anchor: anchor}
+      value: %{kind: "cover", category: category.id, anchor: anchor}
     )
   end
 

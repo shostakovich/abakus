@@ -36,7 +36,7 @@ defmodule AbakusWeb.AreasTest do
     paths =
       for %{verb: :get, path: path} <- AbakusWeb.Router.__routes__(),
           String.starts_with?(path, prefix),
-          do: String.replace(path, ~r"[:*]\w+", Integer.to_string(id))
+          do: String.replace(path, ~r"[:*]\w+", to_string(id))
 
     assert prefix in paths
     paths
