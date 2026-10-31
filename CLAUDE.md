@@ -16,10 +16,16 @@ mix test
 
 CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versions`.
 
+Abakus for the Mac is the Swift package in `apple/`, with its own gates in [`apple/CLAUDE.md`](apple/CLAUDE.md);
+the sync protocol both sides follow is [`sync/PROTOCOL.md`](sync/PROTOCOL.md).
+
 ## Conventions
 
-- Schemas `use Abakus.Schema` (`:utc_datetime_usec` timestamps). Migrations are recorded in production: add new
-  ones, leave old ones as they are; releases run them via `Abakus.Release.migrate/0`.
+- Schemas `use Abakus.Schema` (`:utc_datetime_usec` timestamps), the Ledger's and the budget's with UUID ids
+  (`use Abakus.Schema, uuid: true`, ADR 0025). Migrations are recorded in production: add new ones, leave old ones
+  as they are; releases run them via `Abakus.Release.migrate/0`.
+- Every write to a synced table (`Abakus.Sync.Tables`) goes through `Abakus.Sync`, so it becomes messages (ADR
+  0024). Synced rows are tombstoned with `deleted_at`, never removed.
 - DB tests run synchronously with `pool_size: 1` (SQLite is busy otherwise).
 - UI: Setzkasten components and conventions (Setzkasten's `guides/design-system.md`). App CSS only for domain
   UI, on theme tokens, in the partials under `assets/css/`. A Setzkasten bug or gap is fixed in
