@@ -279,3 +279,61 @@ Accepted, 2026-10-20 (#85).
   deleted if unapproved, while an approved one stays and the booked transaction is proposed as its match.
 - **Consequences:** Abakus deletes transactions on its own for the first time, limited to unapproved pending bank
   imports; an approved one whose booking differs in amount stays for the owner to delete.
+
+## 0023. The Apple apps live in this repository
+
+Accepted, 2026-10-31 (#103).
+
+- **Context:** The native Mac app, and later an iOS app, keep Abakus's budget, and sync makes the schema, the protocol
+  and its test fixtures one contract that every model change touches in Elixir and Swift.
+- **Decision:** One repository: the Swift package under `apple/` and the shared sync fixtures under `sync/`, the Mac
+  app imported as a snapshot without its earlier history.
+- **Consequences:** A model change is one pull request for server and apps, and CI needs a macOS runner for `apple/`.
+  A commit is atomic but a deploy is not, so the server must keep serving older app versions.
+
+## 0024. Sync is a CRDT with one last-writer-wins register per field
+
+Accepted, 2026-10-31 (#102).
+
+- **Context:** The web, the Mac and later iOS should be equal: each edits offline and no device loses by rule, while
+  bank sync, the Kasse and the Depot keep writing on the server.
+- **Decision:** Every change is a message (table, row, column, value, hybrid logical clock, device) that wins when its
+  clock is newer than the field's; the server is one writer among them and checks only ownership and the fields a
+  source leads (0020). Automerge, Yjs and Loro were rejected: made for shared text, heavy, no mature Elixir binding.
+- **Consequences:** All writers converge, but of two concurrent edits of one field the older is lost silently, and a
+  budget rule holds only where the model makes it converge (tombstones, a deleted category pointing to its successor,
+  ids derived from natural keys). Computed figures are never synced, and every write path, the web's included, goes
+  through the change log.
+
+## 0025. UUIDv7 primary keys
+
+Accepted, 2026-10-31 (#102).
+
+- **Context:** Offline devices create rows the server has not seen, and SQLite's integer ids come from the server.
+- **Decision:** Synced tables use UUIDv7 primary and foreign keys; a sync id beside the integer id was rejected, as
+  every message would need translating.
+- **Consequences:** The production tables are rebuilt once, rehearsed on a copy, and ids in URLs, the MCP and the code
+  become UUIDs.
+
+## 0026. Abakus is its own OAuth 2.1 server
+
+Accepted, 2026-10-31 (#102).
+
+- **Context:** The apps need a sign-in that works with passkeys, and there is no identity provider.
+- **Decision:** Authorization code with PKCE for our own public clients, built on the user tokens after the MCP
+  authorization profile (metadata per RFC 8414); only the budget owner signs in an app (0007). Boruta was rejected as
+  a large dependency for one kind of client.
+- **Consequences:** Codes, rotating refresh tokens and revocation are ours to secure and test; the MCP could later
+  leave its secret path (0012) for the same server.
+
+## 0027. The Apple apps keep the budget in SQLite with Abakus's schema
+
+Accepted, 2026-10-31 (#103).
+
+- **Context:** The Mac app rewrote one JSON file after each command, but sync must store the state, the outbox and a
+  clock per field atomically and apply messages as the server does.
+- **Decision:** The system's SQLite through a small wrapper, with the server's synced tables plus `sync_messages` and
+  `sync_clock`; the in-memory `Budget` value stays and its diff yields the messages. Core Data, SwiftData and GRDB
+  were rejected.
+- **Consequences:** The JSON format goes without an import, as the real budget lives in Abakus, and the app's
+  YNAB 4-shaped model is rebuilt on Abakus's names and cents.
