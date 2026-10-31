@@ -5,7 +5,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
 
-  alias Abakus.{Categories, DomainFixtures, FileImport, Ledger}
+  alias Abakus.{Categories, DomainFixtures, FileImport, Ledger, Sync}
   alias Abakus.Depot.{BudgetLink, CashSide, Portfolios}
   alias Abakus.Ledger.{Account, Transaction}
 
@@ -176,7 +176,7 @@ defmodule Abakus.Depot.BudgetLinkTest do
     assert out.payee.transfer_account_id == c.broker_cash.id
 
     assert [%Transaction{amount: 30_000, cleared: :cleared, approved: true}, %Transaction{}] =
-             register(c.broker_cash)
+             Enum.sort_by(register(c.broker_cash), & &1.amount, :desc)
 
     assert Ledger.balance(budget_scope(), c.broker_cash, @day) == 25_000
   end
@@ -436,6 +436,16 @@ defmodule Abakus.Depot.BudgetLinkTest do
       assert Repo.reload!(link).category_id == c.investieren.id
     end
 
+    test "a device deleting the purchase category moves the link to the category it goes into",
+         c do
+      link = switch_on(c)
+      into = DomainFixtures.category_fixture()
+
+      delete_on_device(c.investieren.id, into.id)
+
+      assert Repo.reload!(link).category_id == into.id
+    end
+
     test "deleting the purchase category moves the link to the category it goes into", c do
       link = switch_on(c)
       into = DomainFixtures.category_fixture()
@@ -444,5 +454,20 @@ defmodule Abakus.Depot.BudgetLinkTest do
 
       assert Repo.reload!(link).category_id == into.id
     end
+  end
+
+  defp delete_on_device(category_id, into_id) do
+    messages =
+      for {column, value} <- [deleted_at: "2026-10-12T10:00:00.000000Z", successor_id: into_id] do
+        %{
+          "table" => "categories",
+          "row_id" => category_id,
+          "column" => to_string(column),
+          "value" => value,
+          "clock" => "2026-10-12T10:00:00.000Z-0000-mac"
+        }
+      end
+
+    {:ok, 2} = Sync.apply_messages(budget_scope(), "mac", messages)
   end
 end

@@ -39,6 +39,15 @@ defmodule Abakus.Ledger.ScheduledTransactionTest do
     assert following(:twice_a_month, ~D[2027-01-20], {1, 15}) == ~D[2027-02-01]
   end
 
+  test "twice a month takes its days in either order, and without two days is monthly" do
+    assert following(:twice_a_month, ~D[2027-01-10], {15, 1}) == ~D[2027-01-15]
+    assert following(:twice_a_month, ~D[2027-01-20], {15, 1}) == ~D[2027-02-01]
+    assert following(:twice_a_month, ~D[2027-01-31], {nil, nil}) == ~D[2027-02-28]
+    assert following(:twice_a_month, ~D[2027-01-10], {15, nil}) == ~D[2027-02-10]
+    assert following(:twice_a_month, ~D[2027-01-10], {15, 15}) == ~D[2027-02-10]
+    assert following(:twice_a_month, ~D[2027-01-10], {0, 40}) == ~D[2027-02-10]
+  end
+
   test "twice a month needs two days in order" do
     changeset = fn days ->
       ScheduledTransaction.changeset(

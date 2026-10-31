@@ -1,8 +1,8 @@
 defmodule Abakus.Ledger.ScheduledTransaction do
   @moduledoc """
   A transaction the Ledger enters on its next date, as often as its frequency says (`Abakus.Ledger.Scheduled`).
-  Twice a month it falls on `first_day` and `second_day`; a day past the end of a month, also in a monthly or
-  yearly step, stands for the month's last day. A split has subtransactions instead of a category, and a
+  Twice a month it falls on `first_day` and `second_day`, in either order, and without two days it is monthly; a day
+  past the end of a month, also in a monthly or yearly step, stands for the month's last day. A split has subtransactions instead of a category, and a
   transfer payee makes it a transfer.
   """
 
@@ -48,6 +48,7 @@ defmodule Abakus.Ledger.ScheduledTransaction do
     field :amount, :integer
     field :memo, :string
     field :cleared, Ecto.Enum, values: [:uncleared, :cleared], default: :uncleared
+    field :deleted_at, :utc_datetime_usec
 
     belongs_to :user, Abakus.Users.User, type: :id
     belongs_to :account, Account
@@ -55,6 +56,7 @@ defmodule Abakus.Ledger.ScheduledTransaction do
     belongs_to :category, Category
 
     has_many :subtransactions, ScheduledSubtransaction,
+      where: [deleted_at: nil],
       on_replace: :delete,
       preload_order: [asc: :position, asc: :id]
 
@@ -140,14 +142,17 @@ defmodule Abakus.Ledger.ScheduledTransaction do
   def following(%__MODULE__{frequency: :once}), do: nil
 
   def following(%__MODULE__{frequency: :twice_a_month, next_date: date} = scheduled) do
-    this_month = Enum.map([scheduled.first_day, scheduled.second_day], &on_day(date, &1))
+    case days(scheduled) do
+      [first, _second] = days ->
+        this_month = Enum.map(days, &on_day(date, &1))
 
-    case Enum.find(this_month, &Date.after?(&1, date)) do
-      nil ->
-        date |> Date.beginning_of_month() |> Date.shift(month: 1) |> on_day(scheduled.first_day)
+        case Enum.find(this_month, &Date.after?(&1, date)) do
+          nil -> date |> Date.beginning_of_month() |> Date.shift(month: 1) |> on_day(first)
+          later -> later
+        end
 
-      later ->
-        later
+      _fewer ->
+        following(%{scheduled | frequency: :monthly})
     end
   end
 
@@ -157,6 +162,14 @@ defmodule Abakus.Ledger.ScheduledTransaction do
       months = @months[frequency] -> Date.shift(date, month: months)
       years = @years[frequency] -> Date.shift(date, year: years)
     end
+  end
+
+  # Messages merged field by field may leave the days missing or out of order.
+  defp days(scheduled) do
+    [scheduled.first_day, scheduled.second_day]
+    |> Enum.filter(&(is_integer(&1) and &1 in 1..31))
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
   defp on_day(date, day), do: %{date | day: min(day, Date.days_in_month(date))}

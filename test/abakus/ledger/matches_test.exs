@@ -377,7 +377,7 @@ defmodule Abakus.Ledger.MatchesTest do
            } = merged
 
     assert {merged.id, merged.category_id} == {c.manual.id, c.category.id}
-    assert Repo.get(Transaction, proposal.id) == nil
+    assert Repo.get(Transaction, proposal.id).deleted_at
 
     assert Ledger.get_transaction_by_origin(budget_scope(), c.account, :bank, "tx-7").id ==
              c.manual.id

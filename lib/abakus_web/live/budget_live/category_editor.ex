@@ -125,9 +125,6 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
       {:error, :reconciled} ->
         {:error, %{edit | reconciled: true}}
 
-      {:error, %Ecto.Changeset{}} ->
-        {:error, %{edit | error: "Zusammen sind die Zuweisungen zu groß."}}
-
       {:error, _gone} ->
         :gone
     end

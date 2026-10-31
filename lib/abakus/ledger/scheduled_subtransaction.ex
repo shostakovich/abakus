@@ -13,6 +13,7 @@ defmodule Abakus.Ledger.ScheduledSubtransaction do
     field :position, :integer, default: 0
     field :amount, :integer
     field :memo, :string
+    field :deleted_at, :utc_datetime_usec
 
     belongs_to :scheduled_transaction, ScheduledTransaction
     belongs_to :payee, Payee

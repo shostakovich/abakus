@@ -589,7 +589,9 @@ defmodule Abakus.Ledger.TransactionsTest do
                })
 
       assert Repo.aggregate(
-               from(s in Subtransaction, where: s.transaction_id == ^transaction.id),
+               from(s in Subtransaction,
+                 where: s.transaction_id == ^transaction.id and is_nil(s.deleted_at)
+               ),
                :count
              ) == 3
 

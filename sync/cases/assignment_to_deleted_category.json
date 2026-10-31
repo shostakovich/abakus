@@ -1,0 +1,225 @@
+{
+  "name": "An offline assignment to a deleted category goes to its successor",
+  "setup": [
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "name",
+      "value": "Girokonto",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "kind",
+      "value": "checking",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "closed",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "shared_expenses",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "accounts",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000001",
+      "column": "position",
+      "value": 0,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "category_groups",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
+      "column": "name",
+      "value": "Alltag",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "category_groups",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
+      "column": "hidden",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "category_groups",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
+      "column": "internal",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "category_groups",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
+      "column": "position",
+      "value": 0,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000005",
+      "column": "category_group_id",
+      "value": "01a0f5c0-0000-7000-8000-000000000002",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000005",
+      "column": "name",
+      "value": "Zeitschriften",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000005",
+      "column": "hidden",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000005",
+      "column": "internal",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000005",
+      "column": "position",
+      "value": 0,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000006",
+      "column": "category_group_id",
+      "value": "01a0f5c0-0000-7000-8000-000000000002",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000006",
+      "column": "name",
+      "value": "Bücher",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000006",
+      "column": "hidden",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000006",
+      "column": "internal",
+      "value": false,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "categories",
+      "row_id": "01a0f5c0-0000-7000-8000-000000000006",
+      "column": "position",
+      "value": 1,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "assignments",
+      "row_id": "d97d9899-1e80-5a72-9dfa-7a3f672ece83",
+      "column": "category_id",
+      "value": "01a0f5c0-0000-7000-8000-000000000006",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "assignments",
+      "row_id": "d97d9899-1e80-5a72-9dfa-7a3f672ece83",
+      "column": "month",
+      "value": "2026-11-01",
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    },
+    {
+      "table": "assignments",
+      "row_id": "d97d9899-1e80-5a72-9dfa-7a3f672ece83",
+      "column": "amount",
+      "value": 2000,
+      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
+    }
+  ],
+  "devices": {
+    "web": [
+      {
+        "table": "categories",
+        "row_id": "01a0f5c0-0000-7000-8000-000000000005",
+        "column": "deleted_at",
+        "value": "2026-11-02T10:00:00.000000Z",
+        "clock": "2026-11-02T10:00:00.000Z-0000-web"
+      },
+      {
+        "table": "categories",
+        "row_id": "01a0f5c0-0000-7000-8000-000000000005",
+        "column": "successor_id",
+        "value": "01a0f5c0-0000-7000-8000-000000000006",
+        "clock": "2026-11-02T10:00:00.000Z-0000-web"
+      }
+    ],
+    "mac": [
+      {
+        "table": "assignments",
+        "row_id": "df0fb2d3-aeb2-555d-ba5a-7c37d227316a",
+        "column": "category_id",
+        "value": "01a0f5c0-0000-7000-8000-000000000005",
+        "clock": "2026-11-02T10:05:00.000Z-0000-mac"
+      },
+      {
+        "table": "assignments",
+        "row_id": "df0fb2d3-aeb2-555d-ba5a-7c37d227316a",
+        "column": "month",
+        "value": "2026-11-01",
+        "clock": "2026-11-02T10:05:00.000Z-0000-mac"
+      },
+      {
+        "table": "assignments",
+        "row_id": "df0fb2d3-aeb2-555d-ba5a-7c37d227316a",
+        "column": "amount",
+        "value": 1200,
+        "clock": "2026-11-02T10:05:00.000Z-0000-mac"
+      }
+    ]
+  },
+  "rows": {
+    "categories": {
+      "01a0f5c0-0000-7000-8000-000000000005": {
+        "deleted_at": "2026-11-02T10:00:00.000000Z",
+        "successor_id": "01a0f5c0-0000-7000-8000-000000000006"
+      }
+    },
+    "assignments": {
+      "df0fb2d3-aeb2-555d-ba5a-7c37d227316a": {
+        "amount": 1200,
+        "deleted_at": null
+      },
+      "d97d9899-1e80-5a72-9dfa-7a3f672ece83": {
+        "amount": 2000
+      }
+    }
+  },
+  "budget": {
+    "2026-11-01": {
+      "01a0f5c0-0000-7000-8000-000000000006": {
+        "assigned": 3200,
+        "available": 3200
+      }
+    }
+  }
+}

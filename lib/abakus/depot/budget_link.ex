@@ -10,7 +10,7 @@ defmodule Abakus.Depot.BudgetLink do
   alias Abakus.Categories.Category
   alias Abakus.Depot.BudgetLink.Link
   alias Abakus.Depot.CashSide
-  alias Abakus.{LocalTime, Repo}
+  alias Abakus.{LocalTime, Repo, Sync}
   alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
 
@@ -34,7 +34,7 @@ defmodule Abakus.Depot.BudgetLink do
   """
   def switch_on(%Scope{} = scope, attrs) do
     if Scope.budget_owner?(scope),
-      do: Repo.transact(fn -> link(scope, attrs) end),
+      do: Sync.write(fn -> link(scope, attrs) end),
       else: {:error, :not_budget_owner}
   end
 
@@ -70,7 +70,9 @@ defmodule Abakus.Depot.BudgetLink do
   defp validate_category(%Changeset{data: %Link{user_id: user_id}} = changeset) do
     Changeset.validate_change(changeset, :category_id, fn :category_id, id ->
       if Repo.exists?(
-           from c in Category, where: c.id == ^id and c.user_id == ^user_id and not c.internal
+           from c in Category,
+             where:
+               c.id == ^id and c.user_id == ^user_id and not c.internal and is_nil(c.deleted_at)
          ),
          do: [],
          else: [category_id: "ist keine Kategorie des Budgets"]

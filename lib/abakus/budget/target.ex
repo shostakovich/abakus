@@ -14,24 +14,28 @@ defmodule Abakus.Budget.Target do
   """
 
   alias Abakus.Budget.CategoryMonth
+  alias Abakus.Categories.TargetVersion
 
   @doc """
   The version in effect in the month (versions as `%{from_month, cadence, ...}`) with the month its current cycle
-  began, as `{version, cycle_start}`; nil if there is none or it was ended.
+  began, as `{version, cycle_start}`; nil if there is none, it was ended or it lacks what its cadence needs.
   """
   def in_effect(versions, month) do
     versions
     |> Enum.filter(&(Date.compare(&1.from_month, month) != :gt))
     |> Enum.sort_by(& &1.from_month, {:desc, Date})
     |> case do
-      [] -> nil
-      [%{cadence: :none} | _] -> nil
-      [version | earlier] -> {version, cycle_start(version, earlier, month)}
+      [version | earlier] ->
+        if TargetVersion.complete?(version),
+          do: {version, cycle_start(version, earlier, month)}
+
+      [] ->
+        nil
     end
   end
 
   defp cycle_start(%{cadence: :by_date} = version, earlier, month) do
-    run = Enum.reverse([version | Enum.take_while(earlier, &(&1.cadence == :by_date))])
+    run = Enum.reverse([version | Enum.take_while(earlier, &dated?/1)])
     due = due_month(version, month)
     ends = Enum.map(tl(run), & &1.from_month) ++ [due]
 
@@ -47,6 +51,8 @@ defmodule Abakus.Budget.Target do
   end
 
   defp cycle_start(version, _earlier, _month), do: version.from_month
+
+  defp dated?(version), do: version.cadence == :by_date and TargetVersion.complete?(version)
 
   defp reached(%{repeats_yearly: false} = version, until),
     do: Enum.filter([due_month(version, version.from_month)], &Date.before?(&1, until))

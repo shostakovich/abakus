@@ -10,6 +10,7 @@ defmodule Abakus.Categories.Assignment do
 
   schema "assignments" do
     field :month, :date
+    field :deleted_at, :utc_datetime_usec
     field :amount, :integer
 
     belongs_to :category, Category
@@ -26,18 +27,6 @@ defmodule Abakus.Categories.Assignment do
     |> validate_required([:category_id, :user_id, :month, :amount])
     |> Amount.validate()
     |> unique_constraint([:category_id, :month])
-    |> put_named_id()
+    |> Ids.put_named_id(:month, &Ids.assignment/2)
   end
-
-  defp put_named_id(%{data: %{id: nil}} = changeset) do
-    case {get_field(changeset, :category_id), get_field(changeset, :month)} do
-      {category_id, %Date{} = month} when is_binary(category_id) ->
-        put_change(changeset, :id, Ids.assignment(category_id, month))
-
-      _incomplete ->
-        changeset
-    end
-  end
-
-  defp put_named_id(changeset), do: changeset
 end

@@ -12,6 +12,8 @@ config :abakus, :backup_dir, Path.join(Path.dirname(database), "backups")
 
 config :abakus, jobs: false
 
+config :abakus, :sync_wait, 100
+
 config :abakus, Abakus.ExchangeRates, source: Abakus.FakeExchangeRateSource
 
 config :abakus, Abakus.BankSync, client: Abakus.BankSync.FakeClient

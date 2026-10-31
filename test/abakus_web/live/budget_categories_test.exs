@@ -226,7 +226,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
         with: %{"into" => "#{c.games.id}"}
       )
 
-      refute Repo.reload(c.movies)
+      assert Repo.reload(c.movies).deleted_at
       assert has_element?(view, ~s|dialog#category-dialog[data-show="false"]|)
       assert Categories.budget(budget_scope()).assigned == %{{c.games.id, @october} => 2_500}
       refute has_element?(view, "#category-#{c.movies.id}")
@@ -338,7 +338,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
       view |> element("#edit-group-#{empty.id}") |> render_click()
       Confirm.confirm_click(view, "#edit-delete", "Gruppe „🗑️ Leer“ löschen?")
 
-      refute Repo.reload(empty)
+      assert Repo.reload(empty).deleted_at
       refute has_element?(view, "#group-#{empty.id}")
     end
   end
@@ -388,19 +388,6 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
       assert has_element?(view, ~s|#delete-into-combobox input[name=into][value="#{c.games.id}"]|)
     end
-  end
-
-  test "a sum of assignments out of range is refused with a note", c do
-    Categories.assign(budget_scope(), c.movies, @october, 10_000_000_000_000)
-    Categories.assign(budget_scope(), c.games, @october, 1)
-    view = open(c.conn)
-
-    edit_category(view, c.movies)
-    view |> element("#edit-delete") |> render_click()
-    view |> form("#delete-form") |> render_submit(%{"into" => "#{c.games.id}"})
-
-    assert has_element?(view, "#category-dialog", "zu groß")
-    assert Repo.reload(c.movies)
   end
 
   test "\"Löschen\" sent while adding changes nothing", c do

@@ -13,6 +13,11 @@ defmodule Abakus.IdsTest do
 
     assert Ids.entered_transaction(@category, ~D[2026-12-01]) ==
              "28bca64b-3fac-52b1-8dde-6a7a1ce968b0"
+
+    assert Ids.entered_subtransaction("28bca64b-3fac-52b1-8dde-6a7a1ce968b0", 0) ==
+             "14ba82c4-51c1-5ecd-ba82-b995012c3b39"
+
+    assert Ids.transfer_counterpart(@category) == "9c88c356-e185-5efa-b9f0-818a4644aebf"
   end
 
   test "a new id is a UUIDv7 later than the one before" do

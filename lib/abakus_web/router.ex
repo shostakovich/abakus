@@ -20,6 +20,15 @@ defmodule AbakusWeb.Router do
     plug :fetch_current_scope_for_user
   end
 
+  pipeline :api do
+    plug :accepts, ["json"]
+  end
+
+  pipeline :device_api do
+    plug :accepts, ["json"]
+    plug AbakusWeb.DeviceAuth
+  end
+
   pipeline :budget do
     plug :require_area, :budget
   end
@@ -40,6 +49,29 @@ defmodule AbakusWeb.Router do
   scope "/", AbakusWeb do
     get "/up", HealthController, :show
     forward "/mcp", MCPPlug, [], log: false
+  end
+
+  # Public: what an app needs to sign in, which checks the client and its codes and tokens itself.
+  scope "/", AbakusWeb do
+    pipe_through :api
+
+    get "/.well-known/oauth-authorization-server", OAuthController, :metadata
+    post "/oauth/token", OAuthController, :token
+    post "/oauth/revoke", OAuthController, :revoke
+  end
+
+  scope "/oauth", AbakusWeb do
+    pipe_through [:browser, :require_authenticated_user]
+
+    get "/authorize", OAuthController, :authorize
+    post "/authorize", OAuthController, :decide
+  end
+
+  scope "/api", AbakusWeb do
+    pipe_through :device_api
+
+    post "/sync", SyncController, :sync
+    get "/snapshot", SyncController, :snapshot
   end
 
   scope "/", AbakusWeb do
@@ -126,6 +158,7 @@ defmodule AbakusWeb.Router do
         AbakusWeb.SettingsNav
       ] do
       live "/appearance", SettingsLive
+      live "/devices", DevicesLive
       live "/depot/portfolios", Depot.PortfoliosLive
       live "/depot/receipt-intake", Depot.ReceiptIntakeLive
     end

@@ -38,7 +38,9 @@ defmodule Abakus.Ledger.TransfersTest do
   defp assert_balanced do
     transactions = Repo.all(from t in Transaction, where: is_nil(t.deleted_at))
     by_id = Map.new(transactions, &{&1.id, &1})
-    subtransactions = Repo.all(from s in Subtransaction, preload: :transaction)
+
+    subtransactions =
+      Repo.all(from s in Subtransaction, where: is_nil(s.deleted_at), preload: :transaction)
 
     sides =
       Enum.filter(transactions, &(&1.transfer_subtransaction_id == nil)) ++
@@ -251,7 +253,7 @@ defmodule Abakus.Ledger.TransfersTest do
       assert %{payee_id: ["darf nicht das eigene Konto sein"]} = errors_on(changeset)
     end
 
-    test "a regular payee removes the counterpart, a transfer payee brings a new one", c do
+    test "a regular payee removes the counterpart, a transfer payee brings it back", c do
       {:ok, outflow} = transfer(c.checking, c.savings)
       inflow = counterpart(outflow)
 
@@ -268,8 +270,8 @@ defmodule Abakus.Ledger.TransfersTest do
           payee_id: c.savings.transfer_payee.id
         })
 
-      assert %Transaction{id: id, amount: 1_250} = counterpart(outflow)
-      assert id != inflow.id
+      assert %Transaction{id: id, amount: 1_250, deleted_at: nil} = counterpart(outflow)
+      assert id == inflow.id
       assert_balanced()
     end
 
@@ -401,7 +403,7 @@ defmodule Abakus.Ledger.TransfersTest do
         })
 
       assert reload(c.inflow).deleted_at
-      assert Repo.get(Subtransaction, c.to_savings.id) == nil
+      assert Repo.get(Subtransaction, c.to_savings.id).deleted_at
 
       {:ok, _} =
         Ledger.update_transaction(budget_scope(), c.split, %{

@@ -10,6 +10,7 @@ defmodule Abakus.Categories.TargetSnooze do
 
   schema "target_snoozes" do
     field :month, :date
+    field :deleted_at, :utc_datetime_usec
 
     belongs_to :category, Category
     belongs_to :user, Abakus.Users.User, type: :id
@@ -24,18 +25,6 @@ defmodule Abakus.Categories.TargetSnooze do
     |> update_change(:month, &Date.beginning_of_month/1)
     |> validate_required([:category_id, :user_id, :month])
     |> unique_constraint([:category_id, :month])
-    |> put_named_id()
+    |> Ids.put_named_id(:month, &Ids.target_snooze/2)
   end
-
-  defp put_named_id(%{data: %{id: nil}} = changeset) do
-    case {get_field(changeset, :category_id), get_field(changeset, :month)} do
-      {category_id, %Date{} = month} when is_binary(category_id) ->
-        put_change(changeset, :id, Ids.target_snooze(category_id, month))
-
-      _incomplete ->
-        changeset
-    end
-  end
-
-  defp put_named_id(changeset), do: changeset
 end

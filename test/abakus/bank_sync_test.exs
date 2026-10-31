@@ -6,9 +6,9 @@ defmodule Abakus.BankSyncTest do
   import Abakus.Depot.PortfoliosFixtures, only: [portfolio_fixture: 2]
   import ExUnit.CaptureLog
 
-  alias Abakus.{BankSync, Ledger, Repo}
+  alias Abakus.{BankSync, Ledger, Repo, SyncDevice}
   alias Abakus.BankSync.{AccessError, Connection, FakeClient, LinkedAccount}
-  alias Abakus.Ledger.TransactionOrigin
+  alias Abakus.Ledger.{Payee, Transaction, TransactionOrigin}
   alias Abakus.Users.Scope
 
   setup do
@@ -429,6 +429,22 @@ defmodule Abakus.BankSyncTest do
       assert connection.last_sync_at == run.started_at
       assert connection.last_error == nil
       assert [^run] = connection.sync_runs
+    end
+
+    test "writes messages that a device then receives", ctx do
+      mac = SyncDevice.new(budget_scope(), "mac")
+
+      {:ok, _run} = BankSync.fetch(budget_scope(), ctx.connection)
+      mac = SyncDevice.pull(mac)
+
+      transactions = Ledger.list_transactions(budget_scope(), ctx.giro)
+      assert [_pending, _booked] = transactions
+
+      for transaction <- transactions do
+        SyncDevice.assert_converged(mac, Transaction, transaction.id)
+      end
+
+      SyncDevice.assert_converged(mac, Payee, Enum.find_value(transactions, & &1.payee_id))
     end
 
     test "fetches again from 14 days before the last fetch and imports nothing twice", ctx do

@@ -47,6 +47,7 @@ defmodule AbakusWeb.SettingsLiveTest do
                "Allgemein",
                "Zugang",
                "Aussehen",
+               "Geräte",
                "Kasse",
                "Gruppe",
                "Teilnehmer",
@@ -68,6 +69,7 @@ defmodule AbakusWeb.SettingsLiveTest do
       for {id, plush} <- [
             access: "key",
             appearance: "palette",
+            devices: "smartphone",
             kasse_group: "house",
             kasse_participants: "users",
             kasse_categories: "tag",
@@ -152,8 +154,9 @@ defmodule AbakusWeb.SettingsLiveTest do
       assert has_element?(view, ~s|#settings-back-sidebar[href="/kasse"]|, "Zurück zur Kasse")
     end
 
-    test "gets 404 on the budget link and Belegeingang", %{conn: conn} do
+    test "gets 404 on the budget link, Geräte and Belegeingang", %{conn: conn} do
       assert_error_sent 404, fn -> get(conn, ~p"/settings/kasse/budget") end
+      assert_error_sent 404, fn -> get(conn, ~p"/settings/devices") end
       assert_error_sent 404, fn -> get(conn, ~p"/settings/depot/receipt-intake") end
     end
   end

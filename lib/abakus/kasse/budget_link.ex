@@ -37,6 +37,7 @@ defmodule Abakus.Kasse.BudgetLink do
   alias Abakus.Ledger.{Account, Matches, Payee, Subtransaction, Transaction}
   alias Abakus.Money
   alias Abakus.Repo
+  alias Abakus.Sync
   alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
 
@@ -90,7 +91,7 @@ defmodule Abakus.Kasse.BudgetLink do
   """
   def switch_on(%Scope{} = scope, account_id) do
     participant = Access.person!(scope)
-    Repo.transact(fn -> link(scope, participant, account_id) end)
+    Sync.write(fn -> link(scope, participant, account_id) end)
   end
 
   defp link(scope, participant, account_id) do
@@ -113,11 +114,11 @@ defmodule Abakus.Kasse.BudgetLink do
   defp feed(scope, account_id) do
     with {:ok, id} <- Abakus.Ids.cast(account_id),
          %Account{} = account <- Enum.find(choices(scope), &(&1.id == id)) do
-      Repo.update_all(
+      Sync.update_all(
         from(a in Account,
           where: a.user_id == ^scope.user.id and a.shared_expenses and a.id != ^id
         ),
-        set: [shared_expenses: false]
+        set: [shared_expenses: false, updated_at: DateTime.utc_now()]
       )
 
       Ledger.update_account(scope, account, %{shared_expenses: true})
@@ -374,7 +375,7 @@ defmodule Abakus.Kasse.BudgetLink do
   does, or `{:error, message}` in German.
   """
   def write_from_register(%Scope{} = scope, original, attrs, opts \\ []) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       link = user_link(scope)
       before = original && link && shared_transfer(link, own_transaction(scope, original.id))
 
@@ -656,7 +657,9 @@ defmodule Abakus.Kasse.BudgetLink do
     regular =
       Repo.all(
         from c in BudgetCategory,
-          where: c.user_id == ^scope.user.id and c.id in ^chosen and not c.internal,
+          where:
+            c.user_id == ^scope.user.id and c.id in ^chosen and not c.internal and
+              is_nil(c.deleted_at),
           select: c.id
       )
 

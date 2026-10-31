@@ -38,7 +38,7 @@ defmodule AbakusWeb.RegisterLive do
   alias Abakus.Depot.Portfolios
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Transaction}
-  alias Abakus.LocalTime
+  alias Abakus.{LocalTime, Sync}
   alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.Depot.Components, as: DepotComponents
   alias AbakusWeb.RegisterLive.{Balances, Components, Reconcile, Rows, TransactionEditor}
@@ -156,6 +156,7 @@ defmodule AbakusWeb.RegisterLive do
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     depot_cash = Portfolios.cash_account_portfolios(scope)
+    if connected?(socket), do: Sync.subscribe(scope)
 
     {:ok,
      assign(socket,
@@ -376,6 +377,8 @@ defmodule AbakusWeb.RegisterLive do
      |> put_flash(:info, message)
      |> refresh()}
   end
+
+  def handle_info({:synced, _device}, socket), do: {:noreply, refresh(socket)}
 
   @impl true
   def handle_event("search", %{"q" => query}, socket),

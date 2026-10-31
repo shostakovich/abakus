@@ -14,7 +14,7 @@ defmodule AbakusWeb.BudgetLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{Budget, Categories, Format, LocalTime, Money}
+  alias Abakus.{Budget, Categories, Format, LocalTime, Money, Sync}
 
   alias AbakusWeb.BudgetLive.{
     CategoryEditor,
@@ -219,6 +219,7 @@ defmodule AbakusWeb.BudgetLive do
   @impl true
   def mount(_params, _session, socket) do
     connect = get_connect_params(socket) || %{}
+    if connected?(socket), do: Sync.subscribe(socket.assigns.current_scope)
 
     {:ok,
      socket
@@ -235,6 +236,10 @@ defmodule AbakusWeb.BudgetLive do
      )
      |> assign_budget()}
   end
+
+  @impl true
+  def handle_info({:synced, _device}, socket),
+    do: {:noreply, socket |> assign_budget() |> assign_view()}
 
   @impl true
   def handle_params(params, _uri, socket) do

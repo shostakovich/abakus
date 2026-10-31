@@ -5,15 +5,17 @@ defmodule Abakus.Ledger.Transfers do
   A side of a transfer is a transaction that is not a split, or a split's subtransaction, whose payee is a
   transfer payee. Its counterpart is a transaction in that payee's account with the negated amount, the same date
   and memo, and the side's account's transfer payee. Both point at each other. Cleared state and approval belong
-  to each side; the category follows the category rule.
+  to each side; the category follows the category rule. A counterpart's id is named after its side
+  (`Abakus.Ids.transfer_counterpart/1`), so two writers make the same one; a side that becomes a transfer again
+  brings its deleted counterpart back.
 
   A reconciled counterpart is changed, moved or released only when `confirmed?` is true.
   """
 
   import Ecto.Query
 
+  alias Abakus.{Ids, Repo, Sync}
   alias Abakus.Ledger.{Account, Matches, Payee, Subtransaction, Transaction, TransactionOrigin}
-  alias Abakus.Repo
   alias Ecto.Changeset
 
   # What the Ledger keeps in step on a counterpart, in the order a refusal reports.
@@ -136,30 +138,46 @@ defmodule Abakus.Ledger.Transfers do
   end
 
   defp create_counterpart(side, fields, context) do
-    %Transaction{
-      user_id: context.transaction.user_id,
-      cleared: :uncleared,
-      approved: context.transaction.approved,
-      source: context.transaction.source
-    }
-    |> Changeset.change(Map.merge(fields, back_pointer(side)))
-    |> Repo.insert()
-    |> case do
-      {:ok, counterpart} ->
-        side |> Changeset.change(transfer_transaction_id: counterpart.id) |> Repo.update()
+    id = Ids.transfer_counterpart(side.id)
 
-      error ->
-        error
+    changes =
+      fields
+      |> Map.merge(back_pointer(side))
+      |> Map.merge(%{
+        cleared: :uncleared,
+        approved: context.transaction.approved,
+        source: context.transaction.source,
+        matched_transaction_id: nil,
+        deleted_at: nil
+      })
+
+    with {:ok, counterpart} <- put_counterpart(Repo.get(Transaction, id), id, changes, context) do
+      side |> Changeset.change(transfer_transaction_id: counterpart.id) |> Sync.update()
     end
   end
 
-  defp back_pointer(%Transaction{id: id}), do: %{transfer_transaction_id: id}
-  defp back_pointer(%Subtransaction{id: id}), do: %{transfer_subtransaction_id: id}
+  defp put_counterpart(nil, id, changes, context) do
+    %Transaction{id: id, user_id: context.transaction.user_id}
+    |> Changeset.change(changes)
+    |> Sync.insert()
+  end
+
+  defp put_counterpart(existing, _id, changes, _context) do
+    with {:ok, counterpart} <- existing |> Changeset.change(changes) |> Sync.update(),
+         :ok <- move_counterpart_origins(existing, counterpart),
+         do: {:ok, counterpart}
+  end
+
+  defp back_pointer(%Transaction{id: id}),
+    do: %{transfer_transaction_id: id, transfer_subtransaction_id: nil}
+
+  defp back_pointer(%Subtransaction{id: id}),
+    do: %{transfer_subtransaction_id: id, transfer_transaction_id: nil}
 
   defp update_counterpart(side, existing, fields, context) do
     with :ok <- check_reconciled(existing, fields, context.confirmed?),
          :ok <- dissolve_moved_proposals(existing, fields),
-         {:ok, counterpart} <- existing |> Changeset.change(fields) |> Repo.update(),
+         {:ok, counterpart} <- existing |> Changeset.change(fields) |> Sync.update(),
          :ok <- move_counterpart_origins(existing, counterpart) do
       {:ok, side}
     end
@@ -193,7 +211,7 @@ defmodule Abakus.Ledger.Transfers do
 
   defp unlink(side, context) do
     with :ok <- release([side.transfer_transaction_id], context.confirmed?) do
-      side |> Changeset.change(transfer_transaction_id: nil) |> Repo.update()
+      side |> Changeset.change(transfer_transaction_id: nil) |> Sync.update()
     end
   end
 
@@ -210,7 +228,7 @@ defmodule Abakus.Ledger.Transfers do
       true ->
         soft_delete(ids)
 
-        Repo.update_all(by_ids(ids),
+        Sync.update_all(by_ids(ids),
           set: [
             transfer_transaction_id: nil,
             transfer_subtransaction_id: nil,
@@ -234,11 +252,11 @@ defmodule Abakus.Ledger.Transfers do
   def soft_delete(ids) do
     now = DateTime.utc_now()
 
-    Repo.update_all(from(t in by_ids(ids), where: is_nil(t.deleted_at)),
+    Sync.update_all(from(t in by_ids(ids), where: is_nil(t.deleted_at)),
       set: [deleted_at: now, updated_at: now]
     )
 
-    Repo.update_all(
+    Sync.update_all(
       from(t in Transaction,
         where:
           not is_nil(t.matched_transaction_id) and

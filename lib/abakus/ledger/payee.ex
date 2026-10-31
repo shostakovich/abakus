@@ -2,7 +2,7 @@ defmodule Abakus.Ledger.Payee do
   @moduledoc """
   Who a transaction is with. Every account has one transfer payee ("Transfer : Girokonto"); a transaction with it
   is a transfer to that account. A hidden payee is no longer suggested; its rename rule is its
-  `Abakus.Ledger.PayeeRenameCondition`s.
+  `Abakus.Ledger.PayeeRenameCondition`s. A payee merged into another is deleted with that one as its successor.
   """
 
   use Abakus.Schema, uuid: true
@@ -17,10 +17,12 @@ defmodule Abakus.Ledger.Payee do
     field :name, :string
     field :lookup_key, :string
     field :hidden, :boolean, default: false
+    field :deleted_at, :utc_datetime_usec
 
     belongs_to :user, Abakus.Users.User, type: :id
     belongs_to :transfer_account, Account
     belongs_to :last_category, Category
+    belongs_to :successor, __MODULE__
 
     timestamps()
   end
@@ -32,7 +34,6 @@ defmodule Abakus.Ledger.Payee do
     |> validate_required([:user_id, :name])
     |> validate_not_transfer()
     |> Names.put_lookup_key()
-    |> unique_constraint(:name, name: :payees_user_id_lookup_key_index)
   end
 
   @doc "Names the transfer payee after its account."

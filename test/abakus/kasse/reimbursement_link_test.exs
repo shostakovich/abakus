@@ -26,7 +26,7 @@ defmodule Abakus.Kasse.ReimbursementLinkTest do
       Repo.all(
         from t in Transaction,
           where: t.account_id == ^account.id and is_nil(t.deleted_at),
-          order_by: t.id
+          order_by: [t.inserted_at, t.id]
       )
 
   defp led(expense),

@@ -1,7 +1,7 @@
 defmodule Abakus.Categories.Category do
   @moduledoc """
-  An envelope in the budget. A category is deleted only by moving everything it has into another
-  (`Abakus.Categories.delete_category/4`), so history keeps its references. `hidden` is kept,
+  An envelope in the budget. A category is deleted only into another, its successor
+  (`Abakus.Categories.delete_category/4`), for which whatever still points at it counts. `hidden` is kept,
   but the budget ignores it. Each user's internal category, Ready to Assign, comes with its first use
   (`Abakus.Categories.ready_to_assign!/1`) and cannot be changed.
   """
@@ -22,10 +22,12 @@ defmodule Abakus.Categories.Category do
     field :internal, :boolean, default: false
     field :position, :integer, default: 0
     field :note, :string
+    field :deleted_at, :utc_datetime_usec
 
     belongs_to :category_group, CategoryGroup
     belongs_to :user, Abakus.Users.User, type: :id
-    has_many :target_versions, TargetVersion
+    belongs_to :successor, __MODULE__
+    has_many :target_versions, TargetVersion, where: [deleted_at: nil]
 
     timestamps()
   end

@@ -23,8 +23,17 @@ defmodule AbakusWeb.ContentSecurityPolicy do
     })
   end
 
-  @doc "The policy for a response whose inline scripts carry `nonce`."
-  def policy(nonce, endpoint_url \\ AbakusWeb.Endpoint.url()) do
+  @doc "Lets the page's forms also lead to `target`, e.g. a sign-in that ends in an app's redirect."
+  def allow_form_target(conn, target) do
+    put_resp_header(
+      conn,
+      "content-security-policy",
+      policy(conn.assigns.csp_nonce, AbakusWeb.Endpoint.url(), [target])
+    )
+  end
+
+  @doc "The policy for a response whose inline scripts carry `nonce` and whose forms may also lead to `targets`."
+  def policy(nonce, endpoint_url \\ AbakusWeb.Endpoint.url(), form_targets \\ []) do
     Enum.join(
       [
         "default-src 'self'",
@@ -36,7 +45,7 @@ defmodule AbakusWeb.ContentSecurityPolicy do
         "object-src 'none'",
         "frame-ancestors 'none'",
         "base-uri 'self'",
-        "form-action 'self'"
+        Enum.join(["form-action 'self'" | form_targets], " ")
       ],
       "; "
     )

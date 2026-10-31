@@ -96,7 +96,7 @@ config :logger, :default_formatter,
   metadata: [:request_id]
 
 config :phoenix, :json_library, JSON
-config :phoenix, :filter_parameters, ["password", "token", "secret"]
+config :phoenix, :filter_parameters, ["password", "token", "secret", "code"]
 config :ecto_sqlite3, json_library: JSON
 
 import_config "#{config_env()}.exs"

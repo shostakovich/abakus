@@ -699,7 +699,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert %Transaction{date: ~D[2026-10-04], cleared: :cleared, approved: true} =
                reload(c.shopping)
 
-      assert Repo.get(Transaction, c.proposal.id) == nil
+      assert Repo.get(Transaction, c.proposal.id).deleted_at
       assert has_element?(view, "#flash-info", "Zugeordnet.")
       refute has_element?(view, "#proposal-#{c.proposal.id}")
       assert has_element?(view, "#approve-all-count", "1")
@@ -735,7 +735,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       assert Ledger.list_match_proposals(budget_scope(), c.giro) == []
       assert reload(c.salary).date == ~D[2026-10-02]
-      assert Repo.get(Transaction, other.id) == nil
+      assert Repo.get(Transaction, other.id).deleted_at
       assert has_element?(view, "#flash-info", "2 zugeordnet.")
       refute has_element?(view, "#accept-all-matches")
     end

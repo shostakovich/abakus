@@ -14,6 +14,7 @@ defmodule Abakus.Ledger.PayeeRenameCondition do
     field :position, :integer, default: 0
     field :operator, Ecto.Enum, values: [:contains, :is, :starts_with, :ends_with]
     field :text, :string
+    field :deleted_at, :utc_datetime_usec
 
     belongs_to :user, Abakus.Users.User, type: :id
     belongs_to :payee, Payee

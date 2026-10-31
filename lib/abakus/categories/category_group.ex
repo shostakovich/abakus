@@ -13,9 +13,10 @@ defmodule Abakus.Categories.CategoryGroup do
     field :internal, :boolean, default: false
     field :position, :integer, default: 0
     field :note, :string
+    field :deleted_at, :utc_datetime_usec
 
     belongs_to :user, Abakus.Users.User, type: :id
-    has_many :categories, Category
+    has_many :categories, Category, where: [deleted_at: nil]
 
     timestamps()
   end

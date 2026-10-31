@@ -2,7 +2,8 @@ defmodule Abakus.Ledger.Subtransaction do
   @moduledoc """
   A part of a split transaction, kept in the split's order (`position`). A subtransaction with a transfer payee is
   a transfer of its own, as in YNAB: `transfer_transaction_id` points to its counterpart, which the Ledger keeps.
-  Subtransactions go with their transaction: deleted with its row, and soft-deleted with it.
+  A subtransaction removed from its split is deleted (`deleted_at`); it is not deleted with its transaction, which
+  stands for it.
   """
 
   use Abakus.Schema, uuid: true
@@ -17,6 +18,7 @@ defmodule Abakus.Ledger.Subtransaction do
     field :position, :integer, default: 0
     field :amount, :integer
     field :memo, :string
+    field :deleted_at, :utc_datetime_usec
 
     field :counterpart_category_id, Ecto.UUID, virtual: true
 

@@ -84,14 +84,17 @@ defmodule Abakus.Ledger.ScheduledTest do
     assert Repo.reload!(scheduled).next_date == ~D[2027-01-01]
   end
 
-  test "one that happens once is gone once entered; the transaction keeps its date", c do
+  test "one that happens once is deleted once entered, and not entered again", c do
     scheduled = scheduled_fixture(c, frequency: :once)
 
     assert Scheduled.enter_due(budget_scope(), ~D[2026-12-05]) == {:ok, 1}
-    refute Repo.reload(scheduled)
+    assert Repo.reload(scheduled).deleted_at
+    assert Scheduled.enter_due(budget_scope(), ~D[2026-12-06]) == {:ok, 0}
 
-    assert [%Transaction{scheduled_transaction_id: nil, scheduled_date: ~D[2026-12-01]}] =
+    assert [%Transaction{scheduled_transaction_id: id, scheduled_date: ~D[2026-12-01]}] =
              entered(c.giro)
+
+    assert id == scheduled.id
   end
 
   test "a split is entered with its parts, a transfer with its counterpart", c do

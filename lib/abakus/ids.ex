@@ -7,9 +7,6 @@ defmodule Abakus.Ids do
 
   @namespace "1d70d95f-102c-4115-966f-5db73210e37c"
 
-  @doc "The namespace of the name-based ids."
-  def namespace, do: @namespace
-
   @doc "A new id, later than every id this node made before."
   def generate, do: Ecto.UUID.generate(version: 7, precision: :monotonic)
 
@@ -35,6 +32,30 @@ defmodule Abakus.Ids do
   def entered_transaction(scheduled_transaction_id, %Date{} = date),
     do: named(["entered_transaction", scheduled_transaction_id, date])
 
+  @doc "The part at `position` of a transaction entered from a scheduled transaction."
+  def entered_subtransaction(entered_transaction_id, position) when is_integer(position),
+    do: named(["entered_subtransaction", entered_transaction_id, position])
+
+  @doc "The counterpart of a transfer's side, a transaction or a subtransaction."
+  def transfer_counterpart(side_id), do: named(["transfer_counterpart", side_id])
+
+  @doc """
+  Puts the id named after a new row's category and month on its changeset, by `name` (such as `assignment/2`), once
+  both are known.
+  """
+  def put_named_id(%Ecto.Changeset{data: %{id: nil}} = changeset, month_field, name) do
+    case {Ecto.Changeset.get_field(changeset, :category_id),
+          Ecto.Changeset.get_field(changeset, month_field)} do
+      {category_id, %Date{} = month} when is_binary(category_id) ->
+        Ecto.Changeset.put_change(changeset, :id, name.(category_id, month))
+
+      _incomplete ->
+        changeset
+    end
+  end
+
+  def put_named_id(changeset, _month_field, _name), do: changeset
+
   @doc "The UUIDv5 of the parts joined by slashes in the namespace (RFC 9562)."
   def named(parts) do
     name = Enum.map_join(parts, "/", &part/1)
@@ -48,4 +69,5 @@ defmodule Abakus.Ids do
 
   defp part(%Date{} = date), do: Date.to_iso8601(date)
   defp part(text) when is_binary(text), do: text
+  defp part(number) when is_integer(number), do: Integer.to_string(number)
 end

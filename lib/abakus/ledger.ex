@@ -1,7 +1,8 @@
 defmodule Abakus.Ledger do
   @moduledoc """
   Accounts, payees and transactions, each the user's: functions take the caller's `%Scope{}` and see only its
-  user's records and categories; another user's behave like missing ones.
+  user's records and categories; another user's behave like missing ones. Every write goes through `Abakus.Sync`,
+  which records it as messages, and deletes as tombstones.
 
   The Ledger owns transfers: a transaction or subtransaction with a transfer payee gets its counterpart in that
   payee's account, created, kept in step (amount negated, date, memo), moved, and removed by the Ledger alone
@@ -40,13 +41,16 @@ defmodule Abakus.Ledger do
     BankBalance,
     Matches,
     Payee,
+    PayeeRenameCondition,
+    ScheduledSubtransaction,
+    ScheduledTransaction,
     Subtransaction,
     Transaction,
     TransactionOrigin,
     Transfers
   }
 
-  alias Abakus.{Ids, Names, References, Repo}
+  alias Abakus.{Ids, Names, References, Repo, Successors, Sync}
   alias Abakus.Users.Scope
   alias Ecto.Changeset
 
@@ -82,16 +86,27 @@ defmodule Abakus.Ledger do
 
   @doc "Creates an account together with its transfer payee; without a position it goes after the others."
   def create_account(%Scope{} = scope, attrs) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       changeset =
         %Account{user_id: user_id(scope)} |> Account.changeset(attrs) |> put_next_position(scope)
 
-      with {:ok, account} <- Repo.insert(changeset),
+      with {:ok, account} <- Sync.insert(changeset),
            {:ok, payee} <-
-             Repo.insert(Payee.transfer_changeset(%Payee{user_id: account.user_id}, account)) do
+             Sync.insert(Payee.transfer_changeset(%Payee{user_id: account.user_id}, account)) do
         {:ok, %{account | transfer_payee: payee}}
       end
     end)
+  end
+
+  @doc "Creates the transfer payee of each of the accounts `ids` that lacks one, as part of a write."
+  def put_missing_transfer_payees(%Scope{} = scope, ids) do
+    Repo.all(
+      from a in owned(Account, scope),
+        left_join: p in Payee,
+        on: p.transfer_account_id == a.id,
+        where: a.id in ^ids and is_nil(p.id)
+    )
+    |> Enum.each(&Sync.insert!(Payee.transfer_changeset(%Payee{user_id: &1.user_id}, &1)))
   end
 
   # Cast params have string keys; a given 0 counts as given, though it changes nothing.
@@ -108,8 +123,8 @@ defmodule Abakus.Ledger do
   def update_account(%Scope{} = scope, %Account{} = account, attrs) do
     changeset = scope |> own!(account) |> Account.changeset(attrs)
 
-    Repo.transact(fn ->
-      with {:ok, account} <- Repo.update(changeset),
+    Sync.write(fn ->
+      with {:ok, account} <- Sync.update(changeset),
            payee = Repo.get_by!(Payee, transfer_account_id: account.id),
            {:ok, payee} <-
              rename_transfer_payee(payee, account, Changeset.changed?(changeset, :name)) do
@@ -119,7 +134,7 @@ defmodule Abakus.Ledger do
   end
 
   defp rename_transfer_payee(payee, account, true = _renamed?),
-    do: payee |> Payee.transfer_changeset(account) |> Repo.update()
+    do: payee |> Payee.transfer_changeset(account) |> Sync.update()
 
   defp rename_transfer_payee(payee, _account, false = _renamed?), do: {:ok, payee}
 
@@ -142,13 +157,13 @@ defmodule Abakus.Ledger do
   def link_ofx_account(%Scope{} = scope, %Account{} = account, bank_id, acct_id) do
     own!(scope, account)
 
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with %Account{id: id} = linked when id != account.id <-
              get_account_by_ofx(scope, bank_id, acct_id) do
-        Repo.update!(Account.ofx_changeset(linked, nil, nil))
+        Sync.update!(Account.ofx_changeset(linked, nil, nil))
       end
 
-      account |> Account.ofx_changeset(bank_id, acct_id) |> Repo.update()
+      account |> Account.ofx_changeset(bank_id, acct_id) |> Sync.update()
     end)
   end
 
@@ -206,18 +221,18 @@ defmodule Abakus.Ledger do
         %{amount: amount, date: date, through: through},
         opts \\ []
       ) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       account = get_account!(scope, account_id)
       difference = amount - cleared_balance(scope, account, through)
 
       with :ok <- expect_difference(difference, Keyword.get(opts, :adjust, 0)),
            {:ok, adjustment} <- adjust(scope, account, difference, date) do
         {reconciled, _} =
-          Repo.update_all(lockable(scope, account_id, through),
+          Sync.update_all(lockable(scope, account_id, through),
             set: [cleared: :reconciled, updated_at: DateTime.utc_now()]
           )
 
-        Repo.update!(Changeset.change(account, last_reconciled_at: DateTime.utc_now()))
+        Sync.update!(Changeset.change(account, last_reconciled_at: DateTime.utc_now()))
         {:ok, %{reconciled: reconciled, adjustment: adjustment && Repo.reload!(adjustment)}}
       end
     end)
@@ -250,11 +265,13 @@ defmodule Abakus.Ledger do
     })
   end
 
+  @doc "Creates a regular payee; no other regular payee may have its lookup key."
   def create_payee(%Scope{} = scope, attrs) do
     %Payee{user_id: user_id(scope)}
     |> Payee.changeset(attrs)
     |> References.validate_exists(:last_category_id, owned(Category, scope))
-    |> Repo.insert()
+    |> validate_unique_name(scope)
+    |> Sync.insert()
   end
 
   def update_payee(%Scope{} = scope, %Payee{} = payee, attrs) do
@@ -262,23 +279,37 @@ defmodule Abakus.Ledger do
     |> own!(payee)
     |> Payee.changeset(attrs)
     |> References.validate_exists(:last_category_id, owned(Category, scope))
-    |> Repo.update()
+    |> validate_unique_name(scope)
+    |> Sync.update()
   end
+
+  defp validate_unique_name(changeset, scope) do
+    others =
+      if id = changeset.data.id,
+        do: from(p in regular_payees(scope), where: p.id != ^id),
+        else: regular_payees(scope)
+
+    with {:ok, key} <- Changeset.fetch_change(changeset, :lookup_key),
+         true <- Repo.exists?(from p in others, where: p.lookup_key == ^key) do
+      Changeset.add_error(changeset, :name, "has already been taken")
+    else
+      _unique -> changeset
+    end
+  end
+
+  defp payees(scope), do: from(p in owned(Payee, scope), where: is_nil(p.deleted_at))
+
+  defp regular_payees(scope), do: from(p in payees(scope), where: is_nil(p.transfer_account_id))
 
   @doc "The regular payees (no transfer payees) by name."
   def list_payees(%Scope{} = scope),
-    do:
-      Repo.all(
-        from p in owned(Payee, scope),
-          where: is_nil(p.transfer_account_id),
-          order_by: [p.lookup_key, p.id]
-      )
+    do: Repo.all(from p in regular_payees(scope), order_by: [p.lookup_key, p.id])
 
   @doc "Finds a payee by name, ignoring emoji and case. Regular payees win over transfer payees."
   def find_payee_by_name(%Scope{} = scope, name) when is_binary(name) do
     key = Names.lookup_key(name)
 
-    Repo.all(from p in owned(Payee, scope), where: p.lookup_key == ^key)
+    Repo.all(from p in payees(scope), where: p.lookup_key == ^key)
     |> Enum.map(&{&1, is_nil(&1.transfer_account_id)})
     |> Names.pick()
   end
@@ -349,7 +380,7 @@ defmodule Abakus.Ledger do
 
     subtransaction =
       Repo.one(
-        from s in Subtransaction,
+        from s in parts(),
           join: t in ^in_register(scope),
           on: t.id == s.transaction_id,
           where:
@@ -486,7 +517,7 @@ defmodule Abakus.Ledger do
   from `source` becomes an ordinary import again, which goes once the bank no longer reports it (ADR 0022).
   """
   def yield_proposal(%Scope{} = scope, %Transaction{id: id}, source) do
-    Repo.update_all(
+    Sync.update_all(
       from(p in yielding_proposals(scope, source), where: p.matched_transaction_id == ^id),
       set: [matched_transaction_id: nil, updated_at: DateTime.utc_now()]
     )
@@ -647,7 +678,7 @@ defmodule Abakus.Ledger do
       from t in in_register(scope),
         join: a in assoc(t, :account),
         where: a.kind in ^Account.budget_kinds(),
-        where: t.id not in subquery(from s in Subtransaction, select: s.transaction_id),
+        where: t.id not in subquery(from s in parts(), select: s.transaction_id),
         where:
           not is_nil(t.category_id) or
             (is_nil(t.transfer_transaction_id) and is_nil(t.transfer_subtransaction_id)),
@@ -655,7 +686,7 @@ defmodule Abakus.Ledger do
         select: {{t.category_id, month(t.date)}, sum(t.amount)}
 
     subtransactions =
-      from s in Subtransaction,
+      from s in parts(),
         join: t in subquery(in_register(scope)),
         on: t.id == s.transaction_id,
         join: a in Account,
@@ -673,7 +704,7 @@ defmodule Abakus.Ledger do
     Repo.exists?(
       from t in owned(Transaction, scope),
         left_join: s in Subtransaction,
-        on: s.transaction_id == t.id,
+        on: s.transaction_id == t.id and is_nil(s.deleted_at),
         where: t.cleared == :reconciled and is_nil(t.deleted_at),
         where: t.category_id == ^category_id or s.category_id == ^category_id
     )
@@ -681,8 +712,8 @@ defmodule Abakus.Ledger do
 
   @doc """
   Points everything that has the category `from_id` to `to_id`: transactions and split lines, deleted ones and match
-  proposals included, and payees' last categories. Reconciled transactions among them need `reconciled: :confirmed`
-  (see `reconciled_in_category?/2`).
+  proposals included, scheduled transactions with their parts, and payees' last categories. Reconciled transactions
+  among them need `reconciled: :confirmed` (see `reconciled_in_category?/2`).
   """
   def recategorize(%Scope{} = scope, from_id, to_id, opts \\ []) do
     if Keyword.get(opts, :reconciled) != :confirmed and reconciled_in_category?(scope, from_id),
@@ -703,22 +734,99 @@ defmodule Abakus.Ledger do
       set: [updated_at: now]
     )
 
-    Repo.update_all(
+    set = [set: [category_id: to_id, updated_at: now]]
+    scheduled_ids = select(owned(ScheduledTransaction, scope), [s], s.id)
+
+    Sync.update_all(
       from(s in Subtransaction,
         where: s.category_id == ^from_id and s.transaction_id in subquery(transaction_ids)
       ),
-      set: [category_id: to_id, updated_at: now]
+      set
     )
 
-    Repo.update_all(from(t in owned(Transaction, scope), where: t.category_id == ^from_id),
-      set: [category_id: to_id, updated_at: now]
+    Sync.update_all(from(t in owned(Transaction, scope), where: t.category_id == ^from_id), set)
+
+    Sync.update_all(
+      from(s in owned(ScheduledTransaction, scope), where: s.category_id == ^from_id),
+      set
     )
 
-    Repo.update_all(from(p in owned(Payee, scope), where: p.last_category_id == ^from_id),
+    Sync.update_all(
+      from(s in ScheduledSubtransaction,
+        where: s.category_id == ^from_id and s.scheduled_transaction_id in subquery(scheduled_ids)
+      ),
+      set
+    )
+
+    Sync.update_all(from(p in owned(Payee, scope), where: p.last_category_id == ^from_id),
       set: [last_category_id: to_id, updated_at: now]
     )
 
     :ok
+  end
+
+  defp parts, do: from(s in Subtransaction, where: is_nil(s.deleted_at))
+
+  @doc """
+  Merges the regular payees `ids` that share their lookup key with other regular payees, and those, into the oldest
+  of them, the one with the smallest id: what pointed at a merged payee points at that one, which takes the merged
+  one's last category if it has none, and the merged payee is deleted with it as its successor.
+  """
+  def merge_duplicate_payees(%Scope{} = scope, ids) do
+    keys =
+      Repo.all(
+        from p in regular_payees(scope), where: p.id in ^ids, select: p.lookup_key, distinct: true
+      )
+
+    Enum.each(keys, fn key ->
+      [into | merged] =
+        Repo.all(from p in regular_payees(scope), where: p.lookup_key == ^key, order_by: p.id)
+
+      Enum.reduce(merged, into, &merge_payee(scope, &1, &2))
+    end)
+  end
+
+  defp merge_payee(scope, %Payee{id: from_id} = from, %Payee{id: into_id} = into) do
+    repoint_payee(scope, from_id, into_id)
+    Sync.update!(Changeset.change(from, deleted_at: DateTime.utc_now(), successor_id: into_id))
+
+    if is_nil(into.last_category_id) and from.last_category_id,
+      do: Sync.update!(Changeset.change(into, last_category_id: from.last_category_id)),
+      else: into
+  end
+
+  @doc """
+  Points what points at the payees `ids` that are merged at the end of their chains of successors
+  (`Abakus.Successors`), as merging them did, for references set to a payee after it was merged.
+  """
+  def follow_merged_payees(%Scope{} = scope, ids) do
+    successors = Successors.of(scope, Payee)
+
+    for id <- Enum.uniq(ids),
+        into_id = Map.get(successors, id, id),
+        into_id != id,
+        do: repoint_payee(scope, id, into_id)
+
+    :ok
+  end
+
+  defp repoint_payee(scope, from_id, into_id) do
+    set = [set: [payee_id: into_id, updated_at: DateTime.utc_now()]]
+
+    Sync.update_all(from(t in owned(Transaction, scope), where: t.payee_id == ^from_id), set)
+    Sync.update_all(from(s in Subtransaction, where: s.payee_id == ^from_id), set)
+
+    Sync.update_all(
+      from(s in owned(ScheduledTransaction, scope), where: s.payee_id == ^from_id),
+      set
+    )
+
+    Sync.update_all(from(s in ScheduledSubtransaction, where: s.payee_id == ^from_id), set)
+
+    Sync.update_all(
+      from(c in owned(PayeeRenameCondition, scope), where: c.payee_id == ^from_id),
+      set
+    )
   end
 
   defp sum_by_key(pairs) do
@@ -741,15 +849,32 @@ defmodule Abakus.Ledger do
   def create_transaction(%Scope{} = scope, attrs, opts \\ []) do
     references = if led_by = opts[:led_by], do: Transaction.source_reference(led_by), else: %{}
 
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with {:ok, attrs} <- put_payee_by_name(scope, attrs) do
         %Transaction{user_id: user_id(scope)}
         |> struct!(references)
         |> struct!(entered_from(opts[:entered_from]))
         |> Transaction.changeset(attrs)
+        |> put_entered_part_ids()
         |> put_default_approval()
-        |> write(&Repo.insert/1, opts)
+        |> write(&Sync.insert/1, opts)
       end
+    end)
+  end
+
+  # Every writer enters an occurrence with the same parts.
+  defp put_entered_part_ids(
+         %Changeset{data: %Transaction{scheduled_transaction_id: nil}} = changeset
+       ),
+       do: changeset
+
+  defp put_entered_part_ids(%Changeset{data: %Transaction{id: id}} = changeset) do
+    Transaction.update_subtransactions(changeset, fn part ->
+      Changeset.put_change(
+        part,
+        :id,
+        Ids.entered_subtransaction(id, Changeset.get_field(part, :position))
+      )
     end)
   end
 
@@ -806,10 +931,7 @@ defmodule Abakus.Ledger do
   defp payee_named(scope, name) do
     key = Names.lookup_key(name)
 
-    case Repo.one(
-           from p in owned(Payee, scope),
-             where: p.lookup_key == ^key and is_nil(p.transfer_account_id)
-         ) do
+    case Repo.one(from p in regular_payees(scope), where: p.lookup_key == ^key) do
       nil -> create_payee(scope, %{name: name})
       payee -> {:ok, payee}
     end
@@ -831,14 +953,14 @@ defmodule Abakus.Ledger do
   transaction its source (`led_by:`). The payee may be given by name, as for `create_transaction/3`.
   """
   def update_transaction(%Scope{} = scope, %Transaction{id: id}, attrs, opts \\ []) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with {:ok, attrs} <- put_payee_by_name(scope, attrs) do
         Transaction
         |> owned(scope)
         |> Repo.get!(id)
         |> Repo.preload(:subtransactions)
         |> Transaction.changeset(attrs)
-        |> write(&Repo.update/1, opts)
+        |> write(&Sync.update/1, opts)
       end
     end)
   end
@@ -848,7 +970,7 @@ defmodule Abakus.Ledger do
   stops and returns its changeset.
   """
   def update_transactions(%Scope{} = scope, transactions, attrs, opts \\ []) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       all_or_none(transactions, &update_transaction(scope, &1, attrs, opts))
     end)
   end
@@ -1005,7 +1127,7 @@ defmodule Abakus.Ledger do
         {:error, failed(changeset, :led_by, follows(leading))}
 
       true ->
-        Repo.update(changeset)
+        Sync.update(changeset)
     end
   end
 
@@ -1033,7 +1155,9 @@ defmodule Abakus.Ledger do
   defp save(changeset, save, context) do
     with :ok <- release_removed(changeset, context),
          :ok <- dissolve_moved_proposals(changeset, context),
+         {changeset, removed} = Transaction.take_removed_subtransactions(changeset),
          {:ok, transaction} <- save.(changeset),
+         :ok <- delete_parts(removed),
          :ok <- move_origins(changeset, transaction),
          {:ok, transaction} <- sync(changeset, transaction, context) do
       remember_categories(transaction)
@@ -1060,6 +1184,13 @@ defmodule Abakus.Ledger do
       {:error, {:reconciled, _field}} ->
         {:error, failed(changeset, :subtransactions, @counterpart_reconciled, reconciled: true)}
     end
+  end
+
+  defp delete_parts([]), do: :ok
+
+  defp delete_parts(ids) do
+    Sync.delete_all(from s in Subtransaction, where: s.id in ^ids)
+    :ok
   end
 
   defp move_origins(%Changeset{data: %Transaction{id: id}} = changeset, transaction)
@@ -1117,8 +1248,12 @@ defmodule Abakus.Ledger do
           transaction | transaction.subtransactions
         ],
         payee_id && category_id do
-      Repo.update_all(
-        from(p in Payee, where: p.id == ^payee_id and is_nil(p.transfer_account_id)),
+      Sync.update_all(
+        from(p in Payee,
+          where:
+            p.id == ^payee_id and is_nil(p.transfer_account_id) and
+              (is_nil(p.last_category_id) or p.last_category_id != ^category_id)
+        ),
         set: [last_category_id: category_id, updated_at: DateTime.utc_now()]
       )
     end
@@ -1134,7 +1269,7 @@ defmodule Abakus.Ledger do
   def delete_transaction(%Scope{} = scope, %Transaction{id: id}, opts \\ []) do
     confirmed? = Keyword.get(opts, :reconciled) == :confirmed
 
-    Repo.transact(fn ->
+    Sync.write(fn ->
       transaction = Transaction |> owned(scope) |> Repo.get!(id) |> Repo.preload(:subtransactions)
 
       with :ok <- check_writer(scope, transaction, opts[:led_by]),
@@ -1181,7 +1316,7 @@ defmodule Abakus.Ledger do
 
   @doc "Deletes several transactions with `delete_transaction/3`, all or none: the first refusal stops."
   def delete_transactions(%Scope{} = scope, transactions, opts \\ []) do
-    Repo.transact(fn -> all_or_none(transactions, &delete_transaction(scope, &1, opts)) end)
+    Sync.write(fn -> all_or_none(transactions, &delete_transaction(scope, &1, opts)) end)
   end
 
   defp pair_field(%Transaction{subtransactions: []}), do: :transfer_transaction_id
@@ -1204,16 +1339,18 @@ defmodule Abakus.Ledger do
   @doc """
   Accepts a match proposal: the existing transaction survives with its id, payee and amount, keeps its category
   and memo where it has them (else takes the import's), takes the import's date (unless a split or a source owns
-  it) and cleared state, is approved and gets the import's origins; the proposal is removed. The rules for a new
-  proposal are checked again, so a transaction reconciled meanwhile refuses it. `opts` go to `update_transaction/4`.
+  it) and cleared state, is approved and gets the import's origins; the proposal is removed, so one a source leads is
+  refused. The rules for a new proposal are checked again, so a transaction reconciled meanwhile refuses it. `opts`
+  go to `update_transaction/4`.
   """
   def accept_match(%Scope{} = scope, %Transaction{id: id}, opts \\ []) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with {:ok, proposal} <- pending_proposal(scope, id),
+           :ok <- check_writer(scope, proposal, nil),
            existing = Repo.get(owned(Transaction, scope), proposal.matched_transaction_id),
            :ok <- check_match(proposal, existing),
            :ok <- take_origins(proposal, existing) do
-        Repo.delete!(proposal)
+        Transfers.soft_delete([proposal.id])
         update_transaction(scope, existing, merged(scope, existing, proposal), opts)
       end
     end)
@@ -1226,7 +1363,7 @@ defmodule Abakus.Ledger do
 
   @doc "Accepts several match proposals with `accept_match/3`, all or none: the first refusal stops."
   def accept_matches(%Scope{} = scope, proposals, opts \\ []) do
-    Repo.transact(fn -> all_or_none(proposals, &accept_match(scope, &1, opts)) end)
+    Sync.write(fn -> all_or_none(proposals, &accept_match(scope, &1, opts)) end)
   end
 
   defp check_match(proposal, existing) do
@@ -1243,9 +1380,9 @@ defmodule Abakus.Ledger do
 
   @doc "Rejects a match proposal (\"Trennen\"): the import stays as a transaction of its own and is approved."
   def reject_match(%Scope{} = scope, %Transaction{id: id}) do
-    Repo.transact(fn ->
+    Sync.write(fn ->
       with {:ok, proposal} <- pending_proposal(scope, id) do
-        proposal |> Changeset.change(matched_transaction_id: nil, approved: true) |> Repo.update()
+        proposal |> Changeset.change(matched_transaction_id: nil, approved: true) |> Sync.update()
       end
     end)
   end
