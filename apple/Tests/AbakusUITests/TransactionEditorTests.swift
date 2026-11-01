@@ -373,6 +373,19 @@ import Testing
         #expect(editor.focusedField == .main(.payee))
     }
 
+    @Test func transfersFollowTheSidebarOrder() throws {
+        var fixture = RegisterFixture()
+        for (id, position) in [(fixture.depot, 0), (fixture.karte, 1)] {
+            var account = try #require(fixture.budget.account(withId: id))
+            account.position = position
+            try fixture.budget.apply(.editAccount(account))
+        }
+        let id = fixture.add(fixture.giro, -4, payee: "Shop")
+        let editor = try editor(fixture, id)
+        editor.retype("tr:")
+        #expect(editor.dropDown?.items.map(\.label) == ["Umbuchung mit Konto:", "Karte", "Tagesgeld", "Depot"])
+    }
+
     @Test func transferPrefixCompletesTheAccountName() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -4, payee: "Shop")

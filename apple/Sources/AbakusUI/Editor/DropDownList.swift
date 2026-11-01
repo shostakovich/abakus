@@ -91,11 +91,12 @@ struct DropDownCatalog {
 
     /// The list shows only the account name.
     private func transferItems(excludingAccount accountId: String?) -> [DropDownItem] {
-        budget.sortedAccounts.filter { !$0.closed && $0.id != accountId }.map { account in
-            DropDownItem(
-                id: "transfer:" + account.id, kind: .transfer(accountName: account.name),
-                label: account.name, value: account.transferPayeeName, group: "transfers")
-        }
+        (budget.accounts(in: .budgetAccounts) + budget.accounts(in: .offBudgetAccounts)).filter { $0.id != accountId }
+            .map { account in
+                DropDownItem(
+                    id: "transfer:" + account.id, kind: .transfer(accountName: account.name),
+                    label: account.name, value: account.transferPayeeName, group: "transfers")
+            }
     }
 
     func categoryItems(includeSplit: Bool) -> [DropDownItem] {
