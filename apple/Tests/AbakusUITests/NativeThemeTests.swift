@@ -23,18 +23,43 @@ import Testing
         #expect(ThemeFont.caption.nsFont.pointSize == NSFont.smallSystemFontSize)
     }
 
-    @Test(arguments: [ThemeColor.text, ThemeColor.secondaryText, ThemeColor.negative, ThemeColor.balanced])
-    func coloursFollowDarkModeAndIncreaseContrast(color: Color) {
+    @Test(arguments: [ThemeColor.text, ThemeColor.secondaryText])
+    func textFollowsDarkModeAndIncreaseContrast(color: Color) {
         let light = color.resolve(in: environment(.light, .standard))
         #expect(light != color.resolve(in: environment(.dark, .standard)))
         #expect(light != color.resolve(in: environment(.light, .increased)))
     }
 
-    @Test func meaningfulColoursAreTheSystemOnes() {
-        #expect(ThemeColor.negative == .red)
-        #expect(ThemeColor.balanced == .green)
-        #expect(ThemeColor.warning == .orange)
-        #expect(ThemeColor.accent == .accentColor)
+    @Test(arguments: [
+        (OKLCH(34.05, 0.035, 255.32), 0x2c394a), (OKLCH(98.07, 0.005, 247.88), 0xf6f9fc),
+        (OKLCH(83.02, 0.024, 250.11), 0xbcc9d7), (OKLCH(79.98, 0.108, 245.09), 0x80c5ff),
+        (OKLCH(81.00, 0.095, 22.00), 0xf8a9a5), (OKLCH(100, 0, 0), 0xffffff),
+    ])
+    func oklchMatchesTheHexSetzkastenNotes(color: OKLCH, hex: Int) {
+        let rgb = color.sRGB
+        let channels = [rgb.red, rgb.green, rgb.blue].map { Int(($0 * 255).rounded()) }
+        #expect(channels == [hex >> 16 & 0xff, hex >> 8 & 0xff, hex & 0xff])
+    }
+
+    @Test func abakusColoursAreSetzkastenTokensInBothAppearances() {
+        let tokens: [(Color, SetzkastenToken)] = [
+            (ThemeColor.accent, .primary), (ThemeColor.negative, .errorInk), (ThemeColor.warning, .warningInk),
+            (ThemeColor.positive, .successInk),
+            (ThemeColor.selection, .rowSelected),
+            (ThemeColor.groupBand, .base200), (ThemeColor.availableTint, .availableTint),
+            (ThemeColor.selectedText, .primaryContent),
+        ]
+        for (color, token) in tokens {
+            for scheme in [ColorScheme.light, .dark] {
+                let resolved = color.resolve(in: environment(scheme, .standard))
+                #expect(resolved == token.color(for: scheme).resolve(in: environment(scheme, .standard)))
+            }
+        }
+    }
+
+    @Test func aTokenTellsLightFromDark() {
+        let accent = ThemeColor.accent
+        #expect(accent.resolve(in: environment(.light, .standard)) != accent.resolve(in: environment(.dark, .standard)))
     }
 
     private func environment(_ scheme: ColorScheme, _ contrast: ColorSchemeContrast) -> EnvironmentValues {

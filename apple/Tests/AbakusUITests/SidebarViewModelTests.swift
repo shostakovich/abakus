@@ -28,14 +28,13 @@ private func makeApp(defaults: (any SettingsStorage)? = nil, budget: Budget = De
 @Suite struct SidebarViewModelTests {
     @Test func showsTheGroupsWithTheirAccounts() {
         let panels = makeSidebar().groupPanels
-        #expect(panels.map(\.title) == ["Budgetkonten", "Trackingkonten", "Geschlossene Konten"])
+        #expect(panels.map(\.title) == ["Budgetkonten", "Trackingkonten"])
         #expect(panels[0].rows.map(\.name) == ["Girokonto", "Tagesgeld", "Kreditkarte", "Bargeld"])
         #expect(panels[1].rows.map(\.name) == ["Depot", "Bausparvertrag"])
         #expect(!panels[0].isCollapsed)
-        #expect(panels[2].isCollapsed)
     }
 
-    @Test func emptyOffBudgetAndClosedGroupsAreHidden() throws {
+    @Test func emptyOffBudgetGroupIsHidden() throws {
         var budget = Budget(budgetName: "Empty")
         try budget.apply(
             .addAccount(NewAccount(name: "Giro", kind: .checking, startingBalance: 5, startDate: today)))
@@ -51,11 +50,10 @@ private func makeApp(defaults: (any SettingsStorage)? = nil, budget: Budget = De
     @Test func balancesUseTheBudgetLocale() {
         let sidebar = makeSidebar()
         let kreditkarte = sidebar.groupPanels[0].rows[2]
-        #expect(kreditkarte.isNegative)
+        #expect(kreditkarte.balance < 0)
         #expect(kreditkarte.balanceText.hasPrefix("-"))
-        #expect(!kreditkarte.balanceText.hasSuffix("€"))
+        #expect(kreditkarte.balanceText.hasSuffix("€"))
         #expect(sidebar.groupPanels[0].totalText.hasSuffix("€"))
-        #expect(sidebar.allAccountsBalanceText.hasSuffix("€"))
         #expect(kreditkarte.tooltip.hasPrefix("Kreditkarte    -"))
     }
 
@@ -74,14 +72,15 @@ private func makeApp(defaults: (any SettingsStorage)? = nil, budget: Budget = De
         #expect(sidebar.groupPanels[0].headerBadge == SidebarBadge(count: 2, level: .needsCategory))
     }
 
-    @Test func selectingAClosedAccountExpandsItsGroup() {
+    @Test func closedAccountsStayOutOfTheSidebar() {
         let budget = DemoBudget.make(today: today)
         let closed = budget.account(named: "Altes Sparbuch")!
         let sidebar = makeSidebar(budget: budget)
+        #expect(!sidebar.groupPanels.flatMap(\.rows).contains { $0.id == closed.id })
+        let groups = sidebar.collapsedGroups
         sidebar.select(.account(closed.id))
         #expect(sidebar.navigation.selection == .account(closed.id))
-        #expect(sidebar.isSelected(.account(closed.id)))
-        #expect(!sidebar.groupPanels[2].isCollapsed)
+        #expect(sidebar.collapsedGroups == groups)
     }
 
     @Test func sectionsSelectWithoutTouchingGroups() {

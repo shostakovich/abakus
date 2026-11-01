@@ -59,9 +59,10 @@ import Testing
         let sidebar = launch(storage, selection: .allAccounts).sidebar
         sidebar.setGroup(.budgetAccounts, expanded: false)
         sidebar.setGroup(.offBudgetAccounts, expanded: false)
-        #expect(launch(storage, selection: .allAccounts).sidebar.collapsedGroups == Set(SidebarGroup.allCases))
+        #expect(
+            launch(storage, selection: .allAccounts).sidebar.collapsedGroups == [.budgetAccounts, .offBudgetAccounts])
         var other = fixture.budget
         other.budgetName = "Other"
-        #expect(launch(storage, budget: other, selection: .allAccounts).sidebar.collapsedGroups == [.closedAccounts])
+        #expect(launch(storage, budget: other, selection: .allAccounts).sidebar.collapsedGroups.isEmpty)
     }
 }

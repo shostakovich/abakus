@@ -287,12 +287,21 @@ func capture(_ window: NSWindow, scale: Int) throws -> NSBitmapImageRep {
         let multiple = dlsym(library, "CGWindowListCreateImageFromArray")
     else { throw SnapshotError.render }
     window.displayIfNeeded()
-    RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+    func windowImage() -> CGImage? {
+        unsafeBitCast(single, to: CreateImage.self)(
+            .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution]
+        )?.takeRetainedValue()
+    }
+    // A cold window server, as on a CI runner, hands out the window blank for a while after it was ordered in.
+    let deadline = Date().addingTimeInterval(10)
+    var drawn: CGImage?
+    repeat {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        drawn = windowImage()
+    } while drawn.map(isBlank) ?? true && Date() < deadline
     let frame = window.frame
     guard
-        let image = unsafeBitCast(single, to: CreateImage.self)(
-            .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution]
-        )?.takeRetainedValue(),
+        let image = drawn, !isBlank(image),
         let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: Int(frame.width) * scale, pixelsHigh: Int(frame.height) * scale,
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
@@ -315,6 +324,23 @@ func capture(_ window: NSWindow, scale: Int) throws -> NSBitmapImageRep {
     else { throw SnapshotError.render }
     context.cgContext.draw(attached, in: target)
     return rep
+}
+
+/// Every pixel alike, as in a window the window server has not drawn yet.
+func isBlank(_ image: CGImage) -> Bool {
+    let side = 32
+    var pixels = [UInt32](repeating: 0, count: side * side)
+    let drawn = pixels.withUnsafeMutableBytes { buffer in
+        guard
+            let context = CGContext(
+                data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return false }
+        context.interpolationQuality = .none
+        context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+        return true
+    }
+    return drawn && Set(pixels).count == 1
 }
 
 /// Sheets, alerts and child windows such as the search suggestions, with their own sheets and child windows.

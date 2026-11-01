@@ -52,7 +52,7 @@ struct RegisterRowView: View {
     @ViewBuilder
     private var background: some View {
         if isSelected {
-            ThemeColor.accent
+            ThemeColor.selection
         } else if isAdjustmentHelpRow {
             RegisterGridStyle.adjustmentRow
         } else if isGlowing {
@@ -168,12 +168,7 @@ struct RegisterRowView: View {
     }
 
     private var textColor: Color {
-        if isSelected { return ThemeColor.selectedText }
-        return row.isExcludedFromSearch ? ThemeColor.secondaryText : ThemeColor.text
-    }
-
-    private func tint() -> Color? {
-        isSelected ? ThemeColor.selectedText : nil
+        row.isExcludedFromSearch ? ThemeColor.secondaryText : ThemeColor.text
     }
 
     private func balanceHovered(_ inside: Bool) {
@@ -215,7 +210,7 @@ struct RegisterRowView: View {
 
     @ViewBuilder
     private var transferButton: some View {
-        let image = StatusSymbolImage(symbol: .transfer, tint: tint())
+        let image = StatusSymbolImage(symbol: .transfer)
             .frame(width: Self.symbolButtonWidth, height: RegisterMetrics.rowHeight)
         if let main {
             symbolButton(image) { main.transferIconClicked(row) }
@@ -229,7 +224,7 @@ struct RegisterRowView: View {
     private func errorCell(width: CGFloat) -> some View {
         if let symbol = row.errorLevel.symbol {
             symbolButton(
-                StatusSymbolImage(symbol: symbol, tint: tint())
+                StatusSymbolImage(symbol: symbol)
                     .frame(width: width, height: RegisterMetrics.rowHeight)
             ) {
                 main?.errorIconClicked(row)
@@ -241,7 +236,7 @@ struct RegisterRowView: View {
     private func clearedCell(width: CGFloat) -> some View {
         let symbol = row.cleared.symbol(reconciling: main?.isReconciling ?? false)
         return symbolButton(
-            StatusSymbolImage(symbol: symbol, tint: tint()).frame(width: width, height: RegisterMetrics.rowHeight),
+            StatusSymbolImage(symbol: symbol).frame(width: width, height: RegisterMetrics.rowHeight),
             pointer: row.cleared != .reconciled
         ) {
             main?.clearedClicked(row)
@@ -269,8 +264,8 @@ struct RegisterRowView: View {
         switch row.categoryStyle {
         case .plain: (font, color) = (RegisterGridStyle.rowFont, textColor)
         case .bold: (font, color) = (RegisterGridStyle.rowBoldFont, textColor)
-        case .needsCategory: (font, color) = (RegisterGridStyle.rowFont, isSelected ? textColor : ThemeColor.warning)
-        case .error: (font, color) = (RegisterGridStyle.rowFont, isSelected ? textColor : ThemeColor.negative)
+        case .needsCategory: (font, color) = (RegisterGridStyle.rowFont, ThemeColor.warning)
+        case .error: (font, color) = (RegisterGridStyle.rowFont, ThemeColor.negative)
         }
         let chevronX = leadingInset - 2
         return HStack(spacing: 0) {
@@ -278,7 +273,7 @@ struct RegisterRowView: View {
                 symbolButton(
                     Image(systemName: row.split == .expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(isSelected ? ThemeColor.selectedText : ThemeColor.secondaryText)
+                        .foregroundStyle(ThemeColor.secondaryText)
                         .frame(width: Self.chevronWidth, height: RegisterMetrics.rowHeight)
                 ) {
                     owner.grid.toggleSplit(row.transactionId)

@@ -13,6 +13,7 @@ public struct SidebarView: View {
     let model: SidebarViewModel
     var onAddAccount: () -> Void = {}
     var onEditAccount: (String) -> Void = { _ in }
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(
         model: SidebarViewModel, onAddAccount: @escaping () -> Void = {},
@@ -55,9 +56,13 @@ public struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             SidebarFooter(model: model, onAddAccount: onAddAccount)
         }
+        .environment(\.sidebarColors, colors)
+        .environment(\.colorScheme, .dark)
+        .background(colors.background)
         .toolbar(removing: .sidebarToggle)
     }
 
@@ -65,25 +70,21 @@ public struct SidebarView: View {
     private var sections: some View {
         let titles = model.sectionTitles
         Label {
-            Text(titles.budget).lineLimit(1)
+            Text(titles.budget).lineLimit(1).foregroundStyle(colors.content)
         } icon: {
             SidebarIcon(systemName: "chart.pie.fill")
         }
         .tag(SidebarSelection.budget)
         .id(SidebarSelection.budget)
         Label {
-            HStack(spacing: 4) {
-                Text(titles.allAccounts).lineLimit(1)
-                Spacer(minLength: 0)
-                if model.isFullView {
-                    SidebarAmount(text: model.allAccountsBalanceText, isNegative: model.allAccountsBalance < 0)
-                }
-            }
+            Text(titles.allAccounts).lineLimit(1).foregroundStyle(colors.content)
         } icon: {
             SidebarIcon(systemName: "building.columns.fill")
         }
         .tag(SidebarSelection.allAccounts)
     }
+
+    private var colors: SidebarColors { SidebarColors(colorScheme) }
 
     private var selection: Binding<SidebarSelection?> {
         Binding {

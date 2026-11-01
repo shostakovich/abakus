@@ -34,7 +34,7 @@ struct EditRowView: View {
             EditButtonRow(editor: editor, width: layout.displayWidth)
         }
         .frame(width: layout.displayWidth, height: editor.rowHeight, alignment: .topLeading)
-        .background(ThemeColor.selectionBand)
+        .background(ThemeColor.selection)
         .clipped()
     }
 
