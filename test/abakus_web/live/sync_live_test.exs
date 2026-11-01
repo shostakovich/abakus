@@ -72,4 +72,23 @@ defmodule AbakusWeb.SyncLiveTest do
 
     assert has_element?(view, "#assign-#{c.groceries.id}-2026-11[value='25,00']")
   end
+
+  for path <- [
+        "/budget",
+        "/budget/accounts/all",
+        "/budget/import",
+        "/budget/bank-connections",
+        "/depot"
+      ] do
+    test "the sidebar on #{path} shows what another device changed in the accounts", c do
+      {:ok, view, _html} = live(c.conn, unquote(path))
+
+      {:ok, 1} =
+        Sync.apply_messages(budget_scope(), "mac", [
+          mac_message("accounts", c.giro.id, "name", "Vom Mac")
+        ])
+
+      assert has_element?(view, "#side-account-#{c.giro.id}-sidebar", "Vom Mac")
+    end
+  end
 end

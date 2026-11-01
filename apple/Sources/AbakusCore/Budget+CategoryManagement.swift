@@ -155,7 +155,7 @@ extension Budget {
         reorderGroups(order)
     }
 
-    private static func dropPosition(_ index: Int, count: Int, current: Int?) -> Int {
+    static func dropPosition(_ index: Int, count: Int, current: Int?) -> Int {
         guard index >= 0, index <= count else { return current == nil ? count : count - 1 }
         if let current, current < index { return index - 1 }
         return index

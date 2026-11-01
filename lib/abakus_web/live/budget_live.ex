@@ -14,7 +14,7 @@ defmodule AbakusWeb.BudgetLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{Budget, Categories, Format, LocalTime, Money, Sync}
+  alias Abakus.{Budget, Categories, Format, LocalTime, Money}
 
   alias AbakusWeb.BudgetLive.{
     CategoryEditor,
@@ -26,6 +26,8 @@ defmodule AbakusWeb.BudgetLive do
     TargetForm,
     Window
   }
+
+  on_mount {AbakusWeb.AccountGroups, {:pass_on, [:synced]}}
 
   @fit %{months: 1, span: 7, compact: false}
 
@@ -222,7 +224,6 @@ defmodule AbakusWeb.BudgetLive do
   @impl true
   def mount(_params, _session, socket) do
     connect = get_connect_params(socket) || %{}
-    if connected?(socket), do: Sync.subscribe(socket.assigns.current_scope)
 
     {:ok,
      socket
