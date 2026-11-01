@@ -65,12 +65,21 @@ defmodule Abakus.Ledger do
     end
   end
 
-  @doc "The accounts in their order, with their transfer payees."
-  def list_accounts(%Scope{} = scope),
-    do:
+  @doc """
+  The accounts in the sidebar's order, with their transfer payees: the open budget accounts, the open tracking
+  accounts, then the closed ones, each by position.
+  """
+  def list_accounts(%Scope{} = scope) do
+    accounts =
       Repo.all(
         from a in owned(Account, scope), order_by: [a.position, a.id], preload: :transfer_payee
       )
+
+    Enum.sort_by(accounts, &sidebar_group/1)
+  end
+
+  defp sidebar_group(%Account{closed: true}), do: 2
+  defp sidebar_group(account), do: if(Account.budget_account?(account), do: 0, else: 1)
 
   def get_account!(%Scope{} = scope, id), do: Repo.get!(owned(Account, scope), id)
 

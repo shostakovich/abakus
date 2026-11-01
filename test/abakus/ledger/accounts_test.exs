@@ -195,6 +195,17 @@ defmodule Abakus.Ledger.AccountsTest do
     assert Enum.map(Ledger.list_accounts(budget_scope()), & &1.id) == [first.id, second.id]
   end
 
+  test "list_accounts/1 lists the open budget accounts, the open tracking ones, then the closed, as the sidebar" do
+    haus = account_fixture(name: "Haus", kind: :tracking, position: 0)
+    alt = account_fixture(name: "Alt", kind: :checking, position: 0, closed: true)
+    spar = account_fixture(name: "Spar", kind: :savings, position: 1)
+    giro = account_fixture(name: "Giro", kind: :checking, position: 0)
+    auto = account_fixture(name: "Auto", kind: :tracking, position: 1)
+
+    assert Enum.map(Ledger.list_accounts(budget_scope()), & &1.id) ==
+             Enum.map([giro, spar, haus, auto, alt], & &1.id)
+  end
+
   describe "move_account/3" do
     setup do
       giro = account_fixture(name: "Girokonto", kind: :checking)
