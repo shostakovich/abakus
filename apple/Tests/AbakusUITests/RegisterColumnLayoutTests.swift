@@ -47,10 +47,6 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
         #expect(RegisterGridStyle.rowBoldFont.width(of: "+10.000,00") <= room)
     }
 
-    @Test func betragLeavesTheEditorsSignButtonRoomBesideTheAmount() {
-        #expect(RegisterColumn.signedAmountWidth == RegisterColumn.amountWidth + EditCellStyle.accessoryWidth)
-    }
-
     @Test func columnsFillTheDisplayWidthLeftOfTheColumnMenu() {
         let total = widths(1000).values.reduce(0, +)
         #expect(abs(total - 980) < 0.001)

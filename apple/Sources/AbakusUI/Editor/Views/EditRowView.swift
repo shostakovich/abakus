@@ -8,6 +8,8 @@ enum EditCellStyle {
     static let fieldInset: CGFloat = 2
     static let textInset: CGFloat = 6
     static let accessoryWidth: CGFloat = 18
+    /// The calculator and the sign button at an amount field's start.
+    static let amountAccessoriesWidth: CGFloat = 2 * accessoryWidth
 }
 
 struct EditorAnchorKey: PreferenceKey {
@@ -133,10 +135,8 @@ struct EditTextCell: View {
         return HStack(spacing: 0) {
             transferButton
             if field.column.isAmount {
+                calculatorButton
                 signButton
-                if isFocused {
-                    accessoryButton("plus.forwardslash.minus", label: "Rechner") { editor.openCalculator(for: field) }
-                }
             }
             text(isFocused: isFocused)
             trailingAccessory
@@ -205,6 +205,22 @@ struct EditTextCell: View {
         .toolTip("Zwischen Ausgang und Eingang wechseln (+ oder − tippen)")
         .accessibilityLabel(isInflow ? "Eingang" : "Ausgang")
         .accessibilityHint("Vorzeichen wechseln")
+    }
+
+    private var calculatorButton: some View {
+        Button {
+            editor.openCalculator(for: field)
+        } label: {
+            CalculatorGlyph()
+                .foregroundStyle(ThemeColor.secondaryText)
+                .frame(width: EditCellStyle.accessoryWidth, height: EditRowMetrics.fieldHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .pointerStyle(.link)
+        .toolTip("Rechner")
+        .accessibilityLabel("Rechner")
     }
 
     @ViewBuilder
@@ -306,5 +322,29 @@ enum EditorFieldMetrics {
         let height = ceil(probe.fittingSize.height)
         heights[font] = height
         return height
+    }
+}
+
+/// SF Symbols has no calculator, so it is drawn: a case, a display, round keys and a tall one.
+struct CalculatorGlyph: View {
+    var body: some View {
+        Canvas { context, size in
+            let body = CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
+            context.stroke(Path(roundedRect: body, cornerRadius: 2), with: .foreground, lineWidth: 1)
+            context.fill(Path(CGRect(x: 2.5, y: 2.5, width: size.width - 5, height: 2)), with: .foreground)
+            let key: CGFloat = 1.6
+            let pitch = (size.width - 5 - key) / 2
+            for row in 0..<3 {
+                for column in 0..<3 where !(column == 2 && row > 0) {
+                    let origin = CGPoint(x: 2.5 + CGFloat(column) * pitch, y: 6 + CGFloat(row) * 2.5)
+                    context.fill(
+                        Path(ellipseIn: CGRect(origin: origin, size: CGSize(width: key, height: key))),
+                        with: .foreground)
+                }
+            }
+            let tall = CGRect(x: 2.5 + 2 * pitch, y: 8.5, width: key, height: 2.5 + key)
+            context.fill(Path(roundedRect: tall, cornerRadius: key / 2), with: .foreground)
+        }
+        .frame(width: 11, height: 14)
     }
 }

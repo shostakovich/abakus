@@ -104,7 +104,7 @@ public final class RegisterScheduler {
             .frequency: RegisterColumn.frequency.contentWidth(
                 fitting: frequencies, accessory: SchedulerMetrics.popUpAccessory),
             .amount: RegisterColumn.amount.contentWidth(
-                fitting: rows.map(\.amountText), accessory: EditCellStyle.accessoryWidth),
+                fitting: rows.map(\.amountText), accessory: EditCellStyle.amountAccessoriesWidth),
         ]
     }
 

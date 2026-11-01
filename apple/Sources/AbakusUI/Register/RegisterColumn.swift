@@ -39,8 +39,8 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
     static let amountWidth: CGFloat = ceil(
         ThemeFont.tableEmphasized.width(of: "−10.000,00") + 2 * RegisterGridStyle.cellInset)
 
-    /// Betrag also fits the editor's sign button at the field's start.
-    static let signedAmountWidth: CGFloat = amountWidth + EditCellStyle.accessoryWidth
+    /// Betrag also fits the editor's calculator and sign button at the field's start.
+    static let signedAmountWidth: CGFloat = amountWidth + EditCellStyle.amountAccessoriesWidth
 
     public var isResizable: Bool {
         switch self {
