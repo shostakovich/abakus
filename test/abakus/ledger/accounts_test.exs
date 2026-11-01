@@ -195,6 +195,91 @@ defmodule Abakus.Ledger.AccountsTest do
     assert Enum.map(Ledger.list_accounts(budget_scope()), & &1.id) == [first.id, second.id]
   end
 
+  describe "move_account/3" do
+    setup do
+      giro = account_fixture(name: "Girokonto", kind: :checking)
+      spar = account_fixture(name: "Sparkonto", kind: :savings)
+      bar = account_fixture(name: "Bargeld", kind: :cash)
+      haus = account_fixture(name: "Haus", kind: :tracking)
+      %{giro: giro, spar: spar, bar: bar, haus: haus}
+    end
+
+    defp names(accounts), do: Enum.map(accounts, & &1.name)
+
+    defp positions(scope),
+      do: scope |> Ledger.list_accounts() |> Map.new(&{&1.name, &1.position})
+
+    defp position_messages_after(cursor) do
+      Repo.all(
+        from m in Abakus.Sync.Message,
+          where: m.id > ^cursor and m.table == "accounts",
+          select: {m.row_id, m.column, m.value}
+      )
+    end
+
+    test "puts the account before another of its group and renumbers the group", c do
+      assert {:ok, group} = Ledger.move_account(budget_scope(), c.bar.id, c.giro.id)
+
+      assert names(group) == ["Bargeld", "Girokonto", "Sparkonto"]
+
+      assert positions(budget_scope()) == %{
+               "Bargeld" => 0,
+               "Girokonto" => 1,
+               "Sparkonto" => 2,
+               "Haus" => 3
+             }
+    end
+
+    test "without another account puts it at its group's end", c do
+      assert {:ok, group} = Ledger.move_account(budget_scope(), c.giro.id, nil)
+
+      assert names(group) == ["Sparkonto", "Bargeld", "Girokonto"]
+    end
+
+    test "renumbers equal positions, which order by id", c do
+      for account <- [c.giro, c.spar, c.bar],
+          do: {:ok, _account} = Ledger.update_account(budget_scope(), account, %{position: 5})
+
+      assert {:ok, group} = Ledger.move_account(budget_scope(), c.bar.id, c.spar.id)
+
+      assert Enum.map(group, &{&1.name, &1.position}) ==
+               [{"Girokonto", 0}, {"Bargeld", 1}, {"Sparkonto", 2}]
+    end
+
+    test "writes only the changed positions, as messages", c do
+      cursor = Abakus.Sync.cursor(budget_scope())
+
+      assert {:ok, _group} = Ledger.move_account(budget_scope(), c.bar.id, c.spar.id)
+
+      assert Enum.sort(position_messages_after(cursor)) ==
+               Enum.sort([{c.bar.id, "position", "1"}, {c.spar.id, "position", "2"}])
+    end
+
+    test "refuses a closed account, which keeps its place", c do
+      old = account_fixture(name: "Altes Sparbuch", kind: :savings, closed: true)
+      before = positions(budget_scope())
+
+      assert Ledger.move_account(budget_scope(), old.id, c.giro.id) == {:error, :closed}
+      assert Ledger.move_account(budget_scope(), c.giro.id, old.id) == {:error, :not_in_group}
+      assert positions(budget_scope()) == before
+    end
+
+    test "refuses a place in the other group", c do
+      before = positions(budget_scope())
+
+      assert Ledger.move_account(budget_scope(), c.giro.id, c.haus.id) == {:error, :not_in_group}
+      assert positions(budget_scope()) == before
+    end
+
+    test "another user's account is missing", c do
+      before = positions(budget_scope())
+      other = Abakus.UsersFixtures.user_scope_fixture()
+
+      assert Ledger.move_account(other, c.bar.id, nil) == {:error, :not_found}
+      assert positions(budget_scope()) == before
+    end
+  end
+
   describe "link_ofx_account/4" do
     test "remembers the file's account, so it finds the account again" do
       account = account_fixture()

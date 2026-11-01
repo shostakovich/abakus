@@ -178,7 +178,7 @@ defmodule AbakusWeb.Layouts do
         amount={row.balance}
         count={if row.unapproved > 0, do: row.unapproved}
         count_label="zu bestätigen"
-        section={account_section(group)}
+        section={AccountGroups.section(group)}
         section_amount={if first?, do: group.balance}
         rail={false}
         dock={false}
@@ -350,9 +350,6 @@ defmodule AbakusWeb.Layouts do
   defp same_live_session?("/budget" <> _, current), do: current in @budget_pages
   defp same_live_session?("/kasse" <> _, current), do: current in @kasse_pages
   defp same_live_session?("/depot" <> _, current), do: current in @depot_pages
-
-  defp account_section(%{key: :budget}), do: "Budgetkonten"
-  defp account_section(%{key: :tracking}), do: "Trackingkonten"
 
   defp brand_name([area]), do: area.label
   defp brand_name(_areas), do: "Abakus"

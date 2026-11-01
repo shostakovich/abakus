@@ -4,7 +4,16 @@ defmodule AbakusWeb.AccountGroups do
   closed ones, each account with its working and cleared balance and how many of its transactions wait for approval,
   each group with its working balance. Empty groups are left out, and so is the portfolios' cash
   (`Abakus.Depot.Portfolios.cash_account_portfolios/1`), whose money moves in the Depot.
+
+  The sidebar lists the open groups as sections (`section/1`). Its `on_mount` handles the event `move_account` on
+  every page with the sidebar: `%{"section" => section, "id" => id, "index" => index}` moves that section's account
+  to `index` among the section's entries, before the one listed there now, so the accounts it leaves out keep their
+  place; an id the section does not list changes nothing. A LiveView that handles the event itself too declares
+  `on_mount {AbakusWeb.AccountGroups, {:pass_on, [:move_account]}}` and gets it after the groups were reloaded.
   """
+
+  import Phoenix.Component, only: [assign: 3]
+  import Phoenix.LiveView, only: [attach_hook: 4, put_private: 3]
 
   alias Abakus.Depot.Portfolios
   alias Abakus.Ledger
@@ -21,11 +30,52 @@ defmodule AbakusWeb.AccountGroups do
   def kind_label(kind), do: @kinds[kind]
 
   @doc "Assigns `account_groups` for the sidebar of every signed-in page; none for a user without the Budget."
-  def on_mount(:assign, _params, _session, socket) do
-    scope = socket.assigns.current_scope
-    groups = if Areas.allowed?(scope, :budget), do: load(scope), else: []
-    {:cont, Phoenix.Component.assign(socket, :account_groups, groups)}
+  def on_mount(:assign, _params, _session, socket),
+    do: {:cont, socket |> reload() |> attach_hook(:move_account, :handle_event, &handle_event/3)}
+
+  def on_mount({:pass_on, passed}, _params, _session, socket),
+    do: {:cont, put_private(socket, :account_groups_pass_on, passed)}
+
+  defp handle_event("move_account", params, socket) do
+    move(socket.assigns, params)
+    socket |> reload() |> pass_on(:move_account)
   end
+
+  defp handle_event(_event, _params, socket), do: {:cont, socket}
+
+  defp pass_on(socket, message) do
+    if message in Map.get(socket.private, :account_groups_pass_on, []),
+      do: {:cont, socket},
+      else: {:halt, socket}
+  end
+
+  defp reload(socket) do
+    scope = socket.assigns.current_scope
+    assign(socket, :account_groups, if(Areas.allowed?(scope, :budget), do: load(scope), else: []))
+  end
+
+  defp move(%{current_scope: scope, account_groups: groups}, %{
+         "section" => section,
+         "id" => id,
+         "index" => index
+       })
+       when is_integer(index) and index >= 0 do
+    ids =
+      for %{rows: rows} = group <- open(groups),
+          section(group) == section,
+          row <- rows,
+          do: row.account.id
+
+    if id in ids,
+      do: Ledger.move_account(scope, id, ids |> List.delete(id) |> Enum.at(index)),
+      else: {:error, :not_listed}
+  end
+
+  defp move(_assigns, _params), do: {:error, :malformed}
+
+  @doc "The sidebar's section of an open group."
+  def section(%{key: :budget}), do: "Budgetkonten"
+  def section(%{key: :tracking}), do: "Trackingkonten"
 
   def load(%Scope{} = scope) do
     cash = Portfolios.cash_account_portfolios(scope)

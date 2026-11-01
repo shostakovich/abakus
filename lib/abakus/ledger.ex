@@ -138,6 +138,54 @@ defmodule Abakus.Ledger do
 
   defp rename_transfer_payee(payee, _account, false = _renamed?), do: {:ok, payee}
 
+  @doc """
+  Moves the open account `id` before the account `before_id` of its group, or to the group's end for nil, and
+  renumbers the group's positions from 0. A group is the open budget accounts or the open tracking accounts;
+  closed accounts are not moved and keep their place. Returns the group in its new order.
+  """
+  def move_account(%Scope{} = scope, id, before_id) do
+    Sync.write(fn ->
+      accounts = Repo.all(from a in owned(Account, scope), order_by: [a.position, a.id])
+
+      with {:ok, account} <- movable(accounts, id),
+           others = Enum.reject(account_group(accounts, account), &(&1.id == id)),
+           {:ok, order} <- insert_before(others, account, before_id) do
+        {:ok, renumber(order)}
+      end
+    end)
+  end
+
+  defp movable(accounts, id) do
+    case Enum.find(accounts, &(&1.id == id)) do
+      nil -> {:error, :not_found}
+      %Account{closed: true} -> {:error, :closed}
+      account -> {:ok, account}
+    end
+  end
+
+  defp account_group(accounts, account) do
+    budget? = Account.budget_account?(account)
+    Enum.filter(accounts, &(not &1.closed and Account.budget_account?(&1) == budget?))
+  end
+
+  defp insert_before(others, account, nil), do: {:ok, others ++ [account]}
+
+  defp insert_before(others, account, before_id) do
+    case Enum.find_index(others, &(&1.id == before_id)) do
+      nil -> {:error, :not_in_group}
+      index -> {:ok, List.insert_at(others, index, account)}
+    end
+  end
+
+  defp renumber(accounts) do
+    accounts
+    |> Enum.with_index()
+    |> Enum.map(fn
+      {%Account{position: position} = account, position} -> account
+      {account, position} -> Sync.update!(Changeset.change(account, position: position))
+    end)
+  end
+
   @doc "The account a file's account (`BANKID`, nil for a card, and `ACCTID`) is linked to, if any."
   def get_account_by_ofx(%Scope{} = scope, bank_id, acct_id) when is_binary(acct_id) do
     query = from a in owned(Account, scope), where: a.ofx_acct_id == ^acct_id

@@ -47,6 +47,8 @@ defmodule AbakusWeb.RegisterLive do
 
   import TransactionEditor, only: [confirmed: 1]
 
+  on_mount {AccountGroups, {:pass_on, [:move_account]}}
+
   @page 100
 
   @impl true
@@ -396,6 +398,8 @@ defmodule AbakusWeb.RegisterLive do
   def handle_info({:synced, _device}, socket), do: {:noreply, refresh(socket)}
 
   @impl true
+  def handle_event("move_account", _params, socket), do: {:noreply, assign_rows(socket)}
+
   def handle_event("search", %{"q" => query}, socket),
     do: {:noreply, push_patch(socket, to: register_path(socket.assigns, q: query))}
 
