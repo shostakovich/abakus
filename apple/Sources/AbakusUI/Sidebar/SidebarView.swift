@@ -45,6 +45,7 @@ public struct SidebarView: View {
                                 }
                                 .anchorPreference(key: SidebarRowAnchorKey.self, value: .bounds) { [row.id: $0] }
                         }
+                        .onMove { model.moveAccount(in: panel.group, from: $0, to: $1) }
                     } header: {
                         SidebarGroupHeader(panel: panel, showsTotal: model.isFullView)
                             .anchorPreference(key: SidebarGroupAnchorKey.self, value: .bounds) { [panel.group: $0] }

@@ -23,6 +23,25 @@ func savedAndLoaded(_ budget: Budget) throws -> Budget {
     return try database.budget()
 }
 
+struct SidebarBudget {
+    var budget = Budget(budgetName: "Sidebar")
+
+    init() {
+        let accounts: [(String, String, AccountKind)] = [
+            ("GIRO", "Girokonto", .checking), ("SPAR", "Sparkonto", .savings), ("BAR", "Bargeld", .cash),
+            ("HAUS", "Haus", .tracking),
+        ]
+        for (id, name, kind) in accounts {
+            try! budget.apply(
+                .addAccount(NewAccount(id: id, name: name, kind: kind, startingBalance: 0, startDate: october23)))
+        }
+    }
+
+    func names(in group: SidebarGroup) -> [String] {
+        budget.accounts(in: group).map(\.name)
+    }
+}
+
 struct TestBudget {
     var budget = Budget(budgetName: "Test")
     let girokonto = "GIRO"

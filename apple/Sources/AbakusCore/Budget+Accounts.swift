@@ -62,6 +62,19 @@ extension Budget {
         refreshTransferPayees()
     }
 
+    /// `index` is the drop position in the group, before the account is taken out.
+    mutating func moveAccount(_ id: String, index: Int) throws {
+        guard let account = account(withId: id) else { throw BudgetError.accountNotFound(id) }
+        if account.closed { throw BudgetError.accountIsClosed }
+        var order = accounts(in: account.onBudget ? .budgetAccounts : .offBudgetAccounts).map(\.id)
+        guard let current = order.firstIndex(of: id) else { throw BudgetError.accountNotFound(id) }
+        order.remove(at: current)
+        order.insert(id, at: Self.dropPosition(index, count: order.count + 1, current: current))
+        for (position, accountId) in order.enumerated() {
+            if let slot = accounts.firstIndex(where: { $0.id == accountId }) { accounts[slot].position = position }
+        }
+    }
+
     func balanceCategory(of account: Account) -> String? {
         account.onBudget ? readyToAssignCategoryId : nil
     }

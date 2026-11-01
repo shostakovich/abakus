@@ -85,4 +85,56 @@ import Testing
         #expect(!fixture.budget.isSuggested(payee))
         #expect(!payee.hidden)
     }
+
+    @Test func anAccountMovesToItsDropPlaceInItsGroup() throws {
+        var fixture = SidebarBudget()
+        try fixture.budget.apply(.moveAccount(accountId: "BAR", index: 0))
+        #expect(fixture.names(in: .budgetAccounts) == ["Bargeld", "Girokonto", "Sparkonto"])
+        #expect(fixture.budget.accounts(in: .budgetAccounts).map(\.position) == [0, 1, 2])
+        try fixture.budget.apply(.moveAccount(accountId: "BAR", index: 3))
+        #expect(fixture.names(in: .budgetAccounts) == ["Girokonto", "Sparkonto", "Bargeld"])
+        try fixture.budget.apply(.moveAccount(accountId: "GIRO", index: 2))
+        #expect(fixture.names(in: .budgetAccounts) == ["Sparkonto", "Girokonto", "Bargeld"])
+        try fixture.budget.apply(.moveAccount(accountId: "HAUS", index: 0))
+        #expect(fixture.names(in: .offBudgetAccounts) == ["Haus"])
+        #expect(fixture.budget.account(withId: "HAUS")?.position == 0)
+        #expect(fixture.budget.accounts(in: .budgetAccounts).map(\.position) == [0, 1, 2])
+    }
+
+    @Test func aMoveRenumbersTiedPositions() throws {
+        var fixture = SidebarBudget()
+        for var account in fixture.budget.accounts {
+            account.position = 0
+            try fixture.budget.apply(.editAccount(account))
+        }
+        #expect(fixture.names(in: .budgetAccounts) == ["Bargeld", "Girokonto", "Sparkonto"])
+        try fixture.budget.apply(.moveAccount(accountId: "SPAR", index: 0))
+        #expect(fixture.names(in: .budgetAccounts) == ["Sparkonto", "Bargeld", "Girokonto"])
+        #expect(fixture.budget.accounts(in: .budgetAccounts).map(\.position) == [0, 1, 2])
+    }
+
+    @Test func aClosedAccountKeepsItsPlace() throws {
+        var fixture = SidebarBudget()
+        var sparkonto = try #require(fixture.budget.account(withId: "SPAR"))
+        sparkonto.closed = true
+        try fixture.budget.apply(.editAccount(sparkonto))
+        try fixture.budget.apply(.moveAccount(accountId: "BAR", index: 0))
+        #expect(fixture.names(in: .budgetAccounts) == ["Bargeld", "Girokonto"])
+        #expect(fixture.budget.account(withId: "SPAR")?.position == 1)
+        let before = fixture.budget
+        #expect(throws: BudgetError.accountIsClosed) {
+            try fixture.budget.apply(.moveAccount(accountId: "SPAR", index: 0))
+        }
+        #expect(fixture.budget == before)
+    }
+
+    @Test func anUnknownAccountIsNotMoved() throws {
+        var fixture = SidebarBudget()
+        let before = fixture.budget
+        #expect(throws: BudgetError.accountNotFound("NONE")) {
+            try fixture.budget.apply(.moveAccount(accountId: "NONE", index: 0))
+        }
+        #expect(fixture.budget == before)
+        #expect(fixture.names(in: .budgetAccounts) == ["Girokonto", "Sparkonto", "Bargeld"])
+    }
 }

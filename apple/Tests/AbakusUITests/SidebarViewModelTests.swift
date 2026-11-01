@@ -25,6 +25,18 @@ private func makeApp(defaults: (any SettingsStorage)? = nil, budget: Budget = De
 }
 
 @MainActor
+private func makeOrderedSidebar() throws -> (sidebar: SidebarViewModel, store: SpyBudgetStore) {
+    var budget = Budget(budgetName: "Sidebar")
+    for (name, kind) in [("Girokonto", AccountKind.checking), ("Sparkonto", .savings), ("Bargeld", .cash)] {
+        try budget.apply(.addAccount(NewAccount(name: name, kind: kind, startingBalance: 0, startDate: today)))
+    }
+    let store = SpyBudgetStore(budget: budget, today: today, appliesCommands: true)
+    let sidebar = SidebarViewModel(
+        store: store, navigation: NavigationState(selection: .budget), defaults: nil, budgetSettings: nil)
+    return (sidebar, store)
+}
+
+@MainActor
 @Suite struct SidebarViewModelTests {
     @Test func showsTheGroupsWithTheirAccounts() {
         let panels = makeSidebar().groupPanels
@@ -122,6 +134,22 @@ private func makeApp(defaults: (any SettingsStorage)? = nil, budget: Budget = De
         #expect(defaults.string(forKey: SidebarViewModel.tabStateKey) == "tabStateCollapse")
         let restored = makeSidebar(defaults: defaults)
         #expect(!restored.isFullView)
+    }
+
+    @Test func draggingAnAccountReordersItsGroup() throws {
+        let (sidebar, store) = try makeOrderedSidebar()
+        let bargeld = try #require(store.budget.account(named: "Bargeld"))
+        sidebar.moveAccount(in: .budgetAccounts, from: IndexSet(integer: 2), to: 0)
+        #expect(store.commands == [.moveAccount(accountId: bargeld.id, index: 0)])
+        #expect(sidebar.groupPanels[0].rows.map(\.name) == ["Bargeld", "Girokonto", "Sparkonto"])
+    }
+
+    @Test func aChangedPositionReordersTheSidebar() throws {
+        let (sidebar, store) = try makeOrderedSidebar()
+        var girokonto = try #require(store.budget.account(named: "Girokonto"))
+        girokonto.position = 5
+        store.budget = try store.budget.applying(.editAccount(girokonto))
+        #expect(sidebar.groupPanels[0].rows.map(\.name) == ["Sparkonto", "Bargeld", "Girokonto"])
     }
 
     @Test func everySelectionChangeExpandsTheAccountsGroup() {

@@ -190,4 +190,26 @@ import Testing
             ])
         #expect(store.budget.budgetSheet(today: october23).month(october23)?.category(household)?.assigned == 20)
     }
+
+    @Test func movingAnAccountSendsOnlyTheChangedPositions() throws {
+        let messages = try messages(
+            of: .moveAccount(accountId: "SPAR", index: 3), in: SidebarBudget().budget)
+        expectOneClock(messages)
+        #expect(
+            fields(messages) == [
+                field("accounts", "BAR", "position", .integer(1)), field("accounts", "SPAR", "position", .integer(2)),
+            ])
+    }
+
+    @Test func receivedPositionsReorderTheGroup() throws {
+        let database = try BudgetDatabase()
+        try database.save(SidebarBudget().budget, over: nil, now: now)
+        let store = try BudgetStore.open(database, today: { october23 }, now: { now })
+        let web = "2026-11-04T10:00:00.000Z-0000-web"
+        try store.receive(
+            [("BAR", 0), ("GIRO", 1), ("SPAR", 2)].map { id, position in
+                SyncMessage(table: "accounts", rowId: id, column: "position", value: .integer(position), clock: web)
+            })
+        #expect(store.budget.accounts(in: .budgetAccounts).map(\.name) == ["Bargeld", "Girokonto", "Sparkonto"])
+    }
 }

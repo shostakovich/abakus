@@ -3,6 +3,7 @@ import Foundation
 public enum BudgetCommand: Hashable, Sendable {
     case addAccount(NewAccount)
     case editAccount(Account)
+    case moveAccount(accountId: String, index: Int)
     /// `payeeName` is what the user typed: `"Transfer : <Account>"` makes a transfer, other text a payee.
     case addTransaction(Transaction, payeeName: String? = nil)
     case updateTransaction(Transaction, payeeName: String? = nil)
@@ -74,6 +75,7 @@ extension Budget {
         switch command {
         case .addAccount(let new): try addAccount(new)
         case .editAccount(let account): try editAccount(account)
+        case .moveAccount(let accountId, let index): try moveAccount(accountId, index: index)
         case .addTransaction(let transaction, let payeeName): try addTransaction(transaction, payeeName: payeeName)
         case .updateTransaction(let transaction, let payeeName):
             try updateTransaction(transaction, payeeName: payeeName)

@@ -5,6 +5,7 @@ public enum BudgetError: Error, Equatable, Sendable, LocalizedError {
     case duplicateAccountName
     case invalidAccountNameCharacter
     case accountNotFound(String)
+    case accountIsClosed
     case budgetStateIsFixed
     case transactionNotFound(String)
     case transferToSameAccount
@@ -39,6 +40,7 @@ public enum BudgetError: Error, Equatable, Sendable, LocalizedError {
         case .duplicateAccountName: "Ein Konto mit diesem Namen gibt es schon."
         case .invalidAccountNameCharacter: "Ein Kontoname darf kein ` enthalten."
         case .accountNotFound(let id): "Konto \(id) nicht gefunden."
+        case .accountIsClosed: "Ein geschlossenes Konto behält seinen Platz."
         case .budgetStateIsFixed: "Ein Budgetkonto kann kein Trackingkonto werden und umgekehrt."
         case .transactionNotFound(let id): "Buchung \(id) nicht gefunden."
         case .transferToSameAccount: "Ein Konto kann nicht auf sich selbst umbuchen."

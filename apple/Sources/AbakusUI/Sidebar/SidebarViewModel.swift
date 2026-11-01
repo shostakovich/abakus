@@ -202,6 +202,12 @@ public final class SidebarViewModel {
         }
     }
 
+    public func moveAccount(in group: SidebarGroup, from source: IndexSet, to destination: Int) {
+        let accounts = store.budget.accounts(in: group)
+        guard source.count == 1, let index = source.first, accounts.indices.contains(index) else { return }
+        try? store.perform(.moveAccount(accountId: accounts[index].id, index: destination))
+    }
+
     public func toggleSidebar() {
         isFullView.toggle()
         defaults?.set(isFullView ? "tabStateExpand" : "tabStateCollapse", forKey: Self.tabStateKey)
