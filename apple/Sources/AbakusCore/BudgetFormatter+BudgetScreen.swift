@@ -44,7 +44,7 @@ extension BudgetMonth {
     public func headerLines(formatter: BudgetFormatter) -> [BudgetHeaderLine] {
         let previous = formatter.shortMonthName(month.addingMonths(-1).month)
         let this = formatter.shortMonthName(month.month)
-        let assignedAmount = formatter.budgetAmount(abs(assigned), prefix: "-", prefixZero: false)
+        let assignedAmount = formatter.budgetAmount(-assigned, prefix: "+", prefixZero: false)
         var lines = [
             BudgetHeaderLine(
                 amount: formatter.budgetAmount(previousMonthAvailable), text: "Nicht verteilt im " + previous,
