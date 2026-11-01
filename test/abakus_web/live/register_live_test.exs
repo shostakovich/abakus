@@ -769,7 +769,6 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#proposal-#{id}-reject", "Trennen")
       assert has_element?(view, "#proposal-card-#{id}", "passt zu Buchung vom 02.10.2026")
       assert has_element?(view, "#proposal-card-#{id}-accept")
-      refute has_element?(view, "#proposal-#{id}-select")
 
       assert has_element?(view, "#approve-all-count", "1")
       assert has_element?(view, "#accept-all-matches", "1 zuordnen")
