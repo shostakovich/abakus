@@ -167,30 +167,28 @@ public final class AccountsController {
     public func closeOrReopenClicked() {
         guard let form = editForm, var account = store.budget.account(withId: form.accountId) else { return }
         editForm = nil
-        let wasSelected = navigation.selection == .account(account.id)
+        let neighbour = !account.closed && navigation.selection == .account(account.id) ? neighbour(of: account) : nil
         account.closed.toggle()
         try? store.perform(.editAccount(account))
         applyEdits(form)
-        if account.closed && wasSelected { selectNeighbour(of: account) }
+        if let neighbour { select(neighbour) }
     }
 
-    /// The nearest account of the same group, then the other open group.
-    private func selectNeighbour(of account: Account) {
-        let budget = store.budget
+    /// The nearest open account of the same group, then of the other open group.
+    private func neighbour(of account: Account) -> SidebarSelection {
         let collapsed = sidebar?.collapsedGroups ?? []
         let ownGroup: SidebarGroup = account.onBudget ? .budgetAccounts : .offBudgetAccounts
         let otherGroup: SidebarGroup = account.onBudget ? .offBudgetAccounts : .budgetAccounts
         for group in [ownGroup, otherGroup] where !collapsed.contains(group) {
-            let candidates = budget.accounts(in: group).filter { $0.id != account.id }
-            let next =
-                candidates.first { $0.position > account.position }
-                ?? candidates.last { $0.position < account.position }
-            if let next {
-                select(.account(next.id))
-                return
+            var candidates = store.budget.accounts(in: group)
+            // The tracking group lies below the budget group.
+            let index = candidates.firstIndex { $0.id == account.id } ?? (account.onBudget ? 0 : candidates.count)
+            candidates.removeAll { $0.id == account.id }
+            if let next = candidates.indices.contains(index) ? candidates[index] : candidates.last {
+                return .account(next.id)
             }
         }
-        select(.allAccounts)
+        return .allAccounts
     }
 
     private func select(_ selection: SidebarSelection) {

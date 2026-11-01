@@ -154,6 +154,26 @@ import Testing
         #expect(app.store.budget.account(withId: fixture.giro)?.closed == false)
     }
 
+    @Test func theNeighbourFollowsTheSidebarOrderOfEachGroup() throws {
+        var fixture = RegisterFixture()
+        for var account in fixture.budget.accounts {
+            account.position = 0
+            try fixture.budget.apply(.editAccount(account))
+        }
+        let app = app(fixture)
+        func close(_ id: String) {
+            app.navigation.selection = .account(id)
+            app.accounts.editAccountRequested(id)
+            app.accounts.closeOrReopenClicked()
+        }
+        close(fixture.karte)
+        #expect(app.navigation.selection == .account(fixture.tagesgeld))
+        close(fixture.depot)
+        #expect(app.navigation.selection == .account(fixture.tagesgeld))
+        close(fixture.giro)
+        #expect(app.navigation.selection == .account(fixture.tagesgeld))
+    }
+
     @Test func adjustBalanceAddsAnAdjustmentAfterTheSignCheck() throws {
         let fixture = RegisterFixture()
         let app = app(fixture)
