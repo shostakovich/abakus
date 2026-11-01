@@ -163,7 +163,7 @@ import Testing
         #expect(BudgetViewModel.autoScrollDepth(windowY: 150, windowHeight: 783) == -50)
         #expect(BudgetViewModel.autoScrollDepth(windowY: 400, windowHeight: 783) == 0)
         #expect(BudgetViewModel.autoScrollDepth(windowY: 733, windowHeight: 783) == 50)
-        let model = F().model(panel: CGSize(width: 1076, height: 300)).model
+        let model = F().model(panel: CGSize(width: 1076, height: 164)).model
         model.scroll(to: 50)
         model.dragPressed(rowId: F.kino, at: CGPoint(x: 40, y: 90))
         model.dragMoved(to: CGPoint(x: 40, y: 40), edgeDepth: 14)

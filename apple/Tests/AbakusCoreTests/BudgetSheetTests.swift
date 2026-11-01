@@ -65,7 +65,7 @@ import Testing
         #expect(first.month == date("2025-09-01"))
         #expect(
             first.headerText == [
-                "0,00 Nicht verteilt im Aug", "-0,00 Überzogen im Aug", "+0,00 Einnahmen im Sep",
+                "0,00 Nicht verteilt im Aug", "0,00 Überzogen im Aug", "0,00 Einnahmen im Sep",
                 "-50,00 Zugewiesen im Sep", "= 50,00€", "Nicht verteilt am Monatsende",
             ])
         #expect(scenario.sheet.quickBudgetAmount(.assignedLastMonth, categoryId: S.kleidung, month: first.month) == 0)

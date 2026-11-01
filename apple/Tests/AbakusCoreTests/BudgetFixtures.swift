@@ -116,9 +116,10 @@ extension BudgetMonth {
     func rowText(_ id: String) -> [String] {
         guard let figures = category(id) else { return [] }
         return [
-            figures.showsAssigned ? german.currencyNoSymbol(figures.assigned) : "",
-            figures.showsOutflows ? german.budgetAmount(figures.outflows, prefix: "+", prefixZero: false) : "",
-            figures.showsBalance ? german.currencyNoSymbol(figures.balance) : "",
+            figures.assigned != 0 ? german.currencyNoSymbol(figures.assigned) : "",
+            figures.spent != 0 || figures.hasTransactions
+                ? german.budgetAmount(figures.outflows, prefix: "+", prefixZero: false) : "",
+            figures.balance != 0 || figures.hasTransactions ? german.currencyNoSymbol(figures.balance) : "",
         ]
     }
 }

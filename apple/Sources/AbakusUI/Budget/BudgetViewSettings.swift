@@ -46,7 +46,7 @@ final class BudgetViewSettings {
     }
 
     var isHeaderExpanded: Bool {
-        get { (app?.string(forKey: Self.headerExpandedKey) ?? memory[Self.headerExpandedKey]) != "false" }
+        get { (app?.string(forKey: Self.headerExpandedKey) ?? memory[Self.headerExpandedKey]) == "true" }
         set {
             let value = newValue ? "true" : "false"
             if let app {

@@ -16,14 +16,13 @@ public enum ThemeColor {
     public static let groupFill: some ShapeStyle = FillShapeStyle().quaternary
     public static let groupBand = SetzkastenToken.base200.color
     public static let availableTint = SetzkastenToken.availableTint.color
+    public static let positiveBand = SetzkastenToken.successBand.color
     /// Selected rows and the edited row; the accent stays with the focused field.
     public static let selection = SetzkastenToken.rowSelected.color
     public static let fieldBackground = Color(nsColor: .textBackgroundColor)
     public static let fieldOutline: some ShapeStyle = HierarchicalShapeStyle.quaternary
     public static let focusRing = Color(nsColor: .keyboardFocusIndicatorColor)
     public static let negative = SetzkastenToken.errorInk.color
-    /// Only a figure of exactly zero, such as a fully assigned month.
-    public static let balanced = SetzkastenToken.successInk.color
     public static let warning = SetzkastenToken.warningInk.color
     public static let positive = SetzkastenToken.successInk.color
 }
@@ -100,6 +99,8 @@ extension SetzkastenToken {
     static let sidebarNegative = Self(light: OKLCH(81.00, 0.095, 22.00), dark: OKLCH(74.93, 0.151, 21.82))
     /// Not in Setzkasten: the web's budget sets the Verfügbar column on it.
     static let availableTint = Self(light: OKLCH(97.20, 0.008, 240.00), dark: OKLCH(27.50, 0.010, 262.00))
+    /// Not in Setzkasten: the web's budget sets Zu verteilen above zero on it.
+    static let successBand = Self(light: OKLCH(96.00, 0.035, 150.00), dark: OKLCH(30.00, 0.040, 150.00))
 }
 
 extension NSAppearance {

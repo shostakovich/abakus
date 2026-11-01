@@ -22,15 +22,15 @@ import Testing
         #expect(october.category(S.kleidung)?.isOverspent == true)
         #expect(
             october.headerText == [
-                "0,00 Nicht verteilt im Sep", "-0,00 Überzogen im Sep", "+1.000,00 Einnahmen im Okt",
+                "0,00 Nicht verteilt im Sep", "0,00 Überzogen im Sep", "+1.000,00 Einnahmen im Okt",
                 "-350,00 Zugewiesen im Okt", "= 650,00€", "Zu verteilen",
             ])
         #expect(october.totalsText == ["350,00€", "-200,00€", "150,00€"])
         let november = scenario.month("2026-11-01")
         #expect(
             november.headerText == [
-                "650,00 Nicht verteilt im Okt", "-30,00 Überzogen im Okt", "+0,00 Einnahmen im Nov",
-                "-0,00 Zugewiesen im Nov",
+                "650,00 Nicht verteilt im Okt", "-30,00 Überzogen im Okt", "0,00 Einnahmen im Nov",
+                "0,00 Zugewiesen im Nov",
                 "= 620,00€", "Zu verteilen",
             ])
         #expect(november.rowText(S.kleidung)[2] == "")
@@ -64,8 +64,8 @@ import Testing
         #expect(april.readyToAssign == 200)
         #expect(
             april.headerText == [
-                "0,00 Nicht verteilt im Mrz", "-0,00 Überzogen im Mrz", "+200,00 Einnahmen im Apr",
-                "-0,00 Zugewiesen im Apr", "-250,00 Für spätere Monate", "-50,00 Nicht gedeckt im Mai", "= -50,00€",
+                "0,00 Nicht verteilt im Mrz", "0,00 Überzogen im Mrz", "+200,00 Einnahmen im Apr",
+                "0,00 Zugewiesen im Apr", "-250,00 Für spätere Monate", "-50,00 Nicht gedeckt im Mai", "= -50,00€",
                 "Zu verteilen",
             ])
         #expect(try #require(april.headerLines(formatter: german).last).isWarning)
@@ -81,7 +81,7 @@ import Testing
         #expect(october.headerText[2] == "+3.000,00 Einnahmen im Okt")
         #expect(october.headerText[4] == "= 2.650,00€")
         let november = scenario.month("2026-11-01")
-        #expect(november.headerText[2] == "+0,00 Einnahmen im Nov")
+        #expect(november.headerText[2] == "0,00 Einnahmen im Nov")
         #expect(november.headerText[4...5] == ["= 2.620,00€", "Zu verteilen"])
     }
 
@@ -91,13 +91,13 @@ import Testing
         try scenario.budget(100, "FESTPLATTEN", in: "2026-10-01")
         #expect(
             scenario.month("2026-10-01").headerText == [
-                "0,00 Nicht verteilt im Sep", "-0,00 Überzogen im Sep", "+0,00 Einnahmen im Okt",
+                "0,00 Nicht verteilt im Sep", "0,00 Überzogen im Sep", "0,00 Einnahmen im Okt",
                 "-100,00 Zugewiesen im Okt", "= -100,00€", "Zu verteilen",
             ])
         #expect(
             scenario.month("2026-11-01").headerText == [
-                "-100,00 Nicht verteilt im Okt", "-0,00 Überzogen im Okt", "+0,00 Einnahmen im Nov",
-                "-0,00 Zugewiesen im Nov",
+                "-100,00 Nicht verteilt im Okt", "0,00 Überzogen im Okt", "0,00 Einnahmen im Nov",
+                "0,00 Zugewiesen im Nov",
                 "= -100,00€", "Zu verteilen",
             ])
         let december = scenario.month("2026-12-01").headerText
@@ -113,7 +113,7 @@ import Testing
         let december = scenario.month("2026-12-01")
         #expect(
             december.headerText == [
-                "620,00 Nicht verteilt im Nov", "-0,00 Überzogen im Nov", "+0,00 Einnahmen im Dez",
+                "620,00 Nicht verteilt im Nov", "0,00 Überzogen im Nov", "0,00 Einnahmen im Dez",
                 "-200,00 Zugewiesen im Dez",
                 "= 420,00€", "Zu verteilen",
             ])

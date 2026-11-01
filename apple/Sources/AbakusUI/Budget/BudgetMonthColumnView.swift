@@ -17,11 +17,12 @@ struct BudgetMonthRowsView: View {
 
 private struct BudgetCell<Content: View>: View {
     let width: CGFloat
+    var trailing = BudgetMetrics.cellPadding
     @ViewBuilder let content: Content
 
     var body: some View {
         content
-            .padding(.trailing, BudgetMetrics.cellPadding)
+            .padding(.trailing, trailing)
             .frame(width: width, height: BudgetMetrics.rowHeight, alignment: .trailing)
     }
 }
@@ -30,7 +31,6 @@ private struct BudgetOutflowsFigure: View {
     let model: BudgetViewModel
     let text: String
     let font: ThemeFont
-    let style: AnyShapeStyle
     let hasTransactions: Bool
     let anchor: BudgetPopupAnchor
     var toolTip: String?
@@ -38,15 +38,27 @@ private struct BudgetOutflowsFigure: View {
     @State private var isHovered = false
 
     var body: some View {
-        BudgetFigure(text: text, zero: model.zeroText, font: font, style: style)
+        BudgetFigure(text: text, font: font, style: AnyShapeStyle(ThemeColor.secondaryText))
             .underline(isHovered && hasTransactions)
             .budgetPopupAnchor(anchor, of: model)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .contentShape(Rectangle())
             .onHover { isHovered = $0 }
             .onTapGesture(perform: action)
             .pointerStyle(hasTransactions ? .link : .default)
             .toolTip(toolTip)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Aktivität")
+            .accessibilityValue(text)
             .accessibilityAddTraits(hasTransactions ? .isButton : [])
+    }
+}
+
+extension BudgetMonth {
+    /// A past month is muted; red stays red.
+    func figureStyle(isNegative: Bool = false) -> AnyShapeStyle {
+        if isNegative { return AnyShapeStyle(ThemeColor.negative) }
+        return AnyShapeStyle(isClosed ? ThemeColor.secondaryText : ThemeColor.text)
     }
 }
 
@@ -59,32 +71,22 @@ struct BudgetMonthMasterRow: View {
     var body: some View {
         let display = model.masterRowDisplay(row, in: month)
         let font = BudgetStyle.masterFont
-        let text = AnyShapeStyle(ThemeColor.text)
         HStack(spacing: 0) {
             BudgetCell(width: cells.assigned) {
-                if let assigned = display.assigned {
-                    BudgetFigure(text: assigned, zero: model.zeroText, font: font)
-                } else {
-                    // An empty cell would collapse and pull the other figures into its column.
-                    Color.clear
-                }
+                BudgetFigure(text: display.assigned, font: font, style: month.figureStyle())
             }
             BudgetCell(width: cells.outflows) {
                 BudgetOutflowsFigure(
-                    model: model, text: display.outflows, font: font, style: text,
-                    hasTransactions: display.hasTransactions, anchor: .outflows(month.month, row.id)
+                    model: model, text: display.outflows, font: font, hasTransactions: display.hasTransactions,
+                    anchor: .outflows(month.month, row.id)
                 ) { model.masterOutflowsClicked(month: month.month, masterId: row.id) }
             }
-            BudgetCell(width: cells.balance) {
+            BudgetCell(width: cells.balance, trailing: BudgetStyle.availableDigitInset) {
                 BudgetFigure(
-                    text: display.balance, zero: model.zeroText,
-                    font: display.isBalanceNegative ? BudgetStyle.masterNegativeFont : font,
-                    style: display.isBalanceNegative ? AnyShapeStyle(ThemeColor.negative) : text)
+                    text: display.balance, font: font, style: month.figureStyle(isNegative: display.isBalanceNegative))
             }
         }
         .frame(height: BudgetMetrics.rowHeight)
-        .contentShape(Rectangle())
-        .onHover { model.rowHovered(row.id, in: .month(month.month), $0) }
     }
 }
 
@@ -101,16 +103,13 @@ struct BudgetMonthSubRow: View {
             BudgetCell(width: cells.outflows) {
                 BudgetOutflowsFigure(
                     model: model, text: display.outflows, font: BudgetStyle.outflowsFont,
-                    style: AnyShapeStyle(ThemeColor.secondaryText), hasTransactions: display.hasTransactions,
-                    anchor: .outflows(month.month, row.id),
+                    hasTransactions: display.hasTransactions, anchor: .outflows(month.month, row.id),
                     toolTip: display.outflows.isEmpty ? nil : "Buchungen zeigen"
                 ) { model.subOutflowsClicked(month: month.month, categoryId: row.id) }
             }
             balance(display)
         }
         .frame(height: BudgetMetrics.rowHeight)
-        .contentShape(Rectangle())
-        .onHover { model.rowHovered(row.id, in: .month(month.month), $0) }
     }
 
     private var cell: BudgetCellID { BudgetCellID(month: month.month, categoryId: row.id) }
@@ -126,17 +125,18 @@ struct BudgetMonthSubRow: View {
                     .offset(x: field.minX, y: field.minY)
             } else {
                 BudgetCell(width: cells.assigned) {
-                    BudgetFigure(text: display.assigned, zero: model.zeroText)
+                    BudgetFigure(text: display.assigned, style: month.figureStyle())
                 }
                 .background(alignment: .topLeading) {
-                    if model.hoveredRow == row.id {
+                    if model.hoveredAssignedCell == cell {
                         RoundedRectangle(cornerRadius: BudgetStyle.fieldCornerRadius)
-                            .fill(ThemeColor.groupFill)
+                            .strokeBorder(ThemeColor.text.opacity(0.5), lineWidth: 1)
                             .frame(width: field.width, height: field.height)
                             .offset(x: field.minX, y: field.minY)
                     }
                 }
                 .contentShape(Rectangle())
+                .onHover { model.assignedCellHovered(cell, $0) }
                 .onTapGesture { model.beginEdit(cell) }
                 .pointerStyle(.horizontalText)
                 .accessibilityAddTraits(.isButton)
@@ -148,18 +148,15 @@ struct BudgetMonthSubRow: View {
     }
 
     private func balance(_ display: BudgetSubRowDisplay) -> some View {
-        let value = display.balance.isEmpty ? model.zeroText : display.balance
-        return BudgetCell(width: cells.balance) {
-            HStack(spacing: BudgetStyle.markerSpacing) {
-                if let marker = display.marker {
-                    Image(systemName: marker.symbol.name)
-                        .font(.system(size: BudgetStyle.markerSize))
-                        .foregroundStyle(marker.symbol.color)
-                }
+        BudgetCell(width: cells.balance, trailing: BudgetStyle.markerInset) {
+            HStack(spacing: 0) {
                 BudgetFigure(
-                    text: display.balance, zero: model.zeroText,
-                    font: display.isOverspent ? BudgetStyle.overspentFont : BudgetStyle.balanceFont,
+                    text: display.balance,
+                    font: display.isBalanceZero ? BudgetStyle.assignedFont : BudgetStyle.balanceFont,
                     style: balanceStyle(display))
+                Color.clear
+                    .frame(width: BudgetStyle.markerSlot, height: BudgetStyle.ringSize)
+                    .overlay(alignment: .trailing) { marker(display) }
             }
             .budgetPopupAnchor(.balance(month.month, row.id), of: model)
         }
@@ -169,11 +166,28 @@ struct BudgetMonthSubRow: View {
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel("Verfügbar")
-        .accessibilityValue(display.marker.map { "\(value), \($0.label)" } ?? value)
+        .accessibilityValue(display.accessibilityValue)
+    }
+
+    @ViewBuilder
+    private func marker(_ display: BudgetSubRowDisplay) -> some View {
+        if let marker = display.marker {
+            let color = month.isClosed ? ThemeColor.secondaryText : marker.symbol.color
+            if let percent = display.fundedPercent {
+                BudgetTargetRing(percent: percent, color: color)
+            } else {
+                Image(systemName: marker.symbol.name)
+                    .font(.system(size: BudgetStyle.markerSize))
+                    .foregroundStyle(color)
+            }
+        }
     }
 
     private func balanceStyle(_ display: BudgetSubRowDisplay) -> AnyShapeStyle {
-        if display.isBalanceNegative { return AnyShapeStyle(ThemeColor.negative) }
+        if display.isBalanceZero { return AnyShapeStyle(ThemeColor.tertiaryText) }
+        if display.isBalanceNegative || month.isClosed {
+            return month.figureStyle(isNegative: display.isBalanceNegative)
+        }
         return display.marker == .underfunded ? AnyShapeStyle(ThemeColor.warning) : AnyShapeStyle(ThemeColor.text)
     }
 }

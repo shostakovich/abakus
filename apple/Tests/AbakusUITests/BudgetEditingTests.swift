@@ -105,7 +105,7 @@ import Testing
     }
 
     @Test func pageKeysScrollWhileTheCellStaysInEditMode() {
-        let model = F().model(panel: CGSize(width: 1076, height: 320)).model
+        let model = F().model(panel: CGSize(width: 1076, height: 198)).model
         model.beginEdit(model.cell(F.lebensmittel))
         #expect(model.cellKey(.pageDown))
         #expect(model.scrollOffset == 100)
@@ -113,10 +113,10 @@ import Testing
     }
 
     @Test func aCellBelowTheViewportScrollsIntoView() {
-        let model = F().model(panel: CGSize(width: 1076, height: 320)).model
-        #expect(model.layout.viewportHeight == 69)
+        let model = F().model(panel: CGSize(width: 1076, height: 184)).model
+        #expect(model.layout.viewportHeight == 55)
         model.beginEdit(model.cell(F.kino))
-        #expect(model.scrollOffset == 155)
+        #expect(model.scrollOffset == 169)
         model.beginEdit(model.cell(F.lebensmittel))
         #expect(model.scrollOffset == 32)
     }
@@ -304,10 +304,10 @@ import Testing
         let cell = model.cell(F.kino)
         model.beginEdit(cell)
         let row = try #require(model.rowFrame(of: cell))
-        #expect(row.origin == CGPoint(x: 16 + 202, y: 234 + 6 * 32))
+        #expect(row.origin == CGPoint(x: 16 + 202, y: 112 + 6 * 32))
         #expect(row.height == 32 && abs(row.width - 272.667) < 0.001)
-        #expect(model.assignedBoxFrame(of: cell) == CGRect(x: 218 + 8, y: 426 + 4, width: 77, height: 24))
-        #expect(model.dropDownButtonFrame(of: cell) == CGRect(x: 226, y: 430, width: 20, height: 24))
+        #expect(model.assignedBoxFrame(of: cell) == CGRect(x: 218 + 8, y: 304 + 4, width: 72, height: 24))
+        #expect(model.dropDownButtonFrame(of: cell) == CGRect(x: 226, y: 308, width: 20, height: 24))
         model.openQuickBudget()
         let list = try #require(model.quickBudgetFrame())
         let box = try #require(model.assignedBoxFrame(of: cell))

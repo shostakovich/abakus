@@ -70,7 +70,7 @@ import Testing
     }
 
     @Test func addingAMasterOpensItsCalloutAtTheNewRow() throws {
-        let (model, store) = F().model(panel: CGSize(width: 1076, height: 300))
+        let (model, store) = F().model(panel: CGSize(width: 1076, height: 164))
         model.scroll(to: 40)
         model.addMasterCategoryClicked()
         let id = try #require(addedId(store))
@@ -111,7 +111,7 @@ import Testing
     }
 
     @Test func addingASubScrollsItsGroupIntoView() throws {
-        let (model, store) = F().model(panel: CGSize(width: 1076, height: 300))
+        let (model, store) = F().model(panel: CGSize(width: 1076, height: 164))
         model.addSubCategoryClicked(masterId: F.freizeit)
         let id = try #require(addedId(store))
         let top = try #require(model.groups.top(of: F.freizeit))

@@ -6,23 +6,24 @@ public struct BudgetSubRowDisplay: Hashable, Sendable {
     public let outflows: String
     public let balance: String
     public let isBalanceNegative: Bool
-    public let isBalanceDimmed: Bool
-    public let isOverspent: Bool
+    public let isBalanceZero: Bool
     public let hasTransactions: Bool
     public let marker: BudgetAvailableMarker?
+    /// The ring of an underfunded target.
+    public let fundedPercent: Int?
+    public let accessibilityValue: String
 }
 
 public struct BudgetMasterRowDisplay: Hashable, Sendable {
-    public let assigned: String?
+    public let assigned: String
     public let outflows: String
     public let balance: String
     public let isBalanceNegative: Bool
-    public let isBalanceDimmed: Bool
     public let hasTransactions: Bool
 }
 
 public enum BudgetAvailableTint: Hashable, Sendable {
-    case neutral, balanced, negative
+    case neutral, positive, negative, muted
 }
 
 /// An amount whose trailing currency symbol hangs past the digit edge.
@@ -34,9 +35,11 @@ public struct BudgetTotal: Hashable, Sendable {
 }
 
 public struct BudgetMonthHeaderDisplay: Hashable, Sendable {
+    public let title: String
     public let available: String
     public let availableTint: BudgetAvailableTint
     public let totals: [BudgetTotal]
+    public let isPast: Bool
 }
 
 extension BudgetViewModel {
@@ -45,32 +48,40 @@ extension BudgetViewModel {
     public func subRowDisplay(_ categoryId: String, in month: BudgetMonth) -> BudgetSubRowDisplay {
         let figures = month.category(categoryId)
         let balance = figures?.balance ?? 0
-        let showsBalance = figures?.showsBalance ?? false
+        let marker = figures?.availableMarker(isBeingBudgeted: month.isBeingBudgeted)
+        let fundedPercent = marker == .underfunded ? figures?.target?.fundedPercent : nil
+        let balanceText = isZero(balance) ? zeroText : formatter.currencyNoSymbol(balance)
+        let markerLabel = marker.map { marker in
+            fundedPercent.map { "\(marker.label), \($0) % finanziert" } ?? marker.label
+        }
         return BudgetSubRowDisplay(
-            assigned: figures?.showsAssigned == true ? formatter.currencyNoSymbol(figures?.assigned ?? 0) : "",
-            outflows: figures?.showsOutflows == true ? outflowsText(figures?.outflows ?? 0) : "",
-            balance: showsBalance ? formatter.currencyNoSymbol(balance) : "",
-            isBalanceNegative: balance < 0, isBalanceDimmed: showsBalance && balance == 0,
-            isOverspent: showsBalance && balance < 0, hasTransactions: figures?.hasTransactions ?? false,
-            marker: figures?.availableMarker(isBeingBudgeted: month.isBeingBudgeted))
+            assigned: figure(figures?.assigned ?? 0), outflows: outflowsText(figures?.outflows ?? 0),
+            balance: balanceText, isBalanceNegative: balance < 0, isBalanceZero: isZero(balance),
+            hasTransactions: figures?.hasTransactions ?? false, marker: marker, fundedPercent: fundedPercent,
+            accessibilityValue: markerLabel.map { "\(balanceText), \($0)" } ?? balanceText)
     }
 
     public func masterRowDisplay(_ row: BudgetCategoryRow, in month: BudgetMonth) -> BudgetMasterRowDisplay {
         let figures = month.master(row.id)
         let balance = figures?.balance ?? 0
         return BudgetMasterRowDisplay(
-            assigned: row.kind == .uncategorized ? nil : formatter.currencyNoSymbol(figures?.assigned ?? 0),
-            outflows: outflowsText(figures?.outflows ?? 0), balance: formatter.currencyNoSymbol(balance),
-            isBalanceNegative: balance < 0, isBalanceDimmed: balance == 0,
+            assigned: row.kind == .uncategorized ? "" : figure(figures?.assigned ?? 0),
+            outflows: outflowsText(figures?.outflows ?? 0), balance: figure(balance), isBalanceNegative: balance < 0,
             hasTransactions: figures?.hasTransactions ?? false)
     }
 
     public func headerDisplay(_ month: BudgetMonth) -> BudgetMonthHeaderDisplay {
         let available = Amount.round(month.available, digits: formatter.currencyLocale.decimalDigits)
-        let tint: BudgetAvailableTint = available < 0 ? .negative : (available == 0 ? .balanced : .neutral)
         return BudgetMonthHeaderDisplay(
-            available: formatter.currency(month.available), availableTint: tint,
-            totals: [month.assigned, month.outflows, month.balance].map(total))
+            title: formatter.monthName(month.month.month) + " " + String(month.month.year),
+            available: formatter.currency(month.available), availableTint: tint(available, isPast: month.isClosed),
+            totals: [month.assigned, month.outflows, month.balance].map(total), isPast: month.isClosed)
+    }
+
+    private func tint(_ available: Decimal, isPast: Bool) -> BudgetAvailableTint {
+        if available < 0 { return .negative }
+        if isPast { return .muted }
+        return available > 0 ? .positive : .neutral
     }
 
     private func total(_ amount: Decimal) -> BudgetTotal {
@@ -80,7 +91,15 @@ extension BudgetViewModel {
             : BudgetTotal(digits: formatter.currencyNoSymbol(amount), suffix: locale.currencySymbol)
     }
 
+    private func isZero(_ amount: Decimal) -> Bool {
+        Amount.round(amount, digits: formatter.currencyLocale.decimalDigits) == 0
+    }
+
+    private func figure(_ amount: Decimal) -> String {
+        isZero(amount) ? "" : formatter.currencyNoSymbol(amount)
+    }
+
     private func outflowsText(_ outflows: Decimal) -> String {
-        formatter.budgetAmount(outflows, prefix: "+", prefixZero: false)
+        isZero(outflows) ? "" : formatter.budgetAmount(outflows, prefix: "+")
     }
 }

@@ -14,11 +14,16 @@ public enum BudgetMetrics {
     public static let maximumFittedCategoryWidth: CGFloat = 220
     public static let pageScroll: CGFloat = 100
     public static let dragThreshold: CGFloat = 11
-    public static let tableHeaderHeight: CGFloat = 44
-    public static let cardCollapsedHeight: CGFloat = 106
+    public static let headerTopPadding: CGFloat = 4
+    public static let monthTitleHeight: CGFloat = 22
+    public static let headerGap: CGFloat = 4
+    public static let resultHeight: CGFloat = 36
+    /// The column titles with their totals and the padding below them.
+    public static let columnHeadHeight: CGFloat = 34
+    public static let monthHeaderHeight =
+        headerTopPadding + monthTitleHeight + headerGap + resultHeight + headerGap + columnHeadHeight
     public static let headerLineHeight: CGFloat = 15.5
     public static let headerDetailsPadding: CGFloat = 4
-    public static let cardSpacing: CGFloat = 10
     /// Between a figure's digits and its cell's trailing edge; the € hangs in it.
     public static let cellPadding: CGFloat = 12
     public static let fieldHeight: CGFloat = 24
@@ -72,25 +77,34 @@ public struct BudgetLayout: Hashable, Sendable {
         CGFloat(headerLineCount) * BudgetMetrics.headerLineHeight + BudgetMetrics.headerDetailsPadding
     }
 
-    public var cardHeight: CGFloat {
-        BudgetMetrics.cardCollapsedHeight + headerDetailsHeight * headerProgress
+    public var headerHeight: CGFloat {
+        BudgetMetrics.monthHeaderHeight + headerDetailsHeight * headerProgress
     }
 
     public var tableFrame: CGRect {
-        let top = BudgetMetrics.topInset + cardHeight + BudgetMetrics.cardSpacing
-        return CGRect(
-            x: BudgetMetrics.horizontalInset, y: top, width: tableWidth,
-            height: max(0, panelSize.height - top - BudgetMetrics.bottomInset))
+        CGRect(
+            x: BudgetMetrics.horizontalInset, y: BudgetMetrics.topInset, width: tableWidth,
+            height: max(0, panelSize.height - BudgetMetrics.topInset - BudgetMetrics.bottomInset))
     }
 
     public var rowsOrigin: CGPoint {
-        CGPoint(x: tableFrame.minX, y: tableFrame.minY + BudgetMetrics.tableHeaderHeight)
+        CGPoint(x: tableFrame.minX, y: tableFrame.minY + headerHeight)
     }
 
-    public var viewportHeight: CGFloat { max(0, tableFrame.height - BudgetMetrics.tableHeaderHeight - 1) }
+    public var viewportHeight: CGFloat { max(0, tableFrame.height - headerHeight - 1) }
 
     public func cells(at index: Int) -> BudgetCellColumns {
         BudgetCellColumns(width: columnWidth - (index == columnCount - 1 ? BudgetMetrics.scrollerGutter : 0))
+    }
+
+    /// Verfügbar of month `index` in the table, from its column title down to the next month's separator line; the
+    /// last one runs under the scroller.
+    public func availableColumn(at index: Int) -> CGRect {
+        let cells = cells(at: index)
+        let top = headerHeight - BudgetMetrics.columnHeadHeight
+        let minX = columnX(index) + cells.assigned + cells.outflows
+        let maxX = index == columnCount - 1 ? columnX(index) + columnWidth : separatorX(index + 1)
+        return CGRect(x: minX, y: top, width: max(0, maxX - minX), height: max(0, tableFrame.height - top))
     }
 }
 
@@ -101,8 +115,8 @@ public struct BudgetCellColumns: Hashable, Sendable {
         self.width = width
     }
 
-    public var assigned: CGFloat { (width * 0.33).rounded() }
-    public var outflows: CGFloat { (width * 0.33).rounded() }
+    public var assigned: CGFloat { (width * 0.31).rounded() }
+    public var outflows: CGFloat { (width * 0.31).rounded() }
     public var balance: CGFloat { max(0, width - assigned - outflows) }
 
     public var field: CGRect {

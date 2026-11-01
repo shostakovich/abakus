@@ -15,9 +15,6 @@ public struct BudgetCategoryFigures: Hashable, Sendable {
     public var outflows: Decimal { Amount.round(-spent) }
     public var hasTransactions: Bool { transactionCount > 0 }
     public var isOverspent: Bool { balance < 0 }
-    public var showsAssigned: Bool { assigned != 0 }
-    public var showsOutflows: Bool { spent != 0 || hasTransactions }
-    public var showsBalance: Bool { balance != 0 || hasTransactions }
 }
 
 public struct BudgetMasterFigures: Hashable, Sendable {

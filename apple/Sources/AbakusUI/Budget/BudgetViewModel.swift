@@ -11,17 +11,6 @@ public struct BudgetTimelineCell: Hashable, Sendable {
     public let hasNoData: Bool
 }
 
-public enum BudgetHoverColumn: Hashable, Sendable {
-    case categories
-    case month(DateWithoutTime)
-}
-
-/// The row under the pointer and the column it is in: every column shows the row's fields, only that one its icons.
-public struct BudgetHover: Hashable, Sendable {
-    public let rowId: String
-    public let column: BudgetHoverColumn
-}
-
 @MainActor
 @Observable
 public final class BudgetViewModel {
@@ -41,7 +30,8 @@ public final class BudgetViewModel {
         }
     }
     var storedScrollOffset: CGFloat = 0
-    public internal(set) var hover: BudgetHover?
+    public internal(set) var hoveredRowId: String?
+    public internal(set) var hoveredAssignedCell: BudgetCellID?
     public internal(set) var presentedPopup: BudgetPopup?
     public internal(set) var editor: BudgetCellEdit?
     public internal(set) var quickBudget: BudgetQuickBudgetList?
@@ -183,7 +173,8 @@ public final class BudgetViewModel {
         calculator = nil
         drag = nil
         dismissPopup()
-        hover = nil
+        hoveredRowId = nil
+        hoveredAssignedCell = nil
     }
 
     public var timelineYear: Int { firstMonth.year }
@@ -262,20 +253,22 @@ public final class BudgetViewModel {
         settings.categoryColumnWidth = categoryWidth
     }
 
-    public var hoveredRow: String? { hover?.rowId }
-
-    public func rowHovered(_ rowId: String, in column: BudgetHoverColumn, _ inside: Bool) {
-        let entered = BudgetHover(rowId: rowId, column: column)
+    public func rowHovered(_ rowId: String, _ inside: Bool) {
         if inside {
             guard drag == nil, rowId != EntityID.uncategorizedMasterCategory else { return }
-            hover = entered
-        } else if hover == entered {
-            hover = nil
+            hoveredRowId = rowId
+        } else if hoveredRowId == rowId {
+            hoveredRowId = nil
         }
     }
 
-    public func isPointerOver(_ rowId: String, in column: BudgetHoverColumn) -> Bool {
-        hover == BudgetHover(rowId: rowId, column: column)
+    public func assignedCellHovered(_ cell: BudgetCellID, _ inside: Bool) {
+        if inside {
+            guard drag == nil else { return }
+            hoveredAssignedCell = cell
+        } else if hoveredAssignedCell == cell {
+            hoveredAssignedCell = nil
+        }
     }
 
     public var contentHeight: CGFloat { groups.contentHeight }

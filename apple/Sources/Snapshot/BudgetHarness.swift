@@ -119,7 +119,7 @@ struct BudgetHarness {
         case screen, edit
         case quickBudget = "quick-budget"
         case calculator
-        case collapsedHeader = "collapsed-header"
+        case expandedHeader = "expanded-header"
         case collapsedAll = "collapsed-all"
         case drag, hover, uncategorized
         case quickBudgetMenu = "quick-budget-menu"
@@ -155,10 +155,8 @@ struct BudgetHarness {
         case .screen:
             break
         case .edit:
-            budget.rowHovered(BudgetReference.lernen, in: .month(lernen.month), true)
             budget.beginEdit(lernen)
         case .quickBudget:
-            budget.rowHovered(BudgetReference.lernen, in: .month(lernen.month), true)
             budget.beginEdit(lernen)
             edit.settle()
             edit.send(String(UnicodeScalar(NSF2FunctionKey)!), keyCode: UInt16(kVK_F2))
@@ -166,7 +164,7 @@ struct BudgetHarness {
             budget.beginEdit(lernen)
             edit.settle()
             edit.type("+")
-        case .collapsedHeader:
+        case .expandedHeader:
             budget.toggleHeaderDetails()
             RunLoop.main.run(until: Date().addingTimeInterval(0.4))
         case .collapsedAll:
@@ -181,7 +179,8 @@ struct BudgetHarness {
             budget.dragPressed(rowId: BudgetReference.lernen, at: start)
             budget.dragMoved(to: CGPoint(x: 65, y: CGFloat(to) * BudgetMetrics.rowHeight + 17))
         case .hover:
-            budget.rowHovered("KRAM", in: .categories, true)
+            budget.rowHovered("KRAM", true)
+            budget.assignedCellHovered(lernen, true)
         case .uncategorized:
             try addUncategorizedOutflow()
         case .targets:
@@ -230,10 +229,10 @@ struct BudgetHarness {
             budget.addMasterCategoryClicked()
         case .addSub:
             let master = budget.groups.first { $0.header.kind == .master && $0.subs.isEmpty }?.id ?? "GEWINN"
-            budget.rowHovered(master, in: .categories, true)
+            budget.rowHovered(master, true)
             budget.addSubCategoryClicked(masterId: master)
         case .editCategory, .renameError, .deleteCategory:
-            budget.rowHovered(lernen, in: .categories, true)
+            budget.rowHovered(lernen, true)
             budget.present(.editCategory(categoryId: lernen))
             edit.settle()
             if state == .renameError {
@@ -243,10 +242,9 @@ struct BudgetHarness {
                 callouts.deleteCategoryClicked()
             }
         case .editMaster:
-            budget.rowHovered("KRAM", in: .categories, true)
+            budget.rowHovered("KRAM", true)
             budget.present(.editCategory(categoryId: "KRAM"))
         case .summary, .accountView:
-            budget.rowHovered(lernen, in: .month(month), true)
             budget.present(.outflowSummary(month: month, source: .category(lernen)))
             edit.settle()
             if state == .accountView { callouts.showInAccountViewClicked() }
@@ -257,7 +255,6 @@ struct BudgetHarness {
             edit.settle()
             budget.present(.outflowSummary(month: month, source: .masterCategory(EntityID.uncategorizedMasterCategory)))
         case .outflowHelp:
-            budget.rowHovered(lernen, in: .month(month), true)
             budget.present(.outflowHelp(month: month, categoryId: lernen))
         case .cover:
             try overspendLernen()
@@ -267,7 +264,7 @@ struct BudgetHarness {
             budget.present(.available(month: BudgetReference.today.firstOfMonth, categoryId: "PLATTEN"))
         case .target, .targetEditor:
             try addTargets()
-            budget.rowHovered(lernen, in: .categories, true)
+            budget.rowHovered(lernen, true)
             budget.present(.editCategory(categoryId: lernen, month: BudgetReference.today.firstOfMonth))
             edit.settle()
             if state == .targetEditor {
@@ -278,7 +275,7 @@ struct BudgetHarness {
             try addTargets()
             edit.settle()
             budget.present(.assignToCategory(month: BudgetReference.today.firstOfMonth))
-        case .screen, .edit, .quickBudget, .calculator, .collapsedHeader, .collapsedAll, .drag, .hover, .uncategorized,
+        case .screen, .edit, .quickBudget, .calculator, .expandedHeader, .collapsedAll, .drag, .hover, .uncategorized,
             .targets:
             break
         }
