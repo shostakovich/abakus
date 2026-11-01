@@ -3,9 +3,10 @@ defmodule AbakusWeb.TransactionForm do
   A transaction as the register edits it, as params with string keys, and the attrs for the Ledger built from
   them.
 
-  As in YNAB an amount is typed as an outflow or an inflow (`outflow`, `inflow`): it is inflow − outflow, so a
-  minus counts against its column. Phones type one amount, which `sign` ("-" or "+") makes the outflow or the
-  inflow.
+  A side's amount is held as an outflow or an inflow (`outflow`, `inflow`): it is inflow − outflow, so a minus
+  counts against its column. Each side has a `sign` ("-" or "+"), the transaction's being the whole transaction's
+  on phones. The register's row types each side's amount into `amount`, which its `sign`, or a sign typed in
+  front, makes the outflow or the inflow.
 
   The transaction and each subtransaction of a split (with `split` "true", `subtransactions` by index) are sides:
   each has a `payee`, a `transfer_account_id` and a `category_id`; a subtransaction also has a memo, an amount and
@@ -27,7 +28,6 @@ defmodule AbakusWeb.TransactionForm do
     %{
       "account_id" => to_param(account_id),
       "date" => Date.to_iso8601(date),
-      "sign" => "-",
       "split" => "false",
       "subtransactions" => %{},
       "memo" => ""
@@ -54,7 +54,6 @@ defmodule AbakusWeb.TransactionForm do
     |> Map.merge(%{
       "account_id" => to_param(transaction.account_id),
       "date" => Date.to_iso8601(transaction.date),
-      "sign" => if(transaction.amount > 0, do: "+", else: "-"),
       "split" => to_string(split?),
       "subtransactions" => subtransactions,
       "memo" => transaction.memo || ""
@@ -69,7 +68,8 @@ defmodule AbakusWeb.TransactionForm do
       "transfer_account_id" => to_param(transfer),
       "category_id" => to_param(category_id(side)),
       "outflow" => if(side.amount < 0, do: Money.amount(-side.amount), else: ""),
-      "inflow" => if(side.amount > 0, do: Money.amount(side.amount), else: "")
+      "inflow" => if(side.amount > 0, do: Money.amount(side.amount), else: ""),
+      "sign" => if(side.amount > 0, do: "+", else: "-")
     }
   end
 
@@ -99,11 +99,13 @@ defmodule AbakusWeb.TransactionForm do
         {index,
          sub
          |> Map.merge(typed(get_in(changed, ["subtransactions", index])))
+         |> take_amount()
          |> follow_payee(accounts)}
       end)
 
     params
     |> Map.merge(changed |> typed() |> Map.delete("subtransactions"))
+    |> take_amount()
     |> follow_payee(accounts)
     |> Map.put("subtransactions", subtransactions)
   end
@@ -128,6 +130,28 @@ defmodule AbakusWeb.TransactionForm do
   end
 
   defp follow_payee(side, _accounts), do: side
+
+  defp take_amount(%{"amount" => text} = side) do
+    {sign, digits} = typed_sign(text, sign(side))
+    {column, other} = columns(sign)
+
+    side
+    |> Map.delete("amount")
+    |> Map.merge(%{"sign" => sign, column => digits, other => ""})
+  end
+
+  defp take_amount(side), do: side
+
+  defp typed_sign(text, sign) when is_binary(text) do
+    case String.trim(text) do
+      "+" <> digits -> {"+", String.trim(digits)}
+      "-" <> digits -> {"-", String.trim(digits)}
+      "−" <> digits -> {"-", String.trim(digits)}
+      digits -> {sign, digits}
+    end
+  end
+
+  defp typed_sign(other, sign), do: {sign, other}
 
   defp map_sides(params, fun) do
     params
@@ -172,15 +196,6 @@ defmodule AbakusWeb.TransactionForm do
 
   def suggest(params, _side, nil, false = _suggested?), do: {params, false}
 
-  @doc "YNAB keeps one of outflow and inflow: typing into one (`column`) clears the other."
-  def keep_column(params, side, column) when column in ["outflow", "inflow"] do
-    other = if column == "outflow", do: "inflow", else: "outflow"
-
-    if blank?(side(params, side)[column]),
-      do: params,
-      else: put_side(params, side, %{other => ""})
-  end
-
   @doc """
   After the amount changed direction: income goes to Ready to Assign unless a category is chosen, and an outflow
   does not keep Ready to Assign.
@@ -197,21 +212,31 @@ defmodule AbakusWeb.TransactionForm do
   end
 
   @doc "Flips the sign of the phone's amount: outflows become inflows and back, the parts' too."
-  def toggle_sign(params) do
-    swap = fn side -> %{side | "outflow" => side["inflow"], "inflow" => side["outflow"]} end
-    sign = if params["sign"] == "+", do: "-", else: "+"
+  def toggle_sign(params), do: map_sides(params, &flip/1)
 
-    params
-    |> map_sides(&Map.merge(%{"outflow" => "", "inflow" => ""}, &1))
-    |> map_sides(swap)
-    |> Map.put("sign", sign)
+  @doc "Flips the sign of one side's amount, as the register's row does."
+  def toggle_sign(params, side), do: put_side(params, side, flip(side(params, side)))
+
+  defp flip(side) do
+    Map.merge(side, %{
+      "outflow" => side["inflow"] || "",
+      "inflow" => side["outflow"] || "",
+      "sign" => if(sign(side) == "+", do: "-", else: "+")
+    })
   end
 
+  @doc ~s|A side's sign, "-" or "+".|
+  def sign(side), do: if(side["sign"] == "+", do: "+", else: "-")
+
+  defp columns("+"), do: {"inflow", "outflow"}
+  defp columns(_sign), do: {"outflow", "inflow"}
+
   @doc """
-  The phone's amount of a side in the transaction's direction (`sign`), as typed while only one column is filled.
+  A side's amount in the direction `sign`, as typed while only one column is filled; the phone directs every side
+  by the transaction's sign, the register's row each by its own.
   """
   def directed(side, sign) do
-    {column, other} = if sign == "+", do: {"inflow", "outflow"}, else: {"outflow", "inflow"}
+    {column, other} = columns(sign)
 
     cond do
       blank?(side[other]) -> side[column] || ""
@@ -225,9 +250,11 @@ defmodule AbakusWeb.TransactionForm do
 
   @doc "Splits the transaction into two blank subtransactions; its category goes, as a split has none."
   def split(params) do
+    blank = blank_subtransaction(params)
+
     subtransactions =
       if subtransactions(params) == [],
-        do: %{"0" => blank_subtransaction(), "1" => blank_subtransaction()},
+        do: %{"0" => blank, "1" => blank},
         else: params["subtransactions"]
 
     %{
@@ -253,7 +280,7 @@ defmodule AbakusWeb.TransactionForm do
       |> Enum.map(&String.to_integer(elem(&1, 0)))
       |> Enum.max(fn -> -1 end)
 
-    put_in(params, ["subtransactions", Integer.to_string(next + 1)], blank_subtransaction())
+    put_in(params, ["subtransactions", Integer.to_string(next + 1)], blank_subtransaction(params))
   end
 
   @doc """
@@ -474,10 +501,12 @@ defmodule AbakusWeb.TransactionForm do
       "transfer_account_id" => "",
       "category_id" => "",
       "outflow" => "",
-      "inflow" => ""
+      "inflow" => "",
+      "sign" => "-"
     }
 
-  defp blank_subtransaction, do: Map.merge(blank_side(), %{"id" => "", "memo" => ""})
+  defp blank_subtransaction(params),
+    do: Map.merge(blank_side(), %{"id" => "", "memo" => "", "sign" => sign(params)})
 
   defp blank?(text) when is_binary(text), do: String.trim(text) == ""
   defp blank?(other), do: is_nil(other)

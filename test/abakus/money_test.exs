@@ -245,6 +245,14 @@ defmodule Abakus.MoneyTest do
     end
   end
 
+  describe "signed_amount/1" do
+    test "puts a plus before an inflow and a real minus before an outflow, none before zero" do
+      assert Money.signed_amount(318_000) == "+3.180,00"
+      assert Money.signed_amount(-8_812) == "−88,12"
+      assert Money.signed_amount(0) == "0,00"
+    end
+  end
+
   describe "a field value reads back as written" do
     values =
       [0, 1, 5, 99, 100, 999, 1000, 1001, 123_456, 1_000_000, 1_234_567, 100_000_000] ++

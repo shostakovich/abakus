@@ -16,7 +16,7 @@
 }
 
 /* Fixed columns, so an opened row keeps every column where it is; the edit grid lays its inputs on the same tracks.
-   The amounts fit "−10.000,00", the memo takes what is left. */
+   Betrag fits "−10.000,00" and, while edited, its sign button; the memo takes what is left. */
 .app-reg-wrap { container: register / inline-size; }
 .app-reg {
   table-layout: fixed;
@@ -24,7 +24,7 @@
   --reg-konto: 0px;
   --reg-payee: 22%;
   --reg-cat: 20%;
-  --reg-amount: 6.5rem;
+  --reg-amount: 8rem;
   --reg-run: 0px;
   --reg-status: 2.75rem;
   --reg-head-h: 2.25rem;
@@ -39,14 +39,14 @@
 .app-reg .app-col-payee { width: var(--reg-payee); }
 .app-reg .app-col-cat { width: var(--reg-cat); }
 .app-reg .app-col-memo { width: auto; }
-.app-reg :is(.app-col-out, .app-col-in) { width: var(--reg-amount); }
+.app-reg .app-col-amount { width: var(--reg-amount); }
 .app-reg .app-col-run { width: var(--reg-run); }
 .app-reg .app-col-status { width: var(--reg-status); }
 @container register (width < 78rem) {
   .app-reg-all { --reg-konto: 7rem; }
 }
 @container register (width < 56rem) {
-  .app-reg { --reg-amount: 6rem; --reg-payee: 20%; --reg-cat: 18%; }
+  .app-reg { --reg-amount: 7.5rem; --reg-payee: 20%; --reg-cat: 18%; }
   .app-reg-all { --reg-konto: 5rem; --reg-payee: 18%; --reg-cat: 16%; }
   .app-reg .app-wide { display: none; }
 }
@@ -80,7 +80,7 @@
 .app-reg :is(.app-uncategorised, .app-transfer) > .lucide { display: inline-block; margin-inline-end: .25rem; }
 .app-reg .app-uncategorised { color: var(--color-warning-ink); }
 .app-reg .app-transfer > .lucide { color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
-.app-reg .app-tx-main > td.app-in { color: var(--color-success-ink); }
+.app-reg td.app-inflow { color: var(--color-success-ink); }
 .app-reg .app-tx-main:hover > * { background: var(--color-base-200); }
 .app-reg .app-tx.is-selected > tr > * { background: var(--color-row-selected); }
 .app-reg .app-tx.is-selected > tr > :first-child { box-shadow: inset 3px 0 0 var(--color-selected); }
@@ -88,7 +88,7 @@
 
 /* Unapproved rows get a primary bar, as the row-selected fill stays for selection. */
 .app-reg .app-unapproved > :first-child { box-shadow: inset 3px 0 0 var(--color-primary); }
-.app-reg .app-unapproved > :is(.app-payee, .app-out, .app-in) { font-weight: 600; }
+.app-reg .app-unapproved > :is(.app-payee, .app-amount) { font-weight: 600; }
 .app-reg .app-actrow > td { height: auto; padding-bottom: .5rem; }
 .app-unapproved-item { border-radius: 0; box-shadow: inset 3px 0 0 var(--color-primary); }
 .app-approve { color: var(--color-primary); }
@@ -118,8 +118,8 @@
   align-items: center;
   grid-template-columns:
     [date] var(--reg-date) [konto] var(--reg-konto) [payee] var(--grid-payee, var(--reg-payee))
-    [cat] var(--reg-cat) [memo] var(--grid-memo, minmax(0, 1fr)) [out] var(--reg-amount)
-    [in] var(--reg-amount) [run] var(--reg-run) [status] var(--reg-status) [end];
+    [cat] var(--reg-cat) [memo] var(--grid-memo, minmax(0, 1fr)) [amount] var(--reg-amount)
+    [run] var(--reg-run) [status] var(--reg-status) [end];
   padding-block: .125rem;
 }
 .app-edit-grid > * { grid-row: 1; min-width: 0; padding-inline: .5rem; white-space: nowrap; }
@@ -128,11 +128,11 @@
 .app-edit-grid > .app-payee { grid-column: payee; }
 .app-edit-grid > .app-catcol { grid-column: cat; }
 .app-edit-grid > .app-memo-col { grid-column: memo; }
-.app-edit-grid > .app-out { grid-column: out; }
-.app-edit-grid > .app-in { grid-column: in; }
-.app-edit-grid > .app-edit-remainder-label { grid-column: payee / out; justify-self: end; }
+.app-edit-grid > .app-amount { grid-column: amount; }
+.app-edit-grid > .app-edit-remainder-label { grid-column: payee / amount; justify-self: end; }
 .app-edit-grid :is(.input, .select) { width: 100%; min-width: 0; font-size: var(--text-sm); }
-.app-edit-grid :is(.app-out, .app-in) .input { padding-inline: .5rem; text-align: end; }
+.app-edit-grid .app-amount .input { padding-inline: .5rem; text-align: end; }
+.app-edit-grid .app-amount .btn { padding-inline: .375rem; min-width: 1.75rem; font-weight: 700; }
 .app-edit-grid .app-edit-date .input { padding-inline: .5rem; }
 .app-edit-grid .app-borderless:not(:hover, :focus) { border-color: transparent; background: transparent; }
 

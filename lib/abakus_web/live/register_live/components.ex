@@ -537,8 +537,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           <col class="app-col-payee" />
           <col :if={@columns.category} class="app-col-cat" />
           <col class="app-col-memo" />
-          <col class="app-col-out" />
-          <col class="app-col-in" />
+          <col class="app-col-amount" />
           <col :if={@columns.running} class="app-col-run" />
           <col class="app-col-status" />
         </colgroup>
@@ -549,8 +548,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             <th class="app-payee">Empfänger</th>
             <th :if={@columns.category} class="app-catcol">Kategorie</th>
             <th class="app-memo-col">Memo</th>
-            <th class="text-end app-out">Ausgang</th>
-            <th class="text-end app-in">Eingang</th>
+            <th class="text-end app-amount">Betrag</th>
             <th :if={@columns.running} class="text-end app-run">Saldo</th>
             <th class="app-status-col">
               <span class="sr-only">Status</span><.icon name="check" />
@@ -588,7 +586,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   def columns(account, running) do
     all = is_nil(account)
     category = all or Account.budget_account?(account)
-    count = 6 + Enum.count([all, category, running], & &1)
+    count = 5 + Enum.count([all, category, running], & &1)
     %{all: all, category: category, running: running, count: count}
   end
 
@@ -700,12 +698,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td class="text-base-content/70 app-memo-col" {cell(@transaction, "memo")}>
           {@transaction.memo}
         </td>
-        <td class="text-end app-out" {cell(@transaction, "outflow")}>
-          {outflow(@transaction.amount)}
-        </td>
-        <td class="text-end app-in" {cell(@transaction, "inflow")}>
-          {inflow(@transaction.amount)}
-        </td>
+        <.amount_cell amount={@transaction.amount} {cell(@transaction, "amount")} />
         <td :if={@running} class="text-end text-base-content/70 app-run">
           {Money.amount(@running)}
         </td>
@@ -744,8 +737,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td class="app-memo-col" {cell(@transaction, "memo")}>
           {part.memo}
         </td>
-        <td class="text-end app-out" {cell(@transaction, "outflow")}>{outflow(part.amount)}</td>
-        <td class="text-end app-in" {cell(@transaction, "inflow")}>{inflow(part.amount)}</td>
+        <.amount_cell amount={part.amount} {cell(@transaction, "amount")} />
         <td :if={@running}></td>
         <td></td>
       </tr>
@@ -768,8 +760,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td class="app-payee"><.payee side={@proposal} accounts={@accounts} /></td>
         <td :if={@columns.category} class="app-catcol"></td>
         <td class="text-base-content/70 app-memo-col">{@proposal.memo}</td>
-        <td class="text-end app-out">{outflow(@proposal.amount)}</td>
-        <td class="text-end app-in">{inflow(@proposal.amount)}</td>
+        <.amount_cell amount={@proposal.amount} />
         <td :if={@columns.running}></td>
         <td></td>
       </tr>
@@ -1123,11 +1114,16 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp payee_text(%{payee: %Payee{name: name}}, _accounts), do: name
   defp payee_text(_transaction, _accounts), do: ""
 
-  defp outflow(amount) when amount < 0, do: Money.amount(-amount)
-  defp outflow(_amount), do: ""
+  attr :amount, :integer, required: true
+  attr :rest, :global
 
-  defp inflow(amount) when amount > 0, do: Money.amount(amount)
-  defp inflow(_amount), do: ""
+  defp amount_cell(assigns) do
+    ~H"""
+    <td class={["text-end app-amount", @amount > 0 && "app-inflow"]} {@rest}>
+      {Money.signed_amount(@amount)}
+    </td>
+    """
+  end
 
   defp reconciled(transactions), do: Enum.filter(transactions, &(&1.cleared == :reconciled))
 

@@ -33,7 +33,8 @@ defmodule AbakusWeb.TransactionFormTest do
         "category_id" => "",
         "memo" => "",
         "outflow" => "",
-        "inflow" => ""
+        "inflow" => "",
+        "sign" => "-"
       },
       params
     )
@@ -85,10 +86,6 @@ defmodule AbakusWeb.TransactionFormTest do
       for amount <- [%{"0" => "12"}, ["12"]] do
         assert {:error, "Ungültiger Betrag."} =
                  TransactionForm.to_attrs(form(c, %{"outflow" => amount}), c.accounts)
-
-        assert TransactionForm.keep_column(form(c, %{"outflow" => amount}), "main", "outflow")[
-                 "inflow"
-               ] == ""
       end
     end
 
@@ -300,11 +297,12 @@ defmodule AbakusWeb.TransactionFormTest do
                "payee" => "Rewe",
                "memo" => "Wocheneinkauf",
                "outflow" => "120,00",
-               "inflow" => ""
+               "inflow" => "",
+               "sign" => "-"
              } =
                groceries
 
-      assert %{"transfer_account_id" => id, "inflow" => "20,00"} = savings
+      assert %{"transfer_account_id" => id, "inflow" => "20,00", "sign" => "+"} = savings
       assert id == "#{c.savings.id}"
 
       original = Ledger.get_transaction!(budget_scope(), split.id)
@@ -383,25 +381,83 @@ defmodule AbakusWeb.TransactionFormTest do
                TransactionForm.change(params, %{"payee" => "Depotbank"}, c.accounts)
     end
 
-    test "typing an outflow clears the inflow and back", c do
-      params = form(c, %{"outflow" => "5", "inflow" => "7"})
+    test "a typed amount goes in the side's direction, a sign typed in front sets it", c do
+      params = split(c, %{"inflow" => "7"}, %{"0" => sub(%{"sign" => "+"})})
+      assert %{"sign" => "-"} = params
 
-      assert %{"outflow" => "5", "inflow" => ""} =
-               TransactionForm.keep_column(params, "main", "outflow")
+      assert %{"sign" => "-", "outflow" => "5", "inflow" => ""} =
+               changed = TransactionForm.change(params, %{"amount" => "5"}, c.accounts)
 
-      assert %{"outflow" => "", "inflow" => "7"} =
-               TransactionForm.keep_column(params, "main", "inflow")
+      refute Map.has_key?(changed, "amount")
 
-      # Emptying a column leaves the other one.
-      blank = %{params | "inflow" => " "}
-      assert TransactionForm.keep_column(blank, "main", "inflow") == blank
+      for {typed, sign, column} <- [
+            {"+5", "+", "inflow"},
+            {"-5", "-", "outflow"},
+            {" − 5", "-", "outflow"}
+          ] do
+        assert %{"sign" => ^sign, ^column => "5"} =
+                 TransactionForm.change(params, %{"amount" => typed}, c.accounts)
+      end
+
+      assert %{"sign" => "+", "outflow" => "", "inflow" => ""} =
+               TransactionForm.change(params, %{"amount" => "+"}, c.accounts)
+
+      assert {:error, "Ungültiger Betrag."} =
+               params
+               |> TransactionForm.change(%{"amount" => %{"0" => "5"}}, c.accounts)
+               |> TransactionForm.to_attrs(c.accounts)
+
+      changed =
+        TransactionForm.change(
+          params,
+          %{"subtransactions" => %{"0" => %{"amount" => "3"}}, "sign" => "+"},
+          c.accounts
+        )
+
+      assert %{"sign" => "-"} = changed
+
+      assert %{"sign" => "+", "inflow" => "3", "outflow" => ""} =
+               TransactionForm.side(changed, "0")
+    end
+
+    test "the row's sign button flips one side only", c do
+      params =
+        split(c, %{"outflow" => "100"}, %{
+          "0" => sub(%{"outflow" => "80"}),
+          "1" => sub(%{})
+        })
+
+      toggled = TransactionForm.toggle_sign(params, "0")
+
+      assert %{"sign" => "+", "outflow" => "", "inflow" => "80"} =
+               TransactionForm.side(toggled, "0")
+
+      assert %{"sign" => "-", "outflow" => "100"} = toggled
+
+      assert %{"sign" => "+"} =
+               toggled |> TransactionForm.toggle_sign("1") |> TransactionForm.side("1")
+
+      assert %{"sign" => "+", "inflow" => "100"} = TransactionForm.toggle_sign(params, "main")
+    end
+
+    test "a new part starts in the transaction's direction", c do
+      inflow = form(c, %{"sign" => "+"})
+
+      assert [{"0", %{"sign" => "+"}}, {"1", %{"sign" => "+"}}] =
+               inflow |> TransactionForm.split() |> TransactionForm.subtransactions()
+
+      assert %{"sign" => "-"} =
+               form(c, %{})
+               |> TransactionForm.split()
+               |> TransactionForm.add_subtransaction()
+               |> TransactionForm.side("2")
     end
 
     test "the phone's sign moves the amounts between outflow and inflow", c do
       params =
         split(c, %{"outflow" => "100"}, %{
           "0" => sub(%{"outflow" => "80"}),
-          "1" => sub(%{"inflow" => "20"})
+          "1" => sub(%{"inflow" => "20", "sign" => "+"})
         })
 
       assert TransactionForm.directed(params, "-") == "100"
@@ -409,7 +465,10 @@ defmodule AbakusWeb.TransactionFormTest do
 
       toggled = TransactionForm.toggle_sign(params)
       assert %{"sign" => "+", "outflow" => "", "inflow" => "100"} = toggled
-      assert %{"outflow" => "20", "inflow" => ""} = TransactionForm.side(toggled, "1")
+
+      assert %{"outflow" => "20", "inflow" => "", "sign" => "-"} =
+               TransactionForm.side(toggled, "1")
+
       assert TransactionForm.remainder(toggled) == TransactionForm.remainder(params) * -1
     end
 
