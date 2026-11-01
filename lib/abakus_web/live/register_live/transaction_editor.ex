@@ -1143,9 +1143,16 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     do: {:noreply, update(socket, :params, &TransactionForm.remove_subtransaction(&1, index))}
 
   def handle_event("save", event, socket) do
-    %{accounts: accounts, transaction: original} = socket.assigns
+    %{accounts: accounts, transaction: original, params: before} = socket.assigns
     {_picks, changed} = picks(event["transaction"] || %{})
-    params = TransactionForm.change(socket.assigns.params, changed, accounts)
+    params = TransactionForm.change(before, changed, accounts)
+
+    # Submitting cancels a pending debounced change, so its amount arrives only here.
+    params =
+      if TransactionForm.amount(params) == TransactionForm.amount(before),
+        do: params,
+        else:
+          TransactionForm.follow_direction(params, socket.assigns.ready_to_assign_id, accounts)
 
     opts = confirmed(event) ++ [person_id: person_id(params["person_id"])]
 
@@ -1264,7 +1271,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   defp after_change(socket, params, _target), do: assign(socket, :params, params)
 
   defp directed(socket, params) do
-    params = TransactionForm.follow_direction(params, socket.assigns.ready_to_assign_id)
+    %{ready_to_assign_id: rta, accounts: accounts} = socket.assigns
+    params = TransactionForm.follow_direction(params, rta, accounts)
     suggested = socket.assigns.suggested
 
     suggested =

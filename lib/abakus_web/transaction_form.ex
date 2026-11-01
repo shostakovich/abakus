@@ -198,16 +198,25 @@ defmodule AbakusWeb.TransactionForm do
 
   @doc """
   After the amount changed direction: income goes to Ready to Assign unless a category is chosen, and an outflow
-  does not keep Ready to Assign.
+  does not keep Ready to Assign. Not in a tracking account, whose category is the counterpart's.
   """
-  def follow_direction(params, ready_to_assign_id) do
+  def follow_direction(params, ready_to_assign_id, accounts) do
     rta = to_param(ready_to_assign_id)
+    tracking? = tracking?(params, accounts)
 
     case {amount(params), params} do
       {_amount, %{"split" => "true"}} -> params
+      _tracking when tracking? -> params
       {{:ok, amount}, %{"category_id" => ""}} when amount > 0 -> %{params | "category_id" => rta}
       {{:ok, amount}, %{"category_id" => ^rta}} when amount < 0 -> %{params | "category_id" => ""}
       _same -> params
+    end
+  end
+
+  defp tracking?(params, accounts) do
+    case account(params["account_id"], accounts) do
+      %Account{} = account -> not Account.budget_account?(account)
+      nil -> false
     end
   end
 

@@ -172,6 +172,14 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert %Transaction{amount: 500, category_id: ^rta} = newest(c.giro)
     end
 
+    test "an inflow saved before its change arrives goes to Ready to Assign too", c do
+      view = open_new(c, c.giro)
+      rta = Categories.ready_to_assign!(budget_scope()).id
+
+      submit(view, %{amount: "+3180"})
+      assert %Transaction{amount: 318_000, category_id: ^rta} = newest(c.giro)
+    end
+
     test "a hidden payee is no longer suggested, but its name still books it", c do
       {:ok, _hidden} = Ledger.update_payee(budget_scope(), c.market, %{hidden: true})
       view = open_new(c, c.giro)

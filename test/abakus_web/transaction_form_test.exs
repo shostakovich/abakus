@@ -472,17 +472,21 @@ defmodule AbakusWeb.TransactionFormTest do
       assert TransactionForm.remainder(toggled) == TransactionForm.remainder(params) * -1
     end
 
-    test "income goes to Ready to Assign unless a category is chosen", c do
+    test "income goes to Ready to Assign unless a category is chosen, not in a tracking account",
+         c do
       rta = 99
 
       assert %{"category_id" => "99"} =
-               TransactionForm.follow_direction(form(c, %{"inflow" => "5"}), rta)
+               TransactionForm.follow_direction(form(c, %{"inflow" => "5"}), rta, c.accounts)
 
       chosen = form(c, %{"inflow" => "5", "category_id" => "7"})
-      assert %{"category_id" => "7"} = TransactionForm.follow_direction(chosen, rta)
+      assert %{"category_id" => "7"} = TransactionForm.follow_direction(chosen, rta, c.accounts)
 
       outflow = form(c, %{"outflow" => "5", "category_id" => "99"})
-      assert %{"category_id" => ""} = TransactionForm.follow_direction(outflow, rta)
+      assert %{"category_id" => ""} = TransactionForm.follow_direction(outflow, rta, c.accounts)
+
+      tracking = form(c, %{"account_id" => "#{c.depot.id}", "inflow" => "5"})
+      assert %{"category_id" => ""} = TransactionForm.follow_direction(tracking, rta, c.accounts)
     end
 
     test "a payee suggests its last category; a suggestion goes when the payee changes", c do
