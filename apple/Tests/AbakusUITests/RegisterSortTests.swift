@@ -46,12 +46,14 @@ import Testing
         #expect(model.transactionIds.filter { [kiosk, transfer].contains($0) } == [transfer, kiosk])
     }
 
-    @Test func amountColumnsPutLargerAmountsFirstWhenAscending() {
+    @Test func betragSortsByTheSignedAmount() {
         var fixture = RegisterFixture()
         let outflow = fixture.add(fixture.giro, -50)
         let inflow = fixture.add(fixture.giro, 20)
         let model = fixture.model()
-        model.grid.headerClicked(.outflow)
+        model.grid.headerClicked(.amount)
+        #expect(model.transactionIds == [outflow, inflow, fixture.startingBalanceId(of: fixture.giro)])
+        model.grid.headerClicked(.amount)
         #expect(model.transactionIds == [fixture.startingBalanceId(of: fixture.giro), inflow, outflow])
     }
 

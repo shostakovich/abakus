@@ -58,6 +58,27 @@ import Testing
         #expect(RegisterSortOrder.default == RegisterSortOrder(column: .date, ascending: false))
     }
 
+    @Test func savedAusgangAndEingangSettingsGiveWayToBetrag() throws {
+        let saved = try JSONDecoder().decode(
+            SavedRegisterViewState.self,
+            from: Data(
+                """
+                {"sortColumn": "outflow", "sortAscending": true, "sortVersion": 2, "isShowingReconciled": true,
+                 "columns": {"outflow": {"visible": false, "width": 300}, "inflow": {"visible": false, "width": 300}},
+                 "isSchedulerVisible": false, "schedulerSort": {"column": "inflow", "ascending": false},
+                 "schedulerColumns": {"outflow": {"visible": false, "width": 300}}}
+                """.utf8))
+        let state = RegisterAccountViewState(saved: saved, today: editDay, formatter: BudgetFormatter())
+        let defaults = RegisterAccountViewState()
+        #expect(state.sort == defaults.sort)
+        #expect(state.schedulerSort == defaults.schedulerSort)
+        #expect(state.columnSettings == defaults.columnSettings)
+        #expect(state.schedulerColumnSettings == defaults.schedulerColumnSettings)
+        #expect(
+            state.columnSettings[.amount]
+                == RegisterColumnSetting(visible: true, width: RegisterColumn.signedAmountWidth))
+    }
+
     @Test func reconciliationKeepsTheStateToReturnTo() throws {
         let storage = MemorySettingsStorage()
         let register = launch(storage).register

@@ -400,7 +400,7 @@ extension PopoverCallout where Footer == EmptyView {
 
 struct IncomeCheckAnchor {
     var row: Anchor<CGRect>
-    var outflow: RegisterColumnFrame
+    var amount: RegisterColumnFrame
 }
 
 struct IncomeCheckAnchorKey: PreferenceKey {
@@ -421,7 +421,7 @@ struct IncomeCheckLayer: View {
     var body: some View {
         GeometryReader { proxy in
             let row = proxy[anchor.row]
-            let center = row.minX + anchor.outflow.x + anchor.outflow.width / 2
+            let center = row.minX + anchor.amount.x + anchor.amount.width / 2
             let x = min(max(0, center - 60), proxy.size.width - Self.width)
             ZStack(alignment: .topLeading) {
                 Color.clear

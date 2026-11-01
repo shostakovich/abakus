@@ -33,7 +33,7 @@ with Abakus's terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in th
   `uncategorized-summary`, `outflow-help`, `account-view`, `cover`, `move`, `target`, `target-editor`, `assign`);
   `--month 2023-05` picks the first shown month and `--test-edits` adds the session's later edits (`summary` and
   `account-view` need them).
-  `--edit <state>` first types into the register with real key events (`existing`, `new`, `payee-dropdown`,
+  `--edit <state>` first types into the register with real key events (`existing`, `new`, `inflow`, `payee-dropdown`,
   `category-dropdown`, `split`, `errors`, `unassigned`, `calendar`, `calculator`, `invalid-payee`,
   `income-check`, `account-field`); `--trace` prints the editor state afterwards. `--ops <state>` opens register
   operations instead (`context-menu`, `search-suggestions`, `search-active`, `date-filter`,

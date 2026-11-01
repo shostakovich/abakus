@@ -183,7 +183,7 @@ final class BudgetTextField: NSTextField {
         let replacement = replacementString ?? ""
         if let model = coordinator?.model,
             let remapped = EditorTextField.numpadReplacement(
-                replacement, column: .outflow,
+                replacement, column: .amount,
                 isNumericPad: NSApp.currentEvent?.modifierFlags.contains(.numericPad) == true,
                 separator: model.formatter.currencyLocale.decimalSeparator)
         {

@@ -37,6 +37,10 @@ public final class TransactionEditor {
     public internal(set) var dropDown: DropDownState?
     public internal(set) var isSplitMode = false
     public internal(set) var subIds: [String] = []
+    /// The amount fields set to inflow, by split line id (nil for the transaction's own); the text has no sign.
+    public internal(set) var inflowAmounts: Set<String?> = []
+    /// Signs set by hand, which the income default leaves alone.
+    var chosenSigns: Set<String?> = []
     /// Payees committed in split lines, by line id; the budget resolves them on save.
     var subPayeeNames: [String: String] = [:]
     public internal(set) var categoryPrompts: [String?: String] = [:]
@@ -110,7 +114,7 @@ public final class TransactionEditor {
     public func text(_ field: EditorFieldID) -> String { texts[field] ?? "" }
 
     public func isLocked(_ field: EditorFieldID) -> Bool {
-        leader != nil && !field.isSub && [.account, .date, .payee, .outflow, .inflow].contains(field.column)
+        leader != nil && !field.isSub && [.account, .date, .payee, .amount].contains(field.column)
     }
 
     public var lockReason: String? { leader?.leadsNote }
@@ -121,23 +125,47 @@ public final class TransactionEditor {
         case .payee: "Empfänger"
         case .category: categoryPrompts[field.subId] ?? Self.categoryPrompt
         case .memo: "Memo"
-        case .outflow: "Ausgang"
-        case .inflow: "Eingang"
+        case .amount: "Betrag"
         }
+    }
+
+    public func isInflow(_ field: EditorFieldID) -> Bool { inflowAmounts.contains(field.subId) }
+
+    func setSign(_ field: EditorFieldID, inflow: Bool) {
+        if inflow { inflowAmounts.insert(field.subId) } else { inflowAmounts.remove(field.subId) }
+    }
+
+    func chooseSign(_ field: EditorFieldID, inflow: Bool) {
+        chosenSigns.insert(field.subId)
+        setSign(field, inflow: inflow)
+    }
+
+    func amount(of subId: String?) -> Decimal {
+        guard let subId else { return clone.amount }
+        return clone.subtransactions.first { $0.id == subId }?.amount ?? 0
     }
 
     func resetTexts() {
         for column in EditorColumn.allCases { texts[.main(column)] = originalText(.main(column), of: clone) }
         texts[.main(.payee)] = payeeName
+        setSign(.main(.amount), inflow: clone.amount > 0)
         for id in subIds { resetSubTexts(id) }
     }
 
     func resetSubTexts(_ id: String) {
         let sub = clone.subtransactions.first { $0.id == id }
-        for column in [EditorColumn.category, .memo, .outflow, .inflow] {
+        for column in [EditorColumn.category, .memo, .amount] {
             texts[.sub(id, column)] = subText(column, of: sub)
         }
         texts[.sub(id, .payee)] = sub.map(subPayeeText) ?? ""
+        resetSubSign(id)
+    }
+
+    /// A line without an amount takes the sign of what is left to split.
+    func resetSubSign(_ id: String) {
+        chosenSigns.remove(id)
+        let amount = amount(of: id)
+        setSign(.sub(id, .amount), inflow: amount == 0 ? remainingAmount > 0 : amount > 0)
     }
 
     func subPayeeText(_ sub: Subtransaction) -> String {
@@ -156,8 +184,7 @@ public final class TransactionEditor {
         case .payee: return originalPayeeName
         case .category: return categoryText(transaction.categoryId)
         case .memo: return transaction.memo ?? ""
-        case .outflow: return formatter.registerAmount(transaction.outflow)
-        case .inflow: return formatter.registerAmount(transaction.inflow)
+        case .amount: return formatter.registerAmount(abs(transaction.amount))
         }
     }
 
@@ -167,8 +194,7 @@ public final class TransactionEditor {
         case .payee: return budget.payeeName(of: sub)
         case .category: return categoryText(sub.categoryId)
         case .memo: return sub.memo ?? ""
-        case .outflow: return formatter.registerAmount(sub.outflow)
-        case .inflow: return formatter.registerAmount(sub.inflow)
+        case .amount: return formatter.registerAmount(abs(sub.amount))
         default: return ""
         }
     }
@@ -233,7 +259,7 @@ public final class TransactionEditor {
     }
 
     public func subColumns() -> [EditorColumn] {
-        [.payee, .category, .memo, .outflow, .inflow].filter { columns.contains($0.gridColumn) }
+        [.payee, .category, .memo, .amount].filter { columns.contains($0.gridColumn) }
     }
 
     public var tabOrder: [EditorFocus] {
@@ -248,13 +274,7 @@ public final class TransactionEditor {
         let order = tabOrder
         guard !order.isEmpty else { return nil }
         guard let index = order.firstIndex(of: focus) else { return order.first }
-        var next = order[(index + (backward ? order.count - 1 : 1)) % order.count]
-        if !backward, case .field(let field) = focus, field.column == .memo, isIncome(categoryOf: field.subId),
-            next == .field(EditorFieldID(subId: field.subId, column: .outflow))
-        {
-            next = self.neighbor(of: next, backward: false) ?? next
-        }
-        return next
+        return order[(index + (backward ? order.count - 1 : 1)) % order.count]
     }
 
     func isIncome(categoryOf subId: String?) -> Bool {
@@ -315,6 +335,11 @@ public final class TransactionEditor {
 
     func didFocus(_ field: EditorFieldID) {
         if field == .main(.date) && text(field).isEmpty { texts[field] = formatter.dateShort(today) }
+        if field.column == .amount && amount(of: field.subId) == 0 && !chosenSigns.contains(field.subId)
+            && isIncome(categoryOf: field.subId)
+        {
+            setSign(field, inflow: true)
+        }
         selectAll(field)
         switch field.column {
         case .category: showDropDown(for: field, unfiltered: true)

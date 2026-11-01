@@ -99,7 +99,7 @@ defmodule AbakusWeb.Depot.BudgetLinkTest do
 
     assert has_element?(view, ~s|#tx-depot a[href="/depot/transactions"]|, "Buchung im Depot")
 
-    for field <- ~w(tx-date tx-outflow tx-inflow) do
+    for field <- ~w(tx-date tx-sign tx-amount) do
       assert has_element?(view, "##{field}[disabled]")
     end
 

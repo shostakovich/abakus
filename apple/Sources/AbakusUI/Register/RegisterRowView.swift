@@ -34,9 +34,9 @@ struct RegisterRowView: View {
         .task(id: glowStart) { await playAddedGlow() }
         .anchorPreference(key: IncomeCheckAnchorKey.self, value: .bounds) { anchor in
             guard !row.isSubtransaction, main?.incomeCheck?.transactionId == row.transactionId,
-                let outflow = layout.frame(of: .outflow)
+                let amount = layout.frame(of: .amount)
             else { return nil }
-            return IncomeCheckAnchor(row: anchor, outflow: outflow)
+            return IncomeCheckAnchor(row: anchor, amount: amount)
         }
         .anchorPreference(key: AdjustmentHelpAnchorKey.self, value: .bounds) { anchor in
             isAdjustmentHelpRow ? anchor : nil
@@ -149,8 +149,7 @@ struct RegisterRowView: View {
         case .payee: payee(width: frame.width)
         case .category: category(width: frame.width)
         case .memo: text(row.memo, width: frame.width, tip: .whenTruncated)
-        case .outflow: amount(row.outflow, width: frame.width)
-        case .inflow: amount(row.inflow, width: frame.width, color: inflowColor)
+        case .amount: signedAmount(width: frame.width)
         case .runningBalance:
             amount(row.runningBalance, width: frame.width)
                 .contentShape(Rectangle())
@@ -167,8 +166,7 @@ struct RegisterRowView: View {
         case .payee: payee(width: frame.width, leadingInset: indent)
         case .category: category(width: frame.width, leadingInset: indent)
         case .memo: text(row.memo, width: frame.width, tip: .whenTruncated)
-        case .outflow: amount(row.outflow, width: frame.width)
-        case .inflow: amount(row.inflow, width: frame.width, color: inflowColor)
+        case .amount: signedAmount(width: frame.width)
         default: EmptyView()
         }
     }
@@ -204,6 +202,10 @@ struct RegisterRowView: View {
 
     private func amount(_ value: String, width: CGFloat, color: Color? = nil) -> some View {
         GridCellLabel(text: value, font: textFont, color: color ?? textColor, width: width, alignment: .trailing)
+    }
+
+    private func signedAmount(width: CGFloat) -> some View {
+        amount(row.amountText, width: width, color: row.isInflow ? inflowColor : nil)
     }
 
     /// A transfer reads "⇄ Girokonto": the symbol jumps to the other side.

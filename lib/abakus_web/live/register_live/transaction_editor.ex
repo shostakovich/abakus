@@ -3,8 +3,9 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   Edits a transaction as YNAB does, for a new one and an existing one alike. On desktops (`layout: :row`) it
   replaces the transaction's rows in the register on one line: inputs in every column, Cancel and Save (Approve for
   one waiting for approval) where approve and status stand, Enter saves and Escape cancels; a split's subtransactions as
-  rows below, each with a payee field only where it differs from the transaction's. Its root is a `<tbody>`, the
-  inputs outside the first row belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet
+  rows below, each with a payee field only where it differs from the transaction's. Each side has one amount field
+  behind a sign button; a click or a typed "+" or "−" sets the side's direction, a new transaction's is an outflow.
+  Its root is a `<tbody>`, the inputs outside the first row belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet
   from the bottom with the amount first. The form's state is `AbakusWeb.TransactionForm` params.
 
   Payee and category are Setzkasten comboboxes; a choice arrives as a change of `payee_pick` (with `payee_new` for a
@@ -295,22 +296,13 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
             <div class="app-memo-col">
               <.memo_input id="tx-memo" name="transaction[memo]" value={@params["memo"]} />
             </div>
-            <div class="app-out">
-              <.amount_input
-                id="tx-outflow"
-                name="transaction[outflow]"
-                value={@params["outflow"]}
-                placeholder="Ausgang"
+            <div class="app-amount">
+              <.signed_amount
+                id="tx"
+                side={@main}
+                values={@params}
                 disabled={@fixed}
-              />
-            </div>
-            <div class="app-in">
-              <.amount_input
-                id="tx-inflow"
-                name="transaction[inflow]"
-                value={@params["inflow"]}
-                placeholder="Eingang"
-                disabled={@fixed}
+                target={@myself}
               />
             </div>
             <input :if={@locked} type="hidden" name="reconciled" value="confirmed" />
@@ -360,21 +352,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                 class="app-borderless"
               />
             </div>
-            <div class="app-out">
-              <.amount_input
-                id={"tx-sub-#{index}-outflow"}
-                name={sub_name(index, "outflow")}
-                value={sub["outflow"]}
-                placeholder="Ausgang"
-              />
-            </div>
-            <div class="app-in">
-              <.amount_input
-                id={"tx-sub-#{index}-inflow"}
-                name={sub_name(index, "inflow")}
-                value={sub["inflow"]}
-                placeholder="Eingang"
-              />
+            <div class="app-amount">
+              <.signed_amount id={"tx-sub-#{index}"} side={index} values={sub} target={@myself} />
             </div>
           </div>
         </td>
@@ -385,13 +364,13 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
             <div class="app-payee"><.add_button target={@myself} /></div>
             <div class="app-edit-remainder-label text-end text-base-content/70">Noch aufzuteilen</div>
             <div
-              id="tx-remainder-out"
-              class={["app-out text-end", remainder_class(@remainder && -@remainder)]}
+              id="tx-remainder"
+              class={[
+                "app-amount text-end",
+                if(@remainder in [nil, 0], do: "text-base-content/70", else: "text-error-ink")
+              ]}
             >
-              {@remainder && Money.amount(max(-@remainder, 0))}
-            </div>
-            <div id="tx-remainder-in" class={["app-in text-end", remainder_class(@remainder)]}>
-              {@remainder && Money.amount(max(@remainder, 0))}
+              {@remainder && Money.signed_amount(@remainder)}
             </div>
           </div>
         </td>
@@ -604,28 +583,50 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     """
   end
 
-  attr :id, :string, required: true
-  attr :name, :string, required: true
-  attr :value, :string, required: true
-  attr :placeholder, :string, required: true
+  attr :id, :string, required: true, doc: "prefix of the button's and the field's ids"
+  attr :side, :string, required: true
+  attr :values, :map, required: true, doc: "the side's params"
   attr :disabled, :boolean, default: false
+  attr :target, :any, required: true
 
-  defp amount_input(assigns) do
+  # The sign stays out of the tab order, as typing "+" or "−" sets it too.
+  defp signed_amount(assigns) do
+    assigns = assign(assigns, :sign, TransactionForm.sign(assigns.values))
+
     ~H"""
-    <input
-      id={@id}
-      form="tx-form"
-      name={@name}
-      value={@value}
-      class="input input-sm text-end tabular-nums"
-      inputmode="decimal"
-      placeholder={@placeholder}
-      aria-label={@placeholder}
-      autocomplete="off"
-      size="1"
-      phx-debounce="300"
-      disabled={@disabled}
-    />
+    <div class="join w-full">
+      <.button
+        id={"#{@id}-sign"}
+        size={:sm}
+        disabled={@disabled}
+        class={["join-item", @sign == "+" && "text-success-ink"]}
+        aria-label={sign_label(@sign)}
+        title={sign_label(@sign)}
+        tabindex="-1"
+        data-sign={@sign}
+        phx-click="toggle_sign"
+        phx-value-side={@side}
+        phx-target={@target}
+      >
+        {if @sign == "+", do: "+", else: "−"}
+      </.button>
+      <input
+        id={"#{@id}-amount"}
+        form="tx-form"
+        name={"#{side_name(@side)}[amount]"}
+        data-sign-button={"#{@id}-sign"}
+        value={TransactionForm.directed(@values, @sign)}
+        class="input input-sm join-item tabular-nums"
+        inputmode="decimal"
+        placeholder="Betrag"
+        aria-label="Betrag"
+        aria-describedby={"#{@id}-sign"}
+        autocomplete="off"
+        size="1"
+        phx-debounce="300"
+        disabled={@disabled}
+      />
+    </div>
     """
   end
 
@@ -654,6 +655,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       inputmode="decimal"
       placeholder="0,00"
       aria-label="Betrag"
+      aria-describedby="tx-sign"
       autocomplete="off"
       phx-debounce="300"
       disabled={@disabled}
@@ -962,9 +964,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     if TransactionForm.transfer?(side), do: "Keine Kategorie nötig", else: ""
   end
 
-  defp remainder_class(left) when is_integer(left) and left > 0, do: "text-error-ink"
-  defp remainder_class(_none), do: "text-base-content/70"
-
   defp side_name(@main), do: "transaction"
   defp side_name(index), do: sub_name(index)
 
@@ -1125,10 +1124,14 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   def handle_event("split", _params, socket),
     do: {:noreply, update(socket, :params, &TransactionForm.split/1)}
 
-  def handle_event("toggle_sign", _params, socket) do
-    params = TransactionForm.toggle_sign(socket.assigns.params)
-    {:noreply, directed(socket, params)}
-  end
+  def handle_event("toggle_sign", %{"side" => @main}, socket),
+    do: {:noreply, directed(socket, TransactionForm.toggle_sign(socket.assigns.params, @main))}
+
+  def handle_event("toggle_sign", %{"side" => index}, socket),
+    do: {:noreply, update(socket, :params, &TransactionForm.toggle_sign(&1, index))}
+
+  def handle_event("toggle_sign", _params, socket),
+    do: {:noreply, directed(socket, TransactionForm.toggle_sign(socket.assigns.params))}
 
   def handle_event("show_sub_payee", %{"index" => index}, socket),
     do: {:noreply, update(socket, :payee_shown, &MapSet.put(&1, index))}
@@ -1140,9 +1143,16 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     do: {:noreply, update(socket, :params, &TransactionForm.remove_subtransaction(&1, index))}
 
   def handle_event("save", event, socket) do
-    %{accounts: accounts, transaction: original} = socket.assigns
+    %{accounts: accounts, transaction: original, params: before} = socket.assigns
     {_picks, changed} = picks(event["transaction"] || %{})
-    params = TransactionForm.change(socket.assigns.params, changed, accounts)
+    params = TransactionForm.change(before, changed, accounts)
+
+    # Submitting cancels a pending debounced change, so its amount arrives only here.
+    params =
+      if TransactionForm.amount(params) == TransactionForm.amount(before),
+        do: params,
+        else:
+          TransactionForm.follow_direction(params, socket.assigns.ready_to_assign_id, accounts)
 
     opts = confirmed(event) ++ [person_id: person_id(params["person_id"])]
 
@@ -1254,17 +1264,15 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     assign(socket, params: params, suggested: MapSet.delete(socket.assigns.suggested, side))
   end
 
-  defp after_change(socket, params, ["transaction", column]) when column in ["outflow", "inflow"],
-    do: directed(socket, TransactionForm.keep_column(params, @main, column))
-
-  defp after_change(socket, params, ["transaction", "subtransactions", index, column])
-       when column in ["outflow", "inflow"],
-       do: assign(socket, :params, TransactionForm.keep_column(params, index, column))
+  defp after_change(socket, params, ["transaction", field])
+       when field in ["amount", "outflow", "inflow"],
+       do: directed(socket, params)
 
   defp after_change(socket, params, _target), do: assign(socket, :params, params)
 
   defp directed(socket, params) do
-    params = TransactionForm.follow_direction(params, socket.assigns.ready_to_assign_id)
+    %{ready_to_assign_id: rta, accounts: accounts} = socket.assigns
+    params = TransactionForm.follow_direction(params, rta, accounts)
     suggested = socket.assigns.suggested
 
     suggested =

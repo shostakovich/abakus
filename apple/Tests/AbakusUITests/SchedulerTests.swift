@@ -18,7 +18,7 @@ import Testing
     @Test func columnsFollowTheScheduleGrid() {
         let fixture = fixture()
         let giro = fixture.spied().model
-        #expect(giro.scheduler.visibleColumns == [.date, .frequency, .payee, .category, .memo, .outflow, .inflow])
+        #expect(giro.scheduler.visibleColumns == [.date, .frequency, .payee, .category, .memo, .amount])
         let allAccounts = fixture.spied(selection: .allAccounts).model
         #expect(allAccounts.scheduler.visibleColumns.first == .account)
         let depot = fixture.spied(selection: .account(fixture.depot)).model
@@ -32,7 +32,7 @@ import Testing
         #expect(row.frequency == "Monatlich")
         #expect(row.payee == "Farm")
         #expect(row.category == "Groceries")
-        #expect(row.outflow == "25.00")
+        #expect(row.amountText == "−25.00")
         #expect(model.scheduler.scheduledTransactions.count == 1)
     }
 
@@ -390,13 +390,16 @@ import Testing
         var fixture = fixture()
         let before = fixture.spied().model
         let small = before.scheduler.columnLayout(gridWidth: 1000)
-        #expect(small.frame(of: .outflow)?.width == RegisterColumn.outflow.contentWidth(fitting: []))
+        #expect(small.frame(of: .amount)?.width == RegisterColumn.signedAmountWidth)
         #expect(small.frame(of: .date)?.width == RegisterColumn.date.minWidth)
         fixture.addSchedule("S2", -1_234_567.89, payee: "House")
         let after = fixture.spied().model
         let large = after.scheduler.columnLayout(gridWidth: 1000)
-        let outflow = try #require(large.frame(of: .outflow))
-        #expect(outflow.width == RegisterColumn.outflow.contentWidth(fitting: ["1,234,567.89", "25.00"]))
-        #expect(outflow.width > RegisterColumn.outflow.contentWidth(fitting: []))
+        let amount = try #require(large.frame(of: .amount))
+        #expect(
+            amount.width
+                == RegisterColumn.amount.contentWidth(
+                    fitting: ["−1,234,567.89", "−25.00"], accessory: EditCellStyle.amountAccessoriesWidth))
+        #expect(amount.width > RegisterColumn.signedAmountWidth)
     }
 }

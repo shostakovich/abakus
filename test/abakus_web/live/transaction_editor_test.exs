@@ -96,7 +96,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       pick(view, "main", "payee", "p:🥖 Bäckerei")
       pick(view, "main", "category", "#{c.groceries.id}")
-      submit(view, %{outflow: "12,34", memo: "Brötchen"})
+      submit(view, %{amount: "12,34", memo: "Brötchen"})
 
       refute has_element?(view, "#tx-editor")
       assert has_element?(view, "#flash-info", "Gespeichert.")
@@ -112,22 +112,72 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert has_element?(view, "#balance-working", "−12,34 €")
     end
 
-    test "typing one of outflow and inflow clears the other; income goes to Ready to Assign", c do
+    test "an inflow typed with a plus shows in green in Betrag and raises the balance", c do
+      transaction_fixture(account_id: c.giro.id, date: ~D[2020-01-01], amount: -10_000)
+      view = open_new(c, c.giro)
+      assert has_element?(view, "#balance-working", "−100,00")
+
+      change(view, %{"amount" => "+3180"}, ["amount"])
+      submit(view, %{amount: "+3180"})
+
+      transaction = newest(c.giro)
+      assert transaction.amount == 318_000
+      assert has_element?(view, "#tx-#{transaction.id} td.app-amount.app-inflow", "+3.180,00")
+      assert has_element?(view, "#balance-working", "3.080,00")
+    end
+
+    test "a new transaction starts as an outflow in one amount field; the sign button makes it an inflow",
+         c do
+      view = open_new(c, c.giro)
+      assert has_element?(view, "#tx-sign", "−")
+
+      assert has_element?(
+               view,
+               "#tx-amount[name='transaction[amount]'][aria-describedby='tx-sign']"
+             )
+
+      refute has_element?(view, "#tx-outflow")
+      refute has_element?(view, "#tx-inflow")
+
+      view |> element("#tx-sign") |> render_click()
+      assert has_element?(view, "#tx-sign", "+")
+
+      submit(view, %{amount: "100"})
+      assert %Transaction{amount: 10_000} = newest(c.giro)
+    end
+
+    test "a typed sign sets the direction; income goes to Ready to Assign", c do
       view = open_new(c, c.giro)
       rta = Categories.ready_to_assign!(budget_scope()).id
 
-      change(view, %{"outflow" => "5"}, ["outflow"])
-      change(view, %{"outflow" => "5", "inflow" => "100"}, ["inflow"])
-      assert has_element?(view, ~s|#tx-outflow[value=""]|)
+      change(view, %{"amount" => "+100"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "+")
+      assert has_element?(view, ~s|#tx-amount[value="100"]|)
       assert category(view, rta)
 
-      change(view, %{"outflow" => "5", "inflow" => "100"}, ["outflow"])
-      assert has_element?(view, ~s|#tx-inflow[value=""]|)
+      change(view, %{"amount" => "-100"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "−")
       refute category(view, rta)
 
-      change(view, %{"outflow" => "", "inflow" => "100"}, ["inflow"])
+      change(view, %{"amount" => "+5"}, ["amount"])
+      change(view, %{"amount" => "−5"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "−")
+
+      change(view, %{"amount" => "5"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "−")
+
+      view |> element("#tx-sign") |> render_click()
+      assert category(view, rta)
       submit(view)
-      assert %Transaction{amount: 10_000, category_id: ^rta} = newest(c.giro)
+      assert %Transaction{amount: 500, category_id: ^rta} = newest(c.giro)
+    end
+
+    test "an inflow saved before its change arrives goes to Ready to Assign too", c do
+      view = open_new(c, c.giro)
+      rta = Categories.ready_to_assign!(budget_scope()).id
+
+      submit(view, %{amount: "+3180"})
+      assert %Transaction{amount: 318_000, category_id: ^rta} = newest(c.giro)
     end
 
     test "a hidden payee is no longer suggested, but its name still books it", c do
@@ -137,7 +187,7 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       create_payee(view, "main", "Frischmarkt")
       assert category(view, c.groceries.id)
-      submit(view, %{outflow: "5,00"})
+      submit(view, %{amount: "5,00"})
 
       assert newest(c.giro).payee_id == c.market.id
     end
@@ -196,7 +246,12 @@ defmodule AbakusWeb.TransactionEditorTest do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       view |> element("#new-transaction-fab") |> render_click()
-      assert has_element?(view, "#tx-editor .app-sheet #tx-amount[name='transaction[outflow]']")
+
+      assert has_element?(
+               view,
+               "#tx-editor .app-sheet #tx-amount[name='transaction[outflow]'][aria-describedby='tx-sign']"
+             )
+
       refute has_element?(view, "tbody#tx-editor")
 
       view |> element("#tx-sign") |> render_click()
@@ -211,7 +266,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       view |> element("#new-transaction") |> render_click()
 
       assert has_element?(view, ~s|#tx-account option[selected][value="#{c.giro.id}"]|)
-      submit(view, %{outflow: "5", account_id: c.savings.id})
+      submit(view, %{amount: "5", account_id: c.savings.id})
       assert %Transaction{amount: -500} = newest(c.savings)
     end
 
@@ -245,16 +300,16 @@ defmodule AbakusWeb.TransactionEditorTest do
     test "shows what the Ledger refuses and keeps the row", c do
       view = open_new(c, c.giro)
 
-      submit(view, %{outflow: "12,345"})
+      submit(view, %{amount: "12,345"})
       assert has_element?(view, "#tx-error", "Höchstens 2 Nachkommastellen erlaubt.")
 
       view |> with_target("#tx-editor") |> render_click("split", %{})
-      submit(view, %{outflow: "1", subtransactions: %{"0" => %{outflow: "1"}}})
+      submit(view, %{amount: "1", subtransactions: %{"0" => %{amount: "1"}}})
       assert has_element?(view, "#tx-error", "mindestens zwei Teile")
 
       submit(view, %{
-        outflow: "1",
-        subtransactions: %{"0" => %{outflow: "60"}, "1" => %{outflow: "30"}}
+        amount: "1",
+        subtransactions: %{"0" => %{amount: "60"}, "1" => %{amount: "30"}}
       })
 
       assert has_element?(view, "#tx-error", "Betrag muss der Summe der Teile entsprechen")
@@ -274,7 +329,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert has_element?(view, ~s|#tx-payee[value="⇄ 🏦 Sparkonto"]|)
       assert has_element?(view, "#tx-category[readonly]")
 
-      submit(view, %{outflow: "200", memo: "Rücklagen"})
+      submit(view, %{amount: "200", memo: "Rücklagen"})
 
       transfer = newest(c.giro)
       assert %Transaction{amount: -20_000, category_id: nil} = transfer
@@ -294,7 +349,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert category(view, "")
 
       pick(view, "main", "category", "#{c.saving.id}")
-      submit(view, %{outflow: "500"})
+      submit(view, %{amount: "500"})
 
       transfer = newest(c.giro)
       assert transfer.category_id == c.saving.id
@@ -315,7 +370,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       pick(view, "main", "payee", "a:#{c.giro.id}")
       assert has_element?(view, ".app-payee #tx-category-combobox")
 
-      submit(view, %{inflow: "80"})
+      submit(view, %{amount: "+80"})
 
       assert has_element?(
                view,
@@ -324,7 +379,7 @@ defmodule AbakusWeb.TransactionEditorTest do
              )
 
       pick(view, "main", "category", "#{c.saving.id}")
-      submit(view, %{inflow: "80"})
+      submit(view, %{amount: "+80"})
 
       transfer = newest(c.depot)
       assert %Transaction{amount: 8_000, category_id: nil} = transfer
@@ -345,9 +400,10 @@ defmodule AbakusWeb.TransactionEditorTest do
       open_edit(view, %{id: transfer.transfer_transaction_id})
 
       assert has_element?(view, ~s|#tx-payee[value="⇄ 💶 Girokonto"]|)
-      assert has_element?(view, ~s|#tx-inflow[value="200,00"]|)
+      assert has_element?(view, ~s|#tx-amount[value="200,00"]|)
+      assert has_element?(view, "#tx-sign", "+")
 
-      submit(view, %{inflow: "250"})
+      submit(view, %{amount: "250"})
       assert reload(transfer).amount == -25_000
     end
 
@@ -358,7 +414,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert has_element?(view, ~s|#tx-payee[value="⇄ 🏦 Sparkonto"]|)
 
       create_payee(view, "main", "Sparkasse")
-      submit(view, %{outflow: "3"})
+      submit(view, %{amount: "3"})
 
       assert %{payee: %{name: "Sparkasse", transfer_account_id: nil}} = newest(c.giro)
     end
@@ -406,25 +462,25 @@ defmodule AbakusWeb.TransactionEditorTest do
       change(
         view,
         %{
-          "outflow" => "100",
+          "amount" => "100",
           "subtransactions" => %{
-            "0" => %{"outflow" => "60", "memo" => "Obst"},
-            "1" => %{"outflow" => "30"},
-            "2" => %{"outflow" => "5"}
+            "0" => %{"amount" => "60", "memo" => "Obst"},
+            "1" => %{"amount" => "30"},
+            "2" => %{"amount" => "5"}
           }
         },
-        ["subtransactions", "2", "outflow"]
+        ["subtransactions", "2", "amount"]
       )
 
-      assert has_element?(view, "#tx-remainder-out", "5,00")
+      assert has_element?(view, "#tx-remainder.text-error-ink", "−5,00")
       assert has_element?(view, "#tx-sub-1-category[readonly]")
       assert has_element?(view, "#tx-sub-2-category-combobox")
 
       pick(view, "2", "category", "#{c.saving.id}")
 
       submit(view, %{
-        outflow: "100",
-        subtransactions: %{"2" => %{outflow: "10"}}
+        amount: "100",
+        subtransactions: %{"2" => %{amount: "10"}}
       })
 
       split = newest(c.giro)
@@ -444,6 +500,55 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert has_element?(view, "#tx-#{split.id}-part-1 .app-transfer", "🏦 Sparkonto")
       assert has_element?(view, "#tx-#{split.id}-part-0", "Lebensmittel")
       assert has_element?(view, "#tx-#{split.id}-parts")
+    end
+
+    test "each part has a sign of its own, from its button or a typed sign", c do
+      view = open_new(c, c.giro)
+      view |> with_target("#tx-editor") |> render_click("split", %{})
+      assert has_element?(view, "#tx-sub-0-sign", "−")
+
+      assert has_element?(
+               view,
+               "#tx-sub-1-amount[name='transaction[subtransactions][1][amount]'][aria-describedby='tx-sub-1-sign']"
+             )
+
+      view |> element("#tx-sub-1-sign") |> render_click()
+      assert has_element?(view, "#tx-sub-1-sign", "+")
+      assert has_element?(view, "#tx-sub-0-sign", "−")
+      assert has_element?(view, "#tx-sign", "−")
+
+      view |> element("#tx-sub-0-sign") |> render_click()
+      change(view, %{"amount" => "100"}, ["amount"])
+
+      change(view, %{"subtransactions" => %{"0" => %{"amount" => "−130"}}}, [
+        "subtransactions",
+        "0",
+        "amount"
+      ])
+
+      assert has_element?(view, "#tx-sub-0-sign", "−")
+      assert has_element?(view, "#tx-remainder", "+30,00")
+
+      change(view, %{"subtransactions" => %{"1" => %{"amount" => "+30"}}}, [
+        "subtransactions",
+        "1",
+        "amount"
+      ])
+
+      assert has_element?(view, "#tx-sub-1-sign", "+")
+      assert has_element?(view, "#tx-remainder", "0,00")
+      submit(view)
+
+      split = newest(c.giro)
+      assert split.amount == -10_000
+
+      assert [%Subtransaction{amount: -13_000}, %Subtransaction{amount: 3_000}] =
+               split.subtransactions
+
+      assert has_element?(view, "#tx-#{split.id} td.app-amount", "−100,00")
+      assert has_element?(view, "#tx-#{split.id}-part-0 td.app-amount", "−130,00")
+      refute has_element?(view, "#tx-#{split.id}-part-0 td.app-inflow")
+      assert has_element?(view, "#tx-#{split.id}-part-1 td.app-amount.app-inflow", "+30,00")
     end
 
     test "parts imported from YNAB show their payees and memos and keep them", c do
@@ -552,18 +657,19 @@ defmodule AbakusWeb.TransactionEditorTest do
     test "a click selects the row, a click into a cell opens it there; saving approves", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
 
-      view |> element("#tx-#{c.shopping.id} td.app-out") |> render_click()
+      view |> element("#tx-#{c.shopping.id} td.app-amount") |> render_click()
       assert has_element?(view, "tbody#tx-#{c.shopping.id}-rows.is-selected")
       refute has_element?(view, "#tx-editor")
 
-      view |> element("#tx-#{c.shopping.id} td.app-out") |> render_click()
-      assert has_element?(view, ~s|#tx-editor[data-focus="tx-outflow"]|)
-      assert has_element?(view, ~s|#tx-outflow[value="87,43"]|)
+      view |> element("#tx-#{c.shopping.id} td.app-amount") |> render_click()
+      assert has_element?(view, ~s|#tx-editor[data-focus="tx-amount"]|)
+      assert has_element?(view, ~s|#tx-amount[value="87,43"]|)
+      assert has_element?(view, "#tx-sign", "−")
       assert has_element?(view, ~s|#tx-payee[value="Frischmarkt"]|)
       assert has_element?(view, ~s|#tx-save[aria-label="Bestätigen"]|)
       refute bulk?(view)
 
-      submit(view, %{outflow: "90", date: "2026-10-03"})
+      submit(view, %{amount: "90", date: "2026-10-03"})
 
       assert %Transaction{amount: -9_000, date: ~D[2026-10-03], approved: true} =
                reload(c.shopping)

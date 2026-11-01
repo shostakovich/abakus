@@ -723,7 +723,7 @@ defmodule AbakusWeb.RegisterLive do
 
   defp focus_id("account"), do: "tx-account"
 
-  defp focus_id(field) when field in ~w(date payee category memo outflow inflow),
+  defp focus_id(field) when field in ~w(date payee category memo amount),
     do: "tx-#{field}"
 
   defp focus_id(_field), do: "tx-payee"

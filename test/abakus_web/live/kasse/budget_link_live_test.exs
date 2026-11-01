@@ -250,11 +250,11 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       assert has_element?(view, "#tx-person option", "Ben")
       assert has_element?(view, "#tx-person option", "Cleo")
 
-      view |> form("#tx-form", transaction: %{outflow: "30"}) |> render_submit()
+      view |> form("#tx-form", transaction: %{amount: "30"}) |> render_submit()
       assert has_element?(view, "#tx-error", "mit wem in der Kasse")
 
       view
-      |> form("#tx-form", transaction: %{outflow: "30", person_id: "#{c.h.cleo}"})
+      |> form("#tx-form", transaction: %{amount: "30", person_id: "#{c.h.cleo}"})
       |> render_submit()
 
       refute has_element?(view, "#tx-editor")
@@ -315,7 +315,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
 
       assert has_element?(view, ~s|#tx-expense-link[href="/kasse/expenses/#{expense.id}"]|)
 
-      for field <- ~w(tx-date tx-outflow tx-inflow) do
+      for field <- ~w(tx-date tx-sign tx-amount) do
         assert has_element?(view, "##{field}[disabled]")
       end
 
@@ -331,7 +331,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       view
       |> element("#tx-form")
       |> render_submit(%{
-        "transaction" => %{"memo" => "Spargel", "outflow" => "99", "date" => "2026-01-01"}
+        "transaction" => %{"memo" => "Spargel", "amount" => "99", "date" => "2026-01-01"}
       })
 
       assert %{

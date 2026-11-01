@@ -4,11 +4,35 @@ export const EditRow = {
     this.el.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !event.defaultPrevented) this.pushEvent("cancel_edit", {})
     })
+    // A typed or pasted sign goes to the sign button, as LiveView never patches the focused field to drop it.
+    this.el.addEventListener("keydown", (event) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (!["+", "-", "−"].includes(event.key) || !this.signButton(event.target)) return
+      event.preventDefault()
+      this.setSign(event.target, event.key)
+    })
+    this.el.addEventListener("input", (event) => {
+      const typed = this.signButton(event.target) && event.target.value.match(/^\s*([+\-−])\s*/)
+      if (!typed) return
+      event.target.value = event.target.value.slice(typed[0].length)
+      this.setSign(event.target, typed[1])
+    })
     const input = document.getElementById(this.el.dataset.focus)
     if (!input) return
     input.focus({ preventScroll: true })
     if (typeof input.select === "function" && input.type !== "date") input.select()
     this.el.scrollIntoView({ block: "nearest" })
+  },
+  signButton(input) {
+    return input.dataset.signButton && document.getElementById(input.dataset.signButton)
+  },
+  // Set at once, so a second sign typed before the server answers compares against the first.
+  setSign(input, typed) {
+    const button = this.signButton(input)
+    const sign = typed === "+" ? "+" : "-"
+    if (button.dataset.sign === sign) return
+    button.click()
+    button.dataset.sign = sign
   },
 }
 

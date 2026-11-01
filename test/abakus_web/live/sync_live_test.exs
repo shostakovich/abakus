@@ -37,7 +37,7 @@ defmodule AbakusWeb.SyncLiveTest do
 
     view |> element("#tx-#{transaction.id} td.app-payee") |> render_click()
     view |> element("#tx-#{transaction.id} td.app-payee") |> render_click()
-    view |> form("#tx-form", transaction: %{memo: "Neu", outflow: "20,00"}) |> render_submit()
+    view |> form("#tx-form", transaction: %{memo: "Neu", amount: "20,00"}) |> render_submit()
 
     messages = SyncDevice.messages_after(budget_scope(), cursor, "mac")
 

@@ -252,6 +252,13 @@ defmodule Abakus.Money do
   def amount(minor, currency \\ "EUR") when is_integer(minor),
     do: Setzkasten.Format.number(minor, minor_units: true, minor_digits: decimals(currency))
 
+  @doc """
+  Euro cents without unit and with their sign, as the register's Betrag shows them: `"+3.180,00"`, `"−88,12"`.
+  """
+  @spec signed_amount(integer()) :: String.t()
+  def signed_amount(cents) when is_integer(cents),
+    do: Setzkasten.Format.number(cents, minor_units: true, minor_digits: 2, signed: true)
+
   @doc ~s(Basis points as a percentage: `"33,33 %"`.)
   @spec format_basis_points(integer()) :: String.t()
   def format_basis_points(points), do: format_minor(points, 2) <> " %"

@@ -24,6 +24,6 @@ import Testing
         let layout = model.scheduler.columnLayout(gridWidth: 900)
         #expect(
             SplitEditorView.fieldFrames(layout.frames, editor: editor).map(\.column)
-                == [.payee, .category, .memo, .outflow, .inflow])
+                == [.payee, .category, .memo, .amount])
     }
 }

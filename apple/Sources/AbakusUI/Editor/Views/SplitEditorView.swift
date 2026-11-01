@@ -55,7 +55,7 @@ struct SplitEditorView: View {
     }
 
     private var addRow: some View {
-        let remaining = editor.remainingTexts
+        let remaining = editor.remainingAmount
         let inset = RegisterGridStyle.cellInset
         return ZStack(alignment: .leading) {
             Button("Teil hinzufügen", systemImage: "plus", action: editor.addSubRow)
@@ -63,13 +63,13 @@ struct SplitEditorView: View {
                 .controlSize(.small)
                 .focusable(false)
                 .offset(x: (layout.frame(of: .payee)?.x ?? 0) + EditCellStyle.fieldInset)
-            if let outflow = layout.frame(of: .outflow), let inflow = layout.frame(of: .inflow) {
+            if let amount = layout.frame(of: .amount) {
                 Text("Noch aufzuteilen:")
                     .foregroundStyle(ThemeColor.secondaryText)
                     .lineLimit(1)
-                    .frame(width: max(0, outflow.x - inset), alignment: .trailing)
-                remainingLabel(remaining.outflow, in: outflow)
-                remainingLabel(remaining.inflow, in: inflow)
+                    .frame(width: max(0, amount.x - inset), alignment: .trailing)
+                remainingLabel(editor.remainingText, in: amount)
+                    .foregroundStyle(remaining > 0 ? ThemeColor.positive : ThemeColor.text)
             }
         }
         .font(EditCellStyle.font.font)

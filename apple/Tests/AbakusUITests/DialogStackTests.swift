@@ -107,7 +107,7 @@ private enum Pick: Hashable, Sendable {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -4, cleared: .reconciled)
         let (model, store) = fixture.spied()
-        model.beginEditing(id, column: .outflow)
+        model.beginEditing(id, column: .amount)
         let editor = try #require(model.editor)
         editor.retype("5")
         editor.activate(.done)

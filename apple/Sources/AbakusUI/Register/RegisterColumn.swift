@@ -1,7 +1,7 @@
 import CoreGraphics
 
 public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
-    case account, date, payee, category, memo, outflow, inflow
+    case account, date, payee, category, memo, amount
     case runningBalance, cleared, frequency
 
     public enum Header: Hashable, Sendable {
@@ -16,28 +16,31 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .payee: .text("Empfänger")
         case .category: .text("Kategorie")
         case .memo: .text("Memo")
-        case .outflow: .text("Ausgang")
-        case .inflow: .text("Eingang")
+        case .amount: .text("Betrag")
         case .runningBalance: .text("Saldo")
         case .cleared: .symbol("checkmark.circle", label: "Status")
         case .frequency: .text("Häufigkeit")
         }
     }
 
-    public var isAmount: Bool { self == .outflow || self == .inflow || self == .runningBalance }
+    public var isAmount: Bool { self == .amount || self == .runningBalance }
 
     public var minWidth: CGFloat {
         switch self {
         case .cleared: 32
         case .account, .payee, .category, .memo, .frequency: 50
         case .date: 92
-        case .outflow, .inflow, .runningBalance: Self.amountWidth
+        case .amount: Self.signedAmountWidth
+        case .runningBalance: Self.amountWidth
         }
     }
 
     /// Wide enough for "−10.000,00" in the register's font.
     static let amountWidth: CGFloat = ceil(
         ThemeFont.tableEmphasized.width(of: "−10.000,00") + 2 * RegisterGridStyle.cellInset)
+
+    /// Betrag also fits the editor's calculator and sign button at the field's start.
+    static let signedAmountWidth: CGFloat = amountWidth + EditCellStyle.amountAccessoriesWidth
 
     public var isResizable: Bool {
         switch self {
@@ -62,8 +65,7 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .payee: RegisterColumnSetting(visible: true, width: 175)
         case .category: RegisterColumnSetting(visible: true, width: 175)
         case .memo: RegisterColumnSetting(visible: true, width: 50)
-        case .outflow: RegisterColumnSetting(visible: true, width: Self.amountWidth)
-        case .inflow: RegisterColumnSetting(visible: true, width: Self.amountWidth)
+        case .amount: RegisterColumnSetting(visible: true, width: Self.signedAmountWidth)
         case .runningBalance: RegisterColumnSetting(visible: false, width: Self.amountWidth)
         case .cleared: RegisterColumnSetting(visible: true, width: 15)
         case .frequency: nil

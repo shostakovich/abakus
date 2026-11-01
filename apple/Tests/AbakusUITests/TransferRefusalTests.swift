@@ -19,7 +19,7 @@ import Testing
         editor.retype("Tagesgeld")
         editor.press(.tab)
         #expect(editor.clone.accountId == fixture.tagesgeld)
-        editor.fieldClicked(.main(.outflow))
+        editor.fieldClicked(.main(.amount))
         editor.type("5")
         editor.activate(.save)
         #expect(store.transactionSaves.map(\.transaction.accountId) == [fixture.tagesgeld])

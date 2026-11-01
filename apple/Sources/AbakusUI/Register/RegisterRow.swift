@@ -37,14 +37,16 @@ public struct RegisterRow: Identifiable, Hashable, Sendable {
     public var categoryStyle = RegisterTextStyle.plain
     public var split = RegisterSplitState.none
     public var memo = ""
-    public var outflow = ""
-    public var inflow = ""
+    /// The signed Betrag, "−88,12" or "+3.180,00".
+    public var amountText = ""
     public var runningBalance = ""
     public var cleared = ClearedStatus.uncleared
     public var textStyle = RegisterTextStyle.plain
     public var amount: Decimal = 0
     /// A split line a search did not match: struck through in grey.
     public var isExcludedFromSearch = false
+
+    public var isInflow: Bool { amount > 0 }
 
     public var isSubtransaction: Bool { kind == .subtransaction }
 
@@ -175,8 +177,7 @@ struct RegisterRowBuilder {
         }
         row.split = transaction.isSplit ? (isExpanded ? .expanded : .collapsed) : .none
         row.memo = transaction.memo ?? ""
-        row.outflow = formatter.registerAmount(transaction.outflow)
-        row.inflow = formatter.registerAmount(transaction.inflow)
+        row.amountText = formatter.signedRegisterAmount(transaction.amount)
         row.amount = transaction.amount
         return row
     }
@@ -188,8 +189,7 @@ struct RegisterRowBuilder {
             setPayee(&row, name: lookup.payeeName(of: sub), target: lookup.transferAccountId(of: sub))
             setCategory(&row, sub.categoryId)
             row.memo = sub.memo ?? ""
-            row.outflow = formatter.registerAmount(sub.outflow)
-            row.inflow = formatter.registerAmount(sub.inflow)
+            row.amountText = formatter.signedRegisterAmount(sub.amount)
             row.amount = sub.amount
             return row
         }

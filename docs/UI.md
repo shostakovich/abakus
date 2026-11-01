@@ -70,9 +70,10 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   Phones: the balances in one line, search and "Ansicht", "Buchung" as the "+"
 - Newest first on both platforms, under a quiet month heading ("Oktober 2026", no total) that sticks while the list
   scrolls; rows then read "24.10.". Headings show only while the list is sorted by date (the web always is)
-- Fixed columns, so an opened row keeps every column in place: Ausgang, Eingang and Saldo fit "−10.000,00", the memo
-  takes the remaining width and is hidden per device from "Ansicht"; the column header sticks while the list scrolls.
-  Eingang in green
+- Fixed columns, so an opened row keeps every column in place: Betrag and Saldo fit "−10.000,00", the memo takes the
+  remaining width and is hidden per device from "Ansicht"; the column header sticks while the list scrolls. Betrag
+  is signed, also for parts: "−88,12" in the normal ink, an inflow "+3.180,00" in green. Editing, each side has one
+  amount behind a −/+ button; a click or a typed "+" or "−" sets the sign, a new transaction starts as an outflow
 - The category with its emoji only ("🛒 Lebensmittel"), also in the phone cards; its group shows in the tooltip and
   the picker. A missing category reads "⚠ Kategorie fehlt", a transfer "⇄ Depot", a split "Aufgeteilt (2)"
 - One status column, last, as in Actual: ○ vorgemerkt, ✓ gebucht, 🔒 abgeglichen; a transaction waiting for approval

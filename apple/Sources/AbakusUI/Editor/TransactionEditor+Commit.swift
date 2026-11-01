@@ -19,7 +19,7 @@ extension TransactionEditor {
         case .category: return commitCategory(reason: reason)
         case .memo:
             clone.memo = text(field).isEmpty ? nil : text(field)
-        case .outflow, .inflow: commitAmount(field)
+        case .amount: commitAmount(field)
         case .frequency: break
         }
         return nil
@@ -150,7 +150,7 @@ extension TransactionEditor {
         }
         if clone.amount == 0, let amount = fill.amount {
             clone.amount = amount
-            refreshAmountTexts(subId: nil)
+            refreshAmountText(subId: nil)
         }
     }
 
@@ -263,30 +263,42 @@ extension TransactionEditor {
         setText(field, categoryText(categoryId))
     }
 
-    /// One signed amount; the setters are no-ops for an unchanged side.
     private func commitAmount(_ field: EditorFieldID) {
-        let value = formatter.parseAmount(text(field))
-        var amount = clone.amount
-        if field.column == .inflow {
-            if value != clone.inflow { amount = value }
-        } else if value != clone.outflow {
-            amount = -value
-        }
+        let amount = typedAmount(field)
         if amount != clone.amount && mode == .existing && budget.isTransferFromSplit(original) {
-            refreshAmountTexts(subId: nil)
+            refreshAmountText(subId: nil)
             showRefusal(.transferFromSplitAmountLocked, refocus: nil)
             return
         }
         clone.amount = amount
-        refreshAmountTexts(subId: nil)
+        refreshAmountText(subId: nil)
     }
 
-    func refreshAmountTexts(subId: String?) {
-        let amount =
-            subId.map { id in clone.subtransactions.first { $0.id == id }?.amount ?? 0 } ?? clone.amount
-        let formatter = formatter
-        texts[EditorFieldID(subId: subId, column: .outflow)] = amount < 0 ? formatter.registerAmount(-amount) : ""
-        texts[EditorFieldID(subId: subId, column: .inflow)] = amount >= 0 ? formatter.registerAmount(amount) : ""
+    static let signs: [Character: Bool] = ["+": true, "−": false, "-": false]
+
+    /// The field's text with its sign; a pasted leading sign sets it.
+    func typedAmount(_ field: EditorFieldID) -> Decimal {
+        var typed = text(field).trimmingCharacters(in: .whitespaces)
+        if let first = typed.first, let inflow = Self.signs[first] {
+            chooseSign(field, inflow: inflow)
+            typed.removeFirst()
+        }
+        let value = abs(formatter.parseAmount(typed))
+        return isInflow(field) ? value : -value
+    }
+
+    /// The click on the sign button ends editing, so the field takes focus again.
+    public func toggleSign(_ field: EditorFieldID) {
+        guard field.column == .amount, !isLocked(field) else { return }
+        chooseSign(field, inflow: !isInflow(field))
+        if focus != .field(field) { fieldClicked(field) }
+    }
+
+    func refreshAmountText(subId: String?) {
+        let amount = amount(of: subId)
+        let field = EditorFieldID(subId: subId, column: .amount)
+        texts[field] = formatter.registerAmount(abs(amount))
+        if amount != 0 { setSign(field, inflow: amount > 0) }
     }
 
     func showMessage(_ message: TaskDialog<MessageChoice>, refocus: EditorFieldID?) {

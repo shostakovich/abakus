@@ -8,7 +8,7 @@ import Foundation
 @MainActor
 struct EditHarness {
     enum State: String, CaseIterable {
-        case existing, new
+        case existing, new, inflow
         case payeeDropdown = "payee-dropdown"
         case categoryDropdown = "category-dropdown"
         case split, errors
@@ -42,6 +42,17 @@ struct EditHarness {
             type("Brötchen")
             key(kVK_Tab)
             type("4,20")
+        case .inflow:
+            register.addTransactionClicked()
+            settle()
+            key(kVK_Tab)
+            type("Arbeitgeber")
+            key(kVK_Tab)
+            key(kVK_Escape)
+            key(kVK_Tab)
+            type("Gehalt Oktober")
+            key(kVK_Tab)
+            type("+3180")
         case .payeeDropdown:
             register.addTransactionClicked()
             settle()
@@ -80,7 +91,7 @@ struct EditHarness {
             type("+")
         case .calculator:
             let id = try transaction { self.payee($0) == "Telekom" }
-            try edit(id, column: .outflow)
+            try edit(id, column: .amount)
             type("*3")
         case .invalidPayee:
             let id = try transaction { self.payee($0) == "Telekom" }

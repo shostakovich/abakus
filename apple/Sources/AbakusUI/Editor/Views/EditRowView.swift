@@ -8,6 +8,8 @@ enum EditCellStyle {
     static let fieldInset: CGFloat = 2
     static let textInset: CGFloat = 6
     static let accessoryWidth: CGFloat = 18
+    /// The calculator and the sign button at an amount field's start.
+    static let amountAccessoriesWidth: CGFloat = 2 * accessoryWidth
 }
 
 struct EditorAnchorKey: PreferenceKey {
@@ -68,10 +70,8 @@ struct EditRowView: View {
             EditTextCell(editor: editor, field: .main(.category), width: frame.width, accessory: .suggestions)
         case .memo:
             EditTextCell(editor: editor, field: .main(.memo), width: frame.width)
-        case .outflow:
-            EditTextCell(editor: editor, field: .main(.outflow), width: frame.width)
-        case .inflow:
-            EditTextCell(editor: editor, field: .main(.inflow), width: frame.width)
+        case .amount:
+            EditTextCell(editor: editor, field: .main(.amount), width: frame.width)
         case .runningBalance:
             if let row {
                 Text(verbatim: row.runningBalance)
@@ -134,18 +134,16 @@ struct EditTextCell: View {
         let shape = RoundedRectangle(cornerRadius: EditCellStyle.fieldCornerRadius)
         return HStack(spacing: 0) {
             transferButton
+            if field.column.isAmount {
+                calculatorButton
+                signButton
+            }
             text(isFocused: isFocused)
             trailingAccessory
         }
-        .padding(.leading, transferLink == nil ? EditCellStyle.textInset - 2 : 0)
+        .padding(.leading, transferLink == nil && !field.column.isAmount ? EditCellStyle.textInset - 2 : 0)
         .padding(.trailing, accessory == nil ? EditCellStyle.textInset - 2 : 0)
         .frame(width: max(0, width - 2 * EditCellStyle.fieldInset), height: EditRowMetrics.fieldHeight)
-        // Amounts sit right, so the calculator button takes the free left end instead of their room.
-        .overlay(alignment: .leading) {
-            if isFocused && field.column.isAmount {
-                accessoryButton("plus.forwardslash.minus", label: "Rechner") { editor.openCalculator(for: field) }
-            }
-        }
         .background(isFocused ? AnyShapeStyle(ThemeColor.fieldBackground) : AnyShapeStyle(.clear), in: shape)
         .overlay {
             shape.strokeBorder(
@@ -160,9 +158,11 @@ struct EditTextCell: View {
 
     /// Plain text like a disabled field, so the row shows at a glance what stays.
     private var locked: some View {
-        HStack(spacing: 0) {
+        let text = editor.text(field)
+        let sign = field.column.isAmount && !text.isEmpty ? (editor.isInflow(field) ? "+" : "−") : ""
+        return HStack(spacing: 0) {
             transferButton
-            Text(verbatim: editor.text(field))
+            Text(verbatim: sign + text)
                 .font(EditCellStyle.font.font)
                 .foregroundStyle(ThemeColor.secondaryText)
                 .lineLimit(1)
@@ -186,6 +186,41 @@ struct EditTextCell: View {
             accessoryButton(symbol.name, label: symbol.label, action: transferLink)
                 .toolTip("Zur Gegenbuchung springen")
         }
+    }
+
+    private var signButton: some View {
+        let isInflow = editor.isInflow(field)
+        return Button {
+            editor.toggleSign(field)
+        } label: {
+            Text(verbatim: isInflow ? "+" : "−")
+                .font(ThemeFont.tableEmphasized.font)
+                .foregroundStyle(isInflow ? ThemeColor.positive : ThemeColor.secondaryText)
+                .frame(width: EditCellStyle.accessoryWidth, height: EditRowMetrics.fieldHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .pointerStyle(.link)
+        .toolTip("Zwischen Ausgang und Eingang wechseln (+ oder − tippen)")
+        .accessibilityLabel(isInflow ? "Eingang" : "Ausgang")
+        .accessibilityHint("Vorzeichen wechseln")
+    }
+
+    private var calculatorButton: some View {
+        Button {
+            editor.openCalculator(for: field)
+        } label: {
+            CalculatorGlyph()
+                .foregroundStyle(ThemeColor.secondaryText)
+                .frame(width: EditCellStyle.accessoryWidth, height: EditRowMetrics.fieldHeight)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .pointerStyle(.link)
+        .toolTip("Rechner")
+        .accessibilityLabel("Rechner")
     }
 
     @ViewBuilder
@@ -287,5 +322,29 @@ enum EditorFieldMetrics {
         let height = ceil(probe.fittingSize.height)
         heights[font] = height
         return height
+    }
+}
+
+/// SF Symbols has no calculator, so it is drawn: a case, a display, round keys and a tall one.
+struct CalculatorGlyph: View {
+    var body: some View {
+        Canvas { context, size in
+            let body = CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
+            context.stroke(Path(roundedRect: body, cornerRadius: 2), with: .foreground, lineWidth: 1)
+            context.fill(Path(CGRect(x: 2.5, y: 2.5, width: size.width - 5, height: 2)), with: .foreground)
+            let key: CGFloat = 1.6
+            let pitch = (size.width - 5 - key) / 2
+            for row in 0..<3 {
+                for column in 0..<3 where !(column == 2 && row > 0) {
+                    let origin = CGPoint(x: 2.5 + CGFloat(column) * pitch, y: 6 + CGFloat(row) * 2.5)
+                    context.fill(
+                        Path(ellipseIn: CGRect(origin: origin, size: CGSize(width: key, height: key))),
+                        with: .foreground)
+                }
+            }
+            let tall = CGRect(x: 2.5 + 2 * pitch, y: 8.5, width: key, height: 2.5 + key)
+            context.fill(Path(roundedRect: tall, cornerRadius: key / 2), with: .foreground)
+        }
+        .frame(width: 11, height: 14)
     }
 }

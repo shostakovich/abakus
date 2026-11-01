@@ -26,9 +26,9 @@ import Testing
         var fixture = RegisterFixture()
         let id = ledByKasse(&fixture)
         let model = fixture.model()
-        let editor = try editor(of: id, in: model, column: .outflow)
+        let editor = try editor(of: id, in: model, column: .amount)
 
-        for column in [EditorColumn.account, .date, .payee, .outflow, .inflow] {
+        for column in [EditorColumn.account, .date, .payee, .amount] {
             #expect(editor.isLocked(.main(column)))
             #expect(!editor.tabOrder.contains(.field(.main(column))))
         }

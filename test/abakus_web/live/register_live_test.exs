@@ -223,9 +223,13 @@ defmodule AbakusWeb.RegisterLiveTest do
              )
 
       assert has_element?(view, "#tx-#{c.salary.id}", "Gehalt Oktober")
-      assert has_element?(view, "#tx-#{c.salary.id} .app-in", "3.240,00")
+      assert has_element?(view, "#register-table th.app-amount", "Betrag")
+      refute has_element?(view, "#register-table th", "Ausgang")
+      refute has_element?(view, "#register-table th", "Eingang")
+      assert has_element?(view, "#tx-#{c.salary.id} td.app-amount.app-inflow", "+3.240,00")
       assert has_element?(view, "#tx-#{c.shopping.id}", "Lebensmittel")
-      assert has_element?(view, "#tx-#{c.shopping.id} .app-out", "87,43")
+      assert has_element?(view, "#tx-#{c.shopping.id} td.app-amount", "−87,43")
+      refute has_element?(view, "#tx-#{c.shopping.id} td.app-inflow")
       assert has_element?(view, "#tx-#{c.transfer.id} .app-payee .app-transfer svg")
       assert has_element?(view, "#tx-#{c.transfer.id} .app-payee", "🏦 Sparkonto")
       refute has_element?(view, "#register-table th", "Konto")
@@ -757,7 +761,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       id = c.proposal.id
 
       assert has_element?(view, "tr#proposal-#{id}.app-unapproved", "FRISCHMARKT FILIALE 12")
-      assert has_element?(view, "#proposal-#{id}", "87,43")
+      assert has_element?(view, "#proposal-#{id} td.app-amount", "−87,43")
 
       assert has_element?(
                view,

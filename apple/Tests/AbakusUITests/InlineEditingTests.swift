@@ -171,13 +171,13 @@ import Testing
     }
 
     @Test func theCalculatorWorksByKeyboard() async throws {
-        let host = try await editing(column: .outflow)
+        let host = try await editing(column: .amount)
         await host.type("*3")
         #expect(host.editor.calculator?.calculator.display == "3")
         #expect(host.typesIntoAField)
         await host.press(Self.enter.0, Self.enter.1)
         #expect(host.editor.calculator == nil)
-        #expect(host.editor.text(.main(.outflow)) == "30.00")
+        #expect(host.editor.text(.main(.amount)) == "30.00")
         #expect(host.model.editor != nil)
         await host.press(Self.enter.0, Self.enter.1)
         #expect(host.model.editor == nil)
@@ -186,7 +186,7 @@ import Testing
     @Test func tabMovesOnAndEscapeCancelsAnUnchangedEdit() async throws {
         let host = try await editing(column: .memo)
         await host.press(Self.tab.0, Self.tab.1)
-        #expect(host.editor.focusedField == .main(.outflow))
+        #expect(host.editor.focusedField == .main(.amount))
         #expect(host.typesIntoAField)
         await host.press(Self.escape.0, Self.escape.1)
         #expect(host.model.editor == nil)
