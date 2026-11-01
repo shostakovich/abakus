@@ -72,10 +72,6 @@ import Testing
         fixture.budget.accounts[index].lastReconciledAt = day("2013-09-27").noon()
         #expect(fixture.model().reconciledLabel == "Abgeglichen am 27/09/13")
         #expect(fixture.model(selection: .allAccounts).reconciledLabel == nil)
-        var edited: String?
-        model.onEditAccount = { edited = $0 }
-        model.editAccountClicked()
-        #expect(edited == fixture.giro)
     }
 
     @Test func searchPromptNamesTheAccount() {

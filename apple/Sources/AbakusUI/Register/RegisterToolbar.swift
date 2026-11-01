@@ -1,7 +1,7 @@
 import AbakusCore
 import SwiftUI
 
-/// The header's second row: Buchung (with Umbuchung beside it), the open notices, Ansicht and the search.
+/// The row under the window toolbar: Buchung (with Umbuchung beside it), the open notices, Ansicht and the search.
 struct RegisterToolbar: View {
     static let addTitle = "Buchung"
     static let viewTitle = "Ansicht"
@@ -18,7 +18,7 @@ struct RegisterToolbar: View {
         }
         .controlSize(.regular)
         .padding(.horizontal, RegisterHeaderMetrics.horizontalPadding)
-        .padding(.bottom, 8)
+        .padding(.vertical, 8)
     }
 
     @ViewBuilder

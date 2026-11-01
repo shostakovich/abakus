@@ -1,28 +1,24 @@
 import SwiftUI
 
-struct BudgetToolbar: ToolbarContent {
-    static let title = "Budget"
-
+/// The window toolbar beside the title "Budget": the month timeline.
+struct BudgetHeader: ToolbarContent {
     let model: BudgetViewModel
 
     var body: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            Text(verbatim: Self.title)
-                .font(ThemeFont.headline.font)
-                .padding(.horizontal, 6)
-                .accessibilityAddTraits(.isHeader)
-        }
-        .sharedBackgroundVisibility(.hidden)
         ToolbarItem(placement: .principal) {
-            BudgetTimeline(model: model)
+            BudgetTimeline(model: model, isCompact: model.panelSize.width < BudgetTimeline.compactBelowWidth)
+                .fixedSize()
         }
     }
 }
 
+/// Narrow, the months shrink to their initials so the timeline stays in the toolbar instead of its overflow menu.
 struct BudgetTimeline: View {
     static let monthHeight: CGFloat = 26
+    static let compactBelowWidth: CGFloat = 680
 
     let model: BudgetViewModel
+    let isCompact: Bool
 
     var body: some View {
         let cells = model.timelineCells()
@@ -61,10 +57,10 @@ struct BudgetTimeline: View {
         return Button {
             model.timelineMonthClicked(cell.month)
         } label: {
-            Text(verbatim: cell.label)
+            Text(verbatim: isCompact ? String(cell.label.prefix(1)) : cell.label)
                 .font(.system(size: 12, weight: cell.isCurrent ? .bold : (cell.isShown ? .semibold : .regular)))
                 .foregroundStyle(foreground)
-                .padding(.horizontal, 7)
+                .padding(.horizontal, isCompact ? 5 : 7)
                 .frame(height: Self.monthHeight)
                 .background {
                     if cell.isShown {

@@ -13,6 +13,26 @@ public struct BudgetView: View {
     }
 
     public var body: some View {
+        panel
+            .background(ThemeColor.windowBackground)
+            .navigationTitle("Budget")
+            .toolbar { BudgetHeader(model: model) }
+            .onChange(of: model.isHeaderExpanded) { _, expanded in
+                withAnimation(.motion(BudgetStyle.headerResize)) { model.headerProgress = expanded ? 1 : 0 }
+            }
+            .task(id: model.drag?.autoScrolls == true) {
+                while model.drag?.autoScrolls == true, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    model.autoScrollTick()
+                }
+            }
+            .onChange(of: model.panelFocusRequest) { if !model.isCoveredByModal { isKeySinkFocused = true } }
+            .onChange(of: model.editor == nil) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
+            .onChange(of: model.dialogs.isPresenting) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
+            .onAppear { isKeySinkFocused = true }
+    }
+
+    private var panel: some View {
         GeometryReader { proxy in
             let layout = model.layout(panelSize: proxy.size)
             ZStack(alignment: .topLeading) {
@@ -28,28 +48,11 @@ public struct BudgetView: View {
         } action: {
             model.panelSize = $0
         }
-        .background(ThemeColor.windowBackground)
-        .toolbar { BudgetToolbar(model: model) }
-        // The toolbar shows "Budget" instead of the window title, which keeps its width for the timeline.
-        .toolbar(removing: .title)
         .overlay {
             if model.editor != nil || model.quickBudget != nil || model.calculator != nil {
                 WindowEventMonitor { model.mouseDown(at: $0) }
             }
         }
-        .onChange(of: model.isHeaderExpanded) { _, expanded in
-            withAnimation(.motion(BudgetStyle.headerResize)) { model.headerProgress = expanded ? 1 : 0 }
-        }
-        .task(id: model.drag?.autoScrolls == true) {
-            while model.drag?.autoScrolls == true, !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(100))
-                model.autoScrollTick()
-            }
-        }
-        .onChange(of: model.panelFocusRequest) { if !model.isCoveredByModal { isKeySinkFocused = true } }
-        .onChange(of: model.editor == nil) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
-        .onChange(of: model.dialogs.isPresenting) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
-        .onAppear { isKeySinkFocused = true }
     }
 
     private var keySink: some View {

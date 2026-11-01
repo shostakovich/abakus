@@ -18,7 +18,6 @@ import Testing
     }
 
     @Test func textStylesFollowTheSystemSizes() {
-        #expect(ThemeFont.largeTitle.nsFont.pointSize == NSFont.preferredFont(forTextStyle: .largeTitle).pointSize)
         #expect(ThemeFont.body.nsFont.pointSize == NSFont.systemFontSize)
         #expect(ThemeFont.caption.nsFont.pointSize == NSFont.smallSystemFontSize)
     }

@@ -37,7 +37,6 @@ public struct BudgetMetaData: Hashable, Sendable {
 
 /// Live rows only; the store keeps what is deleted as tombstones.
 public struct Budget: Hashable, Sendable {
-    public static let untitledName = "Unbenanntes Budget"
 
     public var budgetName: String
     public var budgetMetaData: BudgetMetaData
@@ -86,8 +85,6 @@ public struct Budget: Hashable, Sendable {
         self.targetSnoozes = targetSnoozes
         self.successorIds = successorIds
     }
-
-    public var displayName: String { budgetName.isEmpty ? Self.untitledName : budgetName }
 
     public var readyToAssignCategoryId: String {
         categoryGroups.lazy.flatMap(\.categories).first(where: \.isInternal)?.id ?? ""

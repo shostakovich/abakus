@@ -5,46 +5,16 @@ enum RegisterHeaderMetrics {
     static let amountFont = ThemeFont(size: 17, weight: .semibold, hasTabularDigits: true)
 }
 
-/// The account name with its reconcile date and the pencil; Gebucht + Vorgemerkt = Arbeitssaldo and Abgleichen.
-struct RegisterHeader: View {
+/// The window toolbar beside the account name: Gebucht + Vorgemerkt = Arbeitssaldo and Abgleichen.
+struct RegisterHeader: ToolbarContent {
     let model: RegisterViewModel
 
-    var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(verbatim: model.accountName)
-                        .font(ThemeFont.largeTitle.font)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .accessibilityAddTraits(.isHeader)
-                    if model.account != nil { editAccountButton }
-                }
-                if let reconciled = model.reconciledLabel {
-                    Label(reconciled, systemImage: "lock")
-                        .font(ThemeFont.caption.font)
-                        .foregroundStyle(ThemeColor.secondaryText)
-                }
-            }
-            Spacer(minLength: 16)
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .automatic) {
             RegisterSummaryView(model: model, summary: model.summary)
-                .layoutPriority(1)
-            reconcileButton
         }
-        .padding(.horizontal, RegisterHeaderMetrics.horizontalPadding)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
-    }
-
-    private var editAccountButton: some View {
-        Button(action: model.editAccountClicked) {
-            Image(systemName: "pencil")
-                .foregroundStyle(ThemeColor.secondaryText)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.borderless)
-        .accessibilityLabel(EditAccountForm.title)
-        .help(EditAccountForm.title)
+        .sharedBackgroundVisibility(.hidden)
+        ToolbarItem(placement: .automatic) { reconcileButton }
     }
 
     private var reconcileButton: some View {
@@ -52,7 +22,7 @@ struct RegisterHeader: View {
         return Button(action: reconciliation.reconcileClicked) {
             Label("Abgleichen", systemImage: "lock")
         }
-        .buttonStyle(.borderedProminent)
+        .labelStyle(.iconOnly)
         .fixedSize()
         .disabled(!reconciliation.isReconcileEnabled)
         .overlay {
@@ -60,7 +30,7 @@ struct RegisterHeader: View {
                 Color.clear.contentShape(Rectangle()).onTapGesture(perform: reconciliation.reconcileDisabledClicked)
             }
         }
-        .toolTip(reconciliation.reconcileTooltip)
+        .toolTip(reconciliation.reconcileTooltip ?? "Abgleichen")
     }
 }
 

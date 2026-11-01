@@ -7,7 +7,7 @@ public enum RegisterMetrics {
     public static let headerHeight: CGFloat = 28
     public static let rowHeight: CGFloat = 28
     public static let columnMenuWidth: CGFloat = 20
-    /// Puts the first column's text in line with the account name and the toolbar above the grid.
+    /// Puts the first column's text in line with the row above the grid.
     public static let leadingInset: CGFloat = 10
     public static let statusBarHeight: CGFloat = 30
     public static let searchFieldWidth: CGFloat = 200

@@ -144,11 +144,6 @@ private func makeApp(defaults: (any SettingsStorage)? = nil, budget: Budget = De
         #expect(makeApp(budget: Budget(budgetName: "Empty")).navigation.selection == .allAccounts)
     }
 
-    @Test func windowTitleNamesAppAndBudget() {
-        #expect(makeApp().windowTitle == "Abakus - Demo-Budget")
-        #expect(makeApp(budget: Budget(budgetName: "")).windowTitle == "Abakus - Unbenanntes Budget")
-    }
-
     @Test func selectionTitleNamesTheAccount() {
         let app = makeApp()
         #expect(app.selectionTitle == "Girokonto")

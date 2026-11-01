@@ -12,5 +12,6 @@ public struct RegisterPlaceholder: View {
             .font(ThemeFont.headline.font)
             .foregroundStyle(ThemeColor.secondaryText)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle(title)
     }
 }

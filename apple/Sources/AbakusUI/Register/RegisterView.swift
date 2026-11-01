@@ -10,16 +10,15 @@ public struct RegisterView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            RegisterHeader(model: model)
             RegisterToolbar(model: model)
             GeometryReader { proxy in
                 RegisterSplit(model: model, size: proxy.size)
             }
         }
         .background(ThemeColor.windowBackground)
-        // The header holds the title and the toolbar's controls, so the window has no toolbar of its own.
-        .toolbarVisibility(.hidden, for: .windowToolbar)
-        .toolbar(removing: .title)
+        .navigationTitle(model.accountName)
+        .navigationSubtitle(model.reconciledLabel ?? "")
+        .toolbar { RegisterHeader(model: model) }
         .overlayPreferenceValue(IncomeCheckAnchorKey.self) { anchor in
             if let check = model.incomeCheck, let anchor {
                 IncomeCheckLayer(model: model, check: check, anchor: anchor)

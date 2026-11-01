@@ -29,7 +29,6 @@ public final class RegisterViewModel {
     public let store: any BudgetStoring
     public let navigation: NavigationState
     @ObservationIgnored public var onEditPayees: @MainActor (String?) -> Void = { _ in }
-    @ObservationIgnored public var onEditAccount: @MainActor (String) -> Void = { _ in }
     @ObservationIgnored public var autoFillSettings = AutoFillSettings()
     @ObservationIgnored private var scrollOffsets: [String: CGFloat] = [:]
     @ObservationIgnored private var cache: (inputs: DerivedInputs, value: Derived)?
@@ -110,11 +109,6 @@ public final class RegisterViewModel {
         guard let date = account?.lastReconciledOn else { return nil }
         let text = date.year == today().year ? formatter.dayMonth(date) : formatter.dateShort(date)
         return "Abgeglichen am \(text)"
-    }
-
-    public func editAccountClicked() {
-        guard let account, !clickedOutsideEditors() else { return }
-        onEditAccount(account.id)
     }
 
     var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
