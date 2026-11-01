@@ -202,7 +202,7 @@ public final class RegisterSearchController {
         } else {
             if filter == nil {
                 expandedSplitsBeforeSearch = register.expandedSplits
-                scrollBeforeSearch = register.savedScrollOffset().map { .offset($0) } ?? .bottom
+                scrollBeforeSearch = register.savedScrollOffset().map { .offset($0) } ?? .top
             }
             let query = RegisterSearchQuery(text, decimalSeparator: register.formatter.currencyLocale.decimalSeparator)
             filter = RegisterSearchFilter(label: text, query: query)
@@ -227,7 +227,7 @@ public final class RegisterSearchController {
         filter = nil
         if let splits = expandedSplitsBeforeSearch { register.expandedSplits = splits }
         expandedSplitsBeforeSearch = nil
-        register.requestScroll(scrollBeforeSearch ?? .bottom)
+        register.requestScroll(scrollBeforeSearch ?? .top)
         scrollBeforeSearch = nil
     }
 

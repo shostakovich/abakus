@@ -43,6 +43,21 @@ import Testing
         #expect(restored.search.text.isEmpty)
     }
 
+    @Test func theOldDefaultSortGivesWayToNewestFirst() throws {
+        let saved = { (version: String) in
+            try JSONDecoder().decode(
+                SavedRegisterViewState.self,
+                from: Data(
+                    """
+                    {"sortColumn": "date", "sortAscending": true, \(version)
+                     "isShowingReconciled": true, "columns": {}, "isSchedulerVisible": false}
+                    """.utf8))
+        }
+        #expect(try saved("").restoredSort == nil)
+        #expect(try saved(#""sortVersion": 2,"#).restoredSort == RegisterSortOrder(column: .date, ascending: true))
+        #expect(RegisterSortOrder.default == RegisterSortOrder(column: .date, ascending: false))
+    }
+
     @Test func reconciliationKeepsTheStateToReturnTo() throws {
         let storage = MemorySettingsStorage()
         let register = launch(storage).register
@@ -59,9 +74,10 @@ import Testing
         let sidebar = launch(storage, selection: .allAccounts).sidebar
         sidebar.setGroup(.budgetAccounts, expanded: false)
         sidebar.setGroup(.offBudgetAccounts, expanded: false)
-        #expect(launch(storage, selection: .allAccounts).sidebar.collapsedGroups == Set(SidebarGroup.allCases))
+        #expect(
+            launch(storage, selection: .allAccounts).sidebar.collapsedGroups == [.budgetAccounts, .offBudgetAccounts])
         var other = fixture.budget
         other.budgetName = "Other"
-        #expect(launch(storage, budget: other, selection: .allAccounts).sidebar.collapsedGroups == [.closedAccounts])
+        #expect(launch(storage, budget: other, selection: .allAccounts).sidebar.collapsedGroups.isEmpty)
     }
 }

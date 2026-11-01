@@ -57,8 +57,8 @@ struct AbakusApp: App {
                     minWidth: MainWindowMetrics.minimumContentSize.width,
                     minHeight: MainWindowMetrics.minimumContentSize.height
                 )
-                .navigationTitle(model.windowTitle)
                 .background(CloseButtonQuits())
+                .background(DocumentEdited(isEdited: model.store.hasUnsavedChanges))
                 .onAppear { appDelegate.shouldTerminate = { [model] in model.commitBeforeQuit() } }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     model.sync?.syncNow()
@@ -125,4 +125,15 @@ private struct CloseButtonQuits: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView { RoutingView() }
 
     func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+/// Unsaved changes show as the dot in the close button; the toolbar's title belongs to the screen.
+private struct DocumentEdited: NSViewRepresentable {
+    let isEdited: Bool
+
+    func makeNSView(context: Context) -> NSView { NSView() }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        nsView.window?.isDocumentEdited = isEdited
+    }
 }

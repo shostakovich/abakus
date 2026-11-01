@@ -109,7 +109,7 @@ private struct ReconciliationDifference: View {
                 .foregroundStyle(ThemeColor.secondaryText)
             Text(verbatim: footer.difference)
                 .font(ReconciliationFooterMetrics.differenceFont.font)
-                .foregroundStyle(footer.isBalanced ? ThemeColor.balanced : ThemeColor.negative)
+                .foregroundStyle(footer.isBalanced ? ThemeColor.positive : ThemeColor.negative)
         }
         .lineLimit(1)
         .accessibilityElement(children: .combine)

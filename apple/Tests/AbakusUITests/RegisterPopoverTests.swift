@@ -85,7 +85,7 @@ private struct Underlay<Opener: View>: View {
                     .registerAnchor(.schedulerTitle)
             }
             .overlayPreferenceValue(RegisterAnchorKey.self) { anchors in
-                RegisterOverlayLayer(model: model, anchors: anchors, toolbarAnchors: ToolbarAnchors())
+                RegisterOverlayLayer(model: model, anchors: anchors)
             }
         }
         if let popup = popup(id) { model.popup = popup }
@@ -93,14 +93,13 @@ private struct Underlay<Opener: View>: View {
     }
 
     @Test(arguments: [
-        RegisterPopup.approveReject(rowId: ""), .needsCategory(rowId: ""), .removeCategory(rowId: ""),
+        RegisterPopup.needsCategory(rowId: ""), .removeCategory(rowId: ""),
     ])
     func aStatusPopoverClosesAndTakesTheClick(_ kind: RegisterPopup) async {
         let (model, window) = register { id in
             switch kind {
             case .needsCategory: .needsCategory(rowId: id)
-            case .removeCategory: .removeCategory(rowId: id)
-            default: .approveReject(rowId: id)
+            default: .removeCategory(rowId: id)
             }
         }
         defer { window.close() }
@@ -216,6 +215,15 @@ private struct Underlay<Opener: View>: View {
         #expect(placement.arrowEdge == .top)
         #expect(placement.frame.minY == opener.maxY)
         #expect(placement.frame.minX + placement.arrowOffset == opener.midX)
+    }
+
+    @Test func trailingFlipsToTheLeadingSideAtTheRightEdge() {
+        let middle = CGRect(x: 300, y: 100, width: 20, height: 20)
+        #expect(PopoverPlacement.place(size, beside: middle, on: .trailing, in: container).frame.minX == middle.maxX)
+        let edge = CGRect(x: 760, y: 100, width: 20, height: 20)
+        let flipped = PopoverPlacement.place(size, beside: edge, on: .trailing, in: container)
+        #expect(flipped.arrowEdge == .trailing)
+        #expect(flipped.frame.maxX == edge.minX)
     }
 
     @Test func aboveFlipsBelowWithoutRoomAndBelowFlipsAbove() {

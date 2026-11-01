@@ -5,7 +5,7 @@ import Testing
 @testable import AbakusUI
 
 private let singleAccountColumns: [RegisterColumn] = [
-    .date, .payee, .errorState, .category, .memo, .outflow, .inflow, .cleared,
+    .date, .payee, .category, .memo, .outflow, .inflow, .cleared,
 ]
 
 private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAccountColumns)
@@ -17,21 +17,34 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
 }
 
 @Suite struct RegisterColumnLayoutTests {
-    @Test(arguments: [(800, 226.6, 30.8), (1000, 312.9, 58.3), (1400, 486.4, 111.2)])
-    func flexibleColumnsShareTheRoomLeftOfTheFixedOnes(gridWidth: CGFloat, payee: CGFloat, memo: CGFloat) {
+    @Test(arguments: [800, 1000, 1400] as [CGFloat])
+    func theMemoTakesTheRoomLeftOfTheOtherColumns(gridWidth: CGFloat) {
         let result = widths(gridWidth)
-        #expect(abs(result[.payee]! - payee) < 0.1)
-        #expect(abs(result[.category]! - payee) < 0.1)
-        #expect(abs(result[.memo]! - memo) < 0.1)
+        let amount = RegisterColumn.amountWidth
+        #expect(result[.payee] == 175)
+        #expect(result[.category] == 175)
+        #expect(abs(result[.memo]! - (gridWidth - 20 - 92 - 2 * amount - 32 - 350)) < 0.001)
+    }
+
+    @Test func aNarrowGridShrinksTheTextColumnsTogether() {
+        let result = widths(600)
+        #expect(result[.payee]! < 175)
+        #expect(abs(result[.payee]! - result[.category]!) < 0.001)
+        #expect(result[.memo] == RegisterColumn.memo.minWidth)
+        #expect(abs(result.values.reduce(0, +) - 580) < 0.001)
     }
 
     @Test func fixedColumnsUseTheirMinimumWidth() {
         let result = widths(1000)
         #expect(result[.date] == 92)
-        #expect(result[.errorState] == 32)
-        #expect(result[.outflow] == 70)
-        #expect(result[.inflow] == 70)
+        #expect(result[.outflow] == RegisterColumn.amountWidth)
+        #expect(result[.inflow] == RegisterColumn.amountWidth)
         #expect(result[.cleared] == 32)
+    }
+
+    @Test func amountColumnsFitTenThousandWithItsSign() {
+        let room = RegisterColumn.amountWidth - 2 * RegisterGridStyle.cellInset
+        #expect(RegisterGridStyle.rowBoldFont.width(of: "−10.000,00") <= room)
     }
 
     @Test func columnsFillTheDisplayWidthLeftOfTheColumnMenu() {
@@ -39,42 +52,37 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
         #expect(abs(total - 980) < 0.001)
     }
 
-    @Test func hiddenErrorColumnGivesItsWidthToTheFlexibleColumns() {
-        let result = widths(733, singleAccountColumns.filter { $0 != .errorState })
-        #expect(abs(result[.payee]! - 205.3) < 0.1)
-        #expect(abs(result[.memo]! - 38.4) < 0.1)
-    }
-
     @Test func framesAreContiguousOnWholePoints() {
         let layout = RegisterColumnLayout(
             gridWidth: 1000, visibleColumns: singleAccountColumns, settings: RegisterColumnSettings())
-        #expect(layout.frames.first?.x == 0)
+        #expect(layout.frames.first?.x == RegisterMetrics.leadingInset)
         for (left, right) in zip(layout.frames, layout.frames.dropFirst()) {
             #expect(left.maxX == right.x)
             #expect(right.x == right.x.rounded())
         }
         #expect(layout.frames.last?.maxX == 980)
         #expect(layout.displayWidth == 980)
-        #expect(layout.column(atX: 10) == .date)
-        #expect(layout.column(atX: 100) == .payee)
+        #expect(layout.column(atX: 20) == .date)
+        #expect(layout.column(atX: 110) == .payee)
         #expect(layout.column(atX: 990) == nil)
     }
 
-    @Test func savedWidthsScaleTheFlexibleColumns() {
+    @Test func savedWidthsCapTheOtherTextColumns() {
         var settings = RegisterColumnSettings()
         settings[.category]?.width = 87.5
         let values = RegisterColumnLayout.widths(
             gridWidth: 1000, visibleColumns: singleAccountColumns, settings: settings)
         let result = Dictionary(uniqueKeysWithValues: zip(singleAccountColumns, values))
-        #expect(result[.payee]! > 2 * result[.category]! - 1)
+        #expect(result[.category] == 87.5)
+        #expect(result[.payee] == 175)
     }
 
-    @Test func allAccountsNeverGivesTheMemoANegativeWidth() {
+    @Test func allAccountsKeepsTheMemosMinimum() {
         let columns: [RegisterColumn] = [
-            .account, .date, .payee, .errorState, .category, .memo, .outflow, .inflow, .cleared,
+            .account, .date, .payee, .category, .memo, .outflow, .inflow, .cleared,
         ]
         let result = widths(733, columns)
-        #expect(result[.memo]! >= 0)
+        #expect(result[.memo] == RegisterColumn.memo.minWidth)
         #expect(abs(result.values.reduce(0, +) - 713) < 0.001)
         #expect(result[.account]! >= RegisterColumn.account.minWidth)
     }
@@ -88,7 +96,7 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
     @Test func onlyTheRunningBalanceDoesNotSort() {
         #expect(RegisterColumn.allCases.filter { !$0.isSortable } == [.runningBalance])
         #expect(RegisterColumn.date.header == .text("Datum"))
-        #expect(RegisterColumn.cleared.header == .symbol("checkmark.circle", label: "Gebucht"))
+        #expect(RegisterColumn.cleared.header == .symbol("checkmark.circle", label: "Status"))
     }
 }
 
@@ -101,7 +109,7 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
             contentWidths: content)
         for (column, width) in content { #expect(layout.frame(of: column)?.width == width) }
         let text = [RegisterColumn.payee, .category, .memo].compactMap { layout.frame(of: $0)?.width }
-        let rest: CGFloat = 980 - 92 - 130 - 70 - 70
+        let rest: CGFloat = 980 - RegisterMetrics.leadingInset - 92 - 130 - 70 - 70
         #expect(abs(text.reduce(0, +) - rest) <= 1)
     }
 

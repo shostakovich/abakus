@@ -85,7 +85,7 @@ struct UIHarness {
             }
         case .renamePayee:
             try selectAccount("Girokonto")
-            register.rowClicked(try require(register.rows.last { $0.payee == "REWE" }), column: nil, modifiers: [])
+            register.rowClicked(try require(register.rows.first { $0.payee == "REWE" }), column: nil, modifiers: [])
             register.performMenuAction(.renamePayee)
         case .payeeSettings:
             try selectAccount("Girokonto")

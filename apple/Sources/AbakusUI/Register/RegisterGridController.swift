@@ -21,12 +21,11 @@ protocol RegisterGridOwner: AnyObject {
     /// The main grid's own parts: its cell actions (the layout decides which cells draw), popups, glow, focus.
     var mainGrid: RegisterViewModel? { get }
     var gridIds: [String] { get }
-    var rows: [RegisterRow] { get }
+    var gridRows: [RegisterRow] { get }
     var visibleColumns: [RegisterColumn] { get }
     var expandedSplits: Set<String> { get set }
     var sortOrder: RegisterSortOrder { get set }
     var columnTab: RegisterAnchorID { get }
-    var startsAtTop: Bool { get }
     var snapsToRows: Bool { get }
     /// The secondary-click menu of a row other than the edited one, nil when an edit or a modal swallows the click.
     func contextMenu(for row: RegisterRow) -> [RegisterMenuItem]?
@@ -162,21 +161,35 @@ final class RegisterGridController {
         return editor.rowHeight - RegisterMetrics.rowHeight
     }
 
+    /// The add editor's height above the rows, 0 while none is open.
+    var addRowHeight: CGFloat { isAdding ? editor?.rowHeight ?? 0 : 0 }
+
     /// The list's secondary-click menu at `y` in the viewport: nil hands the click on (to the edited row's fields,
-    /// or below the rows), an empty menu takes it.
+    /// or below the rows), an empty menu takes it, as on a month heading.
     func contextMenu(atY y: CGFloat, scrollOffset: CGFloat) -> [RegisterMenuItem]? {
-        guard let owner,
-            let row = Self.row(
-                atY: y, in: owner.rows, scrollOffset: scrollOffset, editingId: editingId,
-                editRowExtraHeight: editRowExtraHeight),
-            row.transactionId != editingId
-        else { return nil }
+        guard let owner, let row = row(atY: y, scrollOffset: scrollOffset), row.transactionId != editingId else {
+            return nil
+        }
+        if row.isMonthHeading { return [] }
         return owner.contextMenu(for: row) ?? []
     }
 
+    /// The row at `y` in the viewport, nil on the add editor or below the rows.
+    func row(atY y: CGFloat, scrollOffset: CGFloat) -> RegisterRow? {
+        Self.row(
+            atY: y, in: owner?.gridRows ?? [], scrollOffset: scrollOffset - addRowHeight, editingId: editingId,
+            editRowExtraHeight: editRowExtraHeight)
+    }
+
+    /// A month heading pinned at the top covers the rows scrolled under it.
     static func row(
         atY y: CGFloat, in rows: [RegisterRow], scrollOffset: CGFloat, editingId: String?, editRowExtraHeight: CGFloat
     ) -> RegisterRow? {
+        if y >= 0 && y < RegisterMetrics.rowHeight && scrollOffset > 0,
+            let pinned = pinnedHeading(in: rows, scrollOffset: scrollOffset)
+        {
+            return pinned
+        }
         var top = -scrollOffset
         for row in rows {
             let height = RegisterMetrics.rowHeight + (row.id == editingId ? editRowExtraHeight : 0)
@@ -184,6 +197,15 @@ final class RegisterGridController {
             top += height
         }
         return nil
+    }
+
+    private static func pinnedHeading(in rows: [RegisterRow], scrollOffset: CGFloat) -> RegisterRow? {
+        var heading: RegisterRow?
+        for (index, row) in rows.enumerated() {
+            if CGFloat(index) * RegisterMetrics.rowHeight > scrollOffset { break }
+            if row.isMonthHeading { heading = row }
+        }
+        return heading
     }
 
     func clickedOutsideEditor() -> Bool {
@@ -234,7 +256,7 @@ final class RegisterGridController {
         } else {
             editor.setFocus(.field(.main(.date)), commitCurrent: false)
         }
-        requestScroll(.bottom)
+        requestScroll(.top)
     }
 
     func cancelEditing() {
@@ -265,13 +287,12 @@ final class RegisterGridController {
         if case .saved(let id, let addAnother, _, _) = outcome {
             updateSelection { $0.select(id) }
             let saved = owner?.editorRecord(id)?.transaction
-            if editor.mode == .new {
-                lastUsedDate = saved?.date
-                requestScroll(.bottom)
+            if editor.mode == .new { lastUsedDate = saved?.date }
+            if addAnother, let saved {
+                beginNew(accountId: saved.accountId, date: saved.date)
             } else {
                 requestScroll(.row(id))
             }
-            if addAnother, let saved { beginNew(accountId: saved.accountId, date: saved.date) }
         }
         owner?.followUpEdit(outcome)
     }
@@ -286,10 +307,20 @@ final class RegisterGridController {
         scrollRequest = RegisterScrollRequest(target: target, token: (storedScrollRequest?.request.token ?? 0) + 1)
     }
 
-    /// The offset that shows `target`, nil while its row is in view; without `current` the list starts at its edge.
-    /// An edit row taller than the viewport fills it and keeps its focused part in view.
+    /// The offset that shows `target`, nil while its row is in view; without `current` the list starts at the top.
+    /// An edit row taller than the viewport fills it and keeps its focused part in view; a row revealed upwards stays
+    /// clear of the month heading pinned above it. An open add editor takes the place of every target.
     func scrollOffset(for target: RegisterScrollRequest.Target, viewport: CGFloat, current: CGFloat?) -> CGFloat? {
-        let rows = owner?.rows ?? []
+        if let editor, editor.mode == .new {
+            let current = current ?? 0
+            let offset =
+                editor.rowHeight > viewport
+                ? min(
+                    max(0, listContentHeight(viewport: viewport) - viewport),
+                    Self.tallEditorOffset(editor, top: 0, pinned: 0, viewport: viewport, current: current)) : 0
+            return offset == current ? nil : offset
+        }
+        let rows = owner?.gridRows ?? []
         let extra = editRowExtraHeight
         let maxOffset = max(0, listContentHeight(viewport: viewport) - viewport)
         switch target {
@@ -301,23 +332,32 @@ final class RegisterGridController {
             return min(maxOffset, offset)
         case .row(let id):
             guard let index = rows.firstIndex(where: { $0.id == id }) else { return nil }
-            let current = current ?? (owner?.startsAtTop == true ? 0 : maxOffset)
+            let current = current ?? 0
             let top = CGFloat(index) * RegisterMetrics.rowHeight
+            let pinned = rows.contains(where: \.isMonthHeading) ? RegisterMetrics.rowHeight : 0
             if id == editingId, let editor, editor.rowHeight > viewport {
-                var offset = min(max(current, top), top + editor.rowHeight - viewport)
-                if let focused = editor.focusedRange {
-                    offset = min(max(offset, top + focused.upperBound - viewport), top + focused.lowerBound)
-                }
+                let offset = Self.tallEditorOffset(
+                    editor, top: top, pinned: pinned, viewport: viewport, current: current)
                 let revealed = revealOffset(offset, from: current, maxOffset: maxOffset)
                 return revealed == current ? nil : revealed
             }
             let height = RegisterMetrics.rowHeight + (id == editingId ? extra : 0)
-            if top < current { return top }
+            if top - pinned < current { return max(0, top - pinned) }
             if top + height > current + viewport {
                 return revealOffset(top + height - viewport, from: current, maxOffset: maxOffset)
             }
             return nil
         }
+    }
+
+    private static func tallEditorOffset(
+        _ editor: TransactionEditor, top: CGFloat, pinned: CGFloat, viewport: CGFloat, current: CGFloat
+    ) -> CGFloat {
+        var offset = min(max(current, top - pinned), top + editor.rowHeight - viewport)
+        if let focused = editor.focusedRange {
+            offset = min(max(offset, top + focused.upperBound - viewport), top + focused.lowerBound)
+        }
+        return offset
     }
 
     /// Row snapping rounds to the nearest row, which could cut the revealed row; rounding away from it keeps it whole.
@@ -329,12 +369,13 @@ final class RegisterGridController {
 
     func listContentHeight(viewport: CGFloat) -> CGFloat {
         registerListContentHeight(
-            rowCount: owner?.rows.count ?? 0, viewportHeight: viewport, extraHeight: editRowExtraHeight)
+            rowCount: owner?.gridRows.count ?? 0, viewportHeight: viewport, extraHeight: editRowExtraHeight,
+            leadHeight: addRowHeight)
     }
 
-    /// A list that fits keeps the edge its grid starts at.
+    /// A list that fits keeps its top.
     func keepsEnd(_ list: ScrollMetrics) -> Bool {
-        list.isAtEnd && (list.canScroll || owner?.startsAtTop != true)
+        list.isAtEnd && list.canScroll
     }
 
     func scrollMetrics(at offset: CGFloat, viewport: CGFloat) -> ScrollMetrics {
@@ -342,7 +383,8 @@ final class RegisterGridController {
         let maxOffset = max(0, content - viewport)
         let offset =
             owner?.snapsToRows == true
-            ? Self.snappedOffset(offset, maxOffset: maxOffset) : min(maxOffset, max(0, offset))
+            ? Self.snappedOffset(offset, maxOffset: maxOffset, origin: addRowHeight)
+            : min(maxOffset, max(0, offset))
         return ScrollMetrics(offset: offset, contentHeight: content, viewportHeight: viewport)
     }
 
@@ -366,16 +408,12 @@ final class RegisterGridController {
         return scrollMetrics(at: offset, viewport: viewport)
     }
 
-    /// Within a row of the end lands on the end: a list resizing at its end passes through such offsets.
-    nonisolated static func snappedOffset(_ offset: CGFloat, maxOffset: CGFloat) -> CGFloat {
+    /// Within a row of the end lands on the end: a list resizing at its end passes through such offsets. The rows
+    /// start at `origin`, below the add editor, which scrolls freely.
+    nonisolated static func snappedOffset(_ offset: CGFloat, maxOffset: CGFloat, origin: CGFloat = 0) -> CGFloat {
         let row = RegisterMetrics.rowHeight
         guard offset <= maxOffset - row else { return maxOffset }
-        return min(maxOffset, max(0, (offset / row).rounded() * row))
-    }
-
-    func addRowPlacement(gridHeight: CGFloat) -> RegisterAddRowPlacement {
-        RegisterAddRowPlacement.compute(
-            gridHeight: gridHeight, rowCount: owner?.rows.count ?? 0, extraHeight: editRowExtraHeight,
-            editorHeight: isAdding ? editor?.rowHeight ?? 0 : 0)
+        guard offset > origin else { return max(0, offset) }
+        return min(maxOffset, origin + ((offset - origin) / row).rounded() * row)
     }
 }

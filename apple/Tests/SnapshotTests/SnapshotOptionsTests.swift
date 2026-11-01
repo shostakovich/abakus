@@ -19,7 +19,7 @@ import Testing
         let options = try SnapshotOptions(arguments: ["out.png", "--scale", "1", "--select", "2", "--height", "681"])
         #expect(options.output.lastPathComponent == "out.png")
         #expect(options.scale == 1)
-        #expect(options.selectLast == 2)
+        #expect(options.selectNewest == 2)
         #expect(options.height == 681)
     }
 
@@ -83,5 +83,27 @@ import Testing
         }
         #expect(throws: SnapshotError.self) { try SnapshotOptions(arguments: ["out.png", "--native-menus"]) }
         #expect(try SnapshotOptions(arguments: ["out.png", "--ops", "keys", "--native-menus"]).nativeMenus)
+    }
+}
+
+@Suite struct BlankCaptureTests {
+    @Test func aUniformImageIsBlank() throws {
+        #expect(isBlank(try image { _ in }))
+    }
+
+    @Test func anImageWithContentIsNot() throws {
+        #expect(!isBlank(try image { $0.fill(CGRect(x: 40, y: 40, width: 20, height: 20)) }))
+    }
+
+    private func image(_ draw: (CGContext) -> Void) throws -> CGImage {
+        let context = try #require(
+            CGContext(
+                data: nil, width: 100, height: 100, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        context.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        draw(context)
+        return try #require(context.makeImage())
     }
 }

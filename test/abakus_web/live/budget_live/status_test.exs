@@ -12,35 +12,57 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
   defp row(attrs), do: struct!(CategoryMonth, Enum.into(attrs, %{month: @oct}))
 
   describe "available/2" do
-    test "red when overspent, amber with a clock while underfunded, a check for a funded target" do
+    test "red when overspent, amber with a ring while underfunded, a check for a funded target" do
       assert Status.available(row(available: -100, underfunded: 50, target: @monthly), true) ==
-               %{tone: :error, icon: nil, label: "überzogen"}
+               %{tone: :error, icon: nil, ring: nil, label: "überzogen"}
 
-      assert Status.available(row(available: 100, underfunded: 50, target: @monthly), true) ==
-               %{tone: :warning, icon: "clock", label: "unterfinanziert"}
+      assert Status.available(
+               row(available: 100, needed: 200, underfunded: 50, target: @monthly),
+               true
+             ) ==
+               %{
+                 tone: :warning,
+                 icon: nil,
+                 ring: 75,
+                 label: "unterfinanziert, 75\u00A0% finanziert"
+               }
 
       assert Status.available(row(available: 100, target: @monthly), true) ==
-               %{tone: nil, icon: "circle-check", label: "Ziel erreicht"}
+               %{tone: nil, icon: "circle-check", ring: nil, label: "Ziel erreicht"}
+    end
+
+    test "a refill target short of its amount after money was taken out has no share, so no ring" do
+      assert Status.available(
+               row(available: 4_000, needed: 0, underfunded: 1_000, target: @monthly),
+               true
+             ) ==
+               %{tone: :warning, icon: nil, ring: nil, label: "unterfinanziert"}
     end
 
     test "a snoozed target pauses, neither underfunded nor funded" do
       assert Status.available(
-               row(available: 100, underfunded: 50, snoozed: true, target: @monthly),
+               row(available: 100, needed: 200, underfunded: 50, snoozed: true, target: @monthly),
                true
              ) ==
-               %{tone: nil, icon: "pause", label: "Ziel pausiert"}
+               %{tone: nil, icon: "pause", ring: nil, label: "Ziel pausiert"}
 
       assert Status.available(row(snoozed: true, target: @monthly), true).tone == :muted
     end
 
     test "plain without a target, muted at zero" do
-      assert Status.available(row(available: 100), true) == %{tone: nil, icon: nil, label: nil}
-      assert Status.available(row(available: 0), true) == %{tone: :muted, icon: nil, label: nil}
+      assert Status.available(row(available: 100), true) ==
+               %{tone: nil, icon: nil, ring: nil, label: nil}
+
+      assert Status.available(row(available: 0), true) ==
+               %{tone: :muted, icon: nil, ring: nil, label: nil}
     end
 
     test "an underfunded target stays plain in a month not being budgeted; the other states show" do
-      assert Status.available(row(available: 100, underfunded: 50, target: @monthly), false) ==
-               %{tone: nil, icon: nil, label: nil}
+      assert Status.available(
+               row(available: 100, needed: 200, underfunded: 50, target: @monthly),
+               false
+             ) ==
+               %{tone: nil, icon: nil, ring: nil, label: nil}
 
       assert Status.available(row(available: -100, underfunded: 50, target: @monthly), false).tone ==
                :error
@@ -49,6 +71,31 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
 
       assert Status.available(row(underfunded: 50, snoozed: true, target: @monthly), false).icon ==
                "pause"
+    end
+  end
+
+  describe "funded_share/1" do
+    test "a monthly target: what of the month's need is assigned, in whole percent rounded down" do
+      assert Status.funded_share(row(target: @monthly, needed: 4_000, underfunded: 1_500)) == 62
+      assert Status.funded_share(row(target: @monthly, needed: 4_000, underfunded: 4_000)) == 0
+      assert Status.funded_share(row(target: @monthly, needed: 4_000, underfunded: 1)) == 99
+    end
+
+    test "a target by a date: what of this month's share of the amount is assigned" do
+      by_date = %{cadence: :by_date, amount: 20_000}
+
+      assert Status.funded_share(
+               row(target: by_date, needed: 13_334, underfunded: 5_334, saved: 8_000)
+             ) == 59
+    end
+
+    test "nothing while the target is snoozed or asks nothing more" do
+      refute Status.funded_share(
+               row(target: @monthly, needed: 4_000, underfunded: 1_500, snoozed: true)
+             )
+
+      refute Status.funded_share(row(target: @monthly, needed: 4_000, underfunded: 0))
+      refute Status.funded_share(row(needed: 0, underfunded: 0))
     end
   end
 

@@ -62,6 +62,15 @@ defmodule AbakusWeb.RegisterLive.Rows do
   def with_proposals(transactions, proposals),
     do: Enum.sort_by(transactions ++ proposals, &{Date.to_gregorian_days(&1.date), &1.id}, :desc)
 
+  @doc "The transactions, newest first, with `{:month, first_day}` before each month's first one."
+  def with_months(transactions) do
+    transactions
+    |> Enum.chunk_by(&Date.beginning_of_month(&1.date))
+    |> Enum.flat_map(fn [first | _] = month ->
+      [{:month, Date.beginning_of_month(first.date)} | month]
+    end)
+  end
+
   @doc "The balance after each transaction by id, going back from the working balance; newest first."
   def running(transactions, working) do
     {after_each, _before} =

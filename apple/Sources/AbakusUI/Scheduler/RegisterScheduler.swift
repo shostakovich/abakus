@@ -76,9 +76,12 @@ public final class RegisterScheduler {
         return columns.filter { !$0.canDisable || settings[$0]?.visible == true }
     }
 
+    /// The next one due first, unlike the register's newest first.
+    nonisolated public static let defaultSort = RegisterSortOrder(column: .date, ascending: true)
+
     nonisolated public static var defaultColumnSettings: RegisterColumnSettings {
         var settings = RegisterColumnSettings()
-        for column in [RegisterColumn.errorState, .runningBalance, .cleared] { settings[column] = nil }
+        for column in [RegisterColumn.runningBalance, .cleared] { settings[column] = nil }
         settings[.memo]?.visible = true
         settings[.frequency] = RegisterColumnSetting(visible: true, width: 70)
         return settings
@@ -140,7 +143,7 @@ public final class RegisterScheduler {
         let builder = RegisterRowBuilder(lookup: BudgetLookup(store.budget))
         return builder.rows(
             for: scheduledTransactions, expandedSplits: expandedSplits, editingId: grid.editingId,
-            row: builder.row(for:isExpanded:), subRows: builder.subRows(for:parentIndex:))
+            row: builder.row(for:isExpanded:), subRows: builder.subRows(for:))
     }
 
     public var selection: RegisterSelection { grid.selection }
@@ -274,8 +277,8 @@ public final class RegisterScheduler {
 extension RegisterScheduler: RegisterGridOwner {
     var mainGrid: RegisterViewModel? { nil }
     var gridIds: [String] { scheduledIds }
+    var gridRows: [RegisterRow] { rows }
     var columnTab: RegisterAnchorID { .schedulerColumnTab }
-    var startsAtTop: Bool { true }
     /// Snapped, the reveal of its edit row would stop a point short of the row's end.
     var snapsToRows: Bool { false }
 

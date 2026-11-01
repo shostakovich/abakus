@@ -340,7 +340,7 @@ Accepted, 2026-10-31 (#103).
 
 ## 0028. The Apple apps look native
 
-Accepted, 2026-10-25.
+Accepted, 2026-10-25; superseded by 0030, 2026-11-01.
 
 - **Context:** A look of its own would need its own Dark Mode, accessibility and iPad/iPhone variants.
 - **Decision:** The Apple apps use system controls, colours and fonts (macOS 26 SwiftUI); the web keeps Setzkasten.
@@ -355,3 +355,14 @@ Accepted, 2026-10-29.
 - **Decision:** Abakus's data model, rules and German terms win; an app may only be richer in the UI.
 - **Consequences:** What Abakus cannot express does not exist in an app until Abakus gains it, and every model change
   touches the server and the apps (0023).
+
+## 0030. The Apple apps look native in Abakus's colours
+
+Accepted, 2026-11-01 (#114). Replaces 0028.
+
+- **Context:** A look of its own would need its own Dark Mode, accessibility and iPad/iPhone variants; the system's
+  colours and a structure of its own made the Mac look like another app than Abakus.
+- **Decision:** The Apple apps use system controls, fonts and density (macOS 26 SwiftUI) with Abakus's colours from
+  the Setzkasten tokens, light and dark, and the web's structure and terms.
+- **Consequences:** The apps feel like Mac and iOS apps and look like Abakus; a Setzkasten colour change is copied into
+  `ThemeColor` by hand. Text, separators and backgrounds keep the system's styles, which follow Increase Contrast.

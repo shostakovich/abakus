@@ -97,7 +97,7 @@ extension SearchSuggestionIcon {
             StatusSymbol(name: "calendar", color: ThemeColor.secondaryText, label: "Datum")
         case .outflow: StatusSymbol(name: "minus.circle", color: ThemeColor.secondaryText, label: "Ausgang")
         case .inflow: StatusSymbol(name: "plus.circle", color: ThemeColor.secondaryText, label: "Eingang")
-        case .cleared(let status): status.symbol(reconciling: false)
+        case .cleared(let status): status.symbol
         }
     }
 }

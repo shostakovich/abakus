@@ -3,28 +3,17 @@ import Testing
 
 @testable import AbakusUI
 
-@Suite struct RegisterAddRowPlacementTests {
-    @Test func floatsDirectlyUnderTheLastRow() {
-        let placement = RegisterAddRowPlacement.compute(gridHeight: 400, rowCount: 1)
-        #expect(placement == .floating(y: 56))
-        #expect(placement.listHeight(gridHeight: 400) == 372)
-    }
-
-    @Test func withoutAnAddEditorTheListTakesTheWholeGrid() {
-        #expect(RegisterAddRowPlacement.compute(gridHeight: 400, rowCount: 15).listHeight(gridHeight: 400) == 372)
-    }
-
-    @Test func theAddEditorDocksWhenTheRowsFillTheGrid() {
-        let placement = RegisterAddRowPlacement.compute(gridHeight: 400, rowCount: 15, editorHeight: 55)
-        #expect(placement == .docked(y: 345))
-        #expect(placement.isDocked)
-        #expect(placement.listHeight(gridHeight: 400) == 317)
-    }
-
+@Suite struct RegisterListContentTests {
     @Test func listContentKeepsRowsAlignedAtTheEnd() {
         #expect(registerListContentHeight(rowCount: 3, viewportHeight: 230) == 230)
         #expect(registerListContentHeight(rowCount: 10, viewportHeight: 230) == 286)
         #expect(registerListContentHeight(rowCount: 30, viewportHeight: 230) == 846)
+    }
+
+    @Test func theAddEditorAboveTheRowsAddsItsHeight() {
+        #expect(registerListContentHeight(rowCount: 3, viewportHeight: 230, leadHeight: 55) == 230)
+        #expect(registerListContentHeight(rowCount: 7, viewportHeight: 230, leadHeight: 55) == 251)
+        #expect(registerListContentHeight(rowCount: 10, viewportHeight: 230, leadHeight: 55) == 341)
     }
 }
 

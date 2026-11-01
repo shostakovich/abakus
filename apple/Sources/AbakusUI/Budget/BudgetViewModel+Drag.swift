@@ -51,7 +51,7 @@ extension BudgetViewModel {
             }
             current.isActive = true
             commitEdit()
-            hover = nil
+            hoveredRowId = nil
         }
         drag = current
         dragTargetMayHaveChanged()

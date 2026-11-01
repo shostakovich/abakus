@@ -11,7 +11,6 @@ import struct SwiftUI.KeyEquivalent
 @MainActor
 struct OpsHarness {
     enum State: String, CaseIterable {
-        case actionMenu = "action-menu"
         case contextMenu = "context-menu"
         case searchSuggestions = "search-suggestions"
         case searchActive = "search-active"
@@ -19,7 +18,6 @@ struct OpsHarness {
         case notifiers
         case columnMenu = "column-menu"
         case runningBalance = "running-balance"
-        case approvePopup = "approve-popup"
         case needsCategory = "needs-category"
         case reconcileHelp = "reconcile-help"
         case deleteDialog = "delete-dialog"
@@ -38,9 +36,6 @@ struct OpsHarness {
     func run(_ state: State) throws {
         edit.settle()
         switch state {
-        case .actionMenu:
-            selectLast(3)
-            register.editTransactionsClicked()
         case .contextMenu:
             try mouse([.rightMouseDown], on: .list, yFromTop: 420)
             print("right click -> selected \(register.selectedTransactionIds.count), menu \(menus?.shown != nil)")
@@ -64,24 +59,19 @@ struct OpsHarness {
         case .runningBalance:
             register.performMenuAction(.toggleColumn(.runningBalance))
             edit.settle()
-            let row = try lastRow { budget.payeeName(of: $0) == "Aral" }
+            let row = try newestRow { budget.payeeName(of: $0) == "Aral" }
             register.runningBalanceHovered(row, inside: true)
-        case .approvePopup:
-            try addUnapproved()
-            edit.settle()
-            let row = try lastRow { $0.needsApproval }
-            register.errorIconClicked(row)
         case .needsCategory:
-            register.errorIconClicked(try lastRow { budget.errorState(of: $0).level == .needsCategory })
+            register.errorIconClicked(try newestRow { budget.errorState(of: $0).level == .needsCategory })
         case .reconcileHelp:
             register.reconciliation.reconcileDisabledClicked()
             if !register.reconciliation.showsReconcileHelp { throw SnapshotError.render }
         case .deleteDialog:
-            let transfer = try lastRow { budget.isTransfer($0) }
+            let transfer = try newestRow { budget.isTransfer($0) }
             register.rowClicked(transfer, column: nil, modifiers: .command)
             register.deleteTransactions(register.selectedTransactionIds)
         case .makeRecurring:
-            selectLast(1)
+            selectNewest(1)
             register.performMenuAction(.makeRecurring)
         case .keys:
             try probeKeys()
@@ -90,7 +80,7 @@ struct OpsHarness {
     }
 
     private func probeKeys() throws {
-        let row = try lastRow { budget.payeeName(of: $0) == "Telekom" }
+        let row = try newestRow { budget.payeeName(of: $0) == "Telekom" }
         register.rowClicked(row, column: .payee, modifiers: [])
         edit.settle()
         let id = row.transactionId
@@ -220,7 +210,7 @@ struct OpsHarness {
 
     /// Below the add bar under the main list's last row.
     private func yBelowTheLastRow() throws -> CGFloat {
-        let y = CGFloat(register.rows.count + 1) * RegisterMetrics.rowHeight + RegisterMetrics.rowHeight / 2
+        let y = CGFloat(register.gridRows.count + 1) * RegisterMetrics.rowHeight + RegisterMetrics.rowHeight / 2
         guard y < (try frame(of: .list)).height else { throw SnapshotError.render }
         return y
     }
@@ -296,15 +286,15 @@ struct OpsHarness {
         }
     }
 
-    private func selectLast(_ count: Int) {
-        for id in register.transactionIds.suffix(count) {
+    private func selectNewest(_ count: Int) {
+        for id in register.transactionIds.prefix(count) {
             guard let row = register.rows.first(where: { $0.id == id }) else { continue }
             register.rowClicked(row, column: nil, modifiers: .command)
         }
     }
 
-    private func lastRow(where predicate: (Transaction) -> Bool) throws -> RegisterRow {
-        guard let transaction = register.transactions.last(where: predicate),
+    private func newestRow(where predicate: (Transaction) -> Bool) throws -> RegisterRow {
+        guard let transaction = register.transactions.first(where: predicate),
             let row = register.rows.first(where: { $0.id == transaction.id })
         else { throw SnapshotError.render }
         return row
@@ -331,7 +321,7 @@ struct OpsHarness {
                     accountId: account.id, date: .today(), payeeId: EntityID.transferPayee(accountId: savings.id),
                     categoryId: groceries.id, amount: -25)))
         edit.settle()
-        let victim = try lastRow { budget.payeeName(of: $0) == "Telekom" }
+        let victim = try newestRow { budget.payeeName(of: $0) == "Telekom" }
         register.rowClicked(victim, column: nil, modifiers: .command)
         register.deleteTransactions([victim.transactionId])
     }

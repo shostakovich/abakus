@@ -35,6 +35,7 @@ public struct MainWindowContent: View {
         }
         // The narrow mode replaces hiding the sidebar.
         .onChange(of: columnVisibility) { columnVisibility = .all }
+        .tint(ThemeColor.accent)
         .overlayPreferenceValue(SidebarRowAnchorKey.self) { anchors in
             AccountEditLayer(controller: model.accounts, anchors: anchors)
         }

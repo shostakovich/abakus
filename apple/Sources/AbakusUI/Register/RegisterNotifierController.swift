@@ -22,38 +22,30 @@ public final class RegisterNotifierController {
             message: message, restore: restore, reselect: reselect, budgetAfter: register.store.budget)
     }
 
-    /// Only the first visible notifier gets its full text and link; the undo notifier always shows its message.
+    /// The open notices as chips, each a click away from the search that lists them; the undo notifier last.
     public var list: [RegisterNotifier] {
         let counts = register.derived.notifierCounts
         var notifiers: [RegisterNotifier] = []
-        func add(_ kind: RegisterNotifier.Kind, full: String, short: String) {
-            let isFirst = notifiers.isEmpty
-            notifiers.append(RegisterNotifier(kind: kind, text: isFirst ? full : short, link: isFirst ? "Zeigen" : nil))
+        func add(_ kind: RegisterNotifier.Kind, _ count: Int, one: String, many: String, tooltip: String) {
+            guard count > 0 else { return }
+            notifiers.append(
+                RegisterNotifier(kind: kind, text: count == 1 ? "1 \(one)" : "\(count) \(many)", tooltip: tooltip))
         }
         let errors = counts.errors
-        if errors > 0 {
-            let text =
-                errors == 1
+        add(
+            .error, errors, one: "Umbuchung mit Kategorie", many: "Umbuchungen mit Kategorie",
+            tooltip: errors == 1
                 ? "1 Umbuchung zwischen Budgetkonten hat eine Kategorie"
-                : "\(errors) Umbuchungen zwischen Budgetkonten haben eine Kategorie"
-            add(.error, full: text, short: "")
-        }
+                : "\(errors) Umbuchungen zwischen Budgetkonten haben eine Kategorie")
         let warnings = counts.needsCategory
-        if warnings > 0 {
-            add(
-                .warning,
-                full: warnings == 1
-                    ? "1 Buchung braucht eine Kategorie" : "\(warnings) Buchungen brauchen eine Kategorie",
-                short: warnings == 1 ? "1 Warnung" : "\(warnings) Warnungen")
-        }
+        add(
+            .warning, warnings, one: "braucht eine Kategorie", many: "brauchen eine Kategorie",
+            tooltip: warnings == 1
+                ? "1 Buchung braucht eine Kategorie" : "\(warnings) Buchungen brauchen eine Kategorie")
         let reminders = counts.forReview
-        if reminders > 0 {
-            add(
-                .reminder,
-                full: reminders == 1
-                    ? "1 Buchung ist zu bestätigen" : "\(reminders) Buchungen sind zu bestätigen",
-                short: reminders == 1 ? "1 Erinnerung" : "\(reminders) Erinnerungen")
-        }
+        add(
+            .reminder, reminders, one: "bestätigen", many: "bestätigen",
+            tooltip: reminders == 1 ? "1 Buchung ist zu bestätigen" : "\(reminders) Buchungen sind zu bestätigen")
         if let undo = undoSlot {
             notifiers.append(RegisterNotifier(kind: .undo, text: undo.message, link: "Widerrufen"))
         }

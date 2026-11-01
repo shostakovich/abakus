@@ -91,8 +91,8 @@ private let order = ["a", "b", "c", "d"]
         model.rowClicked(rows[1], column: nil, modifiers: .command)
         #expect(model.selection.count == 2)
         model.rowClicked(rows[1], column: nil, modifiers: .command)
-        #expect(model.selectedTransactionIds == [rows[0].id])
-        #expect(!model.selection.contains(id))
+        #expect(model.selectedTransactionIds == [id])
+        #expect(!model.selection.contains(rows[1].id))
         #expect(model.editor == nil)
     }
 
@@ -137,19 +137,21 @@ private let order = ["a", "b", "c", "d"]
         var fixture = RegisterFixture()
         let second = fixture.add(fixture.giro, -4)
         let model = fixture.model()
-        model.rowClicked(model.rows[0], column: .payee, modifiers: [])
-        #expect(model.grid.navigationKeyPressed(.down, extending: false, caretOnly: false, pageRows: 1) == second)
+        model.rowClicked(model.rows[1], column: .payee, modifiers: [])
+        #expect(model.grid.navigationKeyPressed(.up, extending: false, caretOnly: false, pageRows: 1) == second)
         #expect(model.selectedTransactionIds == [second])
-        model.grid.navigationKeyPressed(.up, extending: true, caretOnly: false, pageRows: 1)
+        model.grid.navigationKeyPressed(.down, extending: true, caretOnly: false, pageRows: 1)
         #expect(model.selection.count == 2)
     }
 
     @Test func iconClicksKeepAMultiSelectionThatContainsTheRow() {
         var fixture = RegisterFixture()
-        fixture.add(fixture.giro, -4)
+        let second = fixture.add(fixture.giro, -4)
         let third = fixture.add(fixture.giro, -5)
         let (model, store) = fixture.spied()
-        let rows = model.rows
+        let rows = [fixture.startingBalanceId(of: fixture.giro), second, third].map { id in
+            model.rows.first { $0.id == id }!
+        }
         model.rowClicked(rows[0], column: nil, modifiers: .command)
         model.rowClicked(rows[1], column: nil, modifiers: .command)
         model.errorIconClicked(rows[1])

@@ -37,7 +37,6 @@ public struct BudgetMetaData: Hashable, Sendable {
 
 /// Live rows only; the store keeps what is deleted as tombstones.
 public struct Budget: Hashable, Sendable {
-    public static let untitledName = "Unbenanntes Budget"
 
     public var budgetName: String
     public var budgetMetaData: BudgetMetaData
@@ -86,8 +85,6 @@ public struct Budget: Hashable, Sendable {
         self.targetSnoozes = targetSnoozes
         self.successorIds = successorIds
     }
-
-    public var displayName: String { budgetName.isEmpty ? Self.untitledName : budgetName }
 
     public var readyToAssignCategoryId: String {
         categoryGroups.lazy.flatMap(\.categories).first(where: \.isInternal)?.id ?? ""
@@ -159,7 +156,11 @@ public struct Budget: Hashable, Sendable {
 
     public func payeeName(ofPayee payeeId: String?) -> String {
         guard let payeeId, let payee = payee(withId: payeeId) else { return "" }
-        return payee.transferAccountId.flatMap(account(withId:))?.transferPayeeName ?? payee.name
+        return payeeName(of: payee)
+    }
+
+    public func payeeName(of payee: Payee) -> String {
+        payee.transferAccountId.flatMap(account(withId:))?.transferPayeeName ?? payee.name
     }
 
     public func payeeName(of transaction: some SplittableTransaction) -> String {
@@ -177,5 +178,13 @@ public struct Budget: Hashable, Sendable {
         guard let category = category(withId: categoryId) else { return "" }
         let groupName = categoryGroup(withId: category.categoryGroupId)?.name ?? ""
         return "\(groupName): \(category.name)"
+    }
+
+    /// The category's own name, without its group.
+    public func categoryName(_ categoryId: String?) -> String {
+        guard let categoryId else { return "" }
+        if isReadyToAssign(categoryId) { return DefaultCategories.readyToAssignName }
+        if categoryId == EntityID.splitCategory { return DefaultCategories.splitCategoryName }
+        return category(withId: categoryId)?.name ?? ""
     }
 }

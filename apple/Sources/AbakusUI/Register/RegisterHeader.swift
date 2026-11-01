@@ -5,38 +5,32 @@ enum RegisterHeaderMetrics {
     static let amountFont = ThemeFont(size: 17, weight: .semibold, hasTabularDigits: true)
 }
 
-/// The account name as a large title with Reconcile Account beside it, and Cleared + Uncleared = Working.
-struct RegisterHeader: View {
+/// The window toolbar beside the account name: Gebucht + Vorgemerkt = Arbeitssaldo and Abgleichen.
+struct RegisterHeader: ToolbarContent {
     let model: RegisterViewModel
 
-    var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(verbatim: model.accountName)
-                .font(ThemeFont.largeTitle.font)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .accessibilityAddTraits(.isHeader)
-            reconcileButton
-            Spacer(minLength: 16)
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .automatic) {
             RegisterSummaryView(model: model, summary: model.summary)
-                .layoutPriority(1)
         }
-        .padding(.horizontal, RegisterHeaderMetrics.horizontalPadding)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
+        .sharedBackgroundVisibility(.hidden)
+        ToolbarItem(placement: .automatic) { reconcileButton }
     }
 
     private var reconcileButton: some View {
         let reconciliation = model.reconciliation
-        return Button("Abgleichen", action: reconciliation.reconcileClicked)
-            .fixedSize()
-            .disabled(!reconciliation.isReconcileEnabled)
-            .overlay {
-                if !reconciliation.isReconcileEnabled {
-                    Color.clear.contentShape(Rectangle()).onTapGesture(perform: reconciliation.reconcileDisabledClicked)
-                }
+        return Button(action: reconciliation.reconcileClicked) {
+            Label("Abgleichen", systemImage: "lock")
+        }
+        .labelStyle(.iconOnly)
+        .fixedSize()
+        .disabled(!reconciliation.isReconcileEnabled)
+        .overlay {
+            if !reconciliation.isReconcileEnabled {
+                Color.clear.contentShape(Rectangle()).onTapGesture(perform: reconciliation.reconcileDisabledClicked)
             }
-            .toolTip(reconciliation.reconcileTooltip)
+        }
+        .toolTip(reconciliation.reconcileTooltip ?? "Abgleichen")
     }
 }
 

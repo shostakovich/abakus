@@ -239,4 +239,34 @@ import Testing
         #expect(!november.isSnoozed)
         #expect(november.openNeed == 50)
     }
+
+    @Test func theRingShowsTheFundedShareOfAMonthlyTargetRoundedDown() throws {
+        var targets = Targets()
+        try targets.set(.monthly(40))
+        try targets.assign([(Self.one, "2026-09-01", 40), (Self.one, "2026-10-01", 25)])
+        #expect(targets.figures("2026-10-01")?.fundedPercent == 62)
+        #expect(targets.figures("2026-09-01")?.fundedPercent == nil)
+        try targets.set(.monthly(40), for: Self.two)
+        #expect(targets.figures("2026-10-01", Self.two)?.fundedPercent == 0)
+    }
+
+    @Test func theRingOfATargetByADateShowsTheFundedShareOfThisMonthsNeed() throws {
+        var targets = Targets()
+        try targets.set(.byDate(1200, due: date("2027-06-01")), from: "2026-10-01")
+        try targets.assign([(Self.one, "2026-10-01", 80)])
+        let october = try #require(targets.figures("2026-10-01"))
+        #expect([october.needed, october.underfunded] == [decimal("133.34"), decimal("53.34")])
+        #expect(october.fundedPercent == 59)
+    }
+
+    @Test func aSnoozedTargetHasNoRing() throws {
+        var targets = Targets()
+        try targets.set(.monthly(40))
+        try targets.assign([(Self.one, "2026-10-01", 25)])
+        try targets.scenario.budget.apply(
+            .setTargetSnoozed(month: date("2026-10-01"), categoryId: Self.one, true))
+        let october = try #require(targets.figures("2026-10-01"))
+        #expect(october.underfunded == 15)
+        #expect(october.fundedPercent == nil)
+    }
 }

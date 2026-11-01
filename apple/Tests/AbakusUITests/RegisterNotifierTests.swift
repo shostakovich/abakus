@@ -11,7 +11,7 @@ import Testing
         #expect(model.notifiers.list.isEmpty)
     }
 
-    @Test func firstNotifierIsFullAndLaterOnesShort() {
+    @Test func noticesAreShortChipsWithTheFullTextAsTooltip() {
         var fixture = RegisterFixture()
         fixture.add(fixture.giro, -1)
         fixture.add(fixture.giro, -2)
@@ -19,10 +19,18 @@ import Testing
         let (model, _) = fixture.spied()
         let notifiers = model.notifiers.list
         #expect(notifiers.map(\.kind) == [.warning, .reminder])
-        #expect(notifiers[0].text == "2 Buchungen brauchen eine Kategorie")
-        #expect(notifiers[0].link == "Zeigen")
-        #expect(notifiers[1].text == "1 Erinnerung")
-        #expect(notifiers[1].link == nil)
+        #expect(notifiers[0].text == "2 brauchen eine Kategorie")
+        #expect(notifiers[0].tooltip == "2 Buchungen brauchen eine Kategorie")
+        #expect(notifiers[0].link == nil)
+        #expect(notifiers[1].text == "1 bestätigen")
+        #expect(notifiers[1].tooltip == "1 Buchung ist zu bestätigen")
+    }
+
+    @Test func aChipReadsItsTextAndLinkToVoiceOver() {
+        let undo = RegisterNotifier(kind: .undo, text: "Buchung gelöscht", link: "Widerrufen")
+        #expect(NotifierView.accessibilityLabel(undo) == "Buchung gelöscht, Widerrufen")
+        let reminder = RegisterNotifier(kind: .reminder, text: "1 bestätigen")
+        #expect(NotifierView.accessibilityLabel(reminder) == "1 bestätigen")
     }
 
     @Test func errorNotifierComesFirst() {
@@ -32,8 +40,9 @@ import Testing
         let (model, _) = fixture.spied()
         let notifiers = model.notifiers.list
         #expect(notifiers.map(\.kind) == [.error, .warning])
-        #expect(notifiers[0].text == "1 Umbuchung zwischen Budgetkonten hat eine Kategorie")
-        #expect(notifiers[1].text == "1 Warnung")
+        #expect(notifiers[0].text == "1 Umbuchung mit Kategorie")
+        #expect(notifiers[0].tooltip == "1 Umbuchung zwischen Budgetkonten hat eine Kategorie")
+        #expect(notifiers[1].text == "1 braucht eine Kategorie")
     }
 
     @Test func pluralTexts() {
@@ -42,7 +51,7 @@ import Testing
             fixture.add(fixture.giro, Decimal(amount), category: fixture.groceries, approved: false, source: .bank)
         }
         let (model, _) = fixture.spied()
-        #expect(model.notifiers.list.first?.text == "2 Buchungen sind zu bestätigen")
+        #expect(model.notifiers.list.first?.text == "2 bestätigen")
     }
 
     @Test func clickingANotifierSearchesItsRows() {
@@ -59,7 +68,7 @@ import Testing
         fixture.add(fixture.giro, -1)
         fixture.add(fixture.tagesgeld, -1)
         let (model, _) = fixture.spied(selection: .allAccounts)
-        #expect(model.notifiers.list.first?.text == "2 Buchungen brauchen eine Kategorie")
+        #expect(model.notifiers.list.first?.text == "2 brauchen eine Kategorie")
     }
 
     @Test func undoNotifierSitsLastWithItsMessage() {
@@ -119,7 +128,7 @@ import Testing
         model.rowClicked(model.rows.first { $0.id == a }!, column: nil, modifiers: .command)
         model.rowClicked(model.rows.first { $0.id == b }!, column: nil, modifiers: .command)
         model.toggleClearedKeyPressed()
-        #expect(store.commands == [.toggleCleared([a, b])])
+        #expect(store.commands == [.toggleCleared([b, a])])
     }
 
     @Test func keyboardToggleReachesTheAddEditorWithoutSelection() {
@@ -132,18 +141,14 @@ import Testing
         #expect(store.commands.isEmpty)
     }
 
-    @Test func approvePopupActsOnTheSelectedUnapprovedRows() {
+    @Test func theCheckApprovesTheSelectedUnapprovedRowsAtOnce() {
         var fixture = RegisterFixture()
         let a = fixture.add(fixture.giro, -1, category: fixture.groceries, approved: false, source: .bank)
         let b = fixture.add(fixture.giro, -2, category: fixture.groceries, approved: false, source: .bank)
         let (model, store) = fixture.spied()
         model.selectAll()
         model.errorIconClicked(model.rows.first { $0.id == a }!)
-        #expect(model.popup == .approveReject(rowId: a))
-        #expect(model.statusPopupTitle == "2 ausgewählte unbestätigte Buchungen")
-        #expect(model.statusPopupOptions.map(\.title) == ["Buchungen bestätigen", "Buchungen löschen"])
-        model.statusPopupChosen(.approve)
-        #expect(store.commands == [.approveTransactions([a, b])])
+        #expect(store.commands == [.approveTransactions([b, a])])
         #expect(model.popup == nil)
     }
 
@@ -261,7 +266,7 @@ import Testing
         let menu = model.columnMenu
         #expect(
             menu.map(\.title) == [
-                "Gebucht", "Memo", "Laufender Saldo", "", "Für alle Konten übernehmen",
+                "Status", "Memo", "Laufender Saldo", "", "Für alle Konten übernehmen",
             ])
         #expect(menu[0].isChecked)
         #expect(!menu[2].isChecked)
@@ -298,7 +303,7 @@ import Testing
         model.performMenuAction(.toggleColumn(.runningBalance))
         model.grid.headerClicked(.date)
         #expect(model.rows.first { $0.id == a }?.runningBalance == "1,100.00")
-        #expect(model.rows.first?.id == a)
+        #expect(model.rows.last?.id == a)
     }
 
     @Test func runningBalanceTooltipShowsTheBalancesThroughTheDate() {

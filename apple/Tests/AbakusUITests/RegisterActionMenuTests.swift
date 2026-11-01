@@ -472,14 +472,11 @@ import Testing
         #expect(opened == ["Aral"])
     }
 
-    @Test func actionButtonOpensTheMenuBelowItself() {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -1)
-        let (model, _) = fixture.spied()
-        select(model, [id])
-        model.editTransactionsClicked()
-        #expect(model.menuRequest?.anchor == .actionButton)
-        #expect(model.menuRequest?.items.first?.title == "Als gebucht markieren")
+    @Test func theColumnMenuOpensBelowItsButtonAndCloses() {
+        let (model, _) = RegisterFixture().spied()
+        model.columnOptionsClicked()
+        #expect(model.menuRequest?.anchor == .columnTab)
+        #expect(model.menuRequest?.items.first?.title == "Status")
         model.menuDismissed()
         #expect(model.menuRequest == nil)
     }

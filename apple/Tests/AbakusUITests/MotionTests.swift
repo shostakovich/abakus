@@ -24,7 +24,7 @@ import Testing
         #expect(RegisterEffects.glowPhase.kind == .fade)
         #expect(RegisterEffects.notifierFade.kind == .fade)
         for motion in [
-            RegisterEffects.notifierResize, RegisterEffects.schedulerSlide,
+            RegisterEffects.schedulerSlide,
             BudgetStyle.groupResize, BudgetStyle.headerResize, BudgetStyle.indicatorMove,
         ] {
             #expect(motion.kind == .movement)

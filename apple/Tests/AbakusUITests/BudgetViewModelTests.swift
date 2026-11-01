@@ -92,33 +92,37 @@ import Testing
         #expect(model.firstMonth == day("2026-10-01"))
     }
 
-    @Test func headerDetailsToggleAppWideAndWaitForTheAnimation() {
+    @Test func theCalculationStartsClosedTogglesAppWideAndWaitsForTheAnimation() {
         let storage = MemorySettingsStorage()
         let model = F().model(storage: storage).model
-        #expect(model.isHeaderExpanded)
-        #expect(model.headerToggleToolTip == "Rechnung ausblenden")
-        model.toggleHeaderDetails()
         #expect(!model.isHeaderExpanded)
-        #expect(storage.string(forKey: "budgetHeaderExpanded") == "false")
-        model.toggleHeaderDetails()
-        #expect(!model.isHeaderExpanded)
-        model.headerProgress = 0
+        #expect(model.layout.headerHeight == BudgetMetrics.monthHeaderHeight)
         #expect(model.headerToggleToolTip == "Rechnung zeigen")
+        model.toggleHeaderDetails()
+        #expect(model.isHeaderExpanded)
+        #expect(storage.string(forKey: "budgetHeaderExpanded") == "true")
+        model.toggleHeaderDetails()
+        #expect(model.isHeaderExpanded)
+        model.headerProgress = 1
+        #expect(model.headerToggleToolTip == "Rechnung ausblenden")
         let relaunched = F().model(storage: storage).model
-        #expect(!relaunched.isHeaderExpanded)
-        #expect(relaunched.layout.cardHeight == BudgetMetrics.cardCollapsedHeight)
+        #expect(relaunched.isHeaderExpanded)
+        #expect(
+            relaunched.layout.headerHeight == BudgetMetrics.monthHeaderHeight + relaunched.layout.headerDetailsHeight)
     }
 
-    @Test func everyCardGrowsToTheShownMonthWithTheMostHeaderLines() {
+    @Test func everyMonthHeaderGrowsToTheShownMonthWithTheMostHeaderLines() {
         var fixture = F()
         let model = fixture.model().model
-        #expect(model.layout.cardHeight == 172)
+        model.headerProgress = 1
+        #expect(model.layout.headerHeight == 170)
         fixture.budget(100, F.kino, in: "2026-11-01")
         let ahead = fixture.model().model
+        ahead.headerProgress = 1
         let lines = ahead.month(day("2026-10-01"))?.headerLines(formatter: ahead.formatter).map(\.text)
         #expect(lines?.suffix(2) == ["Für spätere Monate", "Nicht gedeckt im Nov"])
         #expect(ahead.layout.headerLineCount == 6)
-        #expect(ahead.layout.cardHeight == 172 + 2 * BudgetMetrics.headerLineHeight)
+        #expect(ahead.layout.headerHeight == 170 + 2 * BudgetMetrics.headerLineHeight)
     }
 
     @Test func theCategoryColumnResizesBetween190And380() {
@@ -193,34 +197,44 @@ import Testing
             ])
     }
 
-    @Test func hoverTintsTheRowEverywhereButShowsIconsOnlyWhereThePointerIs() {
+    @Test func hoverShowsARowsIconsUntilThePointerLeavesIt() {
         let model = F().model().model
-        let october = BudgetHoverColumn.month(day("2026-10-01"))
-        model.rowHovered(F.kino, in: october, true)
-        #expect(model.hoveredRow == F.kino)
-        #expect(model.isPointerOver(F.kino, in: october))
-        #expect(!model.isPointerOver(F.kino, in: .categories))
-        model.rowHovered(F.kino, in: .categories, true)
-        model.rowHovered(F.kino, in: october, false)
-        #expect(model.isPointerOver(F.kino, in: .categories))
-        model.rowHovered(F.kino, in: .categories, false)
-        #expect(model.hoveredRow == nil)
-        model.rowHovered(EntityID.uncategorizedMasterCategory, in: .categories, true)
-        #expect(model.hoveredRow == nil)
+        model.rowHovered(F.kino, true)
+        #expect(model.hoveredRowId == F.kino)
+        model.rowHovered(F.alltag, true)
+        model.rowHovered(F.kino, false)
+        #expect(model.hoveredRowId == F.alltag)
+        model.rowHovered(F.alltag, false)
+        #expect(model.hoveredRowId == nil)
+        model.rowHovered(EntityID.uncategorizedMasterCategory, true)
+        #expect(model.hoveredRowId == nil)
+    }
+
+    @Test func hoverMarksOnlyTheAssignedCellUnderThePointer() {
+        let model = F().model().model
+        let november = BudgetCellID(month: day("2026-11-01"), categoryId: F.kino)
+        let december = BudgetCellID(month: day("2026-12-01"), categoryId: F.kino)
+        model.assignedCellHovered(november, true)
+        #expect(model.hoveredAssignedCell == november)
+        model.assignedCellHovered(december, true)
+        model.assignedCellHovered(november, false)
+        #expect(model.hoveredAssignedCell == december)
+        model.assignedCellHovered(december, false)
+        #expect(model.hoveredAssignedCell == nil)
     }
 
     @Test func scrollingStaysWithinTheRowsAndPagesBy100() {
-        let model = F().model(panel: CGSize(width: 1076, height: 400)).model
-        #expect(model.layout.viewportHeight == 149)
+        let model = F().model(panel: CGSize(width: 1076, height: 264)).model
+        #expect(model.layout.viewportHeight == 135)
         #expect(model.contentHeight == 224)
-        #expect(model.maxScrollOffset == 75)
+        #expect(model.maxScrollOffset == 89)
         model.scroll(to: 500)
-        #expect(model.scrollOffset == 75)
+        #expect(model.scrollOffset == 89)
         model.collapseAllClicked()
         #expect(model.scrollOffset == 0)
         model.expandAllClicked()
         model.scroll(to: 0)
-        model.panelSize = CGSize(width: 1076, height: 300)
+        model.panelSize = CGSize(width: 1076, height: 164)
         model.pageScroll(down: true)
         #expect(model.scrollOffset == 100)
         model.pageScroll(down: false)

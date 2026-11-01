@@ -3,7 +3,6 @@ import SwiftUI
 
 public struct RegisterView: View {
     let model: RegisterViewModel
-    @State private var toolbarAnchors = ToolbarAnchors()
 
     public init(model: RegisterViewModel) {
         self.model = model
@@ -11,16 +10,15 @@ public struct RegisterView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            RegisterHeader(model: model)
-            RegisterNotifierBar(notifiers: model.notifiers)
+            RegisterToolbar(model: model)
             GeometryReader { proxy in
                 RegisterSplit(model: model, size: proxy.size)
             }
         }
         .background(ThemeColor.windowBackground)
-        .toolbar { RegisterToolbar(model: model, anchors: toolbarAnchors) }
-        // The account name is the content's large title, so the toolbar keeps its width for the actions.
-        .toolbar(removing: .title)
+        .navigationTitle(model.accountName)
+        .navigationSubtitle(model.reconciledLabel ?? "")
+        .toolbar { RegisterHeader(model: model) }
         .overlayPreferenceValue(IncomeCheckAnchorKey.self) { anchor in
             if let check = model.incomeCheck, let anchor {
                 IncomeCheckLayer(model: model, check: check, anchor: anchor)
@@ -37,7 +35,7 @@ public struct RegisterView: View {
             }
         }
         .overlayPreferenceValue(RegisterAnchorKey.self) { anchors in
-            RegisterOverlayLayer(model: model, anchors: anchors, toolbarAnchors: toolbarAnchors)
+            RegisterOverlayLayer(model: model, anchors: anchors)
         }
         // Edit › Select All reaches the register when no text field takes it first.
         .onCommand(#selector(NSResponder.selectAll(_:))) { _ = model.selectAllKeyPressed() }
@@ -74,8 +72,7 @@ private struct RegisterPanelContent: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Shown at once: animating its height while the toolbar's search field edits sends the grid into a
-            // layout loop.
+            // Shown at once: animating its height while the search field edits sends the grid into a layout loop.
             if let info = model.search.info {
                 RegisterSearchInfoBar(info: info, onClear: model.search.clearClicked)
             }

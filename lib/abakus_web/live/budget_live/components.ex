@@ -1,6 +1,7 @@
 defmodule AbakusWeb.BudgetLive.Components do
   @moduledoc """
-  The budget view's parts: month strip, month cards (the month bar on narrow screens) and the table's rows.
+  The budget view's parts: month strip, month heads (the month bar on narrow screens) and the table's rows. A month
+  before the current one is muted (`app-past`), red stays red; Verfügbar is the tinted anchor column (`app-av`).
   """
 
   use AbakusWeb, :html
@@ -68,16 +69,16 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :current, Date, required: true
 
   @doc """
-  A month's card, as YNAB 4's month header: the month and its Verteilen menu, YNAB 4's calculation (shown or hidden
+  A month's head, as YNAB 4's month header: the month and its Verteilen menu, YNAB 4's calculation (shown or hidden
   per device) and Zu verteilen, which shows and hides the calculation in every month.
   """
-  def month_card(assigns) do
+  def month_head(assigns) do
     assigns = assign(assigns, :key, Window.param(assigns.month.month))
 
     ~H"""
     <div
       id={"month-#{@key}"}
-      class={["app-mcard", @focus && "is-focus"]}
+      class={["app-month", @focus && "is-focus"]}
       aria-current={@month.month == @current && "date"}
       phx-click={not @focus && "focus"}
       phx-value-month={@key}
@@ -96,7 +97,7 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :window, Window, required: true
 
   @doc """
-  The focus month on narrow screens, as a bar that stays at the top: the parts of the month card in the same order,
+  The focus month on narrow screens, as a bar that stays at the top: the parts of the month head in the same order,
   with arrows to step through the months.
   """
   def month_bar(assigns) do
@@ -225,7 +226,7 @@ defmodule AbakusWeb.BudgetLive.Components do
     <button
       id={"calc-toggle-#{@key}"}
       type="button"
-      class="app-rta"
+      class={["app-rta", elem(@ready, 0) == :success && "is-positive"]}
       aria-expanded="false"
       aria-controls={"calc-#{@key}"}
       phx-hook="CalculationToggle"
@@ -258,7 +259,7 @@ defmodule AbakusWeb.BudgetLive.Components do
     ~H"""
     <th
       :for={{field, label} <- [assigned: "Zugewiesen", activity: "Aktivität", available: "Verfügbar"]}
-      class={["app-num", field == :assigned && "app-ms"]}
+      class={["app-num", @month.closed && "app-past" | field_classes(field)]}
       scope="col"
     >
       <span class="app-colh">{label}</span>
@@ -277,13 +278,15 @@ defmodule AbakusWeb.BudgetLive.Components do
     required: true,
     doc: "per month the totals shown: assigned, activity, available"
 
+  attr :current, Date, required: true
   attr :group_id, :integer, default: nil, doc: "the group's id when it can be edited"
   attr :edit, :map, default: nil, doc: "the open popover, when it is this group's"
   slot :inner_block
 
   @doc """
-  A group's rows: a collapsible head with its totals per month, then its categories. An editable group's name
-  opens its popover (rename, add a category, delete); its "+", shown on hover where there is one, adds a category.
+  A group's rows: a collapsible head on a band with its totals per month, blank at zero, then its categories. An
+  editable group's name opens its popover (rename, add a category, delete); its "+", shown on hover where there is
+  one, adds a category.
   """
   def group(assigns) do
     ~H"""
@@ -337,17 +340,17 @@ defmodule AbakusWeb.BudgetLive.Components do
             <CategoryEditor.editor :if={@edit} edit={@edit} />
           </div>
         </th>
-        <%= for {key, totals} <- group_columns(@months, @totals) do %>
+        <%= for {month, key, totals} <- group_columns(@months, @totals) do %>
           <td
             :for={field <- [:assigned, :activity, :available]}
             id={Map.has_key?(totals, field) && "#{@id}-#{key}-#{field}"}
             class={[
               "app-num",
-              field == :assigned && "app-ms",
-              total_class(field, totals[field])
+              past?(month, @current) && "app-past",
+              total_class(field, totals[field]) | field_classes(field)
             ]}
           >
-            {totals[field] && Money.amount(totals[field])}
+            {totals[field] && blank_zero(totals[field])}
           </td>
         <% end %>
       </tr>
@@ -357,18 +360,23 @@ defmodule AbakusWeb.BudgetLive.Components do
   end
 
   defp group_columns(months, totals),
-    do: for(month <- months, do: {Window.param(month), Map.get(totals, month, %{})})
+    do: for(month <- months, do: {month, Window.param(month), Map.get(totals, month, %{})})
 
-  defp total_class(_field, nil), do: nil
-  defp total_class(_field, 0), do: "app-zero"
-  defp total_class(:available, total) when total < 0, do: "text-error-ink"
+  defp total_class(:available, total) when is_integer(total) and total < 0, do: "text-error-ink"
   defp total_class(_field, _total), do: nil
+
+  defp field_classes(:assigned), do: ["app-ms"]
+  defp field_classes(:activity), do: ["app-quiet"]
+  defp field_classes(:available), do: ["app-av"]
+
+  defp past?(month, current), do: Date.before?(month, current)
 
   attr :id, :any, required: true, doc: "the category's id, or \"uncategorised\""
   attr :name, :string, required: true
   attr :cells, :map, required: true, doc: "the category's `Abakus.Budget.CategoryMonth` per month"
   attr :months, :list, required: true
   attr :focus, Date, required: true
+  attr :current, Date, required: true
 
   attr :invalid, :any,
     required: true,
@@ -440,7 +448,7 @@ defmodule AbakusWeb.BudgetLive.Components do
         </div>
       </td>
       <%= for {month, key, cell, typed} <- columns(@months, @cells, @id, @invalid) do %>
-        <td class="app-ms app-num">
+        <td class={["app-ms app-num", past?(month, @current) && "app-past"]}>
           <input
             :if={@assignable}
             id={"assign-#{@id}-#{key}"}
@@ -457,10 +465,16 @@ defmodule AbakusWeb.BudgetLive.Components do
             phx-value-month={key}
           />
         </td>
-        <td id={"activity-#{@id}-#{key}"} class="app-num app-quiet">
+        <td
+          id={"activity-#{@id}-#{key}"}
+          class={["app-num app-quiet", past?(month, @current) && "app-past"]}
+        >
           {blank_zero(cell.activity)}
         </td>
-        <td id={"available-#{@id}-#{key}"} class="app-num">
+        <td
+          id={"available-#{@id}-#{key}"}
+          class={["app-num app-av", past?(month, @current) && "app-past"]}
+        >
           <.available
             cell={cell}
             budgeting={month in @budgeting}
@@ -486,7 +500,10 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :budgeting, :boolean, required: true, doc: "whether its month is being budgeted"
   attr :id, :any, default: nil, doc: "set for a cell that opens the popover"
 
-  @doc "A cell's available amount, coloured and marked by its status (`Status.available/2`)."
+  @doc """
+  A cell's available amount, coloured and marked by its status (`Status.available/2`): an underfunded target's ring
+  fills by the share of the month's need that is assigned.
+  """
   def available(assigns) do
     assigns = assign(assigns, :status, Status.available(assigns.cell, assigns.budgeting))
 
@@ -517,9 +534,30 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   defp available_content(assigns) do
     ~H"""
-    <.icon :if={@status.icon} name={@status.icon} class={icon_class(@status.icon)} />{Money.amount(
-      @cell.available
-    )}
+    {Money.amount(@cell.available)}<span class="app-mark"><.icon
+      :if={@status.icon}
+      name={@status.icon}
+      class={icon_class(@status.icon)}
+    /><.ring :if={@status.ring} share={@status.ring} /></span>
+    """
+  end
+
+  attr :share, :integer, required: true
+
+  defp ring(assigns) do
+    ~H"""
+    <svg class="app-ring" viewBox="0 0 16 16" aria-hidden="true">
+      <circle class="app-ring-track" cx="8" cy="8" r="6" />
+      <circle
+        class="app-ring-fill"
+        cx="8"
+        cy="8"
+        r="6"
+        pathLength="100"
+        stroke-dasharray={"#{@share} 100"}
+        transform="rotate(-90 8 8)"
+      />
+    </svg>
     """
   end
 

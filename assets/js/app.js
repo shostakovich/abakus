@@ -30,10 +30,23 @@ const appHooks = {
 
 window.addEventListener("abakus:toggle-memo", toggleMemo)
 
+// In the register ⌘ or Ctrl adds a row to the selection, Shift the rows up to it.
+const rowClick = (event, el) => {
+  if (!el.closest("#register-table")) return {}
+  if (event.metaKey || event.ctrlKey) return { toggle: true }
+  if (event.shiftKey) return { range: true }
+  return {}
+}
+// Shift-clicking rows would select their text instead.
+document.addEventListener("mousedown", (event) => {
+  if (event.shiftKey && event.target.closest?.("#register-table > tbody:not(.app-edit)")) event.preventDefault()
+})
+
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: () => ({ _csrf_token: csrfToken, fit: initialBudgetFit(), benchmark: benchmarkChoice() }),
   hooks: { ...colocatedHooks, ...setzkastenHooks, ...appHooks },
+  metadata: { click: rowClick },
 })
 
 liveSocket.connect()

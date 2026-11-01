@@ -106,7 +106,7 @@ defmodule AbakusWeb.RegisterWindowTest do
 
     view |> element("#select-all") |> render_click()
     assert has_element?(view, "#bulk", "250 Buchungen")
-    assert has_element?(view, "#select-all[checked]")
+    assert has_element?(view, "#select-all", "Auswahl aufheben")
 
     view |> element("#approve-selected") |> render_click()
     assert has_element?(view, "#flash-info", "250 bestätigt")
@@ -116,14 +116,14 @@ defmodule AbakusWeb.RegisterWindowTest do
            )
   end
 
-  test "unchecking one after selecting all keeps the others", c do
+  test "taking one out after selecting all keeps the others", c do
     ids = transactions(c.giro, 150)
     {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
     view |> element("#select-all") |> render_click()
-    view |> element("#tx-#{hd(ids)}-select") |> render_click()
+    view |> element("#tx-#{hd(ids)} td.app-payee") |> render_click(%{"toggle" => "true"})
     assert has_element?(view, "#bulk", "149 Buchungen")
-    refute has_element?(view, "#select-all[checked]")
+    assert has_element?(view, "#select-all", "Alle auswählen")
   end
 
   test "the selection of transactions not loaded yet stays after a change", c do

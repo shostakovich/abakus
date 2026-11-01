@@ -5,7 +5,7 @@ defmodule AbakusWeb.BudgetLive do
   the current month, so that it is the user's own. Every month takes assignments, as in YNAB; Zu verteilen may go
   below zero.
 
-  As in Actual there is no inspector: a month's card shows how Zu verteilen adds up and its Verteilen menu
+  As in Actual there is no inspector: a month's head shows how Zu verteilen adds up and its Verteilen menu
   auto-assigns or resets the month; a category's name or pencil opens its dialog (`Inspector`: name, target,
   deleting), on phones a sheet that also takes the assignment. Targets, snoozing, auto-assign, covering and moving
   money work in the focus month; covering and moving through the available cell's popover (`Popover`), which makes
@@ -82,15 +82,15 @@ defmodule AbakusWeb.BudgetLive do
               <% end %>
             </colgroup>
             <thead>
-              <tr :if={not @fit.compact} class="app-cards">
+              <tr :if={not @fit.compact} class="app-heads-month">
                 <th class="app-cat" rowspan="2" scope="col">
                   <div class="app-cathead">
                     <span class="app-colh">Kategorie</span>
                     <CategoryEditor.add_group edit={edit_for(@editing, :new_group)} />
                   </div>
                 </th>
-                <th :for={month <- @months} colspan="3" class="app-ms">
-                  <Components.month_card
+                <th :for={month <- @months} colspan="3" class={["app-ms", month.closed && "app-past"]}>
+                  <Components.month_head
                     month={month}
                     focus={month.month == @window.focus}
                     current={@current}
@@ -111,6 +111,7 @@ defmodule AbakusWeb.BudgetLive do
                 cells={@rows.uncategorised.cells}
                 months={@window.months}
                 focus={@window.focus}
+                current={@current}
                 invalid={@invalid}
                 assignable={false}
                 compact={@fit.compact}
@@ -122,6 +123,7 @@ defmodule AbakusWeb.BudgetLive do
               id={"group-#{group.id}"}
               name={group.name}
               months={@window.months}
+              current={@current}
               totals={totals}
               group_id={group.id}
               edit={edit_for(@editing, :group, group.id)}
@@ -133,6 +135,7 @@ defmodule AbakusWeb.BudgetLive do
                 cells={cells}
                 months={@window.months}
                 focus={@window.focus}
+                current={@current}
                 invalid={@invalid}
                 compact={@fit.compact}
                 budgeting={@budgeting}
@@ -925,7 +928,7 @@ defmodule AbakusWeb.BudgetLive do
 
   defp keep_open(socket, _before), do: assign(socket, popover: nil, target_form: nil)
 
-  # A compact budget (below lg) shows one month in a bar, without strip and cards.
+  # A compact budget (below lg) shows one month in a bar, without strip and month heads.
   defp fit(%{"months" => months, "span" => span} = params)
        when is_integer(months) and is_integer(span) do
     compact = params["compact"] == true

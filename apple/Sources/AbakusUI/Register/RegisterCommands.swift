@@ -30,8 +30,8 @@ public enum RegisterCommand: CaseIterable, Sendable {
         switch self {
         case .addTransaction: register.canAddTransactions
         case .makeTransfer: register.canAddTransactions && register.showsTransferButton
-        case .approve: register.isActionButtonEnabled
-        case .toggleCleared: register.isActionButtonEnabled || register.editor != nil
+        case .approve: register.hasSelection
+        case .toggleCleared: register.hasSelection || register.editor != nil
         case .search: true
         case .timeframe: !register.isReconciling
         case .showReconciled: !register.isReconciling && register.isReconciledFilterEnabled
@@ -72,13 +72,13 @@ public struct RegisterCommands: Commands {
             command(.makeTransfer, isShown: isShown)
             Divider()
             Menu(register.actionButtonTitle.trimmingCharacters(in: .whitespaces)) {
-                if isShown && register.isActionButtonEnabled {
+                if isShown && register.hasSelection {
                     RegisterMenuItemsView(
                         items: register.transactionActionsMenu(withTitle: false),
                         perform: register.editTransactionsCommandChosen)
                 }
             }
-            .disabled(!isShown || !register.isActionButtonEnabled)
+            .disabled(!isShown || !register.hasSelection)
             command(.approve, isShown: isShown)
             command(.toggleCleared, isShown: isShown)
             Divider()

@@ -349,7 +349,7 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
       %{transaction: transaction} = link!(c)
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.account}")
 
-      render_click(view, "select", %{"id" => "#{transaction.id}"})
+      render_click(view, "row_click", %{"id" => "#{transaction.id}", "toggle" => true})
       render_click(view, "delete_selected", %{})
       assert has_element?(view, "#flash-error", "mit ihrer Ausgabe gelöscht")
 

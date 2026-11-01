@@ -10,15 +10,10 @@ struct StatusOptionsPopover: View {
             PopoverTitle(model.statusPopupTitle).padding(.horizontal, 8)
             VStack(spacing: 0) {
                 ForEach(model.statusPopupOptions) { option in
-                    Button(role: option.command == .delete ? .destructive : nil) {
+                    Button {
                         model.statusPopupChosen(option.command)
                     } label: {
-                        HStack(spacing: 6) {
-                            if let symbol = option.systemImage {
-                                Image(systemName: symbol).frame(width: 16).accessibilityHidden(true)
-                            }
-                            Text(verbatim: option.title)
-                        }
+                        Text(verbatim: option.title)
                     }
                     .buttonStyle(PopoverMenuButtonStyle())
                 }

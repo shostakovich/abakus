@@ -29,7 +29,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
   end
 
   describe "a month" do
-    test "its card adds up to Zu verteilen, last month's overspending and later months included",
+    test "its head adds up to Zu verteilen, last month's overspending and later months included",
          c do
       income(c, 100_000, ~D[2026-09-01])
       spend(c, c.groceries, -2_500, ~D[2026-09-15])
@@ -183,6 +183,43 @@ defmodule AbakusWeb.BudgetDetailsTest do
   end
 
   describe "the available cell" do
+    test "the ring shows the month's share of an underfunded target", c do
+      income(c, 100_000)
+
+      christmas =
+        category_fixture(name: "🎄 Weihnachten", category_group_id: c.rent.category_group_id)
+
+      {:ok, _} =
+        Categories.set_target(budget_scope(), christmas, %{
+          from_month: @november,
+          cadence: :monthly,
+          amount: 4_000,
+          set_aside: true
+        })
+
+      Categories.assign(budget_scope(), christmas, @november, 2_500)
+      {:ok, view, _html} = open(c.conn, months: 2)
+
+      cell = "#available-button-#{christmas.id}-2026-11"
+
+      assert has_element?(
+               view,
+               ~s|#{cell}.text-warning-ink[aria-label*="unterfinanziert, 62 % finanziert"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#{cell} svg.app-ring circle.app-ring-fill[stroke-dasharray="62 100"]|
+             )
+
+      refute has_element?(view, "#{cell} svg.lucide")
+
+      view |> element("#month-2026-11") |> render_click()
+      view |> element("#edit-category-#{christmas.id}") |> render_click()
+
+      assert has_element?(view, "#target-status", "Noch 15,00 € diesen Monat.")
+    end
+
     test "covers an overspent category from Zu verteilen", c do
       income(c, 100_000)
       spend(c, c.fuel, -2_500)

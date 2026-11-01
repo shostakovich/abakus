@@ -31,26 +31,35 @@ struct BudgetGroupsStack<Header: View, Sub: View>: View {
     }
 }
 
-/// Runs under every column and the separators between them: the master tint and a hairline under every row.
+/// Runs under every column and the separators between them: the group band and a hairline under every row.
 struct BudgetRowBackgrounds: View {
     let groups: [BudgetGroup]
     let offset: CGFloat
     let width: CGFloat
+    /// Verfügbar of each month, which the group band takes some of its tint from.
+    let tints: [CGRect]
 
     var body: some View {
         BudgetGroupsStack(groups: groups, offset: offset) { group in
-            row(isTinted: group.header.kind != .sub)
+            row(isBand: group.header.kind != .sub)
         } sub: { _ in
-            row(isTinted: false)
+            row(isBand: false)
         }
         .allowsHitTesting(false)
     }
 
-    private func row(isTinted: Bool) -> some View {
-        ZStack(alignment: .bottom) {
-            if isTinted { Rectangle().fill(ThemeColor.groupFill) }
+    private func row(isBand: Bool) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            if isBand {
+                Rectangle().fill(ThemeColor.groupBand)
+                ForEach(tints, id: \.minX) { tint in
+                    Rectangle().fill(ThemeColor.availableTint.opacity(BudgetStyle.groupAvailableTintOpacity))
+                        .frame(width: tint.width)
+                        .offset(x: tint.minX)
+                }
+            }
             Rectangle().fill(ThemeColor.separator).frame(height: 1)
         }
-        .frame(width: width, height: BudgetMetrics.rowHeight, alignment: .bottom)
+        .frame(width: width, height: BudgetMetrics.rowHeight, alignment: .bottomLeading)
     }
 }

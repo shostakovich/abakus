@@ -32,7 +32,7 @@ struct SyncSettingsView: View {
                     .disabled(!model.canEditAddress)
                     .onSubmit(signIn)
                 if let error = model.addressError {
-                    Text(error).foregroundStyle(.red).font(.callout)
+                    Text(error).foregroundStyle(ThemeColor.negative).font(.callout)
                 }
             }
             Section {
@@ -42,7 +42,7 @@ struct SyncSettingsView: View {
                     Image(systemName: cloud.symbolName)
                 }
                 if let error = model.sync.signInError {
-                    Text(error).foregroundStyle(.red).font(.callout)
+                    Text(error).foregroundStyle(ThemeColor.negative).font(.callout)
                 }
                 HStack {
                     Spacer()

@@ -126,6 +126,15 @@ public struct BudgetFormatter: Hashable, Sendable {
         dateString(date, year: String(format: "%02d", date.year % 100))
     }
 
+    /// Day and month without the year, "24.10." where dates end in a dot.
+    public func dayMonth(_ date: DateWithoutTime) -> String {
+        let day = String(format: "%02d", date.day)
+        let month = String(format: "%02d", date.month)
+        let separator = dateLocale.dateSeparator
+        let parts = dateLocale.dateSequence == .dmy ? [day, month] : [month, day]
+        return parts.joined(separator: separator) + (separator == "." ? "." : "")
+    }
+
     public func monthName(_ month: Int) -> String {
         dateLocale.monthNames[(month - 1 + 12) % 12]
     }

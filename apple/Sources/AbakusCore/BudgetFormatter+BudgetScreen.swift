@@ -44,15 +44,16 @@ extension BudgetMonth {
     public func headerLines(formatter: BudgetFormatter) -> [BudgetHeaderLine] {
         let previous = formatter.shortMonthName(month.addingMonths(-1).month)
         let this = formatter.shortMonthName(month.month)
-        let assignedAmount = "-" + formatter.currencyNoSymbol(abs(assigned))
+        let assignedAmount = formatter.budgetAmount(-assigned, prefix: "+", prefixZero: false)
         var lines = [
             BudgetHeaderLine(
                 amount: formatter.budgetAmount(previousMonthAvailable), text: "Nicht verteilt im " + previous,
                 isWarning: previousMonthAvailable < 0),
             BudgetHeaderLine(
-                amount: formatter.budgetAmount(previousMonthOverspent, prefix: "-"), text: "Überzogen im " + previous,
+                amount: formatter.budgetAmount(previousMonthOverspent), text: "Überzogen im " + previous,
                 isWarning: previousMonthOverspent < 0),
-            BudgetHeaderLine(amount: formatter.budgetAmount(income, prefix: "+"), text: "Einnahmen im " + this),
+            BudgetHeaderLine(
+                amount: formatter.budgetAmount(income, prefix: "+", prefixZero: false), text: "Einnahmen im " + this),
             BudgetHeaderLine(amount: assignedAmount, text: "Zugewiesen im " + this),
         ]
         if !isClosed && assignedInFuture != 0 {

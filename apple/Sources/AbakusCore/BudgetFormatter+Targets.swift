@@ -81,4 +81,13 @@ extension BudgetTargetFigures {
         let share = NSDecimalNumber(decimal: ((saved ?? 0) + openNeed) / target.amount).doubleValue
         return min(1, share)
     }
+
+    /// How much of this month's need is assigned, in whole percent rounded down, while the target still asks.
+    public var fundedPercent: Int? {
+        guard openNeed > 0, needed > 0 else { return nil }
+        var share = 100 * (needed - openNeed) / needed
+        var percent = Decimal()
+        NSDecimalRound(&percent, &share, 0, .down)
+        return min(max(NSDecimalNumber(decimal: percent).intValue, 0), 100)
+    }
 }

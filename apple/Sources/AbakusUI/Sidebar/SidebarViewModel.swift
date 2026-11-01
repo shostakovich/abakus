@@ -77,8 +77,6 @@ public struct SidebarAccountRow: Identifiable, Hashable, Sendable {
     public var balanceText: String
     public var tooltip: String
     public var badge: SidebarBadge?
-
-    public var isNegative: Bool { balance < 0 }
 }
 
 public struct SidebarGroupPanel: Identifiable, Hashable, Sendable {
@@ -91,7 +89,6 @@ public struct SidebarGroupPanel: Identifiable, Hashable, Sendable {
     public var headerBadge: SidebarBadge?
 
     public var id: SidebarGroup { group }
-    public var isNegative: Bool { total < 0 }
 }
 
 @MainActor
@@ -110,7 +107,9 @@ public final class SidebarViewModel {
     @ObservationIgnored private let defaults: (any SettingsStorage)?
     @ObservationIgnored private let budgetSettings: BudgetSettings?
 
-    /// Closed Accounts always starts collapsed, so only these two groups are kept.
+    /// Closed accounts stay out of the sidebar, as on the web.
+    static let shownGroups: [SidebarGroup] = [.budgetAccounts, .offBudgetAccounts]
+
     static let savedGroupStates: [SidebarGroup: String] = [
         .budgetAccounts: "onBudgetAccountContainerState", .offBudgetAccounts: "offBudgetAccountContainerState",
     ]
@@ -125,7 +124,7 @@ public final class SidebarViewModel {
         self.defaults = defaults
         budgetSettings = settings
         isFullView = defaults?.string(forKey: Self.tabStateKey) != "tabStateCollapse"
-        var collapsed: Set<SidebarGroup> = [.closedAccounts]
+        var collapsed: Set<SidebarGroup> = []
         for (group, key) in Self.savedGroupStates where settings?.string(forKey: key) == "collapsed" {
             collapsed.insert(group)
         }
@@ -151,14 +150,11 @@ public final class SidebarViewModel {
     }
     public var toggleCommandTitle: String { isFullView ? "Seitenleiste einklappen" : "Seitenleiste ausklappen" }
 
-    public var allAccountsBalance: Decimal { store.budget.allAccountsBalances().working }
-    public var allAccountsBalanceText: String { formatter.currency(allAccountsBalance) }
-
     public var groupPanels: [SidebarGroupPanel] {
         let budget = store.budget
         let balances = budget.workingBalances()
         let formatter = formatter
-        return SidebarGroup.allCases.compactMap { group in
+        return Self.shownGroups.compactMap { group in
             let accounts = budget.accounts(in: group)
             if group != .budgetAccounts && accounts.isEmpty { return nil }
             let rows = accounts.map { account in
@@ -167,7 +163,7 @@ public final class SidebarViewModel {
                 let tooltip = account.name + "    " + formatter.currency(balance)
                 return SidebarAccountRow(
                     id: account.id, name: account.name, balance: balance,
-                    balanceText: formatter.currencyNoSymbol(balance), tooltip: tooltip,
+                    balanceText: formatter.currency(balance), tooltip: tooltip,
                     badge: summary.count > 0 ? SidebarBadge(count: summary.count, level: summary.maxLevel) : nil)
             }
             let total = Amount.sum(rows.map(\.balance))
@@ -226,7 +222,7 @@ public final class SidebarViewModel {
 
     private func expandGroup(containing selection: SidebarSelection) {
         guard case .account(let id) = selection, let account = store.budget.account(withId: id) else { return }
-        for group in SidebarGroup.allCases where group.contains(account) {
+        for group in Self.shownGroups where group.contains(account) {
             collapsedGroups.remove(group)
         }
     }

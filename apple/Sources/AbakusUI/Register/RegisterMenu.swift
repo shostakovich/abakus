@@ -7,6 +7,7 @@ public enum RegisterMenuAction: Hashable, Sendable {
     case renamePayee, payeeSettings, makeRecurring, moveToScheduler
     case moveToAccount(accountId: String)
     case delete
+    case timeframe, showReconciled
     case toggleColumn(RegisterColumn)
     case applyColumnsToAllAccounts
     case toggleScheduledColumn(RegisterColumn)
@@ -56,7 +57,7 @@ public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
 }
 
 public enum RegisterAnchorID: Hashable, Sendable {
-    case actionButton, dateButton, columnTab, schedulerTitle, schedulerColumnTab
+    case viewMenu, columnTab, schedulerTitle, schedulerColumnTab
     case error(String)
     case balance(String)
 }

@@ -1,10 +1,10 @@
 defmodule AbakusWeb.RegisterLive do
   @moduledoc """
-  The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first. Its
-  header has three rows, as in YNAB: the name with its meta line and the actions (pencil, "Abgleichen"; in Alle Konten
-  "Konto hinzufügen"), the balances, and the toolbar. The view (`filter`), the search (`q`) and the running balance
-  (`running`, one account in the full list only) live in the URL; the selection does not, and whether the memo column
-  shows is kept per device in the browser.
+  The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first under
+  a heading per month. Its header has two rows: the name with its meta line and the pencil, beside them the balances
+  and "Abgleichen" (in Alle Konten "Konto hinzufügen"); below, the toolbar. The view (`filter`), the search (`q`) and
+  the running balance (`running`, one account in the full list only) live in the URL; the selection does not, and
+  whether the memo column shows is kept per device in the browser.
 
   It shows the view's newest 100 transactions and loads 100 more as its end comes near (the `LoadMore` hook), so an
   account opens as fast with thousands of transactions as with a few. A search goes through all of them, and "Alle
@@ -28,10 +28,11 @@ defmodule AbakusWeb.RegisterLive do
   (`Abakus.Depot.Portfolios.cash_account_portfolios/1`): Alle Konten leaves out its transactions, no account picker
   offers it but where a transaction uses it already, and its own register leads to its portfolio in the Depot.
 
-  Transactions are edited as in YNAB, without a URL (`TransactionEditor`): a click selects a row, a click into a
-  cell of a selected row opens the row for editing, "Buchung" adds an empty row on top; one row at a time. Phones
-  open a sheet from a list row or the "+" button instead. The counterpart of a split's transfer opens its
-  split. The selection bar approves, categorises and deletes the selected transactions.
+  Transactions are edited as in YNAB, without a URL (`TransactionEditor`): a click selects a row (with ⌘ or Ctrl it
+  joins the selection, with Shift the rows from the last one clicked; "Auswählen" in Ansicht makes every click join
+  it, for touch screens), a click into a cell of a selected row opens the row for editing, "Buchung" adds an empty row
+  on top; one row at a time. Phones open a sheet from a list row or the "+" button instead. The counterpart of a
+  split's transfer opens its split. The selection bar approves, categorises and deletes the selected transactions.
   """
   use AbakusWeb, :live_view
 
@@ -68,31 +69,42 @@ defmodule AbakusWeb.RegisterLive do
         <.fab id="new-transaction-fab" label="Buchung" phx-click="new" phx-value-layout="sheet" />
       </:fab>
       <div id="register">
-        <.header class="app-reg-row pb-4 max-md:pb-3">
+        <.header class="app-reg-row app-reg-head pb-4 max-md:pb-3">
           <span id="register-title">{@page_title}</span>
-          <:subtitle><Components.meta account={@account} /></:subtitle>
-          <:actions :if={!@account}>
-            <.button id="add-account" icon="plus" phx-click="open_account_dialog">
-              Konto hinzufügen
-            </.button>
-          </:actions>
-          <:actions :if={@account}>
-            <.button
-              id="edit-account"
-              icon="pencil"
-              icon_only
-              label="Konto bearbeiten"
-              variant={:ghost}
-              phx-click="open_account_dialog"
-              phx-value-id={@account.id}
-            />
-            <Reconcile.editor
-              :if={Account.reconcilable?(@account) && !@reconciling}
-              state={@reconcile}
-            />
+          <:subtitle>
+            <span class="inline-flex flex-wrap items-center gap-x-1">
+              <Components.meta account={@account} />
+              <.button
+                :if={@account}
+                id="edit-account"
+                icon="pencil"
+                icon_only
+                label="Konto bearbeiten"
+                variant={:ghost}
+                size={:sm}
+                phx-click="open_account_dialog"
+                phx-value-id={@account.id}
+              />
+            </span>
+          </:subtitle>
+          <:actions>
+            <div class="flex items-end gap-x-6 gap-y-2">
+              <Components.balances
+                account={@account}
+                balances={@balances}
+                reconciling={!!@reconciling}
+              />
+              <.button :if={!@account} id="add-account" icon="plus" phx-click="open_account_dialog">
+                Konto hinzufügen
+              </.button>
+              <Reconcile.editor
+                :if={@account && Account.reconcilable?(@account) && !@reconciling}
+                state={@reconcile}
+              />
+            </div>
           </:actions>
         </.header>
-        <Components.balances account={@account} balances={@balances} reconciling={!!@reconciling} />
+        <Components.balance_line account={@account} balances={@balances} />
         <Components.toolbar
           account={@account}
           manual={@manual}
@@ -103,11 +115,12 @@ defmodule AbakusWeb.RegisterLive do
           running={@running}
           running_shown={@running_balances != nil}
           paths={@paths}
+          picking={@picking}
+          all_selected={@count > 0 and MapSet.size(@selected) == @count}
         />
         <Reconcile.bar :if={@reconciling} mode={@reconciling} />
         <Components.table
           rows={@rows}
-          count={@count}
           proposals={@shown_proposals}
           accounts={@accounts}
           columns={@columns}
@@ -167,6 +180,8 @@ defmodule AbakusWeb.RegisterLive do
        editor: nil,
        selected: MapSet.new(),
        selection: [],
+       anchor: nil,
+       picking: false,
        categories: nil,
        reconcile: nil,
        reconciling: nil
@@ -469,10 +484,8 @@ defmodule AbakusWeb.RegisterLive do
       nil ->
         {:noreply, socket}
 
-      %{id: id} = transaction ->
-        if id in socket.assigns.selected,
-          do: {:noreply, open_editor(socket, transaction.id, :row, params["field"])},
-          else: {:noreply, select(socket, [transaction])}
+      transaction ->
+        {:noreply, click_row(socket, transaction, params)}
     end
   end
 
@@ -505,12 +518,8 @@ defmodule AbakusWeb.RegisterLive do
     end
   end
 
-  def handle_event("select", %{"id" => id}, socket) do
-    case find(socket, id) do
-      nil -> {:noreply, socket}
-      transaction -> {:noreply, select(socket, toggle(socket.assigns.selected, transaction.id))}
-    end
-  end
+  def handle_event("toggle_picking", _params, socket),
+    do: {:noreply, update(socket, :picking, &(!&1))}
 
   def handle_event("select_all", _params, %{assigns: assigns} = socket) do
     if MapSet.size(assigns.selected) == assigns.count,
@@ -518,7 +527,8 @@ defmodule AbakusWeb.RegisterLive do
       else: {:noreply, select(socket, view(assigns, []))}
   end
 
-  def handle_event("clear_selection", _params, socket), do: {:noreply, select(socket, [])}
+  def handle_event("clear_selection", _params, socket),
+    do: {:noreply, socket |> assign(:picking, false) |> select([])}
 
   def handle_event("load_more", _params, %{assigns: assigns} = socket) do
     if assigns.count > length(assigns.rows),
@@ -724,6 +734,40 @@ defmodule AbakusWeb.RegisterLive do
   defp toggled(:reconciled), do: :cleared
 
   defp toggle(set, id), do: if(id in set, do: MapSet.delete(set, id), else: MapSet.put(set, id))
+
+  defp click_row(socket, transaction, params) do
+    %{selected: selected, picking: picking} = socket.assigns
+
+    cond do
+      params["range"] && socket.assigns.anchor ->
+        select(
+          socket,
+          MapSet.new(span(socket.assigns.rows, socket.assigns.anchor, transaction.id))
+        )
+
+      params["range"] ->
+        socket |> assign(:anchor, transaction.id) |> select([transaction])
+
+      params["toggle"] || picking ->
+        socket |> assign(:anchor, transaction.id) |> select(toggle(selected, transaction.id))
+
+      transaction.id in selected ->
+        open_editor(socket, transaction.id, :row, params["field"])
+
+      true ->
+        socket |> assign(:anchor, transaction.id) |> select([transaction])
+    end
+  end
+
+  # The ids from one row to another in the shown order, both included.
+  defp span(rows, from, to) do
+    ids = Enum.map(rows, & &1.id)
+
+    case {Enum.find_index(ids, &(&1 == from)), Enum.find_index(ids, &(&1 == to))} do
+      {nil, _to} -> [to]
+      {first, last} -> Enum.slice(ids, min(first, last)..max(first, last)//1)
+    end
+  end
 
   defp change(socket, id, fun) do
     case find(socket, id) do

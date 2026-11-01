@@ -15,14 +15,11 @@ struct StatusSymbol: Hashable {
 }
 
 extension ClearedStatus {
-    func symbol(reconciling: Bool) -> StatusSymbol {
+    var symbol: StatusSymbol {
         switch self {
-        case .cleared:
-            StatusSymbol(
-                name: "checkmark.circle.fill", color: reconciling ? ThemeColor.accent : ThemeColor.secondaryText,
-                label: "Gebucht")
+        case .cleared: StatusSymbol(name: "checkmark.circle.fill", color: ThemeColor.positive, label: "Gebucht")
         case .uncleared: StatusSymbol(name: "circle", color: ThemeColor.secondaryText, label: "Vorgemerkt")
-        case .reconciled: StatusSymbol(name: "lock.fill", color: ThemeColor.secondaryText, label: "Abgeglichen")
+        case .reconciled: StatusSymbol(name: "lock.fill", color: ThemeColor.positive, label: "Abgeglichen")
         }
     }
 }
@@ -32,7 +29,7 @@ extension ErrorLevel {
         switch self {
         case .none: nil
         case .error: StatusSymbol(name: "xmark.octagon.fill", color: ThemeColor.negative, label: "Fehler")
-        case .forReview: StatusSymbol(name: "circle.fill", color: ThemeColor.accent, label: "Zu bestätigen")
+        case .forReview: StatusSymbol(name: "checkmark", color: ThemeColor.accent, label: "Bestätigen")
         case .needsCategory:
             StatusSymbol(name: StatusSymbol.warning, color: ThemeColor.warning, label: "Kategorie fehlt")
         }

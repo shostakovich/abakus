@@ -64,19 +64,17 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, ~s|#assign-#{c.groceries.id}-2026-10[value="250,50"]|)
     end
 
-    test "a category leaves zero assigned and activity blank, Verfügbar and the totals show 0,00",
-         c do
+    test "zeros stay blank in category and group rows; Verfügbar and the totals show 0,00", c do
       {:ok, view, _html} = open(c.conn)
 
       assert has_element?(view, "#assign-#{c.groceries.id}-2026-10:not([value])")
       assert view |> element("#activity-#{c.groceries.id}-2026-10") |> render() =~ ~r/>\s*<\/td>/
-      assert has_element?(view, "#available-#{c.groceries.id}-2026-10", "0,00")
+      assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .app-zero", "0,00")
 
-      assert has_element?(
-               view,
-               "#group-#{c.groceries.category_group_id}-2026-10-assigned",
-               "0,00"
-             )
+      for field <- ~w(assigned activity available) do
+        group = "#group-#{c.groceries.category_group_id}-2026-10-#{field}"
+        assert view |> element(group) |> render() =~ ~r/>\s*<\/td>/
+      end
 
       assert has_element?(view, "#total-2026-10-activity", "0,00")
 
@@ -198,7 +196,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       end
     end
 
-    test "a card's ⋮ menu distributes the month", c do
+    test "a month head's ⋮ menu distributes the month", c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       Categories.assign(budget_scope(), c.groceries, @october, 10_000)
 
@@ -228,7 +226,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, "#distribute-reset-2026-10", "Zuweisung zurücksetzen")
     end
 
-    test "the current month is the focus month; a card has its calculation", c do
+    test "the current month is the focus month; a month head has its calculation", c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       Categories.assign(budget_scope(), c.groceries, @october, 30_000)
       Categories.assign(budget_scope(), c.groceries, @november, 30_000)
@@ -256,7 +254,30 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, "#strip button.is-focus", "Okt")
     end
 
-    test "clicking a month card or working in a month makes it the focus month", c do
+    test "a past month is muted, Verfügbar is the anchor column, Zu verteilen above zero is green",
+         c do
+      income(c, 100_000, ~D[2026-09-01], "Arbeitgeber")
+      {:ok, view, _html} = open(c.conn, ~p"/budget?month=2026-09", months: 2)
+
+      assert has_element?(view, "th.app-past #month-2026-09")
+      refute has_element?(view, "th.app-past #month-2026-10")
+      assert has_element?(view, "#available-#{c.rent.id}-2026-09.app-past.app-av")
+      assert has_element?(view, "#activity-#{c.rent.id}-2026-09.app-past.app-quiet")
+      assert has_element?(view, "#available-#{c.rent.id}-2026-10.app-av:not(.app-past)")
+
+      assert has_element?(
+               view,
+               "#group-#{c.rent.category_group_id}-2026-09-available.app-past.app-av"
+             )
+
+      assert has_element?(view, "#total-2026-10-available")
+      assert has_element?(view, "th.app-av #total-2026-10-available")
+
+      assert has_element?(view, "#calc-toggle-2026-10.app-rta.is-positive", "1.000,00 €")
+      refute has_element?(view, "#calc-toggle-2026-09.is-positive")
+    end
+
+    test "clicking a month head or working in a month makes it the focus month", c do
       {:ok, view, _html} = open(c.conn, ~p"/budget", months: 3)
 
       view |> element("#month-2026-11") |> render_click()
@@ -453,7 +474,8 @@ defmodule AbakusWeb.BudgetLiveTest do
                "200,00"
              )
 
-      assert has_element?(view, button.(c.rent) <> " .lucide")
+      assert has_element?(view, button.(c.rent) <> ~s| .app-ring-fill[stroke-dasharray="40 100"]|)
+      refute has_element?(view, button.(c.rent) <> " .lucide")
       assert has_element?(view, button.(fuel) <> ~s|[aria-label*="Ziel pausiert"] .lucide|)
       refute has_element?(view, button.(fuel) <> ".text-warning-ink")
       assert has_element?(view, button.(gift) <> ~s|.text-error-ink[aria-label*="überzogen"]|)
@@ -483,7 +505,7 @@ defmodule AbakusWeb.BudgetLiveTest do
              )
 
       refute has_element?(view, cell.("2026-12") <> ~s|[aria-label*="unterfinanziert"]|)
-      refute has_element?(view, cell.("2026-12") <> " .lucide")
+      refute has_element?(view, cell.("2026-12") <> " .app-ring")
       refute has_element?(view, cell.("2026-12") <> ".text-warning-ink")
 
       view |> element("#assign-#{c.groceries.id}-2026-12") |> render_blur(%{"value" => "10"})
@@ -493,7 +515,7 @@ defmodule AbakusWeb.BudgetLiveTest do
                cell.("2026-12") <> ~s|.text-warning-ink[aria-label*="unterfinanziert"]|
              )
 
-      assert has_element?(view, cell.("2026-12") <> " .lucide")
+      assert has_element?(view, cell.("2026-12") <> " .app-ring")
     end
 
     test "a target shows its state in Verfügbar, not on the row", c do

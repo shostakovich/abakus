@@ -13,6 +13,26 @@ public struct BudgetView: View {
     }
 
     public var body: some View {
+        panel
+            .background(ThemeColor.windowBackground)
+            .navigationTitle("Budget")
+            .toolbar { BudgetHeader(model: model) }
+            .onChange(of: model.isHeaderExpanded) { _, expanded in
+                withAnimation(.motion(BudgetStyle.headerResize)) { model.headerProgress = expanded ? 1 : 0 }
+            }
+            .task(id: model.drag?.autoScrolls == true) {
+                while model.drag?.autoScrolls == true, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                    model.autoScrollTick()
+                }
+            }
+            .onChange(of: model.panelFocusRequest) { if !model.isCoveredByModal { isKeySinkFocused = true } }
+            .onChange(of: model.editor == nil) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
+            .onChange(of: model.dialogs.isPresenting) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
+            .onAppear { isKeySinkFocused = true }
+    }
+
+    private var panel: some View {
         GeometryReader { proxy in
             let layout = model.layout(panelSize: proxy.size)
             ZStack(alignment: .topLeading) {
@@ -28,28 +48,11 @@ public struct BudgetView: View {
         } action: {
             model.panelSize = $0
         }
-        .background(ThemeColor.windowBackground)
-        .toolbar { BudgetToolbar(model: model) }
-        // The toolbar shows "Budget" instead of the window title, which keeps its width for the timeline.
-        .toolbar(removing: .title)
         .overlay {
             if model.editor != nil || model.quickBudget != nil || model.calculator != nil {
                 WindowEventMonitor { model.mouseDown(at: $0) }
             }
         }
-        .onChange(of: model.isHeaderExpanded) { _, expanded in
-            withAnimation(.motion(BudgetStyle.headerResize)) { model.headerProgress = expanded ? 1 : 0 }
-        }
-        .task(id: model.drag?.autoScrolls == true) {
-            while model.drag?.autoScrolls == true, !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(100))
-                model.autoScrollTick()
-            }
-        }
-        .onChange(of: model.panelFocusRequest) { if !model.isCoveredByModal { isKeySinkFocused = true } }
-        .onChange(of: model.editor == nil) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
-        .onChange(of: model.dialogs.isPresenting) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
-        .onAppear { isKeySinkFocused = true }
     }
 
     private var keySink: some View {
@@ -86,19 +89,9 @@ private struct BudgetPanelContent: View {
 
     var body: some View {
         let table = layout.tableFrame
-        let months = model.shownMonths.compactMap(model.month)
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(months.enumerated()), id: \.element.month) { index, month in
-                BudgetMonthCard(
-                    model: model, month: month, width: layout.columnWidth, height: layout.cardHeight,
-                    detailsHeight: layout.headerDetailsHeight, progress: layout.headerProgress
-                )
-                .offset(x: table.minX + layout.columnX(index), y: BudgetMetrics.topInset)
-            }
-            BudgetTable(model: model, layout: layout, months: months)
-                .offset(x: table.minX, y: table.minY)
-        }
-        .frame(width: layout.panelSize.width, height: layout.panelSize.height, alignment: .topLeading)
+        BudgetTable(model: model, layout: layout, months: model.shownMonths.compactMap(model.month))
+            .offset(x: table.minX, y: table.minY)
+            .frame(width: layout.panelSize.width, height: layout.panelSize.height, alignment: .topLeading)
     }
 }
 
@@ -109,17 +102,27 @@ private struct BudgetTable: View {
 
     var body: some View {
         let size = layout.tableFrame.size
-        let header = BudgetMetrics.tableHeaderHeight
+        let header = layout.headerHeight
         let shape = RoundedRectangle(cornerRadius: BudgetStyle.tableCornerRadius)
+        let tints = months.indices.map(layout.availableColumn(at:))
         ZStack(alignment: .topLeading) {
-            Rectangle().fill(ThemeColor.windowBackground).frame(width: size.width, height: header)
-            BudgetCategoryHeaderCell(model: model, width: layout.categoryWidth)
+            ForEach(tints, id: \.minX) { tint in
+                Rectangle().fill(ThemeColor.availableTint)
+                    .frame(width: tint.width, height: tint.height)
+                    .offset(x: tint.minX, y: tint.minY)
+            }
+            BudgetCategoryHeaderCell(model: model, width: layout.categoryWidth, height: header)
             ForEach(Array(months.enumerated()), id: \.element.month) { index, month in
-                BudgetMonthHeaderCell(model: model, month: month, cells: layout.cells(at: index))
-                    .offset(x: layout.columnX(index))
+                BudgetMonthHeader(
+                    model: model, month: month, width: layout.columnWidth, cells: layout.cells(at: index),
+                    detailsHeight: layout.headerDetailsHeight, progress: layout.headerProgress
+                )
+                .frame(height: header, alignment: .top)
+                .clipped()
+                .offset(x: layout.columnX(index))
             }
             Rectangle().fill(ThemeColor.separator).frame(width: size.width, height: 1).offset(y: header - 1)
-            rows
+            rows(tints: tints)
                 .frame(width: size.width, height: layout.viewportHeight, alignment: .topLeading)
                 .clipped()
                 .offset(y: header)
@@ -143,9 +146,10 @@ private struct BudgetTable: View {
         .overlay { shape.strokeBorder(ThemeColor.separator, lineWidth: 1) }
     }
 
-    private var rows: some View {
+    private func rows(tints: [CGRect]) -> some View {
         ZStack(alignment: .topLeading) {
-            BudgetRowBackgrounds(groups: model.groups, offset: model.scrollOffset, width: layout.tableWidth)
+            BudgetRowBackgrounds(
+                groups: model.groups, offset: model.scrollOffset, width: layout.tableWidth, tints: tints)
             BudgetCategoryRowsView(model: model, width: layout.categoryWidth)
             ForEach(Array(months.enumerated()), id: \.element.month) { index, month in
                 BudgetMonthRowsView(model: model, month: month, cells: layout.cells(at: index))

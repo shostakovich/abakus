@@ -10,7 +10,7 @@ struct SnapshotOptions {
     var collapsedSidebar = false
     var width: CGFloat?
     var height: CGFloat?
-    var selectLast = 0
+    var selectNewest = 0
     var expandSplits = false
     var edit: EditHarness.State?
     var ops: OpsHarness.State?
@@ -52,7 +52,7 @@ struct SnapshotOptions {
             case "--width": width = CGFloat(try number(of: argument, atLeast: 1.0))
             case "--height": height = CGFloat(try number(of: argument, atLeast: 1.0))
             case "--expand-splits": expandSplits = true
-            case "--select": selectLast = try number(of: argument, atLeast: 0)
+            case "--select": selectNewest = try number(of: argument, atLeast: 0)
             case "--edit": edit = try state(of: argument)
             case "--native-menus": nativeMenus = true
             case "--ops": ops = try state(of: argument)
@@ -102,7 +102,7 @@ enum SnapshotError: Error, CustomStringConvertible {
 
     private static var usageText: String {
         "usage: Snapshot <out.png> [--account <name>] [--scale 2] [--collapsed-sidebar] "
-            + "[--width 1020] [--height 700] [--dark] [--increase-contrast] [--select <last n rows>] "
+            + "[--width 1020] [--height 700] [--dark] [--increase-contrast] [--select <newest n rows>] "
             + "[--expand-splits] [--trace] [--edit "
             + EditHarness.State.allCases.map(\.rawValue).joined(separator: "|") + "] [--ops "
             + OpsHarness.State.allCases.map(\.rawValue).joined(separator: "|") + "] [--native-menus] [--ui "
@@ -205,8 +205,8 @@ func render(_ options: SnapshotOptions) throws {
             model.register.toggleSplit(transaction.id)
         }
     }
-    if options.selectLast > 0 {
-        for id in model.register.transactionIds.suffix(options.selectLast) {
+    if options.selectNewest > 0 {
+        for id in model.register.transactionIds.prefix(options.selectNewest) {
             model.register.rowClicked(
                 model.register.rows.first { $0.id == id }!, column: nil, modifiers: .command)
         }
@@ -287,12 +287,21 @@ func capture(_ window: NSWindow, scale: Int) throws -> NSBitmapImageRep {
         let multiple = dlsym(library, "CGWindowListCreateImageFromArray")
     else { throw SnapshotError.render }
     window.displayIfNeeded()
-    RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+    func windowImage() -> CGImage? {
+        unsafeBitCast(single, to: CreateImage.self)(
+            .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution]
+        )?.takeRetainedValue()
+    }
+    // A cold window server, as on a CI runner, hands out the window blank for a while after it was ordered in.
+    let deadline = Date().addingTimeInterval(10)
+    var drawn: CGImage?
+    repeat {
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        drawn = windowImage()
+    } while drawn.map(isBlank) ?? true && Date() < deadline
     let frame = window.frame
     guard
-        let image = unsafeBitCast(single, to: CreateImage.self)(
-            .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution]
-        )?.takeRetainedValue(),
+        let image = drawn, !isBlank(image),
         let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: Int(frame.width) * scale, pixelsHigh: Int(frame.height) * scale,
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
@@ -315,6 +324,23 @@ func capture(_ window: NSWindow, scale: Int) throws -> NSBitmapImageRep {
     else { throw SnapshotError.render }
     context.cgContext.draw(attached, in: target)
     return rep
+}
+
+/// Every pixel alike, as in a window the window server has not drawn yet.
+func isBlank(_ image: CGImage) -> Bool {
+    let side = 32
+    var pixels = [UInt32](repeating: 0, count: side * side)
+    let drawn = pixels.withUnsafeMutableBytes { buffer in
+        guard
+            let context = CGContext(
+                data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return false }
+        context.interpolationQuality = .none
+        context.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+        return true
+    }
+    return drawn && Set(pixels).count == 1
 }
 
 /// Sheets, alerts and child windows such as the search suggestions, with their own sheets and child windows.

@@ -15,12 +15,15 @@ public enum RegisterSplitState: Hashable, Sendable {
 public struct RegisterRow: Identifiable, Hashable, Sendable {
     public enum Kind: Hashable, Sendable {
         case transaction
-        case subtransaction(parentIndex: Int)
+        case subtransaction
+        case monthHeading
     }
 
     public var id: String
     public var transactionId: String
     public var kind: Kind
+    /// A month heading's text, such as "Oktober 2026".
+    public var title = ""
     public var account = ""
     public var date = ""
     public var frequency = ""
@@ -30,6 +33,7 @@ public struct RegisterRow: Identifiable, Hashable, Sendable {
     public var errorLevel = ErrorLevel.none
     public var errorMessage = ""
     public var category = ""
+    public var categoryTooltip: String?
     public var categoryStyle = RegisterTextStyle.plain
     public var split = RegisterSplitState.none
     public var memo = ""
@@ -42,7 +46,13 @@ public struct RegisterRow: Identifiable, Hashable, Sendable {
     /// A split line a search did not match: struck through in grey.
     public var isExcludedFromSearch = false
 
-    public var isSubtransaction: Bool { kind != .transaction }
+    public var isSubtransaction: Bool { kind == .subtransaction }
+
+    public var isMonthHeading: Bool { kind == .monthHeading }
+
+    static func monthHeading(_ title: String) -> RegisterRow {
+        RegisterRow(id: "month:" + title, transactionId: "", kind: .monthHeading, title: title)
+    }
 
     public var clearedTooltip: String { Self.clearedTooltip(cleared) }
 
@@ -64,6 +74,8 @@ struct RegisterRowBuilder {
     let lookup: BudgetLookup
     let formatter: BudgetFormatter
     let runningBalances: [String: Decimal]
+    /// Under month headings a date leaves out its year.
+    var showsYear = true
 
     var budget: Budget { lookup.budget }
 
@@ -73,17 +85,23 @@ struct RegisterRowBuilder {
         self.runningBalances = runningBalances
     }
 
-    /// The edited record stays collapsed: its edit row shows the split lines.
+    /// The edited record stays collapsed: its edit row shows the split lines. A heading precedes each run of records
+    /// with the same `heading`.
     func rows<Record: SplittableTransaction & Identifiable>(
         for records: [Record], expandedSplits: Set<String>, editingId: String?,
-        row: (Record, _ isExpanded: Bool) -> RegisterRow, subRows: (Record, _ parentIndex: Int) -> [RegisterRow]
+        heading: (Record) -> String? = { _ in nil },
+        row: (Record, _ isExpanded: Bool) -> RegisterRow, subRows: (Record) -> [RegisterRow]
     ) -> [RegisterRow] where Record.ID == String {
         var rows: [RegisterRow] = []
+        var currentHeading: String?
         for record in records {
+            if let title = heading(record), title != currentHeading {
+                currentHeading = title
+                rows.append(.monthHeading(title))
+            }
             let isExpanded = record.isSplit && expandedSplits.contains(record.id) && record.id != editingId
-            let parentIndex = rows.count
             rows.append(row(record, isExpanded))
-            if isExpanded { rows += subRows(record, parentIndex) }
+            if isExpanded { rows += subRows(record) }
         }
         return rows
     }
@@ -93,12 +111,18 @@ struct RegisterRowBuilder {
         var row = baseRow(transaction, isExpanded: isExpanded)
         row.errorLevel = errorState.level
         row.errorMessage = errorState.message
-        if needsCategory(transaction, level: errorState.level) { row.category = Self.needsCategoryPrompt }
         row.categoryStyle = Self.categoryStyle(errorState.level)
+        if needsCategory(transaction, level: errorState.level) { showNeedsCategory(&row) }
         row.runningBalance = runningBalances[transaction.id].map(formatter.currencyNoSymbol) ?? ""
         row.cleared = transaction.cleared
         row.textStyle = errorState.level == .forReview ? .bold : .plain
         return row
+    }
+
+    private func showNeedsCategory(_ row: inout RegisterRow) {
+        row.category = Self.needsCategoryPrompt
+        row.categoryTooltip = nil
+        row.categoryStyle = .needsCategory
     }
 
     func row(for scheduled: ScheduledTransaction, isExpanded: Bool) -> RegisterRow {
@@ -107,23 +131,23 @@ struct RegisterRowBuilder {
         return row
     }
 
-    func subRows(for transaction: Transaction, parentIndex: Int, match: RegisterSearchMatch? = nil) -> [RegisterRow] {
-        zip(transaction.subtransactions, baseSubRows(transaction, parentIndex: parentIndex)).map { sub, base in
+    func subRows(for transaction: Transaction, match: RegisterSearchMatch? = nil) -> [RegisterRow] {
+        zip(transaction.subtransactions, baseSubRows(transaction)).map { sub, base in
             let errorState = lookup.errorState(of: sub, inAccount: transaction.accountId)
             var row = base
             row.errorLevel = errorState.level
             row.errorMessage = errorState.message
-            if !EntityID.isCategorized(sub.categoryId) && errorState.level == .needsCategory && sub.amount != 0 {
-                row.category = Self.needsCategoryPrompt
-            }
             row.categoryStyle = Self.categoryStyle(errorState.level)
+            if !EntityID.isCategorized(sub.categoryId) && errorState.level == .needsCategory && sub.amount != 0 {
+                showNeedsCategory(&row)
+            }
             row.isExcludedFromSearch = !(match?.subMatches(sub.id) ?? true)
             return row
         }
     }
 
-    func subRows(for scheduled: ScheduledTransaction, parentIndex: Int) -> [RegisterRow] {
-        baseSubRows(scheduled.editableTransaction, parentIndex: parentIndex)
+    func subRows(for scheduled: ScheduledTransaction) -> [RegisterRow] {
+        baseSubRows(scheduled.editableTransaction)
     }
 
     static func categoryStyle(_ level: ErrorLevel) -> RegisterTextStyle {
@@ -139,11 +163,16 @@ struct RegisterRowBuilder {
         let account = lookup.account(withId: transaction.accountId)
         var row = RegisterRow(id: transaction.id, transactionId: transaction.id, kind: .transaction)
         row.account = account?.name ?? ""
-        row.date = formatter.dateShort(transaction.date)
-        row.payee = lookup.payeeName(of: transaction)
+        row.date = showsYear ? formatter.dateShort(transaction.date) : formatter.dayMonth(transaction.date)
+        setPayee(&row, name: lookup.payeeName(of: transaction), target: lookup.transferAccountId(of: transaction))
         row.payeeTooltip = row.payee.isEmpty ? nil : row.payee
-        row.hasTransferIcon = isTransfer(lookup.transferAccountId(of: transaction))
-        row.category = account?.onBudget == true ? lookup.categoryDisplayName(of: transaction) : ""
+        if account?.onBudget == true {
+            if transaction.isSplit {
+                row.category = "Aufgeteilt (\(transaction.subtransactions.count))"
+            } else {
+                setCategory(&row, transaction.categoryId)
+            }
+        }
         row.split = transaction.isSplit ? (isExpanded ? .expanded : .collapsed) : .none
         row.memo = transaction.memo ?? ""
         row.outflow = formatter.registerAmount(transaction.outflow)
@@ -152,13 +181,12 @@ struct RegisterRowBuilder {
         return row
     }
 
-    private func baseSubRows(_ transaction: Transaction, parentIndex: Int) -> [RegisterRow] {
+    private func baseSubRows(_ transaction: Transaction) -> [RegisterRow] {
         transaction.subtransactions.map { sub in
             var row = RegisterRow(
-                id: sub.id, transactionId: transaction.id, kind: .subtransaction(parentIndex: parentIndex))
-            row.payee = lookup.payeeName(of: sub)
-            row.hasTransferIcon = isTransfer(lookup.transferAccountId(of: sub))
-            row.category = budget.categoryDisplayName(sub.categoryId)
+                id: sub.id, transactionId: transaction.id, kind: .subtransaction)
+            setPayee(&row, name: lookup.payeeName(of: sub), target: lookup.transferAccountId(of: sub))
+            setCategory(&row, sub.categoryId)
             row.memo = sub.memo ?? ""
             row.outflow = formatter.registerAmount(sub.outflow)
             row.inflow = formatter.registerAmount(sub.inflow)
@@ -167,8 +195,21 @@ struct RegisterRowBuilder {
         }
     }
 
-    private func isTransfer(_ targetId: String?) -> Bool {
-        targetId.flatMap(lookup.account(withId:)) != nil
+    /// A transfer shows the account at its other side, after the transfer symbol.
+    private func setPayee(_ row: inout RegisterRow, name: String, target: String?) {
+        if let account = target.flatMap(lookup.account(withId:)) {
+            row.payee = account.name
+            row.hasTransferIcon = true
+        } else {
+            row.payee = name
+        }
+    }
+
+    /// The category without its group; the group shows in the tooltip.
+    private func setCategory(_ row: inout RegisterRow, _ categoryId: String?) {
+        row.category = lookup.categoryName(categoryId)
+        let qualified = lookup.categoryDisplayName(categoryId)
+        row.categoryTooltip = qualified == row.category ? nil : qualified
     }
 
     private func needsCategory(_ transaction: Transaction, level: ErrorLevel) -> Bool {

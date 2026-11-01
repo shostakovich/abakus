@@ -16,7 +16,7 @@ struct RegisterGridView: View {
     init(owner: any RegisterGridOwner, size: CGSize) {
         self.owner = owner
         self.size = size
-        _keepsEnd = State(initialValue: !owner.startsAtTop)
+        _keepsEnd = State(initialValue: false)
         _accountKey = State(initialValue: owner.mainGrid?.accountKey)
     }
 
@@ -25,31 +25,22 @@ struct RegisterGridView: View {
 
     var body: some View {
         let layout = owner.columnLayout(gridWidth: size.width)
-        let rows = owner.rows
-        let addRow = grid.addRowPlacement(gridHeight: size.height)
-        let listHeight = addRow.listHeight(gridHeight: size.height)
-        let contentHeight = grid.listContentHeight(viewport: listHeight)
-        let bodyHeight = max(0, size.height - RegisterMetrics.headerHeight)
+        let rows = owner.gridRows
+        let contentHeight = grid.listContentHeight(viewport: viewport)
         VStack(spacing: 0) {
             RegisterGridHeader(owner: owner, layout: layout)
                 // The column menu opens straight below the mouse, unlike the row menus.
                 .onSecondaryClick(offset: CGSize(width: 0, height: 1), perform: grid.register.performMenuAction) { _ in
                     owner.headerContextMenu()
                 }
-            ZStack(alignment: .topLeading) {
-                list(rows: rows, layout: layout, height: listHeight, contentHeight: contentHeight)
-                    .onSecondaryClick(perform: grid.register.performMenuAction) { point in
-                        let items = grid.contextMenu(atY: point.y, scrollOffset: scroll.metrics.offset)
-                        if main == nil, items?.isEmpty == false { isFocused = true }
-                        return items
-                    }
-                if let editor = grid.editor, editor.mode == .new {
-                    EditRowView(editor: editor, layout: layout, row: nil, main: main)
-                        .offset(y: addRow.y - RegisterMetrics.headerHeight)
+            list(rows: rows, layout: layout, height: viewport, contentHeight: contentHeight)
+                .onSecondaryClick(perform: grid.register.performMenuAction) { point in
+                    let items = grid.contextMenu(atY: point.y, scrollOffset: scroll.metrics.offset)
+                    if main == nil, items?.isEmpty == false { isFocused = true }
+                    return items
                 }
-            }
-            .frame(width: size.width, height: bodyHeight, alignment: .topLeading)
-            .clipped()
+                .frame(width: size.width, height: viewport, alignment: .topLeading)
+                .clipped()
         }
         .background(ThemeColor.contentBackground)
         .frame(width: size.width, height: size.height, alignment: .topLeading)
@@ -64,7 +55,7 @@ struct RegisterGridView: View {
             guard let key = Self.navigationKey(press.key) else { return .ignored }
             let id = grid.navigationKeyPressed(
                 key, extending: press.modifiers.contains(.shift), caretOnly: press.modifiers.contains(.command),
-                pageRows: max(1, Int(listHeight / RegisterMetrics.rowHeight) - 1))
+                pageRows: max(1, Int(viewport / RegisterMetrics.rowHeight) - 1))
             if let id { reveal(.row(id)) }
             return .handled
         }
@@ -107,7 +98,7 @@ struct RegisterGridView: View {
             case .button, .field(.main(.frequency)): isFocused = true
             default: break
             }
-            if grid.editingId != nil { keepPlace() }
+            if grid.editor != nil { keepPlace() }
         }
         .onChange(of: grid.editor == nil) {
             if grid.editor == nil { isFocused = true }
@@ -120,10 +111,10 @@ struct RegisterGridView: View {
             guard let request = grid.scrollRequest else { return }
             if grid.editor == nil { reveal(request.target) } else { keepPlace() }
         }
-        .onChange(of: [listHeight, contentHeight]) { keepPlace() }
+        .onChange(of: [viewport, contentHeight]) { keepPlace() }
         .onChange(of: grid.editor?.rowHeight) { keepPlace() }
         .onAppear {
-            record(grid.scrollMetrics(at: owner.startsAtTop ? 0 : .greatestFiniteMagnitude, viewport: viewport))
+            record(grid.scrollMetrics(at: 0, viewport: viewport))
             if let request = grid.scrollRequest {
                 reveal(request.target)
             } else if let offset = main?.savedScrollOffset() {
@@ -151,9 +142,7 @@ struct RegisterGridView: View {
         "\u{7F}", "\u{8}", String(Character(UnicodeScalar(NSDeleteFunctionKey)!)),
     ]
 
-    private var viewport: CGFloat {
-        grid.addRowPlacement(gridHeight: size.height).listHeight(gridHeight: size.height)
-    }
+    private var viewport: CGFloat { max(0, size.height - RegisterMetrics.headerHeight) }
 
     private func reveal(_ target: RegisterScrollRequest.Target) {
         guard let list = grid.scrollMetrics(revealing: target, from: placed.list, viewport: viewport) else { return }
@@ -205,21 +194,30 @@ struct RegisterGridView: View {
     private func list(rows: [RegisterRow], layout: RegisterColumnLayout, height: CGFloat, contentHeight: CGFloat)
         -> some View
     {
-        let extraHeight = grid.editRowExtraHeight
+        let extraHeight = grid.editRowExtraHeight + grid.addRowHeight
         let selection = grid.selection
         let editingId = grid.editingId
         let editor = grid.editor
         // A legacy scroller narrows the content; rows then give up the trailing column-menu slot instead of centring.
         return ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 0) {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(rows) { row in
-                        if let editor, row.id == editingId {
-                            EditRowView(editor: editor, layout: layout, row: row, main: main)
-                        } else {
-                            RegisterRowView(
-                                row: row, layout: layout, isSelected: selection.contains(row.transactionId),
-                                owner: owner, onClick: { isFocused = true })
+                if let editor, editor.mode == .new {
+                    EditRowView(editor: editor, layout: layout, row: nil, main: main)
+                }
+                LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    ForEach(RegisterMonthSection.sections(of: rows)) { section in
+                        Section {
+                            ForEach(section.rows) { row in
+                                if let editor, row.id == editingId {
+                                    EditRowView(editor: editor, layout: layout, row: row, main: main)
+                                } else {
+                                    RegisterRowView(
+                                        row: row, layout: layout, isSelected: selection.contains(row.transactionId),
+                                        owner: owner, onClick: { isFocused = true })
+                                }
+                            }
+                        } header: {
+                            if let heading = section.heading { RegisterMonthHeadingView(row: heading, layout: layout) }
                         }
                     }
                 }
@@ -229,8 +227,8 @@ struct RegisterGridView: View {
             }
         }
         .scrollPosition($scrollPosition)
-        .scrollTargetBehavior(RowSnapBehavior(isOn: owner.snapsToRows))
-        .defaultScrollAnchor(owner.startsAtTop ? .top : .bottom, for: .initialOffset)
+        .scrollTargetBehavior(RowSnapBehavior(isOn: owner.snapsToRows, origin: grid.addRowHeight))
+        .defaultScrollAnchor(.top, for: .initialOffset)
         .defaultScrollAnchor(keepsEnd ? .bottom : .top, for: .sizeChanges)
         .onScrollGeometryChange(for: ScrollMetrics.self) { geometry in
             ScrollMetrics(
@@ -238,7 +236,7 @@ struct RegisterGridView: View {
                 viewportHeight: geometry.containerSize.height)
         } action: { _, new in
             scroll.metrics = new
-            if let main, main.accountKey == accountKey { main.saveScrollOffset(new.isAtEnd ? nil : new.offset) }
+            if let main, main.accountKey == accountKey { main.saveScrollOffset(new.offset) }
             if isUserScrolling { record(new) } else { restoreIfDrifted() }
         }
         .onScrollPhaseChange { _, phase in
@@ -260,10 +258,56 @@ private final class PlacedList {
 /// Like Flex lists, a snapping grid scrolls by whole rows.
 private struct RowSnapBehavior: ScrollTargetBehavior {
     let isOn: Bool
+    let origin: CGFloat
 
     func updateTarget(_ target: inout ScrollTarget, context: TargetContext) {
         guard isOn else { return }
         let maxOffset = max(0, context.contentSize.height - context.containerSize.height)
-        target.rect.origin.y = RegisterGridController.snappedOffset(target.rect.origin.y, maxOffset: maxOffset)
+        target.rect.origin.y = RegisterGridController.snappedOffset(
+            target.rect.origin.y, maxOffset: maxOffset, origin: origin)
+    }
+}
+
+/// The rows under one month heading; rows before the first heading, or a list without headings, have none.
+struct RegisterMonthSection: Identifiable {
+    var heading: RegisterRow?
+    var rows: [RegisterRow] = []
+
+    var id: String { heading?.id ?? "" }
+
+    static func sections(of rows: [RegisterRow]) -> [RegisterMonthSection] {
+        var sections: [RegisterMonthSection] = []
+        for row in rows {
+            if row.isMonthHeading {
+                sections.append(RegisterMonthSection(heading: row))
+            } else if sections.isEmpty {
+                sections.append(RegisterMonthSection(heading: nil, rows: [row]))
+            } else {
+                sections[sections.count - 1].rows.append(row)
+            }
+        }
+        return sections
+    }
+}
+
+/// A quiet month title that stays at the top while its rows scroll under it.
+struct RegisterMonthHeadingView: View {
+    let row: RegisterRow
+    let layout: RegisterColumnLayout
+
+    var body: some View {
+        Text(verbatim: row.title)
+            .font(RegisterGridStyle.monthHeadingFont.font)
+            .foregroundStyle(ThemeColor.secondaryText)
+            .lineLimit(1)
+            .padding(.leading, RegisterMetrics.leadingInset + RegisterGridStyle.cellInset)
+            .padding(.trailing, RegisterGridStyle.cellInset)
+            .padding(.bottom, 5)
+            .frame(width: layout.gridWidth, height: RegisterMetrics.rowHeight, alignment: .bottomLeading)
+            .background(ThemeColor.contentBackground)
+            .overlay(alignment: .bottom) { Divider() }
+            .contentShape(Rectangle())
+            .onTapGesture {}
+            .accessibilityAddTraits(.isHeader)
     }
 }

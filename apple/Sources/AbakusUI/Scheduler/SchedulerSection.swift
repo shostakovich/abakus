@@ -76,7 +76,7 @@ private struct SchedulerTitleBar: View {
                 Button(RegisterScheduler.transferTitle, action: scheduler.transferClicked)
             }
         } label: {
-            Label(RegisterToolbar.addMenuTitle, systemImage: "plus")
+            Label("Hinzufügen", systemImage: "plus")
                 .labelStyle(.iconOnly)
         }
         .menuStyle(.button)

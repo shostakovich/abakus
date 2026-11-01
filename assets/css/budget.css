@@ -5,6 +5,12 @@
   --app-group-line: color-mix(in oklab, var(--color-base-content) 30%, transparent);
   --app-toolbar-h: 3rem;
   --app-row-h: 2.25rem;
+  --app-band: var(--color-base-200);
+  --app-avail: color-mix(in oklab, var(--color-primary) 6%, var(--color-base-100));
+  --app-avail-band: color-mix(in oklab, var(--app-band) 60%, var(--app-avail));
+  --app-positive-band: color-mix(in oklab, var(--color-success) 12%, var(--color-base-100));
+  /* Verfügbar's digits stop before the marker slot in every row, marked or not. */
+  --app-mark-end: 1.5rem;
 }
 
 .app-zero { color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
@@ -40,20 +46,35 @@
 .app-budget .app-num { text-align: end; }
 .app-col-cat { width: var(--cat-w); }
 .app-budget .app-cat { position: relative; overflow: visible; }
-.app-col-assigned { width: calc(var(--month-w) * .33); }
-.app-col-activity { width: calc(var(--month-w) * .27); }
-.app-col-available { width: calc(var(--month-w) * .4); }
+.app-col-assigned { width: calc(var(--month-w) * .32); }
+.app-col-activity { width: calc(var(--month-w) * .31); }
+.app-col-available { width: calc(var(--month-w) * .37); }
+.app-budget :is(td, th).app-num { padding-inline: .375rem; }
 .app-budget-wrap { container-type: inline-size; }
 
-.app-budget .app-cards > th { height: 1px; padding: .25rem .5rem; box-shadow: none; vertical-align: bottom; overflow: visible; }
-.app-budget .app-cards > th.app-ms { box-shadow: inset 1px 0 0 var(--app-line); }
-.app-budget .app-cards > th.app-cat { padding-block: .25rem; box-shadow: inset 0 -1px 0 var(--app-line); }
+.app-budget .app-heads-month > th { height: 1px; padding: .25rem .5rem .375rem; box-shadow: none; vertical-align: bottom; overflow: visible; }
+.app-budget .app-heads-month > th.app-ms { box-shadow: inset 1px 0 0 var(--app-line); }
+.app-budget .app-heads-month > th.app-cat { padding-block: .25rem; box-shadow: inset 0 -1px 0 var(--app-line); }
 .app-budget .app-heads > th { padding-block: .25rem; vertical-align: bottom; overflow: visible; }
 .app-cathead { display: flex; align-items: flex-end; justify-content: space-between; gap: .5rem; }
 .app-cathead .btn { margin-block-end: -.5rem; margin-inline-end: -.5rem; }
 .app-add-end { display: flex; padding: .5rem 0 1rem; }
 .app-colh { display: block; font-size: .75rem; font-weight: 600; color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
 .app-colsum { display: block; font-weight: 600; }
+
+.app-budget :is(th, td).app-av { background: var(--app-avail); font-weight: 600; }
+.app-budget .app-grp > * { background: var(--app-band); }
+.app-budget .app-grp > .app-av { background: var(--app-avail-band); }
+
+.app-budget .app-past:not(.text-error-ink),
+.app-budget .app-past :is(.app-colsum, .app-mname, .app-rta-value:not(.text-error-ink)) { color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
+.app-budget .app-past :is(.text-warning-ink, .text-success-ink) { color: inherit; }
+
+.app-ring { flex: none; width: .875rem; height: .875rem; }
+.app-ring circle { fill: none; stroke: currentColor; stroke-width: 2.6; }
+.app-ring-track { opacity: .25; }
+.app-ring-fill { stroke-linecap: round; }
+.app-ring-fill[stroke-dasharray^="0 "] { display: none; }
 
 .app-row > * { height: var(--app-row-h); }
 .app-catcell { display: flex; align-items: center; gap: .5rem; min-width: 0; }
@@ -114,29 +135,27 @@ button.app-grp-name:hover { text-decoration: underline; text-underline-offset: 3
 .app-assign:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 1px var(--color-primary); background: var(--color-base-100); color: var(--color-base-content); }
 .app-assign[aria-invalid=true] { border-color: var(--color-error-ink); }
 
+.app-budget :is(td, th).app-num.app-av { padding-inline-end: var(--app-mark-end); }
 .app-avail {
-  position: relative; display: inline-flex; align-items: center; gap: .25rem; height: 1.75rem; margin-inline-end: -.375rem;
-  padding: 0 .375rem; border: 0; border-radius: var(--radius-field); background: none; font: inherit;
+  position: relative; display: inline-flex; align-items: center; height: 1.75rem;
+  margin-inline-end: calc(.375rem - var(--app-mark-end)); padding: 0 .375rem; border: 0; border-radius: var(--radius-field); background: none; font: inherit;
   font-variant-numeric: tabular-nums; white-space: nowrap; vertical-align: middle;
 }
 .app-avail .lucide { flex: none; width: .875rem; height: .875rem; }
+.app-mark { display: inline-flex; justify-content: flex-end; flex: none; width: 1.125rem; }
 button.app-avail { cursor: pointer; }
 button.app-avail:hover { background: color-mix(in oklab, var(--color-base-content) 6%, transparent); }
 button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 @media (pointer: coarse) { button.app-avail::after { content: ""; position: absolute; inset: -.5rem -.25rem; } }
 
-.app-mcard {
-  display: flex; flex-direction: column; gap: .25rem; height: 100%; padding: .25rem .75rem .5rem;
-  border: 1px solid var(--app-line); border-radius: var(--radius-box); background: var(--color-base-100);
-  white-space: normal; cursor: pointer;
-}
-.app-mcard:not(.is-focus):hover { border-color: color-mix(in oklab, var(--color-base-content) 30%, transparent); }
-.app-mcard.is-focus { cursor: default; }
+.app-month { display: flex; flex-direction: column; gap: .25rem; height: 100%; white-space: normal; cursor: pointer; }
+.app-month.is-focus { cursor: default; }
 .app-mhead { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2rem; }
 .app-mhead .app-distribute { margin-inline-end: -.5rem; }
 .app-distribute .menu { text-align: start; }
 .app-mname { font-size: 1rem; font-weight: 600; line-height: 1.5rem; }
-.app-mcard .app-mname { font-size: .875rem; line-height: 1.25rem; }
+.app-month .app-mhead { min-height: 1.75rem; }
+.app-month .app-mname { font-size: .9375rem; }
 
 .app-mcalc {
   --app-mcalc-x: .75rem;
@@ -152,18 +171,22 @@ button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outlin
 .app-mcalc .app-mcalc-warn dt { color: inherit; }
 
 .app-rta {
-  display: flex; flex-direction: column; align-items: center; margin-block-start: auto; padding: .125rem .5rem;
-  border: 0; border-radius: var(--radius-field); background: none; color: inherit; font: inherit; cursor: pointer;
+  display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-block-start: auto;
+  padding: .375rem .625rem; border: 0; border-radius: var(--radius-field); background: var(--app-band); color: inherit;
+  font: inherit; text-align: start; cursor: pointer;
 }
-.app-rta:hover { background: color-mix(in oklab, var(--color-base-content) 6%, transparent); }
+.app-rta.is-positive { background: var(--app-positive-band); }
+.app-rta:hover { background: color-mix(in oklab, var(--color-base-content) 6%, var(--app-band)); }
+.app-rta.is-positive:hover { background: color-mix(in oklab, var(--color-base-content) 6%, var(--app-positive-band)); }
 .app-rta:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 0; }
 .app-rta-label {
-  display: inline-flex; align-items: center; gap: .25rem; font-size: .75rem; line-height: 1rem; font-weight: 500;
+  display: block; min-width: 0; font-size: .75rem; line-height: 1rem; font-weight: 500;
   color: color-mix(in oklab, var(--color-base-content) 70%, transparent);
 }
-.app-rta-label .lucide { flex: none; width: .875rem; height: .875rem; transition: rotate var(--setzkasten-duration) var(--setzkasten-ease-out); }
+.app-rta-label .lucide { display: inline-block; width: .875rem; height: .875rem; margin-inline-start: .25rem; vertical-align: -.1875rem; transition: rotate var(--setzkasten-duration) var(--setzkasten-ease-out); }
 :root[data-budget-calculation="shown"] .app-rta-label .lucide { rotate: 180deg; }
-.app-rta-value { font-size: 1.5rem; line-height: 2rem; font-weight: 600; letter-spacing: -.01em; }
+.app-rta-value { flex: none; font-size: 1.25rem; line-height: 1.75rem; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; }
+.app-past .app-rta-value { font-size: 1rem; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .app-rta-label .lucide { transition: none; } }
 
 .app-mbar {
@@ -173,6 +196,7 @@ button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outlin
   background: var(--color-base-100); border-bottom: 1px solid var(--app-line);
 }
 @media (width >= 40rem) { .app-mbar { --app-bar-x: 1.5rem; } }
+.app-month .app-mcalc { --app-mcalc-x: .5rem; }
 .app-mbar .app-mcalc { --app-mcalc-x: var(--app-bar-x); }
 .app-mbar-nav { display: flex; align-items: center; gap: .25rem; }
 .app-mbar .app-rta-value { font-size: 1.25rem; line-height: 1.75rem; }

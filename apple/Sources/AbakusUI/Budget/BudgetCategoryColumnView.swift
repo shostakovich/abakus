@@ -4,6 +4,7 @@ import SwiftUI
 struct BudgetCategoryHeaderCell: View {
     let model: BudgetViewModel
     let width: CGFloat
+    let height: CGFloat
 
     var body: some View {
         HStack(spacing: 0) {
@@ -13,9 +14,19 @@ struct BudgetCategoryHeaderCell: View {
                 .lineLimit(1)
                 .accessibilityAddTraits(.isHeader)
             Spacer(minLength: 4)
-            BudgetSymbolButton(
-                symbol: "plus.circle", label: "Neue Kategoriegruppe", toolTip: "Neue Kategoriegruppe",
-                action: model.addMasterCategoryClicked)
+            Button(action: model.addMasterCategoryClicked) {
+                HStack(spacing: 3) {
+                    Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+                    Text(verbatim: "Gruppe").font(BudgetStyle.columnTitleFont.font)
+                }
+                .foregroundStyle(ThemeColor.text)
+                .frame(height: BudgetSymbolButton.size)
+                .padding(.horizontal, 4)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Neue Kategoriegruppe")
+            .toolTip("Neue Kategoriegruppe")
             BudgetSymbolButton(
                 symbol: "chevron.down", label: "Alle Gruppen aufklappen", toolTip: "Alle Gruppen aufklappen",
                 action: model.expandAllClicked)
@@ -25,8 +36,8 @@ struct BudgetCategoryHeaderCell: View {
         }
         .padding(.leading, BudgetMetrics.cellPadding)
         .padding(.trailing, 4)
-        .padding(.bottom, 4)
-        .frame(width: width, height: BudgetMetrics.tableHeaderHeight, alignment: .bottom)
+        .padding(.bottom, BudgetStyle.columnHeadBottomPadding)
+        .frame(width: width, height: height, alignment: .bottom)
     }
 }
 
@@ -101,7 +112,7 @@ struct BudgetCategoryHeaderRow: View {
     private var row: BudgetCategoryRow { group.header }
 
     var body: some View {
-        let isPointerOver = !isProxy && model.isPointerOver(row.id, in: .categories)
+        let isPointerOver = !isProxy && model.hoveredRowId == row.id
         HStack(spacing: 2) {
             leading
             name
@@ -118,7 +129,7 @@ struct BudgetCategoryHeaderRow: View {
             if isProxy { Rectangle().fill(ThemeColor.groupFill).background(ThemeColor.contentBackground) }
         }
         .contentShape(Rectangle())
-        .onHover { model.rowHovered(row.id, in: .categories, $0) }
+        .onHover { model.rowHovered(row.id, $0) }
         .budgetPopupAnchor(.categoryRow(row.id), of: model)
         .modifier(BudgetRowDragIfMaster(model: model, row: row))
     }
@@ -197,7 +208,7 @@ struct BudgetCategorySubRow: View {
             if model.drag?.target?.lineBelow == row.id { BudgetInsertionLine(width: width - BudgetStyle.nameX + 6) }
         }
         .contentShape(Rectangle())
-        .onHover { model.rowHovered(row.id, in: .categories, $0) }
+        .onHover { model.rowHovered(row.id, $0) }
         .budgetPopupAnchor(.categoryRow(row.id), of: model)
         .modifier(BudgetRowDrag(model: model, rowId: row.id))
     }

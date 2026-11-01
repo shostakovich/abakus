@@ -22,6 +22,8 @@ struct SavedRegisterViewState: Codable, Equatable {
 
     var sortColumn: String
     var sortAscending: Bool
+    /// Missing before newest first became the default, when every account saved date ascending.
+    var sortVersion: Int?
     var isShowingReconciled: Bool
     var columns: [String: Column]
     var isSchedulerVisible: Bool
@@ -35,6 +37,7 @@ struct SavedRegisterViewState: Codable, Equatable {
         let sort = reconciliation?.savedSort ?? state.sort
         sortColumn = sort.column.rawValue
         sortAscending = sort.ascending
+        sortVersion = Self.currentSortVersion
         isShowingReconciled = state.isShowingReconciled
         columns = Self.columns(state.columnSettings)
         isSchedulerVisible = reconciliation?.savedSchedulerVisible ?? state.isSchedulerVisible
@@ -61,6 +64,13 @@ struct SavedRegisterViewState: Codable, Equatable {
         }
     }
 
+    static let currentSortVersion = 2
+
+    var restoredSort: RegisterSortOrder? {
+        let isOldDefault = sortVersion == nil && sortColumn == RegisterColumn.date.rawValue && sortAscending
+        return isOldDefault ? nil : Self.sortOrder(sortColumn, ascending: sortAscending)
+    }
+
     static func sortOrder(_ column: String, ascending: Bool) -> RegisterSortOrder? {
         guard let column = RegisterColumn(rawValue: column), column.isSortable else { return nil }
         return RegisterSortOrder(column: column, ascending: ascending)
@@ -71,7 +81,7 @@ extension RegisterAccountViewState {
     /// A preset like "Dieser Monat" is resolved against today again.
     init(saved: SavedRegisterViewState, today: DateWithoutTime, formatter: BudgetFormatter) {
         self.init()
-        sort = SavedRegisterViewState.sortOrder(saved.sortColumn, ascending: saved.sortAscending) ?? sort
+        sort = saved.restoredSort ?? sort
         isShowingReconciled = saved.isShowingReconciled
         SavedRegisterViewState.restore(saved.columns, into: &columnSettings)
         isSchedulerVisible = saved.isSchedulerVisible

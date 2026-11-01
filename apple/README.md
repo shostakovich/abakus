@@ -25,9 +25,9 @@ with Abakus's terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in th
 - Render the window offscreen: `swift run Snapshot out.png [--account <name>] [--scale 2] [--select <n>]
   [--expand-splits] [--collapsed-sidebar] [--width 1020] [--height 700] [--dark] [--increase-contrast]`; it renders
   in light mode unless `--dark` or `--increase-contrast` (combinable) ask otherwise. The image is the whole window:
-  the title bar with the toolbar above content of `--width`×`--height`.
+  the toolbar (the screen's title and its items) above content of `--width`×`--height`.
   `--budget <state>` shows the budget screen of the test budget "Business" (today 24.10.2026) in a state (`screen`,
-  `edit`, `quick-budget`, `calculator`, `collapsed-header`, `collapsed-all`, `drag`, `hover`, `uncategorized`, `targets`
+  `edit`, `quick-budget`, `calculator`, `expanded-header`, `collapsed-all`, `drag`, `hover`, `uncategorized`, `targets`
   with the Verfügbar markers) or with one of its popups open (`quick-budget-menu`, `quick-budget-confirm`, `add-master`,
   `add-sub`, `edit-category`, `edit-master`, `rename-error`, `delete-category`, `summary`, `income-summary`,
   `uncategorized-summary`, `outflow-help`, `account-view`, `cover`, `move`, `target`, `target-editor`, `assign`);
@@ -36,8 +36,8 @@ with Abakus's terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in th
   `--edit <state>` first types into the register with real key events (`existing`, `new`, `payee-dropdown`,
   `category-dropdown`, `split`, `errors`, `unassigned`, `calendar`, `calculator`, `invalid-payee`,
   `income-check`, `account-field`); `--trace` prints the editor state afterwards. `--ops <state>` opens register
-  operations instead (`action-menu`, `context-menu`, `search-suggestions`, `search-active`, `date-filter`,
-  `notifiers`, `column-menu`, `running-balance`, `approve-popup`, `needs-category`,
+  operations instead (`context-menu`, `search-suggestions`, `search-active`, `date-filter`,
+  `notifiers`, `column-menu`, `running-balance`, `needs-category`,
   `reconcile-help` (with `--account "Alle Konten"`), `delete-dialog`, `make-recurring`); menus, native in the app, are drawn inline. `--ops keys` sends real key and mouse events and
   prints what the register did with them (add `--native-menus` to run it with native menus); without a menu bar,
   menu key equivalents run their Buchungen menu command and ⌘A sends Select All's `selectAll:`. `--ui <state>` opens a

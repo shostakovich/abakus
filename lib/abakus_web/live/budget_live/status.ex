@@ -9,36 +9,53 @@ defmodule AbakusWeb.BudgetLive.Status do
     only: [long_date: 1, day_month: 1, month_name: 1, month_abbr: 1]
 
   alias Abakus.Budget.{CategoryMonth, Month}
+  alias Abakus.Format
   alias Abakus.Money
 
   @doc """
-  The available cell: `%{tone, icon, label}`. The tone colours the number (red when overspent, amber while the
-  target is underfunded, muted at zero), the icon marks the target as underfunded, funded or snoozed, and `label`
-  names the state for screen readers. An underfunded target shows only in a month being budgeted (`budgeting?/2`).
+  The available cell: `%{tone, icon, ring, label}`. The tone colours the number (red when overspent, amber while the
+  target is underfunded, muted at zero), the icon marks a funded or snoozed target, `ring` is an underfunded
+  target's `funded_share/1`, and `label` names the state for screen readers. An underfunded target shows only in a
+  month being budgeted (`budgeting?/2`).
   """
   def available(%CategoryMonth{available: available}, _budgeting) when available < 0,
-    do: %{tone: :error, icon: nil, label: "überzogen"}
+    do: cell(:error, nil, "überzogen")
 
   def available(%CategoryMonth{} = row, budgeting) do
     tone = if row.available == 0, do: :muted
 
     cond do
-      row.target != nil and row.snoozed ->
-        %{tone: tone, icon: "pause", label: "Ziel pausiert"}
-
-      underfunded?(row) ->
-        underfunded(budgeting, tone)
-
-      row.target != nil and row.available > 0 ->
-        %{tone: nil, icon: "circle-check", label: "Ziel erreicht"}
-
-      true ->
-        %{tone: tone, icon: nil, label: nil}
+      row.target != nil and row.snoozed -> cell(tone, "pause", "Ziel pausiert")
+      underfunded?(row) -> underfunded(budgeting, row, tone)
+      row.target != nil and row.available > 0 -> cell(nil, "circle-check", "Ziel erreicht")
+      true -> cell(tone, nil, nil)
     end
   end
 
-  defp underfunded(true, _tone), do: %{tone: :warning, icon: "clock", label: "unterfinanziert"}
-  defp underfunded(false, tone), do: %{tone: tone, icon: nil, label: nil}
+  defp cell(tone, icon, label), do: %{tone: tone, icon: icon, ring: nil, label: label}
+
+  defp underfunded(false, _row, tone), do: cell(tone, nil, nil)
+
+  defp underfunded(true, row, _tone) do
+    share = funded_share(row)
+
+    label =
+      if share,
+        do: "unterfinanziert, #{Format.percent(share, 0)} finanziert",
+        else: "unterfinanziert"
+
+    %{tone: :warning, icon: nil, ring: share, label: label}
+  end
+
+  @doc """
+  How much of what the target asks this month is assigned, in whole percent rounded down, so that only a funded
+  month shows 100; nil while the target is snoozed or asks nothing more.
+  """
+  def funded_share(%CategoryMonth{needed: needed} = row) when needed > 0 do
+    if underfunded?(row), do: max(div((needed - row.underfunded) * 100, needed), 0)
+  end
+
+  def funded_share(%CategoryMonth{}), do: nil
 
   @doc "Whether the month is being budgeted: the current month, and any other with money assigned."
   def budgeting?(%Month{month: month, assigned: assigned}, current),
@@ -51,8 +68,8 @@ defmodule AbakusWeb.BudgetLive.Status do
   defp underfunded?(row), do: open_need(row) > 0
 
   @doc """
-  The target's state this month in one sentence, for the category dialog: `%{text, tone, icon}` (the icons of the
-  available cell), nil without a target. Overspending wins over snoozing.
+  The target's state this month in one sentence, for the category dialog: `%{text, tone, icon}`, nil without a
+  target. Overspending wins over snoozing.
   """
   def target_status(%CategoryMonth{target: nil}), do: nil
 

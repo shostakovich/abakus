@@ -26,8 +26,6 @@ public struct ThemeFont: Hashable, Sendable {
 }
 
 extension ThemeFont {
-    public static let largeTitle = ThemeFont(
-        size: NSFont.preferredFont(forTextStyle: .largeTitle).pointSize, weight: .bold)
     public static let headline = ThemeFont(size: NSFont.systemFontSize, weight: .semibold)
     public static let body = ThemeFont(size: NSFont.systemFontSize)
     public static let caption = ThemeFont(size: NSFont.smallSystemFontSize)

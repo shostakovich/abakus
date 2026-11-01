@@ -165,7 +165,7 @@ import Testing
         let (model, _) = fixture.spied()
         model.scheduler.grid.toggleSplit("S1")
         let rows = model.scheduler.rows
-        #expect(rows.map(\.payee) == ["Rent", "", "Transfer : Tagesgeld"])
+        #expect(rows.map(\.payee) == ["Rent", "", "Tagesgeld"])
         #expect(rows.map(\.payeeTooltip) == ["Rent", nil, nil])
     }
 }

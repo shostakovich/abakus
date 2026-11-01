@@ -66,7 +66,7 @@ defmodule AbakusWeb.RegisterDepotCashTest do
     view |> element("#tx-#{c.deposit.id} td.app-payee") |> render_click()
     view |> element("#tx-#{c.deposit.id} td.app-payee") |> render_click()
 
-    assert has_element?(view, ~s|#tx-payee[value="↔ Scalable Capital"]|)
+    assert has_element?(view, ~s|#tx-payee[value="⇄ Scalable Capital"]|)
     view |> form("#tx-form", transaction: %{memo: "Sparrate Oktober"}) |> render_submit()
 
     assert %{memo: "Sparrate Oktober", payee_id: payee_id} =
@@ -80,7 +80,7 @@ defmodule AbakusWeb.RegisterDepotCashTest do
     view |> element("#tx-#{c.deposit.id} td.app-payee") |> render_click()
     view |> element("#tx-#{c.deposit.id} td.app-payee") |> render_click()
 
-    assert has_element?(view, ~s|#tx-payee[value="↔ Scalable Capital"]|)
+    assert has_element?(view, ~s|#tx-payee[value="⇄ Scalable Capital"]|)
     view |> form("#tx-form", transaction: %{memo: "Sparrate Oktober"}) |> render_submit()
 
     assert %{

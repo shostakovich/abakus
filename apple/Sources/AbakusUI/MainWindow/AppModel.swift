@@ -71,10 +71,6 @@ public final class AppModel {
         accounts.isPresenting || saveErrorDialog != nil || register.adjustmentHelp != nil || payeeSettings != nil
     }
 
-    public var windowTitle: String {
-        "Abakus - \(store.budget.displayName)" + (store.hasUnsavedChanges ? "*" : "")
-    }
-
     public var selectionTitle: String {
         switch navigation.selection {
         case .budget: "Budget"

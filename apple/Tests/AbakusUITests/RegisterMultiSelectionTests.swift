@@ -45,8 +45,8 @@ private struct Girokonto {
         let girokonto = Girokonto()
         let model = girokonto.model
         #expect(model.rows.count == 20)
-        model.rowClicked(girokonto.row("17.10.26"), column: .payee, modifiers: [])
-        model.rowClicked(girokonto.row("20.10.26"), column: .payee, modifiers: .command)
+        model.rowClicked(girokonto.row("17.10."), column: .payee, modifiers: [])
+        model.rowClicked(girokonto.row("20.10."), column: .payee, modifiers: .command)
         #expect(model.selection.count == 2)
         #expect(model.selectedTotal?.title == "Auswahl (2)")
         #expect(model.selectedTotal?.amountText == "-323,90€")
@@ -57,12 +57,12 @@ private struct Girokonto {
     @Test func selectARangeAndEverything() {
         let girokonto = Girokonto()
         let model = girokonto.model
-        model.rowClicked(girokonto.row("01.10.26"), column: .payee, modifiers: [])
-        model.rowClicked(girokonto.row("06.10.26"), column: .payee, modifiers: .shift)
+        model.rowClicked(girokonto.row("01.10."), column: .payee, modifiers: [])
+        model.rowClicked(girokonto.row("06.10."), column: .payee, modifiers: .shift)
         #expect(model.selection.count == 4)
         #expect(
             model.rows.filter { model.selection.contains($0.transactionId) }.map(\.date)
-                == ["01.10.26", "02.10.26", "03.10.26", "06.10.26"])
+                == ["06.10.", "03.10.", "02.10.", "01.10."])
         #expect(model.selectAllKeyPressed())
         #expect(model.selection.count == 20)
     }
@@ -76,7 +76,7 @@ private struct Girokonto {
     @Test func aSingleSelectionShowsNoSelectedTotal() {
         let girokonto = Girokonto()
         let model = girokonto.model
-        model.rowClicked(girokonto.row("17.10.26"), column: .payee, modifiers: [])
+        model.rowClicked(girokonto.row("17.10."), column: .payee, modifiers: [])
         #expect(model.selectedTotal == nil)
         #expect(model.summary.first.title == "Gebucht")
         #expect(model.summary.second.title == "Vorgemerkt")

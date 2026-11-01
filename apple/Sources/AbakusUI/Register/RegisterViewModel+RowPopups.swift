@@ -12,11 +12,10 @@ public struct RunningBalanceInfo: Hashable, Sendable {
 }
 
 public struct StatusPopupOption: Identifiable, Hashable, Sendable {
-    public enum Command: Hashable, Sendable { case approve, delete, removeCategory }
+    public enum Command: Hashable, Sendable { case removeCategory }
 
     public var command: Command
     public var title: String
-    public var systemImage: String?
 
     public var id: Command { command }
 }
@@ -25,7 +24,9 @@ extension RegisterViewModel {
     func showStatusPopup(for row: RegisterRow) {
         guard row.transactionId != editingTransactionId else { return }
         switch row.errorLevel {
-        case .forReview: popup = .approveReject(rowId: row.id)
+        case .forReview:
+            popup = nil
+            perform(.approveTransactions(idsAtLevel(.forReview, in: selectedTransactions)))
         case .needsCategory: popup = .needsCategory(rowId: row.id)
         case .error: popup = .removeCategory(rowId: row.id)
         case .none: popup = nil
@@ -36,7 +37,6 @@ extension RegisterViewModel {
     var statusPopupTransactions: [Transaction] {
         let level: ErrorLevel
         switch popup {
-        case .approveReject: level = .forReview
         case .needsCategory: level = .needsCategory
         case .removeCategory: level = .error
         default: return []
@@ -48,8 +48,6 @@ extension RegisterViewModel {
     public var statusPopupTitle: String {
         let count = statusPopupTransactions.count
         switch popup {
-        case .approveReject:
-            return count == 1 ? "1 ausgewählte unbestätigte Buchung" : "\(count) ausgewählte unbestätigte Buchungen"
         case .needsCategory:
             return count == 1
                 ? "Kategorie für die ausgewählte Buchung wählen"
@@ -62,21 +60,8 @@ extension RegisterViewModel {
     }
 
     public var statusPopupOptions: [StatusPopupOption] {
-        let transactions = statusPopupTransactions
-        let single = transactions.count == 1
+        let single = statusPopupTransactions.count == 1
         switch popup {
-        case .approveReject:
-            let approve = StatusPopupOption(
-                command: .approve, title: single ? "Buchung bestätigen" : "Buchungen bestätigen",
-                systemImage: EditorButton.approve.systemImage)
-            let led = store.budget.ledTransactionIds
-            guard transactions.contains(where: { !led.contains($0.id) }) else { return [approve] }
-            return [
-                approve,
-                StatusPopupOption(
-                    command: .delete, title: single ? "Buchung löschen" : "Buchungen löschen",
-                    systemImage: EditorButton.delete.systemImage),
-            ]
         case .removeCategory:
             return [
                 StatusPopupOption(
@@ -88,12 +73,9 @@ extension RegisterViewModel {
     }
 
     public func statusPopupChosen(_ command: StatusPopupOption.Command) {
-        let transactions = statusPopupTransactions
-        let ids = transactions.map(\.id)
+        let ids = statusPopupTransactions.map(\.id)
         popup = nil
         switch command {
-        case .approve: perform(.approveTransactions(ids))
-        case .delete: deleteTransactions(ids)
         case .removeCategory: perform(.removeTransferCategories(ids))
         }
     }

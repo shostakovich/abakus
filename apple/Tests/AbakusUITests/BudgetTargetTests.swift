@@ -35,7 +35,8 @@ import Testing
         #expect(display.status.state == .underfunded)
         let row = model.subRowDisplay(F.kleidung, in: try #require(model.month(june)))
         #expect(row.marker == .underfunded)
-        #expect(row.marker?.symbol.name == "clock.fill")
+        #expect(row.fundedPercent == 72)
+        #expect(row.accessibilityValue == "120,00, unterfinanziert, 72 % finanziert")
     }
 
     @Test func theCalloutShowsTheTargetInTodaysMonthWhenShownElseInTheFirstShownMonth() {

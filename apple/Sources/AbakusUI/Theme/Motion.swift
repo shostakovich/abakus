@@ -53,7 +53,6 @@ extension View {
 
 enum RegisterEffects {
     static let glowPhase = Motion(.easeInOut, .milliseconds(750), .fade)
-    static let notifierResize = Motion(.easeInOut, .milliseconds(250), .movement)
     static let notifierFade = Motion(.easeInOut, .milliseconds(250), .fade)
     static let schedulerSlide = Motion(.easeIn, .milliseconds(300), .movement)
 }

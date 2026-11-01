@@ -3,6 +3,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
   import Phoenix.LiveViewTest
   import Abakus.DomainFixtures
+  import AbakusWeb.PageText, only: [text: 2, texts: 2]
   import Ecto.Query, only: [from: 2]
 
   alias Abakus.{Categories, Ledger, Repo}
@@ -92,6 +93,100 @@ defmodule AbakusWeb.RegisterLiveTest do
 
   defp reload(%{id: id}), do: Repo.get!(Transaction, id)
 
+  describe "month headings" do
+    test "follow the date order, newest first", c do
+      transaction_fixture(account_id: c.giro.id, date: ~D[2026-11-01], amount: -5_000)
+      transaction_fixture(account_id: c.giro.id, date: ~D[2026-10-30], amount: 4_500)
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      lines =
+        texts(
+          view,
+          "#register-table :is(tbody.app-reg-month th, tr.app-tx-main > td:first-child)"
+        )
+
+      assert Enum.take(lines, 4) == ["November 2026", "01.11.", "Oktober 2026", "30.10."]
+      assert "September 2026" in lines
+      assert has_element?(view, "#month-2026-11-01", "November 2026")
+      refute has_element?(view, "#register-cards", "November 2026")
+    end
+
+    test "show the category with its emoji, not its group", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      group = Repo.preload(c.groceries, :category_group).category_group.name
+
+      cell = text(view, "#tx-#{c.shopping.id} td.app-catcol")
+      assert cell == "🛒 Lebensmittel"
+      assert has_element?(view, ~s|#tx-#{c.shopping.id} td.app-catcol[title="#{group}"]|)
+      assert has_element?(view, "#tx-card-#{c.shopping.id}", "🛒 Lebensmittel")
+      refute has_element?(view, "#tx-card-#{c.shopping.id}", group)
+    end
+  end
+
+  describe "selection" do
+    defp click(view, transaction, modifiers \\ %{}),
+      do: view |> element("#tx-#{transaction.id} td.app-payee") |> render_click(modifiers)
+
+    defp selected(view) do
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#register-table tbody.is-selected")
+      |> LazyHTML.attribute("id")
+    end
+
+    test "a click selects one row, ⌘ or Ctrl adds one, Shift the rows between", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      click(view, c.transfer)
+      click(view, c.salary)
+      assert selected(view) == ["tx-#{c.salary.id}-rows"]
+
+      click(view, c.imported, %{"toggle" => true})
+      assert has_element?(view, "#bulk", "2 Buchungen")
+
+      click(view, c.old, %{"range" => true})
+
+      assert selected(view) ==
+               Enum.map(
+                 [c.imported, c.transfer, c.shopping, c.salary, c.old],
+                 &"tx-#{&1.id}-rows"
+               )
+
+      refute has_element?(view, "#tx-editor")
+    end
+
+    test "Shift without an anchor selects the row and anchors there", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      render_click(view, "select_all")
+      click(view, c.salary, %{"range" => true})
+      assert selected(view) == ["tx-#{c.salary.id}-rows"]
+      refute has_element?(view, "#tx-editor")
+
+      click(view, c.shopping, %{"range" => true})
+      assert selected(view) == Enum.map([c.shopping, c.salary], &"tx-#{&1.id}-rows")
+    end
+
+    test "Auswählen in Ansicht makes every click join the selection, for touch screens", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      view |> element("#pick-toggle") |> render_click()
+      click(view, c.salary)
+      click(view, c.shopping)
+      click(view, c.salary)
+      assert selected(view) == ["tx-#{c.shopping.id}-rows"]
+      refute has_element?(view, "#tx-editor")
+      assert has_element?(view, "#pick-toggle", "Auswählen beenden")
+
+      view |> element(~s|#bulk button[aria-label="Auswahl aufheben"]|) |> render_click()
+      assert has_element?(view, "#pick-toggle", "Auswählen")
+      click(view, c.salary)
+      click(view, c.salary)
+      assert has_element?(view, "#tx-editor")
+    end
+  end
+
   describe "one account" do
     test "shows its transactions newest first with the balance equation", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
@@ -117,14 +212,22 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert ids ==
                Enum.map([c.imported, c.transfer, c.shopping, c.salary, c.old], &"tx-#{&1.id}")
 
-      assert has_element?(view, "#tx-#{c.salary.id}", "01.10.2026")
+      assert has_element?(view, "#tx-#{c.salary.id}", "01.10.")
+      refute has_element?(view, "#tx-#{c.salary.id}", "01.10.2026")
       assert has_element?(view, "#tx-#{c.salary.id}", "Arbeitgeber")
-      assert has_element?(view, "#tx-#{c.salary.id}", "Einnahme: Zu verteilen")
+
+      assert has_element?(
+               view,
+               ~s|#tx-#{c.salary.id} td.app-catcol[title="Einnahme"]|,
+               "Zu verteilen"
+             )
+
       assert has_element?(view, "#tx-#{c.salary.id}", "Gehalt Oktober")
       assert has_element?(view, "#tx-#{c.salary.id} .app-in", "3.240,00")
       assert has_element?(view, "#tx-#{c.shopping.id}", "Lebensmittel")
       assert has_element?(view, "#tx-#{c.shopping.id} .app-out", "87,43")
-      assert has_element?(view, "#tx-#{c.transfer.id}", "↔ 🏦 Sparkonto")
+      assert has_element?(view, "#tx-#{c.transfer.id} .app-payee .app-transfer svg")
+      assert has_element?(view, "#tx-#{c.transfer.id} .app-payee", "🏦 Sparkonto")
       refute has_element?(view, "#register-table th", "Konto")
 
       assert has_element?(view, "#tx-card-#{c.shopping.id}", "Frischmarkt")
@@ -266,7 +369,8 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute has_element?(view, "#accept-all-matches")
     end
 
-    test "columns come from a colgroup, memo and status are columns of their own", c do
+    test "columns come from a colgroup, memo and status are columns of their own, no selection column",
+         c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       document = view |> render() |> LazyHTML.from_fragment()
 
@@ -277,14 +381,18 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#tx-#{c.salary.id} td.app-memo-col", "Gehalt Oktober")
       refute has_element?(view, "#tx-#{c.salary.id} td.app-payee", "Gehalt Oktober")
 
-      assert has_element?(view, "#register-table thead th:last-child.app-c-col svg")
-      assert has_element?(view, "#register-table thead th.app-c-col .sr-only", "Gebucht")
-      refute has_element?(view, "#register-table thead th.app-c-col", "C")
+      assert has_element?(view, "#register-table thead th:last-child.app-status-col svg")
+      assert has_element?(view, "#register-table thead th.app-status-col .sr-only", "Status")
+      refute has_element?(view, "#register-table input[type=checkbox]")
 
       assert has_element?(
                view,
                "#tx-#{c.shopping.id} td:last-child #tx-#{c.shopping.id}-cleared svg"
              )
+
+      assert has_element?(view, "#tx-#{c.old.id} td:last-child #tx-#{c.old.id}-cleared")
+      assert has_element?(view, "#tx-#{c.imported.id} td:last-child #tx-#{c.imported.id}-approve")
+      refute has_element?(view, "#tx-#{c.imported.id}-cleared")
     end
 
     test "the view menu hides and shows the memo column on this device", c do
@@ -448,14 +556,15 @@ defmodule AbakusWeb.RegisterLiveTest do
     test "the waiting chip counts what waits and the rows are marked", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      assert has_element?(view, "#approve-all", "Alle bestätigen")
+      assert text(view, "#approve-all") == "2 bestätigen"
       assert has_element?(view, ~s|#approve-all[aria-label="Alle 2 bestätigen"]|)
       assert has_element?(view, "#approve-all-count", "2")
       refute has_element?(view, "#show-unapproved")
       refute render(view) =~ "Ansehen"
       assert has_element?(view, "tr#tx-#{c.waiting.id}.app-unapproved")
       refute has_element?(view, "tr#tx-#{c.shopping.id}.app-unapproved")
-      assert has_element?(view, "#tx-#{c.uncategorised.id}", "Nicht kategorisiert")
+      assert has_element?(view, "#tx-#{c.uncategorised.id} .app-uncategorised svg")
+      assert has_element?(view, "#tx-#{c.uncategorised.id} .app-uncategorised", "Kategorie fehlt")
 
       assert has_element?(
                view,
@@ -547,9 +656,13 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       refute bulk?(view)
 
-      view |> element("#tx-#{c.waiting.id}-select") |> render_click()
-      view |> element("#tx-#{c.uncategorised.id}-select") |> render_click()
-      view |> element("#tx-#{c.transfer.id}-select") |> render_click()
+      view |> element("#tx-#{c.waiting.id} td.app-payee") |> render_click(%{"toggle" => "true"})
+
+      view
+      |> element("#tx-#{c.uncategorised.id} td.app-payee")
+      |> render_click(%{"toggle" => "true"})
+
+      view |> element("#tx-#{c.transfer.id} td.app-payee") |> render_click(%{"toggle" => "true"})
       assert has_element?(view, "#bulk", "3 Buchungen")
       assert has_element?(view, "tbody#tx-#{c.waiting.id}-rows.is-selected")
 
@@ -576,7 +689,7 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      view |> element("#tx-#{c.shopping.id}-select") |> render_click()
+      view |> element("#tx-#{c.shopping.id} td.app-payee") |> render_click(%{"toggle" => "true"})
       # As in YNAB the bar offers approving only when one of them waits.
       refute has_element?(view, "#approve-selected")
       render_click(view, "approve_selected", %{})
@@ -584,8 +697,8 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#flash-info", "Keine der ausgewählten Buchungen wartet")
       assert has_element?(view, "#bulk", "1 Buchung")
 
-      view |> element("#tx-#{c.waiting.id}-select") |> render_click()
-      view |> element("#tx-#{c.old.id}-select") |> render_click()
+      view |> element("#tx-#{c.waiting.id} td.app-payee") |> render_click(%{"toggle" => "true"})
+      view |> element("#tx-#{c.old.id} td.app-payee") |> render_click(%{"toggle" => "true"})
       # Without the confirmation the reconciled one stays locked, and so do the others.
       render_click(view, "approve_selected", %{})
       assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeglichen")
@@ -606,7 +719,7 @@ defmodule AbakusWeb.RegisterLiveTest do
     test "categorising selected reconciled transactions asks first", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      view |> element("#tx-#{c.old.id}-select") |> render_click()
+      view |> element("#tx-#{c.old.id} td.app-payee") |> render_click(%{"toggle" => "true"})
       # It is approved already, so approving it changes nothing.
       refute has_element?(view, "#approve-selected")
 
@@ -656,10 +769,9 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#proposal-#{id}-reject", "Trennen")
       assert has_element?(view, "#proposal-card-#{id}", "passt zu Buchung vom 02.10.2026")
       assert has_element?(view, "#proposal-card-#{id}-accept")
-      refute has_element?(view, "#proposal-#{id}-select")
 
       assert has_element?(view, "#approve-all-count", "1")
-      assert has_element?(view, "#accept-all-matches", "Alle zuordnen")
+      assert has_element?(view, "#accept-all-matches", "1 zuordnen")
       assert has_element?(view, "#accept-all-matches-item", "Alle zuordnen")
 
       assert has_element?(
