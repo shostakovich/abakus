@@ -16,7 +16,7 @@ struct RegisterAccountViewState {
     var scrollBeforeSearch: RegisterScrollRequest.Target?
     var reconciliation: RegisterReconciliation?
     var schedulerHeight: CGFloat?
-    var schedulerSort = RegisterSortOrder.default
+    var schedulerSort = RegisterScheduler.defaultSort
     var schedulerColumnSettings = RegisterScheduler.defaultColumnSettings
 }
 
@@ -29,6 +29,7 @@ public final class RegisterViewModel {
     public let store: any BudgetStoring
     public let navigation: NavigationState
     @ObservationIgnored public var onEditPayees: @MainActor (String?) -> Void = { _ in }
+    @ObservationIgnored public var onEditAccount: @MainActor (String) -> Void = { _ in }
     @ObservationIgnored public var autoFillSettings = AutoFillSettings()
     @ObservationIgnored private var scrollOffsets: [String: CGFloat] = [:]
     @ObservationIgnored private var cache: (inputs: DerivedInputs, value: Derived)?
@@ -104,6 +105,18 @@ public final class RegisterViewModel {
 
     public var accountName: String { isAllAccounts ? Account.allAccountsName : account?.name ?? "" }
 
+    /// "Abgeglichen am 27.09.", with the year only for an earlier year.
+    public var reconciledLabel: String? {
+        guard let date = account?.lastReconciledOn else { return nil }
+        let text = date.year == today().year ? formatter.dayMonth(date) : formatter.dateShort(date)
+        return "Abgeglichen am \(text)"
+    }
+
+    public func editAccountClicked() {
+        guard let account, !clickedOutsideEditors() else { return }
+        onEditAccount(account.id)
+    }
+
     var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
 
     private var key: String { accountKey ?? "" }
@@ -116,7 +129,11 @@ public final class RegisterViewModel {
         }
     }
 
+    /// The transactions' rows and their split lines.
     public var rows: [RegisterRow] { derived.rows }
+
+    /// The rows with a heading above each month while the list is sorted by date.
+    public var gridRows: [RegisterRow] { derived.gridRows }
 
     public var transactions: [Transaction] { derived.transactions }
 
@@ -131,15 +148,12 @@ public final class RegisterViewModel {
         grid.toggleSplit(transactionId)
     }
 
-    public var showsErrorColumn: Bool { derived.hasErrors }
-
     public var visibleColumns: [RegisterColumn] {
         let settings = viewState.columnSettings
         let onBudget = account?.onBudget ?? true
         return RegisterColumn.allCases.filter { column in
             switch column {
             case .account: isAllAccounts
-            case .errorState: showsErrorColumn
             case .category: onBudget
             case .cleared: isReconciling || (settings[.cleared]?.visible ?? false)
             case .frequency: false
@@ -194,14 +208,14 @@ public final class RegisterViewModel {
         updateSelection { $0.selectAll(ids) }
     }
 
-    /// The new transactions become the selection and the grid scrolls to the end.
+    /// The new transactions become the selection and the grid scrolls to the first of them.
     func selectEntered(_ ids: [String]) {
         let visible = Set(transactionIds)
         updateSelection { selection in
             selection.clear()
             for id in ids where visible.contains(id) { selection.toggle(id) }
         }
-        requestScroll(.bottom)
+        requestScroll(selectedTransactionIds.first.map { .row($0) } ?? .top)
     }
 
     public func clearSelection() {
@@ -247,11 +261,12 @@ public final class RegisterViewModel {
         }
     }
 
-    public var isActionButtonEnabled: Bool { !selection.isEmpty }
+    public var hasSelection: Bool { !selection.isEmpty }
 
-    public func editTransactionsClicked() {
-        if grid.clickedOutsideEditor() { return }
-        showMenu(transactionActionsMenu(withTitle: false), below: .actionButton)
+    /// An open edit glows or ends first, as for the menu bar's items.
+    func viewMenuChosen(_ action: RegisterMenuAction) {
+        guard !grid.clickedOutsideEditor() else { return }
+        performMenuAction(action)
     }
 
     /// The menu bar's Edit Transactions items: an open edit glows or ends first, as after a click on the button.
@@ -372,7 +387,7 @@ public final class RegisterViewModel {
 
     public var isReconciling: Bool { reconciliation.current != nil }
 
-    /// nil means "scrolled to the end", the state of an account shown for the first time.
+    /// nil for an account not scrolled yet, which starts at the top.
     public func savedScrollOffset() -> CGFloat? {
         scrollOffsets[key]
     }
@@ -410,7 +425,7 @@ public final class RegisterViewModel {
     struct Derived {
         var transactions: [Transaction]
         var rows: [RegisterRow]
-        var hasErrors: Bool
+        var gridRows: [RegisterRow]
         var searchMatches: [String: RegisterSearchMatch] = [:]
         var notifierCounts = RegisterNotifierCounts()
         var added = AddedRows()
@@ -443,7 +458,7 @@ public final class RegisterViewModel {
 
     private func derive(_ inputs: DerivedInputs, state: RegisterAccountViewState) -> Derived {
         let budget = inputs.budget
-        guard !inputs.key.isEmpty else { return Derived(transactions: [], rows: [], hasErrors: false) }
+        guard !inputs.key.isEmpty else { return Derived(transactions: [], rows: [], gridRows: []) }
         let all: [Transaction]
         if let through = inputs.reconcileThrough {
             all = budget.reconciliationList(accountId: inputs.key, through: through)
@@ -466,17 +481,21 @@ public final class RegisterViewModel {
             }
             return !(unfiltered && !state.isShowingReconciled && transaction.cleared == .reconciled)
         }
-        let builder = RegisterRowBuilder(
+        let showsMonths = inputs.sort.column == .date
+        var builder = RegisterRowBuilder(
             lookup: lookup,
             runningBalances: inputs.needsRunningBalance ? budget.runningBalances(forAccount: inputs.key) : [:])
+        builder.showsYear = !showsMonths
+        let formatter = builder.formatter
         let sorted = RegisterSorter.sorted(listed, by: inputs.sort, lookup: lookup)
-        let rows = builder.rows(
+        let gridRows = builder.rows(
             for: sorted, expandedSplits: inputs.expandedSplits, editingId: inputs.editingId,
+            heading: { showsMonths ? formatter.monthHeader($0.date) : nil },
             row: builder.row(for:isExpanded:),
-            subRows: { builder.subRows(for: $0, parentIndex: $1, match: searchMatches[$0.id]) })
-        let counts = budget.notifierCounts(forAccount: inputs.key)
+            subRows: { builder.subRows(for: $0, match: searchMatches[$0.id]) })
         return Derived(
-            transactions: sorted, rows: rows, hasErrors: counts != RegisterNotifierCounts(),
-            searchMatches: searchMatches, notifierCounts: counts)
+            transactions: sorted, rows: showsMonths ? gridRows.filter { !$0.isMonthHeading } : gridRows,
+            gridRows: gridRows, searchMatches: searchMatches,
+            notifierCounts: budget.notifierCounts(forAccount: inputs.key))
     }
 }

@@ -178,4 +178,12 @@ public struct Budget: Hashable, Sendable {
         let groupName = categoryGroup(withId: category.categoryGroupId)?.name ?? ""
         return "\(groupName): \(category.name)"
     }
+
+    /// The category's own name, without its group.
+    public func categoryName(_ categoryId: String?) -> String {
+        guard let categoryId else { return "" }
+        if isReadyToAssign(categoryId) { return DefaultCategories.readyToAssignName }
+        if categoryId == EntityID.splitCategory { return DefaultCategories.splitCategoryName }
+        return category(withId: categoryId)?.name ?? ""
+    }
 }

@@ -44,6 +44,6 @@ import Testing
         let model = fixture.model()
         let order = fixture.budget.transactionsInDefaultOrder(forAccount: fixture.giro).map(\.id)
         #expect(order.filter { [income, refund].contains($0) } == [refund, income])
-        #expect(model.transactionIds.filter { [income, refund].contains($0) } == [refund, income])
+        #expect(model.transactionIds.filter { [income, refund].contains($0) } == [income, refund])
     }
 }

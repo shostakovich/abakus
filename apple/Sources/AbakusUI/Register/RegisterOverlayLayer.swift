@@ -4,13 +4,11 @@ import SwiftUI
 struct RegisterOverlayLayer: View {
     let model: RegisterViewModel
     let anchors: [RegisterAnchorID: Anchor<CGRect>]
-    let toolbarAnchors: ToolbarAnchors
 
     var body: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            let rects = toolbarAnchors.frames(relativeTo: proxy.frame(in: .global).origin)
-                .merging(anchors.mapValues { proxy[$0] }) { $1 }
+            let rects = anchors.mapValues { proxy[$0] }
             ZStack(alignment: .topLeading) {
                 if let popup = model.popup, Self.closesOnOutsideClick(popup) {
                     Color.clear.contentShape(Rectangle()).onTapGesture { model.closePopup() }
@@ -43,7 +41,7 @@ struct RegisterOverlayLayer: View {
     @ViewBuilder
     private func popupView(_ popup: RegisterPopup, anchor: CGRect, size: CGSize) -> some View {
         switch popup {
-        case .approveReject, .removeCategory:
+        case .removeCategory:
             AnchoredPopover(side: .trailing, anchor: anchor, container: size) { StatusOptionsPopover(model: model) }
         case .needsCategory:
             AnchoredPopover(side: .trailing, anchor: anchor, container: size) { NeedsCategoryPopover(model: model) }

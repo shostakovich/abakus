@@ -313,9 +313,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                 disabled={@fixed}
               />
             </div>
-            <div class="app-edit-buttons">
-              <.save_buttons transaction={@transaction} locked={@locked} cancel="cancel_edit" small />
-            </div>
+            <input :if={@locked} type="hidden" name="reconciled" value="confirmed" />
             <.option_lists payee_options={@payee_options} category_options={@category_options} />
           </.form>
         </td>
@@ -398,21 +396,31 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
           </div>
         </td>
       </tr>
-      <tr :if={@split_of || @expense_id || @depot || @error || @ask_person} class="app-edit-notes">
+      <tr class="app-edit-foot">
         <td colspan={@columns.count}>
-          <.person_select
-            :if={@ask_person}
-            people={@reimbursement.people}
-            value={@params["person_id"]}
-          />
-          <.notes
-            split_of={@split_of}
-            transaction={@transaction}
-            accounts={@accounts}
-            expense_id={@expense_id}
-            depot={@depot}
-            error={@error}
-          />
+          <div class="app-edit-foot-row">
+            <div
+              :if={@split_of || @expense_id || @depot || @error || @ask_person}
+              class="app-edit-notes"
+            >
+              <.person_select
+                :if={@ask_person}
+                people={@reimbursement.people}
+                value={@params["person_id"]}
+              />
+              <.notes
+                split_of={@split_of}
+                transaction={@transaction}
+                accounts={@accounts}
+                expense_id={@expense_id}
+                depot={@depot}
+                error={@error}
+              />
+            </div>
+            <div class="app-edit-buttons">
+              <.save_buttons transaction={@transaction} locked={@locked} cancel="cancel_edit" small />
+            </div>
+          </div>
         </td>
       </tr>
     </tbody>
@@ -486,7 +494,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     assigns = assign(assigns, :save_label, save_label(assigns.transaction))
 
     ~H"""
-    <input :if={@locked} type="hidden" name="reconciled" value="confirmed" />
     <.tooltip id="tx-cancel-tip" text="Abbrechen (Esc)" placement={:left}>
       <.button
         id="tx-cancel"
@@ -502,6 +509,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       <.button
         id="tx-save"
         type="submit"
+        form="tx-form"
         variant={:primary}
         size={:sm}
         icon="check"

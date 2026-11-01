@@ -28,7 +28,7 @@ import Testing
         model.rowClicked(try #require(model.rows.first { $0.id == ids[1] }), column: .payee, modifiers: [])
         model.deleteKeyPressed()
         model.grid.navigationKeyPressed(.down, extending: false, caretOnly: false, pageRows: 1)
-        #expect(model.selectedTransactionIds == [ids[2]])
+        #expect(model.selectedTransactionIds == [ids[0]])
     }
 
     @Test func sortingScrollsToTheFirstSelectedRow() throws {
@@ -40,16 +40,16 @@ import Testing
         #expect(model.grid.scrollRequest?.target == .row(id))
     }
 
-    @Test func theRegisterStartsAtItsEndAndClampsOffsets() {
+    @Test func theRegisterStartsAtItsTopAndClampsOffsets() {
         var fixture = RegisterFixture()
         let ids = (1...5).map { fixture.add(fixture.giro, Decimal(-$0), on: "2014-05-1\($0)") }
         let model = fixture.model()
         let row = RegisterMetrics.rowHeight
         let grid = model.grid
         #expect(grid.scrollOffset(for: .row(ids[4]), viewport: 2 * row, current: nil) == nil)
-        #expect(grid.scrollOffset(for: .row(ids[0]), viewport: 2 * row, current: nil) == row)
-        #expect(grid.scrollOffset(for: .bottom, viewport: 2 * row, current: 0) == 4 * row)
-        #expect(grid.scrollOffset(for: .offset(500), viewport: 2 * row, current: 0) == 4 * row)
+        #expect(grid.scrollOffset(for: .row(ids[0]), viewport: 2 * row, current: nil) == 4 * row)
+        #expect(grid.scrollOffset(for: .bottom, viewport: 2 * row, current: 0) == 6 * row)
+        #expect(grid.scrollOffset(for: .offset(500), viewport: 2 * row, current: 0) == 6 * row)
         #expect(grid.scrollOffset(for: .offset(30), viewport: 2 * row, current: 0) == 30)
     }
 
@@ -57,14 +57,14 @@ import Testing
         var fixture = RegisterFixture()
         let ids = (1...5).map { fixture.add(fixture.giro, Decimal(-$0), on: "2014-05-1\($0)") }
         let model = fixture.model()
-        model.beginEditing(ids[4])
+        model.beginEditing(ids[0])
         let height = try #require(model.editor?.rowHeight)
         let top = 5 * RegisterMetrics.rowHeight
         let revealed = ((top + height - 100) / RegisterMetrics.rowHeight).rounded(.up) * RegisterMetrics.rowHeight
-        #expect(model.grid.scrollOffset(for: .row(ids[4]), viewport: 100, current: 48) == revealed)
+        #expect(model.grid.scrollOffset(for: .row(ids[0]), viewport: 100, current: 48) == revealed)
     }
 
-    @Test func editingASplitTallerThanTheViewportStartsAtTheRowsTop() throws {
+    @Test func editingASplitTallerThanTheViewportStartsAtTheRowsTopBelowItsHeading() throws {
         var fixture = RegisterFixture()
         let groceries = fixture.groceries
         let split = fixture.add(
@@ -77,7 +77,8 @@ import Testing
         let model = fixture.model()
         model.beginEditing(split)
         #expect(model.editor?.rowHeight == 180)
-        #expect(model.grid.scrollOffset(for: .row(split), viewport: 100, current: 0) == RegisterMetrics.rowHeight)
+        let belowTheHeading: CGFloat = 2 * RegisterMetrics.rowHeight
+        #expect(model.grid.scrollOffset(for: .row(split), viewport: 100, current: 0) == belowTheHeading)
     }
 
     private func register(rows count: Int) -> RegisterViewModel {
@@ -91,9 +92,9 @@ import Testing
     @Test func aListAtItsEndStaysAtItsEndWhenItsViewportChanges() {
         let model = register(rows: 21)
         let atEnd = model.grid.scrollMetrics(at: .greatestFiniteMagnitude, viewport: 200)
-        #expect(atEnd.offset == 14 * row)
-        #expect(model.grid.scrollMetrics(afterResizing: atEnd, to: 171).offset == 15 * row)
-        #expect(model.grid.scrollMetrics(afterResizing: atEnd, to: 260).offset == 12 * row)
+        #expect(atEnd.offset == 16 * row)
+        #expect(model.grid.scrollMetrics(afterResizing: atEnd, to: 171).offset == 17 * row)
+        #expect(model.grid.scrollMetrics(afterResizing: atEnd, to: 260).offset == 14 * row)
     }
 
     @Test func aScrolledListKeepsItsTopRowWhenItsViewportChanges() {
@@ -101,10 +102,10 @@ import Testing
         let scrolled = model.grid.scrollMetrics(at: 5 * row, viewport: 200)
         #expect(model.grid.scrollMetrics(afterResizing: scrolled, to: 171).offset == 5 * row)
         #expect(model.grid.scrollMetrics(afterResizing: scrolled, to: 260).offset == 5 * row)
-        #expect(model.grid.scrollMetrics(afterResizing: scrolled, to: 480).offset == 4 * row)
+        #expect(model.grid.scrollMetrics(afterResizing: scrolled, to: 560).offset == 3 * row)
     }
 
-    @Test func aListThatFitsKeepsTheEdgeItsGridStartsAt() {
+    @Test func aListThatFitsKeepsItsTop() {
         var fixture = RegisterFixture()
         for number in 1...3 { fixture.add(fixture.giro, Decimal(-number)) }
         fixture.addSchedule("S1")
@@ -113,7 +114,7 @@ import Testing
         let register = model.grid.scrollMetrics(at: 0, viewport: 200)
         let scheduler = model.scheduler.grid.scrollMetrics(at: 0, viewport: 200)
         #expect(model.scheduler.rows.count == 2)
-        #expect(model.grid.scrollMetrics(afterResizing: register, to: 72).offset == 2 * row)
+        #expect(model.grid.scrollMetrics(afterResizing: register, to: 72).offset == 0)
         #expect(model.scheduler.grid.scrollMetrics(afterResizing: scheduler, to: 30).offset == 0)
     }
 
@@ -146,8 +147,8 @@ import Testing
             try #require(model.rows.first { $0.id == model.transactionIds[17] }), column: .payee, modifiers: [])
         let next = try #require(model.grid.navigationKeyPressed(.down, extending: false, caretOnly: false, pageRows: 1))
         let shown = try #require(model.grid.scrollMetrics(revealing: .row(next), from: top, viewport: 451))
-        #expect(shown.offset == 3 * row)
-        #expect(shown.offset + 451 >= 19 * row)
+        #expect(shown.offset == 4 * row)
+        #expect(shown.offset + 451 >= 20 * row)
         let last = try #require(model.grid.navigationKeyPressed(.end, extending: false, caretOnly: false, pageRows: 1))
         #expect(try #require(model.grid.scrollMetrics(revealing: .row(last), from: top, viewport: 451)).isAtEnd)
     }
@@ -159,7 +160,7 @@ import Testing
         let viewport = 17 * row + height - 5
         let top = model.grid.scrollMetrics(at: 0, viewport: viewport)
         let shown = model.grid.scrollMetrics(afterResizing: top, to: viewport)
-        #expect(shown.offset == row)
+        #expect(shown.offset == 2 * row)
     }
 
     @Test func anEditKeepsItsRowInViewWhileTheViewportChanges() {
@@ -179,16 +180,43 @@ import Testing
         #expect(model.grid.scrollMetrics(afterResizing: atEnd, to: 200).offset == end)
     }
 
-    @Test func theAddEditorDockingKeepsTheEnd() {
+    @Test func theAddEditorOpensAtTheTopOfALongListWhateverTheSort() {
+        for ascending in [false, true] {
+            let model = register(rows: 21)
+            if ascending { model.grid.headerClicked(.date) }
+            let atEnd = model.grid.scrollMetrics(at: .greatestFiniteMagnitude, viewport: 200)
+            #expect(atEnd.offset > 0)
+            model.addTransactionClicked()
+            #expect(model.grid.isAdding)
+            #expect(model.grid.scrollRequest?.target == .top)
+            #expect(model.grid.scrollMetrics(afterResizing: atEnd, to: 200).offset == 0)
+        }
+    }
+
+    @Test func theSchedulersAddEditorOpensAtItsTop() {
+        var fixture = RegisterFixture()
+        for number in 1...6 { fixture.addSchedule("S\(number)", on: "2014-06-1\(number)") }
+        let model = fixture.model()
+        let atEnd = model.scheduler.grid.scrollMetrics(at: .greatestFiniteMagnitude, viewport: 100)
+        model.scheduler.addClicked()
+        #expect(model.scheduler.grid.isAdding)
+        #expect(model.scheduler.grid.scrollMetrics(afterResizing: atEnd, to: 100).offset == 0)
+    }
+
+    @Test func theRowsMoveDownByTheAddEditorsHeight() throws {
         let model = register(rows: 21)
-        let gridHeight: CGFloat = 400
-        let before = model.grid.addRowPlacement(gridHeight: gridHeight).listHeight(gridHeight: gridHeight)
-        let atEnd = model.grid.scrollMetrics(at: .greatestFiniteMagnitude, viewport: before)
-        model.grid.beginNew()
-        #expect(model.grid.isAdding)
-        let after = model.grid.addRowPlacement(gridHeight: gridHeight).listHeight(gridHeight: gridHeight)
-        #expect(after < before)
-        #expect(model.grid.scrollMetrics(afterResizing: atEnd, to: after).isAtEnd)
+        let first = try #require(model.grid.row(atY: 1, scrollOffset: 0))
+        let second = try #require(model.grid.row(atY: row + 1, scrollOffset: 0))
+        let content = model.grid.listContentHeight(viewport: 200)
+        model.addTransactionClicked()
+        let height = try #require(model.editor?.rowHeight)
+        #expect(model.grid.addRowHeight == height)
+        #expect(model.grid.row(atY: 1, scrollOffset: 0) == nil)
+        #expect(model.grid.row(atY: height + 1, scrollOffset: 0)?.id == first.id)
+        #expect(model.grid.row(atY: height + row + 1, scrollOffset: 0)?.id == second.id)
+        #expect(model.grid.listContentHeight(viewport: 200) == content + height)
+        #expect(model.grid.scrollMetrics(at: height + 20, viewport: 200).offset == height + row)
+        #expect(model.grid.scrollMetrics(at: height - 10, viewport: 200).offset == height - 10)
     }
 
     /// The view's order: the request places the list, then each frame of the opening info bar resizes it.
@@ -199,7 +227,7 @@ import Testing
             fixture.add(fixture.giro, Decimal(-number), on: "2014-05-1\(number % 10)")
         }
         let model = fixture.model()
-        if !ascending { model.grid.headerClicked(.date) }
+        if ascending { model.grid.headerClicked(.date) }
         let before = model.grid.scrollMetrics(at: 4 * row, viewport: 300)
         model.search.timeframePresetClicked(.latestThreeMonths)
         #expect(model.transactionIds.count == 20)
@@ -214,8 +242,45 @@ import Testing
     @Test func aDateFilterLeavesTheRegisterAtItsEndWhileTheInfoBarOpens() throws {
         let placed = try placementAfterDateFilter(ascending: true)
         #expect(placed.isAtEnd)
-        #expect(placed.offset == 11 * row)
+        #expect(placed.offset == 12 * row)
         #expect(try placementAfterDateFilter(ascending: false).offset == 0)
+    }
+
+    @Test func aSavedNewTransactionIsRevealedWhereItsDateSortsIt() throws {
+        let (model, _) = RegisterFixture().spied(appliesCommands: true)
+        model.requestScroll(.offset(90))
+        model.addTransactionClicked()
+        #expect(model.grid.scrollRequest?.target == .top)
+        let editor = try #require(model.editor)
+        editor.press(.tab)
+        editor.type("Bakery")
+        editor.press(.tab, .tab, .tab)
+        editor.type("3")
+        editor.activate(.save)
+        let saved = try #require(model.transactions.first { $0.amount == -3 })
+        #expect(model.grid.scrollRequest?.target == .row(saved.id))
+    }
+
+    @Test func savingAndAddingAnotherKeepsTheAddEditorAtTheTopAboveTheSavedRow() throws {
+        let (model, _) = RegisterFixture().spied(appliesCommands: true)
+        model.addTransactionClicked()
+        let editor = try #require(model.editor)
+        editor.press(.tab)
+        editor.type("Bakery")
+        editor.press(.tab, .tab, .tab)
+        editor.type("3")
+        editor.activate(.saveAndAddAnother)
+        let saved = try #require(model.transactions.first { $0.amount == -3 })
+        let next = try #require(model.editor)
+        #expect(next !== editor)
+        #expect(next.mode == .new)
+        let request = try #require(model.grid.scrollRequest)
+        #expect(request.target == .top)
+        #expect(model.grid.scrollOffset(for: request.target, viewport: 200, current: 3 * row) == 0)
+        let shown = stride(from: next.rowHeight + 1, to: 200, by: row).compactMap {
+            model.grid.row(atY: $0, scrollOffset: 0)?.transactionId
+        }
+        #expect(shown.contains(saved.id))
     }
 
     @Test func clearingASearchRestoresThePositionBeforeIt() {

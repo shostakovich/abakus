@@ -43,6 +43,21 @@ import Testing
         #expect(restored.search.text.isEmpty)
     }
 
+    @Test func theOldDefaultSortGivesWayToNewestFirst() throws {
+        let saved = { (version: String) in
+            try JSONDecoder().decode(
+                SavedRegisterViewState.self,
+                from: Data(
+                    """
+                    {"sortColumn": "date", "sortAscending": true, \(version)
+                     "isShowingReconciled": true, "columns": {}, "isSchedulerVisible": false}
+                    """.utf8))
+        }
+        #expect(try saved("").restoredSort == nil)
+        #expect(try saved(#""sortVersion": 2,"#).restoredSort == RegisterSortOrder(column: .date, ascending: true))
+        #expect(RegisterSortOrder.default == RegisterSortOrder(column: .date, ascending: false))
+    }
+
     @Test func reconciliationKeepsTheStateToReturnTo() throws {
         let storage = MemorySettingsStorage()
         let register = launch(storage).register

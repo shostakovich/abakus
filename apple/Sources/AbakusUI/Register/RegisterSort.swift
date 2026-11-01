@@ -5,7 +5,7 @@ public struct RegisterSortOrder: Hashable, Sendable {
     public var column: RegisterColumn
     public var ascending: Bool
 
-    public static let `default` = RegisterSortOrder(column: .date, ascending: true)
+    public static let `default` = RegisterSortOrder(column: .date, ascending: false)
 
     public init(column: RegisterColumn, ascending: Bool) {
         self.column = column
@@ -32,7 +32,6 @@ struct RegisterSortKeys {
         case .account: accountName.localizedStandardCompare(other.accountName)
         case .date: Self.order(lhs.date, rhs.date)
         case .payee: lhs.payee.localizedStandardCompare(rhs.payee)
-        case .errorState: Self.order(rhs.errorLevel.rank, lhs.errorLevel.rank)
         case .category: lhs.category.localizedStandardCompare(rhs.category)
         case .memo: lhs.memo.localizedStandardCompare(rhs.memo)
         case .outflow, .inflow: Self.order(rhs.amount, lhs.amount)

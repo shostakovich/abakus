@@ -127,7 +127,7 @@ struct EditHarness {
     }
 
     private func transaction(where predicate: (Transaction) -> Bool) throws -> String {
-        guard let match = register.transactions.last(where: predicate) else { throw SnapshotError.render }
+        guard let match = register.transactions.first(where: predicate) else { throw SnapshotError.render }
         return match.id
     }
 

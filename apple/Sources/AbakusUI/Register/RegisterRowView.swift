@@ -111,7 +111,8 @@ struct RegisterRowView: View {
                 .frame(width: frame.width, height: RegisterMetrics.rowHeight, alignment: .topLeading)
                 .clipped()
                 .anchorPreference(key: RegisterAnchorKey.self, value: .bounds) { anchor in
-                    guard isPopupRow, let id = Self.anchorID(frame.column, row: row) else { return [:] }
+                    guard isPopupRow, let id = Self.anchorID(frame.column, row: row, statusColumn: statusColumn)
+                    else { return [:] }
                     return [id: anchor]
                 }
                 .offset(x: frame.x)
@@ -119,13 +120,24 @@ struct RegisterRowView: View {
         }
     }
 
-    /// A split line anchors only its error popup.
-    static func anchorID(_ column: RegisterColumn, row: RegisterRow) -> RegisterAnchorID? {
-        switch column {
-        case .errorState: .error(row.id)
-        case .runningBalance where !row.isSubtransaction: .balance(row.id)
-        default: nil
-        }
+    static func anchorID(_ column: RegisterColumn, row: RegisterRow, statusColumn: RegisterColumn?)
+        -> RegisterAnchorID?
+    {
+        if column == statusColumn { return .error(row.id) }
+        return column == .runningBalance && !row.isSubtransaction ? .balance(row.id) : nil
+    }
+
+    /// The approve ✓ goes to the status column, other marks to the category; each falls back to the other column.
+    static func statusColumn(for row: RegisterRow, in columns: [RegisterColumn]) -> RegisterColumn? {
+        guard row.errorLevel != .none else { return nil }
+        let order: [RegisterColumn] =
+            row.isSubtransaction
+            ? [.category] : row.errorLevel == .forReview ? [.cleared, .category] : [.category, .cleared]
+        return order.first(where: columns.contains)
+    }
+
+    private var statusColumn: RegisterColumn? {
+        Self.statusColumn(for: row, in: layout.frames.map(\.column))
     }
 
     @ViewBuilder
@@ -135,11 +147,10 @@ struct RegisterRowView: View {
         case .date: text(row.date, width: frame.width)
         case .frequency: text(row.frequency, width: frame.width)
         case .payee: payee(width: frame.width)
-        case .errorState: errorCell(width: frame.width)
         case .category: category(width: frame.width)
         case .memo: text(row.memo, width: frame.width, tip: .whenTruncated)
         case .outflow: amount(row.outflow, width: frame.width)
-        case .inflow: amount(row.inflow, width: frame.width)
+        case .inflow: amount(row.inflow, width: frame.width, color: inflowColor)
         case .runningBalance:
             amount(row.runningBalance, width: frame.width)
                 .contentShape(Rectangle())
@@ -154,11 +165,10 @@ struct RegisterRowView: View {
         let indent = RegisterGridStyle.cellInset + RegisterGridStyle.subRowIndent
         switch frame.column {
         case .payee: payee(width: frame.width, leadingInset: indent)
-        case .errorState: errorCell(width: frame.width)
         case .category: category(width: frame.width, leadingInset: indent)
         case .memo: text(row.memo, width: frame.width, tip: .whenTruncated)
         case .outflow: amount(row.outflow, width: frame.width)
-        case .inflow: amount(row.inflow, width: frame.width)
+        case .inflow: amount(row.inflow, width: frame.width, color: inflowColor)
         default: EmptyView()
         }
     }
@@ -169,6 +179,10 @@ struct RegisterRowView: View {
 
     private var textColor: Color {
         row.isExcludedFromSearch ? ThemeColor.secondaryText : ThemeColor.text
+    }
+
+    private var inflowColor: Color {
+        row.isExcludedFromSearch ? ThemeColor.secondaryText : ThemeColor.positive
     }
 
     private func balanceHovered(_ inside: Bool) {
@@ -188,24 +202,27 @@ struct RegisterRowView: View {
         GridCellLabel(text: value, font: textFont, color: textColor, width: width, tip: tip)
     }
 
-    private func amount(_ value: String, width: CGFloat) -> some View {
-        GridCellLabel(text: value, font: textFont, color: textColor, width: width, alignment: .trailing)
+    private func amount(_ value: String, width: CGFloat, color: Color? = nil) -> some View {
+        GridCellLabel(text: value, font: textFont, color: color ?? textColor, width: width, alignment: .trailing)
     }
 
+    /// A transfer reads "⇄ Girokonto": the symbol jumps to the other side.
     private func payee(width: CGFloat, leadingInset: CGFloat = RegisterGridStyle.cellInset) -> some View {
-        HStack(spacing: 0) {
+        let symbolWidth = row.hasTransferIcon ? Self.symbolButtonWidth : 0
+        return HStack(spacing: 0) {
+            if row.hasTransferIcon {
+                transferButton.padding(.leading, leadingInset - Self.symbolInset)
+            }
             GridCellLabel(
                 text: row.payee, font: textFont, color: textColor,
-                width: width - (row.hasTransferIcon ? Self.symbolButtonWidth : 0), leadingInset: leadingInset,
-                tip: .always(row.payeeTooltip))
-            if row.hasTransferIcon {
-                transferButton
-            }
+                width: width - symbolWidth - (row.hasTransferIcon ? leadingInset - Self.symbolInset : 0),
+                leadingInset: row.hasTransferIcon ? 0 : leadingInset, tip: .always(row.payeeTooltip))
         }
         .frame(width: width, alignment: .leading)
     }
 
-    static let symbolButtonWidth: CGFloat = 22
+    static let symbolButtonWidth: CGFloat = 20
+    static let symbolInset: CGFloat = 3
     static let chevronWidth: CGFloat = 16
 
     @ViewBuilder
@@ -220,8 +237,9 @@ struct RegisterRowView: View {
         }
     }
 
+    /// What the row waits for (a category, a confirmation, a fix); a click opens its popup.
     @ViewBuilder
-    private func errorCell(width: CGFloat) -> some View {
+    private func statusButton(width: CGFloat = Self.symbolButtonWidth) -> some View {
         if let symbol = row.errorLevel.symbol {
             symbolButton(
                 StatusSymbolImage(symbol: symbol)
@@ -233,15 +251,19 @@ struct RegisterRowView: View {
         }
     }
 
+    @ViewBuilder
     private func clearedCell(width: CGFloat) -> some View {
-        let symbol = row.cleared.symbol(reconciling: main?.isReconciling ?? false)
-        return symbolButton(
-            StatusSymbolImage(symbol: symbol).frame(width: width, height: RegisterMetrics.rowHeight),
-            pointer: row.cleared != .reconciled
-        ) {
-            main?.clearedClicked(row)
+        if statusColumn == .cleared {
+            statusButton(width: width)
+        } else {
+            symbolButton(
+                StatusSymbolImage(symbol: row.cleared.symbol).frame(width: width, height: RegisterMetrics.rowHeight),
+                pointer: row.cleared != .reconciled
+            ) {
+                main?.clearedClicked(row)
+            }
+            .toolTip(row.clearedTooltip)
         }
-        .toolTip(row.clearedTooltip)
     }
 
     private func symbolButton<Label: View>(_ label: Label, pointer: Bool = true, action: @escaping () -> Void)
@@ -268,6 +290,10 @@ struct RegisterRowView: View {
         case .error: (font, color) = (RegisterGridStyle.rowFont, ThemeColor.negative)
         }
         let chevronX = leadingInset - 2
+        let hasStatus = statusColumn == .category
+        let statusX = hasChevron ? 0 : leadingInset - Self.symbolInset
+        let accessories =
+            (hasChevron ? chevronX + Self.chevronWidth : 0) + (hasStatus ? statusX + Self.symbolButtonWidth : 0)
         return HStack(spacing: 0) {
             if hasChevron {
                 symbolButton(
@@ -281,10 +307,13 @@ struct RegisterRowView: View {
                 .padding(.leading, chevronX)
                 .accessibilityLabel(row.split == .expanded ? "Teile einklappen" : "Teile ausklappen")
             }
+            if hasStatus {
+                statusButton().padding(.leading, statusX)
+            }
             GridCellLabel(
-                text: row.category, font: font, color: color,
-                width: hasChevron ? width - chevronX - Self.chevronWidth : width,
-                leadingInset: hasChevron ? 0 : leadingInset, truncation: .middle, tip: .whenTruncated)
+                text: row.category, font: font, color: color, width: width - accessories,
+                leadingInset: hasChevron || hasStatus ? 0 : leadingInset, truncation: .middle,
+                tip: row.categoryTooltip.map { .always($0) } ?? .whenTruncated)
         }
         .frame(width: width, alignment: .leading)
     }

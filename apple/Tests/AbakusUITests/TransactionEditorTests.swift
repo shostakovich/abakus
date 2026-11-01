@@ -31,7 +31,7 @@ import Testing
         model.grid.editSelected()
         let editor = try #require(model.editor)
         #expect(editor.focusedField == .main(.date))
-        #expect(editor.text(.main(.date)) == "10/05/14")
+        #expect(editor.text(.main(.date)) == "29/04/14")
         #expect(editor.buttons == [.done, .cancel])
     }
 

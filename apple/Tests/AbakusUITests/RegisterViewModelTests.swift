@@ -19,13 +19,13 @@ import Testing
         let base: [RegisterColumn] = [.date, .payee, .category, .memo, .outflow, .inflow, .cleared]
         #expect(fixture.model().visibleColumns == base)
         fixture.add(fixture.giro, -1)
-        #expect(fixture.model().visibleColumns.contains(.errorState))
+        #expect(fixture.model().visibleColumns == base)
         #expect(fixture.model(selection: .allAccounts).visibleColumns.prefix(2) == [.account, .date])
     }
 
     @Test func columnMenuTogglesOnlyHideableColumns() {
         let model = RegisterFixture().model()
-        #expect(model.columnMenuItems.map(\.label) == ["Gebucht", "Memo", "Laufender Saldo"])
+        #expect(model.columnMenuItems.map(\.label) == ["Status", "Memo", "Laufender Saldo"])
         model.toggleColumnVisibility(.runningBalance)
         model.toggleColumnVisibility(.memo)
         model.toggleColumnVisibility(.payee)
@@ -35,19 +35,47 @@ import Testing
         #expect(RegisterFixture().model(selection: .allAccounts).columnMenuItems.count == 2)
     }
 
-    @Test func actionButtonFollowsTheSelectionCount() {
+    @Test func editTransactionsFollowsTheSelectionCount() {
         var fixture = RegisterFixture()
         fixture.add(fixture.giro, -1)
         fixture.add(fixture.giro, -2)
         let model = fixture.model()
         #expect(model.actionButtonTitle == "Buchungen bearbeiten")
-        #expect(!model.isActionButtonEnabled)
+        #expect(!model.hasSelection)
         model.rowClicked(model.rows[0], column: .payee, modifiers: [])
         #expect(model.actionButtonTitle == "1 Buchung bearbeiten")
         model.selectAll()
         #expect(model.actionButtonTitle == "3 Buchungen bearbeiten")
-        model.editTransactionsClicked()
-        #expect(model.menuRequest?.anchor == .actionButton)
+        #expect(model.contextMenu(for: model.rows[0])?.first?.title == "3 ausgewählte Buchungen:")
+    }
+
+    @Test func theViewMenuHoldsTheFiltersAndTheColumns() {
+        let model = RegisterFixture().model()
+        #expect(
+            model.viewMenu.map(\.title).filter { !$0.isEmpty } == [
+                "Zeitraum: Alle Daten …", "Abgeglichene Buchungen zeigen", "Status", "Memo", "Laufender Saldo",
+                "Für alle Konten übernehmen",
+            ])
+        model.viewMenuChosen(.showReconciled)
+        #expect(!model.isShowingReconciled)
+        model.viewMenuChosen(.timeframe)
+        #expect(model.popup == .timeframe)
+        #expect(model.popup?.anchor == .viewMenu)
+    }
+
+    @Test func theHeaderShowsTheReconcileDateAndEditsTheAccount() {
+        var fixture = RegisterFixture()
+        let index = fixture.budget.accounts.firstIndex { $0.id == fixture.giro }!
+        fixture.budget.accounts[index].lastReconciledAt = day("2014-04-30").noon()
+        let model = fixture.model()
+        #expect(model.reconciledLabel == "Abgeglichen am 30/04")
+        fixture.budget.accounts[index].lastReconciledAt = day("2013-09-27").noon()
+        #expect(fixture.model().reconciledLabel == "Abgeglichen am 27/09/13")
+        #expect(fixture.model(selection: .allAccounts).reconciledLabel == nil)
+        var edited: String?
+        model.onEditAccount = { edited = $0 }
+        model.editAccountClicked()
+        #expect(edited == fixture.giro)
     }
 
     @Test func searchPromptNamesTheAccount() {

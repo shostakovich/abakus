@@ -271,7 +271,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       refute html =~ ~s|data-value="a:#{c.giro.id}"|
 
       pick(view, "main", "payee", "a:#{c.savings.id}")
-      assert has_element?(view, ~s|#tx-payee[value="↔ 🏦 Sparkonto"]|)
+      assert has_element?(view, ~s|#tx-payee[value="⇄ 🏦 Sparkonto"]|)
       assert has_element?(view, "#tx-category[readonly]")
 
       submit(view, %{outflow: "200", memo: "Rücklagen"})
@@ -283,7 +283,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert %Transaction{amount: 20_000, memo: "Rücklagen", category_id: nil} =
                reload(transfer.transfer_transaction)
 
-      assert has_element?(view, "#tx-#{transfer.id}", "↔ 🏦 Sparkonto")
+      assert has_element?(view, "#tx-#{transfer.id} .app-transfer", "🏦 Sparkonto")
     end
 
     test "between a budget and a tracking account take a category, the last one used first", c do
@@ -344,7 +344,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.savings}")
       open_edit(view, %{id: transfer.transfer_transaction_id})
 
-      assert has_element?(view, ~s|#tx-payee[value="↔ 💶 Girokonto"]|)
+      assert has_element?(view, ~s|#tx-payee[value="⇄ 💶 Girokonto"]|)
       assert has_element?(view, ~s|#tx-inflow[value="200,00"]|)
 
       submit(view, %{inflow: "250"})
@@ -355,7 +355,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       view = open_new(c, c.giro)
 
       pick(view, "main", "payee", "a:#{c.savings.id}")
-      assert has_element?(view, ~s|#tx-payee[value="↔ 🏦 Sparkonto"]|)
+      assert has_element?(view, ~s|#tx-payee[value="⇄ 🏦 Sparkonto"]|)
 
       create_payee(view, "main", "Sparkasse")
       submit(view, %{outflow: "3"})
@@ -441,7 +441,7 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert %Transaction{amount: 1_000, category_id: nil} = depot.transfer_transaction
 
       assert has_element?(view, "#tx-#{split.id}", "Aufgeteilt (3)")
-      assert has_element?(view, "#tx-#{split.id}-part-1", "↔ 🏦 Sparkonto")
+      assert has_element?(view, "#tx-#{split.id}-part-1 .app-transfer", "🏦 Sparkonto")
       assert has_element?(view, "#tx-#{split.id}-part-0", "Lebensmittel")
       assert has_element?(view, "#tx-#{split.id}-parts")
     end
@@ -572,21 +572,30 @@ defmodule AbakusWeb.TransactionEditorTest do
       refute has_element?(view, "#tx-editor")
     end
 
-    test "the edited row keeps one line, with Save and Cancel where approve and C stand", c do
+    test "the edited row keeps its inputs on one line, Save and Cancel below it", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-      assert has_element?(view, "#tx-#{c.shopping.id} td.app-ok-col #tx-#{c.shopping.id}-approve")
-
-      open_edit(view, c.shopping)
-
-      assert has_element?(view, "#tx-editor tr.app-edit-main .app-edit-buttons #tx-save")
 
       assert has_element?(
                view,
-               ~s|#tx-editor tr.app-edit-main #tx-cancel[aria-label="Abbrechen"]|
+               "#tx-#{c.shopping.id} td.app-status-col #tx-#{c.shopping.id}-approve"
+             )
+
+      open_edit(view, c.shopping)
+
+      assert has_element?(view, "#tx-editor tr.app-edit-main #tx-form #tx-memo")
+
+      assert has_element?(
+               view,
+               ~s|#tx-editor tr.app-edit-foot .app-edit-buttons #tx-save[form="tx-form"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|#tx-editor tr.app-edit-foot #tx-cancel[aria-label="Abbrechen"]|
              )
 
       refute has_element?(view, "#tx-editor input[type=checkbox]")
-      refute has_element?(view, "#tx-editor tr.app-edit-notes")
+      refute has_element?(view, "#tx-editor .app-edit-notes")
     end
 
     test "only one row is edited at a time", c do
@@ -626,7 +635,7 @@ defmodule AbakusWeb.TransactionEditorTest do
     test "deletes from the selection bar after asking", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      view |> element("#tx-#{c.shopping.id}-select") |> render_click()
+      view |> element("#tx-#{c.shopping.id} td.app-payee") |> render_click(%{"toggle" => "true"})
       confirm_click(view, "#delete-selected", "Buchung löschen?")
 
       assert reload(c.shopping).deleted_at
@@ -650,8 +659,8 @@ defmodule AbakusWeb.TransactionEditorTest do
         Enum.at(Ledger.get_transaction!(budget_scope(), split.id).subtransactions, 1).transfer_transaction_id
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
-      view |> element("#tx-#{split.id}-select") |> render_click()
-      view |> element("#tx-#{counterpart}-select") |> render_click()
+      view |> element("#tx-#{split.id} td.app-payee") |> render_click(%{"toggle" => "true"})
+      view |> element("#tx-#{counterpart} td.app-payee") |> render_click(%{"toggle" => "true"})
       confirm_click(view, "#delete-selected", "2 Buchungen löschen?")
 
       assert reload(split).deleted_at
@@ -672,8 +681,8 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       assert %Transaction{memo: "Nachgetragen", cleared: :reconciled} = reload(old)
 
-      view |> element("#tx-#{old.id}-select") |> render_click()
-      view |> element("#tx-#{old.id}-select") |> render_click()
+      view |> element("#tx-#{old.id} td.app-payee") |> render_click(%{"toggle" => "true"})
+      view |> element("#tx-#{old.id} td.app-payee") |> render_click(%{"toggle" => "true"})
 
       confirm_click(
         view,
@@ -703,7 +712,7 @@ defmodule AbakusWeb.TransactionEditorTest do
         )
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-      view |> element("#tx-#{transfer.id}-select") |> render_click()
+      view |> element("#tx-#{transfer.id} td.app-payee") |> render_click(%{"toggle" => "true"})
       assert asked(view, "#delete-selected").question =~ "abgeglichen"
 
       # Without the confirmation nothing goes.

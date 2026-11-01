@@ -44,7 +44,7 @@ import Testing
         let model = RegisterFixture().model()
         let target = RegisterMenuTarget { _ in }
         let menu = target.menu(model.columnMenu)
-        #expect(menu.item(withTitle: "Gebucht")?.state == .on)
+        #expect(menu.item(withTitle: "Status")?.state == .on)
         #expect(menu.item(withTitle: "Laufender Saldo")?.state == .off)
     }
 }

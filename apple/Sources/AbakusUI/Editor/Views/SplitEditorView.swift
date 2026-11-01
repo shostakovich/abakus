@@ -41,11 +41,6 @@ struct SplitEditorView: View {
                 )
                 .offset(x: frame.x)
             }
-            if let frame = layout.frame(of: .errorState), let symbol = subErrorSymbol(id) {
-                StatusSymbolImage(symbol: symbol)
-                    .frame(width: frame.width, height: EditRowMetrics.subRowHeight)
-                    .offset(x: frame.x)
-            }
         }
         .frame(width: layout.displayWidth, height: EditRowMetrics.subRowHeight, alignment: .topLeading)
     }
@@ -57,11 +52,6 @@ struct SplitEditorView: View {
         return frames.compactMap { frame in
             EditorColumn(frame.column).flatMap { columns.contains($0) ? ($0, frame) : nil }
         }
-    }
-
-    private func subErrorSymbol(_ id: String) -> StatusSymbol? {
-        guard let sub = editor.original.subtransactions.first(where: { $0.id == id }) else { return nil }
-        return editor.store.budget.errorState(of: sub, inAccount: editor.original.accountId).level.symbol
     }
 
     private var addRow: some View {

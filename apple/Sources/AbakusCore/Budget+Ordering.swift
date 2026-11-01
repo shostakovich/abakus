@@ -34,6 +34,7 @@ public struct BudgetLookup: Sendable {
     private let payeeNames: [String: String]
     private let transferAccounts: [String: String]
     private let categoryNames: [String: String]
+    private let shortCategoryNames: [String: String]
 
     public init(_ budget: Budget) {
         self.budget = budget
@@ -46,6 +47,7 @@ public struct BudgetLookup: Sendable {
         }
         let ids = budget.categoryGroups.flatMap(\.categories).map(\.id) + [EntityID.splitCategory]
         categoryNames = Dictionary(ids.map { ($0, budget.categoryDisplayName($0)) }) { first, _ in first }
+        shortCategoryNames = Dictionary(ids.map { ($0, budget.categoryName($0)) }) { first, _ in first }
     }
 
     public func account(withId id: String) -> Account? { accounts[id] }
@@ -82,13 +84,18 @@ public struct BudgetLookup: Sendable {
         categoryId.flatMap { categoryNames[$0] } ?? ""
     }
 
+    public func categoryName(_ categoryId: String?) -> String {
+        categoryId.flatMap { shortCategoryNames[$0] } ?? ""
+    }
+
     public func categoryDisplayName(of transaction: Transaction) -> String {
         categoryDisplayName(transaction.isSplit ? EntityID.splitCategory : transaction.categoryId)
     }
 
     public func defaultOrderKeys(of transaction: Transaction) -> DefaultOrderKeys {
         DefaultOrderKeys(
-            date: transaction.date, amount: transaction.amount, payee: payeeName(of: transaction),
+            date: transaction.date, amount: transaction.amount,
+            payee: transferAccountId(of: transaction).flatMap { accounts[$0]?.name } ?? payeeName(of: transaction),
             category: categoryDisplayName(of: transaction), memo: transaction.memo ?? "",
             cleared: transaction.cleared, errorLevel: errorState(of: transaction).level)
     }

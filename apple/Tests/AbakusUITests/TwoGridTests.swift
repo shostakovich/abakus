@@ -238,7 +238,7 @@ import Testing
 
     @Test func arrowsWhileEditingStepOnlyTheFrequency() throws {
         let (model, _) = fixture().spied()
-        model.beginEditing(try #require(model.rows.last).transactionId)
+        model.beginEditing(try #require(model.rows.first).transactionId)
         #expect(!model.grid.editorArrowPressed(.down))
         #expect(model.editor?.text(.main(.date)) == "10/05/14")
         model.editor?.cancel()

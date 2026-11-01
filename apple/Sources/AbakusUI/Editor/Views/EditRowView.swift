@@ -64,11 +64,6 @@ struct EditRowView: View {
                 transferLink: editor.mode == .existing && editor.budget.isTransfer(editor.original)
                     && !editor.isScheduled
                     ? { if let row { main?.transferIconClicked(row) } } : nil)
-        case .errorState:
-            if let row, let symbol = row.errorLevel.symbol {
-                EditRowSymbolButton(symbol: symbol, width: frame.width) { main?.errorIconClicked(row) }
-                    .toolTip(row.errorMessage)
-            }
         case .category:
             EditTextCell(editor: editor, field: .main(.category), width: frame.width, accessory: .suggestions)
         case .memo:
@@ -89,7 +84,7 @@ struct EditRowView: View {
         case .cleared:
             let cleared = editor.clone.cleared
             EditRowSymbolButton(
-                symbol: cleared.symbol(reconciling: main?.isReconciling ?? false), width: frame.width,
+                symbol: cleared.symbol, width: frame.width,
                 pointer: cleared != .reconciled
             ) {
                 if let row, let main { main.clearedClicked(row) } else { editor.toggleCleared() }

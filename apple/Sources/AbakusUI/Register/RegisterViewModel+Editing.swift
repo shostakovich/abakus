@@ -16,7 +16,6 @@ extension RegisterViewModel: RegisterGridOwner {
     var mainGrid: RegisterViewModel? { self }
     var gridIds: [String] { transactionIds }
     var columnTab: RegisterAnchorID { .columnTab }
-    var startsAtTop: Bool { false }
     var snapsToRows: Bool { true }
 
     func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)? {

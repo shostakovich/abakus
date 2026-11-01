@@ -44,22 +44,22 @@ import Testing
         #expect(model.store.budget.transaction(withId: id)?.memo == "changed")
     }
 
-    @Test func actionMenuGlowsWhileTheEditHasChanges() throws {
+    @Test func theViewMenuGlowsWhileTheEditHasChanges() throws {
         var fixture = RegisterFixture()
         let (model, _) = editingMemo(&fixture)
-        model.editTransactionsClicked()
-        #expect(model.menuRequest == nil)
+        model.viewMenuChosen(.toggleColumn(.runningBalance))
+        #expect(!model.visibleColumns.contains(.runningBalance))
         #expect(model.editor?.glowCount == 1)
     }
 
-    @Test func actionMenuEndsAnUnchangedEditFirst() {
+    @Test func theViewMenuEndsAnUnchangedEditFirst() {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -10, category: fixture.groceries)
         let model = fixture.model()
         model.beginEditing(id)
-        model.editTransactionsClicked()
+        model.viewMenuChosen(.toggleColumn(.runningBalance))
         #expect(model.editor == nil)
-        #expect(model.menuRequest != nil)
+        #expect(model.visibleColumns.contains(.runningBalance))
     }
 
     @Test func aSearchThatHidesTheEditedRowEndsTheEdit() {

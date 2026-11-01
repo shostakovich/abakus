@@ -60,7 +60,8 @@ private final class PresentedMenus {
             fixture.add(fixture.giro, -1, on: "2014-05-1\(index)", payee: payee, category: fixture.groceries, id: payee)
         }
         let (model, _) = fixture.spied()
-        return (model, model.rows)
+        model.grid.headerClicked(.payee)
+        return (model, model.gridRows)
     }
 
     private func row(atY y: CGFloat, in rows: [RegisterRow], scrollOffset: CGFloat = 0, tallRow: String? = nil)

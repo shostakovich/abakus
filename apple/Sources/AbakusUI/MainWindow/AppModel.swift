@@ -56,6 +56,7 @@ public final class AppModel {
         register.isAppModalOpen = { [weak self] in self?.isAppModalOpen ?? false }
         budget.isAppModalOpen = { [weak self] in self?.isAppModalOpen ?? false }
         register.onEditPayees = { [weak self] name in self?.openPayeeSettings(payeeName: name) }
+        register.onEditAccount = { [weak self] id in self?.accounts.editAccountRequested(id) }
         store.onReceive = { [weak self] in self?.register.endEditsOvertakenByChanges() }
         budget.callouts.onShowTransaction = { [weak self] id in self?.register.showTransaction(id) }
         budget.callouts.onShowInAccountView = { [weak self] filter in self?.register.showFilteredView(filter) }

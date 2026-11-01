@@ -19,7 +19,7 @@ import Testing
         let options = try SnapshotOptions(arguments: ["out.png", "--scale", "1", "--select", "2", "--height", "681"])
         #expect(options.output.lastPathComponent == "out.png")
         #expect(options.scale == 1)
-        #expect(options.selectLast == 2)
+        #expect(options.selectNewest == 2)
         #expect(options.height == 681)
     }
 

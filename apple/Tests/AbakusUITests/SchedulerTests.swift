@@ -31,7 +31,7 @@ import Testing
         #expect(row.date == "02/06/14")
         #expect(row.frequency == "Monatlich")
         #expect(row.payee == "Farm")
-        #expect(row.category == "Everyday Expenses: Groceries")
+        #expect(row.category == "Groceries")
         #expect(row.outflow == "25.00")
         #expect(model.scheduler.scheduledTransactions.count == 1)
     }
@@ -42,7 +42,7 @@ import Testing
         let (model, _) = fixture.spied(selection: .allAccounts)
         model.scheduler.grid.toggleSplit("S1")
         let rows = model.scheduler.rows
-        #expect(rows.map(\.category) == ["", "Everyday Expenses: Groceries", "Everyday Expenses: Groceries"])
+        #expect(rows.map(\.category) == ["", "Groceries", "Groceries"])
     }
 
     @Test func toggleShowsThePaneAtItsMinimumHeight() {
@@ -201,7 +201,7 @@ import Testing
         let entered = try #require(model.transactions.first { $0.source == .scheduled })
         #expect(model.selectedTransactionIds == [entered.id])
         #expect(model.scheduler.selection.isEmpty)
-        #expect(model.grid.scrollRequest?.target == .bottom)
+        #expect(model.grid.scrollRequest?.target == .row(entered.id))
     }
 
     @Test func skipAndDeleteWorkOnTheSelection() throws {
@@ -365,20 +365,6 @@ import Testing
         #expect(transfer.text(.main(.payee)) == Payee.transferPrefix)
     }
 
-    @Test func idleListsFillTheGridBelowTheHeader() {
-        var fixture = RegisterFixture()
-        for index in 0..<10 {
-            fixture.addSchedule("S\(index)", payee: "Payee \(index)", category: fixture.groceries)
-            fixture.add(fixture.giro, -1)
-        }
-        let model = fixture.spied().model
-        let gridHeight: CGFloat = 200
-        let scheduled = model.scheduler.grid.addRowPlacement(gridHeight: gridHeight).listHeight(gridHeight: gridHeight)
-        let main = model.grid.addRowPlacement(gridHeight: gridHeight).listHeight(gridHeight: gridHeight)
-        #expect(scheduled == gridHeight - RegisterMetrics.headerHeight)
-        #expect(main == gridHeight - RegisterMetrics.headerHeight)
-    }
-
     @Test func theFrequencyColumnFitsTheLongestFrequency() throws {
         var fixture = fixture()
         let before = fixture.spied().model
@@ -396,7 +382,8 @@ import Testing
                 == RegisterColumn.frequency.contentWidth(
                     fitting: ["Alle 2 Monate"], accessory: SchedulerMetrics.popUpAccessory))
         #expect(longest.width > monthly.width)
-        #expect(abs(layout.frames.map(\.width).reduce(0, +) - layout.displayWidth) <= 1)
+        let columnsWidth = layout.displayWidth - RegisterMetrics.leadingInset
+        #expect(abs(layout.frames.map(\.width).reduce(0, +) - columnsWidth) <= 1)
     }
 
     @Test func amountColumnsWidenForLargeAmountsAndKeepTheirMinimum() throws {

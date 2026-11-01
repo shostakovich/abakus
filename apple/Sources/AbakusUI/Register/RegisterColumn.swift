@@ -1,7 +1,7 @@
 import CoreGraphics
 
 public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
-    case account, date, payee, errorState, category, memo, outflow, inflow
+    case account, date, payee, category, memo, outflow, inflow
     case runningBalance, cleared, frequency
 
     public enum Header: Hashable, Sendable {
@@ -14,13 +14,12 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .account: .text("Konto")
         case .date: .text("Datum")
         case .payee: .text("Empfänger")
-        case .errorState: .symbol("exclamationmark.triangle", label: "Status")
         case .category: .text("Kategorie")
         case .memo: .text("Memo")
         case .outflow: .text("Ausgang")
         case .inflow: .text("Eingang")
         case .runningBalance: .text("Saldo")
-        case .cleared: .symbol("checkmark.circle", label: "Gebucht")
+        case .cleared: .symbol("checkmark.circle", label: "Status")
         case .frequency: .text("Häufigkeit")
         }
     }
@@ -29,12 +28,16 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
 
     public var minWidth: CGFloat {
         switch self {
-        case .errorState, .cleared: 32
+        case .cleared: 32
         case .account, .payee, .category, .memo, .frequency: 50
         case .date: 92
-        case .outflow, .inflow, .runningBalance: 70
+        case .outflow, .inflow, .runningBalance: Self.amountWidth
         }
     }
+
+    /// Wide enough for "−10.000,00" in the register's font.
+    static let amountWidth: CGFloat = ceil(
+        ThemeFont.tableEmphasized.width(of: "−10.000,00") + 2 * RegisterGridStyle.cellInset)
 
     public var isResizable: Bool {
         switch self {
@@ -57,12 +60,11 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .account: RegisterColumnSetting(visible: true, width: 75)
         case .date: RegisterColumnSetting(visible: true, width: 55)
         case .payee: RegisterColumnSetting(visible: true, width: 175)
-        case .errorState: RegisterColumnSetting(visible: true, width: 23)
         case .category: RegisterColumnSetting(visible: true, width: 175)
         case .memo: RegisterColumnSetting(visible: true, width: 50)
-        case .outflow: RegisterColumnSetting(visible: true, width: 70)
-        case .inflow: RegisterColumnSetting(visible: true, width: 70)
-        case .runningBalance: RegisterColumnSetting(visible: false, width: 70)
+        case .outflow: RegisterColumnSetting(visible: true, width: Self.amountWidth)
+        case .inflow: RegisterColumnSetting(visible: true, width: Self.amountWidth)
+        case .runningBalance: RegisterColumnSetting(visible: false, width: Self.amountWidth)
         case .cleared: RegisterColumnSetting(visible: true, width: 15)
         case .frequency: nil
         }
@@ -70,7 +72,7 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
 
     public var menuLabel: String {
         switch self {
-        case .cleared: "Gebucht"
+        case .cleared: "Status"
         case .memo: "Memo"
         case .runningBalance: "Laufender Saldo"
         default: rawValue
@@ -127,10 +129,10 @@ public struct RegisterColumnLayout: Hashable, Sendable {
     ) {
         self.gridWidth = gridWidth
         let widths = Self.widths(
-            gridWidth: gridWidth, visibleColumns: visibleColumns, settings: settings, minimumWidths: minimumWidths,
-            contentWidths: contentWidths)
+            gridWidth: max(0, gridWidth - RegisterMetrics.leadingInset), visibleColumns: visibleColumns,
+            settings: settings, minimumWidths: minimumWidths, contentWidths: contentWidths)
         var frames: [RegisterColumnFrame] = []
-        var exactX: CGFloat = 0
+        var exactX = RegisterMetrics.leadingInset
         for (column, width) in zip(visibleColumns, widths) {
             let x = exactX.rounded()
             exactX += width
@@ -147,31 +149,55 @@ public struct RegisterColumnLayout: Hashable, Sendable {
         frames.first { x >= $0.x && x < $0.maxX }?.column
     }
 
+    /// The memo takes what the other text columns leave; on a narrow grid it keeps its minimum and they shrink.
     static func widths(
         gridWidth: CGFloat, visibleColumns: [RegisterColumn], settings: RegisterColumnSettings,
         minimumWidths: [RegisterColumn: CGFloat] = [:], contentWidths: [RegisterColumn: CGFloat] = [:]
     ) -> [CGFloat] {
+        let widths = sharedWidths(
+            gridWidth: gridWidth, visibleColumns: visibleColumns, settings: settings, minimumWidths: minimumWidths,
+            contentWidths: contentWidths)
+        let memoMinimum = minimumWidths[.memo] ?? RegisterColumn.memo.minWidth
+        guard contentWidths[.memo] == nil, let memo = visibleColumns.firstIndex(of: .memo),
+            widths[memo] < memoMinimum
+        else { return widths }
+        return sharedWidths(
+            gridWidth: gridWidth, visibleColumns: visibleColumns, settings: settings, minimumWidths: minimumWidths,
+            contentWidths: contentWidths.merging([.memo: memoMinimum]) { $1 })
+    }
+
+    private static func sharedWidths(
+        gridWidth: CGFloat, visibleColumns: [RegisterColumn], settings: RegisterColumnSettings,
+        minimumWidths: [RegisterColumn: CGFloat], contentWidths: [RegisterColumn: CGFloat]
+    ) -> [CGFloat] {
         let isFlexible = { (column: RegisterColumn) in column.isResizable && contentWidths[column] == nil }
-        var fixedSum: CGFloat = 0
-        var flexibleSum: CGFloat = 0
-        for column in RegisterColumn.allCases {
-            guard let setting = settings[column], setting.visible else { continue }
-            if isFlexible(column) {
-                flexibleSum += max(0, setting.width)
-            } else {
-                fixedSum += max(0, contentWidths[column] ?? setting.width)
-            }
+        let minimumWidth = { (column: RegisterColumn) in
+            contentWidths[column] ?? minimumWidths[column] ?? column.minWidth
         }
+        let settingWidth = { (column: RegisterColumn) in max(0, settings[column]?.width ?? column.minWidth) }
+        let fixedSum = visibleColumns.filter { !isFlexible($0) }.reduce(CGFloat(0)) { $0 + minimumWidth($1) }
+        let flexibleSum = visibleColumns.filter(isFlexible).reduce(CGFloat(0)) { $0 + settingWidth($1) }
         let displayWidth = max(0, gridWidth - RegisterMetrics.columnMenuWidth)
         let scale = flexibleSum > 0 ? (displayWidth - fixedSum) / flexibleSum : 1
-        let current = visibleColumns.map { column -> CGFloat in
-            if let content = contentWidths[column] { return content }
-            guard let setting = settings[column] else { return column.minWidth }
-            return column.isResizable ? setting.width * scale : setting.width
-        }
-        return distribute(
+        let current = visibleColumns.map { isFlexible($0) ? settingWidth($0) * scale : minimumWidth($0) }
+        var widths = distribute(
             current, columns: visibleColumns, displayWidth: displayWidth, isFlexible: isFlexible,
-            minimumWidth: { contentWidths[$0] ?? minimumWidths[$0] ?? $0.minWidth })
+            minimumWidth: minimumWidth)
+        giveRoomToMemo(&widths, columns: visibleColumns, settings: settings, isFlexible: isFlexible)
+        return widths
+    }
+
+    /// The other text columns grow no wider than their setting; the memo takes the rest.
+    private static func giveRoomToMemo(
+        _ widths: inout [CGFloat], columns: [RegisterColumn], settings: RegisterColumnSettings,
+        isFlexible: (RegisterColumn) -> Bool
+    ) {
+        guard let memo = columns.firstIndex(of: .memo), isFlexible(.memo) else { return }
+        for index in columns.indices where index != memo && isFlexible(columns[index]) {
+            guard let setting = settings[columns[index]], widths[index] > setting.width else { continue }
+            widths[memo] += widths[index] - setting.width
+            widths[index] = setting.width
+        }
     }
 
     private static func distribute(
@@ -206,7 +232,7 @@ public struct RegisterColumnLayout: Hashable, Sendable {
         return widths
     }
 
-    /// Flex would hand the last column a negative width (All Accounts with the error column); borrow it instead.
+    /// Flex would hand the last column a negative width on a narrow All Accounts grid; borrow it instead.
     private static func takeDeficit(
         from widths: inout [CGFloat], columns: [RegisterColumn], last: Int, isFlexible: (RegisterColumn) -> Bool
     ) {

@@ -2,7 +2,6 @@ import AbakusCore
 import Foundation
 
 public enum RegisterPopup: Equatable, Sendable {
-    case approveReject(rowId: String)
     case needsCategory(rowId: String)
     case removeCategory(rowId: String)
     case runningBalance(rowId: String)
@@ -11,16 +10,16 @@ public enum RegisterPopup: Equatable, Sendable {
 
     public var anchor: RegisterAnchorID {
         switch self {
-        case .approveReject(let id), .needsCategory(let id), .removeCategory(let id): .error(id)
+        case .needsCategory(let id), .removeCategory(let id): .error(id)
         case .runningBalance(let id): .balance(id)
-        case .timeframe: .dateButton
+        case .timeframe: .viewMenu
         case .scheduledCallout: .schedulerTitle
         }
     }
 
     public var rowId: String? {
         switch self {
-        case .approveReject(let id), .needsCategory(let id), .removeCategory(let id), .runningBalance(let id): id
+        case .needsCategory(let id), .removeCategory(let id), .runningBalance(let id): id
         case .timeframe, .scheduledCallout: nil
         }
     }
@@ -86,6 +85,7 @@ public struct RegisterNotifier: Identifiable, Hashable, Sendable {
     public var kind: Kind
     public var text: String
     public var link: String?
+    public var tooltip: String?
 
     public var id: Kind { kind }
 }

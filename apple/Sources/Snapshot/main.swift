@@ -10,7 +10,7 @@ struct SnapshotOptions {
     var collapsedSidebar = false
     var width: CGFloat?
     var height: CGFloat?
-    var selectLast = 0
+    var selectNewest = 0
     var expandSplits = false
     var edit: EditHarness.State?
     var ops: OpsHarness.State?
@@ -52,7 +52,7 @@ struct SnapshotOptions {
             case "--width": width = CGFloat(try number(of: argument, atLeast: 1.0))
             case "--height": height = CGFloat(try number(of: argument, atLeast: 1.0))
             case "--expand-splits": expandSplits = true
-            case "--select": selectLast = try number(of: argument, atLeast: 0)
+            case "--select": selectNewest = try number(of: argument, atLeast: 0)
             case "--edit": edit = try state(of: argument)
             case "--native-menus": nativeMenus = true
             case "--ops": ops = try state(of: argument)
@@ -102,7 +102,7 @@ enum SnapshotError: Error, CustomStringConvertible {
 
     private static var usageText: String {
         "usage: Snapshot <out.png> [--account <name>] [--scale 2] [--collapsed-sidebar] "
-            + "[--width 1020] [--height 700] [--dark] [--increase-contrast] [--select <last n rows>] "
+            + "[--width 1020] [--height 700] [--dark] [--increase-contrast] [--select <newest n rows>] "
             + "[--expand-splits] [--trace] [--edit "
             + EditHarness.State.allCases.map(\.rawValue).joined(separator: "|") + "] [--ops "
             + OpsHarness.State.allCases.map(\.rawValue).joined(separator: "|") + "] [--native-menus] [--ui "
@@ -205,8 +205,8 @@ func render(_ options: SnapshotOptions) throws {
             model.register.toggleSplit(transaction.id)
         }
     }
-    if options.selectLast > 0 {
-        for id in model.register.transactionIds.suffix(options.selectLast) {
+    if options.selectNewest > 0 {
+        for id in model.register.transactionIds.prefix(options.selectNewest) {
             model.register.rowClicked(
                 model.register.rows.first { $0.id == id }!, column: nil, modifiers: .command)
         }

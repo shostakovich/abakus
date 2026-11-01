@@ -7,14 +7,14 @@ import Testing
 @Suite struct RegisterRowTests {
     @Test func startingBalanceShowsTheReferenceScreenshotTexts() {
         let row = RegisterFixture().model().rows[0]
-        #expect(row.date == "29/04/14")
+        #expect(row.date == "29/04")
         #expect(row.payee == "Anfangssaldo")
         #expect(row.category == "Zu verteilen")
         #expect(row.categoryStyle == .plain)
         #expect(row.inflow == "1,111.00")
         #expect(row.outflow == "")
         #expect(row.cleared == .cleared)
-        #expect(row.cleared.symbol(reconciling: false).name == "checkmark.circle.fill")
+        #expect(row.cleared.symbol.name == "checkmark.circle.fill")
         #expect(row.errorLevel.symbol == nil)
     }
 
@@ -22,22 +22,47 @@ import Testing
         #expect(StatusSymbol.transfer.label == "Umbuchung")
     }
 
+    @Test func theStatusColumnShowsVorgemerktGebuchtAndAbgeglichen() {
+        #expect(
+            ClearedStatus.uncleared.symbol
+                == StatusSymbol(name: "circle", color: ThemeColor.secondaryText, label: "Vorgemerkt"))
+        #expect(ClearedStatus.cleared.symbol.color == ThemeColor.positive)
+        #expect(
+            ClearedStatus.reconciled.symbol
+                == StatusSymbol(name: "lock.fill", color: ThemeColor.positive, label: "Abgeglichen"))
+    }
+
+    @Test func theCategoryShowsWithoutItsGroupWhichMovesToTheTooltip() {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -12.5, category: fixture.groceries)
+        let row = fixture.model().rows.first { $0.id == id }!
+        #expect(row.category == "Groceries")
+        #expect(row.categoryTooltip == "Everyday Expenses: Groceries")
+    }
+
+    @Test func datesKeepTheirYearWhenNoMonthHeadingNamesIt() {
+        let model = RegisterFixture().model()
+        model.grid.headerClicked(.payee)
+        #expect(model.rows[0].date == "29/04/14")
+    }
+
     @Test func uncategorisedTransactionsAskForACategory() {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -12.5)
         let row = fixture.model().rows.first { $0.id == id }!
         #expect(row.category == "Kategorie fehlt")
+        #expect(row.categoryTooltip == nil)
         #expect(row.categoryStyle == .needsCategory)
         #expect(row.errorLevel.symbol?.name == StatusSymbol.warning)
         #expect(row.outflow == "12.50")
         #expect(row.textStyle == .plain)
     }
 
-    @Test func onBudgetTransfersShowTheTransferIconAndNoCategory() {
+    @Test func onBudgetTransfersShowTheOtherAccountAfterTheTransferIconAndNoCategory() {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -100, target: fixture.tagesgeld)
         let row = fixture.model().rows.first { $0.id == id }!
-        #expect(row.payee == "Transfer : Tagesgeld")
+        #expect(row.payee == "Tagesgeld")
         #expect(row.hasTransferIcon)
         #expect(row.category == "")
         #expect(row.errorLevel == .none)
@@ -58,8 +83,8 @@ import Testing
         let row = fixture.model().rows.first { $0.id == id }!
         #expect(row.textStyle == .bold)
         #expect(row.categoryStyle == .bold)
-        #expect(row.category == "Everyday Expenses: Groceries")
-        #expect(row.errorLevel.symbol?.label == "Zu bestätigen")
+        #expect(row.category == "Groceries")
+        #expect(row.errorLevel.symbol?.label == "Bestätigen")
     }
 
     @Test func offBudgetAccountsHaveNoCategoryText() {
@@ -80,17 +105,18 @@ import Testing
             ])
         let model = fixture.model()
         #expect(model.rows.count == 2)
-        #expect(model.rows[1].split == .collapsed)
-        #expect(model.rows[1].category == "Aufteilung")
+        #expect(model.rows[0].split == .collapsed)
+        #expect(model.rows[0].category == "Aufgeteilt (2)")
         model.toggleSplit(split)
         let rows = model.rows
         #expect(rows.count == 4)
-        #expect(rows[1].split == .expanded)
-        #expect(rows[2].category == "Everyday Expenses: Groceries")
-        #expect(rows[2].memo == "Milk")
-        #expect(rows[2].transactionId == split)
-        #expect(rows[3].payee == "Transfer : Tagesgeld")
-        #expect(rows[3].outflow == "20.00")
+        #expect(rows[0].split == .expanded)
+        #expect(rows[1].category == "Groceries")
+        #expect(rows[1].memo == "Milk")
+        #expect(rows[1].transactionId == split)
+        #expect(rows[2].payee == "Tagesgeld")
+        #expect(rows[2].hasTransferIcon)
+        #expect(rows[2].outflow == "20.00")
         model.toggleSplit(split)
         #expect(model.rows.count == 2)
     }
@@ -107,16 +133,17 @@ import Testing
             ])
         let model = fixture.model()
         model.toggleSplit(split)
-        #expect(model.rows.suffix(2).map(\.payee) == ["Bakery", ""])
+        let index = try #require(model.rows.firstIndex { $0.id == split })
+        #expect(model.rows[index + 1...index + 2].map(\.payee) == ["Bakery", ""])
     }
 
     @Test func runningBalanceIsFilledOnlyWhenTheColumnIsShown() {
         var fixture = RegisterFixture()
         fixture.add(fixture.giro, -11)
         let model = fixture.model()
-        #expect(model.rows.last?.runningBalance == "")
+        #expect(model.rows.first?.runningBalance == "")
         model.toggleColumnVisibility(.runningBalance)
-        #expect(model.rows.last?.runningBalance == "1,100.00")
+        #expect(model.rows.first?.runningBalance == "1,100.00")
         #expect(model.visibleColumns.contains(.runningBalance))
     }
 

@@ -83,6 +83,23 @@ extension RegisterViewModel {
         return submenus + [.action("(Keine Kategorie)", .categorize(categoryId: nil))]
     }
 
+    public static let reconciledTitle = "Abgeglichene Buchungen zeigen"
+
+    /// The date filter and the reconciled filter, which a reconciliation sets itself, then the columns.
+    public var viewMenu: [RegisterMenuItem] {
+        let filters: [RegisterMenuItem] =
+            isReconciling
+            ? []
+            : [
+                .action("Zeitraum: \(search.dateSelectorTitle) …", .timeframe),
+                .action(
+                    Self.reconciledTitle, .showReconciled, enabled: isReconciledFilterEnabled,
+                    checked: isShowingReconciled),
+                .separator(10),
+            ]
+        return filters + columnMenu
+    }
+
     public var columnMenu: [RegisterMenuItem] {
         columnMenuItems.map { .action($0.label, .toggleColumn($0.column), checked: $0.isChecked) } + [
             .separator(0), .action("Für alle Konten übernehmen", .applyColumnsToAllAccounts),
@@ -132,6 +149,8 @@ extension RegisterViewModel {
         case .moveToScheduler: schedule(selected.first, recurring: false)
         case .moveToAccount(let accountId): moveTransactions(ids, to: accountId)
         case .delete: deleteTransactions(ids)
+        case .timeframe: search.dateSelectorClicked()
+        case .showReconciled: setShowingReconciled(!isShowingReconciled)
         case .toggleColumn(let column): toggleColumnVisibility(column)
         case .applyColumnsToAllAccounts: applyColumnSettingsToAllAccounts()
         case .toggleScheduledColumn(let column): scheduler.toggleColumnVisibility(column)
@@ -144,7 +163,7 @@ extension RegisterViewModel {
         }
     }
 
-    private func idsAtLevel(_ level: ErrorLevel, in transactions: [Transaction]) -> [String] {
+    func idsAtLevel(_ level: ErrorLevel, in transactions: [Transaction]) -> [String] {
         let budget = store.budget
         return transactions.filter { budget.errorState(of: $0).level == level }.map(\.id)
     }
@@ -441,7 +460,7 @@ extension RegisterViewModel {
 
     public func refreshSort() {
         guard acceptsRegisterKeys else { return }
-        requestScroll(selectedTransactionIds.first.map { .row($0) } ?? .bottom)
+        requestScroll(selectedTransactionIds.first.map { .row($0) } ?? .top)
     }
 
     func jumpToOtherSide(of row: RegisterRow) {

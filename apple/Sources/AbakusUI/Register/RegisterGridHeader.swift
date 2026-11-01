@@ -5,6 +5,7 @@ enum RegisterGridStyle {
     static let headerFont = ThemeFont(size: NSFont.smallSystemFontSize, weight: .medium)
     static let rowFont = ThemeFont.table
     static let rowBoldFont = ThemeFont.tableEmphasized
+    static let monthHeadingFont = ThemeFont(size: NSFont.smallSystemFontSize, weight: .semibold)
     static let symbolSize: CGFloat = 13
     static let cellInset: CGFloat = 6
     static let sortIndicatorWidth: CGFloat = 12

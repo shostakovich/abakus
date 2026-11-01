@@ -7,11 +7,12 @@ defmodule AbakusWeb.RegisterLive.Components do
   """
   use AbakusWeb, :html
 
+  alias Abakus.Categories.Category
   alias Abakus.Format
   alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
   alias Abakus.Money
   alias Abakus.Names
-  alias AbakusWeb.{AccountGroups, CategoryOptions}
+  alias AbakusWeb.{AccountGroups, TransactionForm}
   alias AbakusWeb.RegisterLive.{Rows, TransactionEditor}
 
   attr :account, Account, default: nil
@@ -55,15 +56,12 @@ defmodule AbakusWeb.RegisterLive.Components do
     doc: "the difference animates then, not the balance"
 
   @doc """
-  The header's second row. One account: Gebucht + Vorgemerkt = Arbeitssaldo. All
-  accounts: that equation for the budget accounts, then tracking and the total. Phones get one compact line.
+  The balances beside the title. One account: Gebucht + Vorgemerkt = Arbeitssaldo. All accounts: that equation for
+  the budget accounts, then tracking and the total.
   """
   def balances(assigns) do
     ~H"""
-    <div
-      id="register-balances"
-      class="app-reg-row flex flex-wrap items-center gap-x-6 gap-y-2 max-md:hidden"
-    >
+    <div id="register-balances" class="flex flex-wrap items-start gap-x-6 gap-y-2 max-md:hidden">
       <%= cond do %>
         <% @account -> %>
           <.equation balances={@balances} animate={!@reconciling} />
@@ -75,6 +73,15 @@ defmodule AbakusWeb.RegisterLive.Components do
           <.figure id="balance-total" value={@balances.total} label="Gesamt" />
       <% end %>
     </div>
+    """
+  end
+
+  attr :account, Account, default: nil
+  attr :balances, :map, required: true
+
+  @doc "Phones: the balances in one compact line below the title."
+  def balance_line(assigns) do
+    ~H"""
     <div
       id="register-balances-line"
       class={["app-reg-row app-reg-line flex md:hidden", !@account && "app-reg-line-all"]}
@@ -182,11 +189,13 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :running, :boolean, required: true
   attr :running_shown, :boolean, required: true
   attr :paths, :map, required: true
+  attr :picking, :boolean, required: true, doc: "whether a click adds a row to the selection"
+  attr :all_selected, :boolean, required: true
 
   @doc """
-  The header's third row: "Buchung", "Datei-Import" and what waits ("Alle bestätigen" with the count, "Alle
-  zuordnen"), then the view menu and the search. Phones keep the search and the menu, which takes the rest; the
-  floating button adds a transaction there.
+  The header's second row: "Buchung", "Datei-Import" and what waits as chips ("2 bestätigen", "1 zuordnen"), then
+  the view menu and the search. Phones keep the search and the menu, which takes the rest; the floating button adds
+  a transaction there.
   """
   def toolbar(assigns) do
     ~H"""
@@ -220,14 +229,12 @@ defmodule AbakusWeb.RegisterLive.Components do
             variant={:ghost}
             size={:sm}
             icon="check"
+            class="app-reg-notice"
             aria-label={"Alle #{length(@unapproved)} bestätigen"}
             phx-click="approve_all"
             {confirm(@unapproved)}
           >
-            Alle bestätigen
-            <.badge id="approve-all-count" tone={:primary} style={:plain}>
-              {length(@unapproved)}
-            </.badge>
+            <span id="approve-all-count">{length(@unapproved)}</span> bestätigen
           </.button>
           <.button
             :if={@proposals != []}
@@ -235,10 +242,12 @@ defmodule AbakusWeb.RegisterLive.Components do
             variant={:ghost}
             size={:sm}
             icon="link"
+            class="app-reg-notice"
+            aria-label={"Alle #{length(@proposals)} zuordnen"}
             phx-click="accept_all_matches"
             {confirm_merge(@proposals)}
           >
-            Alle zuordnen
+            {length(@proposals)} zuordnen
           </.button>
         </div>
         <div class="app-reg-find">
@@ -301,6 +310,17 @@ defmodule AbakusWeb.RegisterLive.Components do
               active={@filter == filter}
             >
               {label}
+            </:item>
+            <:item
+              id="pick-toggle"
+              on_click={JS.push("toggle_picking")}
+              class="max-md:hidden"
+              divider
+            >
+              {if @picking, do: "Auswählen beenden", else: "Auswählen"}
+            </:item>
+            <:item id="select-all" on_click={JS.push("select_all")} class="max-md:hidden">
+              {if @all_selected, do: "Auswahl aufheben", else: "Alle auswählen"}
             </:item>
             <:item :if={@account} id="running-toggle" patch={@paths.running} divider>
               {if @running, do: "Laufenden Saldo ausblenden", else: "Laufenden Saldo zeigen"}
@@ -477,7 +497,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   end
 
   attr :rows, :list, required: true
-  attr :count, :integer, required: true, doc: "how many transactions the view has, loaded or not"
   attr :proposals, :list, required: true, doc: "the match proposals shown among the rows"
   attr :accounts, :map, required: true
   attr :columns, :map, required: true, doc: "`%{all, category, running, count}`, see `columns/2`"
@@ -492,17 +511,14 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :empty_hint, :string, default: nil
 
   @doc """
-  The register on desktops, as in YNAB: a click selects a row, a click into a cell of a selected row opens it for
-  editing there, with the cursor in that cell. Each transaction is a `<tbody>` of its own, so a split keeps its
+  The register on desktops, as in YNAB: a click selects a row, ⌘ or Ctrl adds it to the selection, Shift the rows up
+  to it; a click into a cell of a selected row opens it for editing there, with the cursor in that cell. A quiet
+  heading above each month sticks while it scrolls. Each transaction is a `<tbody>` of its own, so a split keeps its
   subtransactions below it, collapsible, and the editor (`TransactionEditor`) takes its place while it is edited.
   A match proposal is no row to select or edit: below it is what it matches, with "Zuordnen" and "Trennen".
   """
   def table(assigns) do
-    assigns =
-      assign(assigns,
-        all_selected: assigns.count > 0 and MapSet.size(assigns.selected) == assigns.count,
-        edited: assigns.editor && assigns.editor.row_id
-      )
+    assigns = assign(assigns, :edited, assigns.editor && assigns.editor.row_id)
 
     ~H"""
     <div class="app-reg-wrap max-md:hidden border-y border-base-content/10">
@@ -516,7 +532,6 @@ defmodule AbakusWeb.RegisterLive.Components do
         ]}
       >
         <colgroup>
-          <col class="app-col-pick" />
           <col class="app-col-date" />
           <col :if={@columns.all} class="app-col-konto" />
           <col class="app-col-payee" />
@@ -525,21 +540,10 @@ defmodule AbakusWeb.RegisterLive.Components do
           <col class="app-col-out" />
           <col class="app-col-in" />
           <col :if={@columns.running} class="app-col-run" />
-          <col class="app-col-ok" />
-          <col class="app-col-c" />
+          <col class="app-col-status" />
         </colgroup>
         <thead>
           <tr>
-            <th class="app-pick">
-              <input
-                id="select-all"
-                type="checkbox"
-                class="checkbox checkbox-xs"
-                checked={@all_selected}
-                phx-click="select_all"
-                aria-label="Alle auswählen"
-              />
-            </th>
             <th class="app-date-col">Datum</th>
             <th :if={@columns.all} class="app-konto">Konto</th>
             <th class="app-payee">Empfänger</th>
@@ -548,22 +552,22 @@ defmodule AbakusWeb.RegisterLive.Components do
             <th class="text-end app-out">Ausgang</th>
             <th class="text-end app-in">Eingang</th>
             <th :if={@columns.running} class="text-end app-run">Saldo</th>
-            <th class="app-ok-col"><span class="sr-only">Bestätigen</span></th>
-            <th class="app-c-col">
-              <span class="sr-only">Gebucht</span><.icon name="check" />
+            <th class="app-status-col">
+              <span class="sr-only">Status</span><.icon name="check" />
             </th>
           </tr>
         </thead>
         <.live_component :if={@edited == :new} module={TransactionEditor} {@editor.assigns} />
-        <.entry
-          :for={transaction <- Rows.with_proposals(@rows, @proposals)}
-          :key={transaction.id}
-          transaction={transaction}
+        <.line
+          :for={line <- Rows.with_months(Rows.with_proposals(@rows, @proposals))}
+          :key={line_key(line)}
+          line={line}
           accounts={@accounts}
           columns={@columns}
-          selected={transaction.id in @selected}
-          running={@running && @running[transaction.id]}
-          editor={@edited == transaction.id && @editor}
+          selected={@selected}
+          running={@running}
+          edited={@edited}
+          editor={@editor}
         />
         <tbody :if={@rows == [] and @proposals == []}>
           <tr>
@@ -577,12 +581,48 @@ defmodule AbakusWeb.RegisterLive.Components do
     """
   end
 
+  defp line_key({:month, month}), do: "month-#{Date.to_iso8601(month)}"
+  defp line_key(transaction), do: transaction.id
+
   @doc "The table's columns: the account column in all accounts, none for categories in a tracking account."
   def columns(account, running) do
     all = is_nil(account)
     category = all or Account.budget_account?(account)
-    count = 8 + Enum.count([all, category, running], & &1)
+    count = 6 + Enum.count([all, category, running], & &1)
     %{all: all, category: category, running: running, count: count}
+  end
+
+  attr :line, :any, required: true, doc: "a transaction or `{:month, first_day}`"
+  attr :accounts, :map, required: true
+  attr :columns, :map, required: true
+  attr :selected, :any, required: true
+  attr :running, :map, default: nil
+  attr :edited, :any, required: true
+  attr :editor, :any, required: true
+
+  defp line(%{line: {:month, month}} = assigns) do
+    assigns = assign(assigns, :month, month)
+
+    ~H"""
+    <tbody id={"month-#{Date.to_iso8601(@month)}"} class="app-reg-month">
+      <tr>
+        <th colspan={@columns.count} scope="colgroup">{Format.month_year(@month)}</th>
+      </tr>
+    </tbody>
+    """
+  end
+
+  defp line(assigns) do
+    ~H"""
+    <.entry
+      transaction={@line}
+      accounts={@accounts}
+      columns={@columns}
+      selected={@line.id in @selected}
+      running={@running && @running[@line.id]}
+      editor={@edited == @line.id && @editor}
+    />
+    """
   end
 
   attr :transaction, :map, required: true
@@ -627,21 +667,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         id={"tx-#{@transaction.id}"}
         class={["app-tx-main", !@transaction.approved && "app-unapproved"]}
       >
-        <td class="app-pick">
-          <input
-            id={"tx-#{@transaction.id}-select"}
-            type="checkbox"
-            class="checkbox checkbox-xs"
-            checked={@selected}
-            phx-click="select"
-            phx-value-id={@transaction.id}
-            aria-label="Buchung auswählen"
-          />
-        </td>
-        <td {cell(@transaction, "date")}>
-          <span class="app-wide">{Format.date(@transaction.date)}</span>
-          <span class="app-short">{Format.date(@transaction.date, year: false)}</span>
-        </td>
+        <td {cell(@transaction, "date")}>{Format.date(@transaction.date, year: false)}</td>
         <td
           :if={@columns.all}
           class="app-konto"
@@ -651,12 +677,14 @@ defmodule AbakusWeb.RegisterLive.Components do
           <.account_cell account={@accounts[@transaction.account_id]} />
         </td>
         <td class="app-payee" {cell(@transaction, "payee")}>
-          {payee(@transaction, @accounts)}<span
-            :if={payee(@transaction, @accounts) == ""}
-            class="text-base-content/70"
-          >Ohne Empfänger</span>
+          <.payee side={@transaction} accounts={@accounts} />
         </td>
-        <td :if={@columns.category} class="app-catcol" {cell(@transaction, "category")}>
+        <td
+          :if={@columns.category}
+          class="app-catcol"
+          title={group_name(@transaction)}
+          {cell(@transaction, "category")}
+        >
           <button
             :if={@transaction.subtransactions != []}
             id={"tx-#{@transaction.id}-parts"}
@@ -681,16 +709,18 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td :if={@running} class="text-end text-base-content/70 app-run">
           {Money.amount(@running)}
         </td>
-        <td class="app-ok-col">
+        <td class="app-status-col">
           <.approve
             :if={!@transaction.approved}
             id={"tx-#{@transaction.id}-approve"}
             transaction={@transaction}
             accounts={@accounts}
           />
-        </td>
-        <td class="app-c-col">
-          <.cleared id={"tx-#{@transaction.id}-cleared"} transaction={@transaction} />
+          <.cleared
+            :if={@transaction.approved}
+            id={"tx-#{@transaction.id}-cleared"}
+            transaction={@transaction}
+          />
         </td>
       </tr>
       <tr
@@ -698,14 +728,18 @@ defmodule AbakusWeb.RegisterLive.Components do
         id={"tx-#{@transaction.id}-part-#{index}"}
         class="app-part"
       >
-        <td></td>
         <td {cell(@transaction, "date")}></td>
         <td :if={@columns.all} {cell(@transaction, "account")}></td>
         <td class="app-payee" {cell(@transaction, "payee")}>
-          {payee(part, @accounts)}
+          <.payee side={part} accounts={@accounts} blank />
         </td>
-        <td :if={@columns.category} class="app-catcol" {cell(@transaction, "category")}>
-          {category_text(part, @accounts)}
+        <td
+          :if={@columns.category}
+          class="app-catcol"
+          title={group_name(part)}
+          {cell(@transaction, "category")}
+        >
+          <.part_category part={part} />
         </td>
         <td class="app-memo-col" {cell(@transaction, "memo")}>
           {part.memo}
@@ -713,7 +747,6 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td class="text-end app-out" {cell(@transaction, "outflow")}>{outflow(part.amount)}</td>
         <td class="text-end app-in" {cell(@transaction, "inflow")}>{inflow(part.amount)}</td>
         <td :if={@running}></td>
-        <td></td>
         <td></td>
       </tr>
     </tbody>
@@ -728,31 +761,20 @@ defmodule AbakusWeb.RegisterLive.Components do
     ~H"""
     <tbody id={"proposal-#{@proposal.id}-rows"} class="app-tx">
       <tr id={"proposal-#{@proposal.id}"} class="app-tx-main app-unapproved">
-        <td class="app-pick"></td>
-        <td>
-          <span class="app-wide">{Format.date(@proposal.date)}</span>
-          <span class="app-short">{Format.date(@proposal.date, year: false)}</span>
-        </td>
+        <td>{Format.date(@proposal.date, year: false)}</td>
         <td :if={@columns.all} class="app-konto" title={@accounts[@proposal.account_id].name}>
           <.account_cell account={@accounts[@proposal.account_id]} />
         </td>
-        <td class="app-payee">
-          {payee(@proposal, @accounts)}<span
-            :if={payee(@proposal, @accounts) == ""}
-            class="text-base-content/70"
-          >Ohne Empfänger</span>
-        </td>
+        <td class="app-payee"><.payee side={@proposal} accounts={@accounts} /></td>
         <td :if={@columns.category} class="app-catcol"></td>
         <td class="text-base-content/70 app-memo-col">{@proposal.memo}</td>
         <td class="text-end app-out">{outflow(@proposal.amount)}</td>
         <td class="text-end app-in">{inflow(@proposal.amount)}</td>
         <td :if={@columns.running}></td>
         <td></td>
-        <td></td>
       </tr>
       <tr id={"proposal-#{@proposal.id}-match"} class="app-actrow app-unapproved">
-        <td></td>
-        <td colspan={@columns.count - 1}>
+        <td colspan={@columns.count}>
           <div class="flex flex-wrap items-center gap-2">
             <span class="flex items-center gap-1 text-base-content/70">
               <.icon name="link" />{match_text(@proposal.matched_transaction, @accounts)}
@@ -783,7 +805,7 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   @doc "What a match proposal says about the transaction it matches, `accounts` by id naming transfers."
   def match_text(matched, accounts) do
-    case payee(matched, accounts) do
+    case payee_text(matched, accounts) do
       "" -> "passt zu Buchung vom #{Format.date(matched.date)}"
       payee -> "passt zu Buchung vom #{Format.date(matched.date)} · #{payee}"
     end
@@ -894,7 +916,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   end
 
   defp title(transaction, accounts) do
-    case payee(transaction, accounts) do
+    case payee_text(transaction, accounts) do
       "" -> "Ohne Empfänger"
       payee -> payee
     end
@@ -1022,14 +1044,56 @@ defmodule AbakusWeb.RegisterLive.Components do
     <span :if={@transaction.subtransactions != []} class="text-base-content/70">
       {category_text(@transaction, @accounts)}
     </span>
-    <span :if={uncategorised?(@transaction, @accounts)} class="app-uncategorised">
-      Nicht kategorisiert
-    </span>
+    <.missing_category :if={uncategorised?(@transaction, @accounts)} />
     <span :if={@transaction.subtransactions == [] and !uncategorised?(@transaction, @accounts)}>
       {category_text(@transaction, @accounts)}
     </span>
     """
   end
+
+  attr :part, Subtransaction, required: true
+
+  defp part_category(%{part: %{category: nil, payee: %Payee{transfer_account_id: id}}} = assigns)
+       when not is_nil(id),
+       do: ~H""
+
+  defp part_category(%{part: %{category: nil}} = assigns), do: ~H"<.missing_category />"
+  defp part_category(assigns), do: ~H"{category_name(@part.category)}"
+
+  defp missing_category(assigns) do
+    ~H"""
+    <span class="app-uncategorised">
+      <.icon name="triangle-alert" class="size-3.5" />Kategorie fehlt
+    </span>
+    """
+  end
+
+  attr :side, :map, required: true, doc: "a transaction or one of its parts"
+  attr :accounts, :map, required: true
+
+  attr :blank, :boolean,
+    default: false,
+    doc: "whether no payee stays empty, as for a split's parts"
+
+  defp payee(%{side: %{payee: %Payee{transfer_account_id: id}}} = assigns) when not is_nil(id) do
+    assigns = assign(assigns, :name, assigns.accounts[id].name)
+
+    ~H"""
+    <span class="app-transfer">
+      <.icon name="arrow-left-right" class="size-3.5" /><span class="sr-only">Umbuchung</span>{@name}
+    </span>
+    """
+  end
+
+  defp payee(%{side: %{payee: %Payee{name: _}}} = assigns), do: ~H"{@side.payee.name}"
+  defp payee(%{blank: true} = assigns), do: ~H""
+
+  defp payee(assigns),
+    do: ~H|<span class="text-base-content/70">Ohne Empfänger</span>|
+
+  defp group_name(%{category: %{internal: true}}), do: "Einnahme"
+  defp group_name(%{category: %{category_group: %{name: name}}}), do: name
+  defp group_name(_side), do: nil
 
   attr :amount, :integer, required: true
 
@@ -1045,26 +1109,19 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp category_text(%{subtransactions: [_ | _] = parts}, _accounts),
     do: "Aufgeteilt (#{length(parts)})"
 
-  defp category_text(%{category: %{internal: true}}, _accounts), do: "Einnahme: Zu verteilen"
-
-  defp category_text(%{category: %{name: name, category_group: group}}, _accounts),
-    do: CategoryOptions.text(group.name, name)
-
-  # A subtransaction's: a transfer to another budget account has none.
-  defp category_text(%Subtransaction{payee: %Payee{transfer_account_id: id}}, _accounts)
-       when not is_nil(id),
-       do: ""
-
-  defp category_text(%Subtransaction{}, _accounts), do: "Nicht kategorisiert"
+  defp category_text(%{category: %Category{} = category}, _accounts), do: category_name(category)
 
   defp category_text(transaction, accounts),
-    do: if(uncategorised?(transaction, accounts), do: "Nicht kategorisiert", else: "")
+    do: if(uncategorised?(transaction, accounts), do: "Kategorie fehlt", else: "")
 
-  defp payee(%{payee: %Payee{transfer_account_id: id}}, accounts) when not is_nil(id),
-    do: "↔ " <> accounts[id].name
+  defp category_name(%{internal: true}), do: "Zu verteilen"
+  defp category_name(%{name: name}), do: name
 
-  defp payee(%{payee: %Payee{name: name}}, _accounts), do: name
-  defp payee(_transaction, _accounts), do: ""
+  defp payee_text(%{payee: %Payee{transfer_account_id: id}}, accounts) when not is_nil(id),
+    do: TransactionForm.transfer_label(accounts[id])
+
+  defp payee_text(%{payee: %Payee{name: name}}, _accounts), do: name
+  defp payee_text(_transaction, _accounts), do: ""
 
   defp outflow(amount) when amount < 0, do: Money.amount(-amount)
   defp outflow(_amount), do: ""

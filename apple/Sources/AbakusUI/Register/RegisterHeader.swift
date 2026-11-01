@@ -5,38 +5,62 @@ enum RegisterHeaderMetrics {
     static let amountFont = ThemeFont(size: 17, weight: .semibold, hasTabularDigits: true)
 }
 
-/// The account name as a large title with Reconcile Account beside it, and Cleared + Uncleared = Working.
+/// The account name with its reconcile date and the pencil; Gebucht + Vorgemerkt = Arbeitssaldo and Abgleichen.
 struct RegisterHeader: View {
     let model: RegisterViewModel
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            Text(verbatim: model.accountName)
-                .font(ThemeFont.largeTitle.font)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .accessibilityAddTraits(.isHeader)
-            reconcileButton
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(verbatim: model.accountName)
+                        .font(ThemeFont.largeTitle.font)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .accessibilityAddTraits(.isHeader)
+                    if model.account != nil { editAccountButton }
+                }
+                if let reconciled = model.reconciledLabel {
+                    Label(reconciled, systemImage: "lock")
+                        .font(ThemeFont.caption.font)
+                        .foregroundStyle(ThemeColor.secondaryText)
+                }
+            }
             Spacer(minLength: 16)
             RegisterSummaryView(model: model, summary: model.summary)
                 .layoutPriority(1)
+            reconcileButton
         }
         .padding(.horizontal, RegisterHeaderMetrics.horizontalPadding)
         .padding(.top, 10)
-        .padding(.bottom, 8)
+        .padding(.bottom, 10)
+    }
+
+    private var editAccountButton: some View {
+        Button(action: model.editAccountClicked) {
+            Image(systemName: "pencil")
+                .foregroundStyle(ThemeColor.secondaryText)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(EditAccountForm.title)
+        .help(EditAccountForm.title)
     }
 
     private var reconcileButton: some View {
         let reconciliation = model.reconciliation
-        return Button("Abgleichen", action: reconciliation.reconcileClicked)
-            .fixedSize()
-            .disabled(!reconciliation.isReconcileEnabled)
-            .overlay {
-                if !reconciliation.isReconcileEnabled {
-                    Color.clear.contentShape(Rectangle()).onTapGesture(perform: reconciliation.reconcileDisabledClicked)
-                }
+        return Button(action: reconciliation.reconcileClicked) {
+            Label("Abgleichen", systemImage: "lock")
+        }
+        .buttonStyle(.borderedProminent)
+        .fixedSize()
+        .disabled(!reconciliation.isReconcileEnabled)
+        .overlay {
+            if !reconciliation.isReconcileEnabled {
+                Color.clear.contentShape(Rectangle()).onTapGesture(perform: reconciliation.reconcileDisabledClicked)
             }
-            .toolTip(reconciliation.reconcileTooltip)
+        }
+        .toolTip(reconciliation.reconcileTooltip)
     }
 }
 

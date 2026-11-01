@@ -36,7 +36,7 @@ import Testing
         .finishReconciliation(
             ReconciliationFinish(
                 accountId: fixture.giro, statementDate: day("2014-05-20"), statementBalance: balance,
-                transactionIds: [fixture.startingBalanceId(of: fixture.giro)] + ids,
+                transactionIds: ids.reversed() + [fixture.startingBalanceId(of: fixture.giro)],
                 createsAdjustment: createsAdjustment, today: editDay))
     }
 
@@ -116,7 +116,7 @@ import Testing
         model.reconciliation.begin(form)
         #expect(model.isReconciling)
         #expect(model.reconciliation.statementForm == nil)
-        #expect(model.transactionIds == [fixture.startingBalanceId(of: fixture.giro), ids[0], ids[1]])
+        #expect(model.transactionIds == [ids[1], ids[0], fixture.startingBalanceId(of: fixture.giro)])
         #expect(model.search.text.isEmpty)
         #expect(model.sortOrder == .default)
         #expect(model.visibleColumns.contains(.cleared))
@@ -289,7 +289,7 @@ import Testing
         #expect(model.search.info?.clearButtonTitle == nil)
         model.search.boxChanged("Shop")
         model.search.submitted()
-        #expect(model.transactionIds == [ids[0], ids[1]])
+        #expect(model.transactionIds == [ids[1], ids[0]])
         #expect(
             model.search.info?.message == "2 Buchungen für „Shop“ bis 20/05/14 (Datum des Banksaldos)")
         #expect(model.search.info?.clearButtonTitle == "Suche zurücksetzen")
@@ -315,7 +315,7 @@ import Testing
         #expect(model.transactionIds.isEmpty)
         model.reconciliation.stopReconcilingClicked()
         #expect(model.search.filter?.label == "Empfänger: Shop")
-        #expect(model.transactionIds == ids)
+        #expect(model.transactionIds == ids.reversed())
     }
 
     @Test func leavingKeepsTheScrollPositionFromBeforeTheFirstSearch() throws {

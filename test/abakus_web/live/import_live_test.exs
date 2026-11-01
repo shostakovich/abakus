@@ -214,7 +214,7 @@ defmodule AbakusWeb.ImportLiveTest do
     assert has_element?(
              view,
              "#statement-0 tbody tr",
-             "passt zu Buchung vom 28.09.2026 · ↔ Depot"
+             "passt zu Buchung vom 28.09.2026 · ⇄ Depot"
            )
   end
 

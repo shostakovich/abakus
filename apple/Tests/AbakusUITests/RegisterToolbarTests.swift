@@ -213,21 +213,3 @@ import Testing
         #expect(!app.showsRegister)
     }
 }
-
-@MainActor
-@Suite struct ToolbarAnchorsTests {
-    @Test func aToolbarItemsFrameIsMeasuredFromTheContentsTopLeft() throws {
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 200, height: 100), styleMask: [.borderless], backing: .buffered,
-            defer: false)
-        let item = NSView(frame: NSRect(x: 10, y: 20, width: 30, height: 40))
-        window.contentView?.addSubview(item)
-        let anchors = ToolbarAnchors()
-        anchors.register(item, as: .dateButton)
-        #expect(anchors.frame(of: .dateButton) == CGRect(x: 10, y: 40, width: 30, height: 40))
-        #expect(
-            anchors.frames(relativeTo: CGPoint(x: 5, y: 50))[.dateButton] == CGRect(x: 5, y: -10, width: 30, height: 40)
-        )
-        #expect(anchors.frame(of: .actionButton) == nil)
-    }
-}

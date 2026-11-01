@@ -56,14 +56,6 @@ import Testing
 
 @MainActor
 @Suite struct EditorLayoutTests {
-    @Test func addEditorDocksWithItsOwnHeight() {
-        let placement = RegisterAddRowPlacement.compute(gridHeight: 300, rowCount: 3, editorHeight: 55)
-        #expect(placement == .floating(y: 28 + 84))
-        let crowded = RegisterAddRowPlacement.compute(gridHeight: 300, rowCount: 8, editorHeight: 55)
-        #expect(crowded == .docked(y: 300 - 2 - 55))
-        #expect(RegisterAddRowPlacement.compute(gridHeight: 300, rowCount: 11) == .docked(y: 300))
-    }
-
     @Test func listContentCountsTheEditedRowsExtraHeight() {
         #expect(registerListContentHeight(rowCount: 10, viewportHeight: 200, extraHeight: 31) == CGFloat(200 + 4 * 28))
     }

@@ -9,7 +9,7 @@ defmodule AbakusWeb.TransactionForm do
 
   The transaction and each subtransaction of a split (with `split` "true", `subtransactions` by index) are sides:
   each has a `payee`, a `transfer_account_id` and a `category_id`; a subtransaction also has a memo, an amount and
-  its `id` when it exists already. A transfer is picked as a payee, "↔ Account" (`transfer_label/1`): then
+  its `id` when it exists already. A transfer is picked as a payee, "⇄ Account" (`transfer_label/1`): then
   `transfer_account_id` names the other account and `payee` is empty.
 
   A category goes on the budget side of a transfer between a budget and a tracking account, which is
@@ -85,8 +85,8 @@ defmodule AbakusWeb.TransactionForm do
   defp payee_name(%Payee{name: name}), do: name
   defp payee_name(_payee), do: ""
 
-  @doc ~S|How a transfer to or from the account shows as a payee: "↔ Sparkonto".|
-  def transfer_label(%Account{name: name}), do: "↔ " <> name
+  @doc ~S|How a transfer to or from the account shows as a payee: "⇄ Sparkonto".|
+  def transfer_label(%Account{name: name}), do: "⇄ " <> name
 
   @doc """
   Takes typed params into the form. What is picked (categories, transfers) and which subtransactions there are is

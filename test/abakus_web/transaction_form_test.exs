@@ -372,7 +372,7 @@ defmodule AbakusWeb.TransactionFormTest do
     test "a transfer's label keeps the transfer, anything else typed over it is a payee", c do
       params = TransactionForm.pick_payee(form(c, %{}), "main", {:transfer, c.depot.id})
       label = TransactionForm.transfer_label(c.depot)
-      assert label == "↔ Depot"
+      assert label == "⇄ Depot"
 
       assert %{"payee" => "", "transfer_account_id" => depot} =
                TransactionForm.change(params, %{"payee" => label}, c.accounts)

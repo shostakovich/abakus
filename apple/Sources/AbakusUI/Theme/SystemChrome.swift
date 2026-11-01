@@ -54,8 +54,9 @@ struct PopoverPlacement: Equatable {
     /// The arrow's tip along that edge, from the popover's top or leading corner.
     var arrowOffset: CGFloat
 
-    /// Beside the opener on `side`, flipped above or below when only the other side has room, and on the side with
-    /// more room when neither has enough; the arrow points at the opener's centre.
+    /// Beside the opener on `side`, flipped above or below (or to the leading side) when only the other side has
+    /// room, and above or below on the side with more room when neither has enough; the arrow points at the opener's
+    /// centre.
     static func place(_ size: CGSize, beside anchor: CGRect, on side: PopoverSide, in container: CGSize)
         -> PopoverPlacement
     {
@@ -77,9 +78,10 @@ struct PopoverPlacement: Equatable {
                 arrowOffset: anchor.midX - x)
         case .trailing:
             let y = max(0, min(anchor.midY - size.height / 2, container.height - size.height))
+            let leading = anchor.maxX + size.width > container.width && anchor.minX >= size.width
             return PopoverPlacement(
-                frame: CGRect(origin: CGPoint(x: anchor.maxX, y: y), size: size), arrowEdge: .leading,
-                arrowOffset: anchor.midY - y)
+                frame: CGRect(origin: CGPoint(x: leading ? anchor.minX - size.width : anchor.maxX, y: y), size: size),
+                arrowEdge: leading ? .trailing : .leading, arrowOffset: anchor.midY - y)
         }
     }
 
