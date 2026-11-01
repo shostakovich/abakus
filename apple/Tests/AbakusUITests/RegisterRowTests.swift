@@ -11,8 +11,8 @@ import Testing
         #expect(row.payee == "Anfangssaldo")
         #expect(row.category == "Zu verteilen")
         #expect(row.categoryStyle == .plain)
-        #expect(row.inflow == "1,111.00")
-        #expect(row.outflow == "")
+        #expect(row.amountText == "+1,111.00")
+        #expect(row.isInflow)
         #expect(row.cleared == .cleared)
         #expect(row.cleared.symbol.name == "checkmark.circle.fill")
         #expect(row.errorLevel.symbol == nil)
@@ -54,8 +54,23 @@ import Testing
         #expect(row.categoryTooltip == nil)
         #expect(row.categoryStyle == .needsCategory)
         #expect(row.errorLevel.symbol?.name == StatusSymbol.warning)
-        #expect(row.outflow == "12.50")
+        #expect(row.amountText == "−12.50")
+        #expect(!row.isInflow)
         #expect(row.textStyle == .plain)
+    }
+
+    @Test func outflowsAndInflowsShareTheBetragColumnWithTheirSign() {
+        var fixture = RegisterFixture()
+        let outflow = fixture.add(fixture.giro, -88.12)
+        let inflow = fixture.add(fixture.giro, 3180)
+        let rows = fixture.model().rows
+        let columns = fixture.model().visibleColumns
+        #expect(columns.contains(.amount))
+        #expect(RegisterColumn.amount.header == .text("Betrag"))
+        #expect(rows.first { $0.id == outflow }?.amountText == "−88.12")
+        #expect(rows.first { $0.id == outflow }?.isInflow == false)
+        #expect(rows.first { $0.id == inflow }?.amountText == "+3,180.00")
+        #expect(rows.first { $0.id == inflow }?.isInflow == true)
     }
 
     @Test func onBudgetTransfersShowTheOtherAccountAfterTheTransferIconAndNoCategory() {
@@ -98,9 +113,9 @@ import Testing
     @Test func splitsAreCollapsedUntilToggled() {
         var fixture = RegisterFixture()
         let split = fixture.add(
-            fixture.giro, -30,
+            fixture.giro, -10,
             subtransactions: [
-                Subtransaction(transactionId: "", amount: -10, categoryId: fixture.groceries, memo: "Milk"),
+                Subtransaction(transactionId: "", amount: 10, categoryId: fixture.groceries, memo: "Milk"),
                 Subtransaction(transactionId: "", amount: -20).transferring(to: fixture.tagesgeld),
             ])
         let model = fixture.model()
@@ -113,10 +128,12 @@ import Testing
         #expect(rows[0].split == .expanded)
         #expect(rows[1].category == "Groceries")
         #expect(rows[1].memo == "Milk")
+        #expect(rows[1].amountText == "+10.00")
+        #expect(rows[1].isInflow)
         #expect(rows[1].transactionId == split)
         #expect(rows[2].payee == "Tagesgeld")
         #expect(rows[2].hasTransferIcon)
-        #expect(rows[2].outflow == "20.00")
+        #expect(rows[2].amountText == "−20.00")
         model.toggleSplit(split)
         #expect(model.rows.count == 2)
     }

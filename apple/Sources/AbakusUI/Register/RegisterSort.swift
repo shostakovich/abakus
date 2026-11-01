@@ -34,7 +34,7 @@ struct RegisterSortKeys {
         case .payee: lhs.payee.localizedStandardCompare(rhs.payee)
         case .category: lhs.category.localizedStandardCompare(rhs.category)
         case .memo: lhs.memo.localizedStandardCompare(rhs.memo)
-        case .outflow, .inflow: Self.order(rhs.amount, lhs.amount)
+        case .amount: Self.order(lhs.amount, rhs.amount)
         case .cleared: Self.order(rhs.cleared.integerValue, lhs.cleared.integerValue)
         case .frequency: Self.order(frequency, other.frequency)
         case .runningBalance: .orderedSame

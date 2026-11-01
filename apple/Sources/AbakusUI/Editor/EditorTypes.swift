@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 
 public enum EditorColumn: String, Hashable, Sendable, CaseIterable {
-    case account, date, frequency, payee, category, memo, outflow, inflow
+    case account, date, frequency, payee, category, memo, amount
 
     public var gridColumn: RegisterColumn {
         switch self {
@@ -13,8 +13,7 @@ public enum EditorColumn: String, Hashable, Sendable, CaseIterable {
         case .payee: .payee
         case .category: .category
         case .memo: .memo
-        case .outflow: .outflow
-        case .inflow: .inflow
+        case .amount: .amount
         }
     }
 
@@ -23,7 +22,7 @@ public enum EditorColumn: String, Hashable, Sendable, CaseIterable {
         self = match
     }
 
-    public var isAmount: Bool { self == .outflow || self == .inflow }
+    public var isAmount: Bool { self == .amount }
 }
 
 public struct EditorFieldID: Hashable, Sendable, CustomStringConvertible {

@@ -5,7 +5,7 @@ import Testing
 @testable import AbakusUI
 
 private let singleAccountColumns: [RegisterColumn] = [
-    .date, .payee, .category, .memo, .outflow, .inflow, .cleared,
+    .date, .payee, .category, .memo, .amount, .cleared,
 ]
 
 private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAccountColumns)
@@ -20,10 +20,10 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
     @Test(arguments: [800, 1000, 1400] as [CGFloat])
     func theMemoTakesTheRoomLeftOfTheOtherColumns(gridWidth: CGFloat) {
         let result = widths(gridWidth)
-        let amount = RegisterColumn.amountWidth
+        let amount = RegisterColumn.signedAmountWidth
         #expect(result[.payee] == 175)
         #expect(result[.category] == 175)
-        #expect(abs(result[.memo]! - (gridWidth - 20 - 92 - 2 * amount - 32 - 350)) < 0.001)
+        #expect(abs(result[.memo]! - (gridWidth - 20 - 92 - amount - 32 - 350)) < 0.001)
     }
 
     @Test func aNarrowGridShrinksTheTextColumnsTogether() {
@@ -37,14 +37,18 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
     @Test func fixedColumnsUseTheirMinimumWidth() {
         let result = widths(1000)
         #expect(result[.date] == 92)
-        #expect(result[.outflow] == RegisterColumn.amountWidth)
-        #expect(result[.inflow] == RegisterColumn.amountWidth)
+        #expect(result[.amount] == RegisterColumn.signedAmountWidth)
         #expect(result[.cleared] == 32)
     }
 
     @Test func amountColumnsFitTenThousandWithItsSign() {
         let room = RegisterColumn.amountWidth - 2 * RegisterGridStyle.cellInset
         #expect(RegisterGridStyle.rowBoldFont.width(of: "−10.000,00") <= room)
+        #expect(RegisterGridStyle.rowBoldFont.width(of: "+10.000,00") <= room)
+    }
+
+    @Test func betragLeavesTheEditorsSignButtonRoomBesideTheAmount() {
+        #expect(RegisterColumn.signedAmountWidth == RegisterColumn.amountWidth + EditCellStyle.accessoryWidth)
     }
 
     @Test func columnsFillTheDisplayWidthLeftOfTheColumnMenu() {
@@ -79,11 +83,11 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
 
     @Test func allAccountsKeepsTheMemosMinimum() {
         let columns: [RegisterColumn] = [
-            .account, .date, .payee, .category, .memo, .outflow, .inflow, .cleared,
+            .account, .date, .payee, .category, .memo, .amount, .cleared,
         ]
-        let result = widths(733, columns)
+        let result = widths(680, columns)
         #expect(result[.memo] == RegisterColumn.memo.minWidth)
-        #expect(abs(result.values.reduce(0, +) - 713) < 0.001)
+        #expect(abs(result.values.reduce(0, +) - 660) < 0.001)
         #expect(result[.account]! >= RegisterColumn.account.minWidth)
     }
 
@@ -102,14 +106,14 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
 
 @Suite struct ContentSizedColumnTests {
     @Test func contentSizedColumnsKeepTheirWidthAndTheTextColumnsShareTheRest() {
-        let columns: [RegisterColumn] = [.date, .frequency, .payee, .category, .memo, .outflow, .inflow]
-        let content: [RegisterColumn: CGFloat] = [.date: 92, .frequency: 130, .outflow: 70, .inflow: 70]
+        let columns: [RegisterColumn] = [.date, .frequency, .payee, .category, .memo, .amount]
+        let content: [RegisterColumn: CGFloat] = [.date: 92, .frequency: 130, .amount: 90]
         let layout = RegisterColumnLayout(
             gridWidth: 1000, visibleColumns: columns, settings: RegisterScheduler.defaultColumnSettings,
             contentWidths: content)
         for (column, width) in content { #expect(layout.frame(of: column)?.width == width) }
         let text = [RegisterColumn.payee, .category, .memo].compactMap { layout.frame(of: $0)?.width }
-        let rest: CGFloat = 980 - RegisterMetrics.leadingInset - 92 - 130 - 70 - 70
+        let rest: CGFloat = 980 - RegisterMetrics.leadingInset - 92 - 130 - 90
         #expect(abs(text.reduce(0, +) - rest) <= 1)
     }
 

@@ -213,7 +213,7 @@ extension TransactionEditor {
         case .adjustTotal:
             let adjusted = SplitRules.adjustOriginal(normalized)
             clone.amount = adjusted.amount
-            refreshAmountTexts(subId: nil)
+            refreshAmountText(subId: nil)
             perform(adjusted)
         case .manuallyAdjust, .cancel:
             pendingSave = nil

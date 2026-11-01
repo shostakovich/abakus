@@ -177,28 +177,29 @@ import Testing
         model.beginEditing(id)
         let editor = try #require(model.editor)
         var visited: [EditorFocus] = [try #require(editor.focus)]
-        for _ in 0..<8 {
+        for _ in 0..<7 {
             editor.press(.tab)
             visited.append(try #require(editor.focus))
         }
         #expect(
             visited == [
                 .field(.main(.date)), .field(.main(.payee)), .field(.main(.category)), .field(.main(.memo)),
-                .field(.main(.outflow)), .field(.main(.inflow)), .button(.done), .button(.cancel),
-                .field(.main(.date)),
+                .field(.main(.amount)), .button(.done), .button(.cancel), .field(.main(.date)),
             ])
         editor.press(.backTab)
         #expect(editor.focus == .button(.cancel))
     }
 
-    @Test func tabFromMemoSkipsOutflowForIncome() throws {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, 100, category: fixture.budget.readyToAssignCategoryId)
+    @Test func anEmptyAmountForIncomeStartsAsAnInflow() throws {
+        let fixture = RegisterFixture()
         let (model, _) = fixture.spied()
-        model.beginEditing(id, column: .memo)
+        model.addTransactionClicked()
         let editor = try #require(model.editor)
-        editor.press(.tab)
-        #expect(editor.focusedField == .main(.inflow))
+        editor.press(.tab, .tab)
+        editor.retype("Zu verteilen")
+        editor.press(.tab, .tab)
+        #expect(editor.focusedField == .main(.amount))
+        #expect(editor.isInflow(.main(.amount)))
     }
 
     @Test func escapeRestoresAChangedFieldThenCancels() throws {
@@ -287,7 +288,7 @@ import Testing
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -4)
         let (model, _) = fixture.spied()
-        model.beginEditing(id, column: .inflow)
+        model.beginEditing(id, column: .amount)
         let editor = try #require(model.editor)
         editor.press(.tab, .tab)
         #expect(editor.focus == .button(.cancel))
@@ -561,53 +562,165 @@ import Testing
 
 @MainActor
 @Suite struct AmountFieldTests {
-    @Test func oneSignedAmountBehindTwoFields() throws {
+    @Test func typingAPlusIntoBetragEntersAnInflow() throws {
+        let fixture = RegisterFixture()
+        let (model, store) = fixture.spied(appliesCommands: true)
+        let balance = store.budget.balances(forAccount: fixture.giro).working
+        model.addTransactionClicked()
+        let editor = try #require(model.editor)
+        editor.fieldClicked(.main(.amount))
+        editor.type("+3180")
+        #expect(editor.text(.main(.amount)) == "3180")
+        #expect(editor.isInflow(.main(.amount)))
+        editor.activate(.save)
+        let saved = try #require(store.transactionSaves.first).transaction
+        #expect(saved.amount == 3180)
+        let row = try #require(model.rows.first { $0.id == saved.id })
+        #expect(row.amountText == "+3,180.00")
+        #expect(row.isInflow)
+        #expect(store.budget.balances(forAccount: fixture.giro).working == balance + 3180)
+    }
+
+    @Test func aNewTransactionStartsAsAnOutflow() throws {
+        let (model, store) = RegisterFixture().spied()
+        model.addTransactionClicked()
+        let editor = try #require(model.editor)
+        #expect(!editor.isInflow(.main(.amount)))
+        #expect(editor.prompt(.main(.amount)) == "Betrag")
+        editor.fieldClicked(.main(.amount))
+        editor.type("88.12")
+        editor.activate(.save)
+        #expect(store.transactionSaves.map(\.transaction.amount) == [decimal("-88.12")])
+    }
+
+    @Test func plusAndMinusSetTheSignOfAnAmountTypedWithoutOne() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -4)
         let (model, _) = fixture.spied()
-        model.beginEditing(id, column: .inflow)
+        model.beginEditing(id, column: .amount)
         let editor = try #require(model.editor)
+        #expect(editor.text(.main(.amount)) == "4.00")
         editor.retype("12.5")
-        editor.press(.backTab)
-        #expect(editor.text(.main(.inflow)) == "12.50")
-        #expect(editor.text(.main(.outflow)) == "")
-        #expect(editor.clone.amount == 12.5)
+        editor.type("+")
+        #expect(editor.text(.main(.amount)) == "12.5")
+        #expect(editor.isInflow(.main(.amount)))
         editor.press(.tab)
         #expect(editor.clone.amount == 12.5)
         editor.press(.backTab)
-        editor.retype("-1,234")
+        #expect(editor.text(.main(.amount)) == "12.50")
+        for minus in ["−", "-"] {
+            editor.type("+")
+            editor.type(minus)
+            #expect(!editor.isInflow(.main(.amount)))
+        }
+        #expect(editor.calculator == nil)
         editor.press(.tab)
-        #expect(editor.text(.main(.inflow)) == "1,234.00")
+        #expect(editor.clone.amount == -12.5)
+        editor.press(.backTab)
+        editor.paste("+1,234")
+        editor.press(.tab)
         #expect(editor.clone.amount == 1234)
-        editor.press(.backTab)
-        editor.retype("7")
-        editor.press(.tab)
-        #expect(editor.text(.main(.outflow)) == "7.00")
-        #expect(editor.text(.main(.inflow)) == "")
-        editor.retype("0")
-        editor.press(.backTab)
-        #expect(editor.clone.amount == -7)
+        #expect(editor.text(.main(.amount)) == "1,234.00")
     }
 
-    @Test func operatorsOpenTheCalculator() throws {
+    @Test func theSignButtonTogglesBetweenOutflowAndInflow() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -4)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id, column: .memo)
+        let editor = try #require(model.editor)
+        editor.toggleSign(.main(.amount))
+        #expect(editor.isInflow(.main(.amount)))
+        #expect(editor.focusedField == .main(.amount))
+        editor.press(.tab)
+        #expect(editor.clone.amount == 4)
+        editor.toggleSign(.main(.amount))
+        editor.press(.tab)
+        #expect(editor.clone.amount == -4)
+        editor.fieldClicked(.main(.amount))
+        editor.retype("9")
+        editor.toggleSign(.main(.amount))
+        #expect(editor.text(.main(.amount)) == "9")
+        editor.press(.tab)
+        #expect(editor.clone.amount == 9)
+    }
+
+    @Test func clickingTheSignWhileTypingKeepsTheAmountFocused() throws {
+        let (model, store) = RegisterFixture().spied()
+        model.addTransactionClicked()
+        let editor = try #require(model.editor)
+        editor.fieldClicked(.main(.amount))
+        editor.type("30")
+        editor.fieldDidLoseFocus(.main(.amount))
+        editor.toggleSign(.main(.amount))
+        #expect(editor.focusedField == .main(.amount))
+        #expect(editor.isInflow(.main(.amount)))
+        #expect(editor.text(.main(.amount)) == "30.00")
+        editor.press(.enter)
+        #expect(store.transactionSaves.map(\.transaction.amount) == [30])
+    }
+
+    @Test func aChosenSignOnAnEmptyIncomeAmountStays() throws {
+        let (model, _) = RegisterFixture().spied()
+        model.addTransactionClicked()
+        let editor = try #require(model.editor)
+        editor.press(.tab, .tab)
+        editor.retype("Zu verteilen")
+        editor.press(.tab, .tab)
+        #expect(editor.isInflow(.main(.amount)))
+        editor.fieldDidLoseFocus(.main(.amount))
+        editor.toggleSign(.main(.amount))
+        #expect(editor.focusedField == .main(.amount))
+        #expect(!editor.isInflow(.main(.amount)))
+        editor.press(.backTab, .tab)
+        #expect(!editor.isInflow(.main(.amount)))
+    }
+
+    @Test func aNegativeCalculatorResultFlipsTheSign() throws {
+        for startsAsInflow in [false, true] {
+            let (model, store) = RegisterFixture().spied()
+            model.addTransactionClicked()
+            let editor = try #require(model.editor)
+            editor.fieldClicked(.main(.amount))
+            editor.type(startsAsInflow ? "+20" : "20")
+            editor.openCalculator(for: .main(.amount))
+            editor.type("-50")
+            editor.press(.enter)
+            #expect(editor.text(.main(.amount)) == "30.00")
+            #expect(editor.isInflow(.main(.amount)) != startsAsInflow)
+            editor.press(.enter)
+            #expect(store.transactionSaves.map(\.transaction.amount) == [startsAsInflow ? -30 : 30])
+        }
+    }
+
+    @Test func escapeRestoresAChangedSign() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -4)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id, column: .amount)
+        let editor = try #require(model.editor)
+        editor.type("+")
+        editor.press(.escape)
+        #expect(!editor.isInflow(.main(.amount)))
+        #expect(model.editor === editor)
+        editor.press(.escape)
+        #expect(model.editor == nil)
+    }
+
+    @Test func timesAndDivideOpenTheCalculator() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -10)
         let (model, _) = fixture.spied()
-        model.beginEditing(id, column: .outflow)
+        model.beginEditing(id, column: .amount)
         let editor = try #require(model.editor)
-        editor.type("+")
+        editor.type("*")
         #expect(editor.calculator?.calculator.display == "10.00")
-        editor.type("5")
+        editor.type("2")
         editor.press(.enter)
         #expect(editor.calculator == nil)
-        #expect(editor.text(.main(.outflow)) == "15.00")
+        #expect(editor.text(.main(.amount)) == "20.00")
         editor.press(.tab)
-        #expect(editor.clone.amount == -15)
-        editor.press(.backTab)
-        editor.retype("")
-        editor.type("-")
-        #expect(editor.calculator == nil)
-        #expect(editor.text(.main(.outflow)) == "-")
+        #expect(editor.clone.amount == -20)
     }
 }
 
@@ -624,20 +737,20 @@ import Testing
         #expect(editor.isSplitMode)
         #expect(editor.subIds.count == 2)
         #expect(editor.focusedField == .main(.memo))
-        #expect(editor.remainingTexts == ("$50.00", "$0.00"))
+        #expect(editor.remainingText == "−$50.00")
         let first = editor.subIds[0]
         editor.fieldClicked(.sub(first, .category))
         editor.retype("Groceries")
         editor.press(.escape)
         editor.retype("Everyday Expenses: Groceries")
         editor.press(.escape, .tab, .tab)
-        #expect(editor.focusedField == .sub(first, .outflow))
+        #expect(editor.focusedField == .sub(first, .amount))
         editor.type("30")
         editor.press(.tab)
-        #expect(editor.remainingTexts == ("$20.00", "$0.00"))
+        #expect(editor.remainingText == "−$20.00")
         #expect(editor.subIds.count == 2)
         let second = editor.subIds[1]
-        editor.fieldClicked(.sub(second, .outflow))
+        editor.fieldClicked(.sub(second, .amount))
         editor.type("10")
         editor.press(.tab)
         #expect(editor.subIds.count == 3)
@@ -656,6 +769,61 @@ import Testing
         #expect(saved.subtransactions.map(\.categoryId) == [fixture.groceries, nil])
     }
 
+    @Test func eachSplitPartHasItsOwnSign() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -50)
+        let (model, store) = fixture.spied()
+        model.beginEditing(id, column: .category)
+        let editor = try #require(model.editor)
+        editor.retype("Aufteilung")
+        editor.press(.escape, .tab)
+        let (first, second) = (editor.subIds[0], editor.subIds[1])
+        #expect(!editor.isInflow(.sub(first, .amount)))
+        editor.fieldClicked(.sub(first, .amount))
+        editor.type("60")
+        editor.toggleSign(.sub(second, .amount))
+        editor.fieldClicked(.sub(second, .amount))
+        editor.type("4")
+        #expect(editor.isInflow(.sub(second, .amount)))
+        #expect(!editor.isInflow(.sub(first, .amount)))
+        editor.press(.tab)
+        editor.fieldClicked(.sub(editor.subIds[2], .amount))
+        editor.type("+6")
+        editor.activate(.done)
+        let saved = try #require(store.transactionSaves.first).transaction
+        #expect(saved.subtransactions.map(\.amount) == [-60, 4, 6])
+    }
+
+    @Test func escapeResetsTheSignOfANewPart() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -50)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id, column: .category)
+        let editor = try #require(model.editor)
+        editor.retype("Aufteilung")
+        editor.press(.escape, .tab)
+        let part = editor.subIds[1]
+        editor.fieldClicked(.sub(part, .amount))
+        editor.toggleSign(.sub(part, .amount))
+        #expect(editor.isInflow(.sub(part, .amount)))
+        editor.type("30")
+        editor.press(.escape)
+        #expect(!editor.isInflow(.sub(part, .amount)))
+        #expect(editor.text(.sub(part, .amount)).isEmpty)
+        #expect(model.editor === editor)
+    }
+
+    @Test func thePartsOfAnInflowStartAsInflows() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, 50)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id, column: .category)
+        let editor = try #require(model.editor)
+        editor.retype("Aufteilung")
+        editor.press(.escape, .tab)
+        #expect(editor.subIds.allSatisfy { editor.isInflow(.sub($0, .amount)) })
+    }
+
     @Test func adjustOriginalSetsTheTotal() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -50)
@@ -665,7 +833,7 @@ import Testing
         editor.retype("Aufteilung")
         editor.press(.escape, .tab)
         let first = editor.subIds[0]
-        editor.fieldClicked(.sub(first, .outflow))
+        editor.fieldClicked(.sub(first, .amount))
         editor.type("20")
         editor.activate(.done)
         #expect(editor.taskDialog?.dismissal == AnyDialogChoice(UnassignedChoice.cancel))
@@ -728,11 +896,11 @@ import Testing
         #expect(editor.dropDown?.highlightedItem?.value == "Bakery")
         editor.press(.tab)
         #expect(editor.text(.sub(first, .category)) == "Everyday Expenses: Groceries")
-        editor.fieldClicked(.sub(first, .outflow))
+        editor.fieldClicked(.sub(first, .amount))
         editor.type("30")
         editor.fieldClicked(.sub(second, .payee))
         editor.type("Kiosk")
-        editor.fieldClicked(.sub(second, .outflow))
+        editor.fieldClicked(.sub(second, .amount))
         editor.type("20")
         editor.activate(.done)
         #expect(store.transactionSaves.first?.subPayeeNames == [first: "Bakery", second: "Kiosk"])
@@ -825,7 +993,7 @@ import Testing
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -4, cleared: .reconciled)
         let (model, store) = fixture.spied()
-        model.beginEditing(id, column: .outflow)
+        model.beginEditing(id, column: .amount)
         let editor = try #require(model.editor)
         editor.retype("5")
         editor.activate(.done)
@@ -836,7 +1004,7 @@ import Testing
         editor.answer(ReconciledChoice.keep)
         #expect(model.editor == nil)
         #expect(store.commands.isEmpty)
-        model.beginEditing(id, column: .outflow)
+        model.beginEditing(id, column: .amount)
         model.editor?.retype("5")
         model.editor?.activate(.done)
         model.editor?.answer(ReconciledChoice.change)

@@ -51,9 +51,9 @@ import Testing
     }
 
     @Test func onlyAmountFieldsTakeTheNumpadSeparator() {
-        #expect(EditorTextField.numpadReplacement(".", column: .outflow, isNumericPad: true, separator: ",") == ",")
+        #expect(EditorTextField.numpadReplacement(".", column: .amount, isNumericPad: true, separator: ",") == ",")
         #expect(EditorTextField.numpadReplacement(".", column: .memo, isNumericPad: true, separator: ",") == nil)
-        #expect(EditorTextField.numpadReplacement(".", column: .inflow, isNumericPad: false, separator: ",") == nil)
+        #expect(EditorTextField.numpadReplacement(".", column: .amount, isNumericPad: false, separator: ",") == nil)
     }
 
     @Test func completeIsNotEscape() {

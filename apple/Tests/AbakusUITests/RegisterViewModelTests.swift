@@ -16,7 +16,7 @@ import Testing
 
     @Test func visibleColumnsFollowTheAccountKind() {
         var fixture = RegisterFixture()
-        let base: [RegisterColumn] = [.date, .payee, .category, .memo, .outflow, .inflow, .cleared]
+        let base: [RegisterColumn] = [.date, .payee, .category, .memo, .amount, .cleared]
         #expect(fixture.model().visibleColumns == base)
         fixture.add(fixture.giro, -1)
         #expect(fixture.model().visibleColumns == base)

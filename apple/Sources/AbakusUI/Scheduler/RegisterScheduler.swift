@@ -72,7 +72,7 @@ public final class RegisterScheduler {
         var columns: [RegisterColumn] = register.isAllAccounts ? [.account] : []
         columns += [.date, .frequency, .payee]
         if register.account?.onBudget ?? true { columns.append(.category) }
-        columns += [.memo, .outflow, .inflow]
+        columns += [.memo, .amount]
         return columns.filter { !$0.canDisable || settings[$0]?.visible == true }
     }
 
@@ -95,7 +95,7 @@ public final class RegisterScheduler {
             contentWidths: contentWidths)
     }
 
-    /// Date, frequency and amounts fit what they show; payee, category and memo share the rest.
+    /// Date, frequency and Betrag fit what they show; payee, category and memo share the rest.
     var contentWidths: [RegisterColumn: CGFloat] {
         let rows = rows
         let frequencies = rows.map(\.frequency) + [editor?.frequency?.readableName].compactMap { $0 }
@@ -103,8 +103,8 @@ public final class RegisterScheduler {
             .date: RegisterColumn.date.contentWidth(fitting: rows.map(\.date)),
             .frequency: RegisterColumn.frequency.contentWidth(
                 fitting: frequencies, accessory: SchedulerMetrics.popUpAccessory),
-            .outflow: RegisterColumn.outflow.contentWidth(fitting: rows.map(\.outflow)),
-            .inflow: RegisterColumn.inflow.contentWidth(fitting: rows.map(\.inflow)),
+            .amount: RegisterColumn.amount.contentWidth(
+                fitting: rows.map(\.amountText), accessory: EditCellStyle.accessoryWidth),
         ]
     }
 

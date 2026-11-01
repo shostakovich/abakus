@@ -60,10 +60,10 @@ extension TransactionEditor {
         SplitRules.unassigned(clone)
     }
 
-    public var remainingTexts: (outflow: String, inflow: String) {
+    public var remainingText: String {
         let remaining = remainingAmount
-        let formatter = formatter
-        return (formatter.currency(remaining < 0 ? -remaining : 0), formatter.currency(remaining >= 0 ? remaining : 0))
+        let text = formatter.currency(abs(remaining))
+        return remaining < 0 ? "−" + text : remaining > 0 ? "+" + text : text
     }
 
     func commitSub(_ subId: String, column: EditorColumn, reason: CommitReason) -> FocusMove? {
@@ -86,7 +86,7 @@ extension TransactionEditor {
             return reason == .lostFocus ? nil : FocusMove(after: field, backward: false)
         case .memo:
             clone.subtransactions[index].memo = typed.isEmpty ? nil : text(field)
-        case .outflow, .inflow:
+        case .amount:
             commitSubAmount(index: index, field: field)
         default:
             break
@@ -140,19 +140,13 @@ extension TransactionEditor {
         setText(field, categoryText(categoryId))
     }
 
-    /// Amount lines follow the main row's sign rules; a last line that leaves money unassigned gets a successor.
+    /// A last line that leaves money unassigned gets a successor.
     private func commitSubAmount(index: Int, field: EditorFieldID) {
         guard let subId = field.subId else { return }
-        let value = formatter.parseAmount(text(field))
         let old = clone.subtransactions[index].amount
-        var amount = old
-        if field.column == .inflow {
-            if value != clone.subtransactions[index].inflow { amount = value }
-        } else if value != clone.subtransactions[index].outflow {
-            amount = -value
-        }
+        let amount = typedAmount(field)
         clone.subtransactions[index].amount = amount
-        refreshAmountTexts(subId: subId)
+        refreshAmountText(subId: subId)
         if amount != old && remainingAmount != 0 && subIds.last == subId && calculator == nil {
             let added = appendSubRow()
             refocusRequest = .sub(added, .payee)

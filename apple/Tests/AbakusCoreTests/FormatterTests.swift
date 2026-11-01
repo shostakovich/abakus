@@ -33,6 +33,12 @@ import Testing
         #expect(german.registerAmount(decimal("12")) == "12,00")
     }
 
+    @Test func registerAmountsCarryTheirSign() {
+        #expect(german.signedRegisterAmount(decimal("-88.12")) == "−88,12")
+        #expect(german.signedRegisterAmount(decimal("3180")) == "+3.180,00")
+        #expect(german.signedRegisterAmount(decimal("-0.004")) == "")
+    }
+
     @Test func tinyNegativeAmountsAreNotNegativeZero() {
         #expect(german.currency(decimal("-0.004")) == "0,00€")
     }

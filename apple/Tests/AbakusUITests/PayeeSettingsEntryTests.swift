@@ -68,7 +68,7 @@ import Testing
         #expect(editor.clone.memo == "Brötchen")
         #expect(editor.clone.amount == -4.5)
         #expect(editor.text(.main(.memo)) == "Brötchen")
-        #expect(editor.text(.main(.outflow)) == "4.50")
+        #expect(editor.text(.main(.amount)) == "4.50")
     }
 
     @Test func theEditorKeepsMemoAndAmountByDefault() throws {

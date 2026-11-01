@@ -124,17 +124,20 @@ extension TransactionEditor {
         return true
     }
 
+    /// "+" and "−" set the sign, so only "*" and "/" open the calculator.
     private func amountKey(_ key: EditorKey, _ field: EditorFieldID) -> Bool {
-        guard case .character(let character) = key else { return false }
-        let value = formatter.parseAmount(text(field))
+        guard case .character(let character) = key, let first = character.first else { return false }
+        if let inflow = Self.signs[first] {
+            chooseSign(field, inflow: inflow)
+            return true
+        }
         let op: Calculator.Operator
         switch character {
-        case "+": op = .add
         case "*": op = .multiply
         case "/": op = .divide
-        case "-" where value != 0: op = .subtract
         default: return false
         }
+        let value = abs(formatter.parseAmount(text(field)))
         calculator = EditorCalculator(
             field: field, calculator: Calculator(value: value, operator: op, formatter: formatter))
         return true
@@ -168,12 +171,13 @@ extension TransactionEditor {
         calculator?.calculator.press(key)
     }
 
-    /// The result goes into the field as plain amount text; the field commits as usual later.
+    /// The result goes into the field as plain amount text; a negative one flips the field's sign.
     public func calculatorOK() {
         guard var state = calculator else { return }
         let result = state.calculator.result()
         calculator = nil
-        setText(state.field, formatter.currencySimple(result))
+        if result < 0 { chooseSign(state.field, inflow: !isInflow(state.field)) }
+        setText(state.field, formatter.currencySimple(abs(result)))
         if focus != .field(state.field) { setFocus(.field(state.field), commitCurrent: true) }
         selectAll(state.field)
     }
@@ -213,7 +217,7 @@ extension TransactionEditor {
     func resetEditedField(_ field: EditorFieldID) {
         let source = original
         let restored = originalText(field, of: source)
-        guard !textMatchesOriginal(field, restored) else {
+        guard !textMatchesOriginal(field, restored) || signChanged(field) else {
             cancel()
             return
         }
@@ -225,12 +229,19 @@ extension TransactionEditor {
     private func textMatchesOriginal(_ field: EditorFieldID, _ restored: String) -> Bool {
         let current = text(field)
         switch field.column {
-        case .outflow, .inflow: return formatter.parseAmount(current) == formatter.parseAmount(restored)
+        case .amount: return formatter.parseAmount(current) == formatter.parseAmount(restored)
         case .date: return formatter.parseDate(current, today: today) == formatter.parseDate(restored, today: today)
         default:
             return current.trimmingCharacters(in: .whitespaces).lowercased()
                 == restored.trimmingCharacters(in: .whitespaces).lowercased()
         }
+    }
+
+    private func signChanged(_ field: EditorFieldID) -> Bool {
+        guard field.column == .amount else { return false }
+        let old =
+            field.subId.map { id in original.subtransactions.first { $0.id == id }?.amount ?? 0 } ?? original.amount
+        return old != 0 && isInflow(field) != (old > 0)
     }
 
     private func restoreClone(_ field: EditorFieldID) {
@@ -243,9 +254,10 @@ extension TransactionEditor {
                 subPayeeNames[subId] = nil
             case .category: clone.subtransactions[index].categoryId = old?.categoryId
             case .memo: clone.subtransactions[index].memo = old?.memo
-            case .outflow, .inflow:
+            case .amount:
                 clone.subtransactions[index].amount = old?.amount ?? 0
-                refreshAmountTexts(subId: subId)
+                refreshAmountText(subId: subId)
+                resetSubSign(subId)
             default: break
             }
             return
@@ -260,9 +272,11 @@ extension TransactionEditor {
             clone.categoryId = original.categoryId
             if original.isSplit != isSplitMode { setSplitMode(original.isSplit) }
         case .memo: clone.memo = original.memo
-        case .outflow, .inflow:
+        case .amount:
             clone.amount = original.amount
-            refreshAmountTexts(subId: nil)
+            chosenSigns.remove(nil)
+            setSign(field, inflow: original.amount > 0)
+            refreshAmountText(subId: nil)
         case .frequency: setFrequency(originalFrequency)
         }
     }

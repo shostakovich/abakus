@@ -122,6 +122,13 @@ public struct BudgetFormatter: Hashable, Sendable {
         Amount.round(value, digits: currencyLocale.decimalDigits) == 0 ? "" : currencyNoSymbol(value)
     }
 
+    /// "−88,12" or "+3.180,00", with a true minus sign.
+    public func signedRegisterAmount(_ value: Decimal) -> String {
+        let magnitude = registerAmount(value < 0 ? -value : value)
+        guard !magnitude.isEmpty else { return "" }
+        return (value < 0 ? "−" : "+") + magnitude
+    }
+
     public func dateShort(_ date: DateWithoutTime) -> String {
         dateString(date, year: String(format: "%02d", date.year % 100))
     }
