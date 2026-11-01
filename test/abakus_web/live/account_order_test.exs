@@ -48,6 +48,17 @@ defmodule AbakusWeb.AccountOrderTest do
         "index" => index
       })
 
+  test "the sidebar's accounts can be dragged within their section", c do
+    {:ok, view, _html} = live(c.conn, ~p"/budget")
+
+    assert has_element?(view, "aside [data-sort-event='move_account']")
+
+    assert has_element?(
+             view,
+             "li[data-sort-id='#{c.giro.id}'][data-sort-section='Budgetkonten']"
+           )
+  end
+
   test "a dragged account takes its new place in the sidebar", c do
     accounts = [c.giro, c.spar, c.bar]
     {:ok, view, _html} = live(c.conn, ~p"/budget")

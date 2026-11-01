@@ -98,6 +98,7 @@ defmodule AbakusWeb.Layouts do
       area_label="Bereich wechseln"
       width={@width}
       amount_tone={:negative}
+      on_sort="move_account"
     >
       <:brand :let={place}>
         <img src={~p"/images/icon-192.webp"} alt="" width="28" height="28" class="size-7 shrink-0" />
@@ -179,6 +180,7 @@ defmodule AbakusWeb.Layouts do
         count={if row.unapproved > 0, do: row.unapproved}
         count_label="zu bestätigen"
         section={AccountGroups.section(group)}
+        sort_id={row.account.id}
         section_amount={if first?, do: group.balance}
         rail={false}
         dock={false}
