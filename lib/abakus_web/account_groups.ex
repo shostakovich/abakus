@@ -8,15 +8,17 @@ defmodule AbakusWeb.AccountGroups do
   The sidebar lists the open groups as sections (`section/1`). Its `on_mount` handles the event `move_account` on
   every page with the sidebar: `%{"section" => section, "id" => id, "index" => index}` moves that section's account
   to `index` among the section's entries, before the one listed there now, so the accounts it leaves out keep their
-  place; an id the section does not list changes nothing. A LiveView that handles the event itself too declares
-  `on_mount {AbakusWeb.AccountGroups, {:pass_on, [:move_account]}}` and gets it after the groups were reloaded.
+  place; an id the section does not list changes nothing. It also reloads `account_groups` when another device
+  synced (`{:synced, device}`). A LiveView that handles either itself too declares
+  `on_mount {AbakusWeb.AccountGroups, {:pass_on, [:synced, :move_account]}}` (or one of them) and gets it after the
+  groups were reloaded; it does not subscribe to the sync itself, which would deliver `{:synced, device}` twice.
   """
 
   import Phoenix.Component, only: [assign: 3]
-  import Phoenix.LiveView, only: [attach_hook: 4, put_private: 3]
+  import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
 
   alias Abakus.Depot.Portfolios
-  alias Abakus.Ledger
+  alias Abakus.{Ledger, Sync}
   alias Abakus.Ledger.Account
   alias Abakus.Users.Scope
   alias AbakusWeb.Areas
@@ -30,8 +32,16 @@ defmodule AbakusWeb.AccountGroups do
   def kind_label(kind), do: @kinds[kind]
 
   @doc "Assigns `account_groups` for the sidebar of every signed-in page; none for a user without the Budget."
-  def on_mount(:assign, _params, _session, socket),
-    do: {:cont, socket |> reload() |> attach_hook(:move_account, :handle_event, &handle_event/3)}
+  def on_mount(:assign, _params, _session, socket) do
+    budget? = Areas.allowed?(socket.assigns.current_scope, :budget)
+    if budget? and connected?(socket), do: Sync.subscribe(socket.assigns.current_scope)
+
+    {:cont,
+     socket
+     |> reload()
+     |> attach_hook(:move_account, :handle_event, &handle_event/3)
+     |> attach_hook(:account_groups_synced, :handle_info, &handle_info/2)}
+  end
 
   def on_mount({:pass_on, passed}, _params, _session, socket),
     do: {:cont, put_private(socket, :account_groups_pass_on, passed)}
@@ -42,6 +52,9 @@ defmodule AbakusWeb.AccountGroups do
   end
 
   defp handle_event(_event, _params, socket), do: {:cont, socket}
+
+  defp handle_info({:synced, _device}, socket), do: socket |> reload() |> pass_on(:synced)
+  defp handle_info(_message, socket), do: {:cont, socket}
 
   defp pass_on(socket, message) do
     if message in Map.get(socket.private, :account_groups_pass_on, []),
