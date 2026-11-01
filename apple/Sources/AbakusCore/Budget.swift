@@ -159,7 +159,11 @@ public struct Budget: Hashable, Sendable {
 
     public func payeeName(ofPayee payeeId: String?) -> String {
         guard let payeeId, let payee = payee(withId: payeeId) else { return "" }
-        return payee.transferAccountId.flatMap(account(withId:))?.transferPayeeName ?? payee.name
+        return payeeName(of: payee)
+    }
+
+    public func payeeName(of payee: Payee) -> String {
+        payee.transferAccountId.flatMap(account(withId:))?.transferPayeeName ?? payee.name
     }
 
     public func payeeName(of transaction: some SplittableTransaction) -> String {

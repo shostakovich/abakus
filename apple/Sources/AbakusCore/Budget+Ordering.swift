@@ -39,7 +39,7 @@ public struct BudgetLookup: Sendable {
     public init(_ budget: Budget) {
         self.budget = budget
         accounts = Dictionary(budget.accounts.map { ($0.id, $0) }) { first, _ in first }
-        payeeNames = Dictionary(budget.payees.map { ($0.id, budget.payeeName(ofPayee: $0.id)) }) { first, _ in first }
+        payeeNames = Dictionary(budget.payees.map { ($0.id, budget.payeeName(of: $0)) }) { first, _ in first }
         transferAccounts = Dictionary(
             budget.payees.compactMap { payee in payee.transferAccountId.map { (payee.id, $0) } }
         ) {
