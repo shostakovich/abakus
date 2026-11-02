@@ -13,16 +13,16 @@ public struct RegisterIncomeCheck: Hashable, Sendable {
 }
 
 extension RegisterViewModel: RegisterGridOwner {
-    var mainGrid: RegisterViewModel? { self }
-    var gridIds: [String] { transactionIds }
-    var columnTab: RegisterAnchorID { .columnTab }
-    var snapsToRows: Bool { true }
+    package var mainGrid: RegisterViewModel? { self }
+    package var gridIds: [String] { transactionIds }
+    package var columnTab: RegisterAnchorID { .columnTab }
+    package var snapsToRows: Bool { true }
 
-    func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)? {
+    package func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)? {
         store.budget.transaction(withId: id).map { ($0, nil) }
     }
 
-    func followUpEdit(_ outcome: EditorOutcome) {
+    package func followUpEdit(_ outcome: EditorOutcome) {
         switch outcome {
         case .cancelled:
             break

@@ -43,7 +43,7 @@ public struct BudgetMonthHeaderDisplay: Hashable, Sendable {
 }
 
 extension BudgetViewModel {
-    var zeroText: String { formatter.currencyNoSymbol(0) }
+    package var zeroText: String { formatter.currencyNoSymbol(0) }
 
     public func subRowDisplay(_ categoryId: String, in month: BudgetMonth) -> BudgetSubRowDisplay {
         let figures = month.category(categoryId)

@@ -4,8 +4,10 @@ A native macOS SwiftUI client for the Abakus budget (ADR 0029 in [`../DECISIONS.
 registers and the budget screen (window, sidebar, register, budget). It follows Abakus's budget rules and speaks German
 with Abakus's terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in this folder.
 
-- Targets: `AbakusCore` (model, store, persistence, formatting), `AbakusUI` (SwiftUI views and theme),
+- Targets: `AbakusCore` (model, store, persistence, formatting), `AbakusUI` (view models, theme and the views that
+  work on the Mac and iOS, ADR 0031), `AbakusMacUI` (the Mac's screens and everything on AppKit, pointer or keyboard),
   `Abakus` (the app), `Snapshot` (offscreen render and event-driven checks), with their tests in `Tests/`.
+  `AbakusMacUITests` reuses the fixtures of `AbakusUITests`.
 
 ## Setup
 
@@ -52,3 +54,4 @@ with Abakus's terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in th
 - `swift build -Xswiftc -warnings-as-errors`
 - `swift test`
 - `swift format lint --strict --recursive Package.swift Sources Tests`
+- `swift build --scratch-path .build/ios --target AbakusUI --triple arm64-apple-ios26.0-simulator --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -Xswiftc -warnings-as-errors` (the shared UI on the iOS simulator)

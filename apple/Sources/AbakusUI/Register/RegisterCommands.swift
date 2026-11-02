@@ -103,11 +103,16 @@ public struct RegisterCommands: Commands {
 }
 
 /// A register menu as SwiftUI menu items, for the menu bar.
-struct RegisterMenuItemsView: View {
+package struct RegisterMenuItemsView: View {
     let items: [RegisterMenuItem]
     let perform: (RegisterMenuAction) -> Void
 
-    var body: some View {
+    package init(items: [RegisterMenuItem], perform: @escaping (RegisterMenuAction) -> Void) {
+        self.items = items
+        self.perform = perform
+    }
+
+    package var body: some View {
         ForEach(items) { item in
             switch item.kind {
             case .separator:

@@ -18,8 +18,8 @@ public final class RegisterScheduler {
     unowned let register: RegisterViewModel
     public let store: any BudgetStoring
     public let navigation: NavigationState
-    let grid: RegisterGridController
-    var expandedSplits: Set<String> = []
+    package let grid: RegisterGridController
+    package var expandedSplits: Set<String> = []
 
     init(register: RegisterViewModel) {
         self.register = register
@@ -60,7 +60,7 @@ public final class RegisterScheduler {
         .map(\.0)
     }
 
-    public internal(set) var sortOrder: RegisterSortOrder {
+    public package(set) var sortOrder: RegisterSortOrder {
         get { register.viewState.schedulerSort }
         set { register.viewState.schedulerSort = newValue }
     }
@@ -275,18 +275,18 @@ public final class RegisterScheduler {
 }
 
 extension RegisterScheduler: RegisterGridOwner {
-    var mainGrid: RegisterViewModel? { nil }
-    var gridIds: [String] { scheduledIds }
-    var gridRows: [RegisterRow] { rows }
-    var columnTab: RegisterAnchorID { .schedulerColumnTab }
+    package var mainGrid: RegisterViewModel? { nil }
+    package var gridIds: [String] { scheduledIds }
+    package var gridRows: [RegisterRow] { rows }
+    package var columnTab: RegisterAnchorID { .schedulerColumnTab }
     /// Snapped, the reveal of its edit row would stop a point short of the row's end.
-    var snapsToRows: Bool { false }
+    package var snapsToRows: Bool { false }
 
-    func headerContextMenu() -> [RegisterMenuItem]? { nil }
+    package func headerContextMenu() -> [RegisterMenuItem]? { nil }
 
-    func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)? {
+    package func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)? {
         store.budget.scheduledTransaction(withId: id).map { ($0.editableTransaction, $0.frequency) }
     }
 
-    func followUpEdit(_ outcome: EditorOutcome) {}
+    package func followUpEdit(_ outcome: EditorOutcome) {}
 }

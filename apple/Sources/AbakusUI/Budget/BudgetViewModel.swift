@@ -40,7 +40,7 @@ public final class BudgetViewModel {
     public internal(set) var panelFocusRequest = 0
     @ObservationIgnored public private(set) lazy var callouts = BudgetCalloutController(budget: self)
     @ObservationIgnored var hasPlacedOpeningMonth = false
-    @ObservationIgnored var resizeOrigin: CGFloat?
+    @ObservationIgnored package var resizeOrigin: CGFloat?
     @ObservationIgnored var isAppModalOpen: () -> Bool = { false }
     @ObservationIgnored private var cache: (inputs: SheetInputs, sheet: BudgetSheet, groups: [BudgetGroup])?
     @ObservationIgnored private var formatterCache: (metaData: BudgetMetaData, formatter: BudgetFormatter)?
@@ -70,7 +70,7 @@ public final class BudgetViewModel {
 
     public var takesKeyFocusBack: Bool { editor == nil && presentedPopup == nil && !isCoveredByModal }
 
-    var formatter: BudgetFormatter {
+    package var formatter: BudgetFormatter {
         let metaData = store.budget.budgetMetaData
         if let formatterCache, formatterCache.metaData == metaData { return formatterCache.formatter }
         let formatter = BudgetFormatter(metaData: metaData)
@@ -80,7 +80,7 @@ public final class BudgetViewModel {
 
     public var layout: BudgetLayout { layout(panelSize: panelSize) }
 
-    func layout(panelSize: CGSize) -> BudgetLayout {
+    package func layout(panelSize: CGSize) -> BudgetLayout {
         var layout = columnLayout(panelSize: panelSize)
         let lineCounts = (0..<layout.columnCount).compactMap {
             month(firstMonth.addingMonths($0))?.headerLines(formatter: formatter).count

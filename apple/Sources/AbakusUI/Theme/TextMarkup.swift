@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Dialog and search suggestion texts carry `<b>`, `<i>`, `<br/>` and entities.
-enum TextMarkup {
+package enum TextMarkup {
     struct Run: Equatable {
         var text: String
         var bold: Bool
@@ -35,7 +35,7 @@ enum TextMarkup {
     }
 
     /// Emphasis only, so the text takes the font of the view that shows it.
-    static func attributed(_ markup: String) -> AttributedString {
+    package static func attributed(_ markup: String) -> AttributedString {
         var result = runs(markup).reduce(into: AttributedString()) { result, run in
             var piece = AttributedString(run.text)
             var intent = InlinePresentationIntent()
@@ -48,7 +48,7 @@ enum TextMarkup {
         return result
     }
 
-    static func plain(_ markup: String) -> String {
+    package static func plain(_ markup: String) -> String {
         runs(markup).map(\.text).joined().trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

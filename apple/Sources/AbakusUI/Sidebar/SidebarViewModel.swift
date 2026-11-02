@@ -16,7 +16,7 @@ public enum SidebarSelection: Hashable, Sendable {
 }
 
 public struct SidebarRevealRequest: Equatable, Sendable {
-    let selection: SidebarSelection
+    package let selection: SidebarSelection
     let token: Int
 }
 
@@ -221,7 +221,7 @@ public final class SidebarViewModel {
     }
 
     /// Expands the row's group and asks the list to scroll the row into view, so a popover can point at it.
-    func reveal(_ selection: SidebarSelection) {
+    package func reveal(_ selection: SidebarSelection) {
         expandGroup(containing: selection)
         revealRequest = SidebarRevealRequest(selection: selection, token: (revealRequest?.token ?? 0) + 1)
     }

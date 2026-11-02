@@ -51,7 +51,7 @@ public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
         RegisterMenuItem(id: "separator\(index)", title: "", kind: .separator)
     }
 
-    static func frequencyMenu(selected: ScheduledTransactionFrequency?) -> [RegisterMenuItem] {
+    package static func frequencyMenu(selected: ScheduledTransactionFrequency?) -> [RegisterMenuItem] {
         ScheduledTransactionFrequency.allCases.map { .action($0.readableName, .frequency($0), checked: $0 == selected) }
     }
 }

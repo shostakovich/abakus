@@ -84,7 +84,7 @@ public final class PayeeSettingsModel: Identifiable {
     }
 
     var budget: Budget { store.budget }
-    var formatter: BudgetFormatter { BudgetFormatter(metaData: budget.budgetMetaData) }
+    package var formatter: BudgetFormatter { BudgetFormatter(metaData: budget.budgetMetaData) }
 
     public var rows: [Row] {
         let selected = Set(selection)
@@ -365,7 +365,7 @@ public final class PayeeSettingsModel: Identifiable {
         categoryText = categoryDisplay(added)
     }
 
-    var addCategoryRequest: AddCategoryRequest? {
+    package var addCategoryRequest: AddCategoryRequest? {
         addCategoryForm.map {
             AddCategoryRequest(
                 form: $0, masterNames: masterCategoryNames, onCreate: addCategoryConfirmed,
@@ -506,16 +506,16 @@ public final class PayeeSettingsModel: Identifiable {
 }
 
 extension PayeeSettingsModel: DropDownListHost {
-    func dropDownRowHovered(_ index: Int?) {
+    package func dropDownRowHovered(_ index: Int?) {
         guard var list = categoryList else { return }
         if let index, list.items.indices.contains(index), !list.items[index].isEnabled { return }
         list.highlighted = index
         categoryList = list
     }
 
-    func dropDownRowClicked(_ index: Int) {
+    package func dropDownRowClicked(_ index: Int) {
         categoryRowClicked(index)
     }
 
-    func dropDownFooterClicked() {}
+    package func dropDownFooterClicked() {}
 }

@@ -57,7 +57,7 @@ private struct BudgetPopupAnchorModifier: ViewModifier {
 }
 
 extension View {
-    func budgetPopupAnchor(_ anchor: BudgetPopupAnchor, of model: BudgetViewModel) -> some View {
+    package func budgetPopupAnchor(_ anchor: BudgetPopupAnchor, of model: BudgetViewModel) -> some View {
         modifier(BudgetPopupAnchorModifier(anchor: anchor, model: model))
     }
 }

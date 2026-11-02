@@ -46,9 +46,9 @@ public final class RegisterViewModel {
     @ObservationIgnored public private(set) lazy var search = RegisterSearchController(register: self)
     @ObservationIgnored public private(set) lazy var reconciliation = RegisterReconciliationController(register: self)
     @ObservationIgnored public private(set) lazy var notifiers = RegisterNotifierController(register: self)
-    @ObservationIgnored private(set) lazy var grid = RegisterGridController(register: self)
+    @ObservationIgnored package private(set) lazy var grid = RegisterGridController(register: self)
     public let dialogs: DialogStack
-    @ObservationIgnored var today: () -> DateWithoutTime = { .today() }
+    @ObservationIgnored package var today: () -> DateWithoutTime = { .today() }
     @ObservationIgnored var now: () -> ContinuousClock.Instant = { .now }
     @ObservationIgnored var isAppModalOpen: () -> Bool = { false }
 
@@ -111,7 +111,7 @@ public final class RegisterViewModel {
         return "Abgeglichen am \(text)"
     }
 
-    var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
+    package var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
 
     private var key: String { accountKey ?? "" }
 
@@ -133,7 +133,7 @@ public final class RegisterViewModel {
 
     public var transactionIds: [String] { derived.transactions.map(\.id) }
 
-    public internal(set) var sortOrder: RegisterSortOrder {
+    public package(set) var sortOrder: RegisterSortOrder {
         get { viewState.sort }
         set { viewState.sort = newValue }
     }
@@ -258,7 +258,7 @@ public final class RegisterViewModel {
     public var hasSelection: Bool { !selection.isEmpty }
 
     /// An open edit glows or ends first, as for the menu bar's items.
-    func viewMenuChosen(_ action: RegisterMenuAction) {
+    package func viewMenuChosen(_ action: RegisterMenuAction) {
         guard !grid.clickedOutsideEditor() else { return }
         performMenuAction(action)
     }
@@ -280,7 +280,7 @@ public final class RegisterViewModel {
 
     public var isReconciledFilterEnabled: Bool { !search.isFiltered }
 
-    var expandedSplits: Set<String> {
+    package var expandedSplits: Set<String> {
         get { viewState.expandedSplits }
         set { viewState.expandedSplits = newValue }
     }

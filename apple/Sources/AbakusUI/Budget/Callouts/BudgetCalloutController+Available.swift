@@ -59,7 +59,7 @@ public struct BudgetAvailableForm: Hashable, Sendable {
 
 extension BudgetCalloutController {
     static let nothingToCover = "Daraus lässt sich nichts decken."
-    static let noSources = "Kein Geld in „Zu verteilen“ oder anderen Kategorien."
+    package static let noSources = "Kein Geld in „Zu verteilen“ oder anderen Kategorien."
     static let missingAmount = "Bitte einen Betrag angeben."
     static let amountNotPositive = "Bitte einen Betrag über null angeben, etwa 12,50."
 

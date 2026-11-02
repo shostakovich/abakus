@@ -2,9 +2,9 @@ import CoreGraphics
 import Foundation
 
 extension BudgetViewModel {
-    var categoryRowsOrigin: CGPoint { layout.rowsOrigin }
+    package var categoryRowsOrigin: CGPoint { layout.rowsOrigin }
 
-    func rowsPoint(_ point: CGPoint) -> CGPoint {
+    package func rowsPoint(_ point: CGPoint) -> CGPoint {
         let origin = categoryRowsOrigin
         return CGPoint(x: point.x - origin.x, y: point.y - origin.y)
     }
@@ -36,34 +36,5 @@ extension BudgetViewModel {
         return CGRect(
             x: box.maxX - list.width, y: below ? box.maxY : box.minY - list.height, width: list.width,
             height: list.height)
-    }
-
-    public func calculatorFrame() -> CGRect? {
-        calculatorPlacement()?.frame
-    }
-
-    func calculatorPlacement() -> PopoverPlacement? {
-        guard let state = calculator, let box = assignedBoxFrame(of: state.cell) else { return nil }
-        let size = PopoverMetrics.size(content: CalculatorPopover.size)
-        let below = panelSize.height - box.maxY >= size.height
-        return PopoverPlacement(
-            frame: CGRect(
-                origin: CGPoint(x: box.maxX - size.width, y: below ? box.maxY : box.minY - size.height), size: size),
-            arrowEdge: below ? .top : .bottom, arrowOffset: size.width - box.width / 2)
-    }
-
-    public func mouseDown(at point: CGPoint) {
-        guard !isCoveredByModal else { return }
-        if calculator != nil, calculatorFrame()?.contains(point) != true {
-            mouseDownOutsideCalculator()
-        }
-        let list = quickBudgetFrame()
-        let button = editor.flatMap { dropDownButtonFrame(of: $0.cell) }
-        if quickBudget != nil, list?.contains(point) != true, button?.contains(point) != true {
-            mouseDownOutsideQuickBudget()
-        }
-        if let edit = editor, rowFrame(of: edit.cell)?.contains(point) != true, list?.contains(point) != true {
-            mouseDownOutsideEditedRow()
-        }
     }
 }

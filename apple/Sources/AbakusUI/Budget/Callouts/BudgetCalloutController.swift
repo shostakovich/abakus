@@ -20,7 +20,7 @@ public final class BudgetCalloutController {
 
     var store: any BudgetStoring { budget.store }
     var dialogs: DialogStack { budget.dialogs }
-    var formatter: BudgetFormatter { budget.formatter }
+    package var formatter: BudgetFormatter { budget.formatter }
 
     func open(_ popup: BudgetPopup) -> BudgetPopup? {
         reset()
@@ -54,7 +54,7 @@ public final class BudgetCalloutController {
         assignForm = nil
     }
 
-    func isShowing(_ popup: BudgetPopup) -> Bool {
+    package func isShowing(_ popup: BudgetPopup) -> Bool {
         budget.presentedPopup == popup
     }
 

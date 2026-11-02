@@ -22,14 +22,14 @@ public struct BudgetQuickBudgetList: Hashable, Sendable {
     public static let calculatorLabel = "Rechner zeigen"
     public static let rowHeight = SystemChrome.menuRowHeight
     public static let separatorHeight: CGFloat = 11
-    static let labelFont = ThemeFont.body
-    static let amountFont = ThemeFont(size: ThemeFont.body.size, hasTabularDigits: true)
-    static let iconWidth: CGFloat = 16
-    static let iconGap: CGFloat = 6
-    static let gap: CGFloat = 12
+    package static let labelFont = ThemeFont.body
+    package static let amountFont = ThemeFont(size: ThemeFont.body.size, hasTabularDigits: true)
+    package static let iconWidth: CGFloat = 16
+    package static let iconGap: CGFloat = 6
+    package static let gap: CGFloat = 12
     static let inset = 10 + SystemChrome.menuPadding
 
-    static func label(_ text: String) -> String {
+    package static func label(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespaces)
     }
 

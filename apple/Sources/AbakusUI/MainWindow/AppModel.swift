@@ -105,7 +105,7 @@ public final class AppModel {
     }
 
     /// The save error covers every other dialog.
-    var presentedDialogs: [PresentedDialog] {
+    package var presentedDialogs: [PresentedDialog] {
         dialogs.presented + [saveErrorDialog].compactMap(\.self)
     }
 

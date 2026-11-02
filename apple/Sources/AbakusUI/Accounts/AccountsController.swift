@@ -26,7 +26,7 @@ public final class AccountsController {
         today = store.today
     }
 
-    var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
+    package var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
 
     public var isPresenting: Bool { addForm != nil || editForm != nil || balanceForm != nil }
 

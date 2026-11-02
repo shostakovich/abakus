@@ -34,3 +34,6 @@ jobs:
 
       - name: Check formatting
         run: swift format lint --strict --recursive Package.swift Sources Tests
+
+      - name: Build the shared UI for iOS
+        run: swift build --scratch-path .build/ios --target AbakusUI --triple arm64-apple-ios26.0-simulator --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -Xswiftc -warnings-as-errors
