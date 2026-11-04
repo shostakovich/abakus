@@ -68,6 +68,28 @@ import Testing
         #expect(store.budget.assigned(in: day("2026-10-01"), categoryId: BudgetScreenFixture.kino) == 40)
     }
 
+    @Test func goingToTheBackgroundSavesAnOpenBudgetCellEdit() {
+        let store = BudgetStore(budget: BudgetScreenFixture().budget, today: { BudgetScreenFixture.today })
+        let app = AppModel(store: store, selection: .budget, defaults: nil, device: .iPhone)
+        app.budget.panelSize = BudgetScreenFixture.panel
+        app.budget.beginEdit(app.budget.cell(BudgetScreenFixture.kino))
+        app.budget.cellTextChanged("40")
+        app.enteredBackground()
+        #expect(app.budget.editor == nil)
+        #expect(store.budget.assigned(in: day("2026-10-01"), categoryId: BudgetScreenFixture.kino) == 40)
+    }
+
+    @Test func goingToTheBackgroundRetriesAFailedSave() throws {
+        let fixture = RegisterFixture()
+        let database = try refusingDatabase()
+        let store = BudgetStore(budget: fixture.budget, database: database)
+        let app = app(fixture, store: store)
+        try store.perform(.setCleared([fixture.startingBalanceId(of: fixture.giro)], .uncleared))
+        try database.execute("DROP TRIGGER refuse")
+        app.enteredBackground()
+        #expect(!store.hasUnsavedChanges)
+    }
+
     @Test func aFailedSaveShowsTheErrorAndRetries() throws {
         let fixture = RegisterFixture()
         let database = try refusingDatabase()

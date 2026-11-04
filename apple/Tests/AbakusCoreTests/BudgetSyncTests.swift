@@ -21,6 +21,14 @@ private final class FailingTokenStore: TokenStoring, @unchecked Sendable {
     }
 }
 
+private var hasKeychain: Bool {
+    #if os(iOS)
+        false
+    #else
+        ProcessInfo.processInfo.environment["CI"] == nil
+    #endif
+}
+
 @MainActor
 @Suite struct BudgetSyncTests {
     let server = FakeAbakus()
@@ -96,6 +104,62 @@ private final class FailingTokenStore: TokenStoring, @unchecked Sendable {
         #expect(query["code_challenge_method"] == "S256")
         #expect(query["code_challenge"]?.count == 43)
         #expect(query["device_name"] == "MacBook")
+    }
+
+    @Test func installingAgainKeepsTheBudgetAndSendsItsUnsentChanges() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("AbakusTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let (oldContainer, newContainer) = (folder.appending(path: "A"), folder.appending(path: "B"))
+        let location = "Library/Application Support/Abakus/budget.sqlite"
+        do {
+            let (store, sync) = try await signedIn(BudgetDatabase(url: oldContainer.appending(path: location)))
+            server.offline = true
+            try store.perform(.setAssigned(month: december, categoryId: grocery, amount: 50))
+            try store.perform(.setAssigned(month: december, categoryId: grocery, amount: 60))
+            #expect(sync.pendingChanges == 2)
+        }
+
+        try FileManager.default.moveItem(at: oldContainer, to: newContainer)
+        server.offline = false
+        let database = newContainer.appending(path: location)
+        let store = try BudgetStore.open(BudgetDatabase(url: database), today: { october23 })
+        let sync = try #require(restartedSync(store))
+
+        #expect(
+            KeychainTokenStore.account(forDatabaseAt: database, inContainer: newContainer)
+                == KeychainTokenStore.account(
+                    forDatabaseAt: oldContainer.appending(path: location), inContainer: oldContainer))
+        #expect(sync.isSignedIn)
+        #expect(readyToAssign(store) == 340)
+        #expect(sync.pendingChanges == 2)
+        #expect(await sync.syncOnce() == .synced(quiet: false))
+        #expect(sync.pendingChanges == 0)
+        #expect(server.messages(from: "mac-1").filter { $0.table == "assignments" && $0.column == "amount" }.count == 2)
+    }
+
+    @Test func theContainerAndTheDatabaseMayNameTheirFolderThroughASymlink() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("AbakusTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let resolved = folder.resolvingSymlinksInPath().path
+        let (linked, real) =
+            resolved.hasPrefix("/private/")
+            ? (String(resolved.dropFirst("/private".count)), resolved) : (resolved, "/private" + resolved)
+        let database = "Library/budget.sqlite"
+        #expect(
+            KeychainTokenStore.account(
+                forDatabaseAt: URL(fileURLWithPath: real + "/" + database), inContainer: URL(fileURLWithPath: linked))
+                == database)
+        #expect(
+            KeychainTokenStore.account(
+                forDatabaseAt: URL(fileURLWithPath: linked + "/" + database), inContainer: URL(fileURLWithPath: real))
+                == database)
+    }
+
+    @Test func aDatabaseOutsideTheContainerKeepsItsFullPathAsKeychainAccount() {
+        let account = KeychainTokenStore.account(
+            forDatabaseAt: URL(fileURLWithPath: "/tmp/budget.sqlite"), inContainer: URL(fileURLWithPath: "/Users/x"))
+        #expect(account == "/tmp/budget.sqlite")
     }
 
     @Test func aCancelledSignInKeepsTheDemoBudget() async throws {
@@ -247,7 +311,7 @@ private final class FailingTokenStore: TokenStoring, @unchecked Sendable {
         #expect(server.messages(from: "mac-1").contains { $0.table == "assignments" })
     }
 
-    @Test(.disabled(if: ProcessInfo.processInfo.environment["CI"] != nil, "CI runners have no login keychain"))
+    @Test(.enabled(if: hasKeychain, "CI runners and the iOS simulator's test runner have no keychain"))
     func theKeychainKeepsTheLatestTokens() throws {
         let keychain = KeychainTokenStore(account: "AbakusTests-\(UUID().uuidString)")
         defer { try? keychain.save(nil) }
@@ -277,6 +341,24 @@ private final class FailingTokenStore: TokenStoring, @unchecked Sendable {
         #expect(!sync.isSignedIn)
         #expect(tokens.load() == nil)
         #expect(sync.status == .notSignedIn)
+    }
+
+    @Test func stoppingDuringARefreshKeepsTheRotatedTokens() async throws {
+        let (store, sync) = try await signedIn()
+        server.expireAccessTokens()
+        server.holdsRefreshes = true
+        try store.perform(.setAssigned(month: december, categoryId: grocery, amount: 50))
+        sync.start()
+        try await eventually { server.refreshRequested }
+
+        sync.stop()
+        sync.start()
+        server.holdsRefreshes = false
+
+        try await eventually { server.messages(from: "mac-1").contains { $0.table == "assignments" } }
+        sync.stop()
+        #expect(sync.isSignedIn)
+        #expect(tokens.load()?.refreshToken != "refresh-1")
     }
 
     @Test func aCommandDuringARefreshGoesOutWithoutWaiting() async throws {

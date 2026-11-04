@@ -73,7 +73,7 @@ private struct BudgetMonthResult: View {
                 Spacer(minLength: 0)
                 Text(verbatim: display.available)
                     .font(BudgetStyle.resultFont.font)
-                    .foregroundStyle(amountStyle)
+                    .foregroundStyle(display.availableTint.color)
                     .lineLimit(1)
                     .fixedSize()
                     .layoutPriority(1)
@@ -87,15 +87,6 @@ private struct BudgetMonthResult: View {
         .padding(.horizontal, BudgetStyle.resultInset)
         .toolTip(model.headerToggleToolTip)
         .accessibilityElement(children: .combine)
-    }
-
-    private var amountStyle: Color {
-        switch display.availableTint {
-        case .neutral: ThemeColor.text
-        case .positive: ThemeColor.positive
-        case .negative: ThemeColor.negative
-        case .muted: ThemeColor.secondaryText
-        }
     }
 }
 

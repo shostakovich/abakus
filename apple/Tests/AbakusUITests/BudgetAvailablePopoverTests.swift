@@ -52,6 +52,40 @@ import Testing
         #expect(model.callouts.remainingText == "35,00\u{00A0}€")
     }
 
+    @Test func assigningKeepsWhatTheFormChoseAndTyped() throws {
+        let (model, _) = fixture().model()
+        model.balanceClicked(month: october, categoryId: F.kleidung)
+        model.callouts.moveDirection = .take
+        model.callouts.moveOtherId = F.lebensmittel
+        model.callouts.moveAmount = "12"
+        model.assign("20", to: BudgetCellID(month: october, categoryId: F.kleidung))
+        let form = try #require(model.callouts.availableForm)
+        #expect(form.available == 20)
+        #expect(form.direction == .take)
+        #expect(form.otherId == F.lebensmittel)
+        #expect(form.amount == "12")
+    }
+
+    @Test func assigningKeepsTheChosenSourceAndMode() throws {
+        let (model, _) = fixture().model()
+        model.balanceClicked(month: october, categoryId: F.kino)
+        model.callouts.coverSourceId = F.kleidung
+        model.assign("5", to: BudgetCellID(month: october, categoryId: F.kino))
+        #expect(model.callouts.availableForm?.available == -20)
+        #expect(model.callouts.coverSourceId == F.kleidung)
+        model.callouts.availableMode = .move
+        model.assign("10", to: BudgetCellID(month: october, categoryId: F.kino))
+        #expect(model.callouts.availableMode == .move)
+    }
+
+    @Test func aNewCategoryJoinsTheOtherCategories() throws {
+        let (model, _) = fixture().model()
+        model.balanceClicked(month: october, categoryId: F.kleidung)
+        model.perform(.addNamedCategory(groupName: "Freizeit", name: "Sport"))
+        let others = try #require(model.callouts.availableForm).others.flatMap(\.categories).map(\.name)
+        #expect(others.contains("Sport"))
+    }
+
     @Test func coveringFromZuVerteilenRaisesOnlyTheAssignment() {
         let (model, store) = fixture().model()
         model.balanceClicked(month: october, categoryId: F.kino)

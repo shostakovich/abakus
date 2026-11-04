@@ -76,7 +76,7 @@ private struct BudgetCalloutHost: View {
     private func callout(_ popup: BudgetPopup, owner: CGRect, bounds: CGSize) -> some View {
         let callouts = model.callouts
         switch popup {
-        case .editCategory:
+        case .editCategory, .category:
             if let form = callouts.category {
                 placer(owner, bounds) { BudgetCategoryPopover(controller: callouts, form: form) }
             }

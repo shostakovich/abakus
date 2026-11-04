@@ -16,6 +16,35 @@ private enum Pick: Hashable, Sendable {
             buttons: [.init(.no, title: "No"), .init(.yes, title: "Yes", isDefault: true)], dismissal: dismissal)
     }
 
+    @Test func aTouchAlertOffersTheCheckboxWithEachAnswerAndShowsTheDetails() throws {
+        let dialog = TransactionEditor.payeeRenameDialog(
+            oldName: "REWE SAGT DANKE", newName: "Rewe", matches: 3, uncategorized: 0, categoryName: nil)
+        let alert = TouchDialog(dialog.map(AnyDialogChoice.init))
+        #expect(alert.title == "Passende Buchungen auch ändern?")
+        #expect(alert.message.contains("Umbenennen: 3 passende Buchungen in „Rewe“ umbenennen"))
+        #expect(alert.message.contains("Unverändert lassen: Nur diese Buchung ändern, die anderen nicht."))
+        #expect(
+            alert.answers.map(\.title) == [
+                "Umbenennen", "Unverändert lassen", "Umbenennen, bei diesem Empfänger nicht mehr fragen",
+                "Unverändert lassen, bei diesem Empfänger nicht mehr fragen", "Abbrechen",
+            ])
+        #expect(alert.answers.map(\.isChecked) == [false, false, true, true, false])
+        #expect(alert.answers.last?.isCancel == true)
+
+        let stack = DialogStack()
+        var checked: Bool?
+        stack.ask(dialog) { checked = $0.isChecked }
+        let answer = try #require(alert.answers.first { $0.isChecked })
+        stack.presented.last?.answer(answer.choice, isChecked: answer.isChecked)
+        #expect(checked == true)
+    }
+
+    @Test func aTouchAlertWithoutAnInstructionTakesTheTitle() {
+        let dialog = TaskDialog<Pick>(
+            title: "Fehler", instruction: "", content: "", buttons: [.init(.yes, title: "OK")], dismissal: .yes)
+        #expect(TouchDialog(dialog.map(AnyDialogChoice.init)).title == "Fehler")
+    }
+
     @Test func dialogsStackInTheOrderTheyWereAsked() {
         let stack = DialogStack()
         #expect(!stack.isPresenting)

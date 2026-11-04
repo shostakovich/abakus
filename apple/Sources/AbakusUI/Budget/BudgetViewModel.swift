@@ -29,16 +29,26 @@ public final class BudgetViewModel {
             endEditOutsideShownMonths()
         }
     }
+    /// Set on iPhone and iPad, where it decides the months in place of the Mac's panel.
+    public var touchLayout: BudgetTouchLayout? {
+        didSet {
+            placeOpeningMonth()
+            endEditOutsideShownMonths()
+        }
+    }
     var storedScrollOffset: CGFloat = 0
     public internal(set) var hoveredRowId: String?
     public internal(set) var hoveredAssignedCell: BudgetCellID?
     public internal(set) var presentedPopup: BudgetPopup?
     public internal(set) var editor: BudgetCellEdit?
+    @ObservationIgnored var sheetAssigned: BudgetCellEdit?
     public internal(set) var quickBudget: BudgetQuickBudgetList?
     public internal(set) var calculator: BudgetCalculator?
     public internal(set) var drag: BudgetDrag?
     public internal(set) var panelFocusRequest = 0
     @ObservationIgnored public private(set) lazy var callouts = BudgetCalloutController(budget: self)
+    @ObservationIgnored public var onShowAllAccountsSearch: @MainActor (String) -> Void = { _ in }
+    @ObservationIgnored public var onShowApprovals: @MainActor () -> Void = {}
     @ObservationIgnored var hasPlacedOpeningMonth = false
     @ObservationIgnored package var resizeOrigin: CGFloat?
     @ObservationIgnored var isAppModalOpen: () -> Bool = { false }
@@ -109,7 +119,7 @@ public final class BudgetViewModel {
         return width
     }
 
-    public var columnCount: Int { columnLayout(panelSize: panelSize).columnCount }
+    public var columnCount: Int { touchLayout?.monthCount ?? columnLayout(panelSize: panelSize).columnCount }
 
     public var shownMonths: [DateWithoutTime] {
         (0..<columnCount).map { firstMonth.addingMonths($0) }
@@ -313,6 +323,7 @@ public final class BudgetViewModel {
         commitEdit()
         do {
             try store.perform(command)
+            callouts.refreshAvailableForm()
         } catch let error as BudgetError {
             dialogs.show(.message(error.dialogInstruction, error.dialogContent ?? ""))
         } catch {

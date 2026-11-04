@@ -516,3 +516,63 @@ extension PayeeSettingsModel {
         #expect(store.commands == [.setPayeesHidden(newestFirst, true), .setPayeesHidden(newestFirst, false)])
     }
 }
+
+@MainActor
+@Suite struct PayeeSettingsTouchTests {
+    @Test func aChosenCategoryIsStoredAndNoneClearsIt() throws {
+        let setup = PayeeSettingsFixture()
+        let (dialog, store) = setup.spied(on: "Aral", appliesCommands: true)
+        let fuel = try #require(dialog.categoryChoices(matching: "Fue").first { $0.isEnabled })
+        dialog.categoryChosen(fuel.value)
+        let fuelId = setup.fixture.category("Everyday Expenses", "Fuel")
+        #expect(dialog.categoryText == "Everyday Expenses: Fuel")
+        dialog.categoryChosen("")
+        #expect(dialog.categoryText == "")
+        #expect(
+            store.commands == [
+                .setPayeeLastCategory(payeeId: setup.id("Aral"), categoryId: fuelId),
+                .setPayeeLastCategory(payeeId: setup.id("Aral"), categoryId: nil),
+            ])
+    }
+
+    @Test func aNewCategoryIsAddedAndChosen() throws {
+        let setup = PayeeSettingsFixture()
+        let (dialog, store) = setup.spied(on: "Aral", appliesCommands: true)
+        dialog.newCategoryClicked()
+        #expect(dialog.addCategoryForm?.masterName == "")
+        #expect(dialog.addCategoryForm?.name == "")
+        dialog.addCategoryConfirmed(masterName: "Auto", name: "Tanken")
+        let added = try #require(store.budget.category(fullName: "Auto: Tanken")?.id)
+        #expect(store.budget.payee(withId: setup.id("Aral"))?.lastCategoryId == added)
+        #expect(dialog.categoryText == "Auto: Tanken")
+    }
+}
+
+@MainActor
+@Suite struct PayeeListTests {
+    @Test func theListIsSplitByInitialWithTheListedPayeesFirst() throws {
+        let setup = PayeeSettingsFixture()
+        let (dialog, _) = setup.spied(appliesCommands: true)
+        dialog.selectionChanged(to: [setup.id("Lidl")])
+        dialog.setSelectedPayeesEnabled(false)
+        let listed = dialog.sections(showing: .listed, matching: "")
+        #expect(listed.map(\.id).prefix(2) == ["A", "R"])
+        #expect(listed.flatMap(\.rows).allSatisfy { $0.isEnabled })
+        let hidden = dialog.sections(showing: .hidden, matching: "")
+        #expect(hidden.flatMap(\.rows).map(\.name) == ["Anfangssaldo", "Lidl"])
+        #expect(hidden.map(\.id) == ["A", "L"])
+        #expect(dialog.sections(showing: .all, matching: "re").flatMap(\.rows).map(\.name) == ["REWE"])
+    }
+
+    @Test(arguments: [("Aral", "A"), ("ärztehaus", "A"), ("Öko", "O"), ("1&1", "#"), ("🛒 Markt", "M"), ("", "#")])
+    func theInitialFoldsCaseAndAccentsAndGroupsTheRestUnderHash(name: String, initial: String) {
+        #expect(PayeeListSection.initial(of: name) == initial)
+    }
+
+    @Test func theHashSectionComesLast() {
+        let rows = ["1&1", "Aral"].map {
+            PayeeSettingsModel.Row(id: $0, name: $0, isEnabled: true, hasRules: false, isSelected: false)
+        }
+        #expect(PayeeListSection.sections(of: rows).map(\.id) == ["A", "#"])
+    }
+}

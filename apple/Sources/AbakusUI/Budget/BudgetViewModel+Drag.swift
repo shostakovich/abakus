@@ -61,8 +61,12 @@ extension BudgetViewModel {
         guard let current = drag else { return }
         drag = nil
         guard current.isActive, let target = current.target else { return }
+        performDrop(target.command)
+    }
+
+    func performDrop(_ command: BudgetCommand) {
         do {
-            try store.perform(target.command)
+            try store.perform(command)
         } catch BudgetError.categoryNameTakenInGroup(let master, let name) {
             dialogs.show(Self.duplicateNamePrompt(master: master, name: name))
         } catch {}

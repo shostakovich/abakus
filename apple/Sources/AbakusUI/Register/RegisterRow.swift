@@ -78,6 +78,8 @@ struct RegisterRowBuilder {
     let runningBalances: [String: Decimal]
     /// Under month headings a date leaves out its year.
     var showsYear = true
+    /// Touch screens write "24.10." for this year and "24.10.2025" for another, never a two-digit year.
+    var omitsYear: Int?
 
     var budget: Budget { lookup.budget }
 
@@ -165,7 +167,7 @@ struct RegisterRowBuilder {
         let account = lookup.account(withId: transaction.accountId)
         var row = RegisterRow(id: transaction.id, transactionId: transaction.id, kind: .transaction)
         row.account = account?.name ?? ""
-        row.date = showsYear ? formatter.dateShort(transaction.date) : formatter.dayMonth(transaction.date)
+        row.date = dateText(transaction.date)
         setPayee(&row, name: lookup.payeeName(of: transaction), target: lookup.transferAccountId(of: transaction))
         row.payeeTooltip = row.payee.isEmpty ? nil : row.payee
         if account?.onBudget == true {
@@ -180,6 +182,12 @@ struct RegisterRowBuilder {
         row.amountText = formatter.signedRegisterAmount(transaction.amount)
         row.amount = transaction.amount
         return row
+    }
+
+    private func dateText(_ date: DateWithoutTime) -> String {
+        guard showsYear else { return formatter.dayMonth(date) }
+        guard let omitsYear else { return formatter.dateShort(date) }
+        return date.year == omitsYear ? formatter.dayMonth(date) : formatter.dateLong(date)
     }
 
     private func baseSubRows(_ transaction: Transaction) -> [RegisterRow] {

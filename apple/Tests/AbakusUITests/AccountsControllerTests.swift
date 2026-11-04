@@ -316,6 +316,13 @@ import Testing
         #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 5)
     }
 
+    @Test func theClockQuestionNamesTheDevice() {
+        let app = AppModel(
+            store: BudgetStore(budget: RegisterFixture().budget, today: { editDay }), defaults: nil, device: .iPad)
+        app.dateChecked(today: editDay.addingDays(3))
+        #expect(app.dialogs.presented.last?.dialog.instruction == "Stimmt die Uhr deines iPads?")
+    }
+
     @Test func aClockJumpCanBeIgnoredAndEscapeTakesTheDate() throws {
         var fixture = RegisterFixture()
         let transaction = Transaction(id: "S1", accountId: fixture.giro, date: editDay.addingDays(1), amount: -5)

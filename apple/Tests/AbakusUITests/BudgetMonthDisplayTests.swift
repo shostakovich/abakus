@@ -89,7 +89,7 @@ import Testing
         let model = fixture.model().model
         let header = model.headerDisplay(try month(model, "2026-11-01"))
         #expect(header.available == "−1.500,00\u{00A0}€")
-        #expect(header.totals.map(\.text) == ["1.500,00€", "0,00€", "1.500,00€"])
+        #expect(header.totals.map(\.text) == ["1.500,00\u{00A0}€", "0,00\u{00A0}€", "1.500,00\u{00A0}€"])
         #expect(header.totals[0] == BudgetTotal(digits: "1.500,00", suffix: "€"))
     }
 }

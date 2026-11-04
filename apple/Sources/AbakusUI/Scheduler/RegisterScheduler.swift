@@ -140,7 +140,8 @@ public final class RegisterScheduler {
     }
 
     public var rows: [RegisterRow] {
-        let builder = RegisterRowBuilder(lookup: BudgetLookup(store.budget))
+        var builder = RegisterRowBuilder(lookup: BudgetLookup(store.budget))
+        builder.omitsYear = register.isTouch ? register.today().year : nil
         return builder.rows(
             for: scheduledTransactions, expandedSplits: expandedSplits, editingId: grid.editingId,
             row: builder.row(for:isExpanded:), subRows: builder.subRows(for:))
@@ -178,12 +179,17 @@ public final class RegisterScheduler {
     /// The scheduled action menu as the grid's context menu, with the selection count as its title.
     public func contextMenu(for row: RegisterRow) -> [RegisterMenuItem]? {
         guard contextClicked(row) else { return nil }
+        return [
+            RegisterMenuItem(id: "title", title: menuTitle, kind: .title, isEnabled: false),
+            .separator(0),
+        ] + actionItems
+    }
+
+    var actionItems: [RegisterMenuItem] {
         let targets = moveTargets.map {
             RegisterMenuItem.action($0.name, .moveScheduled(accountId: $0.id))
         }
         return [
-            RegisterMenuItem(id: "title", title: menuTitle, kind: .title, isEnabled: false),
-            .separator(0),
             .action(Self.enterTitle, .enterScheduledNow),
             .action(Self.skipTitle, .skipScheduled),
             .separator(1),

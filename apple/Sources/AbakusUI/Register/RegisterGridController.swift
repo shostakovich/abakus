@@ -51,6 +51,7 @@ package final class RegisterGridController {
     private var storedScrollRequest: (visit: Int, request: RegisterScrollRequest)?
     /// The date of the last new record saved in this grid.
     var lastUsedDate: DateWithoutTime?
+    var lastUsedAccountId: String?
 
     init(register: RegisterViewModel, newFrequency: ScheduledTransactionFrequency? = nil) {
         self.register = register
@@ -243,8 +244,11 @@ package final class RegisterGridController {
         if peer?.clickedOutsideEditor() == true { return }
         if let editor, editor.mode == .new || editor.clickedOutside() { return }
         let budget = store.budget
+        let lastUsed = lastUsedAccountId.flatMap(budget.account(withId:)).flatMap { account in
+            register.isTouch && !account.closed ? account : nil
+        }
         guard
-            let account = register.account ?? accountId.flatMap(budget.account(withId:))
+            let account = accountId.flatMap(budget.account(withId:)) ?? register.account ?? lastUsed
                 ?? budget.accounts(in: .budgetAccounts).first ?? budget.accounts(in: .offBudgetAccounts).first
         else { return }
         clearSelection()
@@ -287,7 +291,10 @@ package final class RegisterGridController {
         if case .saved(let id, let addAnother, _, _) = outcome {
             updateSelection { $0.select(id) }
             let saved = owner?.editorRecord(id)?.transaction
-            if editor.mode == .new { lastUsedDate = saved?.date }
+            if editor.mode == .new {
+                lastUsedDate = saved?.date
+                lastUsedAccountId = saved?.accountId
+            }
             if addAnother, let saved {
                 beginNew(accountId: saved.accountId, date: saved.date)
             } else {

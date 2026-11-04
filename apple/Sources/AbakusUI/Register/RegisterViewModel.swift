@@ -39,6 +39,7 @@ public final class RegisterViewModel {
     var adjustmentHelpSlot: (visit: Int, help: RegisterAdjustmentHelp)?
     private var storedIncomeCheck: (visit: Int, check: RegisterIncomeCheck)?
     private var overlays = (visit: -1, state: RegisterOverlayState())
+    var pickingVisit: Int?
     public internal(set) var renamePayeeForm: RenamePayeeForm?
     public internal(set) var gridFocusRequest = 0
     public internal(set) var lastScheduledTransactionId: String?
@@ -51,6 +52,8 @@ public final class RegisterViewModel {
     @ObservationIgnored package var today: () -> DateWithoutTime = { .today() }
     @ObservationIgnored var now: () -> ContinuousClock.Instant = { .now }
     @ObservationIgnored var isAppModalOpen: () -> Bool = { false }
+    /// iPhone and iPad: dates without a two-digit year and Saldo as a fixed column of single accounts.
+    @ObservationIgnored public var isTouch = false
 
     public init(store: any BudgetStoring, navigation: NavigationState, dialogs: DialogStack = DialogStack()) {
         self.store = store
@@ -106,9 +109,12 @@ public final class RegisterViewModel {
 
     /// "Abgeglichen am 27.09.", with the year only for an earlier year.
     public var reconciledLabel: String? {
-        guard let date = account?.lastReconciledOn else { return nil }
-        let text = date.year == today().year ? formatter.dayMonth(date) : formatter.dateLong(date)
-        return "Abgeglichen am \(text)"
+        account?.lastReconciledOn.map { "Abgeglichen am \(headerDate($0))" }
+    }
+
+    /// The register's sentences write a date as its rows do: "27.09.", with the year only for another year.
+    func headerDate(_ date: DateWithoutTime) -> String {
+        date.year == today().year ? formatter.dayMonth(date) : formatter.dateLong(date)
     }
 
     package var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
@@ -149,6 +155,7 @@ public final class RegisterViewModel {
             switch column {
             case .account: isAllAccounts
             case .category: onBudget
+            case .runningBalance: isTouch ? !isAllAccounts : settings[column]?.visible ?? false
             case .cleared: isReconciling || (settings[.cleared]?.visible ?? false)
             case .frequency: false
             default: column.canDisable ? settings[column]?.visible ?? false : true
@@ -170,7 +177,7 @@ public final class RegisterViewModel {
 
     public var columnMenuItems: [RegisterColumnMenuItem] {
         let order: [RegisterColumn] = [.cleared, .memo, .runningBalance]
-        return order.filter { !(isAllAccounts && $0 == .runningBalance) }.map { column in
+        return order.filter { !((isAllAccounts || isTouch) && $0 == .runningBalance) }.map { column in
             RegisterColumnMenuItem(
                 column: column, label: column.menuLabel,
                 isChecked: viewState.columnSettings[column]?.visible ?? false)
@@ -430,7 +437,7 @@ public final class RegisterViewModel {
         let inputs = DerivedInputs(
             budget: store.budget, key: key, sort: state.sort, isShowingReconciled: state.isShowingReconciled,
             expandedSplits: state.expandedSplits, searchFilter: state.searchFilter, dateFilter: state.dateFilter,
-            needsRunningBalance: state.columnSettings[.runningBalance]?.visible ?? false,
+            needsRunningBalance: visibleColumns.contains(.runningBalance),
             editingId: grid.editingId, today: today(),
             reconcileThrough: state.reconciliation?.statementDate
         )
@@ -480,6 +487,7 @@ public final class RegisterViewModel {
             lookup: lookup,
             runningBalances: inputs.needsRunningBalance ? budget.runningBalances(forAccount: inputs.key) : [:])
         builder.showsYear = !showsMonths
+        builder.omitsYear = isTouch ? inputs.today.year : nil
         let formatter = builder.formatter
         let sorted = RegisterSorter.sorted(listed, by: inputs.sort, lookup: lookup)
         let gridRows = builder.rows(

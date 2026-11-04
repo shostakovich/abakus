@@ -43,6 +43,7 @@ public final class BudgetSync {
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var tokens: SyncTokens?
     @ObservationIgnored private var loop: Task<Void, Never>?
+    @ObservationIgnored private var refreshing: Task<SyncTokens, any Error>?
     @ObservationIgnored private var interrupt: (() -> Void)?
     @ObservationIgnored private var interruptGeneration = 0
     @ObservationIgnored private var failures = 0
@@ -284,14 +285,21 @@ public final class BudgetSync {
         return try await refreshedTokens(server)
     }
 
+    /// The server rotates the refresh token and takes a reused one for theft, so a refresh outlives `stop()`.
     private func refreshedTokens(_ server: AbakusServer) async throws -> SyncTokens {
+        if let refreshing { return try await refreshing.value }
         guard let tokens else { throw SyncError.invalidGrant }
-        var refreshed = try await server.refresh(tokens, now: now())
-        guard self.tokens == tokens else { throw CancellationError() }
-        refreshed.deviceId = tokens.deviceId
-        self.tokens = refreshed
-        try tokenStore.save(refreshed)
-        return refreshed
+        let refresh = Task {
+            defer { refreshing = nil }
+            var refreshed = try await server.refresh(tokens, now: now())
+            guard self.tokens == tokens else { throw CancellationError() }
+            refreshed.deviceId = tokens.deviceId
+            self.tokens = refreshed
+            try tokenStore.save(refreshed)
+            return refreshed
+        }
+        refreshing = refresh
+        return try await refresh.value
     }
 
     private func signedOutRemotely() {
@@ -326,7 +334,7 @@ public final class BudgetSync {
     static func problem(for error: SyncError) -> SyncProblem {
         switch error {
         case .clockAhead(let message, _):
-            .clockAhead(message ?? "Die Uhr dieses Mac geht vor. Bitte stelle sie richtig.")
+            .clockAhead(message ?? "Die Uhr dieses Geräts geht vor. Bitte stelle sie richtig.")
         case .unsupportedProtocol(let message):
             .unsupportedProtocol(
                 message ?? "Diese Version der App kann nicht mehr synchronisieren. Bitte aktualisiere sie.")

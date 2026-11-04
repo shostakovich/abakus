@@ -6,14 +6,18 @@ import Observation
 @Observable
 public final class SyncSettingsModel {
     public let sync: BudgetSync
+    public let device: DeviceKind
     public var serverAddress: String
     public private(set) var addressError: String?
     /// The unsent changes signing out would lose, while the owner is asked.
     public private(set) var signOutWarning: Int?
     @ObservationIgnored private let authorize: BudgetSync.Authorize
 
-    public init(sync: BudgetSync, authorize: @escaping BudgetSync.Authorize = WebSignIn.authorize) {
+    public init(
+        sync: BudgetSync, device: DeviceKind = .mac, authorize: @escaping BudgetSync.Authorize = WebSignIn.authorize
+    ) {
         self.sync = sync
+        self.device = device
         self.authorize = authorize
         serverAddress = sync.serverURL?.absoluteString ?? ""
     }
@@ -26,13 +30,18 @@ public final class SyncSettingsModel {
     public var statusText: String {
         switch sync.status {
         case .notSignedIn:
-            "Melde diesen Mac bei Abakus an, um dein Budget zu synchronisieren. Bis dahin zeigt er ein Demo-Budget."
+            "Melde \(device.accusative) bei Abakus an, um dein Budget zu synchronisieren. Bis dahin zeigt "
+                + "\(device.pronoun) ein Demo-Budget."
         case .signedOutRemotely:
-            "Dieser Mac wurde in Abakus abgemeldet. Melde ihn wieder an, um weiter zu synchronisieren; bis dahin "
-                + "bleiben das Budget und \(unsent) auf diesem Mac."
+            "\(device.sentenceSubject) wurde in Abakus abgemeldet. Melde \(device.pronounAccusative) wieder an, um "
+                + "weiter zu synchronisieren; bis dahin bleiben das Budget und \(unsent) auf \(device.dative)."
         case .inStep, .offline, .error:
-            CloudSyncStatus(sync.status, pendingChanges: sync.pendingChanges, lastSync: sync.lastSync).tooltip
+            cloudStatus.tooltip
         }
+    }
+
+    public var cloudStatus: CloudSyncStatus {
+        CloudSyncStatus(sync.status, pendingChanges: sync.pendingChanges, lastSync: sync.lastSync, on: device)
     }
 
     private var unsent: String {
@@ -43,7 +52,7 @@ public final class SyncSettingsModel {
         let count = signOutWarning ?? 0
         let (sent, lost) = count == 1 ? ("wurde", "geht") : ("wurden", "gehen")
         return "\(CloudSyncStatus.changes(count)) \(sent) noch nicht an Abakus gesendet und \(lost) beim Abmelden "
-            + "verloren."
+            + "verloren. Dann löscht Abakus das Budget auf \(device.dative) und zeigt das Demo-Budget."
     }
 
     public func signInClicked() async {

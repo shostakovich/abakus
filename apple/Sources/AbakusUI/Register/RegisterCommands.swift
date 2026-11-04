@@ -59,17 +59,22 @@ public enum RegisterCommand: CaseIterable, Sendable {
 
 public struct RegisterCommands: Commands {
     let model: AppModel
+    /// iPhone and iPad add a transaction from every screen, as their "+" does.
+    let addsEverywhere: Bool
+    let addingWaits: Bool
 
-    public init(model: AppModel) {
+    public init(model: AppModel, addsEverywhere: Bool = false, addingWaits: Bool = false) {
         self.model = model
+        self.addsEverywhere = addsEverywhere
+        self.addingWaits = addingWaits
     }
 
     public var body: some Commands {
         CommandMenu("Buchungen") {
             let register = model.register
             let isShown = model.showsRegister
-            command(.addTransaction, isShown: isShown)
-            command(.makeTransfer, isShown: isShown)
+            command(.addTransaction, isShown: (isShown || addsEverywhere) && !addingWaits)
+            command(.makeTransfer, isShown: (isShown || addsEverywhere) && !addingWaits)
             Divider()
             Menu(register.actionButtonTitle.trimmingCharacters(in: .whitespaces)) {
                 if isShown && register.hasSelection {
@@ -121,17 +126,34 @@ package struct RegisterMenuItemsView: View {
                 Text(verbatim: item.title)
             case .action(let action):
                 if item.isChecked {
-                    Toggle(item.title, isOn: Binding(get: { true }, set: { _ in perform(action) }))
+                    Toggle(isOn: Binding(get: { true }, set: { _ in perform(action) })) { label(item) }
                         .disabled(!item.isEnabled)
                 } else {
-                    Button(item.title) { perform(action) }.disabled(!item.isEnabled)
+                    Button {
+                        perform(action)
+                    } label: {
+                        label(item)
+                    }
+                    .disabled(!item.isEnabled)
                 }
             case .submenu(let children):
-                Menu(item.title) {
+                Menu {
                     RegisterMenuItemsView(items: children, perform: perform)
+                } label: {
+                    label(item)
                 }
                 .disabled(!item.isEnabled)
             }
         }
+    }
+
+    @ViewBuilder
+    private func label(_ item: RegisterMenuItem) -> some View {
+        if let image = item.systemImage {
+            Label(item.title, systemImage: image)
+        } else {
+            Text(item.title)
+        }
+        if let subtitle = item.subtitle { Text(subtitle) }
     }
 }

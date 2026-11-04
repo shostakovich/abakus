@@ -40,7 +40,7 @@ struct SyncSettingsView: View {
                 Label {
                     Text(model.statusText).fixedSize(horizontal: false, vertical: true)
                 } icon: {
-                    Image(systemName: cloud.symbolName)
+                    Image(systemName: model.cloudStatus.symbolName)
                 }
                 if let error = model.sync.signInError {
                     Text(error).foregroundStyle(ThemeColor.negative).font(.callout)
@@ -68,12 +68,8 @@ struct SyncSettingsView: View {
             Button("Abmelden", role: .destructive) { Task { await model.confirmSignOut() } }
             Button("Abbrechen", role: .cancel) { model.cancelSignOut() }
         } message: {
-            Text(model.signOutWarningText + " Dann löscht Abakus das Budget auf diesem Mac und zeigt das Demo-Budget.")
+            Text(model.signOutWarningText)
         }
-    }
-
-    private var cloud: CloudSyncStatus {
-        CloudSyncStatus(model.sync.status, pendingChanges: model.sync.pendingChanges, lastSync: model.sync.lastSync)
     }
 
     private func signIn() {

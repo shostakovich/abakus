@@ -24,3 +24,21 @@ import Testing
         #expect("".lookupKey == "")
     }
 }
+
+@Suite struct LeadingEmojiTests {
+    @Test(arguments: [
+        ("🛒 Lebensmittel", "🛒", "Lebensmittel"),
+        ("👨‍👩‍👧 Familie", "👨‍👩‍👧", "Familie"),
+        ("1️⃣ Erste Wahl", "1️⃣", "Erste Wahl"),
+        ("💶💳Karten", "💶💳", "Karten"),
+    ])
+    func splitsTheLeadingEmojiFromTheName(name: String, emoji: String, rest: String) {
+        #expect(name.leadingEmoji?.emoji == emoji)
+        #expect(name.leadingEmoji?.name == rest)
+    }
+
+    @Test(arguments: ["Girokonto", "Urlaub 🇮🇹", "❤️", "🛒 ", "1 Konto", ""])
+    func aNameWithoutLeadingEmojiOrOfEmojiOnlyHasNone(name: String) {
+        #expect(name.leadingEmoji == nil)
+    }
+}

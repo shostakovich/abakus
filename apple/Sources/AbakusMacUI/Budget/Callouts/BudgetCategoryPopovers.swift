@@ -55,10 +55,6 @@ struct BudgetCategoryPopover: View {
 }
 
 private struct BudgetCategoryDeletionView: View {
-    static let noSuccessor = "Es gibt keine andere Kategorie, die alles übernehmen kann."
-    static let successorLabel = "Buchungen, Zuweisungen und Geld gehen in"
-    static let reconciledWarning = "Auch abgeglichene Buchungen bekommen die neue Kategorie."
-
     let controller: BudgetCalloutController
     let form: BudgetCategoryForm
     let deletion: BudgetCategoryDeletion
@@ -67,19 +63,20 @@ private struct BudgetCategoryDeletionView: View {
         @Bindable var controller = controller
         PopoverTitle(form.deletionTitle)
         if deletion.successors.isEmpty {
-            Text(verbatim: Self.noSuccessor)
+            Text(verbatim: BudgetCategoryDeletion.noSuccessor)
                 .foregroundStyle(ThemeColor.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Text(verbatim: Self.successorLabel)
+                Text(verbatim: BudgetCategoryDeletion.successorLabel)
                 BudgetCategoryChoicePicker(
-                    label: Self.successorLabel, groups: deletion.successors,
+                    label: BudgetCategoryDeletion.successorLabel, groups: deletion.successors,
                     selection: $controller.deletionSuccessorId, leading: ("Kategorie wählen", nil))
             }
             if deletion.changesReconciledTransactions {
                 Label {
-                    Text(verbatim: Self.reconciledWarning).fixedSize(horizontal: false, vertical: true)
+                    Text(verbatim: BudgetCategoryDeletion.reconciledWarning)
+                        .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: StatusSymbol.warning).foregroundStyle(ThemeColor.warning)
                 }

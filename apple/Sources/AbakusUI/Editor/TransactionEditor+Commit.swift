@@ -276,14 +276,25 @@ extension TransactionEditor {
 
     static let signs: [Character: Bool] = ["+": true, "−": false, "-": false]
 
-    /// The field's text with its sign; a pasted leading sign sets it.
+    /// A lone leading sign sets the sign, one before arithmetic counts in it; else a negative result flips the sign.
     func typedAmount(_ field: EditorFieldID) -> Decimal {
         var typed = text(field).trimmingCharacters(in: .whitespaces)
         if let first = typed.first, let inflow = Self.signs[first] {
+            let rest = String(typed.dropFirst())
+            if let result = Calculator.evaluate(inflow ? rest : typed, formatter: formatter) {
+                if result != 0 { chooseSign(field, inflow: result > 0) }
+                return isInflow(field) ? abs(result) : -abs(result)
+            }
             chooseSign(field, inflow: inflow)
-            typed.removeFirst()
+            typed = rest
         }
-        let value = abs(formatter.parseAmount(typed))
+        let value: Decimal
+        if let result = Calculator.evaluate(typed, formatter: formatter) {
+            if result < 0 { chooseSign(field, inflow: !isInflow(field)) }
+            value = abs(result)
+        } else {
+            value = abs(formatter.parseAmount(typed))
+        }
         return isInflow(field) ? value : -value
     }
 

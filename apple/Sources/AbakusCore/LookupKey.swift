@@ -11,6 +11,14 @@ extension String {
         let withoutVariants = LookupKey.normalize(scalars.filter { !LookupKey.isVariant($0) })
         return withoutVariants.isEmpty ? LookupKey.normalize(scalars) : withoutVariants
     }
+
+    /// Abakus's `Names.split_emoji`: nil for a name without a leading emoji or of emoji only.
+    public var leadingEmoji: (emoji: String, name: String)? {
+        let emoji = prefix(while: LookupKey.isEmoji)
+        let name = dropFirst(emoji.count).drop(while: \.isWhitespace)
+        guard !emoji.isEmpty, !name.isEmpty else { return nil }
+        return (String(emoji), String(name))
+    }
 }
 
 private enum LookupKey {
@@ -44,6 +52,12 @@ private enum LookupKey {
         return result
     }
 
+    static func isEmoji(_ character: Character) -> Bool {
+        let scalars = Array(character.unicodeScalars)
+        if keycapEnd(scalars, from: 0) == scalars.count { return true }
+        return scalars.allSatisfy(isEmoji)
+    }
+
     private static func keycapEnd(_ scalars: [Unicode.Scalar], from index: Int) -> Int? {
         guard "0123456789#*".unicodeScalars.contains(scalars[index]) else { return nil }
         var next = index + 1
@@ -51,7 +65,7 @@ private enum LookupKey {
         return next < scalars.count && scalars[next].value == 0x20E3 ? next + 1 : nil
     }
 
-    private static func isEmoji(_ scalar: Unicode.Scalar) -> Bool {
+    static func isEmoji(_ scalar: Unicode.Scalar) -> Bool {
         let properties = scalar.properties
         let value = scalar.value
         return properties.generalCategory == .otherSymbol || properties.isEmojiModifier

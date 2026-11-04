@@ -15,6 +15,14 @@ extension AppModel {
         navigation.selection = last ?? Self.defaultSelection(in: store.budget)
     }
 
+    /// iPhone and iPad: a sheet of the budget or the register is up; the app's sheets wait until it is gone.
+    public var showsScreenSheet: Bool {
+        let registerSheet =
+            register.isSchedulerVisible || register.reconciliation.statementForm != nil
+            || register.popup == .timeframe
+        return register.editor != nil || budget.showsTouchCallout || (showsRegister && registerSheet)
+    }
+
     /// The register's toolbar and Buchungen menu exist only while it shows an account.
     public var showsRegister: Bool { navigation.selection != .budget && register.accountKey != nil }
 

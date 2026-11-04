@@ -15,7 +15,16 @@ struct BudgetSettings {
     let budgetKey: String
 
     init(storage: any SettingsStorage, store: BudgetStore) {
-        self.init(storage: storage, budgetKey: store.databaseURL?.path ?? store.budget.budgetName)
+        self.init(storage: storage, budgetKey: store.databaseURL.map(Self.budgetKey) ?? store.budget.budgetName)
+    }
+
+    /// An iOS app's container moves with every install, so the key starts inside it.
+    private static func budgetKey(_ url: URL) -> String {
+        #if os(iOS)
+            KeychainTokenStore.account(forDatabaseAt: url, inContainer: URL(fileURLWithPath: NSHomeDirectory()))
+        #else
+            url.path
+        #endif
     }
 
     init(storage: any SettingsStorage, budgetKey: String) {

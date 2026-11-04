@@ -8,6 +8,7 @@ public enum RegisterMenuAction: Hashable, Sendable {
     case moveToAccount(accountId: String)
     case delete
     case timeframe, showReconciled
+    case togglePicking, toggleSelectAll
     case toggleColumn(RegisterColumn)
     case applyColumnsToAllAccounts
     case toggleScheduledColumn(RegisterColumn)
@@ -32,19 +33,29 @@ public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
     public var kind: Kind
     public var isEnabled: Bool
     public var isChecked: Bool
+    public var systemImage: String?
+    public var subtitle: String?
 
-    public init(id: String, title: String, kind: Kind, isEnabled: Bool = true, isChecked: Bool = false) {
+    public init(
+        id: String, title: String, kind: Kind, isEnabled: Bool = true, isChecked: Bool = false,
+        systemImage: String? = nil, subtitle: String? = nil
+    ) {
         self.id = id
         self.title = title
         self.kind = kind
         self.isEnabled = isEnabled
         self.isChecked = isChecked
+        self.systemImage = systemImage
+        self.subtitle = subtitle
     }
 
-    static func action(_ title: String, _ action: RegisterMenuAction, enabled: Bool = true, checked: Bool = false)
-        -> RegisterMenuItem
-    {
-        RegisterMenuItem(id: "\(action)", title: title, kind: .action(action), isEnabled: enabled, isChecked: checked)
+    static func action(
+        _ title: String, _ action: RegisterMenuAction, enabled: Bool = true, checked: Bool = false,
+        systemImage: String? = nil, subtitle: String? = nil
+    ) -> RegisterMenuItem {
+        RegisterMenuItem(
+            id: "\(action)", title: title, kind: .action(action), isEnabled: enabled, isChecked: checked,
+            systemImage: systemImage, subtitle: subtitle)
     }
 
     static func separator(_ index: Int) -> RegisterMenuItem {

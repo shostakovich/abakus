@@ -17,7 +17,10 @@ extension RegisterViewModel {
 
     /// The enable rules are recomputed on every open.
     public func transactionActionsMenu(withTitle: Bool) -> [RegisterMenuItem] {
-        let selected = selectedTransactions
+        transactionActionsMenu(of: selectedTransactions, withTitle: withTitle)
+    }
+
+    func transactionActionsMenu(of selected: [Transaction], withTitle: Bool) -> [RegisterMenuItem] {
         let budget = store.budget
         let single = selected.count == 1 ? selected.first : nil
         var items: [RegisterMenuItem] = []
@@ -42,7 +45,7 @@ extension RegisterViewModel {
             .separator(2),
             RegisterMenuItem(
                 id: "categorize", title: "Kategorisieren als", kind: .submenu(categorizeItems),
-                isEnabled: account?.onBudget ?? true),
+                isEnabled: canCategorize),
             .separator(3),
             .action(
                 "Gleiche Empfänger umbenennen …", .renamePayee,
@@ -62,8 +65,10 @@ extension RegisterViewModel {
         return items
     }
 
+    var canCategorize: Bool { account?.onBudget ?? true }
+
     /// A master appears only when a category follows it.
-    private var categorizeItems: [RegisterMenuItem] {
+    var categorizeItems: [RegisterMenuItem] {
         let catalog = DropDownCatalog(budget: store.budget, formatter: formatter, today: today())
         var groups: [(id: String, title: String, items: [RegisterMenuItem])] = []
         var master: (id: String, title: String)?
@@ -87,17 +92,18 @@ extension RegisterViewModel {
 
     /// The date filter and the reconciled filter, which a reconciliation sets itself, then the columns.
     public var viewMenu: [RegisterMenuItem] {
-        let filters: [RegisterMenuItem] =
-            isReconciling
-            ? []
-            : [
-                .action("Zeitraum: \(search.dateSelectorTitle) …", .timeframe),
-                .action(
-                    Self.reconciledTitle, .showReconciled, enabled: isReconciledFilterEnabled,
-                    checked: isShowingReconciled),
-                .separator(10),
-            ]
-        return filters + columnMenu
+        filterMenu + columnMenu
+    }
+
+    var filterMenu: [RegisterMenuItem] {
+        guard !isReconciling else { return [] }
+        return [
+            .action("Zeitraum: \(search.dateSelectorTitle) …", .timeframe),
+            .action(
+                Self.reconciledTitle, .showReconciled, enabled: isReconciledFilterEnabled,
+                checked: isShowingReconciled),
+            .separator(10),
+        ]
     }
 
     public var columnMenu: [RegisterMenuItem] {
@@ -151,6 +157,8 @@ extension RegisterViewModel {
         case .delete: deleteTransactions(ids)
         case .timeframe: search.dateSelectorClicked()
         case .showReconciled: setShowingReconciled(!isShowingReconciled)
+        case .togglePicking: togglePicking()
+        case .toggleSelectAll: toggleSelectAll()
         case .toggleColumn(let column): toggleColumnVisibility(column)
         case .applyColumnsToAllAccounts: applyColumnSettingsToAllAccounts()
         case .toggleScheduledColumn(let column): scheduler.toggleColumnVisibility(column)
@@ -509,10 +517,14 @@ extension RegisterViewModel {
         search.setDateSelection(filter.dateFilter)
     }
 
-    public func showPayeeTransactions(_ payeeName: String, showingScheduled: Bool) {
+    public func showAllAccounts(searching text: String) {
         navigation.selection = .allAccounts
         search.dateFilter = nil
-        search.run("Empfänger: " + payeeName)
+        search.run(text)
+    }
+
+    public func showPayeeTransactions(_ payeeName: String, showingScheduled: Bool) {
+        showAllAccounts(searching: "Empfänger: " + payeeName)
         if showingScheduled && !isSchedulerVisible { scheduledToggleClicked() }
     }
 

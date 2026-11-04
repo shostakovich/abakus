@@ -76,6 +76,32 @@ private func makeOrderedSidebar() throws -> (sidebar: SidebarViewModel, store: S
         #expect(rows[1].badge == nil)
     }
 
+    @Test func voiceOverReadsTheBalanceAndWhatWaits() {
+        let rows = makeSidebar().groupPanels[0].rows
+        #expect(rows[0].accessibilityValue == rows[0].balanceText + ", 1 Buchung braucht deine Aufmerksamkeit.")
+        #expect(rows[1].accessibilityValue == rows[1].balanceText)
+    }
+
+    @Test func rowsShowTheEmojiOfTheirNameElseTheMotifOfTheirKind() throws {
+        var budget = Budget(budgetName: "Motifs")
+        let accounts: [(String, AccountKind)] = [
+            ("💶 Giro", .checking), ("Sparkonto", .savings), ("Bargeld", .cash), ("Giro", .checking),
+            ("Depot", .tracking),
+        ]
+        for (name, kind) in accounts {
+            try budget.apply(.addAccount(NewAccount(name: name, kind: kind, startingBalance: 0, startDate: today)))
+        }
+        let rows = makeSidebar(budget: budget).groupPanels.flatMap(\.rows)
+        #expect(rows.map(\.emoji) == ["💶", nil, nil, nil, nil])
+        #expect(rows.map(\.label) == ["Giro", "Sparkonto", "Bargeld", "Giro", "Depot"])
+        #expect(rows.map(\.motif) == [.landmark, .piggyBank, .banknote, .landmark, .trendingUp])
+    }
+
+    @Test func theSharedExpensesAccountShowsTheReceipt() {
+        let account = Account(name: "Gemeinsam", kind: .checking, sharedExpenses: true)
+        #expect(AccountMotif(account) == .receipt)
+    }
+
     @Test func collapsedGroupHeaderShowsTheAggregatedBadge() {
         let sidebar = makeSidebar()
         #expect(sidebar.groupPanels[0].headerBadge == nil)
@@ -209,27 +235,58 @@ extension Budget {
         #expect(SidebarBadge(count: 1, level: level).isWarning == isWarning)
     }
 
+    @Test(arguments: [
+        (ErrorLevel.needsCategory, SidebarBadge.Kind.needsCategory), (.forReview, .forReview), (.error, .error),
+    ])
+    func theKindFollowsTheLevel(level: ErrorLevel, kind: SidebarBadge.Kind) {
+        #expect(SidebarBadge(count: 2, level: level).kind == kind)
+    }
+
+    @Test func theSummaryNamesTheCountWithoutTheClickHint() {
+        #expect(SidebarBadge(count: 1, level: .error).summary == "1 Buchung braucht deine Aufmerksamkeit.")
+        #expect(SidebarBadge(count: 3, level: .forReview).summary == "3 Buchungen brauchen deine Aufmerksamkeit.")
+    }
+
+    @Test func onlyAnErrorOrARemoteSignOutNeedsAttention() {
+        let attention: [SyncStatus] = [.signedOutRemotely, .error(.clockAhead("Die Uhr geht vor."))]
+        let quiet: [SyncStatus] = [.notSignedIn, .inStep, .offline]
+        for status in attention {
+            #expect(CloudSyncStatus(status, pendingChanges: 0, lastSync: nil, on: .iPhone).needsAttention)
+        }
+        for status in quiet {
+            #expect(!CloudSyncStatus(status, pendingChanges: 2, lastSync: nil, on: .iPhone).needsAttention)
+        }
+    }
+
     @Test func tooltipUsesSingularAndPlural() {
         #expect(SidebarBadge(count: 1, level: .error).tooltip.hasPrefix("1 Buchung braucht deine Aufmerksamkeit."))
         #expect(SidebarBadge(count: 4, level: .error).tooltip.hasPrefix("4 Buchungen brauchen deine Aufmerksamkeit."))
     }
 
     @Test func aBudgetNotSignedInShowsTheCrossedOutCloud() {
-        let status = CloudSyncStatus(.notSignedIn, pendingChanges: 0, lastSync: nil)
+        let status = CloudSyncStatus(.notSignedIn, pendingChanges: 0, lastSync: nil, on: .mac)
         #expect(status.symbolName == "icloud.slash")
         #expect(status.tooltip == "Das Budget liegt nur auf diesem Mac und wird nicht synchronisiert.")
     }
 
+    @Test func theCloudNamesTheDeviceItRunsOn() {
+        let local = CloudSyncStatus(.notSignedIn, pendingChanges: 0, lastSync: nil, on: .iPhone)
+        #expect(local.tooltip == "Das Budget liegt nur auf diesem iPhone und wird nicht synchronisiert.")
+        let signedOut = CloudSyncStatus(.signedOutRemotely, pendingChanges: 0, lastSync: nil, on: .iPad)
+        #expect(signedOut.tooltip == "Dieses iPad wurde in Abakus abgemeldet. Melde es in den Einstellungen wieder an.")
+    }
+
     @Test func theCloudNamesTheLastSyncTheWaitingChangesOrTheError() {
         let last = Date(timeIntervalSince1970: 1_793_440_800)
-        let inStep = CloudSyncStatus(.inStep, pendingChanges: 0, lastSync: last)
+        let inStep = CloudSyncStatus(.inStep, pendingChanges: 0, lastSync: last, on: .mac)
         #expect(inStep.symbolName == "checkmark.icloud")
         #expect(inStep.tooltip.hasPrefix("Das Budget ist mit Abakus abgeglichen. Zuletzt synchronisiert: "))
-        let offline = CloudSyncStatus(.offline, pendingChanges: 3, lastSync: nil)
+        let offline = CloudSyncStatus(.offline, pendingChanges: 3, lastSync: nil, on: .mac)
         #expect(offline.symbolName == "arrow.clockwise.icloud")
         #expect(
             offline.tooltip == "Abakus ist gerade nicht erreichbar. 3 Änderungen warten darauf, gesendet zu werden.")
-        let clock = CloudSyncStatus(.error(.clockAhead("Die Uhr geht vor.")), pendingChanges: 1, lastSync: last)
+        let clock = CloudSyncStatus(
+            .error(.clockAhead("Die Uhr geht vor.")), pendingChanges: 1, lastSync: last, on: .mac)
         #expect(clock.symbolName == "exclamationmark.icloud")
         #expect(clock.tooltip == "Beim Synchronisieren ist ein Fehler aufgetreten: Die Uhr geht vor.")
     }

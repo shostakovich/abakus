@@ -59,11 +59,11 @@ public final class PayeeSettingsModel: Identifiable {
     public private(set) var autoFill: AutoFillSettings
     public private(set) var isRenaming = false
     public var renameText = ""
-    public private(set) var categoryText = ""
+    public internal(set) var categoryText = ""
     public private(set) var categoryList: DropDownState?
     public private(set) var rules: [RuleRow] = []
     public var combineName = ""
-    public private(set) var addCategoryForm: AddCategoryForm?
+    public internal(set) var addCategoryForm: AddCategoryForm?
     public private(set) var focusRequest: (field: Field, token: Int)?
     public private(set) var scrollRequest: (payeeId: String, token: Int)?
     @ObservationIgnored private var requests = 0
@@ -308,7 +308,7 @@ public final class PayeeSettingsModel: Identifiable {
         updateSelectedCategory(askingForNew: true)
     }
 
-    private func updateSelectedCategory(askingForNew: Bool) {
+    func updateSelectedCategory(askingForNew: Bool) {
         guard let payee = selectedPayee else { return }
         let typed = categoryText.trimmingCharacters(in: .whitespaces)
         if typed.isEmpty {

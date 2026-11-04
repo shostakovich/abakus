@@ -198,33 +198,3 @@ private struct BudgetTargetEditor: View {
         .onSubmit(controller.targetSaveClicked)
     }
 }
-
-extension BudgetTargetState {
-    var symbol: StatusSymbol? {
-        switch self {
-        case .overspent: nil
-        case .snoozed: StatusSymbol(name: "pause.circle.fill", color: ThemeColor.secondaryText, label: "Pausiert")
-        case .underfunded: BudgetAvailableMarker.underfunded.symbol
-        case .onTrack, .met: BudgetAvailableMarker.funded.symbol
-        }
-    }
-
-    var textColor: Color {
-        switch self {
-        case .overspent: ThemeColor.negative
-        case .snoozed: ThemeColor.secondaryText
-        case .underfunded: ThemeColor.warning
-        case .onTrack, .met: ThemeColor.positive
-        }
-    }
-}
-
-extension BudgetAvailableMarker {
-    var symbol: StatusSymbol {
-        switch self {
-        case .underfunded: StatusSymbol(name: "clock.fill", color: ThemeColor.warning, label: label)
-        case .funded: StatusSymbol(name: "checkmark.circle.fill", color: ThemeColor.positive, label: label)
-        case .snoozed: StatusSymbol(name: "pause.circle.fill", color: ThemeColor.secondaryText, label: label)
-        }
-    }
-}

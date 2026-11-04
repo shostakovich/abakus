@@ -78,6 +78,8 @@ public struct ReconciliationFooterModel: Hashable, Sendable {
     public var rows: [ReconciliationFooterRow]
     public var difference: String
     public var isBalanced: Bool
+    public var statementBalance = ""
+    public var statementDate = ""
 
     public var message: String { isBalanced ? Self.doneText : Self.pendingText }
 }
@@ -204,7 +206,8 @@ public final class RegisterReconciliationController {
                     label: "Banksaldo am " + date, value: formatter.currency(summary.statementBalance),
                     operation: .minus),
             ],
-            difference: formatter.currency(summary.difference), isBalanced: summary.isBalanced)
+            difference: formatter.currency(summary.difference), isBalanced: summary.isBalanced,
+            statementBalance: formatter.currency(summary.statementBalance), statementDate: date)
     }
 
     private func reconciliationSummary(_ reconciliation: RegisterReconciliation) -> ReconciliationSummary {

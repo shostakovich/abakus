@@ -75,10 +75,11 @@ extension BudgetViewModel {
 
     /// Text that does not parse keeps the stored amount.
     public func commitEdit() {
+        commitSheetAssigned()
         guard let edit = editor else { return }
         editor = nil
         quickBudget = nil
-        store(edit.text, in: edit.cell)
+        assign(edit.text, to: edit.cell)
     }
 
     public func cancelEdit() {
@@ -86,14 +87,15 @@ extension BudgetViewModel {
         quickBudget = nil
     }
 
-    private func store(_ text: String, in cell: BudgetCellID) {
+    public func assign(_ text: String, to cell: BudgetCellID) {
         guard let amount = formatter.parseBudgetAmount(text) else { return }
         setAssigned(amount, in: cell)
     }
 
-    private func setAssigned(_ amount: Decimal, in cell: BudgetCellID) {
+    func setAssigned(_ amount: Decimal, in cell: BudgetCellID) {
         guard amount != month(cell.month)?.category(cell.categoryId)?.assigned else { return }
         try? store.perform(.setAssigned(month: cell.month, categoryId: cell.categoryId, amount: amount))
+        callouts.refreshAvailableForm()
     }
 
     @discardableResult

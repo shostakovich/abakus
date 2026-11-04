@@ -49,6 +49,7 @@ public struct BudgetAvailableForm: Hashable, Sendable {
     public var direction: BudgetMoveDirection
     public var otherId: String
     public internal(set) var error: String?
+    var isAmountTyped = false
 
     public var isOverspent: Bool { available < 0 }
 
@@ -78,6 +79,26 @@ extension BudgetCalloutController {
             mode: available < 0 ? .cover : .move,
             amount: formatter.currencyNoSymbol(amount),
             direction: available > 0 ? .give : .take, otherId: sheet.readyToAssignCategoryId)
+    }
+
+    /// The touch sheet stays open while what is done in it changes Verfügbar; what was chosen or typed stays.
+    func refreshAvailableForm() {
+        guard let form = availableForm, var fresh = availableForm(month: form.month, categoryId: form.categoryId),
+            fresh.available != form.available || fresh.sources != form.sources || fresh.others != form.others
+        else { return }
+        if fresh.isOverspent { fresh.mode = form.mode }
+        fresh.direction = form.direction
+        if fresh.sources.contains(where: { $0.categoryId == form.sourceId }) { fresh.sourceId = form.sourceId }
+        if form.otherId == readyToAssignCategoryId
+            || fresh.others.contains(where: { $0.categories.contains { $0.id == form.otherId } })
+        {
+            fresh.otherId = form.otherId
+        }
+        if form.isAmountTyped {
+            fresh.amount = form.amount
+            fresh.isAmountTyped = true
+        }
+        availableForm = fresh
     }
 
     public var readyToAssignCategoryId: String { budget.sheet.readyToAssignCategoryId }
@@ -112,7 +133,12 @@ extension BudgetCalloutController {
 
     public var moveAmount: String {
         get { availableForm?.amount ?? "" }
-        set { changeAvailableForm { $0.amount = newValue } }
+        set {
+            changeAvailableForm {
+                $0.amount = newValue
+                $0.isAmountTyped = true
+            }
+        }
     }
 
     public var moveDirection: BudgetMoveDirection {
@@ -138,6 +164,11 @@ extension BudgetCalloutController {
 
     public func coverSourceLabel(_ source: BudgetFundsSource) -> String {
         "\(source.name) · \(formatter.currency(source.available))"
+    }
+
+    public var coverButtonTitle: String {
+        guard let form = availableForm, let source = form.source else { return BudgetAvailableMode.cover.title }
+        return "\(formatter.currency(source.coverAmount(overspent: form.available))) decken"
     }
 
     public var remainingLabel: String {

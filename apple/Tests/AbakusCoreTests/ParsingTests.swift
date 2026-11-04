@@ -210,6 +210,24 @@ import Testing
         for _ in 0..<40 { calculator.press(.digit(1)) }
         #expect(calculator.display.count == 30)
     }
+
+    @Test func typedArithmeticIsWorkedLeftToRight() {
+        #expect(Calculator.evaluate("12,50 + 7,30", formatter: formatter) == decimal("19.8"))
+        #expect(Calculator.evaluate("10+5×2", formatter: formatter) == 30)
+        #expect(Calculator.evaluate("10 ÷ 4", formatter: formatter) == decimal("2.5"))
+        #expect(Calculator.evaluate("5−7", formatter: formatter) == -2)
+        #expect(Calculator.evaluate("1.000,00*2", formatter: formatter) == 2000)
+        #expect(Calculator.evaluate("10/3", formatter: formatter) == decimal("3.33"))
+        #expect(Calculator.evaluate("12,50+", formatter: formatter) == nil)
+    }
+
+    @Test func plainAmountsAndDivisionByZeroAreNoArithmetic() {
+        #expect(Calculator.evaluate("12,50", formatter: formatter) == nil)
+        #expect(Calculator.evaluate("-12,50", formatter: formatter) == nil)
+        #expect(Calculator.evaluate("", formatter: formatter) == nil)
+        #expect(Calculator.evaluate("+", formatter: formatter) == nil)
+        #expect(Calculator.evaluate("5/0", formatter: formatter) == nil)
+    }
 }
 
 @Suite struct BudgetAmountParsingTests {

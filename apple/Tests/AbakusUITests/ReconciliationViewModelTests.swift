@@ -121,7 +121,7 @@ import Testing
         #expect(model.sortOrder == .default)
         #expect(model.visibleColumns.contains(.cleared))
         #expect(model.columnLayout(gridWidth: 700).frame(of: .cleared)?.width == 90)
-        #expect(model.search.info?.message == "3 Buchungen bis 20/05/2014 (Datum des Banksaldos)")
+        #expect(model.search.info?.message == "3 Buchungen bis 20/05 (Datum des Banksaldos)")
     }
 
     @Test func aTypedDateCountsWithoutLeavingTheField() throws {
@@ -291,7 +291,7 @@ import Testing
         model.search.submitted()
         #expect(model.transactionIds == [ids[1], ids[0]])
         #expect(
-            model.search.info?.message == "2 Buchungen für „Shop“ bis 20/05/2014 (Datum des Banksaldos)")
+            model.search.info?.message == "2 Buchungen für „Shop“ bis 20/05 (Datum des Banksaldos)")
         #expect(model.search.info?.clearButtonTitle == "Suche zurücksetzen")
         model.search.clearClicked()
         #expect(model.isReconciling)
