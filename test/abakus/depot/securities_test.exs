@@ -1,9 +1,12 @@
 defmodule Abakus.Depot.SecuritiesTest do
   use Abakus.DataCase
 
-  import Abakus.Depot.SecuritiesFixtures
+  import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures, TaxonomiesFixtures}
+  import Abakus.UsersFixtures
 
-  alias Abakus.Depot.Securities
+  alias Abakus.Depot.{Securities, Settings}
+  alias Abakus.Depot.Securities.{Price, Security}
+  alias Abakus.Depot.Taxonomies.Assignment
   alias Abakus.Users.Scope
 
   @scope %Scope{}
@@ -88,9 +91,24 @@ defmodule Abakus.Depot.SecuritiesTest do
       assert Securities.with_same_yahoo_symbol(security, & &1.symbol) == "VGWL.DE"
 
       {:ok, _} =
-        Securities.update_quote_feed(@scope, security, %{quote_feed: "yahoo", symbol: "VWRL.AS"})
+        Securities.update_security(@scope, security, %{quote_feed: "yahoo", symbol: "VWRL.AS"})
 
       assert Securities.with_same_yahoo_symbol(security, & &1.symbol) == :skipped
+    end
+  end
+
+  describe "with_same_isin/2" do
+    test "skips a security whose ISIN changed or was removed" do
+      security = security_fixture(isin: "IE00B3RBWM25")
+
+      assert Securities.with_same_isin(security, & &1.isin) == "IE00B3RBWM25"
+
+      {:ok, changed} = update_isin(security, "IE00B5SSQT16")
+      assert Securities.with_same_isin(security, & &1.isin) == :skipped
+
+      {:ok, removed} = update_isin(changed, "")
+      assert Securities.with_same_isin(changed, & &1.isin) == :skipped
+      assert Securities.with_same_isin(removed, & &1.isin) == :skipped
     end
   end
 
@@ -126,7 +144,7 @@ defmodule Abakus.Depot.SecuritiesTest do
     end
   end
 
-  describe "update_quote_feed/3" do
+  describe "update_security/3" do
     setup do
       security =
         security_fixture(fetched_at: ~U[2026-10-09 16:00:00.000000Z], fetch_error: "Fehler")
@@ -139,7 +157,7 @@ defmodule Abakus.Depot.SecuritiesTest do
 
     test "a new symbol drops the Yahoo prices of the old one", %{security: security} do
       assert {:ok, updated} =
-               Securities.update_quote_feed(@scope, security, %{
+               Securities.update_security(@scope, security, %{
                  quote_feed: "yahoo",
                  symbol: "VWRL.AS"
                })
@@ -156,13 +174,13 @@ defmodule Abakus.Depot.SecuritiesTest do
     test "a switch back to Yahoo drops the Yahoo prices and the quote of the old symbol", %{
       security: security
     } do
-      {:ok, manual} = Securities.update_quote_feed(@scope, security, %{quote_feed: "manual"})
+      {:ok, manual} = Securities.update_security(@scope, security, %{quote_feed: "manual"})
 
       security
       |> Ecto.Changeset.change(latest_close: 1, latest_date: ~D[2026-10-07])
       |> Repo.update!()
 
-      assert {:ok, updated} = Securities.update_quote_feed(@scope, manual, %{quote_feed: "yahoo"})
+      assert {:ok, updated} = Securities.update_security(@scope, manual, %{quote_feed: "yahoo"})
 
       assert {updated.latest_close, updated.latest_date} == {nil, nil}
 
@@ -174,7 +192,7 @@ defmodule Abakus.Depot.SecuritiesTest do
 
     test "switching to manual keeps the Yahoo prices", %{security: security} do
       assert {:ok, updated} =
-               Securities.update_quote_feed(@scope, security, %{quote_feed: "manual", symbol: ""})
+               Securities.update_security(@scope, security, %{quote_feed: "manual", symbol: ""})
 
       assert updated.quote_feed == :manual
       assert length(prices_of(security)) == 3
@@ -182,10 +200,221 @@ defmodule Abakus.Depot.SecuritiesTest do
 
     test "Yahoo needs a symbol", %{security: security} do
       assert {:error, changeset} =
-               Securities.update_quote_feed(@scope, security, %{quote_feed: "yahoo", symbol: ""})
+               Securities.update_security(@scope, security, %{quote_feed: "yahoo", symbol: ""})
 
       assert "can't be blank" in errors_on(changeset).symbol
     end
+  end
+
+  describe "update_security/3 with an ISIN" do
+    defp update_isin(security, isin),
+      do:
+        Securities.update_security(@scope, security, %{
+          quote_feed: "yahoo",
+          symbol: "VGWL.DE",
+          isin: isin
+        })
+
+    test "adds an ISIN, without spaces and in capitals, and a blank one removes it" do
+      security = security_fixture(isin: nil)
+
+      assert {:ok, %{isin: "IE00B3RBWM25"} = updated} = update_isin(security, " ie00 b3rb wm25 ")
+      assert {:ok, %{isin: nil}} = update_isin(updated, "  ")
+    end
+
+    test "refuses an invalid ISIN and one another security has, but keeps its own" do
+      security = security_fixture(isin: "IE00B3RBWM25")
+      security_fixture(isin: "IE00B5SSQT16", name: "HSBC MSCI Emerging Markets")
+
+      assert {:error, changeset} = update_isin(security, "IE00B3RBWM26")
+      assert errors_on(changeset).isin == ["ist keine gültige ISIN."]
+
+      assert {:error, changeset} = update_isin(security, "ie00b5ssqt16")
+      assert errors_on(changeset).isin == ["gehört schon zu HSBC MSCI Emerging Markets."]
+
+      assert {:ok, %{isin: "IE00B3RBWM25"}} = update_isin(security, "IE00B3RBWM25")
+    end
+
+    test "a new or removed ISIN drops DivvyDiary's error for the old one" do
+      security = security_fixture(isin: "IE00B3RBWM25", divvy_diary_error: "kennt sie nicht")
+
+      assert {:ok, %{divvy_diary_error: "kennt sie nicht"} = same} =
+               update_isin(security, "IE00B3RBWM25")
+
+      assert {:ok, %{divvy_diary_error: nil}} = update_isin(same, "IE00B5SSQT16")
+
+      unknown = security_fixture(isin: "IE00B4L5Y983", divvy_diary_unknown: true)
+      assert {:ok, %{divvy_diary_unknown: false}} = update_isin(unknown, "IE00BKM4GZ66")
+    end
+
+    test "a new ISIN drops a TER stored after the security was read" do
+      security = security_fixture(isin: "IE00B3RBWM25")
+      Securities.store_ter_and_fund_size(Repo.reload!(security), 0.0022, 9_000_000)
+
+      assert {:ok, updated} = update_isin(security, "IE00B5SSQT16")
+
+      assert updated.attributes == %{}
+      assert Repo.reload!(security).attributes == %{}
+    end
+
+    test "a new or removed ISIN drops what DivvyDiary delivered for the old one" do
+      for {isin, new_isin} <- [{"IE00B3RBWM25", "IE00B5SSQT16"}, {"IE00B4L5Y983", ""}] do
+        security =
+          security_fixture(
+            isin: isin,
+            attributes: %{"ter" => 0.002, "aum" => 100, "vendor" => "Vanguard"}
+          )
+
+        composition_fixture(security, %{"US" => 1})
+        divvy_diary_dividend_fixture(security, ~D[2026-03-12], ~D[2026-03-25], 0.15)
+
+        {:ok, same} = update_isin(security, isin)
+        assert composition_of(same) != nil
+        assert same.attributes["ter"] == 0.002
+
+        {:ok, updated} = update_isin(same, new_isin)
+        assert composition_of(updated) == nil
+        assert Securities.list_divvy_diary_dividends([security.id]) == []
+        assert Repo.reload!(security).attributes == %{"vendor" => "Vanguard"}
+      end
+    end
+  end
+
+  describe "update_security/3 retiring" do
+    test "retires a security and brings it back" do
+      security = security_fixture()
+
+      assert {:ok, %{retired: true} = retired} =
+               Securities.update_security(@scope, security, %{retired: "true"})
+
+      assert {:ok, %{retired: false}} =
+               Securities.update_security(@scope, retired, %{retired: "false"})
+    end
+  end
+
+  test "record_divvy_diary_error/2 records why DivvyDiary delivered nothing, nil clears it" do
+    security = security_fixture(isin: "IE00B3RBWM25", divvy_diary_unknown: true)
+
+    failed = Securities.record_divvy_diary_error(security, "DivvyDiary ist nicht erreichbar.")
+
+    assert %{divvy_diary_error: "DivvyDiary ist nicht erreichbar.", divvy_diary_unknown: false} =
+             Repo.reload!(failed)
+
+    assert Securities.record_divvy_diary_error(failed, nil).divvy_diary_error == nil
+  end
+
+  test "record_divvy_diary_unknown/1 records an ISIN DivvyDiary does not know, not as an error" do
+    security = security_fixture(isin: "IE00B3RBWM25", divvy_diary_error: "alt")
+
+    Securities.record_divvy_diary_unknown(security)
+
+    assert %{divvy_diary_error: nil, divvy_diary_unknown: true} = Repo.reload!(security)
+  end
+
+  describe "delete_security/2" do
+    setup do
+      scope = user_scope_fixture()
+      %{scope: scope, security: security_fixture(isin: "IE00B3RBWM25")}
+    end
+
+    test "deletes a security with its prices, composition, DivvyDiary dividends and assignments",
+         %{scope: scope, security: security} do
+      price_fixture(security, ~D[2026-10-05], 100, :yahoo)
+      composition_fixture(security, %{"US" => 1})
+      divvy_diary_dividend_fixture(security, ~D[2026-03-12], ~D[2026-03-25], 0.15)
+      {_taxonomy, root} = taxonomy_fixture(scope)
+      assignment_fixture(root, security)
+      kept = security_fixture(name: "Bleibt")
+
+      refute Securities.booked?(scope, security)
+      assert {:ok, _deleted} = Securities.delete_security(scope, security)
+
+      assert Repo.all(Security) == [kept]
+      assert Repo.all(Price) == []
+      assert composition_of(security) == nil
+      assert Securities.list_divvy_diary_dividends([security.id]) == []
+      assert Repo.all(Assignment) == []
+    end
+
+    test "keeps a security any user has booked", %{scope: scope, security: security} do
+      other = user_scope_fixture()
+      portfolio = portfolio_fixture(other)
+
+      transaction_fixture(other, ~D[2026-10-01],
+        type: :inbound_delivery,
+        portfolio_id: portfolio.id,
+        security_id: security.id,
+        shares: shares(1)
+      )
+
+      assert Securities.booked?(scope, security)
+      assert Securities.delete_security(scope, security) == {:error, :booked}
+      assert Repo.reload(security)
+    end
+
+    test "keeps a security any user compares with", %{scope: scope, security: security} do
+      {:ok, _setting} = Settings.update_benchmark(user_scope_fixture(), security.id)
+
+      assert Securities.delete_security(scope, security) == {:error, :benchmark}
+      assert Repo.reload(security)
+    end
+
+    test "keeps a security another user has assigned", %{scope: scope, security: security} do
+      {_taxonomy, root} = taxonomy_fixture(user_scope_fixture())
+      assignment_fixture(root, security)
+
+      assert Securities.usage(scope, security).assigned
+      assert Securities.delete_security(scope, security) == {:error, :assigned}
+      assert Repo.reload(security)
+    end
+  end
+
+  describe "usage/2" do
+    test "tells booked, held and anyone's benchmark apart" do
+      scope = user_scope_fixture()
+      other = user_scope_fixture()
+      security = security_fixture()
+      portfolio = portfolio_fixture(other)
+
+      assert Securities.usage(scope, security) ==
+               %{booked: false, held: false, benchmark: false, assigned: false}
+
+      transaction_fixture(other, ~D[2026-10-01],
+        type: :inbound_delivery,
+        portfolio_id: portfolio.id,
+        security_id: security.id,
+        shares: shares(2)
+      )
+
+      assert %{booked: true, held: true} = Securities.usage(scope, security)
+
+      transaction_fixture(other, ~D[2026-10-02],
+        type: :outbound_delivery,
+        portfolio_id: portfolio.id,
+        security_id: security.id,
+        shares: shares(2)
+      )
+
+      {:ok, _setting} = Settings.update_benchmark(other, security.id)
+
+      assert Securities.usage(scope, security) ==
+               %{booked: true, held: false, benchmark: true, assigned: false}
+    end
+  end
+
+  test "get_security_by_isin/2 finds the security with an ISIN" do
+    security = security_fixture(isin: "IE00B3RBWM25")
+
+    assert Securities.get_security_by_isin(@scope, "IE00B3RBWM25") == security
+    assert Securities.get_security_by_isin(@scope, "IE00B5SSQT16") == nil
+  end
+
+  test "divvy_diary_fetched_at/2 is when the composition came, nil before" do
+    security = security_fixture()
+    assert Securities.divvy_diary_fetched_at(@scope, security) == nil
+
+    composition_fixture(security, %{"US" => 1})
+    assert Securities.divvy_diary_fetched_at(@scope, security) == ~U[2026-10-08 12:00:00.000000Z]
   end
 
   describe "compositions" do

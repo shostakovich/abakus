@@ -37,10 +37,10 @@ defmodule Abakus.Depot.NewSecurityTest do
 
   test "refuses a wrong check digit and an ISIN that a security has", %{scope: scope} do
     {:error, changeset} = Securities.create_security(scope, %{isin: "IE00BKM4GZ67", name: "EM"})
-    assert errors_on(changeset).isin == ["ist keine gültige ISIN"]
+    assert errors_on(changeset).isin == ["ist keine gültige ISIN."]
 
     security_fixture(isin: "IE00BKM4GZ66", name: "EM IMI")
     {:error, changeset} = Securities.create_security(scope, %{isin: "IE00BKM4GZ66", name: "EM"})
-    assert errors_on(changeset).isin == ["gehört schon zu EM IMI"]
+    assert errors_on(changeset).isin == ["gehört schon zu EM IMI."]
   end
 end

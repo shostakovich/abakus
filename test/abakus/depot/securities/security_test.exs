@@ -31,6 +31,33 @@ defmodule Abakus.Depot.Securities.SecurityTest do
              %{attributes: %{"aum" => 7}}
   end
 
+  describe "changeset/2" do
+    test "takes the ISIN without spaces, in capitals; a blank one removes it" do
+      security = %Security{quote_feed: :manual, isin: "IE00B3RBWM25"}
+
+      assert Security.changeset(security, %{isin: " ie00 b5ss qt16 "}).changes ==
+               %{isin: "IE00B5SSQT16"}
+
+      for blank <- ["", "  ", nil] do
+        assert Security.changeset(security, %{isin: blank}).changes == %{isin: nil}
+      end
+    end
+
+    test "takes the symbol without spaces around it and whether it is retired" do
+      security = %Security{quote_feed: :yahoo, symbol: "VGWL.DE"}
+
+      assert Security.changeset(security, %{symbol: " VWRL.AS ", retired: "true"}).changes ==
+               %{symbol: "VWRL.AS", retired: true}
+
+      assert Security.changeset(security, %{symbol: " VGWL.DE "}).changes == %{}
+    end
+
+    test "refuses an ISIN with a wrong check digit" do
+      changeset = Security.changeset(%Security{quote_feed: :manual}, %{isin: "IE00B5SSQT17"})
+      assert changeset.errors[:isin] == {"ist keine gültige ISIN.", []}
+    end
+  end
+
   test "every other attribute set comes with its type, in the order of the types" do
     [ter, aum, index, vendor, fee, listed] =
       for key <- ~w(ter aum index vendor fee listed), do: %AttributeType{key: key}

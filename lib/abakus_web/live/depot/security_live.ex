@@ -5,7 +5,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
 
   alias Abakus.Depot.{MarketData, Portfolios, Securities}
   alias Abakus.{ExchangeRates, Format, LocalTime, Money}
-  alias AbakusWeb.Depot.{AttributeValue, Periods}
+  alias AbakusWeb.Depot.{AttributeValue, Periods, SecurityDialog}
   alias AbakusWeb.Depot.Format, as: DepotFormat
 
   # The first is the default.
@@ -64,7 +64,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
     >
       <.header back={~p"/depot/holdings"} back_label="Bestand">
         {@security.name}
-        <:subtitle>{subtitle(@security)}</:subtitle>
+        <:subtitle><.subtitle security={@security} /></:subtitle>
         <:actions>
           <div :if={@price} id="price" class="whitespace-nowrap tabular-nums sm:text-end">
             <div class="text-2xl font-bold">{DepotFormat.price(@price, @security.currency)}</div>
@@ -84,6 +84,15 @@ defmodule AbakusWeb.Depot.SecurityLive do
             class="self-center"
             options={Periods.options(@periods, &security_path(@security, &1, @composition_tab))}
           />
+          <.button
+            id="security-edit"
+            patch={security_path(@security, @period, @composition_tab, :edit)}
+            icon="pencil"
+            size={:sm}
+            class="self-center"
+          >
+            Bearbeiten
+          </.button>
         </:actions>
       </.header>
 
@@ -135,6 +144,16 @@ defmodule AbakusWeb.Depot.SecurityLive do
           />
         </div>
       </div>
+      <.live_component
+        :if={@live_action == :edit}
+        module={SecurityDialog}
+        id="security-dialog"
+        security={@security}
+        title="Wertpapier bearbeiten"
+        current_scope={@current_scope}
+        return_to={security_path(@security, @period, @composition_tab)}
+        deleted_to={~p"/depot/securities"}
+      />
     </Layouts.depot>
     """
   end
@@ -415,6 +434,15 @@ defmodule AbakusWeb.Depot.SecurityLive do
   attr :available, :boolean, required: true
 
   defp sources(assigns) do
+    %{available: available, security: security} = assigns
+    asked = available && security.isin not in [nil, ""]
+
+    assigns =
+      assign(assigns,
+        divvy_diary_error: asked && security.divvy_diary_error,
+        unknown: asked && security.divvy_diary_unknown
+      )
+
     ~H"""
     <section id="sources" aria-labelledby="sources-title">
       <.section_heading id="sources-title">Datenquellen</.section_heading>
@@ -441,20 +469,14 @@ defmodule AbakusWeb.Depot.SecurityLive do
               else: "noch kein Kurs"}
           </p>
         </:item>
-        <:item label="Länder und Sektoren">
+        <:item label="Fondsdaten">
           <p>DivvyDiary</p>
-          <p class="font-normal text-base-content/70">
-            {composition_source(@available, @composition, @security.isin)}
+          <p :if={@divvy_diary_error} class="font-normal text-error-ink">{@divvy_diary_error}</p>
+          <p :if={!@divvy_diary_error || @composition} class="font-normal text-base-content/70">
+            {composition_source(@available, @composition, @security.isin, @unknown)}
           </p>
         </:item>
       </.description_list>
-      <.button
-        navigate={"#{~p"/depot/securities"}#security-#{@security.id}"}
-        size={:sm}
-        class="mt-4"
-      >
-        Kursquelle ändern
-      </.button>
     </section>
     """
   end
@@ -462,10 +484,17 @@ defmodule AbakusWeb.Depot.SecurityLive do
   defp fetched(nil), do: "noch nicht abgerufen"
   defp fetched(at), do: "abgerufen #{Format.datetime(at)}"
 
-  defp composition_source(false = _available, _composition, _isin), do: "ohne API-Key"
-  defp composition_source(true, %{as_of: as_of}, _isin), do: "Stand #{Format.date(as_of)}"
-  defp composition_source(true, nil, isin) when isin in [nil, ""], do: "ohne ISIN"
-  defp composition_source(true, nil, _isin), do: "keine Angaben"
+  defp composition_source(false = _available, _composition, _isin, _unknown), do: "ohne API-Key"
+
+  defp composition_source(true, %{as_of: as_of}, _isin, _unknown),
+    do: "Stand #{Format.date(as_of)}"
+
+  defp composition_source(true, nil, isin, _unknown) when isin in [nil, ""], do: "ohne ISIN"
+
+  defp composition_source(true, nil, _isin, true = _unknown),
+    do: "keine Fondsdaten zu dieser ISIN"
+
+  defp composition_source(true, nil, _isin, _unknown), do: "keine Angaben"
 
   defp composition_tabs(assigns) do
     for {tab, label} <- @composition_tabs do
@@ -477,7 +506,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
     end
   end
 
-  defp security_path(security, period, tab) do
+  defp security_path(security, period, tab, action \\ :show) do
     query =
       Enum.filter(
         [
@@ -487,11 +516,24 @@ defmodule AbakusWeb.Depot.SecurityLive do
         &elem(&1, 1)
       )
 
-    ~p"/depot/securities/#{security}?#{query}"
+    case action do
+      :show -> ~p"/depot/securities/#{security}?#{query}"
+      :edit -> ~p"/depot/securities/#{security}/details/edit?#{query}"
+    end
   end
 
-  defp subtitle(security),
-    do: join_meta([security.isin, security.wkn && "WKN #{security.wkn}", security.currency])
+  attr :security, :map, required: true
+
+  defp subtitle(assigns) do
+    ~H"""
+    <.identifier :if={@security.isin}>{@security.isin}</.identifier><span :if={@security.wkn}><.meta_sep :if={
+      @security.isin
+    } />WKN
+    <.identifier>{@security.wkn}</.identifier></span><span :if={@security.currency}><.meta_sep :if={
+      @security.isin || @security.wkn
+    } />{@security.currency}</span>
+    """
+  end
 
   defp change_note(price, yesterday, currency) do
     change = price - yesterday
@@ -516,13 +558,18 @@ defmodule AbakusWeb.Depot.SecurityLive do
      )}
   end
 
+  # Opening or closing the edit dialog changes neither period nor tab, so nothing loads again.
   @impl true
   def handle_params(params, _uri, socket) do
-    socket
-    |> assign(period: period(params["period"]))
-    |> assign(composition_tab: composition_tab(params["composition"]))
-    |> load()
-    |> then(&{:noreply, &1})
+    shown = %{
+      period: period(params["period"]),
+      composition_tab: composition_tab(params["composition"])
+    }
+
+    if Map.has_key?(socket.assigns, :security) and
+         Map.take(socket.assigns, Map.keys(shown)) == shown,
+       do: {:noreply, socket},
+       else: {:noreply, socket |> assign(shown) |> load()}
   end
 
   defp period(param), do: Periods.parse(@periods, param, :one_year)
@@ -532,6 +579,7 @@ defmodule AbakusWeb.Depot.SecurityLive do
 
   @impl true
   def handle_info(:market_data_updated, socket), do: {:noreply, load(socket)}
+  def handle_info({SecurityDialog, :saved}, socket), do: {:noreply, load(socket)}
 
   # The security again each time, with its latest quote.
   defp load(socket) do

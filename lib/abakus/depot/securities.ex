@@ -9,7 +9,10 @@ defmodule Abakus.Depot.Securities do
   import Ecto.Query, warn: false
 
   alias Abakus.Depot.Allocation
+  alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.Securities.{AttributeType, Composition, DivvyDiaryDividend, Price, Security}
+  alias Abakus.Depot.Settings.Setting
+  alias Abakus.Depot.Taxonomies.Assignment
   alias Abakus.Repo
   alias Abakus.Users.Scope
 
@@ -19,24 +22,34 @@ defmodule Abakus.Depot.Securities do
   @doc "The security with `id`, nil for an unknown one."
   def get_security(%Scope{}, id), do: Repo.get(Security, id)
 
+  @doc "The security with `isin`, nil for none."
+  def get_security_by_isin(%Scope{}, isin), do: other_with_isin(isin, nil)
+
   @doc "A form for a security created by its ISIN, see `create_security/2`."
   def change_new_security(attrs \\ %{}),
-    do: %Security{} |> Security.create_changeset(attrs) |> validate_new_isin()
+    do: %Security{} |> Security.create_changeset(attrs) |> validate_unique_isin()
 
   @doc """
   Creates a security by its ISIN with a name and, for prices from Yahoo, a symbol. An ISIN that a
   security already has is refused, the user picks that one instead.
   """
-  def create_security(%Scope{}, attrs), do: attrs |> change_new_security() |> Repo.insert()
+  def create_security(%Scope{}, attrs),
+    do: Repo.transact(fn -> attrs |> change_new_security() |> Repo.insert() end)
 
-  defp validate_new_isin(changeset) do
+  defp validate_unique_isin(changeset) do
     with [] <- Keyword.get_values(changeset.errors, :isin),
-         isin when is_binary(isin) <- get_field(changeset, :isin),
-         %Security{name: name} <- Repo.one(from s in Security, where: s.isin == ^isin, limit: 1) do
-      add_error(changeset, :isin, "gehört schon zu %{name}", name: name)
+         isin when is_binary(isin) <- get_change(changeset, :isin),
+         %Security{name: name} <- other_with_isin(isin, changeset.data.id) do
+      add_error(changeset, :isin, "gehört schon zu %{name}.", name: name)
     else
       _new -> changeset
     end
+  end
+
+  defp other_with_isin(isin, id) do
+    query = from s in Security, where: s.isin == ^isin, limit: 1
+    query = if id, do: where(query, [s], s.id != ^id), else: query
+    Repo.one(query)
   end
 
   def list_prices(%Scope{}, %Security{id: id}),
@@ -83,13 +96,16 @@ defmodule Abakus.Depot.Securities do
     |> validate_length(:symbol, max: 32)
   end
 
-  @doc "The security that takes its prices from the Yahoo `symbol`, nil for none."
+  @doc """
+  The security that takes its prices from the Yahoo `symbol`, an active one before a retired
+  one; nil for none.
+  """
   def get_yahoo_security(symbol) do
     Repo.one(
       from s in Security,
-        where: s.quote_feed == :yahoo and not s.retired,
+        where: s.quote_feed == :yahoo,
         where: fragment("upper(?)", s.symbol) == ^String.upcase(symbol),
-        order_by: s.id,
+        order_by: [s.retired, s.id],
         limit: 1
     )
   end
@@ -121,20 +137,42 @@ defmodule Abakus.Depot.Securities do
     record_quote(security, chart.quote, now)
   end
 
-  @doc """
-  Sets where prices come from. A switch to Yahoo or a new Yahoo symbol drops the Yahoo prices and
-  the quote of the old one, a switch to manual keeps them.
-  """
-  def update_quote_feed(%Scope{}, %Security{} = security, attrs) do
-    changeset = Security.quote_feed_changeset(security, attrs)
-    new_source? = changed?(changeset, :quote_feed) or changed?(changeset, :symbol)
+  @doc "A form for `update_security/3`."
+  def change_security(%Security{} = security, attrs \\ %{}),
+    do: security |> Security.changeset(attrs) |> validate_unique_isin()
 
+  @doc """
+  Sets where prices come from, the ISIN and whether the security is retired. A switch to Yahoo or
+  a new Yahoo symbol drops the Yahoo prices and the quote of the old one, a switch to manual keeps
+  them. A new or removed ISIN drops the composition, the DivvyDiary dividends, the TER, the fund
+  size and the DivvyDiary error of the old one; an ISIN another security has is refused.
+  """
+  def update_security(%Scope{}, %Security{} = security, attrs) do
     Repo.transact(fn ->
+      changeset = change_security(security, attrs)
+      new_source? = changed?(changeset, :quote_feed) or changed?(changeset, :symbol)
+      new_isin? = changed?(changeset, :isin)
+
       with {:ok, updated} <- Repo.update(changeset) do
-        {:ok, maybe_drop_yahoo_prices(updated, new_source?)}
+        {:ok,
+         updated |> maybe_drop_divvy_diary_data(new_isin?) |> maybe_drop_yahoo_prices(new_source?)}
       end
     end)
   end
+
+  # The attributes as stored: a fetch may have added a TER since the caller read the security.
+  defp maybe_drop_divvy_diary_data(%Security{id: id}, true = _new_isin) do
+    Repo.delete_all(from c in Composition, where: c.security_id == ^id)
+    Repo.delete_all(from d in DivvyDiaryDividend, where: d.security_id == ^id)
+
+    Security
+    |> Repo.get!(id)
+    |> Security.without_ter_and_fund_size_changeset()
+    |> change(divvy_diary_error: nil, divvy_diary_unknown: false)
+    |> Repo.update!()
+  end
+
+  defp maybe_drop_divvy_diary_data(security, _new_isin), do: security
 
   defp maybe_drop_yahoo_prices(%Security{quote_feed: :yahoo} = security, true = _new_source) do
     Repo.delete_all(from p in Price, where: p.security_id == ^security.id and p.source == :yahoo)
@@ -160,6 +198,24 @@ defmodule Abakus.Depot.Securities do
 
           _changed ->
             {:ok, :skipped}
+        end
+      end)
+
+    result
+  end
+
+  @doc """
+  Calls `fun` with the current security if it still has the ISIN of `security`, so a fetch never
+  stores what an old ISIN delivered; returns `:skipped` otherwise.
+  """
+  def with_same_isin(%Security{isin: nil}, _fun), do: :skipped
+
+  def with_same_isin(%Security{id: id, isin: isin}, fun) do
+    {:ok, result} =
+      Repo.transact(fn ->
+        case Repo.get(Security, id) do
+          %Security{isin: ^isin} = current -> {:ok, fun.(current)}
+          _changed -> {:ok, :skipped}
         end
       end)
 
@@ -229,6 +285,80 @@ defmodule Abakus.Depot.Securities do
 
   def record_fetch_error(%Security{} = security, message, now),
     do: security |> change(fetch_error: message, checked_at: now) |> Repo.update!()
+
+  @doc "Records why DivvyDiary delivered nothing for the security's ISIN; nil after it did."
+  def record_divvy_diary_error(%Security{} = security, message),
+    do:
+      security |> change(divvy_diary_error: message, divvy_diary_unknown: false) |> Repo.update!()
+
+  @doc "Records that DivvyDiary does not know the security's ISIN."
+  def record_divvy_diary_unknown(%Security{} = security),
+    do: security |> change(divvy_diary_error: nil, divvy_diary_unknown: true) |> Repo.update!()
+
+  @doc "Whether any user has booked the security."
+  def booked?(%Scope{}, %Security{id: id}),
+    do: Repo.exists?(from t in Transaction, where: t.security_id == ^id)
+
+  @doc """
+  How the users use the security: `booked` by any, `held` (shares in any portfolio), chosen as
+  anyone's `benchmark` and `assigned` in another user's classifications.
+  """
+  def usage(%Scope{} = scope, %Security{id: id} = security) do
+    shares =
+      Repo.one(
+        from t in Transaction,
+          where: t.security_id == ^id,
+          select:
+            sum(
+              fragment(
+                "CASE WHEN ? IN ('buy', 'inbound_delivery') THEN ? WHEN ? IN ('sell', 'outbound_delivery') THEN -? ELSE 0 END",
+                t.type,
+                t.shares,
+                t.type,
+                t.shares
+              )
+            )
+      )
+
+    %{
+      booked: booked?(scope, security),
+      held: (shares || 0) > 0,
+      benchmark: benchmark?(security),
+      assigned: assigned_by_others?(scope, security)
+    }
+  end
+
+  defp benchmark?(%Security{id: id}),
+    do: Repo.exists?(from s in Setting, where: s.benchmark_id == ^id)
+
+  defp assigned_by_others?(%Scope{user: user}, %Security{id: id}) do
+    Repo.exists?(
+      from a in Assignment,
+        join: c in assoc(a, :classification),
+        join: t in assoc(c, :taxonomy),
+        where: a.security_id == ^id and t.user_id != ^user.id
+    )
+  end
+
+  @doc """
+  Deletes a security with its prices, composition, DivvyDiary dividends and the user's
+  assignments. One that any user has booked (`:booked`) or compares with (`:benchmark`), or that
+  another user has assigned (`:assigned`), stays.
+  """
+  def delete_security(%Scope{} = scope, %Security{} = security) do
+    Repo.transact(fn ->
+      cond do
+        booked?(scope, security) -> {:error, :booked}
+        benchmark?(security) -> {:error, :benchmark}
+        assigned_by_others?(scope, security) -> {:error, :assigned}
+        true -> Repo.delete(security)
+      end
+    end)
+  end
+
+  @doc "When DivvyDiary last delivered the security's composition, nil before."
+  def divvy_diary_fetched_at(%Scope{}, %Security{id: id}),
+    do: Repo.one(from c in Composition, where: c.security_id == ^id, select: c.fetched_at)
 
   @doc "The securities DivvyDiary may know: those with an ISIN, without retired ones."
   def list_securities_with_isin do

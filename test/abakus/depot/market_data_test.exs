@@ -266,6 +266,36 @@ defmodule Abakus.Depot.MarketDataTest do
                %{"ter" => 0.0014, "aum" => 200, "vendor" => "Vanguard"}
     end
 
+    test "stores nothing for an ISIN the security lost while DivvyDiary answered" do
+      changed = security_fixture(isin: "IE00B3RBWM25")
+      removed = security_fixture(isin: "IE00B4L5Y983", name: "Other")
+
+      FakeSymbolSource.stub(fn isin ->
+        case isin do
+          "IE00B3RBWM25" ->
+            changed |> Ecto.Changeset.change(isin: "IE00B5SSQT16") |> Repo.update!()
+
+          "IE00B4L5Y983" ->
+            removed |> Ecto.Changeset.change(isin: nil) |> Repo.update!()
+        end
+
+        symbol(%{
+          composition: %{countries: %{"US" => 1}, sectors: %{}},
+          dividends: [dividend(~D[2026-03-25], 0.15)],
+          ter: 0.002,
+          fund_size: 100
+        })
+      end)
+
+      MarketData.run_daily(@now)
+
+      for security <- [changed, removed] do
+        assert composition_of(security) == nil
+        assert dividends_of(security) == []
+        assert Repo.reload!(security).attributes == %{}
+      end
+    end
+
     test "asks nothing without an API key" do
       security_fixture(isin: "IE00B3RBWM25")
       FakeSymbolSource.stub(fn _isin -> composition(%{"US" => 1}) end, api_key: false)
@@ -307,6 +337,43 @@ defmodule Abakus.Depot.MarketDataTest do
       assert %{countries: %{"BR" => 1}} = composition_of(fine)
     end
 
+    test "records why DivvyDiary delivered nothing or that it does not know the ISIN" do
+      unknown = security_fixture(isin: "IE00B4L5Y983", name: "A")
+      failing = security_fixture(isin: "IE00B3RBWM25", name: "B")
+      fine = security_fixture(isin: "IE00BKM4GZ66", name: "C", divvy_diary_error: "alt")
+
+      FakeSymbolSource.stub(fn
+        "IE00B4L5Y983" -> {:error, :not_found}
+        "IE00B3RBWM25" -> {:error, {:http_status, 503}}
+        _isin -> composition(%{"BR" => 1})
+      end)
+
+      ExUnit.CaptureLog.capture_log(fn -> MarketData.run_daily(@now) end)
+
+      assert %{divvy_diary_error: nil, divvy_diary_unknown: true} = Repo.reload!(unknown)
+
+      assert %{
+               divvy_diary_error: "DivvyDiary antwortet mit HTTP 503.",
+               divvy_diary_unknown: false
+             } =
+               Repo.reload!(failing)
+
+      assert %{divvy_diary_error: nil, divvy_diary_unknown: false} = Repo.reload!(fine)
+    end
+
+    test "records no error for an ISIN the security lost while DivvyDiary answered" do
+      security = security_fixture(isin: "IE00B3RBWM25")
+
+      FakeSymbolSource.stub(fn _isin ->
+        Repo.update!(Ecto.Changeset.change(security, isin: "IE00B5SSQT16"))
+        {:error, :not_found}
+      end)
+
+      MarketData.run_daily(@now)
+
+      assert %{divvy_diary_error: nil, divvy_diary_unknown: false} = Repo.reload!(security)
+    end
+
     test "an exception is logged and does not stop the others" do
       security_fixture(isin: "IE00B3RBWM25", name: "A")
       fine = security_fixture(isin: "IE00BKM4GZ66", name: "B")
@@ -336,6 +403,9 @@ defmodule Abakus.Depot.MarketDataTest do
       assert log =~ "IE00B3RBWM25"
       refute log =~ "SECRET"
       assert %{countries: %{"BR" => 1}} = composition_of(fine)
+
+      assert Repo.get_by!(Security, name: "A").divvy_diary_error ==
+               "Die Fondsdaten ließen sich nicht abrufen."
     end
   end
 
@@ -434,6 +504,44 @@ defmodule Abakus.Depot.MarketDataTest do
     end
   end
 
+  describe "fetch_divvy_diary_in_background/1" do
+    test "stores what DivvyDiary knows of the security and tells subscribers" do
+      security = security_fixture(isin: "IE00B5SSQT16")
+
+      FakeSymbolSource.stub(fn _isin ->
+        {:ok,
+         %{
+           composition: %{countries: %{"CN" => 1}, sectors: %{}},
+           dividends: [],
+           ter: 0.0015,
+           fund_size: 512_364_049_100
+         }}
+      end)
+
+      MarketData.subscribe()
+
+      assert MarketData.fetch_divvy_diary_in_background(security) == :ok
+
+      assert_receive :market_data_updated
+      assert_received {:symbol, "IE00B5SSQT16"}
+      assert %{countries: %{"CN" => 1}} = composition_of(security)
+      assert Repo.reload!(security).attributes == %{"ter" => 0.0015, "aum" => 512_364_049_100}
+    end
+
+    test "asks nothing for a security without an ISIN or without an API key" do
+      FakeSymbolSource.stub(fn _isin -> {:error, :not_found} end, api_key: false)
+
+      assert MarketData.fetch_divvy_diary_in_background(security_fixture(isin: "IE00B5SSQT16")) ==
+               :ok
+
+      FakeSymbolSource.stub()
+      assert MarketData.fetch_divvy_diary_in_background(security_fixture(isin: nil)) == :ok
+
+      assert Task.Supervisor.children(Abakus.Depot.TaskSupervisor) == []
+      refute_received {:symbol, _isin}
+    end
+  end
+
   defp fill_task_supervisor(pids \\ []) do
     case Task.Supervisor.start_child(Abakus.TaskSupervisor, fn -> Process.sleep(:infinity) end) do
       {:ok, pid} -> fill_task_supervisor([pid | pids])
@@ -498,7 +606,7 @@ defmodule Abakus.Depot.MarketDataTest do
       refute_received {:chart, _symbol, _from}
     end
 
-    test "takes the first listing in euros with closes, Xetra first, and asks no further" do
+    test "takes the first listing in euros with closes, Xetra first" do
       FakeSymbolSearch.stub(fn
         "IE00BKM4GZ66" ->
           {:ok, [listing("EMIM.AS", "AMS"), listing("IS3N.F", "FRA"), listing("IS3N.DE", "GER")]}
@@ -516,7 +624,34 @@ defmodule Abakus.Depot.MarketDataTest do
 
       assert_received {:chart, "IS3N.DE", _from}
       assert_received {:chart, "IS3N.F", _from}
-      refute_received {:chart, "EMIM.AS", _from}
+    end
+
+    test "passes over a listing for which the price feed does not answer in time" do
+      FakeSymbolSearch.stub(fn
+        "IE00BKM4GZ66" -> {:ok, [listing("IS3N.DE", "GER"), listing("IS3N.F", "FRA")]}
+        _name -> {:ok, []}
+      end)
+
+      FakePriceFeed.stub(fn
+        "IS3N.DE", _from, _now -> Process.sleep(:infinity)
+        _symbol, _from, _now -> {:ok, FakePriceFeed.chart_result([{~D[2026-11-03], 1}])}
+      end)
+
+      assert {:ok, %{symbol: "IS3N.F"}} = MarketData.lookup_isin("IE00BKM4GZ66")
+    end
+
+    test "passes over a listing for which the price feed fails" do
+      FakeSymbolSearch.stub(fn
+        "IE00BKM4GZ66" -> {:ok, [listing("IS3N.DE", "GER"), listing("IS3N.F", "FRA")]}
+        _name -> {:ok, []}
+      end)
+
+      FakePriceFeed.stub(fn
+        "IS3N.DE", _from, _now -> exit(:closed)
+        _symbol, _from, _now -> {:ok, FakePriceFeed.chart_result([{~D[2026-11-03], 1}])}
+      end)
+
+      assert {:ok, %{symbol: "IS3N.F"}} = MarketData.lookup_isin("IE00BKM4GZ66")
     end
 
     test "takes the first listing in euros when none has closes" do

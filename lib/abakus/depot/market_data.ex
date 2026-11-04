@@ -55,10 +55,10 @@ defmodule Abakus.Depot.MarketData do
   @doc """
   The name and Yahoo symbol of the security with `isin`, from the price feed's search. A search by
   ISIN often finds one listing only, often in London, so a search by its name adds the listings
-  of the same name. The listings on exchanges in euros are tried in a fixed order of exchanges,
-  Xetra first, and the first for which the price feed has closes of the last month wins, as Yahoo
-  knows some, such as Stuttgart's fund listings, by a quote alone. Without one the first in euros
-  wins, else the first found. `:not_found` when the search has none.
+  of the same name. The listings on exchanges in euros are ranked in a fixed order of exchanges,
+  Xetra first, and the first for which the price feed has closes of the last month in time wins,
+  as Yahoo knows some, such as Stuttgart's fund listings, by a quote alone. Without one the first
+  in euros wins, else the first found. `:not_found` when the search has none.
   """
   def lookup_isin(isin) do
     case symbol_search().search(isin) do
@@ -91,7 +91,21 @@ defmodule Abakus.Depot.MarketData do
           uniq: true,
           do: listing
 
-    Enum.find(in_euros, &closes?/1) || List.first(in_euros) || first
+    first_with_closes(in_euros) || List.first(in_euros) || first
+  end
+
+  # Probed together and each for a few seconds, so a hanging Yahoo does not keep the dialog waiting.
+  defp first_with_closes([]), do: nil
+
+  defp first_with_closes(listings) do
+    Abakus.Depot.TaskSupervisor
+    |> Task.Supervisor.async_stream_nolink(listings, &closes?/1,
+      max_concurrency: length(listings),
+      timeout: config(:probe_timeout),
+      on_timeout: :kill_task
+    )
+    |> Enum.zip(listings)
+    |> Enum.find_value(fn {result, listing} -> result == {:ok, true} && listing end)
   end
 
   defp closes?(%{symbol: symbol}) do
@@ -101,6 +115,8 @@ defmodule Abakus.Depot.MarketData do
       {:ok, %{closes: [_ | _]}} -> true
       _none -> false
     end
+  catch
+    :exit, _reason -> false
   end
 
   @doc "A sentence on why `lookup_isin/1` found nothing."
@@ -145,6 +161,18 @@ defmodule Abakus.Depot.MarketData do
   @doc "Fetches, in the background, the whole price history of a security, e.g. after a new symbol."
   def fetch_in_background(security),
     do: in_background(fn -> update_prices_safely(security, nil, DateTime.utc_now()) end)
+
+  @doc """
+  Fetches, in the background, what DivvyDiary knows of a security, e.g. after a new ISIN; nothing
+  without an ISIN or the API key.
+  """
+  def fetch_divvy_diary_in_background(%{isin: isin} = security) when isin not in [nil, ""] do
+    if divvy_diary_available?(),
+      do: in_background(fn -> update_symbol(security, DateTime.utc_now()) end),
+      else: :ok
+  end
+
+  def fetch_divvy_diary_in_background(_security), do: :ok
 
   @doc """
   Refreshes, in the background, every Yahoo quote not checked for 15 minutes, failed ones too.
@@ -196,27 +224,51 @@ defmodule Abakus.Depot.MarketData do
     end
   end
 
-  # A failed fetch keeps the stored composition; one DivvyDiary does not know is no error.
+  # A failed fetch keeps the stored composition and records why; one DivvyDiary does not know logs nothing.
   defp update_symbol(security, now) do
     case symbol_source().symbol(security.isin) do
       {:ok, symbol} ->
-        Securities.replace_composition(security, symbol.composition, now)
-        Securities.replace_dividends(security, symbol.dividends, now)
-        Securities.store_ter_and_fund_size(security, symbol.ter, symbol.fund_size)
+        Securities.with_same_isin(security, fn current ->
+          Securities.replace_composition(current, symbol.composition, now)
+          Securities.replace_dividends(current, symbol.dividends, now)
+
+          current
+          |> Securities.store_ter_and_fund_size(symbol.ter, symbol.fund_size)
+          |> Securities.record_divvy_diary_error(nil)
+        end)
 
       {:error, :not_found} ->
-        :ok
+        record_divvy_diary_unknown(security)
 
       {:error, reason} ->
         Logger.warning("Nothing from DivvyDiary for #{security.isin}: #{inspect(reason)}")
+        record_divvy_diary_failure(security, divvy_diary_error(reason))
     end
   rescue
-    exception -> Logger.error(Exception.format(:error, exception, __STACKTRACE__))
+    exception ->
+      message = log_and_describe(exception, __STACKTRACE__, "Die Fondsdaten")
+      record_divvy_diary_failure(security, message)
   catch
     # The reason of an exit from `:httpc` holds the request, the API key with it.
     :exit, _reason ->
       Logger.error("Nothing from DivvyDiary for #{security.isin}: the request exited")
+      record_divvy_diary_failure(security, "Die Fondsdaten ließen sich nicht abrufen.")
   end
+
+  defp record_divvy_diary_failure(security, message) do
+    Securities.with_same_isin(security, &Securities.record_divvy_diary_error(&1, message))
+  rescue
+    _exception -> :error
+  end
+
+  defp record_divvy_diary_unknown(security) do
+    Securities.with_same_isin(security, &Securities.record_divvy_diary_unknown/1)
+  rescue
+    _exception -> :error
+  end
+
+  @doc "A sentence on why DivvyDiary delivered nothing for an ISIN."
+  def divvy_diary_error(reason), do: source_error("DivvyDiary", reason)
 
   # Yahoo refuses a start after the end.
   defp not_after(nil, _today), do: nil
