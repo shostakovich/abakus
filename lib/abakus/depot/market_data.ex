@@ -55,8 +55,10 @@ defmodule Abakus.Depot.MarketData do
   @doc """
   The name and Yahoo symbol of the security with `isin`, from the price feed's search. A search by
   ISIN often finds one listing only, often in London, so a search by its name adds the listings
-  of the same name; the first on an exchange in euros wins, Xetra first, else the first found.
-  `:not_found` when the search has none.
+  of the same name. The listings on exchanges in euros are tried in a fixed order of exchanges,
+  Xetra first, and the first for which the price feed has closes of the last month wins, as Yahoo
+  knows some, such as Stuttgart's fund listings, by a quote alone. Without one the first in euros
+  wins, else the first found. `:not_found` when the search has none.
   """
   def lookup_isin(isin) do
     case symbol_search().search(isin) do
@@ -82,9 +84,23 @@ defmodule Abakus.Depot.MarketData do
   end
 
   defp preferred_listing([first | _] = listings) do
-    Enum.find_value(@euro_exchanges, first, fn exchange ->
-      Enum.find(listings, &(&1.exchange == exchange))
-    end)
+    in_euros =
+      for exchange <- @euro_exchanges,
+          listing <- listings,
+          listing.exchange == exchange,
+          uniq: true,
+          do: listing
+
+    Enum.find(in_euros, &closes?/1) || List.first(in_euros) || first
+  end
+
+  defp closes?(%{symbol: symbol}) do
+    now = DateTime.utc_now()
+
+    case price_feed().chart(symbol, Date.shift(DateTime.to_date(now), month: -1), now) do
+      {:ok, %{closes: [_ | _]}} -> true
+      _none -> false
+    end
   end
 
   @doc "A sentence on why `lookup_isin/1` found nothing."

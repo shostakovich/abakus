@@ -467,6 +467,74 @@ defmodule Abakus.Depot.MarketDataTest do
       assert_received {:search, "iShares Core MSCI EM IMI"}
     end
 
+    test "skips a listing in euros that Yahoo knows by a quote alone" do
+      FakeSymbolSearch.stub(fn
+        "IE00B5SSQT16" ->
+          {:ok,
+           [
+             listing("HMEM.L", "LSE", "HSBC MSCI Emerging Markets UCITS ETF"),
+             listing("IE00B5SSQT16.SG", "STU", "HSBC MSCI Emerging Markets UCIT")
+           ]}
+
+        "HSBC MSCI Emerging Markets UCITS ETF" ->
+          {:ok,
+           [
+             listing("HMEF.L", "LSE", "HSBC MSCI Emerging Markets UCITS ETF"),
+             listing("HMEM.MI", "MIL", "HSBC MSCI Emerging Markets UCITS ETF"),
+             listing("HMEM.L", "LSE", "HSBC MSCI Emerging Markets UCITS ETF")
+           ]}
+      end)
+
+      FakePriceFeed.stub(fn
+        "HMEM.MI", _from, _now -> {:ok, FakePriceFeed.chart_result([{~D[2026-11-03], 1}])}
+        _symbol, _from, _now -> {:ok, FakePriceFeed.chart_result([])}
+      end)
+
+      assert MarketData.lookup_isin("IE00B5SSQT16") ==
+               {:ok, %{name: "HSBC MSCI Emerging Markets UCITS ETF", symbol: "HMEM.MI"}}
+
+      assert_received {:chart, "IE00B5SSQT16.SG", %Date{}}
+      assert_received {:chart, "HMEM.MI", %Date{}}
+      refute_received {:chart, _symbol, _from}
+    end
+
+    test "takes the first listing in euros with closes, Xetra first, and asks no further" do
+      FakeSymbolSearch.stub(fn
+        "IE00BKM4GZ66" ->
+          {:ok, [listing("EMIM.AS", "AMS"), listing("IS3N.F", "FRA"), listing("IS3N.DE", "GER")]}
+
+        _name ->
+          {:ok, []}
+      end)
+
+      FakePriceFeed.stub(fn
+        "IS3N.DE", _from, _now -> {:error, :not_found}
+        _symbol, _from, _now -> {:ok, FakePriceFeed.chart_result([{~D[2026-11-03], 1}])}
+      end)
+
+      assert {:ok, %{symbol: "IS3N.F"}} = MarketData.lookup_isin("IE00BKM4GZ66")
+
+      assert_received {:chart, "IS3N.DE", _from}
+      assert_received {:chart, "IS3N.F", _from}
+      refute_received {:chart, "EMIM.AS", _from}
+    end
+
+    test "takes the first listing in euros when none has closes" do
+      FakeSymbolSearch.stub(fn
+        "IE00BKM4GZ66" ->
+          {:ok, [listing("EIMI.L", "LSE"), listing("EMIM.AS", "AMS"), listing("IS3N.F", "FRA")]}
+
+        _name ->
+          {:ok, []}
+      end)
+
+      FakePriceFeed.stub(fn _symbol, _from, _now -> {:ok, FakePriceFeed.chart_result([])} end)
+
+      assert {:ok, %{symbol: "IS3N.F"}} = MarketData.lookup_isin("IE00BKM4GZ66")
+      assert_received {:chart, "EMIM.AS", _from}
+      refute_received {:chart, "EIMI.L", _from}
+    end
+
     test "takes the first listing without one in euros" do
       FakeSymbolSearch.stub(fn
         "IE00BKM4GZ66" -> {:ok, [listing("EIMI.L", "LSE")]}
