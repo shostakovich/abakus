@@ -223,6 +223,11 @@ private struct SearchFixture {
         #expect(fixture.visible("Eingang: abc") == [])
     }
 
+    @Test func aTrueMinusSignsTheAmountLikeAHyphen() {
+        #expect(fixture.visible("Eingang: -40") == ["REWE"])
+        #expect(fixture.visible("Eingang: \u{2212}40") == ["REWE"])
+    }
+
     @Test func accountGroupsFollowTheSidebarGroups() throws {
         var test = TestBudget()
         let giro = try test.add(test.girokonto, -1)
