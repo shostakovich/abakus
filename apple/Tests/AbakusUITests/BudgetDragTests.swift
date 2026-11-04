@@ -49,6 +49,13 @@ import Testing
         #expect(dragged(F.kleidung, from: 80, to: 87).model.drag?.target == nil)
     }
 
+    @Test func aSubWhoseLookupKeyIsTakenShowsNoLine() throws {
+        var fixture = F()
+        try fixture.budget.apply(.renameCategory(categoryId: F.notgroschen, name: "🎬 KINO"))
+        #expect(dragged(F.kino, from: 204, to: 150, fixture: fixture).model.drag?.target?.lineBelow == nil)
+        #expect(dragged(F.kino, from: 204, to: 150).model.drag?.target?.lineBelow == F.notgroschen)
+    }
+
     @Test func aSubWhoseNameIsTakenShowsNoLineButStillTargetsTheMaster() throws {
         var fixture = F()
         try fixture.budget.apply(.renameCategory(categoryId: F.notgroschen, name: "kino"))

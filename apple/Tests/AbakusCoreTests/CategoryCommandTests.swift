@@ -194,6 +194,19 @@ import Testing
         }
     }
 
+    @Test func movingOntoACategoryWithTheSameLookupKeyIsRefused() throws {
+        var budget = ScenarioBudget().budget
+        try budget.apply(.renameCategory(categoryId: S.notgroschen, name: "🧥 KLEIDUNG"))
+        #expect(throws: BudgetError.categoryNameTakenInGroup(group: "Sparen", name: "Kleidung")) {
+            try budget.apply(.moveCategory(categoryId: S.kleidung, toGroupId: S.sparen, index: 0))
+        }
+        try budget.apply(.renameCategory(categoryId: S.notgroschen, name: "Straße"))
+        try budget.apply(.renameCategory(categoryId: S.kleidung, name: "Strasse"))
+        #expect(throws: BudgetError.categoryNameTakenInGroup(group: "Sparen", name: "Strasse")) {
+            try budget.apply(.moveCategory(categoryId: S.kleidung, toGroupId: S.sparen, index: 0))
+        }
+    }
+
     @Test func mastersMoveToTheirDropPosition() throws {
         var budget = ScenarioBudget().budget
         try budget.apply(.addCategoryGroup(groupId: "N"))

@@ -21,7 +21,7 @@ defmodule Abakus.Categories do
     TargetVersion
   }
 
-  alias Abakus.{Budget, Ledger, Names, References, Repo, Successors, Sync}
+  alias Abakus.{Budget, Ledger, Names, Positions, References, Repo, Successors, Sync}
   alias Abakus.Depot.BudgetLink, as: DepotLink
   alias Abakus.Kasse.BudgetLink
   alias Abakus.Users.Scope
@@ -157,12 +157,76 @@ defmodule Abakus.Categories do
     end
   end
 
-  @doc "Deletes a group without categories; the internal one stays."
-  def delete_category_group(%Scope{} = scope, %CategoryGroup{id: id}) do
-    Sync.write(fn -> scope |> deletable_group(id) |> delete_empty() end)
+  @doc """
+  Moves the regular category `id` into the regular group `group_id`, its own or another, before the category
+  `before_id` there, or to the group's end for nil, and renumbers the categories of the groups it leaves and enters
+  from 0 (`Abakus.Positions`). Another group holding a category with its lookup key refuses it (`:name_taken`).
+  Returns the target group's categories in their new order.
+  """
+  def move_category(%Scope{} = scope, id, group_id, before_id) do
+    Sync.write(fn ->
+      with {:ok, category} <- regular_category(scope, id),
+           {:ok, _group} <- target_group(scope, group_id),
+           others = group_categories(scope, group_id, id),
+           :ok <- free_lookup_key(others, category, group_id),
+           {:ok, order} <- Positions.insert_before(others, category, before_id) do
+        renumber_left_group(scope, category, group_id)
+        {:ok, Positions.renumber(order, category_group_id: group_id)}
+      end
+    end)
   end
 
-  defp deletable_group(scope, id) do
+  defp renumber_left_group(_scope, %Category{category_group_id: group_id}, group_id), do: []
+
+  defp renumber_left_group(scope, %Category{id: id, category_group_id: left_id}, _group_id),
+    do: scope |> group_categories(left_id, id) |> Positions.renumber()
+
+  defp target_group(scope, id) do
+    case regular_group(scope, id) do
+      {:ok, group} -> {:ok, group}
+      {:error, _gone_or_internal} -> {:error, :target}
+    end
+  end
+
+  defp group_categories(scope, group_id, without_id) do
+    Repo.all(
+      from c in alive(Category, scope),
+        where: c.category_group_id == ^group_id and c.id != ^without_id,
+        order_by: [c.position, c.id]
+    )
+  end
+
+  defp free_lookup_key(_others, %Category{category_group_id: group_id}, group_id), do: :ok
+
+  defp free_lookup_key(others, %Category{lookup_key: key}, _group_id) do
+    if Enum.any?(others, &(&1.lookup_key == key)), do: {:error, :name_taken}, else: :ok
+  end
+
+  @doc """
+  Moves the regular group `id` before the group `before_id`, or after the others for nil, and renumbers the regular
+  groups from 0 (`Abakus.Positions`). Returns them in their new order.
+  """
+  def move_category_group(%Scope{} = scope, id, before_id) do
+    Sync.write(fn ->
+      others =
+        Repo.all(
+          from g in alive(CategoryGroup, scope),
+            where: not g.internal and g.id != ^id,
+            order_by: [g.position, g.id]
+        )
+
+      with {:ok, group} <- regular_group(scope, id),
+           {:ok, order} <- Positions.insert_before(others, group, before_id),
+           do: {:ok, Positions.renumber(order)}
+    end)
+  end
+
+  @doc "Deletes a group without categories; the internal one stays."
+  def delete_category_group(%Scope{} = scope, %CategoryGroup{id: id}) do
+    Sync.write(fn -> scope |> regular_group(id) |> delete_empty() end)
+  end
+
+  defp regular_group(scope, id) do
     case Repo.get(alive(CategoryGroup, scope), id) do
       nil -> {:error, :not_found}
       %CategoryGroup{internal: true} -> {:error, :internal}
@@ -190,7 +254,7 @@ defmodule Abakus.Categories do
   """
   def delete_category(%Scope{} = scope, %Category{id: id}, %Category{id: into_id}, opts \\ []) do
     Sync.write(fn ->
-      with {:ok, category} <- deletable(scope, id),
+      with {:ok, category} <- regular_category(scope, id),
            {:ok, into} <- target(scope, into_id, id),
            :ok <- Ledger.recategorize(scope, category.id, into.id, opts),
            :ok <- BudgetLink.recategorize(scope, category.id, into.id),
@@ -209,7 +273,7 @@ defmodule Abakus.Categories do
   def reconciled_transactions?(%Scope{} = scope, %Category{id: id}),
     do: Ledger.reconciled_in_category?(scope, id)
 
-  defp deletable(scope, id) do
+  defp regular_category(scope, id) do
     case Repo.get(alive(Category, scope), id) do
       nil -> {:error, :not_found}
       %Category{internal: true} -> {:error, :internal}

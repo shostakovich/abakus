@@ -27,7 +27,7 @@ Abakus for the Mac, iPhone and iPad is the Swift package in `apple/`, with its o
 - Every write to a synced table (`Abakus.Sync.Tables`) goes through `Abakus.Sync`, so it becomes messages (ADR
   0024). Synced rows are tombstoned with `deleted_at`, never removed.
 - DB tests run synchronously with `pool_size: 1` (SQLite is busy otherwise).
-- UI: Setzkasten components and conventions (Setzkasten's `guides/design-system.md`). App CSS only for domain
+- UI: Setzkasten components and conventions (Setzkasten's module docs and catalog). App CSS only for domain
   UI, on theme tokens, in the partials under `assets/css/`. A Setzkasten bug or gap is fixed in
   `shostakovich/setzkasten`, not worked around in the app.
 - Confirmations go through Setzkasten's confirm dialog; tests drive it with `Setzkasten.Test.Confirm`.

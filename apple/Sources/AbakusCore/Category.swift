@@ -55,6 +55,12 @@ public struct CategoryGroup: Hashable, Identifiable, Sendable, Positioned {
         self.note = note
         self.categories = categories
     }
+
+    /// The server merges the categories of a group that share a lookup key.
+    public func holdsAnother(namedLike category: Category) -> Bool {
+        let key = category.name.lookupKey
+        return categories.contains { $0.id != category.id && $0.name.lookupKey == key }
+    }
 }
 
 public enum DefaultCategories {

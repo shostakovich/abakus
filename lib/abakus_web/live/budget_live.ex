@@ -10,7 +10,8 @@ defmodule AbakusWeb.BudgetLive do
   deleting), on phones a sheet that also takes the assignment. Targets, snoozing, auto-assign, covering and moving
   money work in the focus month; covering and moving through the available cell's popover (`Popover`), which makes
   its month the focus. Groups are added, renamed and deleted in popovers (`CategoryEditor`): "+ Gruppe" above the
-  table (below it on phones), "+" and the name on a group's row.
+  table (below it on phones), "+" and the name on a group's row. With a mouse, categories and groups are dragged
+  into a new order (`Sortable`: `sort_category`, `sort_group`).
   """
   use AbakusWeb, :live_view
 
@@ -70,6 +71,8 @@ defmodule AbakusWeb.BudgetLive do
         <div class="app-budget-wrap">
           <table
             id="budget-table"
+            phx-hook="Setzkasten.Components.Data.Sortable"
+            data-sort-event="sort_category"
             data-months={length(@months)}
             class={[
               "app-budget",
@@ -141,6 +144,7 @@ defmodule AbakusWeb.BudgetLive do
                 invalid={@invalid}
                 compact={@fit.compact}
                 budgeting={@budgeting}
+                group_id={group.id}
               />
             </Components.group>
             <tbody :if={@rows.groups == [] and is_nil(@rows.uncategorised)}>
@@ -639,6 +643,46 @@ defmodule AbakusWeb.BudgetLive do
     end
   end
 
+  def handle_event(
+        "sort_category",
+        %{"id" => id, "section" => group_id, "index" => index},
+        socket
+      )
+      when is_integer(index) and index >= 0 do
+    groups = socket.assigns.groups
+
+    with %Categories.Category{} = category <- find_category(groups, id),
+         %Categories.CategoryGroup{} = group <- Enum.find(groups, &(&1.id == group_id)) do
+      before_id = group.categories |> Enum.map(& &1.id) |> List.delete(id) |> Enum.at(index)
+
+      case Categories.move_category(socket.assigns.current_scope, id, group.id, before_id) do
+        {:error, :name_taken} ->
+          message = "In „#{group.name}“ gibt es schon eine Kategorie „#{category.name}“."
+          {:noreply, put_flash(socket, :error, message)}
+
+        _moved_or_stale ->
+          {:noreply, sorted(socket)}
+      end
+    else
+      nil -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("sort_group", %{"id" => id, "index" => index}, socket)
+      when is_integer(index) and index >= 0 do
+    ids = Enum.map(socket.assigns.groups, & &1.id)
+
+    if id in ids do
+      before_id = ids |> List.delete(id) |> Enum.at(index)
+      Categories.move_category_group(socket.assigns.current_scope, id, before_id)
+      {:noreply, sorted(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("sort_" <> _level, _params, socket), do: {:noreply, socket}
+
   # Late clicks after the popover closed.
   def handle_event("edit_" <> _event, _params, socket), do: {:noreply, socket}
 
@@ -784,6 +828,8 @@ defmodule AbakusWeb.BudgetLive do
 
     if message, do: put_flash(socket, :info, message), else: socket
   end
+
+  defp sorted(socket), do: socket |> assign_budget() |> assign_view() |> clear_flash()
 
   defp closed(nil), do: nil
   defp closed(state), do: %{state | open: false}
