@@ -7,11 +7,13 @@ let package = Package(
     products: [
         .executable(name: "Abakus", targets: ["Abakus"]),
         .executable(name: "Snapshot", targets: ["Snapshot"]),
+        .library(name: "AbakusIOSUI", targets: ["AbakusIOSUI"]),
     ],
     targets: [
         .target(name: "AbakusCore"),
         .target(name: "AbakusUI", dependencies: ["AbakusCore"]),
         .target(name: "AbakusMacUI", dependencies: ["AbakusCore", "AbakusUI"]),
+        .target(name: "AbakusIOSUI", dependencies: ["AbakusCore", "AbakusUI"]),
         .executableTarget(
             name: "Abakus",
             dependencies: ["AbakusCore", "AbakusUI", "AbakusMacUI"],

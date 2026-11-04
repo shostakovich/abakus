@@ -1,6 +1,12 @@
 .build/
-.swiftpm/
-*.xcodeproj
+/.swiftpm/*
+!/.swiftpm/xcode/
+/.swiftpm/xcode/*
+!/.swiftpm/xcode/xcshareddata/
+/*.xcodeproj
+xcuserdata/
+/iOS/Abakus.xcodeproj/project.xcworkspace/
+/iOS/Signing.xcconfig
 .DS_Store
 /.pkgtest/
 /.claude/
