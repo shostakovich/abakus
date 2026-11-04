@@ -185,9 +185,8 @@ extension BudgetViewModel {
 
     private func master(_ masterId: String, hasSubNamedLike categoryId: String) -> Bool {
         let budget = store.budget
-        guard let name = budget.category(withId: categoryId)?.name.lowercased(),
-            let master = budget.categoryGroup(withId: masterId)
+        guard let category = budget.category(withId: categoryId), let master = budget.categoryGroup(withId: masterId)
         else { return false }
-        return master.categories.contains { $0.id != categoryId && $0.name.lowercased() == name }
+        return master.holdsAnother(namedLike: category)
     }
 }

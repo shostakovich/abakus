@@ -134,7 +134,7 @@ extension Budget {
             return
         }
         let target = categoryGroups[to]
-        if target.categories.contains(where: { $0.name.lowercased() == category.name.lowercased() }) {
+        if target.holdsAnother(namedLike: category) {
             throw BudgetError.categoryNameTakenInGroup(group: target.name, name: category.name)
         }
         categoryGroups[from.group].categories.remove(at: from.category)
