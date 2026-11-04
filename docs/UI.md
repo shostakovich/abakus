@@ -26,6 +26,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 - No income group: income shows only in the month head's calculation
 - A category row shows a pencil on hover and focus; it and the name open the category's dialog: name, target and
   deleting (the phone sheet shows the same parts after Verfügbar and auto-assign)
+- As on the Mac, a mouse drags categories within and between groups and a group as a block between groups;
+  "Nicht kategorisiert" stays put, touch does not drag
 - Zugewiesen and Aktivität of a category stay blank at 0 (the assign field stays editable); Verfügbar 0 shows
   muted; group rows stay blank at 0 too, only the totals show 0,00. Group rows lie on a quiet band (base-200);
   amounts are never cut off
