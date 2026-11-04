@@ -63,10 +63,10 @@ private func makeOrderedSidebar() throws -> (sidebar: SidebarViewModel, store: S
         let sidebar = makeSidebar()
         let kreditkarte = sidebar.groupPanels[0].rows[2]
         #expect(kreditkarte.balance < 0)
-        #expect(kreditkarte.balanceText.hasPrefix("-"))
+        #expect(kreditkarte.balanceText.hasPrefix("−"))
         #expect(kreditkarte.balanceText.hasSuffix("€"))
         #expect(sidebar.groupPanels[0].totalText.hasSuffix("€"))
-        #expect(kreditkarte.tooltip.hasPrefix("Kreditkarte    -"))
+        #expect(kreditkarte.tooltip.hasPrefix("Kreditkarte    −"))
     }
 
     @Test func badgesCountTransactionsThatNeedAttention() {

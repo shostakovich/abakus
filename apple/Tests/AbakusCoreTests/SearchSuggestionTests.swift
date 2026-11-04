@@ -50,9 +50,9 @@ import Testing
         let amounts = suggestions("50").filter { $0.icon == .outflow || $0.icon == .inflow }
         #expect(
             amounts.map(\.description) == [
-                "Ausgang gleich <b>50,00€</b>", "Ausgang mindestens <b>50,00€</b>",
-                "Ausgang höchstens <b>50,00€</b>", "Eingang gleich <b>50,00€</b>",
-                "Eingang mindestens <b>50,00€</b>", "Eingang höchstens <b>50,00€</b>",
+                "Ausgang gleich <b>50,00\u{00A0}€</b>", "Ausgang mindestens <b>50,00\u{00A0}€</b>",
+                "Ausgang höchstens <b>50,00\u{00A0}€</b>", "Eingang gleich <b>50,00\u{00A0}€</b>",
+                "Eingang mindestens <b>50,00\u{00A0}€</b>", "Eingang höchstens <b>50,00\u{00A0}€</b>",
             ])
         #expect(
             amounts.map(\.searchText) == [

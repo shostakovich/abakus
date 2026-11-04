@@ -317,9 +317,9 @@ import Testing
         model.runningBalanceHovered(row, inside: true)
         #expect(model.popup == .runningBalance(rowId: a))
         let info = model.runningBalanceInfo(for: a)
-        #expect(info?.title == "Saldo bis 02/05/14:")
-        #expect(info?.lines.map(\.amount) == ["$1,111.00", "-$11.00", "$1,100.00"])
-        #expect(info?.lines.last?.caption == "Arbeitssaldo (das Geld, das am 02/05/14 da war)")
+        #expect(info?.title == "Saldo bis 02/05/2014:")
+        #expect(info?.lines.map(\.amount) == ["$1,111.00", "−$11.00", "$1,100.00"])
+        #expect(info?.lines.last?.caption == "Arbeitssaldo (das Geld, das am 02/05/2014 da war)")
         model.runningBalanceHovered(row, inside: false)
         #expect(model.popup == nil)
     }

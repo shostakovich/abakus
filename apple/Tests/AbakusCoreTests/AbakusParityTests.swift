@@ -124,6 +124,6 @@ import Testing
             income: [("2026-12-01", 10)], activity: [], assigned: [("2027-01-01", "FUN", 25)])
         scenario.today = date("2026-12-10")
         let line = try #require(scenario.month("2026-12-01").headerLines(formatter: german).last)
-        #expect([line.amount, line.text] == ["-15,00", "Nicht gedeckt im Jan 2027"])
+        #expect([line.amount, line.text] == ["−15,00", "Nicht gedeckt im Jan 2027"])
     }
 }

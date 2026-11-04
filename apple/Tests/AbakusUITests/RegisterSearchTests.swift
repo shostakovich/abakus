@@ -137,7 +137,7 @@ import Testing
         let subRows = model.rows.filter(\.isSubtransaction)
         #expect(subRows.map(\.id) == ["S1", "S2"])
         #expect(subRows.map(\.isExcludedFromSearch) == [false, true])
-        #expect(model.summary.second.amountText == "-$30.00")
+        #expect(model.summary.second.amountText == "−$30.00")
     }
 
     @Test func clearingTheSearchRestoresTheSplitExpansion() {
@@ -152,9 +152,9 @@ import Testing
         let (_, model, _) = searchModel()
         model.search.run("Ausgang: >40")
         #expect(model.summary.second.title == "Suchsumme (3)")
-        #expect(model.summary.second.amountText == "-$100.00")
+        #expect(model.summary.second.amountText == "−$100.00")
         model.search.run("Ausgang: >10")
-        #expect(model.summary.second.amountText == "-$150.00")
+        #expect(model.summary.second.amountText == "−$150.00")
     }
 
     @Test func summaryBoxesRunTheirSearches() {

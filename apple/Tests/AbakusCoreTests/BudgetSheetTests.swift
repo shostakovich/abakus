@@ -66,7 +66,7 @@ import Testing
         #expect(
             first.headerText == [
                 "0,00 Nicht verteilt im Aug", "0,00 Überzogen im Aug", "0,00 Einnahmen im Sep",
-                "+50,00 Zugewiesen im Sep", "= 50,00€", "Nicht verteilt am Monatsende",
+                "+50,00 Zugewiesen im Sep", "= 50,00\u{00A0}€", "Nicht verteilt am Monatsende",
             ])
         #expect(scenario.sheet.quickBudgetAmount(.assignedLastMonth, categoryId: S.kleidung, month: first.month) == 0)
     }
@@ -109,7 +109,7 @@ import Testing
         #expect(october.category(S.kleidung)?.spent == -20)
         #expect(october.rowText(S.kleidung) == ["", "+20,00", "20,00"])
         #expect(october.masterText(S.alltag) == ["0,00", "+20,00", "20,00"])
-        #expect(october.totalsText[1] == "20,00€")
+        #expect(october.totalsText[1] == "20,00\u{00A0}€")
     }
 
     @Test func zeroBalancesAfterActivityShowAndUntouchedCategoriesStayBlank() throws {
@@ -117,7 +117,7 @@ import Testing
         try scenario.budget(25, S.kleidung, in: "2026-10-01")
         try scenario.add(-25, on: "2026-10-09", category: S.kleidung)
         let october = scenario.month("2026-10-01")
-        #expect(october.rowText(S.kleidung) == ["25,00", "-25,00", "0,00"])
+        #expect(october.rowText(S.kleidung) == ["25,00", "−25,00", "0,00"])
         #expect(october.rowText(S.notgroschen) == ["", "", ""])
         #expect(october.category(S.notgroschen)?.hasTransactions == false)
     }

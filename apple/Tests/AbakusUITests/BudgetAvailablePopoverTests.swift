@@ -43,13 +43,13 @@ import Testing
         #expect(form.isOverspent)
         #expect(form.mode == .cover)
         #expect(form.sources.map(\.categoryId) == [BudgetScreenFixture.readyToAssign, F.kleidung])
-        #expect(model.callouts.coverLabel == "Decke 25,00€ aus")
-        #expect(model.callouts.coverSourceLabel(try #require(form.sources.first)) == "Zu verteilen · 40,00€")
+        #expect(model.callouts.coverLabel == "Decke 25,00\u{00A0}€ aus")
+        #expect(model.callouts.coverSourceLabel(try #require(form.sources.first)) == "Zu verteilen · 40,00\u{00A0}€")
         #expect(model.callouts.remainingLabel == "Zu verteilen danach")
-        #expect(model.callouts.remainingText == "15,00€")
+        #expect(model.callouts.remainingText == "15,00\u{00A0}€")
         model.callouts.coverSourceId = F.kleidung
         #expect(model.callouts.remainingLabel == "Kleidung danach")
-        #expect(model.callouts.remainingText == "35,00€")
+        #expect(model.callouts.remainingText == "35,00\u{00A0}€")
     }
 
     @Test func coveringFromZuVerteilenRaisesOnlyTheAssignment() {

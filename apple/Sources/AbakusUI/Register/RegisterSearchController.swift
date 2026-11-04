@@ -70,7 +70,7 @@ public final class RegisterSearchController {
         if let reconciliation = register.reconciliation.current {
             var message = "\(register.transactionIds.count) Buchungen"
             if let search = filter { message += " für „\(search.label)“" }
-            message += " bis \(register.formatter.dateShort(reconciliation.statementDate)) (Datum des Banksaldos)"
+            message += " bis \(register.formatter.dateLong(reconciliation.statementDate)) (Datum des Banksaldos)"
             return RegisterSearchInfo(message: message, clearButtonTitle: filter == nil ? nil : Self.clearSearchTitle)
         }
         guard isFiltered else { return nil }

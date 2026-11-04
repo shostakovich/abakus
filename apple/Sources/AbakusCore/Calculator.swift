@@ -51,7 +51,8 @@ public struct Calculator: Hashable, Sendable {
             display.removeLast(display.isEmpty ? 0 : 1)
             if display.isEmpty { display = "0" }
         case .negate:
-            display = display.hasPrefix("-") ? String(display.dropFirst()) : "-" + display
+            let minus = BudgetFormatter.minus
+            display = display.hasPrefix(minus) ? String(display.dropFirst()) : minus + display
             if isNewValue { register = -register }
         case .digit(let digit):
             enter(String(digit))

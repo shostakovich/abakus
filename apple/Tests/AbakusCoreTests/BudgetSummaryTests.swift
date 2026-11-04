@@ -32,7 +32,7 @@ import Testing
         let budget = try scenario().budget
         let result = summary(budget, .category(S.lebensmittel))
         #expect(result.title == "Alltag: Lebensmittel")
-        #expect(result.message == "122,00€ ausgegeben in 3 Buchungen:")
+        #expect(result.message == "122,00\u{00A0}€ ausgegeben in 3 Buchungen:")
         #expect(result.rows.map(\.payee) == ["[Aufgeteilt] Kaufhaus ", "REWE", "Bäcker"])
         #expect(result.rows.map(\.amount) == [-70, -40, -12])
         #expect(result.rows.map(\.transactionId) == ["SPLIT", "REWE", result.rows[2].transactionId])
@@ -51,7 +51,7 @@ import Testing
         let budget = try scenario().budget
         let result = summary(budget, .masterCategory(S.alltag))
         #expect(result.title == "Alltag")
-        #expect(result.message == "152,00€ ausgegeben in 3 Buchungen:")
+        #expect(result.message == "152,00\u{00A0}€ ausgegeben in 3 Buchungen:")
         #expect(result.rows.map(\.amount) == [-70, -30, -40, -12])
         #expect(result.accountView?.searchText == "Kategorie: Alltag, ")
     }
@@ -60,7 +60,7 @@ import Testing
         let budget = try scenario().budget
         let result = summary(budget, .allOutflows)
         #expect(result.title == "Alle Kategorien")
-        #expect(result.message == "159,00€ ausgegeben in 4 Buchungen:")
+        #expect(result.message == "159,00\u{00A0}€ ausgegeben in 4 Buchungen:")
         #expect(result.rows.map(\.amount) == [-7, -70, -30, -40, -12])
         #expect(result.accountView?.searchText == "")
         #expect(result.emptyOutflowHelp == nil)
@@ -70,7 +70,7 @@ import Testing
         let budget = try scenario().budget
         let result = summary(budget, .masterCategory(EntityID.uncategorizedMasterCategory))
         #expect(result.title == "Nicht kategorisiert")
-        #expect(result.message == "7,00€ ausgegeben in 1 Buchung ohne Kategorie:")
+        #expect(result.message == "7,00\u{00A0}€ ausgegeben in 1 Buchung ohne Kategorie:")
         #expect(result.accountView?.accountId == S.giro)
         #expect(result.accountView?.searchText == "Kategorie: , ")
     }
@@ -132,7 +132,7 @@ import Testing
         let budget = try scenario().budget
         let result = summary(budget, .category(S.notgroschen))
         #expect(result.rows.isEmpty && result.accountView == nil)
-        #expect(result.message == "0,00€ ausgegeben in 0 Buchungen:")
+        #expect(result.message == "0,00\u{00A0}€ ausgegeben in 0 Buchungen:")
         #expect(
             result.emptyOutflowHelp
                 == "Im Oktober 2026 gibt es noch keine Ausgaben in <b>„Sparen: Notgroschen“</b>.<br/><br/>Um eine "
@@ -147,7 +147,7 @@ import Testing
         try scenario.add(2000, on: "2026-09-28", category: ScenarioBudget.readyToAssign, payee: "Arbeitgeber")
         let result = scenario.budget.incomeSummary(month: date("2026-10-01"), today: october24, formatter: german)
         #expect(result.title == "Einnahmen im Oktober")
-        #expect(result.message == "<b>995,00€</b> Einnahmen im Oktober.")
+        #expect(result.message == "<b>995,00\u{00A0}€</b> Einnahmen im Oktober.")
         #expect(result.rows.map(\.amount) == [-5, 0, 1000, 0])
         #expect(result.accountView?.searchText == "Einnahmen: Oktober 2026, ")
         #expect(result.accountView?.dateFilter == nil)

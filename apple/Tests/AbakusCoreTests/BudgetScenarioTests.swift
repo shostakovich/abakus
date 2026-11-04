@@ -11,30 +11,30 @@ import Testing
         var scenario = ScenarioBudget()
         try scenario.budget(300, S.lebensmittel, in: "2026-10-01")
         try scenario.add(-120, on: "2026-10-05", category: S.lebensmittel)
-        #expect(scenario.month("2026-10-01").rowText(S.lebensmittel) == ["300,00", "-120,00", "180,00"])
+        #expect(scenario.month("2026-10-01").rowText(S.lebensmittel) == ["300,00", "−120,00", "180,00"])
         #expect(scenario.month("2026-11-01").rowText(S.lebensmittel) == ["", "", "180,00"])
     }
 
     @Test func bOverspendingIsPaidByNextMonthsZuVerteilen() throws {
         let scenario = try S.scenarioB()
         let october = scenario.month("2026-10-01")
-        #expect(october.rowText(S.kleidung)[2] == "-30,00")
+        #expect(october.rowText(S.kleidung)[2] == "−30,00")
         #expect(october.category(S.kleidung)?.isOverspent == true)
         #expect(
             october.headerText == [
                 "0,00 Nicht verteilt im Sep", "0,00 Überzogen im Sep", "+1.000,00 Einnahmen im Okt",
-                "-350,00 Zugewiesen im Okt", "= 650,00€", "Zu verteilen",
+                "−350,00 Zugewiesen im Okt", "= 650,00\u{00A0}€", "Zu verteilen",
             ])
-        #expect(october.totalsText == ["350,00€", "-200,00€", "150,00€"])
+        #expect(october.totalsText == ["350,00\u{00A0}€", "−200,00\u{00A0}€", "150,00\u{00A0}€"])
         let november = scenario.month("2026-11-01")
         #expect(
             november.headerText == [
-                "650,00 Nicht verteilt im Okt", "-30,00 Überzogen im Okt", "0,00 Einnahmen im Nov",
+                "650,00 Nicht verteilt im Okt", "−30,00 Überzogen im Okt", "0,00 Einnahmen im Nov",
                 "0,00 Zugewiesen im Nov",
-                "= 620,00€", "Zu verteilen",
+                "= 620,00\u{00A0}€", "Zu verteilen",
             ])
         #expect(november.rowText(S.kleidung)[2] == "")
-        #expect(november.totalsText == ["0,00€", "0,00€", "180,00€"])
+        #expect(november.totalsText == ["0,00\u{00A0}€", "0,00\u{00A0}€", "180,00\u{00A0}€"])
     }
 
     @Test func cAnOverspentCategoryStartsTheNextMonthAtZero() throws {
@@ -46,7 +46,7 @@ import Testing
         #expect(scenario.month("2026-03-01").readyToAssign == 500)
         let april = scenario.month("2026-04-01")
         #expect(april.category(S.lebensmittel)?.balance == 0)
-        #expect(april.headerText[1] == "-40,00 Überzogen im Mrz")
+        #expect(april.headerText[1] == "−40,00 Überzogen im Mrz")
         #expect(april.headerLines(formatter: german)[1].isWarning)
         #expect(april.available == 460)
         try scenario.budget(10, S.lebensmittel, in: "2026-04-01")
@@ -65,7 +65,8 @@ import Testing
         #expect(
             april.headerText == [
                 "0,00 Nicht verteilt im Mrz", "0,00 Überzogen im Mrz", "+200,00 Einnahmen im Apr",
-                "0,00 Zugewiesen im Apr", "-250,00 Für spätere Monate", "-50,00 Nicht gedeckt im Mai", "= -50,00€",
+                "0,00 Zugewiesen im Apr", "−250,00 Für spätere Monate", "−50,00 Nicht gedeckt im Mai",
+                "= −50,00\u{00A0}€",
                 "Zu verteilen",
             ])
         #expect(try #require(april.headerLines(formatter: german).last).isWarning)
@@ -79,10 +80,10 @@ import Testing
         #expect(scenario.budget.categoryDisplayName(ScenarioBudget.readyToAssign) == "Zu verteilen")
         let october = scenario.month("2026-10-01")
         #expect(october.headerText[2] == "+3.000,00 Einnahmen im Okt")
-        #expect(october.headerText[4] == "= 2.650,00€")
+        #expect(october.headerText[4] == "= 2.650,00\u{00A0}€")
         let november = scenario.month("2026-11-01")
         #expect(november.headerText[2] == "0,00 Einnahmen im Nov")
-        #expect(november.headerText[4...5] == ["= 2.620,00€", "Zu verteilen"])
+        #expect(november.headerText[4...5] == ["= 2.620,00\u{00A0}€", "Zu verteilen"])
     }
 
     @Test func fOverbudgetingCarriesIntoTheNextMonths() throws {
@@ -92,30 +93,30 @@ import Testing
         #expect(
             scenario.month("2026-10-01").headerText == [
                 "0,00 Nicht verteilt im Sep", "0,00 Überzogen im Sep", "0,00 Einnahmen im Okt",
-                "-100,00 Zugewiesen im Okt", "= -100,00€", "Zu verteilen",
+                "−100,00 Zugewiesen im Okt", "= −100,00\u{00A0}€", "Zu verteilen",
             ])
         #expect(
             scenario.month("2026-11-01").headerText == [
-                "-100,00 Nicht verteilt im Okt", "0,00 Überzogen im Okt", "0,00 Einnahmen im Nov",
+                "−100,00 Nicht verteilt im Okt", "0,00 Überzogen im Okt", "0,00 Einnahmen im Nov",
                 "0,00 Zugewiesen im Nov",
-                "= -100,00€", "Zu verteilen",
+                "= −100,00\u{00A0}€", "Zu verteilen",
             ])
         let december = scenario.month("2026-12-01").headerText
-        #expect(december[0] == "-100,00 Nicht verteilt im Nov")
-        #expect(december[4...5] == ["= -100,00€", "Zu verteilen"])
+        #expect(december[0] == "−100,00 Nicht verteilt im Nov")
+        #expect(december[4...5] == ["= −100,00\u{00A0}€", "Zu verteilen"])
     }
 
     @Test func gBudgetingInAFutureMonth() throws {
         var scenario = try S.scenarioB()
         try scenario.budget(200, S.lebensmittel, in: "2026-12-01")
-        #expect(scenario.month("2026-10-01").headerText[4...5] == ["-200,00 Für spätere Monate", "= 450,00€"])
-        #expect(scenario.month("2026-11-01").headerText[4...5] == ["-200,00 Für spätere Monate", "= 420,00€"])
+        #expect(scenario.month("2026-10-01").headerText[4...5] == ["−200,00 Für spätere Monate", "= 450,00\u{00A0}€"])
+        #expect(scenario.month("2026-11-01").headerText[4...5] == ["−200,00 Für spätere Monate", "= 420,00\u{00A0}€"])
         let december = scenario.month("2026-12-01")
         #expect(
             december.headerText == [
                 "620,00 Nicht verteilt im Nov", "0,00 Überzogen im Nov", "0,00 Einnahmen im Dez",
-                "-200,00 Zugewiesen im Dez",
-                "= 420,00€", "Zu verteilen",
+                "−200,00 Zugewiesen im Dez",
+                "= 420,00\u{00A0}€", "Zu verteilen",
             ])
         #expect(december.rowText(S.lebensmittel) == ["200,00", "", "380,00"])
     }
@@ -124,19 +125,19 @@ import Testing
         var scenario = ScenarioBudget()
         try scenario.split([(-70, S.lebensmittel), (-30, S.kleidung)], on: "2026-10-15", payee: "Kaufhaus")
         let october = scenario.month("2026-10-01")
-        #expect(october.rowText(S.lebensmittel) == ["", "-70,00", "-70,00"])
-        #expect(october.rowText(S.kleidung) == ["", "-30,00", "-30,00"])
-        #expect(october.masterText(S.alltag) == ["0,00", "-100,00", "-100,00"])
+        #expect(october.rowText(S.lebensmittel) == ["", "−70,00", "−70,00"])
+        #expect(october.rowText(S.kleidung) == ["", "−30,00", "−30,00"])
+        #expect(october.masterText(S.alltag) == ["0,00", "−100,00", "−100,00"])
         let summary = scenario.budget.outflowSummary(
             .category(S.lebensmittel), month: date("2026-10-01"), today: october24, formatter: german)
-        #expect(summary.message == "70,00€ ausgegeben in 1 Buchung:")
+        #expect(summary.message == "70,00\u{00A0}€ ausgegeben in 1 Buchung:")
         let row = try #require(summary.rows.first)
         #expect(summary.rows.count == 1)
         #expect(
             [german.dateShort(row.date), row.accountName, row.payee, german.currencyNoSymbol(row.amount)] == [
-                "15.10.26", "Giro", "[Aufgeteilt] Kaufhaus ", "-70,00",
+                "15.10.26", "Giro", "[Aufgeteilt] Kaufhaus ", "−70,00",
             ])
-        #expect(scenario.month("2026-11-01").headerText[1] == "-100,00 Überzogen im Okt")
+        #expect(scenario.month("2026-11-01").headerText[1] == "−100,00 Überzogen im Okt")
     }
 
     @Test func iATransferToAnOffBudgetAccount() throws {
@@ -151,7 +152,7 @@ import Testing
         ).transferring(to: "DEPOT")
         try scenario.budget.apply(.addTransaction(transfer))
         let october = scenario.month("2026-10-01")
-        #expect(october.rowText(S.notgroschen) == ["", "-500,00", "-500,00"])
+        #expect(october.rowText(S.notgroschen) == ["", "−500,00", "−500,00"])
         #expect(october.income == 1000)
         #expect(october.spent == 500)
         #expect(!scenario.sheet.showsUncategorizedRow)
@@ -161,8 +162,8 @@ import Testing
         let uncategorized = sheet.month(date("2026-10-01"))!.uncategorized
         #expect(
             [german.budgetAmount(uncategorized.outflows, prefix: "+"), german.currencyNoSymbol(uncategorized.balance)]
-                == ["-500,00", "-500,00"])
-        #expect(sheet.month(date("2026-11-01"))?.headerText[1] == "-500,00 Überzogen im Okt")
+                == ["−500,00", "−500,00"])
+        #expect(sheet.month(date("2026-11-01"))?.headerText[1] == "−500,00 Überzogen im Okt")
     }
 
     @Test func kDeletingACategoryIntoAnother() throws {
@@ -185,7 +186,7 @@ import Testing
         let june = scenario.month("2026-06-01")
         #expect(june.category("BUECHER")?.balance == 27)
         #expect(june.category("ZEITSCHRIFTEN") == nil)
-        #expect(june.headerText[4] == "= 450,00€")
+        #expect(june.headerText[4] == "= 450,00\u{00A0}€")
     }
 
     @Test func lTheDropDownShowsTheBalanceOfTodaysMonth() throws {

@@ -91,7 +91,11 @@ public struct FormatLocale: Hashable, Sendable {
     }
 }
 
+/// Amounts are written as the web's `Abakus.Money` shows them: a true minus and a no-break space before the unit.
 public struct BudgetFormatter: Hashable, Sendable {
+    public static let minus = "\u{2212}"
+    public static let unitSpace = "\u{00A0}"
+
     public var currencyLocale: FormatLocale
     public var dateLocale: FormatLocale
 
@@ -126,11 +130,15 @@ public struct BudgetFormatter: Hashable, Sendable {
     public func signedRegisterAmount(_ value: Decimal) -> String {
         let magnitude = registerAmount(value < 0 ? -value : value)
         guard !magnitude.isEmpty else { return "" }
-        return (value < 0 ? "−" : "+") + magnitude
+        return (value < 0 ? Self.minus : "+") + magnitude
     }
 
     public func dateShort(_ date: DateWithoutTime) -> String {
         dateString(date, year: String(format: "%02d", date.year % 100))
+    }
+
+    public func dateLong(_ date: DateWithoutTime) -> String {
+        dateString(date, year: String(date.year))
     }
 
     /// Day and month without the year, "24.10." where dates end in a dot.
@@ -174,9 +182,10 @@ public struct BudgetFormatter: Hashable, Sendable {
         if thousands { integer = grouped(integer, separator: locale.groupSeparator) }
         var number = locale.decimalDigits > 0 ? integer + locale.decimalSeparator + fraction : integer
         if symbol {
-            number = locale.symbolOnLeft ? locale.currencySymbol + number : number + locale.currencySymbol
+            number =
+                locale.symbolOnLeft ? locale.currencySymbol + number : number + Self.unitSpace + locale.currencySymbol
         }
-        return negative ? "-" + number : number
+        return negative ? Self.minus + number : number
     }
 
     private func grouped(_ integer: String, separator: String) -> String {

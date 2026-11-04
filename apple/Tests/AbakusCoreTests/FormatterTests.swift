@@ -6,25 +6,25 @@ import Testing
     let german = BudgetFormatter(currencyLocale: .deDE)
     let american = BudgetFormatter(currencyLocale: .enUS)
 
-    @Test func germanCurrencyHasTheSymbolOnTheRightWithoutSpace() {
-        #expect(german.currency(decimal("1234.5")) == "1.234,50€")
-        #expect(german.currency(decimal("-1234.5")) == "-1.234,50€")
-        #expect(german.currency(0) == "0,00€")
+    @Test func germanCurrencyHasTheSymbolOnTheRightAfterANoBreakSpace() {
+        #expect(german.currency(decimal("1234.5")) == "1.234,50\u{00A0}€")
+        #expect(german.currency(decimal("-1234.5")) == "−1.234,50\u{00A0}€")
+        #expect(german.currency(0) == "0,00\u{00A0}€")
     }
 
     @Test func americanCurrencyPutsTheMinusBeforeTheSymbol() {
         #expect(american.currency(decimal("1234.5")) == "$1,234.50")
-        #expect(american.currency(decimal("-1234.5")) == "-$1,234.50")
+        #expect(american.currency(decimal("-1234.5")) == "−$1,234.50")
     }
 
     @Test func noSymbolKeepsThousands() {
         #expect(german.currencyNoSymbol(decimal("1234567.891")) == "1.234.567,89")
-        #expect(american.currencyNoSymbol(decimal("-1234.5")) == "-1,234.50")
+        #expect(american.currencyNoSymbol(decimal("-1234.5")) == "−1,234.50")
         #expect(german.currencyNoSymbol(decimal("999.999")) == "1.000,00")
     }
 
     @Test func simpleDropsThousands() {
-        #expect(german.currencySimple(decimal("-1234.5")) == "-1234,50")
+        #expect(german.currencySimple(decimal("-1234.5")) == "−1234,50")
     }
 
     @Test func registerCellsAreEmptyForZero() {
@@ -40,12 +40,22 @@ import Testing
     }
 
     @Test func tinyNegativeAmountsAreNotNegativeZero() {
-        #expect(german.currency(decimal("-0.004")) == "0,00€")
+        #expect(german.currency(decimal("-0.004")) == "0,00\u{00A0}€")
     }
 
     @Test func shortDatesFollowTheDateLocale() {
         #expect(german.dateShort(october23) == "23.10.26")
         #expect(american.dateShort(october23) == "10/23/26")
+    }
+
+    @Test func budgetAmountsCanCarryTheUnit() {
+        #expect(german.budgetAmount(decimal("-5"), prefix: "+", withUnit: true) == "−5,00\u{00A0}€")
+        #expect(german.budgetAmount(decimal("255"), prefix: "+", withUnit: true) == "+255,00\u{00A0}€")
+    }
+
+    @Test func longDatesShowTheWholeYear() {
+        #expect(german.dateLong(october23) == "23.10.2026")
+        #expect(american.dateLong(october23) == "10/23/2026")
     }
 
     @Test func monthNamesComeFromTheDateLocale() {

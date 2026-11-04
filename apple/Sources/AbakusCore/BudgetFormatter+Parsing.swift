@@ -65,7 +65,7 @@ extension BudgetFormatter {
     }
 
     public func parseAmountUnrounded(_ text: String) -> Decimal {
-        var prepared = text
+        var prepared = Self.plainAmountText(text)
         if let range = prepared.range(of: currencyLocale.currencySymbol) { prepared.removeSubrange(range) }
         prepared = prepared.replacingOccurrences(of: " ", with: "")
         guard
@@ -78,7 +78,7 @@ extension BudgetFormatter {
 
     /// A typed balance, or nil when the text is not a number.
     public func parseBalance(_ text: String) -> Decimal? {
-        var body = text.replacingOccurrences(of: " ", with: "")
+        var body = Self.plainAmountText(text).replacingOccurrences(of: " ", with: "")
         if let range = body.range(of: currencyLocale.currencySymbol) { body.removeSubrange(range) }
         if body.hasPrefix("-") || body.hasPrefix("+") { body.removeFirst() }
         body = body.replacingOccurrences(of: currencyLocale.groupSeparator, with: "")
@@ -87,6 +87,12 @@ extension BudgetFormatter {
             parts.allSatisfy({ $0.allSatisfy(\.isASCIIDigit) })
         else { return nil }
         return parseAmount(text)
+    }
+
+    /// Shown amounts read back as typed ones: the true minus is "-", a no-break space a space.
+    static func plainAmountText(_ text: String) -> String {
+        text.replacingOccurrences(of: minus, with: "-").replacingOccurrences(of: unitSpace, with: " ")
+            .replacingOccurrences(of: "\u{202F}", with: " ")
     }
 
     /// The last `.` or `,` is the decimal point.

@@ -46,30 +46,30 @@ import Testing
     }
 
     @Test func aMonthlyTargetInOneSentence() {
-        #expect(german.targetHead(.monthly(50)) == "Jeden Monat weitere 50,00€ zurücklegen")
-        #expect(german.targetHead(.monthly(650, setAside: false)) == "Jeden Monat auffüllen bis 650,00€")
+        #expect(german.targetHead(.monthly(50)) == "Jeden Monat weitere 50,00\u{00A0}€ zurücklegen")
+        #expect(german.targetHead(.monthly(650, setAside: false)) == "Jeden Monat auffüllen bis 650,00\u{00A0}€")
     }
 
     @Test func aTargetByADateNamesItsDateARepeatingOneWithoutTheYear() {
         #expect(
             german.targetHead(.byDate(1200, due: date("2027-06-01")))
-                == "Bis zum 1. Juni 2027 weitere 1.200,00€ zurücklegen")
+                == "Bis zum 1. Juni 2027 weitere 1.200,00\u{00A0}€ zurücklegen")
         #expect(
             german.targetHead(.byDate(1200, due: date("2027-06-01"), repeatsYearly: true, setAside: false))
-                == "Jedes Jahr bis zum 1. Juni auf 1.200,00€ ansparen")
+                == "Jedes Jahr bis zum 1. Juni auf 1.200,00\u{00A0}€ ansparen")
     }
 
     @Test func theStatusIsOneSentenceOverspentFirstThenPausedStillMissingFunded() {
         #expect(german.targetStatus(row(balance: 5, target: nil), month: october) == nil)
         #expect(
             german.targetStatus(row(balance: decimal("-180.20"), snoozed: true), month: october)
-                == BudgetTargetStatus(state: .overspent, text: "Überzogen um 180,20€."))
+                == BudgetTargetStatus(state: .overspent, text: "Überzogen um 180,20\u{00A0}€."))
         #expect(
             german.targetStatus(row(underfunded: 0.10, snoozed: true), month: october)
                 == BudgetTargetStatus(state: .snoozed, text: "Pausiert im Oktober."))
         #expect(
             german.targetStatus(row(underfunded: decimal("68.34")), month: october)
-                == BudgetTargetStatus(state: .underfunded, text: "Noch 68,34€ diesen Monat."))
+                == BudgetTargetStatus(state: .underfunded, text: "Noch 68,34\u{00A0}€ diesen Monat."))
         #expect(german.targetStatus(row(), month: october) == BudgetTargetStatus(state: .met, text: "Erfüllt."))
     }
 
@@ -89,6 +89,6 @@ import Testing
         #expect((snoozed * 100).rounded() == 7)
         #expect(
             german.targetSavedLabel(try #require(row(saved: 80, target: byDate).target))
-                == "Angespart 80,00 von 1.200,00€")
+                == "Angespart 80,00 von 1.200,00\u{00A0}€")
     }
 }

@@ -186,9 +186,9 @@ public final class RegisterReconciliationController {
         guard let reconciliation = current, let account = register.account else { return nil }
         let summary = reconciliationSummary(reconciliation)
         let formatter = register.formatter
-        let date = formatter.dateShort(reconciliation.statementDate)
+        let date = formatter.dateLong(reconciliation.statementDate)
         let lastText =
-            account.lastReconciledOn.map { "Abgeglichener Saldo vom " + formatter.dateShort($0) }
+            account.lastReconciledOn.map { "Abgeglichener Saldo vom " + formatter.dateLong($0) }
             ?? "Noch nie abgeglichen"
         return ReconciliationFooterModel(
             rows: [

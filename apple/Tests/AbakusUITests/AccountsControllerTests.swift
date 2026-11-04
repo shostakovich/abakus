@@ -69,7 +69,7 @@ import Testing
         form.type = .checking
         app.accounts.createAccountClicked()
         let dialog = try #require(app.dialogs.presented.last?.dialog)
-        #expect(dialog.instruction == "Soll der Anfangssaldo negativ sein? (-$20.00)")
+        #expect(dialog.instruction == "Soll der Anfangssaldo negativ sein? (−$20.00)")
         #expect(dialog.buttons.map(\.title) == ["Der Betrag stimmt", "Korrigieren"])
         #expect(dialog.dismissal == AnyDialogChoice(BalanceSignChoice.fix))
         app.dialogs.presented.last?.answer(BalanceSignChoice.fix)

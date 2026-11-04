@@ -107,7 +107,7 @@ public final class RegisterViewModel {
     /// "Abgeglichen am 27.09.", with the year only for an earlier year.
     public var reconciledLabel: String? {
         guard let date = account?.lastReconciledOn else { return nil }
-        let text = date.year == today().year ? formatter.dayMonth(date) : formatter.dateShort(date)
+        let text = date.year == today().year ? formatter.dayMonth(date) : formatter.dateLong(date)
         return "Abgeglichen am \(text)"
     }
 
