@@ -50,7 +50,7 @@ defmodule Abakus.Ledger do
     Transfers
   }
 
-  alias Abakus.{Ids, Names, References, Repo, Successors, Sync}
+  alias Abakus.{Ids, Names, Positions, References, Repo, Successors, Sync}
   alias Abakus.Users.Scope
   alias Ecto.Changeset
 
@@ -158,8 +158,8 @@ defmodule Abakus.Ledger do
 
       with {:ok, account} <- movable(accounts, id),
            others = Enum.reject(account_group(accounts, account), &(&1.id == id)),
-           {:ok, order} <- insert_before(others, account, before_id) do
-        {:ok, renumber(order)}
+           {:ok, order} <- Positions.insert_before(others, account, before_id) do
+        {:ok, Positions.renumber(order)}
       end
     end)
   end
@@ -175,24 +175,6 @@ defmodule Abakus.Ledger do
   defp account_group(accounts, account) do
     budget? = Account.budget_account?(account)
     Enum.filter(accounts, &(not &1.closed and Account.budget_account?(&1) == budget?))
-  end
-
-  defp insert_before(others, account, nil), do: {:ok, others ++ [account]}
-
-  defp insert_before(others, account, before_id) do
-    case Enum.find_index(others, &(&1.id == before_id)) do
-      nil -> {:error, :not_in_group}
-      index -> {:ok, List.insert_at(others, index, account)}
-    end
-  end
-
-  defp renumber(accounts) do
-    accounts
-    |> Enum.with_index()
-    |> Enum.map(fn
-      {%Account{position: position} = account, position} -> account
-      {account, position} -> Sync.update!(Changeset.change(account, position: position))
-    end)
   end
 
   @doc "The account a file's account (`BANKID`, nil for a card, and `ACCTID`) is linked to, if any."
