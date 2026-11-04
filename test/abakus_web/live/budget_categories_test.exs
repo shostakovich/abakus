@@ -390,6 +390,155 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     end
   end
 
+  describe "sorting by dragging" do
+    setup do
+      home = category_group_fixture(name: "🏠 Wohnen")
+      rent = category_fixture(name: "🔑 Miete", category_group_id: home.id)
+      %{home: home, rent: rent}
+    end
+
+    defp shown_before?(view, first, second) do
+      html = render(view)
+      {at, _length} = :binary.match(html, ~s|id="#{first}"|)
+      {later, _length} = :binary.match(html, ~s|id="#{second}"|)
+      at < later
+    end
+
+    defp group_names do
+      budget_scope() |> Categories.list_category_groups() |> Enum.map(& &1.name)
+    end
+
+    test "groups, their heads and categories carry the sort attributes; the uncategorised row none",
+         c do
+      transaction_fixture(account_id: c.checking.id, amount: -999, date: ~D[2026-10-08])
+      view = open(c.conn)
+
+      assert has_element?(
+               view,
+               ~s|table#budget-table[phx-hook="Setzkasten.Components.Data.Sortable"][data-sort-event="sort_category"]|
+             )
+
+      assert has_element?(
+               view,
+               ~s|tbody#group-#{c.leisure.id}-rows[data-sort-id="#{c.leisure.id}"][data-sort-event="sort_group"]|
+             )
+
+      assert has_element?(view, ~s|tr#group-#{c.leisure.id}[data-sort-head="#{c.leisure.id}"]|)
+
+      assert has_element?(
+               view,
+               ~s|tr#category-#{c.movies.id}[data-sort-id="#{c.movies.id}"][data-sort-section="#{c.leisure.id}"]|
+             )
+
+      assert has_element?(view, "#category-uncategorised")
+      refute has_element?(view, "[data-sort-id] #category-uncategorised")
+      refute has_element?(view, "#category-uncategorised[data-sort-id]")
+    end
+
+    test "a category moves within its group", c do
+      view = open(c.conn)
+
+      render_hook(view, "sort_category", %{
+        "id" => c.games.id,
+        "section" => c.leisure.id,
+        "index" => 0
+      })
+
+      assert names(c.leisure.id) == ["🎳 Bowling", "🎬 Kino"]
+      assert shown_before?(view, "category-#{c.games.id}", "category-#{c.movies.id}")
+    end
+
+    test "a category moves to the start or the end of another group", c do
+      view = open(c.conn)
+
+      render_hook(view, "sort_category", %{
+        "id" => c.movies.id,
+        "section" => c.home.id,
+        "index" => 0
+      })
+
+      assert names(c.home.id) == ["🎬 Kino", "🔑 Miete"]
+
+      render_hook(view, "sort_category", %{
+        "id" => c.games.id,
+        "section" => c.home.id,
+        "index" => 2
+      })
+
+      assert names(c.home.id) == ["🎬 Kino", "🔑 Miete", "🎳 Bowling"]
+      assert names(c.leisure.id) == []
+      assert has_element?(view, ~s|#category-#{c.games.id}[data-sort-section="#{c.home.id}"]|)
+    end
+
+    test "a category moves into an empty group", c do
+      empty = category_group_fixture(name: "🗑️ Leer")
+      view = open(c.conn)
+
+      render_hook(view, "sort_category", %{"id" => c.rent.id, "section" => empty.id, "index" => 0})
+
+      assert names(empty.id) == ["🔑 Miete"]
+      assert has_element?(view, "#group-#{empty.id}-rows #category-#{c.rent.id}")
+    end
+
+    test "a group holding a category of the same name refuses it", c do
+      category_fixture(name: "Kino", category_group_id: c.home.id)
+      view = open(c.conn)
+
+      render_hook(view, "sort_category", %{
+        "id" => c.movies.id,
+        "section" => c.home.id,
+        "index" => 0
+      })
+
+      assert has_element?(
+               view,
+               "#flash-error",
+               "In „🏠 Wohnen“ gibt es schon eine Kategorie „🎬 Kino“."
+             )
+
+      assert names(c.leisure.id) == ["🎬 Kino", "🎳 Bowling"]
+    end
+
+    test "malformed or stale moves change nothing", c do
+      view = open(c.conn)
+      {:ok, _deleted} = Categories.delete_category(budget_scope(), c.rent, c.games)
+
+      for params <- [
+            %{"id" => c.movies.id, "section" => c.leisure.id, "index" => "1"},
+            %{"id" => c.movies.id, "section" => c.leisure.id, "index" => -1},
+            %{"id" => c.movies.id, "section" => Ecto.UUID.generate(), "index" => 0},
+            %{"id" => Ecto.UUID.generate(), "section" => c.leisure.id, "index" => 0},
+            %{"id" => c.leisure.id, "section" => c.home.id, "index" => 0},
+            %{"id" => c.movies.id},
+            %{}
+          ],
+          do: render_hook(view, "sort_category", params)
+
+      render_hook(view, "sort_group", %{"id" => c.movies.id, "section" => nil, "index" => 0})
+      render_hook(view, "sort_group", %{"id" => c.home.id, "section" => nil, "index" => "0"})
+
+      render_hook(view, "sort_category", %{
+        "id" => c.rent.id,
+        "section" => c.leisure.id,
+        "index" => 0
+      })
+
+      assert names(c.leisure.id) == ["🎬 Kino", "🎳 Bowling"]
+      assert group_names() == ["🎉 Freizeit", "🏠 Wohnen"]
+      refute has_element?(view, "#category-#{c.rent.id}")
+      refute has_element?(view, "#flash-error")
+    end
+
+    test "a group moves between groups", c do
+      view = open(c.conn)
+
+      render_hook(view, "sort_group", %{"id" => c.home.id, "section" => nil, "index" => 0})
+
+      assert group_names() == ["🏠 Wohnen", "🎉 Freizeit"]
+      assert shown_before?(view, "group-#{c.home.id}", "group-#{c.leisure.id}")
+    end
+  end
+
   test "\"Löschen\" sent while adding changes nothing", c do
     view = open(c.conn)
 

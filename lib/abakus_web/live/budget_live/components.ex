@@ -279,19 +279,23 @@ defmodule AbakusWeb.BudgetLive.Components do
     doc: "per month the totals shown: assigned, activity, available"
 
   attr :current, Date, required: true
-  attr :group_id, :integer, default: nil, doc: "the group's id when it can be edited"
+  attr :group_id, :string, default: nil, doc: "the group's id when it can be edited and dragged"
   attr :edit, :map, default: nil, doc: "the open popover, when it is this group's"
   slot :inner_block
 
   @doc """
   A group's rows: a collapsible head on a band with its totals per month, blank at zero, then its categories. An
   editable group's name opens its popover (rename, add a category, delete); its "+", shown on hover where there is
-  one, adds a category.
+  one, adds a category. It drags as a block, and its head takes dragged categories (`BudgetLive`'s `Sortable`).
   """
   def group(assigns) do
     ~H"""
-    <tbody id={"#{@id}-rows"}>
-      <tr id={@id} class="app-grp">
+    <tbody
+      id={"#{@id}-rows"}
+      data-sort-id={@group_id}
+      data-sort-event={@group_id && "sort_group"}
+    >
+      <tr id={@id} class="app-grp" data-sort-head={@group_id}>
         <th class="app-cat" scope="rowgroup">
           <div class="app-grp-head">
             <button
@@ -388,6 +392,7 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   attr :compact, :boolean, default: false, doc: "on phones, without the pencil"
   attr :budgeting, :any, required: true, doc: "the months being budgeted (`Status.budgeting?/2`)"
+  attr :group_id, :string, default: nil, doc: "its group's id, when the row can be dragged"
 
   @doc """
   A category on one line: name, then per month an assign input, activity and available, which opens the popover
@@ -398,7 +403,12 @@ defmodule AbakusWeb.BudgetLive.Components do
     assigns = assign(assigns, :parts, Names.split_emoji(assigns.name))
 
     ~H"""
-    <tr id={"category-#{@id}"} class="app-row">
+    <tr
+      id={"category-#{@id}"}
+      class="app-row"
+      data-sort-id={@group_id && @id}
+      data-sort-section={@group_id}
+    >
       <td class="app-cat">
         <div class="app-catcell">
           <span class="app-emoji" aria-hidden="true">
