@@ -203,6 +203,30 @@ import Testing
         #expect(adjustment.amount == -1116)
     }
 
+    @Test func adjustingTheBalanceKeepsTheTypedNameAndKind() throws {
+        let fixture = RegisterFixture()
+        let app = app(fixture)
+        app.accounts.editAccountRequested(fixture.giro)
+        let form = try #require(app.accounts.editForm)
+        form.name = "Hauskonto"
+        form.type = .savings
+        app.accounts.adjustBalanceClicked()
+        #expect(try #require(app.accounts.balanceForm).title == "Saldo von „Hauskonto“ anpassen")
+        #expect(app.store.budget.account(withId: fixture.giro)?.name == "Hauskonto")
+        #expect(app.store.budget.account(withId: fixture.giro)?.kind == .savings)
+    }
+
+    @Test func aRefusedNameKeepsTheAccountFormInsteadOfAdjusting() throws {
+        let fixture = RegisterFixture()
+        let app = app(fixture)
+        app.accounts.editAccountRequested(fixture.giro)
+        try #require(app.accounts.editForm).name = "  "
+        app.accounts.adjustBalanceClicked()
+        #expect(app.dialogs.presented.last?.dialog.instruction == "Bitte einen Kontonamen eingeben.")
+        #expect(app.accounts.editForm != nil)
+        #expect(app.accounts.balanceForm == nil)
+    }
+
     @Test func fixingTheSignKeepsTheBalanceForm() throws {
         let fixture = RegisterFixture()
         let app = app(fixture)
