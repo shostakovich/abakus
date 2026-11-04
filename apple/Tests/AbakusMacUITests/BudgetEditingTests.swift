@@ -301,6 +301,10 @@ import Testing
         #expect(!"aZ€:".contains(where: BudgetViewModel.allowsTyping))
     }
 
+    @Test func aPastedTrueMinusKeepsTheSign() {
+        #expect(BudgetViewModel.allowedText("\u{2212}50,00\u{00A0}€") == "-50,00")
+    }
+
     @Test func popupsSitAtTheAssignedBox() throws {
         let model = F().model().model
         let cell = model.cell(F.kino)

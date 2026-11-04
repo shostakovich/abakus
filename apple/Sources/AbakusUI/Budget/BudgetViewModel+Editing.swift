@@ -123,6 +123,11 @@ extension BudgetViewModel {
         return true
     }
 
+    /// What a cell keeps of typed or pasted text; the true minus that Abakus writes reads as a sign.
+    public static func allowedText(_ text: String) -> String {
+        String(text.replacingOccurrences(of: "\u{2212}", with: "-").filter(allowsTyping))
+    }
+
     /// Everything up to "/" passes, so signs and the calculator's operators can be typed.
     public static func allowsTyping(_ character: Character) -> Bool {
         guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1 else { return false }

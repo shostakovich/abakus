@@ -138,7 +138,7 @@ struct BudgetCellField: NSViewRepresentable {
         func shouldInsert(_ replacement: String, in textView: NSTextView, range: NSRange) -> Bool {
             guard let model, !isApplying else { return true }
             if replacement.count == 1, model.cellKey(.character(replacement)) { return false }
-            let allowed = String(replacement.filter(BudgetViewModel.allowsTyping))
+            let allowed = BudgetViewModel.allowedText(replacement)
             guard allowed != replacement else { return true }
             if !allowed.isEmpty { textView.insertText(allowed, replacementRange: range) }
             return false
