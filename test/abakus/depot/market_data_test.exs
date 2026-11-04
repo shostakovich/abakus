@@ -165,7 +165,20 @@ defmodule Abakus.Depot.MarketDataTest do
 
   describe "run_daily/1 with DivvyDiary" do
     defp composition(countries, sectors \\ %{}),
-      do: {:ok, %{composition: %{countries: countries, sectors: sectors}, dividends: []}}
+      do: symbol(%{composition: %{countries: countries, sectors: sectors}})
+
+    defp symbol(fields),
+      do:
+        {:ok,
+         Map.merge(
+           %{
+             composition: %{countries: %{}, sectors: %{}},
+             dividends: [],
+             ter: nil,
+             fund_size: nil
+           },
+           fields
+         )}
 
     defp dividend(pay_date, per_share, currency \\ "USD"),
       do: %{
@@ -216,7 +229,7 @@ defmodule Abakus.Depot.MarketDataTest do
 
       FakeSymbolSource.stub(fn
         "IE00B3RBWM25" ->
-          {:ok, %{composition: %{countries: %{}, sectors: %{}}, dividends: [announced]}}
+          symbol(%{dividends: [announced]})
 
         _isin ->
           {:error, :unreachable}
@@ -229,6 +242,28 @@ defmodule Abakus.Depot.MarketDataTest do
              ]
 
       assert length(dividends_of(other)) == 3
+    end
+
+    test "stores the TER and the fund size, keeping a stored one DivvyDiary does not deliver" do
+      security =
+        security_fixture(
+          isin: "IE00B3RBWM25",
+          attributes: %{"ter" => 0.002, "aum" => 100, "vendor" => "Vanguard"}
+        )
+
+      FakeSymbolSource.stub(fn _isin -> symbol(%{ter: 0.0014, fund_size: 7_918_397_382_400}) end)
+
+      MarketData.run_daily(@now)
+
+      assert Repo.reload!(security).attributes ==
+               %{"ter" => 0.0014, "aum" => 7_918_397_382_400, "vendor" => "Vanguard"}
+
+      FakeSymbolSource.stub(fn _isin -> symbol(%{fund_size: 200}) end)
+
+      MarketData.run_daily(@now)
+
+      assert Repo.reload!(security).attributes ==
+               %{"ter" => 0.0014, "aum" => 200, "vendor" => "Vanguard"}
     end
 
     test "asks nothing without an API key" do

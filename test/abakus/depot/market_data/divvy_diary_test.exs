@@ -171,6 +171,23 @@ defmodule Abakus.Depot.MarketData.DivvyDiaryTest do
       end
     end
 
+    test "reads the TER as a fraction and the fund size in cents" do
+      assert {:ok, %{ter: 0.0022, fund_size: 1_780_000_000_000}} = Response.symbol(@json)
+
+      json = Map.merge(@json, %{"ter" => 0, "fundSize" => 5_123_640_491.4})
+      assert {:ok, %{ter: 0, fund_size: 512_364_049_140}} = Response.symbol(json)
+    end
+
+    test "a missing, null or malformed TER or fund size is unknown" do
+      for {ter, size} <- [{nil, nil}, {"0.22 %", "5 Mrd."}, {-0.1, 0}, {true, -5}] do
+        json = Map.merge(@json, %{"ter" => ter, "fundSize" => size})
+        assert {:ok, %{ter: nil, fund_size: nil}} = Response.symbol(json)
+      end
+
+      json = Map.drop(@json, ["ter", "fundSize"])
+      assert {:ok, %{ter: nil, fund_size: nil}} = Response.symbol(json)
+    end
+
     test "dividends that are not a list make the answer invalid, so the stored data stays" do
       assert Response.symbol(Map.put(@json, "dividends", "none")) == {:error, :invalid_response}
     end

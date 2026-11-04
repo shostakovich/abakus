@@ -248,6 +248,10 @@ defmodule Abakus.Depot.Securities do
     )
   end
 
+  @doc "Stores the TER and the fund size of a security; nil keeps the stored one."
+  def store_ter_and_fund_size(%Security{} = security, ter, fund_size),
+    do: security |> Security.ter_and_fund_size_changeset(ter, fund_size) |> Repo.update!()
+
   @doc "The compositions of the securities with `ids` as `%{security_id => composition}`."
   def list_compositions(ids) do
     from(c in Composition, where: c.security_id in ^ids)

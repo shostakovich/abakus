@@ -19,6 +19,18 @@ defmodule Abakus.Depot.Securities.SecurityTest do
     assert Security.fund_size(security(%{"aum" => 1.5})) == nil
   end
 
+  test "sets the TER and the fund size given, keeping the others" do
+    security = security(%{"ter" => 0.002, "aum" => 100, "vendor" => "iShares"})
+
+    assert Security.ter_and_fund_size_changeset(security, 0.0015, 512_364_049_100).changes ==
+             %{attributes: %{"ter" => 0.0015, "aum" => 512_364_049_100, "vendor" => "iShares"}}
+
+    assert Security.ter_and_fund_size_changeset(security, nil, nil).changes == %{}
+
+    assert Security.ter_and_fund_size_changeset(%Security{attributes: nil}, nil, 7).changes ==
+             %{attributes: %{"aum" => 7}}
+  end
+
   test "every other attribute set comes with its type, in the order of the types" do
     [ter, aum, index, vendor, fee, listed] =
       for key <- ~w(ter aum index vendor fee listed), do: %AttributeType{key: key}

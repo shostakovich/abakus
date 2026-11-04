@@ -1,8 +1,8 @@
 defmodule Abakus.Depot.MarketData do
   @moduledoc """
-  Fetches prices and the compositions and dividends of the securities and stores them. The daily
-  job calls `run_daily/1`; pages refresh stale quotes in the background and hear about every
-  update over PubSub. Screens never call a source themselves.
+  Fetches prices and the compositions, dividends, TERs and fund sizes of the securities and stores
+  them. The daily job calls `run_daily/1`; pages refresh stale quotes in the background and hear
+  about every update over PubSub. Screens never call a source themselves.
   """
 
   require Logger
@@ -21,8 +21,8 @@ defmodule Abakus.Depot.MarketData do
   def broadcast, do: Phoenix.PubSub.broadcast(Abakus.PubSub, @topic, :market_data_updated)
 
   @doc """
-  Fetches the prices of every Yahoo security and, with an API key, the composition and the
-  dividends of every security with an ISIN, then records the run. A step that fails, even with
+  Fetches the prices of every Yahoo security and, with an API key, the composition, dividends, TER
+  and fund size of every security with an ISIN, then records the run. A step that fails, even with
   an exception or an exit, is recorded or logged and does not stop the others.
   """
   def run_daily(now \\ DateTime.utc_now()) do
@@ -183,9 +183,10 @@ defmodule Abakus.Depot.MarketData do
   # A failed fetch keeps the stored composition; one DivvyDiary does not know is no error.
   defp update_symbol(security, now) do
     case symbol_source().symbol(security.isin) do
-      {:ok, %{composition: composition, dividends: dividends}} ->
-        Securities.replace_composition(security, composition, now)
-        Securities.replace_dividends(security, dividends, now)
+      {:ok, symbol} ->
+        Securities.replace_composition(security, symbol.composition, now)
+        Securities.replace_dividends(security, symbol.dividends, now)
+        Securities.store_ter_and_fund_size(security, symbol.ter, symbol.fund_size)
 
       {:error, :not_found} ->
         :ok

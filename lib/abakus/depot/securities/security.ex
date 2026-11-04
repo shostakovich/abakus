@@ -44,6 +44,19 @@ defmodule Abakus.Depot.Securities.Security do
   def fund_size(%__MODULE__{attributes: %{@fund_size => size}}) when is_integer(size), do: size
   def fund_size(%__MODULE__{}), do: nil
 
+  @doc "Sets the TER and the fund size given, in the units above; nil keeps the stored one."
+  def ter_and_fund_size_changeset(%__MODULE__{} = security, ter, fund_size) do
+    attributes =
+      (security.attributes || %{})
+      |> put_known(@ter, ter)
+      |> put_known(@fund_size, fund_size)
+
+    change(security, attributes: attributes)
+  end
+
+  defp put_known(attributes, _key, nil), do: attributes
+  defp put_known(attributes, key, value), do: Map.put(attributes, key, value)
+
   @doc """
   The attributes set on the security other than TER and fund size as `{type, value}`, in the
   order of `types`, the attribute types of securities; a value without its type is left out.
