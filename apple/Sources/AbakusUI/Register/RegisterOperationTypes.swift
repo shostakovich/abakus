@@ -49,6 +49,16 @@ public enum RegisterScheduledCallout: Equatable, Sendable {
                 + "<b>Einmalig</b>, lässt sich aber ändern."
         }
     }
+
+    /// Touch screens show the scheduled transactions in a sheet of their own, not below the register.
+    public var touchMessage: String {
+        switch self {
+        case .added:
+            "Sie steht jetzt in den geplanten Buchungen. Ihre Häufigkeit ist <b>Monatlich</b>, lässt sich aber ändern."
+        case .moved:
+            "Sie steht jetzt in den geplanten Buchungen. Ihre Häufigkeit ist <b>Einmalig</b>, lässt sich aber ändern."
+        }
+    }
 }
 
 public struct RenamePayeeForm: Identifiable, Hashable, Sendable {

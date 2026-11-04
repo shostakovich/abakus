@@ -20,7 +20,7 @@ public final class BudgetCalloutController {
 
     var store: any BudgetStoring { budget.store }
     var dialogs: DialogStack { budget.dialogs }
-    var formatter: BudgetFormatter { budget.formatter }
+    package var formatter: BudgetFormatter { budget.formatter }
 
     func open(_ popup: BudgetPopup) -> BudgetPopup? {
         reset()
@@ -28,6 +28,10 @@ public final class BudgetCalloutController {
         case .editCategory(let id, let month):
             guard let form = categoryForm(id, isNew: false, month: month) else { return nil }
             category = form
+        case .category(let month, let id):
+            guard let form = categoryForm(id, isNew: false, month: month) else { return nil }
+            category = form
+            availableForm = availableForm(month: month, categoryId: id)
         case .outflowSummary(let month, let source):
             summary = store.budget.outflowSummary(source, month: month, today: budget.today, formatter: formatter)
         case .incomeSummary(let month):
@@ -54,7 +58,7 @@ public final class BudgetCalloutController {
         assignForm = nil
     }
 
-    func isShowing(_ popup: BudgetPopup) -> Bool {
+    package func isShowing(_ popup: BudgetPopup) -> Bool {
         budget.presentedPopup == popup
     }
 
@@ -67,7 +71,7 @@ public final class BudgetCalloutController {
         guard let popup = budget.presentedPopup, !budget.isCoveredByModal else { return false }
         switch popup {
         case .monthQuickBudget: return false
-        case .editCategory: if !targetEscaped() && !deletionEscaped() { categoryCancelled() }
+        case .editCategory, .category: if !targetEscaped() && !deletionEscaped() { categoryCancelled() }
         default: close()
         }
         return true
@@ -78,7 +82,7 @@ public final class BudgetCalloutController {
         guard let popup = budget.presentedPopup, !budget.isCoveredByModal else { return }
         switch popup {
         case .monthQuickBudget: break
-        case .editCategory: if category?.closesOnClickOutside != false && category?.target == nil { close() }
+        case .editCategory, .category: if category?.closesOnClickOutside != false && category?.target == nil { close() }
         default: close()
         }
     }

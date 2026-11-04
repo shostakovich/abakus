@@ -32,6 +32,28 @@ import Testing
         #expect(model.search.dropDown == nil)
     }
 
+    @Test func touchSuggestionsListValuesThenTheFieldsToSearchIn() throws {
+        let (_, model, _) = searchModel()
+        model.search.boxChanged("re")
+        let groups = model.search.touchSuggestionGroups
+        #expect(groups.map(\.title) == ["Vorschläge", "„re“ suchen in"])
+        let rewe = try #require(groups.first?.rows.first { $0.value == "REWE" })
+        #expect(rewe.field == "Empfänger:")
+        #expect(model.search.dropDown?.items[rewe.index].searchText == "Empfänger: REWE")
+        #expect(groups.last?.rows.map(\.field) == ["Allen Feldern", "Empfänger", "Kategorie", "Memo"])
+    }
+
+    @Test func touchSuggestionsNameATransferByItsAccountAndTheRemindersByTheApprovalToken() {
+        let (_, model, _) = searchModel()
+        model.search.boxChanged("Ist: Erinn")
+        let reminder = model.search.touchSuggestionGroups.flatMap(\.rows).first { $0.id == "is:Erinnerung" }
+        #expect(reminder?.value == "Zu bestätigen")
+        model.search.boxChanged("Empfänger: Transfer")
+        let transfers = model.search.touchSuggestionGroups.flatMap(\.rows).filter(\.isTransfer)
+        #expect(!transfers.isEmpty)
+        #expect(transfers.allSatisfy { !$0.value.contains("Transfer") })
+    }
+
     @Test func enterRunsTheTypedSearch() {
         let (_, model, ids) = searchModel()
         model.search.boxChanged("rewe")
@@ -137,7 +159,7 @@ import Testing
         let subRows = model.rows.filter(\.isSubtransaction)
         #expect(subRows.map(\.id) == ["S1", "S2"])
         #expect(subRows.map(\.isExcludedFromSearch) == [false, true])
-        #expect(model.summary.second.amountText == "-$30.00")
+        #expect(model.summary.second.amountText == "−$30.00")
     }
 
     @Test func clearingTheSearchRestoresTheSplitExpansion() {
@@ -152,9 +174,9 @@ import Testing
         let (_, model, _) = searchModel()
         model.search.run("Ausgang: >40")
         #expect(model.summary.second.title == "Suchsumme (3)")
-        #expect(model.summary.second.amountText == "-$100.00")
+        #expect(model.summary.second.amountText == "−$100.00")
         model.search.run("Ausgang: >10")
-        #expect(model.summary.second.amountText == "-$150.00")
+        #expect(model.summary.second.amountText == "−$150.00")
     }
 
     @Test func summaryBoxesRunTheirSearches() {

@@ -1,6 +1,11 @@
 import AbakusCore
-import AppKit
 import AuthenticationServices
+
+#if os(macOS)
+    import AppKit
+#else
+    import UIKit
+#endif
 
 @MainActor
 public enum WebSignIn {
@@ -34,7 +39,18 @@ public enum WebSignIn {
         var session: ASWebAuthenticationSession?
 
         func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-            MainActor.assumeIsolated { NSApp.keyWindow ?? NSApp.windows.first ?? ASPresentationAnchor() }
+            MainActor.assumeIsolated { Self.window }
+        }
+
+        @MainActor private static var window: ASPresentationAnchor {
+            #if os(macOS)
+                return NSApp.keyWindow ?? NSApp.windows.first ?? ASPresentationAnchor()
+            #else
+                let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+                if let window = scenes.flatMap(\.windows).first(where: \.isKeyWindow) { return window }
+                guard let scene = scenes.first else { preconditionFailure("Signing in needs a window scene") }
+                return ASPresentationAnchor(windowScene: scene)
+            #endif
         }
     }
 }

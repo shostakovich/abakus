@@ -23,8 +23,10 @@ public final class AppModel {
     public internal(set) var payeeSettings: PayeeSettingsModel?
     public let sync: BudgetSync?
     public let syncSettings: SyncSettingsModel?
+    public let device: DeviceKind
     @ObservationIgnored var lastUsedPayeeId: String?
     @ObservationIgnored let preferences: (any SettingsStorage)?
+    @ObservationIgnored let settings: BudgetSettings?
     private var acknowledgedSaveFailures = 0
     @ObservationIgnored private let saveErrorId = UUID()
     @ObservationIgnored private var lastDate: DateWithoutTime
@@ -32,12 +34,14 @@ public final class AppModel {
 
     public init(
         store: BudgetStore, selection: SidebarSelection? = nil,
-        defaults: (any SettingsStorage)? = UserDefaults.standard, sync: BudgetSync? = nil
+        defaults: (any SettingsStorage)? = UserDefaults.standard, sync: BudgetSync? = nil, device: DeviceKind = .mac
     ) {
         self.store = store
         self.sync = sync
-        syncSettings = sync.map { SyncSettingsModel(sync: $0) }
+        self.device = device
+        syncSettings = sync.map { SyncSettingsModel(sync: $0, device: device) }
         let settings = defaults.map { BudgetSettings(storage: $0, store: store) }
+        self.settings = settings
         let budgetSettings = BudgetViewSettings(budget: settings, app: defaults)
         let initial = selection ?? (budgetSettings.opensOnBudget ? .budget : Self.defaultSelection(in: store.budget))
         navigation = NavigationState(selection: initial)
@@ -47,6 +51,7 @@ public final class AppModel {
         budget = BudgetViewModel(store: store, navigation: navigation, dialogs: dialogs, settings: budgetSettings)
         if let settings { register.restoreViewStates(from: RegisterViewStateStore(settings: settings)) }
         sidebar.sync = sync
+        sidebar.device = device
         accounts = AccountsController(store: store, navigation: navigation, dialogs: dialogs)
         accounts.register = register
         accounts.sidebar = sidebar
@@ -59,6 +64,9 @@ public final class AppModel {
         store.onReceive = { [weak self] in self?.register.endEditsOvertakenByChanges() }
         budget.callouts.onShowTransaction = { [weak self] id in self?.register.showTransaction(id) }
         budget.callouts.onShowInAccountView = { [weak self] filter in self?.register.showFilteredView(filter) }
+        budget.onShowAllAccountsSearch = { [weak self] text in self?.register.showAllAccounts(searching: text) }
+        budget.onShowApprovals = { [weak self] in self?.register.showApprovals() }
+        register.isTouch = device != .mac
         navigation.onSelectionChange { [weak self] old, new in
             guard let self else { return }
             if old == .budget { budget.leave() }
@@ -89,6 +97,13 @@ public final class AppModel {
         return !store.hasUnsavedChanges
     }
 
+    /// The system may end an app in the background; the sheets stay open for the return.
+    public func enteredBackground() {
+        budget.commitEdit()
+        if store.hasUnsavedChanges { store.retrySave() }
+        sync?.stop()
+    }
+
     /// Every failed write shows an error dialog, here with a retry.
     public var saveErrorDialog: PresentedDialog? {
         guard store.saveFailures > acknowledgedSaveFailures, let error = store.lastSaveError else { return nil }
@@ -105,7 +120,7 @@ public final class AppModel {
     }
 
     /// The save error covers every other dialog.
-    var presentedDialogs: [PresentedDialog] {
+    package var presentedDialogs: [PresentedDialog] {
         dialogs.presented + [saveErrorDialog].compactMap(\.self)
     }
 
@@ -120,7 +135,7 @@ public final class AppModel {
             dialogs.dismiss(ownedBy: self)
             dialogs.ask(
                 TaskDialog<ClockChoice>(
-                    instruction: "Stimmt die Uhr deines Mac?",
+                    instruction: "Stimmt die Uhr \(device.yourGenitive)?",
                     content: "Das Datum hat sich gerade um mehr als einen Tag geändert. Sollen fällige geplante "
                         + "Buchungen für das neue Datum angelegt werden?",
                     buttons: [

@@ -171,8 +171,17 @@ public struct AbakusServer: Sendable {
         do {
             return try JSONDecoder().decode(type, from: sent.0)
         } catch {
+            if Self.isWebPage(sent.1) { throw SyncError.refused(Self.webPageMessage) }
             throw SyncError.refused("Die Antwort von Abakus ließ sich nicht lesen.")
         }
+    }
+
+    private static let webPageMessage =
+        "Abakus antwortete mit einer Webseite statt mit Daten. Vermutlich lässt ein Anmeldedienst vor dem Server die "
+        + "App nicht durch."
+
+    private static func isWebPage(_ response: HTTPURLResponse) -> Bool {
+        (response.value(forHTTPHeaderField: "Content-Type") ?? "").lowercased().hasPrefix("text/html")
     }
 
     private static func error(_ data: Data, _ response: HTTPURLResponse) -> SyncError {
@@ -186,6 +195,7 @@ public struct AbakusServer: Sendable {
         case "invalid_request": return .invalidRequest(body?.detail ?? "Abakus hat die Anfrage abgelehnt.")
         default:
             if response.statusCode == 401 { return .invalidToken }
+            if body == nil && isWebPage(response) { return .refused(webPageMessage) }
             return .refused(body?.detail ?? body?.error ?? "Abakus antwortete mit Status \(response.statusCode).")
         }
     }

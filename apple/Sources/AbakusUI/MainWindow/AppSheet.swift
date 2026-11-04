@@ -1,16 +1,16 @@
 import Foundation
 
-struct AddCategoryRequest: Identifiable {
-    let form: AddCategoryForm
-    let masterNames: [String]
-    let onCreate: (String, String) -> Void
-    let onCancel: () -> Void
+package struct AddCategoryRequest: Identifiable {
+    package let form: AddCategoryForm
+    package let masterNames: [String]
+    package let onCreate: (String, String) -> Void
+    package let onCancel: () -> Void
 
-    var id: UUID { form.id }
+    package var id: UUID { form.id }
 }
 
 /// The form the window shows as its sheet; a new category asked for by an editor covers everything else.
-enum AppSheet: Identifiable {
+package enum AppSheet: Identifiable {
     case addCategory(AddCategoryRequest)
     case payeeSettings(PayeeSettingsModel)
     case renamePayee(RenamePayeeForm)
@@ -18,7 +18,7 @@ enum AppSheet: Identifiable {
     case addAccount(AddAccountForm)
     case adjustBalance(AdjustBalanceForm)
 
-    var id: UUID {
+    package var id: UUID {
         switch self {
         case .addCategory(let request): request.id
         case .payeeSettings(let model): model.id
@@ -31,7 +31,7 @@ enum AppSheet: Identifiable {
 }
 
 extension AppModel {
-    var sheet: AppSheet? {
+    package var sheet: AppSheet? {
         if let editor = register.editor ?? register.scheduler.editor, let form = editor.addCategoryForm {
             return .addCategory(
                 AddCategoryRequest(

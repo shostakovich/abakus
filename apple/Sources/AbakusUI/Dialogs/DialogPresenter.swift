@@ -1,7 +1,7 @@
 import Foundation
 
 @MainActor
-protocol DialogPresentation: AnyObject {
+package protocol DialogPresentation: AnyObject {
     func show(
         _ dialog: TaskDialog<AnyDialogChoice>, id: UUID,
         onAnswer: @escaping @MainActor (AnyDialogChoice, Bool) -> Void)
@@ -10,7 +10,7 @@ protocol DialogPresentation: AnyObject {
 
 /// Keeps the presented sheets in step with the dialog stack: the stack stays the model, the sheets follow it.
 @MainActor
-final class DialogPresenter {
+package final class DialogPresenter {
     private struct Shown {
         let id: UUID
         let dialog: TaskDialog<AnyDialogChoice>
@@ -19,11 +19,11 @@ final class DialogPresenter {
     private let presentation: any DialogPresentation
     private var shown: [Shown] = []
 
-    init(presentation: any DialogPresentation) {
+    package init(presentation: any DialogPresentation) {
         self.presentation = presentation
     }
 
-    func update(_ dialogs: [PresentedDialog]) {
+    package func update(_ dialogs: [PresentedDialog]) {
         let kept = zip(shown, dialogs).prefix { $0.id == $1.id && $0.dialog == $1.dialog }.count
         for stale in shown[kept...].reversed() {
             presentation.close(stale.id)

@@ -366,3 +366,14 @@ Accepted, 2026-11-01 (#114). Replaces 0028.
   the Setzkasten tokens, light and dark, and the web's structure and terms.
 - **Consequences:** The apps feel like Mac and iOS apps and look like Abakus; a Setzkasten colour change is copied into
   `ThemeColor` by hand. Text, separators and backgrounds keep the system's styles, which follow Increase Contrast.
+
+## 0031. The Mac and iOS share the views' logic, not their screens
+
+Accepted, 2026-11-01 (#123).
+
+- **Context:** The Mac's views are SwiftUI with AppKit pieces for pointer and keyboard (text fields, popovers,
+  menus, key routing), while iOS needs touch, sheets and size classes for iPhone and iPad.
+- **Decision:** One UI target serves both with the view models, Abakus's colours and the views that work on both;
+  each platform keeps its own screens and its interaction, the Mac's AppKit pieces included.
+- **Consequences:** A rule in a view model reaches both platforms at once, but a screen is laid out per platform,
+  and the Mac's view models lose what they know of AppKit.

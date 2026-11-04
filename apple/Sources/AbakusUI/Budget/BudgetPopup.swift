@@ -7,6 +7,8 @@ public enum BudgetPopup: Hashable, Sendable {
     case assignToCategory(month: DateWithoutTime)
     /// `month` is the one the target shows; without it, today's if shown, else the first shown.
     case editCategory(categoryId: String, month: DateWithoutTime? = nil)
+    /// The touch sheet of a category or group in one month: Verfügbar and assigning beside what `editCategory` has.
+    case category(month: DateWithoutTime, categoryId: String)
     case outflowSummary(month: DateWithoutTime, source: OutflowSummarySource)
     case incomeSummary(month: DateWithoutTime)
     case outflowHelp(month: DateWithoutTime, categoryId: String)
@@ -15,7 +17,7 @@ public enum BudgetPopup: Hashable, Sendable {
     public var anchor: BudgetPopupAnchor {
         switch self {
         case .monthQuickBudget(let month), .assignToCategory(let month): .monthQuickBudget(month)
-        case .editCategory(let id, _): .categoryRow(id)
+        case .editCategory(let id, _), .category(_, let id): .categoryRow(id)
         case .outflowSummary(let month, .category(let id)), .outflowSummary(let month, .masterCategory(let id)),
             .outflowHelp(let month, let id):
             .outflows(month, id)
@@ -57,7 +59,7 @@ private struct BudgetPopupAnchorModifier: ViewModifier {
 }
 
 extension View {
-    func budgetPopupAnchor(_ anchor: BudgetPopupAnchor, of model: BudgetViewModel) -> some View {
+    package func budgetPopupAnchor(_ anchor: BudgetPopupAnchor, of model: BudgetViewModel) -> some View {
         modifier(BudgetPopupAnchorModifier(anchor: anchor, model: model))
     }
 }

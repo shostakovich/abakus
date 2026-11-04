@@ -74,6 +74,13 @@ import Testing
         #expect(american.parseAmount("$12.00") == 12)
     }
 
+    @Test func shownAmountsReadBack() {
+        let shown = german.currency(decimal("-1234.5"))
+        #expect(german.parseAmount(shown) == decimal("-1234.5"))
+        #expect(german.parseBudgetAmount(shown) == decimal("-1234.5"))
+        #expect(german.parseBalance(shown) == decimal("-1234.5"))
+    }
+
     @Test func minusMakesItNegative() {
         #expect(german.parseAmount("-12,30") == decimal("-12.3"))
         #expect(german.parseAmount("- 5") == -5)
@@ -167,7 +174,7 @@ import Testing
         calculator.press(.backspace)
         #expect(calculator.display == "4")
         calculator.press(.negate)
-        #expect(calculator.display == "-4")
+        #expect(calculator.display == "−4")
         calculator.press(.backspace)
         calculator.press(.backspace)
         #expect(calculator.display == "0")
@@ -180,7 +187,7 @@ import Testing
         negated.press(.digit(5))
         negated.press(.equals)
         negated.press(.negate)
-        #expect(negated.display == "-15,00")
+        #expect(negated.display == "−15,00")
         negated.press(.op(.add))
         negated.press(.digit(3))
         #expect(negated.result() == -12)
@@ -202,6 +209,24 @@ import Testing
         var calculator = calculator(0, nil)
         for _ in 0..<40 { calculator.press(.digit(1)) }
         #expect(calculator.display.count == 30)
+    }
+
+    @Test func typedArithmeticIsWorkedLeftToRight() {
+        #expect(Calculator.evaluate("12,50 + 7,30", formatter: formatter) == decimal("19.8"))
+        #expect(Calculator.evaluate("10+5×2", formatter: formatter) == 30)
+        #expect(Calculator.evaluate("10 ÷ 4", formatter: formatter) == decimal("2.5"))
+        #expect(Calculator.evaluate("5−7", formatter: formatter) == -2)
+        #expect(Calculator.evaluate("1.000,00*2", formatter: formatter) == 2000)
+        #expect(Calculator.evaluate("10/3", formatter: formatter) == decimal("3.33"))
+        #expect(Calculator.evaluate("12,50+", formatter: formatter) == nil)
+    }
+
+    @Test func plainAmountsAndDivisionByZeroAreNoArithmetic() {
+        #expect(Calculator.evaluate("12,50", formatter: formatter) == nil)
+        #expect(Calculator.evaluate("-12,50", formatter: formatter) == nil)
+        #expect(Calculator.evaluate("", formatter: formatter) == nil)
+        #expect(Calculator.evaluate("+", formatter: formatter) == nil)
+        #expect(Calculator.evaluate("5/0", formatter: formatter) == nil)
     }
 }
 

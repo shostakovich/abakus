@@ -62,7 +62,7 @@ final class FakeAbakus: HTTPTransport, @unchecked Sendable {
         get { lock.withLock { _failure } }
         set { lock.withLock { _failure = newValue } }
     }
-    /// A refresh waits until this is false again.
+    /// A refresh is answered only once this is false again, though the server has rotated the token already.
     var holdsRefreshes: Bool {
         get { lock.withLock { _holdsRefreshes } }
         set { lock.withLock { _holdsRefreshes = newValue } }
@@ -98,10 +98,11 @@ final class FakeAbakus: HTTPTransport, @unchecked Sendable {
         switch path {
         case "/oauth/token":
             let form = form(request)
+            let answer = token(form)
             while form["grant_type"] == "refresh_token" && holdsRefreshes {
                 try await Task.sleep(for: .milliseconds(5))
             }
-            return token(form)
+            return answer
         case "/oauth/revoke": return answer(200, [:])
         case "/api/snapshot", "/api/sync":
             guard let device = device(of: request) else { return answer(401, ["error": "invalid_token"]) }

@@ -26,7 +26,7 @@ public final class AccountsController {
         today = store.today
     }
 
-    var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
+    package var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
 
     public var isPresenting: Bool { addForm != nil || editForm != nil || balanceForm != nil }
 
@@ -151,7 +151,8 @@ public final class AccountsController {
     }
 
     public func adjustBalanceClicked() {
-        guard let form = editForm, let account = store.budget.account(withId: form.accountId) else { return }
+        guard let form = editForm, applyEdits(form), let account = store.budget.account(withId: form.accountId)
+        else { return }
         editForm = nil
         let working = store.budget.balances(forAccount: account.id).working
         balanceForm = AdjustBalanceForm(

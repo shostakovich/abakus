@@ -16,7 +16,7 @@ public struct RegisterScrollRequest: Hashable, Sendable {
 }
 
 @MainActor
-protocol RegisterGridOwner: AnyObject {
+package protocol RegisterGridOwner: AnyObject {
     var grid: RegisterGridController { get }
     /// The main grid's own parts: its cell actions (the layout decides which cells draw), popups, glow, focus.
     var mainGrid: RegisterViewModel? { get }
@@ -39,18 +39,19 @@ protocol RegisterGridOwner: AnyObject {
 
 @MainActor
 @Observable
-final class RegisterGridController {
-    unowned let register: RegisterViewModel
+package final class RegisterGridController {
+    package unowned let register: RegisterViewModel
     let store: any BudgetStoring
     let navigation: NavigationState
     let newFrequency: ScheduledTransactionFrequency?
-    @ObservationIgnored weak var owner: (any RegisterGridOwner)?
+    @ObservationIgnored package weak var owner: (any RegisterGridOwner)?
     @ObservationIgnored weak var peer: RegisterGridController?
     private var storedSelection = (visit: -1, selection: RegisterSelection())
     private var storedEditor: (visit: Int, editor: TransactionEditor)?
     private var storedScrollRequest: (visit: Int, request: RegisterScrollRequest)?
     /// The date of the last new record saved in this grid.
     var lastUsedDate: DateWithoutTime?
+    var lastUsedAccountId: String?
 
     init(register: RegisterViewModel, newFrequency: ScheduledTransactionFrequency? = nil) {
         self.register = register
@@ -62,7 +63,7 @@ final class RegisterGridController {
     private var ids: [String] { owner?.gridIds ?? [] }
     var acceptsKeys: Bool { register.acceptsRegisterKeys }
 
-    var selection: RegisterSelection {
+    package var selection: RegisterSelection {
         guard storedSelection.visit == navigation.visit else { return RegisterSelection() }
         var selection = storedSelection.selection
         selection.retain(Set(ids))
@@ -86,7 +87,7 @@ final class RegisterGridController {
 
     /// Returns whether the grid takes keyboard focus; an edit that swallowed the click keeps it.
     @discardableResult
-    func rowClicked(_ id: String, column: RegisterColumn?, modifiers: RegisterClickModifiers) -> Bool {
+    package func rowClicked(_ id: String, column: RegisterColumn?, modifiers: RegisterClickModifiers) -> Bool {
         if swallowsClick(on: id) { return false }
         var result = RegisterSelection.ClickResult.selectionChanged
         let order = ids
@@ -95,13 +96,13 @@ final class RegisterGridController {
         return !hasOpenEdit
     }
 
-    func headerClicked(_ column: RegisterColumn) {
+    package func headerClicked(_ column: RegisterColumn) {
         guard !swallowsClick(), let owner, column.isSortable else { return }
         owner.sortOrder = owner.sortOrder.clicked(column)
         if let first = selectedIds.first { requestScroll(.row(first)) }
     }
 
-    func toggleSplit(_ id: String) {
+    package func toggleSplit(_ id: String) {
         guard !swallowsClick(), let owner else { return }
         if owner.expandedSplits.contains(id) {
             owner.expandedSplits.remove(id)
@@ -119,7 +120,7 @@ final class RegisterGridController {
     }
 
     @discardableResult
-    func navigationKeyPressed(_ key: RegisterNavigationKey, extending: Bool, caretOnly: Bool, pageRows: Int)
+    package func navigationKeyPressed(_ key: RegisterNavigationKey, extending: Bool, caretOnly: Bool, pageRows: Int)
         -> String?
     {
         let count = ids.count
@@ -136,37 +137,37 @@ final class RegisterGridController {
     }
 
     /// The open editor; switching the account or budget drops it silently.
-    var editor: TransactionEditor? {
+    package var editor: TransactionEditor? {
         guard let storedEditor, storedEditor.visit == navigation.visit else { return nil }
         return storedEditor.editor
     }
 
     /// Only the frequency field has no AppKit input to take the arrows; other fields' arrows wait for theirs.
-    func editorArrowPressed(_ key: EditorKey) -> Bool {
+    package func editorArrowPressed(_ key: EditorKey) -> Bool {
         guard let editor, editor.focus == .field(.main(.frequency)) else { return false }
         return editor.handleKey(key)
     }
 
-    var editingId: String? {
+    package var editingId: String? {
         editor.flatMap { $0.mode == .existing ? $0.transactionId : nil }
     }
 
     var isAdding: Bool { editor?.mode == .new }
 
     /// An edit in this grid or in its peer keeps the keyboard focus.
-    var hasOpenEdit: Bool { editor != nil || peer?.editor != nil }
+    package var hasOpenEdit: Bool { editor != nil || peer?.editor != nil }
 
-    var editRowExtraHeight: CGFloat {
+    package var editRowExtraHeight: CGFloat {
         guard let editor, editor.mode == .existing else { return 0 }
         return editor.rowHeight - RegisterMetrics.rowHeight
     }
 
     /// The add editor's height above the rows, 0 while none is open.
-    var addRowHeight: CGFloat { isAdding ? editor?.rowHeight ?? 0 : 0 }
+    package var addRowHeight: CGFloat { isAdding ? editor?.rowHeight ?? 0 : 0 }
 
     /// The list's secondary-click menu at `y` in the viewport: nil hands the click on (to the edited row's fields,
     /// or below the rows), an empty menu takes it, as on a month heading.
-    func contextMenu(atY y: CGFloat, scrollOffset: CGFloat) -> [RegisterMenuItem]? {
+    package func contextMenu(atY y: CGFloat, scrollOffset: CGFloat) -> [RegisterMenuItem]? {
         guard let owner, let row = row(atY: y, scrollOffset: scrollOffset), row.transactionId != editingId else {
             return nil
         }
@@ -234,7 +235,7 @@ final class RegisterGridController {
         requestScroll(.row(id))
     }
 
-    func editSelected() {
+    package func editSelected() {
         guard acceptsKeys, !hasOpenEdit, selection.count == 1, let id = selectedIds.first else { return }
         beginEditing(id)
     }
@@ -243,8 +244,11 @@ final class RegisterGridController {
         if peer?.clickedOutsideEditor() == true { return }
         if let editor, editor.mode == .new || editor.clickedOutside() { return }
         let budget = store.budget
+        let lastUsed = lastUsedAccountId.flatMap(budget.account(withId:)).flatMap { account in
+            register.isTouch && !account.closed ? account : nil
+        }
         guard
-            let account = register.account ?? accountId.flatMap(budget.account(withId:))
+            let account = accountId.flatMap(budget.account(withId:)) ?? register.account ?? lastUsed
                 ?? budget.accounts(in: .budgetAccounts).first ?? budget.accounts(in: .offBudgetAccounts).first
         else { return }
         clearSelection()
@@ -287,7 +291,10 @@ final class RegisterGridController {
         if case .saved(let id, let addAnother, _, _) = outcome {
             updateSelection { $0.select(id) }
             let saved = owner?.editorRecord(id)?.transaction
-            if editor.mode == .new { lastUsedDate = saved?.date }
+            if editor.mode == .new {
+                lastUsedDate = saved?.date
+                lastUsedAccountId = saved?.accountId
+            }
             if addAnother, let saved {
                 beginNew(accountId: saved.accountId, date: saved.date)
             } else {
@@ -298,7 +305,7 @@ final class RegisterGridController {
     }
 
     /// A request the grid of this visit still has to follow, also when it appears after the request.
-    var scrollRequest: RegisterScrollRequest? {
+    package var scrollRequest: RegisterScrollRequest? {
         get { storedScrollRequest.flatMap { $0.visit == navigation.visit ? $0.request : nil } }
         set { storedScrollRequest = newValue.map { (navigation.visit, $0) } }
     }
@@ -310,7 +317,9 @@ final class RegisterGridController {
     /// The offset that shows `target`, nil while its row is in view; without `current` the list starts at the top.
     /// An edit row taller than the viewport fills it and keeps its focused part in view; a row revealed upwards stays
     /// clear of the month heading pinned above it. An open add editor takes the place of every target.
-    func scrollOffset(for target: RegisterScrollRequest.Target, viewport: CGFloat, current: CGFloat?) -> CGFloat? {
+    package func scrollOffset(for target: RegisterScrollRequest.Target, viewport: CGFloat, current: CGFloat?)
+        -> CGFloat?
+    {
         if let editor, editor.mode == .new {
             let current = current ?? 0
             let offset =
@@ -367,18 +376,18 @@ final class RegisterGridController {
         return min(maxOffset, rows * RegisterMetrics.rowHeight)
     }
 
-    func listContentHeight(viewport: CGFloat) -> CGFloat {
+    package func listContentHeight(viewport: CGFloat) -> CGFloat {
         registerListContentHeight(
             rowCount: owner?.gridRows.count ?? 0, viewportHeight: viewport, extraHeight: editRowExtraHeight,
             leadHeight: addRowHeight)
     }
 
     /// A list that fits keeps its top.
-    func keepsEnd(_ list: ScrollMetrics) -> Bool {
+    package func keepsEnd(_ list: ScrollMetrics) -> Bool {
         list.isAtEnd && list.canScroll
     }
 
-    func scrollMetrics(at offset: CGFloat, viewport: CGFloat) -> ScrollMetrics {
+    package func scrollMetrics(at offset: CGFloat, viewport: CGFloat) -> ScrollMetrics {
         let content = listContentHeight(viewport: viewport)
         let maxOffset = max(0, content - viewport)
         let offset =
@@ -388,7 +397,9 @@ final class RegisterGridController {
         return ScrollMetrics(offset: offset, contentHeight: content, viewportHeight: viewport)
     }
 
-    func scrollMetrics(revealing target: RegisterScrollRequest.Target, from list: ScrollMetrics, viewport: CGFloat)
+    package func scrollMetrics(
+        revealing target: RegisterScrollRequest.Target, from list: ScrollMetrics, viewport: CGFloat
+    )
         -> ScrollMetrics?
     {
         scrollOffset(for: target, viewport: viewport, current: list.offset).map {
@@ -397,7 +408,7 @@ final class RegisterGridController {
     }
 
     /// An open edit then keeps its row in view.
-    func scrollMetrics(afterResizing list: ScrollMetrics, to viewport: CGFloat) -> ScrollMetrics {
+    package func scrollMetrics(afterResizing list: ScrollMetrics, to viewport: CGFloat) -> ScrollMetrics {
         let maxOffset = max(0, listContentHeight(viewport: viewport) - viewport)
         var offset = keepsEnd(list) ? maxOffset : min(maxOffset, list.offset)
         if editor != nil, let request = scrollRequest,
@@ -410,7 +421,8 @@ final class RegisterGridController {
 
     /// Within a row of the end lands on the end: a list resizing at its end passes through such offsets. The rows
     /// start at `origin`, below the add editor, which scrolls freely.
-    nonisolated static func snappedOffset(_ offset: CGFloat, maxOffset: CGFloat, origin: CGFloat = 0) -> CGFloat {
+    package nonisolated static func snappedOffset(_ offset: CGFloat, maxOffset: CGFloat, origin: CGFloat = 0) -> CGFloat
+    {
         let row = RegisterMetrics.rowHeight
         guard offset <= maxOffset - row else { return maxOffset }
         guard offset > origin else { return max(0, offset) }

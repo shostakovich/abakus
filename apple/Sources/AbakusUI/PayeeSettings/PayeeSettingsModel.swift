@@ -59,11 +59,11 @@ public final class PayeeSettingsModel: Identifiable {
     public private(set) var autoFill: AutoFillSettings
     public private(set) var isRenaming = false
     public var renameText = ""
-    public private(set) var categoryText = ""
+    public internal(set) var categoryText = ""
     public private(set) var categoryList: DropDownState?
     public private(set) var rules: [RuleRow] = []
     public var combineName = ""
-    public private(set) var addCategoryForm: AddCategoryForm?
+    public internal(set) var addCategoryForm: AddCategoryForm?
     public private(set) var focusRequest: (field: Field, token: Int)?
     public private(set) var scrollRequest: (payeeId: String, token: Int)?
     @ObservationIgnored private var requests = 0
@@ -84,7 +84,7 @@ public final class PayeeSettingsModel: Identifiable {
     }
 
     var budget: Budget { store.budget }
-    var formatter: BudgetFormatter { BudgetFormatter(metaData: budget.budgetMetaData) }
+    package var formatter: BudgetFormatter { BudgetFormatter(metaData: budget.budgetMetaData) }
 
     public var rows: [Row] {
         let selected = Set(selection)
@@ -308,7 +308,7 @@ public final class PayeeSettingsModel: Identifiable {
         updateSelectedCategory(askingForNew: true)
     }
 
-    private func updateSelectedCategory(askingForNew: Bool) {
+    func updateSelectedCategory(askingForNew: Bool) {
         guard let payee = selectedPayee else { return }
         let typed = categoryText.trimmingCharacters(in: .whitespaces)
         if typed.isEmpty {
@@ -365,7 +365,7 @@ public final class PayeeSettingsModel: Identifiable {
         categoryText = categoryDisplay(added)
     }
 
-    var addCategoryRequest: AddCategoryRequest? {
+    package var addCategoryRequest: AddCategoryRequest? {
         addCategoryForm.map {
             AddCategoryRequest(
                 form: $0, masterNames: masterCategoryNames, onCreate: addCategoryConfirmed,
@@ -506,16 +506,16 @@ public final class PayeeSettingsModel: Identifiable {
 }
 
 extension PayeeSettingsModel: DropDownListHost {
-    func dropDownRowHovered(_ index: Int?) {
+    package func dropDownRowHovered(_ index: Int?) {
         guard var list = categoryList else { return }
         if let index, list.items.indices.contains(index), !list.items[index].isEnabled { return }
         list.highlighted = index
         categoryList = list
     }
 
-    func dropDownRowClicked(_ index: Int) {
+    package func dropDownRowClicked(_ index: Int) {
         categoryRowClicked(index)
     }
 
-    func dropDownFooterClicked() {}
+    package func dropDownFooterClicked() {}
 }

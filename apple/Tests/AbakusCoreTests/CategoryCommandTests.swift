@@ -98,7 +98,7 @@ import Testing
             scenario.budget.scheduledTransaction(withId: "SCHED-SPLIT")?.subtransactions.map(\.categoryId)
                 == [S.lebensmittel])
         #expect(scenario.budget.payee(withId: payee.id)?.lastCategoryId == S.lebensmittel)
-        #expect(scenario.month("2026-10-01").rowText(S.lebensmittel) == ["350,00", "-215,00", "135,00"])
+        #expect(scenario.month("2026-10-01").rowText(S.lebensmittel) == ["350,00", "−215,00", "135,00"])
         #expect(scenario.month("2026-11-01").rowText(S.lebensmittel) == ["20,00", "", "155,00"])
         #expect(scenario.month("2026-10-01").uncategorized.spent == 0)
     }
@@ -174,7 +174,7 @@ import Testing
         #expect(layout(scenario.budget) == ["Alltag|Lebensmittel", "Sparen|Kleidung|Notgroschen"])
         #expect(scenario.budget.categoryDisplayName(S.kleidung) == "Sparen: Kleidung")
         let october = scenario.month("2026-10-01")
-        #expect(october.masterText(S.sparen) == ["50,00", "-80,00", "-30,00"])
+        #expect(october.masterText(S.sparen) == ["50,00", "−80,00", "−30,00"])
         #expect(october.category(S.kleidung)?.assigned == 50)
     }
 

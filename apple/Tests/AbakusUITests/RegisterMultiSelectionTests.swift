@@ -49,7 +49,7 @@ private struct Girokonto {
         model.rowClicked(girokonto.row("20.10."), column: .payee, modifiers: .command)
         #expect(model.selection.count == 2)
         #expect(model.selectedTotal?.title == "Auswahl (2)")
-        #expect(model.selectedTotal?.amountText == "-323,90€")
+        #expect(model.selectedTotal?.amountText == "−323,90\u{00A0}€")
         #expect(model.actionButtonTitle.trimmingCharacters(in: .whitespaces) == "2 Buchungen bearbeiten")
         #expect(model.editor == nil)
     }

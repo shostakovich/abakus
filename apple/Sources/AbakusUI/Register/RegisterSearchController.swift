@@ -70,7 +70,7 @@ public final class RegisterSearchController {
         if let reconciliation = register.reconciliation.current {
             var message = "\(register.transactionIds.count) Buchungen"
             if let search = filter { message += " für „\(search.label)“" }
-            message += " bis \(register.formatter.dateShort(reconciliation.statementDate)) (Datum des Banksaldos)"
+            message += " bis \(register.headerDate(reconciliation.statementDate)) (Datum des Banksaldos)"
             return RegisterSearchInfo(message: message, clearButtonTitle: filter == nil ? nil : Self.clearSearchTitle)
         }
         guard isFiltered else { return nil }
@@ -107,7 +107,7 @@ public final class RegisterSearchController {
         return trimmed
     }
 
-    var currentTerm: String {
+    public var currentTerm: String {
         let text = self.text
         let start = text.lastIndex(of: ",").map { text.index(after: $0) } ?? text.startIndex
         return text[start...].trimmingCharacters(in: .whitespaces)

@@ -51,7 +51,8 @@ public struct Calculator: Hashable, Sendable {
             display.removeLast(display.isEmpty ? 0 : 1)
             if display.isEmpty { display = "0" }
         case .negate:
-            display = display.hasPrefix("-") ? String(display.dropFirst()) : "-" + display
+            let minus = BudgetFormatter.minus
+            display = display.hasPrefix(minus) ? String(display.dropFirst()) : minus + display
             if isNewValue { register = -register }
         case .digit(let digit):
             enter(String(digit))
@@ -121,5 +122,44 @@ extension Calculator.Key {
         case "F": return .negate
         default: return nil
         }
+    }
+}
+
+extension Calculator {
+    static let typedOperators: [Character: Operator] = [
+        "+": .add, "-": .subtract, "−": .subtract, "*": .multiply, "×": .multiply, "/": .divide, "÷": .divide,
+    ]
+
+    /// Left to right as the calculator works; nil without an operator between two numbers or on division by zero.
+    public static func evaluate(_ expression: String, formatter: BudgetFormatter) -> Decimal? {
+        var operands = [""]
+        var operators: [Operator] = []
+        for character in expression {
+            let operand = operands[operands.count - 1]
+            if let op = typedOperators[character], operand.contains(where: \.isNumber) {
+                operators.append(op)
+                operands.append("")
+            } else {
+                operands[operands.count - 1].append(character)
+            }
+        }
+        if operands.count > 1, !operands[operands.count - 1].contains(where: \.isNumber) {
+            operands.removeLast()
+            operators.removeLast()
+        }
+        guard !operators.isEmpty else { return nil }
+        var value = formatter.parseAmountUnrounded(operands[0])
+        for (op, operand) in zip(operators, operands.dropFirst()) {
+            let rhs = formatter.parseAmountUnrounded(operand)
+            switch op {
+            case .add: value += rhs
+            case .subtract: value -= rhs
+            case .multiply: value *= rhs
+            case .divide:
+                guard rhs != 0 else { return nil }
+                value /= rhs
+            }
+        }
+        return Amount.round(value, digits: formatter.currencyLocale.decimalDigits)
     }
 }

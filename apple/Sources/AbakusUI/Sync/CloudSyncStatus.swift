@@ -4,24 +4,33 @@ import Foundation
 public struct CloudSyncStatus: Hashable, Sendable {
     public let symbolName: String
     public let tooltip: String
+    /// Only what the owner has to act on, not a passing outage.
+    public let needsAttention: Bool
 
-    public static let local = CloudSyncStatus(
-        symbolName: "icloud.slash", tooltip: "Das Budget liegt nur auf diesem Mac und wird nicht synchronisiert.")
-
-    init(symbolName: String, tooltip: String) {
-        self.symbolName = symbolName
-        self.tooltip = tooltip
+    public static func local(on device: DeviceKind) -> CloudSyncStatus {
+        CloudSyncStatus(
+            symbolName: "icloud.slash",
+            tooltip: "Das Budget liegt nur auf \(device.dative) und wird nicht synchronisiert.")
     }
 
-    public init(_ status: SyncStatus, pendingChanges: Int, lastSync: Date?) {
+    init(symbolName: String, tooltip: String, needsAttention: Bool = false) {
+        self.symbolName = symbolName
+        self.tooltip = tooltip
+        self.needsAttention = needsAttention
+    }
+
+    public init(_ status: SyncStatus, pendingChanges: Int, lastSync: Date?, on device: DeviceKind) {
         let last = lastSync.map { " Zuletzt synchronisiert: \(Self.moment($0))." } ?? ""
         switch status {
         case .notSignedIn:
-            self = .local
+            self = .local(on: device)
         case .signedOutRemotely:
             self.init(
                 symbolName: "exclamationmark.icloud",
-                tooltip: "Dieser Mac wurde in Abakus abgemeldet. Melde ihn in den Einstellungen wieder an.")
+                tooltip:
+                    "\(device.sentenceSubject) wurde in Abakus abgemeldet. Melde \(device.pronounAccusative) in den "
+                    + "Einstellungen wieder an.",
+                needsAttention: true)
         case .inStep:
             self.init(symbolName: "checkmark.icloud", tooltip: "Das Budget ist mit Abakus abgeglichen." + last)
         case .offline:
@@ -31,7 +40,8 @@ public struct CloudSyncStatus: Hashable, Sendable {
         case .error(let problem):
             self.init(
                 symbolName: "exclamationmark.icloud",
-                tooltip: "Beim Synchronisieren ist ein Fehler aufgetreten: " + problem.message)
+                tooltip: "Beim Synchronisieren ist ein Fehler aufgetreten: " + problem.message,
+                needsAttention: true)
         }
     }
 

@@ -1,8 +1,15 @@
-import AppKit
 import SwiftUI
 
+#if os(macOS)
+    import AppKit
+    typealias PlatformColor = NSColor
+#else
+    import UIKit
+    typealias PlatformColor = UIColor
+#endif
+
 /// Abakus's colours come from Setzkasten's tokens; text, separators and backgrounds stay the system's, as SwiftUI's own
-/// styles follow Increase Contrast and `Color(nsColor:)` does not.
+/// styles follow Increase Contrast and a platform colour does not.
 public enum ThemeColor {
     public static let text = Color.primary
     public static let secondaryText = Color.secondary
@@ -12,17 +19,40 @@ public enum ThemeColor {
     public static let selectedText = SetzkastenToken.primaryContent.color
     public static let separator = SeparatorShapeStyle()
     public static let windowBackground = WindowBackgroundShapeStyle()
-    public static let contentBackground = Color(nsColor: .controlBackgroundColor)
+    public static let contentBackground = Color(platform: .contentBackground)
     public static let groupFill: some ShapeStyle = FillShapeStyle().quaternary
-    public static let groupBand = SetzkastenToken.base200.color
-    public static let availableTint = SetzkastenToken.availableTint.color
+    #if os(macOS)
+        public static let groupBand = SetzkastenToken.base200.color
+        public static let availableTint = SetzkastenToken.availableTint.color
+        public static let focusRing = Color(platform: .keyboardFocusIndicatorColor)
+    #else
+        /// The system's elevated surface, so the dark theme keeps one base and one elevation.
+        public static let groupBand = Color(platform: .secondarySystemBackground)
+        /// Laid over rows and group bands alike, so Verfügbar reads as one column.
+        public static let availableTint = Color(
+            platform: UIColor {
+                $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.05) : UIColor(white: 0, alpha: 0.03)
+            })
+        public static let focusRing = accent
+        public static let groupedBackground = Color(platform: .systemGroupedBackground)
+        public static let groupedRowBackground = Color(platform: .secondarySystemGroupedBackground)
+        /// Opaque, so the track keeps one tone under the fill, and a step lighter in dark to stay visible on black.
+        public static let targetTrack = Color(
+            platform: UIColor { $0.userInterfaceStyle == .dark ? .systemGray4 : .systemGray5 })
+        /// The system draws a search token's text white, so its fill is a grey that keeps 4.5:1 in both themes.
+        public static let searchTokenFill = UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? .systemGray4 : .systemGray.resolvedColor(with: UITraitCollection(accessibilityContrast: .high))
+        }
+    #endif
     public static let positiveBand = SetzkastenToken.successBand.color
+    public static let positiveContent = Color(platform: .contentBackground)
     /// Selected rows and the edited row; the accent stays with the focused field.
     public static let selection = SetzkastenToken.rowSelected.color
-    public static let fieldBackground = Color(nsColor: .textBackgroundColor)
+    public static let fieldBackground = Color(platform: .fieldBackground)
     public static let fieldOutline: some ShapeStyle = HierarchicalShapeStyle.quaternary
-    public static let focusRing = Color(nsColor: .keyboardFocusIndicatorColor)
     public static let negative = SetzkastenToken.errorInk.color
+    public static let negativeContent = SetzkastenToken.dangerContent.color
     public static let warning = SetzkastenToken.warningInk.color
     public static let positive = SetzkastenToken.successInk.color
 }
@@ -53,9 +83,17 @@ public struct OKLCH: Hashable, Sendable {
         )
     }
 
-    public var nsColor: NSColor {
+    #if os(macOS)
+        public var nsColor: NSColor { platformColor }
+    #endif
+
+    var platformColor: PlatformColor {
         let rgb = sRGB
-        return NSColor(colorSpace: .extendedSRGB, components: [rgb.red, rgb.green, rgb.blue, 1], count: 4)
+        #if os(macOS)
+            return NSColor(colorSpace: .extendedSRGB, components: [rgb.red, rgb.green, rgb.blue, 1], count: 4)
+        #else
+            return UIColor(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
+        #endif
     }
 
     private static func encoded(_ linear: Double) -> Double {
@@ -71,14 +109,18 @@ public struct SetzkastenToken: Hashable, Sendable {
     public let dark: OKLCH
 
     public var color: Color {
-        let light = light.nsColor
-        let dark = dark.nsColor
-        return Color(nsColor: NSColor(name: nil) { $0.isDark ? dark : light })
+        let light = light.platformColor
+        let dark = dark.platformColor
+        #if os(macOS)
+            return Color(nsColor: NSColor(name: nil) { $0.isDark ? dark : light })
+        #else
+            return Color(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+        #endif
     }
 
     /// For a view that draws in another appearance than the window, such as the sidebar.
     public func color(for scheme: ColorScheme) -> Color {
-        Color(nsColor: (scheme == .dark ? dark : light).nsColor)
+        Color(platform: (scheme == .dark ? dark : light).platformColor)
     }
 }
 
@@ -90,19 +132,42 @@ extension SetzkastenToken {
     static let successInk = Self(light: OKLCH(52.13, 0.144, 149.89), dark: OKLCH(81.97, 0.170, 150.02))
     static let warningInk = Self(light: OKLCH(54.00, 0.114, 74.60), dark: OKLCH(86.93, 0.142, 84.86))
     static let errorInk = Self(light: OKLCH(54.94, 0.199, 25.12), dark: OKLCH(74.93, 0.151, 21.82))
-    static let warning = Self(light: OKLCH(86.00, 0.154, 85.00), dark: OKLCH(86.93, 0.142, 84.86))
-    static let warningContent = Self(light: OKLCH(26.94, 0.060, 60.30), dark: OKLCH(26.00, 0.059, 60.77))
-    static let sidebar = Self(light: OKLCH(34.05, 0.035, 255.32), dark: OKLCH(20.00, 0.010, 262.00))
-    static let sidebarContent = Self(light: OKLCH(98.07, 0.005, 247.88), dark: OKLCH(95.07, 0.005, 247.88))
-    static let sidebarMuted = Self(light: OKLCH(83.02, 0.024, 250.11), dark: OKLCH(79.07, 0.010, 258.34))
-    static let sidebarAccent = Self(light: OKLCH(79.98, 0.108, 245.09), dark: OKLCH(75.90, 0.128, 250.16))
-    static let sidebarNegative = Self(light: OKLCH(81.00, 0.095, 22.00), dark: OKLCH(74.93, 0.151, 21.82))
+    static let dangerContent = Self(light: OKLCH(100, 0, 0), dark: OKLCH(21.87, 0.070, 21.41))
+    package static let warning = Self(light: OKLCH(86.00, 0.154, 85.00), dark: OKLCH(86.93, 0.142, 84.86))
+    package static let warningContent = Self(light: OKLCH(26.94, 0.060, 60.30), dark: OKLCH(26.00, 0.059, 60.77))
+    package static let sidebar = Self(light: OKLCH(34.05, 0.035, 255.32), dark: OKLCH(20.00, 0.010, 262.00))
+    package static let sidebarContent = Self(light: OKLCH(98.07, 0.005, 247.88), dark: OKLCH(95.07, 0.005, 247.88))
+    package static let sidebarMuted = Self(light: OKLCH(83.02, 0.024, 250.11), dark: OKLCH(79.07, 0.010, 258.34))
+    package static let sidebarAccent = Self(light: OKLCH(79.98, 0.108, 245.09), dark: OKLCH(75.90, 0.128, 250.16))
+    package static let sidebarNegative = Self(light: OKLCH(81.00, 0.095, 22.00), dark: OKLCH(74.93, 0.151, 21.82))
     /// Not in Setzkasten: the web's budget sets the Verfügbar column on it.
     static let availableTint = Self(light: OKLCH(97.20, 0.008, 240.00), dark: OKLCH(27.50, 0.010, 262.00))
     /// Not in Setzkasten: the web's budget sets Zu verteilen above zero on it.
     static let successBand = Self(light: OKLCH(96.00, 0.035, 150.00), dark: OKLCH(30.00, 0.040, 150.00))
 }
 
-extension NSAppearance {
-    var isDark: Bool { bestMatch(from: [.aqua, .darkAqua]) == .darkAqua }
+extension Color {
+    init(platform color: PlatformColor) {
+        #if os(macOS)
+            self.init(nsColor: color)
+        #else
+            self.init(uiColor: color)
+        #endif
+    }
 }
+
+extension PlatformColor {
+    #if os(macOS)
+        static var contentBackground: PlatformColor { .controlBackgroundColor }
+        static var fieldBackground: PlatformColor { .textBackgroundColor }
+    #else
+        static var contentBackground: PlatformColor { .systemBackground }
+        static var fieldBackground: PlatformColor { .tertiarySystemFill }
+    #endif
+}
+
+#if os(macOS)
+    extension NSAppearance {
+        var isDark: Bool { bestMatch(from: [.aqua, .darkAqua]) == .darkAqua }
+    }
+#endif

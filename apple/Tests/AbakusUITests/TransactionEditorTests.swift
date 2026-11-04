@@ -769,7 +769,7 @@ import Testing
         #expect(editor.subIds.count == 3)
         #expect(editor.focusedField == .sub(editor.subIds[2], .payee))
         editor.activate(.done)
-        #expect(editor.taskDialog?.instruction == "Was soll mit den noch nicht aufgeteilten <b>-$10.00</b> geschehen?")
+        #expect(editor.taskDialog?.instruction == "Was soll mit den noch nicht aufgeteilten <b>−$10.00</b> geschehen?")
         editor.answer(UnassignedChoice.manuallyAdjust)
         #expect(model.editor === editor)
         editor.activate(.done)

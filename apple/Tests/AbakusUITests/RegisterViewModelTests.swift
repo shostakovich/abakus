@@ -70,7 +70,7 @@ import Testing
         let model = fixture.model()
         #expect(model.reconciledLabel == "Abgeglichen am 30/04")
         fixture.budget.accounts[index].lastReconciledAt = day("2013-09-27").noon()
-        #expect(fixture.model().reconciledLabel == "Abgeglichen am 27/09/13")
+        #expect(fixture.model().reconciledLabel == "Abgeglichen am 27/09/2013")
         #expect(fixture.model(selection: .allAccounts).reconciledLabel == nil)
     }
 
@@ -131,7 +131,7 @@ import Testing
         let summary = model.summary
         #expect(summary.first.kind == .blank)
         #expect(summary.second.title == "Suchsumme (1)")
-        #expect(summary.second.amountText == "-$40.00")
+        #expect(summary.second.amountText == "−$40.00")
         #expect(!summary.showsOperands)
         model.search.clearClicked()
         #expect(model.search.filter == nil)
@@ -145,9 +145,9 @@ import Testing
         #expect(summary.first.title == "Gebucht")
         #expect(summary.first.amountText == "$1,111.00")
         #expect(summary.second.title == "Vorgemerkt")
-        #expect(summary.second.amountText == "-$1,200.00")
+        #expect(summary.second.amountText == "−$1,200.00")
         #expect(summary.second.isNegative)
-        #expect(summary.working.amountText == "-$89.00")
+        #expect(summary.working.amountText == "−$89.00")
         #expect(summary.showsOperands)
     }
 
@@ -219,7 +219,7 @@ import Testing
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -10)
         let model = fixture.model()
-        #expect(model.summary.second.amountText == "-$10.00")
+        #expect(model.summary.second.amountText == "−$10.00")
         try model.store.perform(.setCleared([id], .cleared))
         #expect(model.rows.last?.cleared == .cleared)
         #expect(model.summary.first.amountText == "$1,101.00")

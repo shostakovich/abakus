@@ -16,8 +16,8 @@ mix test
 
 CI runs the same plus `mix assets.deploy`. Erlang/Elixir versions: `.tool-versions`.
 
-Abakus for the Mac is the Swift package in `apple/`, with its own gates in [`apple/CLAUDE.md`](apple/CLAUDE.md);
-the sync protocol both sides follow is [`sync/PROTOCOL.md`](sync/PROTOCOL.md).
+Abakus for the Mac, iPhone and iPad is the Swift package in `apple/`, with its own gates in
+[`apple/CLAUDE.md`](apple/CLAUDE.md); the sync protocol both sides follow is [`sync/PROTOCOL.md`](sync/PROTOCOL.md).
 
 ## Conventions
 

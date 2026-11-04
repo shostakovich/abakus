@@ -98,7 +98,7 @@ extension RegisterViewModel {
     public func runningBalanceInfo(for rowId: String) -> RunningBalanceInfo? {
         guard let transaction = store.budget.transaction(withId: rowId) else { return nil }
         let balances = store.budget.balances(forAccount: accountKey ?? "", through: transaction.date)
-        let date = formatter.dateShort(transaction.date)
+        let date = formatter.dateLong(transaction.date)
         let uncleared = balances.uncleared
         let working = balances.working
         return RunningBalanceInfo(

@@ -28,6 +28,13 @@ public struct RegisterSearchSuggestion: Hashable, Sendable, Identifiable {
         self.isBlank = isBlank
         self.searchText = searchText
     }
+
+    static let scopeIdPrefix = "find:"
+    static let reminderId = "is:Erinnerung"
+
+    /// "„re“ in allen Feldern suchen": the typed text in a field instead of a value.
+    public var isScope: Bool { id.hasPrefix(Self.scopeIdPrefix) }
+    public var isReminder: Bool { id == Self.reminderId }
 }
 
 public struct RegisterSearchSuggestions {
@@ -228,8 +235,8 @@ public struct RegisterSearchSuggestions {
         ]
         var items = finds.map { prefix, field in
             RegisterSearchSuggestion(
-                id: "find:\(prefix)", prefix: prefix, description: "„<b>\(escaped)</b>“ \(field) suchen",
-                searchText: prefix + text)
+                id: RegisterSearchSuggestion.scopeIdPrefix + prefix, prefix: prefix,
+                description: "„<b>\(escaped)</b>“ \(field) suchen", searchText: prefix + text)
         }
         for name in ["Fehler", "Nicht kategorisiert", "Erinnerung"] {
             if let item = plain("is:\(name)", prefix: "Ist:", description: name, text: text) { items.append(item) }

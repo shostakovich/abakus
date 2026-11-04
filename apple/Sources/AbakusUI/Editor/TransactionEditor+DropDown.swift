@@ -6,7 +6,7 @@ extension TransactionEditor {
         switch (field.isSub, field.column) {
         case (_, .payee): .payee
         case (false, .category): .category
-        case (false, .account): isAllAccounts ? .account : nil
+        case (false, .account): choosesAccount ? .account : nil
         case (true, .category): .subCategory
         default: nil
         }

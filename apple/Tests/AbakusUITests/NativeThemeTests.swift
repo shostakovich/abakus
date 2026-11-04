@@ -47,7 +47,7 @@ import Testing
             (ThemeColor.selection, .rowSelected),
             (ThemeColor.groupBand, .base200), (ThemeColor.availableTint, .availableTint),
             (ThemeColor.positiveBand, .successBand),
-            (ThemeColor.selectedText, .primaryContent),
+            (ThemeColor.selectedText, .primaryContent), (ThemeColor.negativeContent, .dangerContent),
         ]
         for (color, token) in tokens {
             for scheme in [ColorScheme.light, .dark] {

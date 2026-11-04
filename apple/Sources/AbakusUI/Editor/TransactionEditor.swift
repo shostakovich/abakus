@@ -102,8 +102,8 @@ public final class TransactionEditor {
         for id in subIds { categoryPrompts[id] = subCategoryPrompt(id) }
     }
 
-    var budget: Budget { store.budget }
-    var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
+    package var budget: Budget { store.budget }
+    package var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
     var catalog: DropDownCatalog { DropDownCatalog(budget: budget, formatter: formatter, today: today) }
 
     public var transactionId: String { original.id }
@@ -371,7 +371,7 @@ public final class TransactionEditor {
         dropDown != nil || calculator != nil || isCalendarOpen || isFrequencyListOpen
     }
 
-    func closePopups() {
+    package func closePopups() {
         dropDown = nil
         calculator = nil
         isCalendarOpen = false

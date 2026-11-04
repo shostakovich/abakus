@@ -22,14 +22,14 @@ public struct BudgetQuickBudgetList: Hashable, Sendable {
     public static let calculatorLabel = "Rechner zeigen"
     public static let rowHeight = SystemChrome.menuRowHeight
     public static let separatorHeight: CGFloat = 11
-    static let labelFont = ThemeFont.body
-    static let amountFont = ThemeFont(size: ThemeFont.body.size, hasTabularDigits: true)
-    static let iconWidth: CGFloat = 16
-    static let iconGap: CGFloat = 6
-    static let gap: CGFloat = 12
+    package static let labelFont = ThemeFont.body
+    package static let amountFont = ThemeFont(size: ThemeFont.body.size, hasTabularDigits: true)
+    package static let iconWidth: CGFloat = 16
+    package static let iconGap: CGFloat = 6
+    package static let gap: CGFloat = 12
     static let inset = 10 + SystemChrome.menuPadding
 
-    static func label(_ text: String) -> String {
+    package static func label(_ text: String) -> String {
         text.trimmingCharacters(in: .whitespaces)
     }
 
@@ -75,10 +75,11 @@ extension BudgetViewModel {
 
     /// Text that does not parse keeps the stored amount.
     public func commitEdit() {
+        commitSheetAssigned()
         guard let edit = editor else { return }
         editor = nil
         quickBudget = nil
-        store(edit.text, in: edit.cell)
+        assign(edit.text, to: edit.cell)
     }
 
     public func cancelEdit() {
@@ -86,14 +87,15 @@ extension BudgetViewModel {
         quickBudget = nil
     }
 
-    private func store(_ text: String, in cell: BudgetCellID) {
+    public func assign(_ text: String, to cell: BudgetCellID) {
         guard let amount = formatter.parseBudgetAmount(text) else { return }
         setAssigned(amount, in: cell)
     }
 
-    private func setAssigned(_ amount: Decimal, in cell: BudgetCellID) {
+    func setAssigned(_ amount: Decimal, in cell: BudgetCellID) {
         guard amount != month(cell.month)?.category(cell.categoryId)?.assigned else { return }
         try? store.perform(.setAssigned(month: cell.month, categoryId: cell.categoryId, amount: amount))
+        callouts.refreshAvailableForm()
     }
 
     @discardableResult
@@ -121,6 +123,11 @@ extension BudgetViewModel {
         default: return false
         }
         return true
+    }
+
+    /// What a cell keeps of typed or pasted text; the true minus that Abakus writes reads as a sign.
+    public static func allowedText(_ text: String) -> String {
+        String(text.replacingOccurrences(of: "\u{2212}", with: "-").filter(allowsTyping))
     }
 
     /// Everything up to "/" passes, so signs and the calculator's operators can be typed.

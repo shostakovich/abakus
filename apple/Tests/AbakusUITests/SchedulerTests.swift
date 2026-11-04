@@ -402,4 +402,34 @@ import Testing
                     fitting: ["−1,234,567.89", "−25.00"], accessory: EditCellStyle.amountAccessoriesWidth))
         #expect(amount.width > RegisterColumn.signedAmountWidth)
     }
+
+    @Test func touchActionsActOnTheScheduleTheyName() {
+        var fixture = fixture()
+        fixture.addSchedule("S2", on: "2014-06-10", payee: "Gym")
+        let (model, store) = fixture.spied()
+        model.scheduler.performMenuAction(.skipScheduled, on: ["S2"])
+        model.scheduler.performMenuAction(.enterScheduledNow, on: ["S1"])
+        #expect(
+            store.commands == [
+                .skipScheduledTransactions(["S2"]),
+                .enterScheduledTransactions(ScheduledEntry(scheduledIds: ["S1"], approved: true)),
+            ])
+    }
+
+    @Test func theTouchMenuOffersTheScheduledActionsWithoutATitle() {
+        let (model, _) = fixture().spied()
+        let titles = model.scheduler.actionsMenu(for: ["S1"]).filter { $0.kind != .separator }.map(\.title)
+        #expect(titles == ["Jetzt buchen", "Diesmal überspringen", "Löschen", "In Konto verschieben"])
+    }
+
+    @Test func theTouchMenuIsBuiltForTheRowsItNames() throws {
+        let (model, _) = fixture().spied(selection: .allAccounts)
+        #expect(model.scheduler.actionsMenu(for: ["GONE"]).isEmpty)
+        let move = try #require(model.scheduler.actionsMenu(for: ["S1"]).first { $0.id == "move" })
+        guard case .submenu(let targets) = move.kind else {
+            Issue.record("no submenu")
+            return
+        }
+        #expect(targets.map(\.title) == ["Depot", "Karte", "Tagesgeld"])
+    }
 }

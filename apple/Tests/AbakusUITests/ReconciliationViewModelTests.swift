@@ -80,7 +80,7 @@ import Testing
     @Test func theStatementBalanceIsTakenAsTyped() throws {
         let fixture = RegisterFixture()
         let (model, _) = fixture.spied(selection: .account(fixture.karte))
-        for (typed, shown) in [("50", "$50.00"), ("-50", "-$50.00")] {
+        for (typed, shown) in [("50", "$50.00"), ("-50", "−$50.00")] {
             model.reconciliation.reconcileClicked()
             let form = try #require(model.reconciliation.statementForm)
             form.amountText = typed
@@ -121,7 +121,7 @@ import Testing
         #expect(model.sortOrder == .default)
         #expect(model.visibleColumns.contains(.cleared))
         #expect(model.columnLayout(gridWidth: 700).frame(of: .cleared)?.width == 90)
-        #expect(model.search.info?.message == "3 Buchungen bis 20/05/14 (Datum des Banksaldos)")
+        #expect(model.search.info?.message == "3 Buchungen bis 20/05 (Datum des Banksaldos)")
     }
 
     @Test func aTypedDateCountsWithoutLeavingTheField() throws {
@@ -167,8 +167,8 @@ import Testing
         let footer = try #require(model.reconciliation.footer)
         #expect(
             footer.rows.map(\.label) == [
-                "Noch nie abgeglichen", "Oben als gebucht markiert", "Gebuchter Saldo am 20/05/14",
-                "Banksaldo am 20/05/14",
+                "Noch nie abgeglichen", "Oben als gebucht markiert", "Gebuchter Saldo am 20/05/2014",
+                "Banksaldo am 20/05/2014",
             ])
         #expect(footer.rows.map(\.value) == ["$0.00", "$1,011.00", "$1,011.00", "$1,000.00"])
         #expect(footer.rows.map(\.operation) == [nil, .plus, .equals, .minus])
@@ -291,7 +291,7 @@ import Testing
         model.search.submitted()
         #expect(model.transactionIds == [ids[1], ids[0]])
         #expect(
-            model.search.info?.message == "2 Buchungen für „Shop“ bis 20/05/14 (Datum des Banksaldos)")
+            model.search.info?.message == "2 Buchungen für „Shop“ bis 20/05 (Datum des Banksaldos)")
         #expect(model.search.info?.clearButtonTitle == "Suche zurücksetzen")
         model.search.clearClicked()
         #expect(model.isReconciling)

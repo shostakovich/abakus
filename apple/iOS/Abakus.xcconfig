@@ -1,0 +1,27 @@
+// The app's settings; the team and the bundle id come from Signing.xcconfig (see Signing.xcconfig.template).
+SDKROOT = iphoneos
+SUPPORTED_PLATFORMS = iphoneos iphonesimulator
+TARGETED_DEVICE_FAMILY = 1,2
+IPHONEOS_DEPLOYMENT_TARGET = 26.0
+SWIFT_VERSION = 6.0
+SWIFT_TREAT_WARNINGS_AS_ERRORS = YES
+PRODUCT_NAME = Abakus
+PRODUCT_BUNDLE_IDENTIFIER = local.abakus.app
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+CODE_SIGN_STYLE = Automatic
+ALWAYS_SEARCH_USER_PATHS = NO
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/Frameworks
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+GENERATE_INFOPLIST_FILE = YES
+// One window per process, as the app shares one AppModel and the budget's lock lets one store open it.
+INFOPLIST_FILE = Info.plist
+INFOPLIST_KEY_CFBundleDisplayName = Abakus
+INFOPLIST_KEY_LSApplicationCategoryType = public.app-category.finance
+INFOPLIST_KEY_UILaunchScreen_Generation = YES
+INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES
+INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+
+#include? "Signing.xcconfig"

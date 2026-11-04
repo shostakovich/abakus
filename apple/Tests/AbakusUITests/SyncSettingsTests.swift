@@ -111,7 +111,8 @@ private final class SignInServer: HTTPTransport, @unchecked Sendable {
         #expect(model.signOutWarning == 3)
         #expect(
             model.signOutWarningText
-                == "3 Änderungen wurden noch nicht an Abakus gesendet und gehen beim Abmelden verloren.")
+                == "3 Änderungen wurden noch nicht an Abakus gesendet und gehen beim Abmelden verloren. Dann löscht "
+                + "Abakus das Budget auf diesem Mac und zeigt das Demo-Budget.")
         #expect(store.budget.account(withId: "giro") != nil)
 
         await model.confirmSignOut()
@@ -141,5 +142,15 @@ private final class SignInServer: HTTPTransport, @unchecked Sendable {
         #expect(model.signOutWarning == nil)
         #expect(store.budget.account(withId: "giro")?.name == "Giro")
         #expect(model.sync.isSignedIn)
+    }
+
+    @Test func theSettingsNameTheDeviceItRunsOn() throws {
+        let store = try BudgetStore.open(BudgetDatabase(), today: { today })
+        let sync = try #require(BudgetSync(store: store, tokens: MemoryTokenStore(), deviceName: "iPhone"))
+        let model = SyncSettingsModel(sync: sync, device: .iPhone)
+        #expect(
+            model.statusText
+                == "Melde dieses iPhone bei Abakus an, um dein Budget zu synchronisieren. Bis dahin zeigt es ein "
+                + "Demo-Budget.")
     }
 }

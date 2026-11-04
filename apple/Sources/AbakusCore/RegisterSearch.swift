@@ -408,8 +408,8 @@ enum SearchText {
 
     static func number(_ text: String) -> Decimal? {
         var digits = Substring(text.trimmingCharacters(in: .whitespaces))
-        let negative = digits.first == "-"
-        if digits.first == "-" || digits.first == "+" { digits = digits.dropFirst() }
+        let negative = digits.first == "-" || digits.first == "\u{2212}"
+        if negative || digits.first == "+" { digits = digits.dropFirst() }
         let parts = digits.split(separator: ".", omittingEmptySubsequences: false)
         guard !digits.isEmpty, parts.count <= 2, parts.allSatisfy({ $0.allSatisfy(\.isASCIIDigit) }),
             digits.contains(where: \.isASCIIDigit),

@@ -22,7 +22,8 @@ import Testing
     @Test func theMenuStartsWithFillingTheUnderfundedAndAssigningToOneCategory() {
         let model = fixture().model().model
         let items = model.callouts.quickBudgetMenu(month: october)
-        #expect(items.prefix(3).map(\.title) == ["Unterfinanzierte füllen (160,00€)", "In eine Kategorie …", ""])
+        #expect(
+            items.prefix(3).map(\.title) == ["Unterfinanzierte füllen (160,00\u{00A0}€)", "In eine Kategorie …", ""])
         #expect(items[0].kind == .action(.fillUnderfunded))
         #expect(items[1].kind == .action(.assignToCategory))
         #expect(items[2].kind == .separator)
@@ -33,7 +34,7 @@ import Testing
     @Test func withoutMoneyToAssignBothAreDisabled() {
         let model = fixture(income: 0).model().model
         let items = model.callouts.quickBudgetMenu(month: october)
-        #expect(items[0].title == "Unterfinanzierte füllen (160,00€)")
+        #expect(items[0].title == "Unterfinanzierte füllen (160,00\u{00A0}€)")
         #expect(items.prefix(2).map(\.isEnabled) == [false, false])
     }
 
@@ -74,7 +75,7 @@ import Testing
         #expect(model.popupAnchor == .monthQuickBudget(october))
         let form = try #require(model.callouts.assignForm)
         #expect(form.monthTitle == "Oktober 2026")
-        #expect(form.freeText == "Frei zu verteilen: 100,00€")
+        #expect(form.freeText == "Frei zu verteilen: 100,00\u{00A0}€")
         #expect(form.categoryId == F.kleidung)
         #expect(form.amount == "40,00")
         #expect(form.categories.map(\.name) == ["Alltag", "Sparen", "Freizeit"])

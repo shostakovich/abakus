@@ -61,10 +61,16 @@ public struct DropDownItem: Identifiable, Hashable, Sendable {
     }
 }
 
-struct DropDownCatalog {
+package struct DropDownCatalog {
     let budget: Budget
     let formatter: BudgetFormatter
     let today: DateWithoutTime
+
+    package init(budget: Budget, formatter: BudgetFormatter, today: DateWithoutTime) {
+        self.budget = budget
+        self.formatter = formatter
+        self.today = today
+    }
 
     func payeeItems(excludingAccount accountId: String?) -> [DropDownItem] {
         let payees = budget.payees.filter { !$0.isTransferPayee && !$0.hidden }
@@ -99,7 +105,7 @@ struct DropDownCatalog {
             }
     }
 
-    func categoryItems(includeSplit: Bool) -> [DropDownItem] {
+    package func categoryItems(includeSplit: Bool) -> [DropDownItem] {
         var items: [DropDownItem] = []
         if includeSplit {
             items.append(
@@ -323,3 +329,12 @@ extension DropDownItem {
         return ""
     }
 }
+
+@MainActor
+package protocol DropDownListHost: AnyObject {
+    func dropDownRowHovered(_ index: Int?)
+    func dropDownRowClicked(_ index: Int)
+    func dropDownFooterClicked()
+}
+
+extension TransactionEditor: DropDownListHost {}

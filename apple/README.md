@@ -1,11 +1,15 @@
-# Abakus for the Mac
+# Abakus for the Mac, iPhone and iPad
 
-A native macOS SwiftUI client for the Abakus budget (ADR 0029 in [`../DECISIONS.md`](../DECISIONS.md)), with account
-registers and the budget screen (window, sidebar, register, budget). It follows Abakus's budget rules and speaks German
-with Abakus's terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in this folder.
+A native SwiftUI client of the Abakus budget for macOS and iOS (ADR 0029 in [`../DECISIONS.md`](../DECISIONS.md)),
+with the budget, the account registers and the payees: on the Mac in one window with a sidebar, on the iPhone and
+the iPad in tabs (Budget, Konten, Einstellungen). It follows Abakus's budget rules and speaks German with Abakus's
+terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in this folder.
 
-- Targets: `AbakusCore` (model, store, persistence, formatting), `AbakusUI` (SwiftUI views and theme),
-  `Abakus` (the app), `Snapshot` (offscreen render and event-driven checks), with their tests in `Tests/`.
+- Targets: `AbakusCore` (model, store, persistence, formatting), `AbakusUI` (view models, theme and the views that
+  work on the Mac and iOS, ADR 0031), `AbakusMacUI` (the Mac's screens and everything on AppKit, pointer or keyboard),
+  `AbakusIOSUI` (the screens of the iPhone and the iPad), `Abakus` (the Mac app), `Snapshot` (offscreen render and
+  event-driven checks), with their tests in `Tests/`.
+  `AbakusMacUITests` reuses the fixtures of `AbakusUITests`.
 
 ## Setup
 
@@ -47,8 +51,25 @@ with Abakus's terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in th
   `payee-settings-category`); it runs before `--ops`, so both can be combined. Open sheets and alerts are drawn over
   the window.
 
+## iPhone and iPad
+
+- `iOS/Abakus.xcodeproj` is the iOS app: one source file that hosts `AbakusIOSUI`'s scene, the app icon and the
+  settings in `iOS/Abakus.xcconfig`. Copy `iOS/Signing.xcconfig.template` to `iOS/Signing.xcconfig` (git ignores it),
+  fill in your own team and a bundle id of your own, open the project in Xcode and run it on the device. The team is
+  that of a paid Apple Developer Program membership; a free personal team works too, but it limits the devices and
+  its installs run out after seven days, when running the app again from Xcode installs it anew and keeps the budget
+  and the sign-in.
+- The budget lives in the app's container (`Library/Application Support/Abakus/budget.sqlite`) with the Mac's rules
+  for opening, backups and sign-in; the tokens live in the Keychain under the database's path inside the container,
+  as the container's own path changes with each install. The app syncs while it is in the foreground, and when it
+  becomes active or the network comes back. Abakus lists the device as "iPhone" or "iPad".
+- `tools/test_ios.sh` builds the app and runs the core's tests on an iPhone simulator, through the shared scheme
+  `AbakusCoreTests` in `.swiftpm/xcode`.
+
 ## Gates
 
 - `swift build -Xswiftc -warnings-as-errors`
 - `swift test`
-- `swift format lint --strict --recursive Package.swift Sources Tests`
+- `swift format lint --strict --recursive Package.swift Sources Tests iOS`
+- `swift build --scratch-path .build/ios --target AbakusIOSUI --triple arm64-apple-ios26.0-simulator --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -Xswiftc -warnings-as-errors` (the iOS UI on the simulator)
+- `tools/test_ios.sh` (the iOS app, and the core's tests on an iPhone simulator)

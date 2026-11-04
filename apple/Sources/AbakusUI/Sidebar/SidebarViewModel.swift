@@ -16,7 +16,7 @@ public enum SidebarSelection: Hashable, Sendable {
 }
 
 public struct SidebarRevealRequest: Equatable, Sendable {
-    let selection: SidebarSelection
+    package let selection: SidebarSelection
     let token: Int
 }
 
@@ -25,17 +25,30 @@ public struct SidebarRevealRequest: Equatable, Sendable {
 public final class NavigationState {
     public var selection: SidebarSelection {
         didSet {
-            guard selection != oldValue else { return }
-            visit += 1
-            for observer in observers { observer(oldValue, selection) }
+            if selection != oldValue {
+                visit += 1
+                for observer in observers { observer(oldValue, selection) }
+            }
+            for observer in requestObservers { observer(selection) }
         }
     }
     /// Counts switches between sidebar entries; state that lasts for one visit (the selection) keys on it.
     public private(set) var visit = 0
     @ObservationIgnored private var observers: [(SidebarSelection, SidebarSelection) -> Void] = []
+    @ObservationIgnored private var requestObservers: [(SidebarSelection) -> Void] = []
 
     func onSelectionChange(_ observer: @escaping (SidebarSelection, SidebarSelection) -> Void) {
         observers.append(observer)
+    }
+
+    /// Hears every request to show a selection, also one for the selection already shown.
+    func onSelectionRequest(_ observer: @escaping (SidebarSelection) -> Void) {
+        requestObservers.append(observer)
+    }
+
+    /// Touch screens leave a register without selecting anything else.
+    func endVisit() {
+        visit += 1
     }
 
     public init(selection: SidebarSelection = .allAccounts) {
@@ -44,6 +57,10 @@ public final class NavigationState {
 }
 
 public struct SidebarBadge: Hashable, Sendable {
+    public enum Kind: Hashable, Sendable {
+        case needsCategory, forReview, error
+    }
+
     public var count: Int
     public var level: ErrorLevel
 
@@ -62,21 +79,65 @@ public struct SidebarBadge: Hashable, Sendable {
 
     public var isWarning: Bool { level == .error || level == .needsCategory }
 
-    public var tooltip: String {
-        let detail = "\nKlicke auf das Konto für Details."
-        return count == 1
-            ? "1 Buchung braucht deine Aufmerksamkeit." + detail
-            : "\(count) Buchungen brauchen deine Aufmerksamkeit." + detail
+    public var kind: Kind {
+        switch level {
+        case .error: .error
+        case .forReview: .forReview
+        case .needsCategory, .none: .needsCategory
+        }
+    }
+
+    public var summary: String {
+        count == 1 ? "1 Buchung braucht deine Aufmerksamkeit." : "\(count) Buchungen brauchen deine Aufmerksamkeit."
+    }
+
+    public var tooltip: String { summary + "\nKlicke auf das Konto für Details." }
+}
+
+/// The web's `AccountMotif`: what an account without an emoji in its name shows.
+public enum AccountMotif: Hashable, Sendable {
+    case landmark, piggyBank, banknote, trendingUp, receipt
+
+    public init(_ account: Account) {
+        if account.sharedExpenses {
+            self = .receipt
+            return
+        }
+        switch account.kind {
+        case .checking: self = .landmark
+        case .savings: self = .piggyBank
+        case .cash: self = .banknote
+        case .tracking: self = .trendingUp
+        }
+    }
+
+    /// SF Symbols has no piggy bank; a coin stands in for it.
+    public var symbolName: String {
+        switch self {
+        case .landmark: "building.columns"
+        case .piggyBank: "eurosign.circle"
+        case .banknote: "banknote"
+        case .trendingUp: "chart.line.uptrend.xyaxis"
+        case .receipt: "receipt"
+        }
     }
 }
 
 public struct SidebarAccountRow: Identifiable, Hashable, Sendable {
     public var id: String
     public var name: String
+    public var emoji: String?
+    public var label: String
+    public var motif: AccountMotif
     public var balance: Decimal
     public var balanceText: String
     public var tooltip: String
     public var badge: SidebarBadge?
+
+    /// What VoiceOver reads after the name.
+    public var accessibilityValue: String {
+        [balanceText, badge?.summary].compactMap(\.self).joined(separator: ", ")
+    }
 }
 
 public struct SidebarGroupPanel: Identifiable, Hashable, Sendable {
@@ -103,6 +164,7 @@ public final class SidebarViewModel {
         didSet { saveGroupStates(changedFrom: oldValue) }
     }
     public var sync: BudgetSync?
+    public var device = DeviceKind.mac
     public private(set) var revealRequest: SidebarRevealRequest?
     @ObservationIgnored private let defaults: (any SettingsStorage)?
     @ObservationIgnored private let budgetSettings: BudgetSettings?
@@ -137,7 +199,8 @@ public final class SidebarViewModel {
     private var formatter: BudgetFormatter { BudgetFormatter(metaData: store.budget.budgetMetaData) }
 
     public var cloudStatus: CloudSyncStatus {
-        sync.map { CloudSyncStatus($0.status, pendingChanges: $0.pendingChanges, lastSync: $0.lastSync) } ?? .local
+        sync.map { CloudSyncStatus($0.status, pendingChanges: $0.pendingChanges, lastSync: $0.lastSync, on: device) }
+            ?? .local(on: device)
     }
 
     public var sectionTitles: (budget: String, allAccounts: String) {
@@ -161,8 +224,10 @@ public final class SidebarViewModel {
                 let balance = balances[account.id] ?? 0
                 let summary = budget.errorSummary(forAccount: account.id)
                 let tooltip = account.name + "    " + formatter.currency(balance)
+                let split = account.name.leadingEmoji
                 return SidebarAccountRow(
-                    id: account.id, name: account.name, balance: balance,
+                    id: account.id, name: account.name, emoji: split?.emoji, label: split?.name ?? account.name,
+                    motif: AccountMotif(account), balance: balance,
                     balanceText: formatter.currency(balance), tooltip: tooltip,
                     badge: summary.count > 0 ? SidebarBadge(count: summary.count, level: summary.maxLevel) : nil)
             }
@@ -221,7 +286,7 @@ public final class SidebarViewModel {
     }
 
     /// Expands the row's group and asks the list to scroll the row into view, so a popover can point at it.
-    func reveal(_ selection: SidebarSelection) {
+    package func reveal(_ selection: SidebarSelection) {
         expandGroup(containing: selection)
         revealRequest = SidebarRevealRequest(selection: selection, token: (revealRequest?.token ?? 0) + 1)
     }

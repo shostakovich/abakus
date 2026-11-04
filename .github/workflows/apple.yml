@@ -33,4 +33,10 @@ jobs:
         run: swift test
 
       - name: Check formatting
-        run: swift format lint --strict --recursive Package.swift Sources Tests
+        run: swift format lint --strict --recursive Package.swift Sources Tests iOS
+
+      - name: Build the iOS UI
+        run: swift build --scratch-path .build/ios --target AbakusIOSUI --triple arm64-apple-ios26.0-simulator --sdk "$(xcrun --sdk iphonesimulator --show-sdk-path)" -Xswiftc -warnings-as-errors
+
+      - name: Build the iOS app and test the core on the iOS simulator
+        run: tools/test_ios.sh

@@ -24,6 +24,19 @@ public final class KeychainTokenStore: TokenStoring {
         self.account = account
     }
 
+    /// An iOS app's container moves with each install, so the account is the database's path inside it.
+    public static func account(forDatabaseAt url: URL, inContainer container: URL) -> String {
+        let path = canonicalPath(url)
+        let prefix = canonicalPath(container) + "/"
+        return path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : url.standardizedFileURL.path
+    }
+
+    /// The container may be named as /var and the database as /private/var, or the other way round.
+    private static func canonicalPath(_ url: URL) -> String {
+        let path = url.standardizedFileURL.resolvingSymlinksInPath().path
+        return path.hasPrefix("/private/") ? String(path.dropFirst("/private".count)) : path
+    }
+
     private var query: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Self.service,

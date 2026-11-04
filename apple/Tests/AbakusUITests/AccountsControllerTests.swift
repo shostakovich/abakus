@@ -69,7 +69,7 @@ import Testing
         form.type = .checking
         app.accounts.createAccountClicked()
         let dialog = try #require(app.dialogs.presented.last?.dialog)
-        #expect(dialog.instruction == "Soll der Anfangssaldo negativ sein? (-$20.00)")
+        #expect(dialog.instruction == "Soll der Anfangssaldo negativ sein? (−$20.00)")
         #expect(dialog.buttons.map(\.title) == ["Der Betrag stimmt", "Korrigieren"])
         #expect(dialog.dismissal == AnyDialogChoice(BalanceSignChoice.fix))
         app.dialogs.presented.last?.answer(BalanceSignChoice.fix)
@@ -203,6 +203,30 @@ import Testing
         #expect(adjustment.amount == -1116)
     }
 
+    @Test func adjustingTheBalanceKeepsTheTypedNameAndKind() throws {
+        let fixture = RegisterFixture()
+        let app = app(fixture)
+        app.accounts.editAccountRequested(fixture.giro)
+        let form = try #require(app.accounts.editForm)
+        form.name = "Hauskonto"
+        form.type = .savings
+        app.accounts.adjustBalanceClicked()
+        #expect(try #require(app.accounts.balanceForm).title == "Saldo von „Hauskonto“ anpassen")
+        #expect(app.store.budget.account(withId: fixture.giro)?.name == "Hauskonto")
+        #expect(app.store.budget.account(withId: fixture.giro)?.kind == .savings)
+    }
+
+    @Test func aRefusedNameKeepsTheAccountFormInsteadOfAdjusting() throws {
+        let fixture = RegisterFixture()
+        let app = app(fixture)
+        app.accounts.editAccountRequested(fixture.giro)
+        try #require(app.accounts.editForm).name = "  "
+        app.accounts.adjustBalanceClicked()
+        #expect(app.dialogs.presented.last?.dialog.instruction == "Bitte einen Kontonamen eingeben.")
+        #expect(app.accounts.editForm != nil)
+        #expect(app.accounts.balanceForm == nil)
+    }
+
     @Test func fixingTheSignKeepsTheBalanceForm() throws {
         let fixture = RegisterFixture()
         let app = app(fixture)
@@ -290,6 +314,13 @@ import Testing
         #expect(app.dialogs.presented.last?.dialog.instruction == "Stimmt die Uhr deines Mac?")
         app.dialogs.presented.last?.answer(ClockChoice.enterDue)
         #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 5)
+    }
+
+    @Test func theClockQuestionNamesTheDevice() {
+        let app = AppModel(
+            store: BudgetStore(budget: RegisterFixture().budget, today: { editDay }), defaults: nil, device: .iPad)
+        app.dateChecked(today: editDay.addingDays(3))
+        #expect(app.dialogs.presented.last?.dialog.instruction == "Stimmt die Uhr deines iPads?")
     }
 
     @Test func aClockJumpCanBeIgnoredAndEscapeTakesTheDate() throws {

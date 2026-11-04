@@ -56,7 +56,7 @@ public struct BudgetTargetDisplay: Hashable, Sendable {
 }
 
 extension BudgetCalloutController {
-    static let noTargetText = "Kein Ziel. Ein Ziel sagt dir, wie viel diese Kategorie jeden Monat braucht."
+    package static let noTargetText = "Kein Ziel. Ein Ziel sagt dir, wie viel diese Kategorie jeden Monat braucht."
 
     public var targetMonthTitle: String {
         category.map { formatter.monthHeader($0.month) } ?? ""

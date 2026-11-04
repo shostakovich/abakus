@@ -33,6 +33,10 @@ public struct BudgetCategoryForm: Hashable, Sendable {
 }
 
 public struct BudgetCategoryDeletion: Hashable, Sendable {
+    public static let noSuccessor = "Es gibt keine andere Kategorie, die alles übernehmen kann."
+    public static let successorLabel = "Buchungen, Zuweisungen und Geld gehen in"
+    public static let reconciledWarning = "Auch abgeglichene Buchungen bekommen die neue Kategorie."
+
     public let successors: [BudgetCategoryChoiceGroup]
     public let changesReconciledTransactions: Bool
     public var successorId: String?

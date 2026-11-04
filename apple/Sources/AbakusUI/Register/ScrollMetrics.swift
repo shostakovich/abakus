@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Written on every scroll frame and read outside the grid's body, so scrolling does not rerun it.
-@MainActor
-@Observable
-final class ScrollMetricsBox {
-    var metrics = ScrollMetrics()
-}
-
 public struct ScrollMetrics: Hashable, Sendable {
     public var offset: CGFloat
     public var contentHeight: CGFloat
@@ -22,7 +15,7 @@ public struct ScrollMetrics: Hashable, Sendable {
     public var canScroll: Bool { maxOffset > 0.5 }
     public var isAtEnd: Bool { offset >= maxOffset - 0.5 }
 
-    func hasSameSize(as other: ScrollMetrics) -> Bool {
+    package func hasSameSize(as other: ScrollMetrics) -> Bool {
         abs(contentHeight - other.contentHeight) < 1 && abs(viewportHeight - other.viewportHeight) < 1
     }
 }

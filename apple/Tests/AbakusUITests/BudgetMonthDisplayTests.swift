@@ -21,7 +21,7 @@ import Testing
         let model = fixture.model().model
         let october = try month(model, "2026-10-01")
         let food = model.subRowDisplay(F.lebensmittel, in: october)
-        #expect([food.assigned, food.outflows, food.balance] == ["300,00", "-120,00", "180,00"])
+        #expect([food.assigned, food.outflows, food.balance] == ["300,00", "−120,00", "180,00"])
         #expect(!food.isBalanceNegative && food.hasTransactions)
         let november = model.subRowDisplay(F.lebensmittel, in: try month(model, "2026-11-01"))
         #expect([november.assigned, november.outflows, november.balance] == ["", "", "180,00"])
@@ -41,7 +41,7 @@ import Testing
         fixture.spend(80, F.kleidung, on: "2026-10-12")
         let model = fixture.model().model
         let overspent = model.subRowDisplay(F.kleidung, in: try month(model, "2026-10-01"))
-        #expect(overspent.balance == "-30,00")
+        #expect(overspent.balance == "−30,00")
         #expect(overspent.isBalanceNegative)
         #expect(model.subRowDisplay(F.kleidung, in: try month(model, "2026-11-01")).balance == "0,00")
     }
@@ -56,7 +56,7 @@ import Testing
         let groups = model.groups
         let alltag = try #require(groups.first { $0.id == F.alltag }).header
         let master = model.masterRowDisplay(alltag, in: october)
-        #expect([master.assigned, master.outflows, master.balance] == ["50,00", "-80,00", "-30,00"])
+        #expect([master.assigned, master.outflows, master.balance] == ["50,00", "−80,00", "−30,00"])
         #expect(master.isBalanceNegative && master.hasTransactions)
         let sparen = try #require(groups.first { $0.id == F.sparen }).header
         let quiet = model.masterRowDisplay(sparen, in: october)
@@ -64,7 +64,7 @@ import Testing
         #expect(!quiet.isBalanceNegative && !quiet.hasTransactions)
         let uncategorized = try #require(groups.first).header
         #expect(uncategorized.kind == .uncategorized)
-        #expect(model.masterRowDisplay(uncategorized, in: october).outflows == "-7,00")
+        #expect(model.masterRowDisplay(uncategorized, in: october).outflows == "−7,00")
         #expect(model.masterRowDisplay(uncategorized, in: october).assigned == "")
     }
 
@@ -88,8 +88,8 @@ import Testing
         fixture.budget(1500, F.kino, in: "2026-11-01")
         let model = fixture.model().model
         let header = model.headerDisplay(try month(model, "2026-11-01"))
-        #expect(header.available == "-1.500,00€")
-        #expect(header.totals.map(\.text) == ["1.500,00€", "0,00€", "1.500,00€"])
+        #expect(header.available == "−1.500,00\u{00A0}€")
+        #expect(header.totals.map(\.text) == ["1.500,00\u{00A0}€", "0,00\u{00A0}€", "1.500,00\u{00A0}€"])
         #expect(header.totals[0] == BudgetTotal(digits: "1.500,00", suffix: "€"))
     }
 }
