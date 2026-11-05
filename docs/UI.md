@@ -187,9 +187,9 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   it), then "Differenz zur Bank", whose tap opens the calculation and its explanation, and "Abgleichen". The
   calculation writes each operator a single space before its amount, as one text, so an amount wrapped under its
   label starts at the edge
-- iPad table: Saldo is a fixed column of single accounts (not in Alle Konten), the status column is centred under
-  its header glyph, the first month heading follows the column header directly; Empfänger takes the largest text
-  share and the memo the smallest, and a long payee truncates in the middle; a split shows its square.split.2x1
+- iPad table: the status column is centred under its header glyph, the first month heading follows the column
+  header directly; Empfänger takes the largest text share and the memo the smallest, and a long payee truncates in
+  the middle; a split shows its square.split.2x1
 - The transaction sheet: the amount first, large, with tabular digits and "€", the −/+ button right before it in the
   accent ("Ausgabe"/"Einnahme"), focused for a new transaction; then Empfänger, Kategorie ("🛒 Lebensmittel", a
   transfer "⇄ Tagesgeld" with no category row between budget accounts), Konto, Datum (full date), Memo, each
@@ -220,7 +220,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   Phones: the balances in one line, search and "Ansicht", "Buchung" as the "+" beside the tab bar
 - Newest first on both platforms, under a quiet month heading ("Oktober 2026", no total) that sticks while the list
   scrolls; rows then read "24.10.". Headings show only while the list is sorted by date (the web always is)
-- Fixed columns, so an opened row keeps every column in place: Betrag and Saldo fit "−10.000,00", the memo takes the
+- Fixed columns, so an opened row keeps every column in place: Betrag fits "−10.000,00", the memo takes the
   remaining width and is hidden per device from "Ansicht"; the column header sticks while the list scrolls. Betrag
   is signed, also for parts: "−88,12" in the normal ink, an inflow "+3.180,00" in green. Editing, each side has one
   amount behind a −/+ button; a click or a typed "+" or "−" sets the sign, a new transaction starts as an outflow
