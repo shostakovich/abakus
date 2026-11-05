@@ -49,12 +49,12 @@ defmodule Abakus.Budget do
   @doc """
   The assignments that fill the month's underfunded categories in budget order, as far as the month's Ready to
   Assign reaches without taking what later months have assigned (also in a closed month), the last one partly;
-  snoozed categories are skipped, and with `only` (a category id) all others. Returns `{category_id, new_assigned}`.
+  snoozed categories are skipped. Returns `{category_id, new_assigned}`.
   """
-  def fill_underfunded(%__MODULE__{} = budget, month, current, only \\ nil) do
+  def fill_underfunded(%__MODULE__{} = budget, month, current) do
     month = Date.beginning_of_month(month)
     %Month{} = shown = budget |> months(current, month) |> Enum.find(&(&1.month == month))
-    rows = Enum.filter(shown.categories, &(not &1.snoozed and only in [nil, &1.category_id]))
+    rows = Enum.reject(shown.categories, & &1.snoozed)
     {fills, _left} = Enum.flat_map_reduce(rows, Month.free(shown), &fill/2)
     fills
   end

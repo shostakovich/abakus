@@ -106,6 +106,18 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
     assert Status.budgeting?(%Month{month: ~D[2026-09-01], assigned: -5}, @oct)
   end
 
+  describe "to_assign/2" do
+    test "what the target still asks, as far as Zu verteilen reaches" do
+      assert Status.to_assign(row(underfunded: 5_334, target: @monthly), 10_000) == 5_334
+      assert Status.to_assign(row(underfunded: 5_334, target: @monthly), 2_000) == 2_000
+      assert Status.to_assign(row(underfunded: 5_334, target: @monthly), 0) == 0
+      assert Status.to_assign(row(underfunded: 5_334, target: @monthly), -300) == 0
+
+      assert Status.to_assign(row(underfunded: 5_334, target: @monthly, snoozed: true), 10_000) ==
+               0
+    end
+  end
+
   describe "target_head/1" do
     test "a monthly target in one sentence, setting aside or refilling" do
       assert Status.target_head(%{cadence: :monthly, amount: 5_000, set_aside: true}) ==

@@ -1,14 +1,14 @@
 defmodule AbakusWeb.BudgetLive.Inspector do
   @moduledoc """
   The focus month's categories and the selected category: on desktop a dialog from the category's row with its
-  name, target and deleting, on phones a sheet with the same parts after what is available (with the assignment)
-  and auto-assign.
+  name as the title, its target and deleting, on phones a sheet with the same parts and what is available (with the
+  assignment). Covering is not here: an overspent Verfügbar opens its own list (`Popover`).
 
   `new/5` gathers what they show: every category, as the table shows them.
   """
   use AbakusWeb, :html
 
-  import Abakus.Format, only: [month_name: 1, month_abbr: 1, month_year: 1]
+  import Abakus.Format, only: [month_abbr: 1, month_year: 1]
 
   alias Abakus.Budget.{CategoryMonth, Month}
   alias Abakus.Money
@@ -60,15 +60,14 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   attr :target_form, :any, required: true, doc: "the target editor's form while it is open"
   attr :edit, :map, required: true, doc: "the selected category's `CategoryEditor` state"
 
-  @doc "The selected category's dialog on desktop: its name and target, and deleting it."
+  @doc "The selected category's dialog on desktop: its name as the title, its target, and deleting it."
   def dialog(assigns) do
     assigns = assign(assigns, :entry, assigns.inspector.selected)
 
     ~H"""
     <div class="app-insp">
-      <.month_line cell={@entry.cell} current={@current} />
-      <CategoryEditor.category_name edit={@edit} autofocus />
-      <.target_section cell={@entry.cell} form={@target_form} />
+      <.head entry={@entry} current={@current} />
+      <.target_section cell={@entry.cell} free={@inspector.free} form={@target_form} />
       <CategoryEditor.category_delete edit={@edit} />
     </div>
     """
@@ -81,7 +80,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
 
   attr :assign, :map,
     required: true,
-    doc: "`%{value, invalid}` for the assign field, which the table on phones does not have"
+    doc: "`%{value, error}` for the assign field, which the table on phones does not have"
 
   @doc "The selected category's sheet on phones."
   def sheet(assigns) do
@@ -89,10 +88,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
 
     ~H"""
     <div class="app-insp">
-      <div id="inspector-head">
-        <h2 id="inspector-name" class="app-insp-title truncate">{@entry.category.name}</h2>
-        <.month_line cell={@entry.cell} current={@current} />
-      </div>
+      <.head entry={@entry} current={@current} />
       <.available_section
         cell={@entry.cell}
         budgeting={@inspector.budgeting}
@@ -100,68 +96,24 @@ defmodule AbakusWeb.BudgetLive.Inspector do
         category={@entry.category}
         assign={@assign}
       />
-      <.overspent_hint :if={@entry.cell.available < 0} entry={@entry} />
-      <.target_section cell={@entry.cell} form={@target_form} />
-      <.auto_section
-        key={key(@inspector)}
-        category={@entry.category.id}
-        underfunded={Status.open_need(@entry.cell)}
-      />
-      <CategoryEditor.category_name edit={@edit} />
+      <.target_section cell={@entry.cell} free={@inspector.free} form={@target_form} />
       <CategoryEditor.category_delete edit={@edit} />
     </div>
     """
   end
 
-  attr :cell, CategoryMonth, required: true
+  attr :entry, :map, required: true
   attr :current, Date, required: true
 
-  defp month_line(assigns) do
+  defp head(assigns) do
     ~H"""
-    <p class="text-sm text-base-content/70">
-      {month_year(@cell.month)}<span :if={@cell.month == @current}><.meta_sep />aktueller Monat</span>
-    </p>
+    <div id="category-head">
+      <p class="text-sm text-base-content/70">
+        {month_year(@entry.cell.month)}<span :if={@entry.cell.month == @current}><.meta_sep />aktueller Monat</span>
+      </p>
+    </div>
     """
   end
-
-  defp key(%__MODULE__{month: month}), do: Window.param(month.month)
-
-  defp cover(category, anchor) do
-    JS.push("open_popover",
-      value: %{kind: "cover", category: category.id, anchor: anchor}
-    )
-  end
-
-  attr :key, :string, required: true
-  attr :category, :integer, required: true
-  attr :underfunded, :integer, required: true
-
-  defp auto_section(assigns) do
-    assigns = assign(assigns, :fill, auto(assigns.key, assigns.category, "underfunded"))
-
-    ~H"""
-    <section id="inspector-auto">
-      <.section_heading level={3}>Auto-Verteilen</.section_heading>
-      <ul class="app-acts">
-        <li id="auto-underfunded" class="app-act">
-          <span class="app-act-name">Unterfinanziert</span>
-          <.amount value={@underfunded} class={@underfunded == 0 && "text-base-content/70"} />
-          <.button
-            :if={@underfunded > 0}
-            size={:sm}
-            aria-label="Unterfinanzierte füllen"
-            phx-click={@fill}
-          >
-            Füllen
-          </.button>
-        </li>
-      </ul>
-    </section>
-    """
-  end
-
-  defp auto(key, category, kind),
-    do: JS.push("auto", value: %{month: key, category: to_string(category), kind: kind})
 
   attr :cell, CategoryMonth, required: true
   attr :budgeting, :boolean, required: true
@@ -194,11 +146,15 @@ defmodule AbakusWeb.BudgetLive.Inspector do
               label="Zugewiesen"
               hide_label
               value={@assign.value}
+              data-saved={Money.amount(@cell.assigned)}
               numeric
+              inputmode="text"
+              autocapitalize="off"
+              spellcheck="false"
               suffix="€"
               autocomplete="off"
               class="max-w-36"
-              errors={if @assign.invalid, do: ["Kein gültiger Betrag"], else: []}
+              errors={List.wrap(@assign.error)}
               phx-blur="assign"
               phx-value-category={@category.id}
               phx-value-month={Window.param(@cell.month)}
@@ -211,28 +167,12 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     """
   end
 
-  attr :entry, :map, required: true
-
-  defp overspent_hint(assigns) do
-    ~H"""
-    <.alert id="inspector-cover" tone={:error} title="Überzogen">
-      {month_name(@entry.cell.month)} ist um
-      <strong class="whitespace-nowrap">{Money.euros(-@entry.cell.available)}</strong>
-      überzogen. Decke es aus „Zu verteilen“ oder einer anderen Kategorie.
-      <:actions>
-        <.button
-          id={"cover-hint-#{@entry.category.id}"}
-          size={:sm}
-          phx-click={cover(@entry.category, "cover-hint-#{@entry.category.id}")}
-        >
-          Decken
-        </.button>
-      </:actions>
-    </.alert>
-    """
-  end
-
   attr :cell, CategoryMonth, required: true
+
+  attr :free, :integer,
+    required: true,
+    doc: "what Zu verteilen has free for the target's Zuweisen"
+
   attr :form, :any, required: true
 
   defp target_section(assigns) do
@@ -240,7 +180,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     <section id="inspector-target">
       <.section_heading level={3}>Ziel</.section_heading>
       <TargetForm.editor :if={@form} form={@form} target={@cell.target} />
-      <.target_view :if={!@form && @cell.target} cell={@cell} />
+      <.target_view :if={!@form && @cell.target} cell={@cell} free={@free} />
       <div :if={!@form && !@cell.target}>
         <p class="text-sm text-base-content/70">
           Kein Ziel. Ein Ziel sagt dir, wie viel diese Kategorie jeden Monat braucht.
@@ -254,9 +194,14 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   end
 
   attr :cell, CategoryMonth, required: true
+  attr :free, :integer, required: true
 
   defp target_view(assigns) do
-    assigns = assign(assigns, :status, Status.target_status(assigns.cell))
+    assigns =
+      assign(assigns,
+        status: Status.target_status(assigns.cell),
+        to_assign: Status.to_assign(assigns.cell, assigns.free)
+      )
 
     ~H"""
     <p id="target-head" class="text-sm font-medium">{Status.target_head(@cell.target)}</p>
@@ -268,13 +213,12 @@ defmodule AbakusWeb.BudgetLive.Inspector do
         <.icon :if={@status.icon} name={@status.icon} />{@status.text}
       </p>
       <.button
-        :if={!@cell.snoozed && @cell.available >= 0 && @cell.underfunded > 0}
+        :if={@cell.available >= 0 && @to_assign > 0}
         id="target-assign"
         size={:sm}
-        aria-label={"#{Money.euros(@cell.underfunded)} zuweisen"}
         phx-click="assign_rest"
       >
-        Zuweisen
+        {Money.euros(@to_assign)} zuweisen
       </.button>
     </div>
     <.bar

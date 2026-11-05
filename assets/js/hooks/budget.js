@@ -40,12 +40,27 @@ export const BudgetLayout = {
     this.observer = new ResizeObserver(() => this.layout())
     this.observer.observe(this.el)
     this.el.addEventListener("keydown", (event) => this.nextOnEnter(event))
+    // On the document: the phone's sheet lies outside the budget.
+    this.onEscape = (event) => this.restoreOnEscape(event)
+    document.addEventListener("keydown", this.onEscape)
     this.el.addEventListener("focusin", ({ target }) => target.matches(".app-assign") && target.select())
+    this.handleEvent("refocus_amount", ({ id }) => this.refocus(id))
     this.layout()
+  },
+
+  // Back to a refused amount, unless focus has moved on to something other than another amount.
+  refocus(id) {
+    const input = document.getElementById(id)
+    const active = document.activeElement
+    if (!input || !input.getClientRects().length) return
+    if (active && active !== document.body && active !== input && !active.matches(".app-assign")) return
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
   },
 
   destroyed() {
     this.observer.disconnect()
+    document.removeEventListener("keydown", this.onEscape)
     root.removeProperty("--cat-w")
     root.removeProperty("--month-w")
   },
@@ -70,17 +85,20 @@ export const BudgetLayout = {
     const next = column[column.indexOf(input) + 1]
     next ? next.focus() : input.blur()
   },
-}
 
-// LiveView leaves a focused field's value alone, so Escape restores the saved name from data-saved.
-export const RenameField = {
-  mounted() {
-    this.el.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape" || this.el.value === this.el.dataset.saved) return
-      event.preventDefault()
-      event.stopPropagation()
-      // While a submitted name waits for its reply, data-saved is not yet the name being saved.
-      if (!this.el.form?.classList.contains("phx-submit-loading")) this.el.value = this.el.dataset.saved
+  // Unchanged, Escape is left to the sheet, which closes.
+  restoreOnEscape(event) {
+    const input = event.target
+    if (event.key !== "Escape" || !input.matches(".app-assign, #panel-assign")) return
+    const saved = input.dataset.saved ?? ""
+    if (input.value === saved && input.getAttribute("aria-invalid") !== "true") return
+    event.preventDefault()
+    event.stopPropagation()
+    input.value = saved
+    input.select()
+    this.pushEvent("assign_cancel", {
+      category: input.getAttribute("phx-value-category"),
+      month: input.getAttribute("phx-value-month"),
     })
   },
 }

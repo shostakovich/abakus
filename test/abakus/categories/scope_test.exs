@@ -101,7 +101,6 @@ defmodule Abakus.Categories.ScopeTest do
 
   test "another user changes nothing of the owner's budget", c do
     :ok = Categories.unsnooze_target(c.other, c.category, @october)
-    :ok = Categories.reset_assignments(c.other, @october, c.category)
     :ok = Categories.reset_assignments(c.other, @october)
     {:ok, []} = Categories.fill_underfunded(c.other, @october, @october)
 

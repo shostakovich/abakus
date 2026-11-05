@@ -65,6 +65,9 @@ defmodule AbakusWeb.BudgetLive.Status do
   def open_need(%CategoryMonth{snoozed: true}), do: 0
   def open_need(%CategoryMonth{} = row), do: row.underfunded
 
+  @doc "What the target's Zuweisen assigns: what it still asks this month, as far as `free` (Zu verteilen) reaches."
+  def to_assign(%CategoryMonth{} = row, free), do: row |> open_need() |> min(max(free, 0))
+
   defp underfunded?(row), do: open_need(row) > 0
 
   @doc """

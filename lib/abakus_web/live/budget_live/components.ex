@@ -158,16 +158,26 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :month, Month, required: true
   attr :key, :string, required: true
 
+  # An empty phx-click keeps the menu's clicks from the month head's, which would make its month the focus.
   defp distribute(assigns) do
+    month = assigns.month
+    fill = min(month.underfunded, Month.free(month))
+
     assigns =
       assign(assigns,
-        free: Month.free(assigns.month) > 0,
-        assigned: assigns.month.assigned != 0
+        fill: fill,
+        fill_reason:
+          cond do
+            month.underfunded == 0 -> "Nichts unterfinanziert"
+            fill == 0 -> "Nichts zu verteilen"
+            true -> nil
+          end,
+        reset_reason:
+          if(Enum.all?(month.categories, &(&1.assigned == 0)), do: "Nichts zugewiesen")
       )
 
     ~H"""
     <.dropdown
-      :if={@free or @assigned}
       id={"distribute-#{@key}"}
       label="Verteilen"
       variant={:ghost}
@@ -175,37 +185,31 @@ defmodule AbakusWeb.BudgetLive.Components do
       trigger_class="btn-sm btn-square"
       class="app-distribute"
       align={:end}
+      phx-click={%JS{}}
     >
       <:trigger><.icon name="ellipsis-vertical" /></:trigger>
       <:item
-        :if={@free and @month.underfunded > 0}
         id={"distribute-underfunded-#{@key}"}
         icon="target"
+        disabled={@fill_reason != nil}
+        subtitle={@fill_reason || Money.euros(@fill)}
         on_click={JS.push("auto", value: %{kind: "underfunded", month: @key})}
       >
-        Unterfinanzierte füllen ({Money.euros(@month.underfunded)})
+        Ziele füllen
       </:item>
       <:item
-        :if={@free}
-        id={"distribute-pick-#{@key}"}
-        icon="wallet"
-        on_click={
-          JS.push("open_popover", value: %{kind: "pick", month: @key, anchor: "distribute-#{@key}"})
-        }
-      >
-        In eine Kategorie …
-      </:item>
-      <:item
-        :if={@assigned}
         id={"distribute-reset-#{@key}"}
         icon="rotate-ccw"
-        divider={@free}
+        danger
+        divider
+        disabled={@reset_reason != nil}
+        subtitle={@reset_reason || "Zuweisungen im #{month_abbr(@month.month)}"}
         on_click={JS.push("auto", value: %{kind: "reset", month: @key})}
         confirm={"Alle Zuweisungen im #{month_name(@month.month)} zurücksetzen?"}
         confirm_text="Zu verteilen bekommt das Geld zurück."
         confirm_label="Zurücksetzen"
       >
-        Zuweisung zurücksetzen
+        Zurücksetzen
       </:item>
     </.dropdown>
     """
@@ -242,6 +246,11 @@ defmodule AbakusWeb.BudgetLive.Components do
     </button>
     """
   end
+
+  @doc "Why an amount typed into Zugewiesen was refused, with how to add and subtract."
+  def invalid_amount(typed),
+    do:
+      "„#{String.trim(typed)}“ ist kein gültiger Betrag.\nRechnen geht mit +\u00A0und\u00A0−, etwa\u00A050+20."
 
   @doc "The text colour of a tone (`Status`): only the ink tokens colour text."
   def tone_class(:error), do: "text-error-ink"
@@ -384,7 +393,7 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   attr :invalid, :any,
     required: true,
-    doc: "`{category_id, month, typed}` for the amount that was no number"
+    doc: "`{category_id, month, typed, error}` for the amount that was refused"
 
   attr :assignable, :boolean,
     default: true,
@@ -396,7 +405,7 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   @doc """
   A category on one line: name, then per month an assign input, activity and available, which opens the popover
-  for that month. Zero assigned and activity stay blank. The name, and on desktop a pencil shown on hover and
+  that covers it in that month while it is overspent. Zero assigned and activity stay blank. The name, and on desktop a pencil shown on hover and
   focus, open the category's dialog (name, target, delete).
   """
   def category_row(assigns) do
@@ -457,23 +466,28 @@ defmodule AbakusWeb.BudgetLive.Components do
           </.tooltip>
         </div>
       </td>
-      <%= for {month, key, cell, typed} <- columns(@months, @cells, @id, @invalid) do %>
+      <%= for {month, key, cell, {typed, errors}} <- columns(@months, @cells, @id, @invalid) do %>
         <td class={["app-ms app-num", past?(month, @current) && "app-past"]}>
-          <input
-            :if={@assignable}
-            id={"assign-#{@id}-#{key}"}
-            class="app-assign"
-            value={typed || blank_zero(cell.assigned)}
-            inputmode="decimal"
-            autocomplete="off"
-            aria-label={"#{@name}, zugewiesen im #{month_year(month)}"}
-            aria-invalid={typed && "true"}
-            title={typed && "Kein gültiger Betrag"}
-            phx-blur="assign"
-            phx-focus={month != @focus && "focus"}
-            phx-value-category={@id}
-            phx-value-month={key}
-          />
+          <%= if @assignable do %>
+            <input
+              id={"assign-#{@id}-#{key}"}
+              class="app-assign"
+              value={typed || blank_zero(cell.assigned)}
+              data-saved={blank_zero(cell.assigned)}
+              inputmode="text"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              aria-label={"#{@name}, zugewiesen im #{month_year(month)}"}
+              aria-invalid={typed && "true"}
+              aria-describedby={field_describedby("assign-#{@id}-#{key}", errors, nil)}
+              phx-blur="assign"
+              phx-focus={month != @focus && "focus"}
+              phx-value-category={@id}
+              phx-value-month={key}
+            />
+            <.error_bubble id={"assign-#{@id}-#{key}"} errors={errors} align={:end} />
+          <% end %>
         </td>
         <td
           id={"activity-#{@id}-#{key}"}
@@ -488,7 +502,7 @@ defmodule AbakusWeb.BudgetLive.Components do
           <.available
             cell={cell}
             budgeting={month in @budgeting}
-            id={@assignable && "available-button-#{@id}-#{key}"}
+            id={@assignable && cell.available < 0 && "available-button-#{@id}-#{key}"}
           />
         </td>
       <% end %>
@@ -500,15 +514,18 @@ defmodule AbakusWeb.BudgetLive.Components do
     for month <- months, do: {month, Window.param(month), cells[month], typed(invalid, id, month)}
   end
 
-  defp typed({id, month, typed}, id, month), do: typed
-  defp typed(_invalid, _id, _month), do: nil
+  defp typed({id, month, typed, error}, id, month), do: {typed, [error]}
+  defp typed(_invalid, _id, _month), do: {nil, []}
 
   defp blank_zero(0), do: nil
   defp blank_zero(amount), do: Money.amount(amount)
 
   attr :cell, :any, required: true
   attr :budgeting, :boolean, required: true, doc: "whether its month is being budgeted"
-  attr :id, :any, default: nil, doc: "set for a cell that opens the popover"
+
+  attr :id, :any,
+    default: nil,
+    doc: "set for an overspent cell, which opens the popover that covers it"
 
   @doc """
   A cell's available amount, coloured and marked by its status (`Status.available/2`): an underfunded target's ring
@@ -525,7 +542,6 @@ defmodule AbakusWeb.BudgetLive.Components do
       class={["app-avail", available_class(@status.tone)]}
       aria-label={available_label(@status, @cell)}
       phx-click="open_popover"
-      phx-value-kind="available"
       phx-value-category={@cell.category_id}
       phx-value-month={Window.param(@cell.month)}
       phx-value-anchor={@id}
@@ -580,6 +596,6 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   defp available_label(status, cell) do
     state = if status.label, do: ", #{status.label}"
-    "Verfügbar #{Money.euros(cell.available)}#{state}, Geld verschieben"
+    "Verfügbar #{Money.euros(cell.available)}#{state}, decken"
   end
 end

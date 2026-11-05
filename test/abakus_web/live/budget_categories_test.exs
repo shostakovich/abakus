@@ -100,8 +100,14 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     edit_category(view, c.movies)
 
     assert has_element?(view, ~s|dialog#category-dialog[data-show="true"]|)
-    assert has_element?(view, "#category-dialog-title", "🎬 Kino")
-    assert has_element?(view, ~s|#category-name-input[value="🎬 Kino"][autofocus]|)
+
+    assert has_element?(
+             view,
+             ~s|#category-dialog .setzkasten-modal-head #category-dialog-title[value="🎬 Kino"]|
+           )
+
+    refute has_element?(view, "#category-dialog [autofocus]")
+
     assert has_element?(view, "#category-dialog #inspector-target")
     assert has_element?(view, "#category-dialog #category-delete #edit-delete")
     refute has_element?(view, "#edit-pop")
@@ -110,13 +116,12 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
     assert Repo.reload!(c.movies).name == "🍿 Kino & Streaming"
     assert has_element?(view, "#category-#{c.movies.id}", "Kino & Streaming")
-    assert has_element?(view, "#category-dialog-title", "🍿 Kino & Streaming")
-    assert has_element?(view, ~s|#category-name-input[value="🍿 Kino & Streaming"]|)
+    assert has_element?(view, ~s|#category-dialog-title[value="🍿 Kino & Streaming"]|)
     assert has_element?(view, "#flash-info", "Name gespeichert.")
 
     rename(view, " ")
 
-    assert has_element?(view, "#category-name-input-error-0", "Name muss ausgefüllt werden")
+    assert has_element?(view, "#category-dialog-title-error-0", "Name muss ausgefüllt werden")
     assert Repo.reload!(c.movies).name == "🍿 Kino & Streaming"
   end
 
@@ -128,24 +133,24 @@ defmodule AbakusWeb.BudgetCategoriesTest do
 
     assert has_element?(
              view,
-             ~s|#category-name-input[phx-hook=RenameField][data-saved="🎬 Kino"]|
+             ~s|#category-dialog-title[phx-hook="Setzkasten.Components.Overlays.TitleInput"][data-saved="🎬 Kino"]|
            )
 
-    view |> element("#category-name-input") |> render_blur(%{"value" => "🍿 Filme"})
+    view |> element("#category-dialog-title") |> render_blur(%{"value" => "🍿 Filme"})
 
     assert Repo.reload!(c.movies).name == "🍿 Filme"
-    assert has_element?(view, ~s|#category-name-input[data-saved="🍿 Filme"]|)
+    assert has_element?(view, ~s|#category-dialog-title[data-saved="🍿 Filme"]|)
     assert has_element?(view, "#flash-info", "Name gespeichert.")
 
-    view |> element("#category-name-input") |> render_blur(%{"value" => ""})
+    view |> element("#category-dialog-title") |> render_blur(%{"value" => ""})
 
-    assert has_element?(view, "#category-name-input-error-0", "Name muss ausgefüllt werden")
+    assert has_element?(view, "#category-dialog-title-error-0", "Name muss ausgefüllt werden")
 
     saved = Repo.reload!(c.movies).updated_at
     render_click(view, "lv:clear-flash", %{"key" => "info"})
-    view |> element("#category-name-input") |> render_blur(%{"value" => " 🍿 Filme "})
+    view |> element("#category-dialog-title") |> render_blur(%{"value" => " 🍿 Filme "})
 
-    refute has_element?(view, "#category-name-input-error-0")
+    refute has_element?(view, "#category-dialog-title-error-0")
     refute has_element?(view, "#flash-info")
     assert Repo.reload!(c.movies).updated_at == saved
   end
@@ -157,11 +162,11 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     rename(view, "Miete ")
 
     assert Repo.reload!(c.movies).name == "Miete"
-    assert has_element?(view, ~s|#category-name-input[data-saved="Miete"]|)
+    assert has_element?(view, ~s|#category-dialog-title[data-saved="Miete"]|)
 
     saved = Repo.reload!(c.movies).updated_at
     render_click(view, "lv:clear-flash", %{"key" => "info"})
-    view |> element("#category-name-input") |> render_blur(%{"value" => "Miete "})
+    view |> element("#category-dialog-title") |> render_blur(%{"value" => "Miete "})
 
     refute has_element?(view, "#flash-info")
     assert Repo.reload!(c.movies).updated_at == saved
@@ -180,7 +185,7 @@ defmodule AbakusWeb.BudgetCategoriesTest do
     view |> element("#select-#{c.movies.id}") |> render_click()
 
     assert has_element?(view, "#panel #category-delete #edit-delete")
-    refute has_element?(view, "#category-name-input[autofocus]")
+    refute has_element?(view, "#panel-title[autofocus]")
     rename(view, "🍿 Kino")
 
     assert Repo.reload!(c.movies).name == "🍿 Kino"

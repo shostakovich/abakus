@@ -4,7 +4,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   replaces the transaction's rows in the register on one line: inputs in every column, Cancel and Save (Approve for
   one waiting for approval) where approve and status stand, Enter saves and Escape cancels; a split's subtransactions as
   rows below, each with a payee field only where it differs from the transaction's. Each side has one amount field
-  behind a sign button; a click or a typed "+" or "−" sets the side's direction, a new transaction's is an outflow.
+  behind a sign button; a click or a sign typed in front sets the side's direction, a new transaction's is an
+  outflow. Amounts may add and subtract ("50+20").
   Its root is a `<tbody>`, the inputs outside the first row belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet
   from the bottom with the amount first. The form's state is `AbakusWeb.TransactionForm` params.
 
@@ -169,6 +170,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                     side={sub}
                     sign={@params["sign"]}
                     class="text-end tabular-nums"
+                    part
                   />
                   <span class="label">€</span>
                 </label>
@@ -589,7 +591,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :disabled, :boolean, default: false
   attr :target, :any, required: true
 
-  # The sign stays out of the tab order, as typing "+" or "−" sets it too.
+  # The sign stays out of the tab order, as a sign typed in front sets it too.
   defp signed_amount(assigns) do
     assigns = assign(assigns, :sign, TransactionForm.sign(assigns.values))
 
@@ -603,7 +605,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         aria-label={sign_label(@sign)}
         title={sign_label(@sign)}
         tabindex="-1"
-        data-sign={@sign}
         phx-click="toggle_sign"
         phx-value-side={@side}
         phx-target={@target}
@@ -614,7 +615,6 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         id={"#{@id}-amount"}
         form="tx-form"
         name={"#{side_name(@side)}[amount]"}
-        data-sign-button={"#{@id}-sign"}
         value={TransactionForm.directed(@values, @sign)}
         class="input input-sm join-item tabular-nums"
         inputmode="decimal"
@@ -630,22 +630,27 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     """
   end
 
-  # The phone's one amount: the column the sign picks, the other one emptied.
+  # A part's amount goes into the transaction's column, so its minus counts against that direction as shown.
   attr :id, :string, required: true
   attr :name, :string, required: true
   attr :side, :map, required: true
   attr :sign, :string, required: true
   attr :class, :string, required: true
   attr :disabled, :boolean, default: false
+  attr :part, :boolean, default: false
 
   defp directed_amount(assigns) do
     {column, other} =
-      if assigns.sign == "+", do: {"inflow", "outflow"}, else: {"outflow", "inflow"}
+      cond do
+        not assigns.part -> {"amount", nil}
+        assigns.sign == "+" -> {"inflow", "outflow"}
+        true -> {"outflow", "inflow"}
+      end
 
     assigns = assign(assigns, column: column, other: other)
 
     ~H"""
-    <input type="hidden" form="tx-form" name={"#{@name}[#{@other}]"} value="" />
+    <input :if={@other} type="hidden" form="tx-form" name={"#{@name}[#{@other}]"} value="" />
     <input
       id={@id}
       form="tx-form"
@@ -1264,9 +1269,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
     assign(socket, params: params, suggested: MapSet.delete(socket.assigns.suggested, side))
   end
 
-  defp after_change(socket, params, ["transaction", field])
-       when field in ["amount", "outflow", "inflow"],
-       do: directed(socket, params)
+  defp after_change(socket, params, ["transaction", "amount"]), do: directed(socket, params)
 
   defp after_change(socket, params, _target), do: assign(socket, :params, params)
 

@@ -49,7 +49,7 @@ defmodule Abakus.MixProject do
        compile: false,
        depth: 1},
       # The UI's components, themes and icons.
-      {:setzkasten, github: "shostakovich/setzkasten"},
+      {:setzkasten, github: "shostakovich/setzkasten", branch: "popover-fit-pick-list"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:lazy_html, ">= 0.1.0", only: :test},
       # Property tests for the budget math.

@@ -69,7 +69,7 @@ defmodule Abakus.Categories.SuccessorsTest do
     {:ok, 1_000} = Categories.move_assigned(c.scope, :ready_to_assign, c.books, @november, 1_000)
     assert assigned(c.scope, c.books) == 4_000
 
-    :ok = Categories.reset_assignments(c.scope, @november, c.books)
+    :ok = Categories.reset_assignments(c.scope, @november)
     assert assigned(c.scope, c.books) == 0
   end
 end

@@ -126,6 +126,46 @@ defmodule Abakus.MoneyTest do
     end
   end
 
+  describe "parse_expression/2" do
+    for {text, cents} <- [
+          {"50+20", 7000},
+          {"10-5", 500},
+          {"10−5", 500},
+          {"-50+20", -3000},
+          {"+50-20", 3000},
+          {"−20+50", 3000},
+          {"20-50", -3000},
+          {"1.234,56 + 0,44", 123_500},
+          {"12,50 + 7,5 €", 2000},
+          {"100-30-20+5", 5500},
+          {"12,34", 1234},
+          {"-12", -1200}
+        ] do
+      test "reads #{inspect(text)} as #{cents}" do
+        assert Money.parse_expression(unquote(text), 2) == {:ok, unquote(cents)}
+      end
+    end
+
+    for text <- ["60*2", "60/2", "60x2", "50++20", "50+", "+", "-", "50+-20", "(50)", "50+20€+5"] do
+      test "rejects #{inspect(text)} as a whole" do
+        assert {:error, "Ungültiger Betrag „" <> _rest} =
+                 Money.parse_expression(unquote(text), 2)
+      end
+    end
+
+    test "says what is wrong with a part" do
+      assert Money.parse_expression("1+0,005", 2) == {:error, @places}
+      assert Money.parse_expression(" ", 2) == {:error, @blank}
+      assert Money.parse_expression(nil, 2) == {:error, "Ungültiger Betrag."}
+    end
+
+    test "refuses a sum beyond what one amount may hold" do
+      big = String.duplicate("9", 15)
+      assert {:ok, _cents} = Money.parse_expression(big, 2)
+      assert Money.parse_expression(big <> "+" <> big, 2) == {:error, "Der Betrag ist zu groß."}
+    end
+  end
+
   describe "parse_number/1" do
     for {text, number} <- [
           {"1.500", "1500"},
