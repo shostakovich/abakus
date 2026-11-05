@@ -17,23 +17,6 @@ extension BudgetFormatter {
         let text = withUnit ? currency(rounded) : currencyNoSymbol(rounded)
         return rounded < 0 || (rounded == 0 && !prefixZero) ? text : prefix + text
     }
-
-    /// A typed assigned amount: empty text is zero; text that does not parse, or is too large for `Decimal`, is nil.
-    public func parseBudgetAmount(_ text: String) -> Decimal? {
-        var prepared = Self.plainAmountText(text)
-        if let range = prepared.range(of: currencyLocale.currencySymbol) { prepared.removeSubrange(range) }
-        prepared = prepared.replacingOccurrences(of: " ", with: "")
-        if prepared.isEmpty { return 0 }
-        guard
-            let number = Self.parseNumberString(
-                prepared, decimalSeparator: currencyLocale.decimalSeparator,
-                thousandsSeparator: currencyLocale.groupSeparator)
-        else { return nil }
-        if number.isEmpty { return 0 }
-        guard let value = Decimal(string: number, locale: Locale(identifier: "en_US_POSIX")) else { return nil }
-        let rounded = Amount.round(value, digits: currencyLocale.decimalDigits)
-        return rounded.isFinite ? rounded : nil
-    }
 }
 
 public struct BudgetHeaderLine: Hashable, Sendable {

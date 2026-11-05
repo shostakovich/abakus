@@ -94,9 +94,16 @@ extension TaskDialog where Choice == MessageChoice {
 
     /// Only Konto hinzufügen shows the typed text in bold.
     public static func invalidBalance(_ text: String, bold: Bool = false) -> Self {
-        let escaped = text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
+        .message(InvalidBalance.instruction, InvalidBalance.content(escaped(text), bold: bold))
+    }
+
+    public static func invalidAmount(_ text: String) -> Self {
+        .message(InvalidAmount.instruction, InvalidAmount.content(escaped(text)))
+    }
+
+    private static func escaped(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")
-        return .message(InvalidBalance.instruction, InvalidBalance.content(escaped, bold: bold))
     }
 }
 

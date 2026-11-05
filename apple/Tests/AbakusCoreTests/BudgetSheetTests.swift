@@ -68,7 +68,6 @@ import Testing
                 "0,00 Nicht verteilt im Aug", "0,00 Überzogen im Aug", "0,00 Einnahmen im Sep",
                 "+50,00 Zugewiesen im Sep", "= 50,00\u{00A0}€", "Nicht verteilt am Monatsende",
             ])
-        #expect(scenario.sheet.quickBudgetAmount(.assignedLastMonth, categoryId: S.kleidung, month: first.month) == 0)
     }
 
     @Test func aClosedMonthThatAssignedTooMuchSaysSoAndTheNextMonthWarns() throws {

@@ -75,20 +75,56 @@ import Testing
         #expect(model.shownMonths == [day("2026-11-01")])
     }
 
-    @Test func tappingACategoryOpensItsSheetWithVerfuegbarAndTheCategory() throws {
+    @Test func tappingACategoryOpensItsSheetWithoutTheCoverList() throws {
         let model = model()
         model.touchLayout = .phone
         model.categoryTapped(F.kino)
         #expect(model.presentedPopup == .category(month: october, categoryId: F.kino))
         #expect(model.callouts.category?.name == "Kino")
-        let form = try #require(model.callouts.availableForm)
-        #expect(form.isOverspent)
-        model.callouts.coverSourceId = F.kleidung
-        #expect(model.callouts.coverButtonTitle == "25,00\u{00A0}€ decken")
-        model.callouts.coverClicked()
+        #expect(try #require(model.callouts.availableForm).isOverspent)
+        #expect(model.showsTouchSheet)
+        #expect(!model.showsCoverSheet)
+    }
+
+    @Test func onThePhoneAnOverspentVerfuegbarOpensOnlyTheCoverListInASheet() {
+        let model = model()
+        model.touchLayout = .phone
+        model.balanceClicked(month: october, categoryId: F.kino)
+        #expect(model.showsCoverSheet)
+        #expect(!model.showsTouchSheet)
+        #expect(model.coverPopover == nil)
+        #expect(model.callouts.coverTitle == "25,00\u{00A0}€ decken aus")
+        model.callouts.cover(from: F.kleidung)
         #expect(model.presentedPopup == nil)
+        #expect(!model.showsCoverSheet)
         #expect(model.month(october)?.category(F.kino)?.balance == 0)
         #expect(model.month(october)?.category(F.kleidung)?.balance == 35)
+        #expect(model.undoNotice != nil)
+    }
+
+    @Test func onTheIPadAnOverspentVerfuegbarOpensTheCoverListBesideItsCell() {
+        let model = model()
+        model.touchLayout = .wide(months: 2, categoryWidth: 224)
+        model.balanceClicked(month: october, categoryId: F.kino)
+        #expect(model.coverPopover == model.cell(F.kino))
+        #expect(!model.showsCoverSheet)
+        #expect(!model.showsTouchCallout)
+        model.coverDismissed()
+        #expect(model.presentedPopup == nil)
+    }
+
+    @Test func theTitleRenamesInPlaceAndTheSheetStaysOpen() {
+        let model = model()
+        model.touchLayout = .phone
+        model.categoryTapped(F.kleidung)
+        model.callouts.categoryName = "👕 Kleidung"
+        model.callouts.categoryNameSubmitted()
+        #expect(model.store.budget.category(withId: F.kleidung)?.name == "👕 Kleidung")
+        #expect(model.presentedPopup == .category(month: october, categoryId: F.kleidung))
+        model.callouts.categoryName = "Lebensmittel"
+        model.callouts.categoryNameSubmitted()
+        #expect(model.dialogs.isPresenting)
+        #expect(model.store.budget.category(withId: F.kleidung)?.name == "👕 Kleidung")
     }
 
     @Test func aWideMonthsVerfuegbarOpensTheSheetForThatMonth() {
@@ -111,18 +147,6 @@ import Testing
         #expect(model.callouts.availableForm?.available == 20)
     }
 
-    @Test func autoAssigningBringsVerfuegbarToZero() throws {
-        let model = model()
-        model.touchLayout = .phone
-        model.categoryTapped(F.kino)
-        let cell = model.cell(F.kino)
-        let option = try #require(model.quickBudgetOptions(for: cell).first { $0.fill == .balanceToZero })
-        #expect(option.amount == 25)
-        model.quickBudgetOptionChosen(option, for: cell)
-        #expect(model.month(october)?.category(F.kino)?.balance == 0)
-        #expect(model.callouts.availableForm?.isOverspent == false)
-    }
-
     @Test func closingTheSheetSavesTheAmountBeingTyped() {
         let model = model()
         model.touchLayout = .phone
@@ -131,18 +155,6 @@ import Testing
         model.touchSheetDismissed()
         #expect(model.presentedPopup == nil)
         #expect(model.month(october)?.category(F.kleidung)?.assigned == 75)
-    }
-
-    @Test func aQuickAmountWinsOverTheAmountBeingTyped() throws {
-        let model = model()
-        model.touchLayout = .phone
-        model.categoryTapped(F.kino)
-        let cell = model.cell(F.kino)
-        model.sheetAssignedChanged("5", in: cell)
-        let option = try #require(model.quickBudgetOptions(for: cell).first { $0.fill == .balanceToZero })
-        model.quickBudgetOptionChosen(option, for: cell)
-        model.commitSheetAssigned()
-        #expect(model.month(october)?.category(F.kino)?.assigned == 25)
     }
 
     @Test func closingTheSheetSavesTheTargetBeingEdited() {
@@ -265,8 +277,10 @@ import Testing
         #expect(waiting.overspentIds == [F.notgroschen, F.kino])
         #expect(waiting.overspentText == "2 Kategorien überzogen")
         #expect(waiting.approvalsText == nil)
+        model.touchLayout = .phone
         model.overspentTapped(in: month)
-        #expect(model.presentedPopup == .category(month: october, categoryId: F.notgroschen))
+        #expect(model.presentedPopup == .available(month: october, categoryId: F.notgroschen))
+        #expect(model.showsCoverSheet)
     }
 
     @Test func anOverspentCategoryInAFoldedGroupOpensWithItsGroupUnfolded() throws {
@@ -276,7 +290,7 @@ import Testing
         #expect(!model.groups.visibleRows.map(\.id).contains(F.kino))
         model.overspentTapped(in: try #require(model.monthInFocus))
         #expect(model.groups.visibleRows.map(\.id).contains(F.kino))
-        #expect(model.presentedPopup == .category(month: october, categoryId: F.kino))
+        #expect(model.coverPopover == model.cell(F.kino))
     }
 
     @Test func nothingWaitsWithoutOverspendingOrApprovals() throws {

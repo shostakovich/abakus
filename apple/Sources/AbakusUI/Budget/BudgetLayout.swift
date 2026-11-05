@@ -28,7 +28,6 @@ public enum BudgetMetrics {
     public static let fieldHeight: CGFloat = 24
     public static let fieldLeadingInset: CGFloat = 8
     public static let fieldTrailingInset: CGFloat = 5
-    public static let fieldButtonWidth: CGFloat = 20
     /// The legacy scroller's width; the last month keeps its figures clear of it, and of an expanded overlay scroller.
     public static let scrollerGutter: CGFloat = 17
 }

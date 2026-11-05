@@ -25,7 +25,7 @@
                     }
                     Section {
                         TextField("Banksaldo", text: $form.amountText)
-                            .keyboardType(.numbersAndPunctuation)
+                            .amountKeyboard()
                             .monospacedDigit()
                             .focused($isAmountFocused)
                             .submitLabel(.done)

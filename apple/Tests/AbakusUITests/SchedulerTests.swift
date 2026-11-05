@@ -399,7 +399,7 @@ import Testing
         #expect(
             amount.width
                 == RegisterColumn.amount.contentWidth(
-                    fitting: ["−1,234,567.89", "−25.00"], accessory: EditCellStyle.amountAccessoriesWidth))
+                    fitting: ["−1,234,567.89", "−25.00"], accessory: EditCellStyle.accessoryWidth))
         #expect(amount.width > RegisterColumn.signedAmountWidth)
     }
 

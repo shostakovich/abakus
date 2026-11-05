@@ -19,6 +19,7 @@ struct BudgetAmountField: View {
                 .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.trailing)
                 .monospacedDigit()
+                .autocorrectionDisabled()
                 .focused(isFocused)
                 .frame(width: Self.width)
             if !locale.symbolOnLeft { Text(verbatim: locale.currencySymbol) }

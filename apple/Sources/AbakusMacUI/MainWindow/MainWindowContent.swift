@@ -45,6 +45,11 @@ public struct MainWindowContent: View {
                 BudgetCalloutLayer(model: model.budget, anchor: anchor)
             }
         }
+        .overlayPreferenceValue(BudgetAmountErrorAnchorKey.self) { anchor in
+            if model.navigation.selection == .budget, let anchor, let error = model.budget.editor?.error {
+                BudgetAmountErrorBubble(error: error, anchor: anchor)
+            }
+        }
         .sheet(item: Binding(get: { model.sheet }, set: { _ in })) { sheet in
             AppSheetView(model: model, sheet: sheet)
         }

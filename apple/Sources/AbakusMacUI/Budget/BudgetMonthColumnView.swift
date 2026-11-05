@@ -163,9 +163,9 @@ struct BudgetMonthSubRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { model.balanceClicked(month: month.month, categoryId: row.id) }
-        .pointerStyle(.link)
+        .pointerStyle(display.isBalanceNegative ? .link : nil)
         .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isButton)
+        .accessibilityAddTraits(display.isBalanceNegative ? .isButton : [])
         .accessibilityLabel("Verfügbar")
         .accessibilityValue(display.accessibilityValue)
     }
@@ -202,23 +202,17 @@ private struct BudgetEditedField: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: BudgetStyle.fieldCornerRadius)
-        HStack(spacing: 0) {
-            Button(action: model.dropDownButtonClicked) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(ThemeColor.secondaryText)
-                    .frame(width: BudgetMetrics.fieldButtonWidth, height: BudgetMetrics.fieldHeight)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Auto-Verteilen")
-            .toolTip("Auto-Verteilen und Rechner")
-            BudgetCellField(model: model, edit: edit)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.trailing, Self.textTrailingInset)
-        }
-        .background(ThemeColor.fieldBackground, in: shape)
-        .overlay { shape.strokeBorder(ThemeColor.accent, lineWidth: 1) }
-        .focusRing(true, cornerRadius: BudgetStyle.fieldCornerRadius)
+        BudgetCellField(model: model, edit: edit)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.trailing, Self.textTrailingInset)
+            .frame(height: BudgetMetrics.fieldHeight)
+            .background(ThemeColor.fieldBackground, in: shape)
+            .overlay { if edit.error == nil { shape.strokeBorder(ThemeColor.accent, lineWidth: 1) } }
+            .focusRing(
+                true, cornerRadius: BudgetStyle.fieldCornerRadius,
+                color: edit.error == nil ? ThemeColor.focusRing : ThemeColor.negative
+            )
+            .budgetAmountErrorAnchor(edit.error != nil)
+            .accessibilityHint(edit.error ?? "")
     }
 }

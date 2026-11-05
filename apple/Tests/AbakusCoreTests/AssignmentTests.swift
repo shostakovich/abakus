@@ -46,12 +46,37 @@ import Testing
         #expect(throws: BudgetError.amountNotFinite) {
             try scenario.budget.apply(.setAssigned(month: october24, categoryId: S.kleidung, amount: .nan))
         }
-        let half = try #require(Decimal(string: "2" + String(repeating: "0", count: 165)))
-        try scenario.add(-half, on: "2026-09-10", category: S.kleidung)
-        try scenario.add(-half, on: "2026-09-11", category: S.kleidung)
-        try scenario.budget.apply(.quickBudget(month: october24, fill: .outflowsLastMonth, today: october24))
-        #expect(scenario.budget.assignments.allSatisfy { $0.amount.isFinite })
-        #expect(scenario.budget.assigned(in: october24, categoryId: S.kleidung) == 0)
+    }
+
+    @Test func resettingSetsEveryAssignmentOfTheMonthToZero() throws {
+        var scenario = ScenarioBudget()
+        try scenario.budget(40, S.kleidung, in: "2026-10-01")
+        try scenario.budget(-15, S.notgroschen, in: "2026-10-01")
+        try scenario.budget(25, S.kleidung, in: "2026-09-01")
+        try scenario.budget.apply(.resetAssigned(month: october24))
+        #expect(scenario.month("2026-10-01").category(S.kleidung)?.assigned == 0)
+        #expect(scenario.month("2026-10-01").category(S.notgroschen)?.assigned == 0)
+        #expect(scenario.budget.assigned(in: date("2026-09-01"), categoryId: S.kleidung) == 25)
+    }
+
+    @Test func changingAssignedAddsToEachCategoryOfTheMonth() throws {
+        var scenario = ScenarioBudget()
+        try scenario.budget(40, S.kleidung, in: "2026-10-01")
+        try scenario.budget.apply(
+            .changeAssigned(
+                month: october24,
+                [
+                    AssignedChange(categoryId: S.kleidung, amount: -15),
+                    AssignedChange(categoryId: S.notgroschen, amount: 15),
+                ]
+            ))
+        #expect(scenario.month("2026-10-01").category(S.kleidung)?.assigned == 25)
+        #expect(scenario.month("2026-10-01").category(S.notgroschen)?.assigned == 15)
+        #expect(throws: BudgetError.categoryNotFound("MISSING")) {
+            try scenario.budget.apply(
+                .changeAssigned(month: october24, [AssignedChange(categoryId: "MISSING", amount: 1)]))
+        }
+        #expect(scenario.month("2026-10-01").category(S.kleidung)?.assigned == 25)
     }
 
     @Test func assignmentsSurviveARoundTrip() throws {

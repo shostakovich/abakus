@@ -197,29 +197,4 @@ import Testing
         #expect(balances[S.kleidung] == -30)
         #expect(balances[S.notgroschen] == 0)
     }
-
-    @Test func nQuickBudgetFiguresInTheCurrentAndAFutureMonth() throws {
-        var scenario = ScenarioBudget(income: nil)
-        for (month, assigned, outflow) in [("07", 100, -90), ("08", 120, -120), ("09", 140, -150)]
-            as [(String, Decimal, Decimal)]
-        {
-            try scenario.budget(assigned, S.lebensmittel, in: "2026-\(month)-01")
-            try scenario.add(outflow, on: "2026-\(month)-10", category: S.lebensmittel)
-        }
-        try scenario.add(-40, on: "2026-10-10", category: S.lebensmittel)
-        let sheet = scenario.sheet
-        let october = sheet.quickBudgetOptions(categoryId: S.lebensmittel, month: date("2026-10-01"))
-        #expect(
-            october.map { "\($0.label)\(german.currencyNoSymbol($0.amount))" } == [
-                "Zugewiesen im Vormonat:140,00", "Ausgegeben im Vormonat:150,00",
-                "Im Schnitt ausgegeben, letzte 3 Monate:120,00", "Geplante Ausgaben diesen Monat:0,00",
-                "Verfügbar auf null bringen:40,00",
-            ])
-        let december = sheet.quickBudgetOptions(categoryId: S.lebensmittel, month: date("2026-12-01"))
-        #expect(
-            december.dropFirst().map { "\($0.label)\(german.currencyNoSymbol($0.amount))" }.prefix(3) == [
-                "Ausgegeben im Vormonat:0,00", "Im Schnitt ausgegeben, letzte 3 Monate:103,33",
-                "Im Schnitt ausgegeben, letztes Jahr (nur 4 Monate):100,00",
-            ])
-    }
 }

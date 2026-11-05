@@ -77,7 +77,6 @@ import Testing
     @Test func shownAmountsReadBack() {
         let shown = german.currency(decimal("-1234.5"))
         #expect(german.parseAmount(shown) == decimal("-1234.5"))
-        #expect(german.parseBudgetAmount(shown) == decimal("-1234.5"))
         #expect(german.parseBalance(shown) == decimal("-1234.5"))
     }
 
@@ -110,148 +109,76 @@ import Testing
         #expect(german.parseAmount("1,005") == decimal("1.01"))
         #expect(german.parseAmount("1,2,3") == 0)
     }
-
-    @Test func unknownDecimalSeparatorTakesTheLastOne() {
-        #expect(german.parseAmountWithUnknownDecimalSeparator("1.234.5") == decimal("1234.5"))
-        #expect(german.parseAmountWithUnknownDecimalSeparator("12.5") == decimal("12.5"))
-        #expect(american.parseAmountWithUnknownDecimalSeparator("12,5") == decimal("12.5"))
-    }
 }
 
-@Suite struct CalculatorTests {
-    let formatter = BudgetFormatter()
-
-    func calculator(_ value: Decimal, _ op: Calculator.Operator?) -> Calculator {
-        Calculator(value: value, operator: op, formatter: formatter)
-    }
-
-    @Test func startsWithTheFieldValueAndTheTypedOperator() {
-        var calculator = calculator(10, .add)
-        #expect(calculator.display == "10,00")
-        calculator.press(.digit(5))
-        #expect(calculator.display == "5")
-        #expect(calculator.result() == 15)
-        #expect(calculator.display == "15,00")
-    }
-
-    @Test func chainsOperators() {
-        var calculator = calculator(100, .subtract)
-        calculator.press(.digit(2))
-        calculator.press(.digit(0))
-        calculator.press(.op(.multiply))
-        #expect(calculator.display == "80,00")
-        calculator.press(.digit(2))
-        #expect(calculator.result() == 160)
-    }
-
-    @Test func decimalPointUsesTheLocaleSeparator() {
-        var calculator = calculator(0, .add)
-        calculator.press(.digit(1))
-        calculator.press(.point)
-        calculator.press(.digit(5))
-        #expect(calculator.display == "1,5")
-        #expect(calculator.result() == decimal("1.5"))
-    }
-
-    @Test func divisionByZeroShowsTheErrorAndGivesZero() {
-        var calculator = calculator(10, .divide)
-        calculator.press(.digit(0))
-        #expect(calculator.result() == 0)
-        #expect(calculator.display == "Fehler")
-    }
-
-    @Test func zeroDividedByANumberIsZero() {
-        var calculator = calculator(0, .divide)
-        calculator.press(.digit(5))
-        #expect(calculator.result() == 0)
-        #expect(calculator.display == "0,00")
-    }
-
-    @Test func backspaceNegateAndClear() {
-        var calculator = calculator(0, nil)
-        calculator.press(.digit(4))
-        calculator.press(.digit(2))
-        calculator.press(.backspace)
-        #expect(calculator.display == "4")
-        calculator.press(.negate)
-        #expect(calculator.display == "−4")
-        calculator.press(.backspace)
-        calculator.press(.backspace)
-        #expect(calculator.display == "0")
-        calculator.press(.clear)
-        #expect(calculator.display == "0,00")
-    }
-
-    @Test func editingAShownResultAndASecondSeparatorStayInStep() {
-        var negated = calculator(10, .add)
-        negated.press(.digit(5))
-        negated.press(.equals)
-        negated.press(.negate)
-        #expect(negated.display == "−15,00")
-        negated.press(.op(.add))
-        negated.press(.digit(3))
-        #expect(negated.result() == -12)
-
-        var shown = calculator(10, .add)
-        shown.press(.digit(5))
-        shown.press(.equals)
-        shown.press(.backspace)
-        #expect(shown.display == "15,00")
-        #expect(shown.result() == 15)
-
-        var decimals = calculator(0, nil)
-        for key: Calculator.Key in [.digit(1), .point, .digit(5), .point, .digit(2)] { decimals.press(key) }
-        #expect(decimals.display == "1,52")
-        #expect(decimals.result() == decimal("1.52"))
-    }
-
-    @Test func displayIsLimitedToThirtyCharacters() {
-        var calculator = calculator(0, nil)
-        for _ in 0..<40 { calculator.press(.digit(1)) }
-        #expect(calculator.display.count == 30)
-    }
-
-    @Test func typedArithmeticIsWorkedLeftToRight() {
-        #expect(Calculator.evaluate("12,50 + 7,30", formatter: formatter) == decimal("19.8"))
-        #expect(Calculator.evaluate("10+5×2", formatter: formatter) == 30)
-        #expect(Calculator.evaluate("10 ÷ 4", formatter: formatter) == decimal("2.5"))
-        #expect(Calculator.evaluate("5−7", formatter: formatter) == -2)
-        #expect(Calculator.evaluate("1.000,00*2", formatter: formatter) == 2000)
-        #expect(Calculator.evaluate("10/3", formatter: formatter) == decimal("3.33"))
-        #expect(Calculator.evaluate("12,50+", formatter: formatter) == nil)
-    }
-
-    @Test func plainAmountsAndDivisionByZeroAreNoArithmetic() {
-        #expect(Calculator.evaluate("12,50", formatter: formatter) == nil)
-        #expect(Calculator.evaluate("-12,50", formatter: formatter) == nil)
-        #expect(Calculator.evaluate("", formatter: formatter) == nil)
-        #expect(Calculator.evaluate("+", formatter: formatter) == nil)
-        #expect(Calculator.evaluate("5/0", formatter: formatter) == nil)
-    }
-}
-
-@Suite struct BudgetAmountParsingTests {
+@Suite struct AmountExpressionTests {
     let german = BudgetFormatter()
+    let american = BudgetFormatter(currencyLocale: .enUS)
 
-    @Test func emptyTextIsZeroAndTypedNumbersAreRead() {
-        #expect(german.parseBudgetAmount("") == 0)
-        #expect(german.parseBudgetAmount(" ") == 0)
-        #expect(german.parseBudgetAmount("12,5") == 12.5)
-        #expect(german.parseBudgetAmount("12.5") == 125)
-        #expect(german.parseBudgetAmount("1.234,50€") == 1234.5)
-        #expect(german.parseBudgetAmount("-5") == -5)
-        #expect(german.parseBudgetAmount("10(5") == 5)
+    func evaluate(_ text: String) -> Decimal? {
+        Calculator.evaluate(text, formatter: german)
     }
 
-    @Test func textWithoutANumberIsNotAnAmount() {
-        #expect(german.parseBudgetAmount("1,2,3") == nil)
-        #expect(german.parseBudgetAmount("-") == nil)
-        #expect(german.parseBudgetAmount("+/") == nil)
+    @Test func plusAndMinusAreWorkedLeftToRight() {
+        #expect(evaluate("50+20") == 70)
+        #expect(evaluate("10-5") == 5)
+        #expect(evaluate("10−5−8") == -3)
+        #expect(evaluate("12,50 + 7,30") == decimal("19.8"))
+        #expect(evaluate("1.000,00€+2") == 1002)
+        #expect(Calculator.evaluate("1,000.50+0.5", formatter: american) == 1001)
     }
 
-    @Test func aNumberTooLargeForDecimalIsNotAnAmount() {
-        #expect(german.parseBudgetAmount(String(repeating: "9", count: 165))?.isFinite == true)
-        #expect(german.parseBudgetAmount(String(repeating: "9", count: 166)) == nil)
-        #expect(german.parseBudgetAmount(",") == 0)
+    @Test func aLeadingSignBelongsToTheFirstNumber() {
+        #expect(evaluate("-50+20") == -30)
+        #expect(evaluate("−5−3") == -8)
+        #expect(evaluate("+5−8") == -3)
+        #expect(evaluate("-12,50") == decimal("-12.5"))
+    }
+
+    @Test func aPlainNumberIsItsValue() {
+        #expect(evaluate("12,50") == decimal("12.5"))
+        #expect(evaluate(",5") == decimal("0.5"))
+        #expect(evaluate("12,") == 12)
+        #expect(evaluate("1,500") == decimal("1.5"))
+        #expect(evaluate("1,230") == decimal("1.23"))
+    }
+
+    @Test func aDotIsADecimalSeparatorUnlessExactlyThreeDigitsFollowIt() {
+        #expect(evaluate("12.50") == decimal("12.5"))
+        #expect(evaluate("12.5") == decimal("12.5"))
+        #expect(evaluate("1.500") == 1500)
+        #expect(evaluate(".500") == decimal("0.5"))
+        #expect(evaluate("1.234.567") == 1_234_567)
+        #expect(evaluate("1,234,567") == 1_234_567)
+        #expect(evaluate("1.234,5") == decimal("1234.5"))
+        #expect(evaluate("1,234.5") == decimal("1234.5"))
+        #expect(evaluate("12.50+1.000") == decimal("1012.5"))
+    }
+
+    @Test func moreDecimalsThanTheCurrencyHasAreRejected() {
+        for text in ["1,005", "0.125", "1,2345"] {
+            #expect(evaluate(text) == nil, "\(text)")
+        }
+    }
+
+    @Test func otherOperatorsAndUnreadableTextAreRejected() {
+        for text in [
+            "60*2", "10/2", "5×2", "10÷2", "12,50+", "5+-3", "+", "-", "", " ", "abc", "1,2,3", "10(5", "1.23.4",
+            "12.34.5", "1.2,3", "1,2.345,6", ".", ",",
+        ] {
+            #expect(evaluate(text) == nil, "\(text)")
+        }
+    }
+
+    @Test func moreThanFifteenIntegerDigitsArePerPartOrInTotalRejected() {
+        let largest = String(repeating: "9", count: 15)
+        #expect(evaluate(largest) == Decimal(string: largest))
+        #expect(evaluate("-" + largest + ",99") == -(Decimal(string: largest)! + decimal("0.99")))
+        #expect(evaluate("1" + largest) == nil)
+        #expect(evaluate("0" + largest) == nil)
+        #expect(evaluate("999.999.999.999.999.999") == nil)
+        #expect(evaluate(largest + "+1") == nil)
+        #expect(evaluate("-" + largest + "-1") == nil)
+        #expect(evaluate(largest + "+1-1") == Decimal(string: largest))
     }
 }

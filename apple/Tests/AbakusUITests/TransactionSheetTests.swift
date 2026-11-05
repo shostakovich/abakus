@@ -140,6 +140,20 @@ import Testing
         #expect(sheet.clone.amount == 4)
     }
 
+    @Test func anotherOperatorIsRefusedWhenTheKeypadCloses() throws {
+        var fixture = RegisterFixture()
+        fixture.budget.budgetMetaData = BudgetMetaData()
+        let (model, _) = fixture.spied()
+        model.addTransactionClicked()
+        let sheet = try #require(model.editor)
+        sheet.enter("-50+20", in: .main(.amount))
+        #expect(sheet.clone.amount == -30)
+        sheet.enter("60*2", in: .main(.amount))
+        #expect(sheet.clone.amount == -30)
+        #expect(sheet.text(.main(.amount)) == "30,00")
+        #expect(sheet.taskDialog?.instruction == "Ungültiger Betrag")
+    }
+
     @Test func aSavedTransactionChangesTheBalanceAndAvailableAtOnce() throws {
         let fixture = RegisterFixture()
         let (model, store) = fixture.spied(appliesCommands: true)

@@ -15,49 +15,6 @@ import Testing
 }
 
 @MainActor
-@Suite struct BudgetQuickBudgetMenuTests {
-    typealias F = BudgetScreenFixture
-    let october = day("2026-10-01")
-
-    @Test func theMenuShowsTheCoreItemsWithDisabledHeadings() {
-        let model = F().model().model
-        let items = Array(model.callouts.quickBudgetMenu(month: october).dropFirst(3))
-        let expected = model.sheet.quickBudgetMenu(month: october, formatter: model.formatter)
-        #expect(items.map(\.title) == expected.map(\.label))
-        #expect(items.first?.kind == .title)
-        #expect(items.first?.isEnabled == false)
-        #expect(items[1].kind == .action(.quickBudget(.assignedLastMonth)))
-        #expect(items.last?.kind == .action(.quickBudget(.zero)))
-    }
-
-    @Test func aFillTheMonthDoesNotOfferAsksNothing() {
-        let model = F().model().model
-        model.callouts.quickBudgetChosen(.averageOutflowsLastYear, month: october)
-        #expect(!model.dialogs.isPresenting)
-    }
-
-    @Test func anItemAsksFirstAndFillsOnlyOnTheFillButton() throws {
-        let (model, store) = F().model()
-        model.present(.monthQuickBudget(month: october))
-        model.callouts.quickBudgetChosen(.outflowsLastMonth, month: october)
-        model.callouts.quickBudgetMenuClosed()
-        #expect(model.presentedPopup == nil)
-        let dialog = try #require(model.dialogs.presented.last)
-        #expect(dialog.dialog.instruction == "Leere Zuweisungen mit den Ausgaben aus September '26 füllen?")
-        #expect(dialog.dialog.content == "Das lässt sich nicht rückgängig machen.")
-        #expect(dialog.dialog.buttons.map(\.title) == ["Abbrechen", "Leere Zuweisungen füllen"])
-        dialog.answer(QuickBudgetChoice.cancel)
-        #expect(store.commands.isEmpty)
-        model.callouts.quickBudgetChosen(.zero, month: october)
-        let zero = try #require(model.dialogs.presented.last)
-        #expect(zero.dialog.instruction == "Alle Zuweisungen im Oktober zurücksetzen?")
-        zero.answer(QuickBudgetChoice.fill)
-        #expect(store.commands == [.quickBudget(month: october, fill: .zero, today: F.today)])
-        #expect(!model.dialogs.isPresenting)
-    }
-}
-
-@MainActor
 @Suite struct BudgetCategoryCalloutTests {
     typealias F = BudgetScreenFixture
 
@@ -233,13 +190,13 @@ import Testing
     @Test func theKeyFocusReturnsToThePanelOnlyAfterTheTaskDialogCloses() throws {
         let model = F().model().model
         let october = day("2026-10-01")
-        model.present(.monthQuickBudget(month: october))
+        model.present(.monthMenu(month: october))
         #expect(!model.takesKeyFocusBack)
-        model.callouts.quickBudgetChosen(.outflowsLastMonth, month: october)
-        model.callouts.quickBudgetMenuClosed()
+        model.callouts.monthMenuChosen(.resetAssigned, month: october)
+        model.callouts.monthMenuClosed()
         #expect(model.presentedPopup == nil)
         #expect(!model.takesKeyFocusBack)
-        try #require(model.dialogs.presented.last).answer(QuickBudgetChoice.cancel)
+        try #require(model.dialogs.presented.last).answer(ResetAssignedChoice.cancel)
         #expect(model.takesKeyFocusBack)
     }
 }

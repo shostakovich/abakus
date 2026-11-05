@@ -42,10 +42,10 @@ extension TransactionEditor {
     /// A sign typed at the start would win over the button on blur, so the button flips what it says.
     private func takeTypedSign(_ field: EditorFieldID) {
         let typed = text(field).trimmingCharacters(in: .whitespaces)
-        guard let first = typed.first, Self.signs[first] != nil else { return }
-        let amount = typedAmount(field)
-        let isArithmetic = Calculator.evaluate(typed, formatter: formatter) != nil
-        setText(field, isArithmetic ? formatter.registerAmount(abs(amount)) : String(typed.dropFirst()))
+        guard let first = typed.first, Self.signs[first] != nil, let amount = typedAmount(field) else { return }
+        let rest = typed.dropFirst()
+        let isArithmetic = rest.contains { Self.signs[$0] != nil }
+        setText(field, isArithmetic ? formatter.registerAmount(abs(amount)) : String(rest))
     }
 
     /// What a picker for the payee, category or account offers, narrowed by its search text.

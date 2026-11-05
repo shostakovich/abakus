@@ -25,6 +25,11 @@ public enum ThemeColor {
         public static let groupBand = SetzkastenToken.base200.color
         public static let availableTint = SetzkastenToken.availableTint.color
         public static let focusRing = Color(platform: .keyboardFocusIndicatorColor)
+        /// A card on a popover's window background: white in light, a lighter step in dark.
+        public static let groupedRowBackground = Color(
+            platform: NSColor(name: nil) {
+                $0.isDark ? NSColor(white: 1, alpha: 0.08) : .controlBackgroundColor
+            })
     #else
         /// The system's elevated surface, so the dark theme keeps one base and one elevation.
         public static let groupBand = Color(platform: .secondarySystemBackground)

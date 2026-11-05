@@ -4,7 +4,7 @@
     import SwiftUI
 
     enum BudgetSheetField: Hashable {
-        case assigned, move, assign, name, target
+        case assigned, name, target
     }
 
     struct BudgetSheet: View {
@@ -16,9 +16,7 @@
             let callouts = model.callouts
             NavigationStack {
                 Group {
-                    if let form = callouts.assignForm {
-                        BudgetAssignSheet(controller: callouts, form: form, focus: $focus)
-                    } else if let form = callouts.category, let deletion = form.deletion {
+                    if let form = callouts.category, let deletion = form.deletion {
                         BudgetDeletionSheet(controller: callouts, form: form, deletion: deletion)
                     } else if let form = callouts.category, let available = callouts.availableForm {
                         BudgetCategorySheet(
@@ -40,8 +38,19 @@
                         Button("Fertig") { focus = nil }
                     }
                 }
+                .safeAreaInset(edge: .bottom) { banner }
+                .animation(.smooth(duration: 0.25), value: model.undoNotice?.id)
             }
             .presentationBackground(ThemeColor.groupedBackground)
+        }
+
+        @ViewBuilder
+        private var banner: some View {
+            if let notice = model.undoNotice {
+                BudgetUndoBanner(model: model, notice: notice)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
     }
 
@@ -64,18 +73,6 @@
                     }
                     BudgetTargetSection(controller: controller, form: form, focus: focus)
                     Section {
-                        NavigationLink {
-                            BudgetMoveView(controller: controller, focus: focus)
-                        } label: {
-                            Label("Geld verschieben", systemImage: "arrow.left.arrow.right")
-                        }
-                    }
-                    Section("Name") {
-                        TextField("Name", text: $controller.categoryName)
-                            .focused(focus, equals: .name)
-                            .submitLabel(.done)
-                    }
-                    Section {
                         Button(form.deleteTitle, systemImage: "trash", role: .destructive) {
                             focus.wrappedValue = nil
                             controller.deleteCategoryClicked()
@@ -90,9 +87,14 @@
             .listSectionSpacing(.compact)
             .scrollIndicatorsFlash(onAppear: true)
             .modifier(ReportsFormHeight())
-            .navigationTitle(available.categoryName)
-            .navigationSubtitle(available.monthTitle)
+            .navigationTitle(form.name)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    BudgetSheetTitleField(
+                        name: $controller.categoryName, prompt: form.title, subtitle: available.monthTitle,
+                        focus: focus, onSubmit: controller.categoryNameSubmitted)
+                }
+                .sharedBackgroundVisibility(.hidden)
                 if showsClose {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Schließen", systemImage: "xmark", role: .close) {
@@ -118,25 +120,30 @@
             let stored = model.assignedText(cell)
             Section {
                 LabeledContent(BudgetAvailableBreakdown.carriedLabel) { amount(breakdown.carried) }
-                VStack(alignment: .leading, spacing: 10) {
-                    LabeledContent(breakdown.assignedLabel) {
-                        TextField(breakdown.assignedLabel, text: typed, prompt: Text(verbatim: model.zeroText))
-                            .multilineTextAlignment(.trailing)
-                            .monospacedDigit()
-                            .keyboardType(.numbersAndPunctuation)
-                            .submitLabel(.done)
-                            .focused(focus, equals: .assigned)
-                            .onSubmit(commit)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(ThemeColor.fieldBackground, in: RoundedRectangle(cornerRadius: 8))
-                            .frame(maxWidth: 160)
-                    }
-                    BudgetQuickAmounts(model: model, cell: cell) { focus.wrappedValue = nil }
+                LabeledContent(breakdown.assignedLabel) {
+                    TextField(breakdown.assignedLabel, text: typed, prompt: Text(verbatim: model.zeroText))
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                        .amountKeyboard()
+                        .submitLabel(.done)
+                        .focused(focus, equals: .assigned)
+                        .onSubmit(commit)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(ThemeColor.fieldBackground, in: RoundedRectangle(cornerRadius: 8))
+                        .frame(maxWidth: 160)
                 }
                 .onChange(of: stored, initial: true) { assigned = stored }
                 .onChange(of: focus.wrappedValue) { old, _ in if old == .assigned { commit() } }
+                .onChange(of: model.sheetAssignedRefusals) { focus.wrappedValue = .assigned }
                 .onDisappear(perform: commit)
+                if let error = model.sheetAssignedError {
+                    Text(verbatim: error)
+                        .font(.footnote)
+                        .foregroundStyle(ThemeColor.negative)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .listRowSeparator(.hidden, edges: .top)
+                }
                 LabeledContent(breakdown.activityLabel) { amount(breakdown.activity) }
                 LabeledContent {
                     Text(verbatim: breakdown.available)
@@ -145,9 +152,6 @@
                         .foregroundStyle(availableColor)
                 } label: {
                     Text("Verfügbar").fontWeight(.semibold)
-                }
-                if available.isOverspent {
-                    BudgetCoverRows(controller: model.callouts, form: available)
                 }
             } header: {
                 Text("Verfügbar")
@@ -181,183 +185,6 @@
         }
     }
 
-    private struct BudgetQuickAmounts: View {
-        let model: BudgetViewModel
-        let cell: BudgetCellID
-        let onChosen: () -> Void
-
-        var body: some View {
-            ChipFlow(spacing: 8) {
-                ForEach(model.quickBudgetOptions(for: cell), id: \.fill) { option in
-                    Button {
-                        onChosen()
-                        model.quickBudgetOptionChosen(option, for: cell)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(verbatim: Self.title(option.fill))
-                                .font(.caption2)
-                                .foregroundStyle(ThemeColor.secondaryText)
-                            Text(verbatim: model.formatter.currency(option.amount))
-                                .font(.footnote.weight(.semibold))
-                                .monospacedDigit()
-                                .foregroundStyle(ThemeColor.text)
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(ThemeColor.fieldBackground, in: RoundedRectangle(cornerRadius: 10))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(option.label.trimmingCharacters(in: CharacterSet(charactersIn: ":")))
-                    .accessibilityValue(model.formatter.currency(option.amount))
-                    .accessibilityAddTraits(.isButton)
-                }
-            }
-        }
-
-        static func title(_ fill: QuickBudgetFill) -> String {
-            switch fill {
-            case .assignedLastMonth: "Wie im Vormonat"
-            case .outflowsLastMonth: "Ausgaben Vormonat"
-            case .averageOutflows: "Ø Ausgaben"
-            case .averageOutflowsLastYear: "Ø Vorjahr"
-            case .scheduledOutflows: "Geplant"
-            case .balanceToZero: "Auf null"
-            case .zero: "Null"
-            }
-        }
-    }
-
-    private struct ChipFlow: Layout {
-        private struct Line {
-            var indices: [Int] = []
-            var width: CGFloat = 0
-            var height: CGFloat = 0
-        }
-
-        let spacing: CGFloat
-
-        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
-            let lines = lines(subviews, width: proposal.width ?? .infinity)
-            let height = lines.map(\.height).reduce(0, +) + spacing * CGFloat(max(lines.count - 1, 0))
-            return CGSize(width: proposal.width ?? lines.map(\.width).max() ?? 0, height: height)
-        }
-
-        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
-            var y = bounds.minY
-            for line in lines(subviews, width: bounds.width) {
-                var x = bounds.minX
-                for index in line.indices {
-                    let size = subviews[index].sizeThatFits(.unspecified)
-                    subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-                    x += size.width + spacing
-                }
-                y += line.height + spacing
-            }
-        }
-
-        private func lines(_ subviews: Subviews, width: CGFloat) -> [Line] {
-            var lines = [Line()]
-            for (index, subview) in subviews.enumerated() {
-                let size = subview.sizeThatFits(.unspecified)
-                if let last = lines.last, !last.indices.isEmpty, last.width + spacing + size.width > width {
-                    lines.append(Line())
-                }
-                let gap = lines[lines.count - 1].indices.isEmpty ? 0 : spacing
-                lines[lines.count - 1].indices.append(index)
-                lines[lines.count - 1].width += gap + size.width
-                lines[lines.count - 1].height = max(lines[lines.count - 1].height, size.height)
-            }
-            return lines
-        }
-    }
-
-    private struct BudgetCoverRows: View {
-        let controller: BudgetCalloutController
-        let form: BudgetAvailableForm
-
-        var body: some View {
-            @Bindable var controller = controller
-            if form.sources.isEmpty {
-                Text(verbatim: BudgetCalloutController.noSources).foregroundStyle(ThemeColor.secondaryText)
-            } else {
-                Menu {
-                    Picker("Decken aus", selection: $controller.coverSourceId) {
-                        ForEach(form.sources, id: \.categoryId) { source in
-                            Text(verbatim: source.name).tag(source.categoryId)
-                        }
-                    }
-                    .pickerStyle(.inline)
-                } label: {
-                    LabeledContent("Decken aus") {
-                        HStack(spacing: 4) {
-                            Text(verbatim: form.source?.name ?? "")
-                            Image(systemName: "chevron.up.chevron.down").font(.footnote.weight(.medium))
-                        }
-                        .foregroundStyle(ThemeColor.accent)
-                    }
-                    .foregroundStyle(ThemeColor.text)
-                }
-                LabeledContent(controller.remainingLabel) {
-                    Text(verbatim: controller.remainingText).monospacedDigit()
-                }
-                .foregroundStyle(ThemeColor.secondaryText)
-                Button(action: controller.coverClicked) {
-                    Text(verbatim: controller.coverButtonTitle)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(ThemeColor.selectedText)
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .listRowInsets(.vertical, 8)
-                if let error = form.error {
-                    Text(verbatim: error).foregroundStyle(ThemeColor.negative)
-                }
-            }
-        }
-    }
-
-    private struct BudgetMoveView: View {
-        let controller: BudgetCalloutController
-        var focus: FocusState<BudgetSheetField?>.Binding
-
-        var body: some View {
-            @Bindable var controller = controller
-            Form {
-                if let form = controller.availableForm {
-                    Section {
-                        Picker("Richtung", selection: $controller.moveDirection) {
-                            ForEach(BudgetMoveDirection.allCases, id: \.self) { Text($0.title).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-                        BudgetCategoryPicker(
-                            label: "Andere Kategorie", groups: form.others, selection: $controller.moveOtherId,
-                            leading: (DefaultCategories.readyToAssignName, controller.readyToAssignCategoryId))
-                        BudgetAmountField(label: "Betrag", text: $controller.moveAmount, focus: focus, field: .move)
-                        if let error = form.error {
-                            Text(verbatim: error).foregroundStyle(ThemeColor.negative)
-                        }
-                    }
-                    Section {
-                        Button(action: controller.moveClicked) {
-                            Text(BudgetAvailableMode.move.title)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(ThemeColor.selectedText)
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.large)
-                        .listRowInsets(.vertical, 8)
-                    }
-                }
-            }
-            .modifier(ReportsFormHeight())
-            .navigationTitle("Geld verschieben")
-        }
-    }
-
     private struct BudgetGroupSheet: View {
         let model: BudgetViewModel
         let form: BudgetCategoryForm
@@ -366,12 +193,6 @@
         var body: some View {
             @Bindable var controller = model.callouts
             Form {
-                Section("Name") {
-                    TextField("Name", text: $controller.categoryName)
-                        .focused(focus, equals: .name)
-                        .submitLabel(.done)
-                        .onSubmit(controller.categoryDone)
-                }
                 if form.isMaster && !form.isNew {
                     Section {
                         Button("Neue Kategorie", systemImage: "plus") {
@@ -390,6 +211,12 @@
             }
             .navigationTitle(form.isNew ? form.title : form.name)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    BudgetSheetTitleField(
+                        name: $controller.categoryName, prompt: form.title, subtitle: nil, focus: focus,
+                        onSubmit: form.isNew ? controller.categoryDone : controller.categoryNameSubmitted)
+                }
+                .sharedBackgroundVisibility(.hidden)
                 ToolbarItem(placement: .cancellationAction) {
                     Button(form.isNew ? "Abbrechen" : "Schließen", systemImage: "xmark", role: .close) {
                         focus.wrappedValue = nil
@@ -404,39 +231,6 @@
             }
             .onAppear { if form.isNew { focus.wrappedValue = .name } }
             .onChange(of: form.focusRequest) { focus.wrappedValue = .name }
-        }
-    }
-
-    private struct BudgetAssignSheet: View {
-        let controller: BudgetCalloutController
-        let form: BudgetAssignForm
-        var focus: FocusState<BudgetSheetField?>.Binding
-
-        var body: some View {
-            @Bindable var controller = controller
-            Form {
-                Section {
-                    BudgetCategoryPicker(
-                        label: "Kategorie", groups: form.categories, selection: $controller.assignCategoryId)
-                    BudgetAmountField(label: "Betrag", text: $controller.assignAmount, focus: focus, field: .assign)
-                } footer: {
-                    Text(verbatim: form.freeText)
-                }
-                if let error = form.error {
-                    Text(verbatim: error).foregroundStyle(ThemeColor.negative)
-                }
-            }
-            .navigationTitle("In eine Kategorie")
-            .navigationSubtitle(form.monthTitle)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Abbrechen", systemImage: "xmark", role: .close, action: controller.assignCancelled)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Zuweisen", systemImage: "checkmark", role: .confirm, action: controller.assignClicked)
-                }
-            }
-            .onAppear { focus.wrappedValue = .assign }
         }
     }
 
@@ -480,6 +274,44 @@
         }
     }
 
+    /// The sheet's title is the name itself, emoji included: a tap renames, as in Reminders' list info.
+    private struct BudgetSheetTitleField: View {
+        @Binding var name: String
+        let prompt: String
+        let subtitle: String?
+        var focus: FocusState<BudgetSheetField?>.Binding
+        let onSubmit: () -> Void
+
+        var body: some View {
+            let isEditing = focus.wrappedValue == .name
+            VStack(spacing: 1) {
+                TextField("Name", text: $name, prompt: Text(verbatim: prompt))
+                    .font(.title3.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                    .submitLabel(.done)
+                    .focused(focus, equals: .name)
+                    .onSubmit(onSubmit)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 2)
+                    .background(
+                        isEditing ? AnyShapeStyle(ThemeColor.fieldBackground) : AnyShapeStyle(ThemeColor.groupFill),
+                        in: Capsule()
+                    )
+                    .contentShape(.hoverEffect, Capsule())
+                    .hoverEffect(.highlight)
+                    .accessibilityLabel("Name")
+                    .accessibilityAddTraits(.isHeader)
+                if let subtitle {
+                    Text(verbatim: subtitle)
+                        .font(.caption)
+                        .foregroundStyle(ThemeColor.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: 260)
+        }
+    }
+
     struct BudgetCategoryPicker<Selection: Hashable>: View {
         let label: String
         let groups: [BudgetCategoryChoiceGroup]
@@ -512,7 +344,7 @@
                 TextField(label, text: $text)
                     .multilineTextAlignment(.trailing)
                     .monospacedDigit()
-                    .keyboardType(.decimalPad)
+                    .amountKeyboard(.decimalPad)
                     .focused(focus, equals: field)
             }
         }

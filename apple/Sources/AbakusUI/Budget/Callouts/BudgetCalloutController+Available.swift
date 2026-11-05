@@ -1,218 +1,66 @@
 import AbakusCore
 import Foundation
 
-public enum BudgetAvailableMode: Hashable, Sendable, CaseIterable {
-    case cover, move
-
-    public var title: String {
-        switch self {
-        case .cover: "Decken"
-        case .move: "Verschieben"
-        }
-    }
-}
-
-public enum BudgetMoveDirection: Hashable, Sendable, CaseIterable {
-    case give, take
-
-    public var title: String {
-        switch self {
-        case .give: "Abgeben an"
-        case .take: "Holen aus"
-        }
-    }
-}
-
-public struct BudgetCategoryChoice: Identifiable, Hashable, Sendable {
-    public let id: String
-    public let name: String
-}
-
-public struct BudgetCategoryChoiceGroup: Identifiable, Hashable, Sendable {
-    public let id: String
-    public let name: String
-    public let categories: [BudgetCategoryChoice]
-}
-
-/// The Verfügbar popover of one category in one month.
+/// An overspent category's cover list in one month, or the touch sheet's Verfügbar.
 public struct BudgetAvailableForm: Hashable, Sendable {
     public let month: DateWithoutTime
     public let categoryId: String
     public let categoryName: String
     public let monthTitle: String
     public let available: Decimal
-    public let sources: [BudgetFundsSource]
-    public let others: [BudgetCategoryChoiceGroup]
-    public var mode: BudgetAvailableMode
-    public var sourceId: String?
-    public var amount: String
-    public var direction: BudgetMoveDirection
-    public var otherId: String
-    public internal(set) var error: String?
-    var isAmountTyped = false
+    /// Zu verteilen, only while it is above zero.
+    public let readyToAssign: BudgetFundsSource?
+    /// The categories with money, the most first.
+    public let categories: [BudgetFundsSource]
+
+    public var sources: [BudgetFundsSource] { (readyToAssign.map { [$0] } ?? []) + categories }
 
     public var isOverspent: Bool { available < 0 }
-
-    public var source: BudgetFundsSource? {
-        sources.first { $0.categoryId == sourceId } ?? sources.first
-    }
 }
 
 extension BudgetCalloutController {
-    static let nothingToCover = "Daraus lässt sich nichts decken."
     package static let noSources = "Kein Geld in „Zu verteilen“ oder anderen Kategorien."
-    static let missingAmount = "Bitte einen Betrag angeben."
-    static let amountNotPositive = "Bitte einen Betrag über null angeben, etwa 12,50."
 
     func availableForm(month date: DateWithoutTime, categoryId: String) -> BudgetAvailableForm? {
         let sheet = budget.sheet
         guard let month = sheet.month(date),
             let category = sheet.categoryGroups.flatMap(\.categories).first(where: { $0.id == categoryId })
         else { return nil }
-        let available = month.category(categoryId)?.balance ?? 0
-        let underfunded = month.category(categoryId)?.target?.underfunded ?? 0
-        let amount = available > 0 ? available : underfunded > 0 ? underfunded : max(-available, 0)
+        let sources = sheet.coverSources(for: categoryId, in: date)
+        let readyToAssign = sources.first { $0.categoryId == sheet.readyToAssignCategoryId }
         return BudgetAvailableForm(
             month: date, categoryId: categoryId, categoryName: category.name,
-            monthTitle: formatter.monthHeader(date), available: available,
-            sources: sheet.coverSources(for: categoryId, in: date), others: categoryChoices(excluding: categoryId),
-            mode: available < 0 ? .cover : .move,
-            amount: formatter.currencyNoSymbol(amount),
-            direction: available > 0 ? .give : .take, otherId: sheet.readyToAssignCategoryId)
+            monthTitle: formatter.monthHeader(date), available: month.category(categoryId)?.balance ?? 0,
+            readyToAssign: readyToAssign, categories: sources.filter { $0.categoryId != readyToAssign?.categoryId })
     }
 
-    /// The touch sheet stays open while what is done in it changes Verfügbar; what was chosen or typed stays.
+    /// The touch sheet stays open while what is done in it changes Verfügbar.
     func refreshAvailableForm() {
-        guard let form = availableForm, var fresh = availableForm(month: form.month, categoryId: form.categoryId),
-            fresh.available != form.available || fresh.sources != form.sources || fresh.others != form.others
-        else { return }
-        if fresh.isOverspent { fresh.mode = form.mode }
-        fresh.direction = form.direction
-        if fresh.sources.contains(where: { $0.categoryId == form.sourceId }) { fresh.sourceId = form.sourceId }
-        if form.otherId == readyToAssignCategoryId
-            || fresh.others.contains(where: { $0.categories.contains { $0.id == form.otherId } })
-        {
-            fresh.otherId = form.otherId
-        }
-        if form.isAmountTyped {
-            fresh.amount = form.amount
-            fresh.isAmountTyped = true
-        }
-        availableForm = fresh
+        guard let form = availableForm else { return }
+        availableForm = availableForm(month: form.month, categoryId: form.categoryId)
     }
 
     public var readyToAssignCategoryId: String { budget.sheet.readyToAssignCategoryId }
 
-    func categoryChoices(excluding excluded: String? = nil) -> [BudgetCategoryChoiceGroup] {
-        budget.sheet.categoryGroups.compactMap { master in
-            let categories = master.categories.filter { $0.id != excluded }
-                .map { BudgetCategoryChoice(id: $0.id, name: $0.name) }
-            guard !categories.isEmpty else { return nil }
-            return BudgetCategoryChoiceGroup(id: master.id, name: master.name, categories: categories)
-        }
+    public var coverTitle: String {
+        "\(formatter.currency(-min(availableForm?.available ?? 0, 0))) decken aus"
     }
 
-    /// Popover amounts read like the budget's assignment cells, where "12.5" is 125.
-    func typedAmount(_ text: String) -> Decimal? {
-        text.trimmingCharacters(in: .whitespaces).isEmpty ? nil : formatter.parseBudgetAmount(text)
-    }
-
-    func amountError(_ text: String) -> String {
-        typedAmount(text) == nil ? Self.missingAmount : Self.amountNotPositive
-    }
-
-    public var availableMode: BudgetAvailableMode {
-        get { availableForm?.mode ?? .move }
-        set { changeAvailableForm { $0.mode = newValue } }
-    }
-
-    public var coverSourceId: String {
-        get { availableForm?.source?.categoryId ?? "" }
-        set { changeAvailableForm { $0.sourceId = newValue } }
-    }
-
-    public var moveAmount: String {
-        get { availableForm?.amount ?? "" }
-        set {
-            changeAvailableForm {
-                $0.amount = newValue
-                $0.isAmountTyped = true
-            }
-        }
-    }
-
-    public var moveDirection: BudgetMoveDirection {
-        get { availableForm?.direction ?? .give }
-        set { changeAvailableForm { $0.direction = newValue } }
-    }
-
-    public var moveOtherId: String {
-        get { availableForm?.otherId ?? readyToAssignCategoryId }
-        set { changeAvailableForm { $0.otherId = newValue } }
-    }
-
-    private func changeAvailableForm(_ change: (inout BudgetAvailableForm) -> Void) {
-        guard var form = availableForm else { return }
-        change(&form)
-        form.error = nil
-        availableForm = form
-    }
-
-    public var coverLabel: String {
-        "Decke \(formatter.currency(-min(availableForm?.available ?? 0, 0))) aus"
-    }
-
-    public func coverSourceLabel(_ source: BudgetFundsSource) -> String {
-        "\(source.name) · \(formatter.currency(source.available))"
-    }
-
-    public var coverButtonTitle: String {
-        guard let form = availableForm, let source = form.source else { return BudgetAvailableMode.cover.title }
-        return "\(formatter.currency(source.coverAmount(overspent: form.available))) decken"
-    }
-
-    public var remainingLabel: String {
-        guard let source = availableForm?.source else { return "" }
-        return source.isReadyToAssign ? "Zu verteilen danach" : "\(source.name) danach"
-    }
-
-    public var remainingText: String {
-        guard let form = availableForm, let source = form.source else { return "" }
-        return formatter.currency(source.remaining(afterCovering: form.available))
-    }
-
-    public func coverClicked() {
-        guard let form = availableForm, let source = form.source,
+    /// Moves as much as the source holds, up to the overspending, both as they are after the edit being typed.
+    public func cover(from sourceId: String) {
+        guard let opened = availableForm else { return }
+        budget.commitEdit()
+        guard let form = availableForm(month: opened.month, categoryId: opened.categoryId),
+            let source = form.sources.first(where: { $0.categoryId == sourceId }),
             case let amount = source.coverAmount(overspent: form.available), amount > 0
-        else {
-            availableForm?.error = Self.nothingToCover
-            return
-        }
-        move(amount, in: form.month, from: source.categoryId, to: form.categoryId)
-    }
-
-    public func moveClicked() {
-        guard let form = availableForm else { return }
-        guard let amount = typedAmount(form.amount), amount > 0 else {
-            availableForm?.error = amountError(form.amount)
-            return
-        }
-        let (from, to) =
-            form.direction == .give ? (form.categoryId, form.otherId) : (form.otherId, form.categoryId)
-        move(amount, in: form.month, from: from, to: to)
-    }
-
-    func move(_ amount: Decimal, in month: DateWithoutTime, from: String, to: String) {
+        else { return }
         close()
-        budget.perform(.moveAssigned(month: month, from: from, to: to, amount: amount))
-    }
-
-    public func availableCancelled() {
-        close()
-    }
-
-    public func editCategoryClicked() {
-        guard let form = availableForm else { return }
-        budget.present(.editCategory(categoryId: form.categoryId, month: form.month))
+        let name =
+            source.categoryId == readyToAssignCategoryId
+            ? "„\(budget.plainName(of: source.categoryId))“" : budget.plainName(of: source.categoryId)
+        budget.performUndoable(
+            .moveAssigned(month: form.month, from: source.categoryId, to: form.categoryId, amount: amount),
+            month: form.month, actionName: "Decken"
+        ) { "\(self.formatter.currency($0)) aus \(name) gedeckt." }
     }
 }

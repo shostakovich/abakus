@@ -1,7 +1,6 @@
 import AbakusCore
 import AbakusUI
 import AppKit
-import Carbon.HIToolbox
 import Foundation
 
 /// The test budget "Business", today 24.10.2026.
@@ -117,13 +116,10 @@ enum BudgetReference {
 struct BudgetHarness {
     enum State: String, CaseIterable {
         case screen, edit
-        case quickBudget = "quick-budget"
-        case calculator
         case expandedHeader = "expanded-header"
         case collapsedAll = "collapsed-all"
         case drag, hover, uncategorized
-        case quickBudgetMenu = "quick-budget-menu"
-        case quickBudgetConfirm = "quick-budget-confirm"
+        case monthMenu = "month-menu"
         case addMaster = "add-master"
         case addSub = "add-sub"
         case editCategory = "edit-category"
@@ -132,11 +128,13 @@ struct BudgetHarness {
         case deleteCategory = "delete-category"
         case summary
         case uncategorizedSummary = "uncategorized-summary"
-        case cover, move
+        case cover
+        case coverReady = "cover-ready"
+        case undoNotice = "undo-notice"
+        case amountError = "amount-error"
         case accountView = "account-view"
         case targets, target
         case targetEditor = "target-editor"
-        case assign
     }
 
     let model: AppModel
@@ -154,14 +152,10 @@ struct BudgetHarness {
             break
         case .edit:
             budget.beginEdit(lernen)
-        case .quickBudget:
+        case .amountError:
             budget.beginEdit(lernen)
-            edit.settle()
-            edit.send(String(UnicodeScalar(NSF2FunctionKey)!), keyCode: UInt16(kVK_F2))
-        case .calculator:
-            budget.beginEdit(lernen)
-            edit.settle()
-            edit.type("+")
+            budget.cellTextChanged("60*2")
+            budget.commitEdit()
         case .expandedHeader:
             budget.toggleHeaderDetails()
             RunLoop.main.run(until: Date().addingTimeInterval(0.4))
@@ -209,6 +203,13 @@ struct BudgetHarness {
         try model.store.perform(.setAssigned(month: october, categoryId: BudgetReference.lernen, amount: 20))
     }
 
+    private func addIncome() throws {
+        let transaction = Transaction(
+            accountId: "KONTIST-ACCOUNT", date: BudgetReference.today,
+            categoryId: model.store.budget.readyToAssignCategoryId, amount: 1500)
+        try model.store.perform(.addTransaction(transaction, payeeName: "Kunde"))
+    }
+
     private func overspendLernen() throws {
         let transaction = Transaction(
             accountId: "KONTIST-ACCOUNT", date: BudgetReference.today, categoryId: BudgetReference.lernen, amount: -40)
@@ -219,10 +220,8 @@ struct BudgetHarness {
         let lernen = BudgetReference.lernen
         let callouts = budget.callouts
         switch state {
-        case .quickBudgetMenu:
-            budget.present(.monthQuickBudget(month: month))
-        case .quickBudgetConfirm:
-            callouts.quickBudgetChosen(.assignedLastMonth, month: month)
+        case .monthMenu:
+            budget.present(.monthMenu(month: month))
         case .addMaster:
             budget.addMasterCategoryClicked()
         case .addSub:
@@ -250,12 +249,15 @@ struct BudgetHarness {
             try addUncategorizedOutflow()
             edit.settle()
             budget.present(.outflowSummary(month: month, source: .masterCategory(EntityID.uncategorizedMasterCategory)))
-        case .cover:
+        case .cover, .coverReady, .undoNotice:
+            if state != .cover { try addIncome() }
             try overspendLernen()
             edit.settle()
             budget.present(.available(month: BudgetReference.today.firstOfMonth, categoryId: lernen))
-        case .move:
-            budget.present(.available(month: BudgetReference.today.firstOfMonth, categoryId: "PLATTEN"))
+            if state == .undoNotice {
+                edit.settle()
+                callouts.cover(from: try require(callouts.availableForm?.categories.first?.categoryId))
+            }
         case .target, .targetEditor:
             try addTargets()
             budget.rowHovered(lernen, true)
@@ -265,12 +267,7 @@ struct BudgetHarness {
                 callouts.editTargetClicked()
                 callouts.targetRepeatsYearly = true
             }
-        case .assign:
-            try addTargets()
-            edit.settle()
-            budget.present(.assignToCategory(month: BudgetReference.today.firstOfMonth))
-        case .screen, .edit, .quickBudget, .calculator, .expandedHeader, .collapsedAll, .drag, .hover, .uncategorized,
-            .targets:
+        case .screen, .edit, .amountError, .expandedHeader, .collapsedAll, .drag, .hover, .uncategorized, .targets:
             break
         }
     }

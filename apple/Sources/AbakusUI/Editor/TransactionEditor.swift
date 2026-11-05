@@ -45,7 +45,6 @@ public final class TransactionEditor {
     var subPayeeNames: [String: String] = [:]
     public internal(set) var categoryPrompts: [String?: String] = [:]
     public internal(set) var dateCallout: EditorDateCallout?
-    public internal(set) var calculator: EditorCalculator?
     public internal(set) var isCalendarOpen = false
     public internal(set) var glowCount = 0
     /// Flex draws the focus rectangle only after keyboard navigation.
@@ -56,6 +55,8 @@ public final class TransactionEditor {
     public internal(set) var isFrequencyListOpen = false
 
     var fieldSelection = NSRange(location: 0, length: 0)
+    /// A sign typed before any digit, which the next digit takes into the text.
+    var leadingSign: (field: EditorFieldID, sign: String)?
     var blockNextSave = false
     var stashedSubtransactions: [Subtransaction] = []
     var pendingSave: PendingSave?
@@ -368,12 +369,11 @@ public final class TransactionEditor {
     }
 
     public var hasOpenPopup: Bool {
-        dropDown != nil || calculator != nil || isCalendarOpen || isFrequencyListOpen
+        dropDown != nil || isCalendarOpen || isFrequencyListOpen
     }
 
     package func closePopups() {
         dropDown = nil
-        calculator = nil
         isCalendarOpen = false
         isFrequencyListOpen = false
     }
@@ -381,6 +381,7 @@ public final class TransactionEditor {
     public func textDidChange(_ field: EditorFieldID, text newText: String, selection: NSRange, isDeletion: Bool) {
         texts[field] = newText
         fieldSelection = selection
+        leadingSign = nil
         if dateCallout != nil && field == .main(.date) { dateCallout = nil }
         guard let kind = dropDownKind(for: field) else { return }
         autoComplete(field, kind: kind, isDeletion: isDeletion)

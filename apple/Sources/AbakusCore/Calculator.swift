@@ -1,165 +1,83 @@
 import Foundation
 
-public struct Calculator: Hashable, Sendable {
-    public enum Operator: String, Hashable, Sendable, CaseIterable {
-        case add = "+"
-        case subtract = "-"
-        case multiply = "*"
-        case divide = "/"
-    }
+public enum Calculator {
+    static let signs: [Character: Decimal] = ["+": 1, "-": -1, "−": -1]
+    /// As on the web, so that an amount always fits the cents stored as `Int`.
+    static let maxIntegerDigits = 15
 
-    public enum Key: Hashable, Sendable {
-        case digit(Int)
-        case point
-        case op(Operator)
-        case equals
-        case clear
-        case negate
-        case backspace
-    }
-
-    public static let maxDisplayLength = 30
-
-    public private(set) var display: String
-    public private(set) var isError = false
-    private var register: Decimal
-    private var pendingOperator: Operator?
-    private var isNewValue = true
-    private let formatter: BudgetFormatter
-    private let errorText: String
-
-    public init(value: Decimal, operator: Operator?, formatter: BudgetFormatter, errorText: String = "Fehler") {
-        self.formatter = formatter
-        self.errorText = errorText
-        register = value
-        pendingOperator = `operator`
-        display = formatter.currencySimple(value)
-    }
-
-    public mutating func press(_ key: Key) {
-        if key == .clear {
-            register = 0
-            display = formatter.currencySimple(0)
-            isNewValue = true
-            isError = false
-            return
-        }
-        guard !isError else { return }
-        switch key {
-        case .backspace:
-            guard !isNewValue else { return }
-            display.removeLast(display.isEmpty ? 0 : 1)
-            if display.isEmpty { display = "0" }
-        case .negate:
-            let minus = BudgetFormatter.minus
-            display = display.hasPrefix(minus) ? String(display.dropFirst()) : minus + display
-            if isNewValue { register = -register }
-        case .digit(let digit):
-            enter(String(digit))
-        case .point:
-            let separator = formatter.currencyLocale.decimalSeparator
-            guard isNewValue || !display.contains(separator) else { return }
-            enter(separator)
-        case .op(let op):
-            evaluate()
-            pendingOperator = op
-        case .equals:
-            evaluate()
-            pendingOperator = nil
-        case .clear:
-            break
-        }
-    }
-
-    /// OK / Enter: `=` then the display read with either decimal separator.
-    public mutating func result() -> Decimal {
-        press(.equals)
-        return formatter.parseAmountWithUnknownDecimalSeparator(display)
-    }
-
-    private mutating func enter(_ text: String) {
-        guard display.count < Self.maxDisplayLength else { return }
-        display = isNewValue ? text : display + text
-        isNewValue = false
-    }
-
-    private mutating func evaluate() {
-        guard !isNewValue else { return }
-        let operand = formatter.parseAmountUnrounded(display)
-        register = calculate(register, operand)
-        isNewValue = true
-    }
-
-    private mutating func calculate(_ lhs: Decimal, _ rhs: Decimal) -> Decimal {
-        let value: Decimal
-        switch pendingOperator {
-        case .add: value = lhs + rhs
-        case .subtract: value = lhs - rhs
-        case .multiply: value = lhs * rhs
-        case .divide: value = lhs == 0 && rhs == 0 ? 0 : lhs / rhs
-        case nil: value = rhs
-        }
-        let rounded = Amount.round(value, digits: 12)
-        if rounded.isNaN || !rounded.isFinite {
-            display = errorText
-            isError = true
-        } else {
-            display = formatter.currencySimple(rounded)
-        }
-        return rounded
-    }
-}
-
-extension Calculator.Key {
-    public static func typed(_ character: String, decimalSeparator: String) -> Calculator.Key? {
-        let upper = character.uppercased()
-        if let digit = Int(upper), (0...9).contains(digit) { return .digit(digit) }
-        if upper == "." || upper == "," || upper == decimalSeparator { return .point }
-        if let op = Calculator.Operator(rawValue: upper) { return .op(op) }
-        switch upper {
-        case "=": return .equals
-        case "C": return .clear
-        case "F": return .negate
-        default: return nil
-        }
-    }
-}
-
-extension Calculator {
-    static let typedOperators: [Character: Operator] = [
-        "+": .add, "-": .subtract, "−": .subtract, "*": .multiply, "×": .multiply, "/": .divide, "÷": .divide,
-    ]
-
-    /// Left to right as the calculator works; nil without an operator between two numbers or on division by zero.
+    /// Numbers joined by `+` and `−`, worked left to right, with an optional leading sign; nil for anything else.
+    /// Each number is read as the web's `Abakus.Money` reads it.
     public static func evaluate(_ expression: String, formatter: BudgetFormatter) -> Decimal? {
-        var operands = [""]
-        var operators: [Operator] = []
-        for character in expression {
-            let operand = operands[operands.count - 1]
-            if let op = typedOperators[character], operand.contains(where: \.isNumber) {
-                operators.append(op)
-                operands.append("")
+        let locale = formatter.currencyLocale
+        var text = BudgetFormatter.plainAmountText(expression).replacingOccurrences(of: locale.currencySymbol, with: "")
+        text.removeAll { $0.isWhitespace }
+        var total: Decimal = 0
+        var sign: Decimal = 1
+        var number = ""
+        var index = text.startIndex
+        if let first = text.first, let leading = signs[first] {
+            sign = leading
+            index = text.index(after: index)
+        }
+        func addNumber() -> Bool {
+            guard let value = parseNumber(number, digits: locale.decimalDigits) else { return false }
+            total += sign * value
+            number = ""
+            return true
+        }
+        while index < text.endIndex {
+            let character = text[index]
+            if let next = signs[character] {
+                guard addNumber() else { return nil }
+                sign = next
             } else {
-                operands[operands.count - 1].append(character)
+                number.append(character)
             }
+            index = text.index(after: index)
         }
-        if operands.count > 1, !operands[operands.count - 1].contains(where: \.isNumber) {
-            operands.removeLast()
-            operators.removeLast()
+        guard addNumber() else { return nil }
+        return abs(total) < pow(10, maxIntegerDigits) ? total : nil
+    }
+
+    /// A comma or a dot as decimal separator, the other one as thousands separator; a single dot before exactly
+    /// three digits groups thousands unless the currency has three decimals or only zeros precede it.
+    private static func parseNumber(_ text: String, digits: Int) -> Decimal? {
+        guard text.contains(where: \.isASCIIDigit),
+            text.allSatisfy({ $0.isASCIIDigit || $0 == "." || $0 == "," }),
+            let (whole, fraction) = separate(text, dotGroupsThousands: digits < 3)
+        else { return nil }
+        var places = fraction
+        while places.count > digits, places.last == "0" { places.removeLast() }
+        guard places.count <= digits, whole.count <= maxIntegerDigits else { return nil }
+        let posix = Locale(identifier: "en_US_POSIX")
+        return Decimal(string: (whole.isEmpty ? "0" : whole) + "." + places + "0", locale: posix)
+    }
+
+    private static func separate(_ text: String, dotGroupsThousands: Bool) -> (whole: String, fraction: String)? {
+        let dots = text.count { $0 == "." }
+        let commas = text.count { $0 == "," }
+        guard let last = text.lastIndex(where: { $0 == "." || $0 == "," }) else { return (text, "") }
+        let before = text[..<last]
+        let after = String(text[text.index(after: last)...])
+        if dots > 0, commas > 0 {
+            let isDot = text[last] == "."
+            guard (isDot ? dots : commas) == 1, let whole = ungroup(before, by: isDot ? "," : ".") else { return nil }
+            return (whole, after)
         }
-        guard !operators.isEmpty else { return nil }
-        var value = formatter.parseAmountUnrounded(operands[0])
-        for (op, operand) in zip(operators, operands.dropFirst()) {
-            let rhs = formatter.parseAmountUnrounded(operand)
-            switch op {
-            case .add: value += rhs
-            case .subtract: value -= rhs
-            case .multiply: value *= rhs
-            case .divide:
-                guard rhs != 0 else { return nil }
-                value /= rhs
-            }
+        if dots + commas > 1 {
+            return ungroup(text[...], by: commas > 0 ? "," : ".").map { ($0, "") }
         }
-        return Amount.round(value, digits: formatter.currencyLocale.decimalDigits)
+        if text[last] == ".", after.count == 3, dotGroupsThousands, before.contains(where: { $0 != "0" }) {
+            return ungroup(text[...], by: ".").map { ($0, "") }
+        }
+        return (String(before), after)
+    }
+
+    private static func ungroup(_ whole: Substring, by separator: Character) -> String? {
+        let groups = whole.split(separator: separator, omittingEmptySubsequences: false)
+        guard let first = groups.first, (1...3).contains(first.count), groups.dropFirst().allSatisfy({ $0.count == 3 })
+        else { return nil }
+        let digits = groups.joined()
+        return digits.allSatisfy(\.isASCIIDigit) ? String(digits) : nil
     }
 }

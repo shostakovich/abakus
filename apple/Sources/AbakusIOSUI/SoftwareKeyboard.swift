@@ -7,6 +7,10 @@
         func tracksSoftwareKeyboard(_ isShown: Binding<Bool>) -> some View {
             modifier(SoftwareKeyboardTracker(isShown: isShown))
         }
+
+        func amountKeyboard(_ type: UIKeyboardType = .numbersAndPunctuation) -> some View {
+            keyboardType(type).autocorrectionDisabled().textInputAutocapitalization(.never)
+        }
     }
 
     private struct SoftwareKeyboardTracker: ViewModifier {

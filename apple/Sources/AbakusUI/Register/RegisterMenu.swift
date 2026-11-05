@@ -15,8 +15,7 @@ public enum RegisterMenuAction: Hashable, Sendable {
     case applyScheduledColumnsToAllAccounts
     case enterScheduledNow, skipScheduled, deleteScheduled
     case moveScheduled(accountId: String)
-    case quickBudget(QuickBudgetFill)
-    case fillUnderfunded, assignToCategory
+    case fillUnderfunded, resetAssigned
     case frequency(ScheduledTransactionFrequency)
 }
 
@@ -35,10 +34,11 @@ public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
     public var isChecked: Bool
     public var systemImage: String?
     public var subtitle: String?
+    public var isDestructive: Bool
 
     public init(
         id: String, title: String, kind: Kind, isEnabled: Bool = true, isChecked: Bool = false,
-        systemImage: String? = nil, subtitle: String? = nil
+        systemImage: String? = nil, subtitle: String? = nil, isDestructive: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -47,15 +47,16 @@ public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
         self.isChecked = isChecked
         self.systemImage = systemImage
         self.subtitle = subtitle
+        self.isDestructive = isDestructive
     }
 
     static func action(
         _ title: String, _ action: RegisterMenuAction, enabled: Bool = true, checked: Bool = false,
-        systemImage: String? = nil, subtitle: String? = nil
+        systemImage: String? = nil, subtitle: String? = nil, isDestructive: Bool = false
     ) -> RegisterMenuItem {
         RegisterMenuItem(
             id: "\(action)", title: title, kind: .action(action), isEnabled: enabled, isChecked: checked,
-            systemImage: systemImage, subtitle: subtitle)
+            systemImage: systemImage, subtitle: subtitle, isDestructive: isDestructive)
     }
 
     static func separator(_ index: Int) -> RegisterMenuItem {

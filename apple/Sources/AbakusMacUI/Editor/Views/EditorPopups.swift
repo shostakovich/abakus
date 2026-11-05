@@ -33,17 +33,6 @@ struct EditorPopupsLayer: View {
                     }
                     .offset(x: placement.frame.minX, y: placement.frame.minY)
                 }
-                if let calculator = editor.calculator, let placement = frames.calculator {
-                    PopoverChrome(arrowEdge: placement.arrowEdge, arrowOffset: placement.arrowOffset) {
-                        CalculatorPopover(
-                            display: calculator.calculator.display,
-                            decimalSeparator: editor.formatter.currencyLocale.decimalSeparator,
-                            onPress: editor.calculatorPress, onOK: editor.calculatorOK,
-                            onCancel: editor.calculatorCancel
-                        )
-                    }
-                    .offset(x: placement.frame.minX, y: placement.frame.minY)
-                }
                 if let callout = editor.dateCallout, let field = rects[.main(.date)] {
                     dateCallout(callout, field: field, size: size)
                 }
@@ -86,9 +75,8 @@ struct EditorPopupsLayer: View {
     struct PopupFrames {
         var dropDown: CGRect?
         var calendar: PopoverPlacement?
-        var calculator: PopoverPlacement?
 
-        var all: [CGRect] { [dropDown, calendar?.frame, calculator?.frame].compactMap(\.self) }
+        var all: [CGRect] { [dropDown, calendar?.frame].compactMap(\.self) }
     }
 
     static func popupFrames(editor: TransactionEditor, anchors: [EditorFieldID: CGRect], size: CGSize)
@@ -106,10 +94,6 @@ struct EditorPopupsLayer: View {
             frames.calendar = PopoverPlacement.place(
                 PopoverMetrics.size(content: GraphicalDatePicker.size), beside: field, on: .below, in: size)
         }
-        if let calculator = editor.calculator, let field = anchors[calculator.field] {
-            frames.calculator = PopoverPlacement.place(
-                PopoverMetrics.size(content: CalculatorPopover.size), beside: field, on: .below, in: size)
-        }
         return frames
     }
 
@@ -120,7 +104,6 @@ struct EditorPopupsLayer: View {
         var owners: [CGRect] = []
         if let list = editor.dropDown, let field = anchors[list.field] { owners.append(field) }
         if editor.isCalendarOpen, let field = anchors[.main(.date)] { owners.append(field) }
-        if let calculator = editor.calculator, let field = anchors[calculator.field] { owners.append(field) }
         if editor.isFrequencyListOpen, let field = anchors[.main(.frequency)] { owners.append(field) }
         return popupFrames(editor: editor, anchors: anchors, size: size).all + owners
     }
@@ -239,118 +222,6 @@ struct GraphicalDatePicker: NSViewRepresentable {
 
         @objc func picked(_ sender: NSDatePicker) {
             onPick(DateWithoutTime(sender.dateValue, in: calendar))
-        }
-    }
-}
-
-struct CalculatorPopover: View {
-    enum Face {
-        case text(String)
-        case symbol(String, label: String)
-    }
-
-    static let keyWidth: CGFloat = 40
-    static let keyHeight: CGFloat = 18
-    static let spacing: CGFloat = 6
-
-    let display: String
-    let decimalSeparator: String
-    let onPress: (Calculator.Key) -> Void
-    let onOK: () -> Void
-    let onCancel: () -> Void
-
-    @MainActor static var size: CGSize {
-        if let measured { return measured }
-        let size = NSHostingView(
-            rootView: CalculatorPopover(
-                display: "0", decimalSeparator: ",", onPress: { _ in }, onOK: {}, onCancel: {})
-        ).fittingSize
-        measured = size
-        return size
-    }
-
-    @MainActor private static var measured: CGSize?
-
-    private var rows: [[(Face, Calculator.Key)?]] {
-        [
-            [
-                (.text("C"), .clear), (.symbol("plus.forwardslash.minus", label: "Vorzeichen wechseln"), .negate),
-                (.symbol("delete.left", label: "Löschen"), .backspace),
-                (.symbol("divide", label: "Teilen"), .op(.divide)),
-            ],
-            [
-                (.text("7"), .digit(7)), (.text("8"), .digit(8)), (.text("9"), .digit(9)),
-                (.symbol("multiply", label: "Malnehmen"), .op(.multiply)),
-            ],
-            [
-                (.text("4"), .digit(4)), (.text("5"), .digit(5)), (.text("6"), .digit(6)),
-                (.symbol("minus", label: "Abziehen"), .op(.subtract)),
-            ],
-            [
-                (.text("1"), .digit(1)), (.text("2"), .digit(2)), (.text("3"), .digit(3)),
-                (.symbol("plus", label: "Addieren"), .op(.add)),
-            ],
-            [
-                (.text("0"), .digit(0)), (.text(decimalSeparator), .point),
-                (.symbol("equal", label: "Ergebnis"), .equals),
-                nil,
-            ],
-        ]
-    }
-
-    var body: some View {
-        Grid(horizontalSpacing: Self.spacing, verticalSpacing: Self.spacing) {
-            GridRow {
-                displayField.gridCellColumns(4)
-            }
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                GridRow {
-                    ForEach(Array(row.enumerated()), id: \.offset) { _, entry in
-                        if let (face, key) = entry {
-                            Button {
-                                onPress(key)
-                            } label: {
-                                label(face).frame(width: Self.keyWidth, height: Self.keyHeight)
-                            }
-                        } else {
-                            Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                        }
-                    }
-                }
-            }
-            GridRow {
-                Button(action: onCancel) { Text("Abbrechen").frame(maxWidth: .infinity) }
-                    .gridCellColumns(2)
-                Button(action: onOK) { Text("OK").frame(maxWidth: .infinity) }
-                    .buttonStyle(.borderedProminent)
-                    .gridCellColumns(2)
-            }
-        }
-        .buttonStyle(.bordered)
-        .focusable(false)
-        .fixedSize()
-    }
-
-    private var displayField: some View {
-        let shape = RoundedRectangle(cornerRadius: EditCellStyle.fieldCornerRadius)
-        return Text(verbatim: display)
-            .font(.system(size: 17, weight: .medium).monospacedDigit())
-            .lineLimit(1)
-            .padding(.horizontal, 8)
-            .frame(maxWidth: .infinity, minHeight: 30, alignment: .trailing)
-            .background(ThemeColor.fieldBackground, in: shape)
-            .overlay { shape.strokeBorder(ThemeColor.fieldOutline, lineWidth: 1) }
-            .accessibilityLabel("Ergebnis")
-            .accessibilityValue(display)
-    }
-
-    @ViewBuilder
-    private func label(_ face: Face) -> some View {
-        switch face {
-        case .text(let text):
-            Text(verbatim: text).monospacedDigit()
-        case .symbol(let name, let label):
-            Image(systemName: name).accessibilityLabel(label)
         }
     }
 }

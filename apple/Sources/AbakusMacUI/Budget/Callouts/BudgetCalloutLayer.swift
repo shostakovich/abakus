@@ -86,32 +86,36 @@ private struct BudgetCalloutHost: View {
             }
         case .available:
             if let form = callouts.availableForm {
-                placer(owner, bounds) { BudgetAvailablePopover(controller: callouts, form: form) }
+                placer(owner, bounds, background: AnyShapeStyle(ThemeColor.groupBand)) {
+                    BudgetAvailablePopover(controller: callouts, form: form)
+                }
             }
-        case .assignToCategory:
-            if let form = callouts.assignForm {
-                placer(owner, bounds) { BudgetAssignPopover(controller: callouts, form: form) }
-            }
-        case .monthQuickBudget(let month):
-            BudgetQuickBudgetMenuPresenter(
+        case .monthMenu(let month):
+            BudgetMonthMenuPresenter(
                 controller: callouts, month: month, location: CGPoint(x: owner.minX, y: owner.maxY + 1))
         }
     }
 
-    private func placer<Content: View>(_ owner: CGRect, _ bounds: CGSize, @ViewBuilder content: () -> Content)
-        -> some View
-    {
-        BudgetPopoverPlacer(controller: model.callouts, popup: popup, owner: owner, bounds: bounds, content: content)
+    private func placer<Content: View>(
+        _ owner: CGRect, _ bounds: CGSize, background: AnyShapeStyle = AnyShapeStyle(ThemeColor.windowBackground),
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        BudgetPopoverPlacer(
+            controller: model.callouts, popup: popup, owner: owner, bounds: bounds, background: background,
+            content: content)
     }
 }
 
 /// Shows once SwiftUI has measured the content, since the popover's place depends on its size; content taller than
 /// the window scrolls.
 private struct BudgetPopoverPlacer<Content: View>: View {
+    static var windowMargin: CGFloat { 10 }
+
     let controller: BudgetCalloutController
     let popup: BudgetPopup
     let owner: CGRect
     let bounds: CGSize
+    let background: AnyShapeStyle
     @ViewBuilder let content: Content
     @State private var contentSize: CGSize?
 
@@ -125,7 +129,7 @@ private struct BudgetPopoverPlacer<Content: View>: View {
                 if controller.isShowing(popup), !placement.frame.contains(point) { controller.mouseDownOutside() }
             }
             .frame(width: bounds.width, height: bounds.height)
-            PopoverChrome(arrowEdge: placement.arrowEdge, arrowOffset: placement.arrowOffset) {
+            PopoverChrome(arrowEdge: placement.arrowEdge, arrowOffset: placement.arrowOffset, background: background) {
                 ScrollView(.vertical) {
                     content
                         .fixedSize()
@@ -148,23 +152,31 @@ private struct BudgetPopoverPlacer<Content: View>: View {
 
     /// The popover's place and the size its scrolling content shows; a legacy scroller needs room beside it.
     private func layout() -> (PopoverPlacement, CGSize?) {
-        guard let contentSize else {
-            return (PopoverPlacement.place(.zero, beside: owner, on: .below, in: bounds), nil)
-        }
+        guard let contentSize else { return (place(.zero), nil) }
         var shown = contentSize
         var natural = PopoverMetrics.size(content: shown)
-        var placement = PopoverPlacement.place(natural, beside: owner, on: .below, in: bounds).fitting(in: bounds)
+        var placement = place(natural)
         if placement.frame.height < natural.height, NSScroller.preferredScrollerStyle == .legacy {
             shown.width += NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
             natural = PopoverMetrics.size(content: shown)
-            placement = PopoverPlacement.place(natural, beside: owner, on: .below, in: bounds).fitting(in: bounds)
+            placement = place(natural)
         }
         shown.height -= natural.height - placement.frame.height
         return (placement, shown)
     }
+
+    private func place(_ size: CGSize) -> PopoverPlacement {
+        let margin = Self.windowMargin
+        let area = CGSize(width: bounds.width - 2 * margin, height: bounds.height - 2 * margin)
+        var placement = PopoverPlacement.place(
+            size, beside: owner.offsetBy(dx: -margin, dy: -margin), on: .below, in: area
+        ).fitting(in: area)
+        placement.frame = placement.frame.offsetBy(dx: margin, dy: margin)
+        return placement
+    }
 }
 
-private struct BudgetQuickBudgetMenuPresenter: NSViewRepresentable {
+private struct BudgetMonthMenuPresenter: NSViewRepresentable {
     let controller: BudgetCalloutController
     let month: DateWithoutTime
     let location: CGPoint
@@ -174,7 +186,7 @@ private struct BudgetQuickBudgetMenuPresenter: NSViewRepresentable {
     func updateNSView(_ view: OriginView, context: Context) {
         guard !view.hasPresented else { return }
         view.hasPresented = true
-        let items = controller.quickBudgetMenu(month: month)
+        let items = controller.monthMenu(month: month)
         let presenter = context.environment.menuPresenter
         let controller = controller
         let month = month
@@ -182,9 +194,9 @@ private struct BudgetQuickBudgetMenuPresenter: NSViewRepresentable {
         DispatchQueue.main.async { [weak view] in
             guard let view else { return }
             presenter.present(items, location, view) { action in
-                controller.quickBudgetMenuChosen(action, month: month)
+                controller.monthMenuChosen(action, month: month)
             }
-            controller.quickBudgetMenuClosed()
+            controller.monthMenuClosed()
         }
     }
 

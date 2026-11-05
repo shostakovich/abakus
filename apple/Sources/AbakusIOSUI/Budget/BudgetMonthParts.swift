@@ -108,59 +108,41 @@
         }
     }
 
-    struct BudgetDistributeMenu: View {
-        private struct MenuSection: Identifiable {
-            let id: Int
-            var title: String?
-            var items: [RegisterMenuItem] = []
-        }
+    /// Verteilen beside the month's title: what it cannot do stays in the menu, dimmed, with the reason.
+    struct BudgetMonthMenu: View {
+        static let circleSize: CGFloat = 30
+        static let tapSize: CGFloat = 44
 
         let model: BudgetViewModel
         let month: DateWithoutTime
+        /// A glass circle smaller than its 44 pt tap area, which overhangs the layout.
+        var isCircle = false
 
         var body: some View {
+            if isCircle {
+                menu {
+                    Image(systemName: "ellipsis")
+                        .foregroundStyle(.tint)
+                        .frame(width: Self.circleSize, height: Self.circleSize)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .frame(width: Self.tapSize, height: Self.tapSize)
+                        .contentShape(Rectangle())
+                }
+                .padding((Self.circleSize - Self.tapSize) / 2)
+                .accessibilityLabel("Verteilen")
+            } else {
+                menu { Label("Verteilen", systemImage: "ellipsis") }
+            }
+        }
+
+        private func menu<Label: View>(@ViewBuilder label: () -> Label) -> some View {
             Menu {
-                ForEach(sections) { section in
-                    if let title = section.title {
-                        Section(title) { items(section) }
-                    } else {
-                        Section { items(section) }
-                    }
+                RegisterMenuItemsView(items: model.callouts.monthMenu(month: month)) {
+                    model.callouts.monthMenuChosen($0, month: month)
                 }
             } label: {
-                Text("Verteilen").font(.subheadline.weight(.semibold))
+                label()
             }
-            .buttonStyle(.borderedProminent)
-            .buttonBorderShape(.capsule)
-            .tint(ThemeColor.positive)
-            .foregroundStyle(ThemeColor.positiveContent)
-        }
-
-        private func items(_ section: MenuSection) -> some View {
-            RegisterMenuItemsView(items: section.items) { model.callouts.quickBudgetMenuChosen($0, month: month) }
-        }
-
-        /// The Mac's headings and separators become the menu's sections.
-        private var sections: [MenuSection] {
-            var sections = [MenuSection(id: 0)]
-            for item in model.callouts.quickBudgetMenu(month: month) {
-                switch item.kind {
-                case .separator:
-                    sections.append(MenuSection(id: sections.count))
-                case .title:
-                    let title = item.title.trimmingCharacters(in: .whitespaces)
-                    if sections[sections.count - 1].items.isEmpty {
-                        sections[sections.count - 1].title = title
-                    } else {
-                        sections.append(MenuSection(id: sections.count, title: title))
-                    }
-                default:
-                    var item = item
-                    item.title = item.title.trimmingCharacters(in: .whitespaces)
-                    sections[sections.count - 1].items.append(item)
-                }
-            }
-            return sections.filter { !$0.items.isEmpty }
         }
     }
 
@@ -284,12 +266,8 @@
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .combine)
                 .accessibilityHint(model.headerToggleToolTip)
-                if isPositive {
-                    BudgetDistributeMenu(model: model, month: month.month)
-                }
             }
-            .padding(.leading, 14)
-            .padding(.trailing, isPositive ? 8 : 14)
+            .padding(.horizontal, 14)
             .frame(minHeight: 48)
             .background(
                 isPositive ? ThemeColor.positiveBand : ThemeColor.groupBand,

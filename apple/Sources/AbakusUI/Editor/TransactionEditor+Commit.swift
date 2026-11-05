@@ -264,7 +264,7 @@ extension TransactionEditor {
     }
 
     private func commitAmount(_ field: EditorFieldID) {
-        let amount = typedAmount(field)
+        guard let amount = typedAmount(field) else { return rejectAmount(field) }
         if amount != clone.amount && mode == .existing && budget.isTransferFromSplit(original) {
             refreshAmountText(subId: nil)
             showRefusal(.transferFromSplitAmountLocked, refocus: nil)
@@ -274,28 +274,30 @@ extension TransactionEditor {
         refreshAmountText(subId: nil)
     }
 
+    func rejectAmount(_ field: EditorFieldID) {
+        let typed = text(field).trimmingCharacters(in: .whitespaces)
+        refreshAmountText(subId: field.subId)
+        showMessage(.invalidAmount(typed), refocus: field)
+    }
+
     static let signs: [Character: Bool] = ["+": true, "−": false, "-": false]
 
-    /// A lone leading sign sets the sign, one before arithmetic counts in it; else a negative result flips the sign.
-    func typedAmount(_ field: EditorFieldID) -> Decimal {
-        var typed = text(field).trimmingCharacters(in: .whitespaces)
-        if let first = typed.first, let inflow = Self.signs[first] {
-            let rest = String(typed.dropFirst())
-            if let result = Calculator.evaluate(inflow ? rest : typed, formatter: formatter) {
-                if result != 0 { chooseSign(field, inflow: result > 0) }
-                return isInflow(field) ? abs(result) : -abs(result)
-            }
-            chooseSign(field, inflow: inflow)
-            typed = rest
+    /// A leading sign gives the result its direction, else a negative result flips it; nil for text that is no sum.
+    func typedAmount(_ field: EditorFieldID) -> Decimal? {
+        let typed = text(field).trimmingCharacters(in: .whitespaces)
+        let leading = typed.first.flatMap { Self.signs[$0] }
+        if let leading, typed.dropFirst().allSatisfy(\.isWhitespace) {
+            chooseSign(field, inflow: leading)
+            return 0
         }
-        let value: Decimal
-        if let result = Calculator.evaluate(typed, formatter: formatter) {
-            if result < 0 { chooseSign(field, inflow: !isInflow(field)) }
-            value = abs(result)
-        } else {
-            value = abs(formatter.parseAmount(typed))
+        if typed.isEmpty { return 0 }
+        guard let result = Calculator.evaluate(typed, formatter: formatter) else { return nil }
+        if leading != nil {
+            if result != 0 { chooseSign(field, inflow: result > 0) }
+        } else if result < 0 {
+            chooseSign(field, inflow: !isInflow(field))
         }
-        return isInflow(field) ? value : -value
+        return isInflow(field) ? abs(result) : -abs(result)
     }
 
     /// The click on the sign button ends editing, so the field takes focus again.

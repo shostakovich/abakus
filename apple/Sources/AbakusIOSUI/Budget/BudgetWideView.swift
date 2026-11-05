@@ -50,10 +50,21 @@
                 }
                 .onChange(of: model.presentedPopup) { _, popup in
                     // A popover needs its row on screen to stand on.
-                    if case .category(_, let categoryId) = popup { proxy.scrollTo(categoryId) }
+                    switch popup {
+                    case .category(_, let categoryId), .available(_, let categoryId): proxy.scrollTo(categoryId)
+                    default: break
+                    }
                 }
                 .onChange(of: focusedCell) { old, new in
                     if new == nil, let old, model.editor?.cell == old { model.commitEdit() }
+                }
+                .onChange(of: model.editor?.refusals) {
+                    if model.editor?.error != nil { focusedCell = model.editor?.cell }
+                }
+                .overlayPreferenceValue(BudgetAmountErrorAnchorKey.self) { anchor in
+                    if let anchor, let error = model.editor?.error {
+                        BudgetAmountErrorBubble(error: error, anchor: anchor)
+                    }
                 }
             }
         }
@@ -126,7 +137,8 @@
             BudgetSheet(model: model, isPopover: true)
                 .modifier(DialogAlert(dialogs: dialogs))
                 .environment(\.reportFormHeight, FormHeightReport { height = $0.rounded(.up) })
-                .frame(width: 400, height: height ?? 560)
+                .frame(width: 400)
+                .frame(idealHeight: height ?? 560, maxHeight: height ?? 560)
                 .presentationCompactAdaptation(.popover)
         }
     }
@@ -279,12 +291,16 @@
         var body: some View {
             let display = model.headerDisplay(month)
             VStack(alignment: .leading, spacing: 8) {
-                if showsTitle {
-                    Text(verbatim: display.title)
-                        .font(.headline)
-                        .foregroundStyle(display.isPast ? ThemeColor.secondaryText : ThemeColor.text)
-                        .lineLimit(1)
-                        .accessibilityAddTraits(.isHeader)
+                HStack(spacing: 8) {
+                    if showsTitle {
+                        Text(verbatim: display.title)
+                            .font(.headline)
+                            .foregroundStyle(display.isPast ? ThemeColor.secondaryText : ThemeColor.text)
+                            .lineLimit(1)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                    Spacer(minLength: 0)
+                    BudgetMonthMenu(model: model, month: month.month, isCircle: true)
                 }
                 if model.isHeaderExpanded {
                     BudgetCalculation(
@@ -400,9 +416,16 @@
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .accessibilityLabel("Aktivität")
                 Button {
-                    model.categoryTapped(row.id, month: month.month)
+                    if display.isBalanceNegative {
+                        model.balanceClicked(month: month.month, categoryId: row.id)
+                    } else {
+                        model.categoryTapped(row.id, month: month.month)
+                    }
                 } label: {
                     BudgetAvailableFigure(display: display, month: month)
+                        .popover(isPresented: coverPopover(cell), arrowEdge: .trailing) {
+                            BudgetCoverPopover(model: model)
+                        }
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                         .contentShape(Rectangle())
                 }
@@ -411,9 +434,41 @@
                 .accessibilityLabel("Verfügbar")
                 .accessibilityValue(display.accessibilityValue)
                 .accessibilityAddTraits(.isButton)
+                .accessibilityHint(display.isBalanceNegative ? "Decken" : "Kategorie bearbeiten")
                 .popover(isPresented: popover, attachmentAnchor: .rect(.bounds), arrowEdge: .trailing) {
                     BudgetPopover(model: model, dialogs: dialogs)
                 }
+            }
+        }
+
+        private func coverPopover(_ cell: BudgetCellID) -> Binding<Bool> {
+            Binding {
+                model.coverPopover == cell
+            } set: { shown in
+                if !shown && model.coverPopover == cell { model.coverDismissed() }
+            }
+        }
+    }
+
+    /// As tall as the list, up to what the screen leaves; the list scrolls beyond.
+    private struct BudgetCoverPopover: View {
+        let model: BudgetViewModel
+        @State private var size: CGSize?
+
+        var body: some View {
+            if let form = model.callouts.availableForm {
+                ScrollView {
+                    BudgetCoverList(controller: model.callouts, form: form, rowHeight: BudgetCoverList.touchRowHeight)
+                        .frame(minWidth: 280, maxWidth: 320)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(16)
+                        .onGeometryChange(for: CGSize.self, of: \.size) { size = $0 }
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(width: size?.width)
+                .frame(idealHeight: size?.height, maxHeight: size?.height)
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground(ThemeColor.groupedBackground)
             }
         }
     }
@@ -428,17 +483,22 @@
         var body: some View {
             TextField(
                 "Zugewiesen", text: Binding(get: { model.editor?.text ?? "" }, set: { model.cellTextChanged($0) }),
-                selection: $selection
+                selection: $selection, prompt: Text(verbatim: model.zeroText)
             )
             .multilineTextAlignment(.trailing)
             .monospacedDigit()
-            .keyboardType(.numbersAndPunctuation)
+            .amountKeyboard()
             .submitLabel(.next)
             .padding(.horizontal, 6)
             .padding(.vertical, 4)
             .background(ThemeColor.fieldBackground, in: RoundedRectangle(cornerRadius: 6))
-            .overlay { RoundedRectangle(cornerRadius: 6).strokeBorder(ThemeColor.focusRing, lineWidth: 2) }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(edit.error == nil ? ThemeColor.focusRing : ThemeColor.negative, lineWidth: 2)
+            }
             .focused(focus, equals: edit.cell)
+            .budgetAmountErrorAnchor(edit.error != nil)
+            .accessibilityHint(edit.error ?? "")
             .onSubmit { model.cellKey(.enter) }
             .onKeyPress(keys: [.tab, .upArrow, .downArrow, .escape], phases: .down) { press in
                 model.cellKey(Self.key(press)) ? .handled : .ignored
