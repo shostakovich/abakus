@@ -54,14 +54,15 @@ import Testing
         #expect(loaded.budgetName == "Test")
     }
 
-    @Test func openSeedsTheDemoBudgetIntoAnEmptyDatabase() throws {
+    @Test func anEmptyDatabaseOpensWithOnlyZuVerteilen() throws {
         let database = try BudgetDatabase()
         let store = try BudgetStore.open(database, today: { october23 })
-        #expect(store.budget.budgetName == "Demo-Budget")
+        #expect(store.budget.accounts.isEmpty)
+        #expect(store.budget.categoryGroups.flatMap(\.categories).map(\.id) == [store.budget.readyToAssignCategoryId])
         #expect(try database.budget().syncedRows == store.budget.syncedRows)
     }
 
-    @Test func anEmptyBudgetOfAServerGetsNoDemoBudget() throws {
+    @Test func anEmptyBudgetOfAServerStaysEmpty() throws {
         let database = try BudgetDatabase()
         try database.adopt(
             SyncSnapshot(cursor: 3, tables: [:]), deviceId: "mac-1", serverURL: URL(string: "https://abakus.test")!,
@@ -166,6 +167,55 @@ import Testing
         try #require(Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: day, hour: 12)))
     }
 
+    @Test(arguments: [1, 2]) func aStoreOfAnEarlierVersionLosesTheColumnsAbakusDropped(version: Int) throws {
+        let dropped = [
+            ("accounts", "note"), ("category_groups", "hidden"), ("category_groups", "note"), ("categories", "hidden"),
+            ("categories", "note"),
+        ]
+        let fields = dropped + [("accounts", "name")]
+        try withTemporaryDatabase { url in
+            let budget = TestBudget().budget
+            let pending = try {
+                let database = try BudgetDatabase(url: url)
+                try database.save(budget, over: nil, now: Date())
+                return try database.pendingChanges
+            }()
+            let clocks = fields.enumerated().map { index, field in
+                "INSERT INTO sync_field_clocks VALUES ('\(field.0)', 'row', '\(field.1)', 'c\(index)');"
+                    + "INSERT INTO sync_messages (\"table\", row_id, \"column\", value, clock, outbox) "
+                    + "VALUES ('\(field.0)', 'row', '\(field.1)', '\"\"', 'c\(index)', 1);"
+            }
+            let index = version == 1 ? "DROP INDEX sync_field_clocks_clock;" : ""
+            try SQLite(path: url.path).execute(
+                dropped.map { "ALTER TABLE \($0.0) ADD COLUMN \($0.1);" }.joined() + clocks.joined() + index
+                    + "UPDATE accounts SET note = 'Alt'; UPDATE categories SET hidden = 1; "
+                    + "PRAGMA user_version = \(version);")
+
+            let database = try BudgetDatabase(url: url)
+
+            #expect(try database.budget().syncedRows == budget.syncedRows)
+            #expect(try database.pendingChanges == pending + 1)
+            let sqlite = try SQLite(path: url.path)
+            for (table, column) in dropped {
+                let columns = try sqlite.query("SELECT name FROM pragma_table_info('\(table)')").compactMap {
+                    $0["name"]?.text
+                }
+                #expect(!columns.isEmpty && !columns.contains(column))
+            }
+            for table in ["sync_field_clocks", "sync_messages"] {
+                let kept = try sqlite.query("SELECT \"table\", \"column\" FROM \(table) WHERE row_id = 'row'").map {
+                    "\($0["table"]?.text ?? "").\($0["column"]?.text ?? "")"
+                }
+                #expect(kept == ["accounts.name"])
+            }
+            let indexes = try sqlite.query("SELECT name FROM pragma_index_list('sync_field_clocks')").compactMap {
+                $0["name"]?.text
+            }
+            #expect(indexes.contains("sync_field_clocks_clock"))
+            #expect(try sqlite.query("PRAGMA user_version").first?["user_version"] == .integer(3))
+        }
+    }
+
     @Test func aSecondInstanceCannotOpenTheSameBudget() throws {
         try withTemporaryDatabase { url in
             var first: BudgetDatabase? = try BudgetDatabase(url: url)
@@ -183,7 +233,7 @@ import Testing
         }
     }
 
-    @Test func anUnreadableFileIsSetAsideAndTheDemoBudgetOpens() throws {
+    @Test func anUnreadableFileIsSetAsideAndAnEmptyBudgetOpens() throws {
         try withTemporaryDatabase { url in
             let folder = url.deletingLastPathComponent()
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -197,7 +247,7 @@ import Testing
             let kept = try #require(aside.first)
             #expect(String(decoding: try Data(contentsOf: kept), as: UTF8.self) == "not a database")
             #expect(store.openNotice?.contains(kept.lastPathComponent) == true)
-            #expect(store.budget.budgetName == "Demo-Budget")
+            #expect(store.budget.accounts.isEmpty)
         }
     }
 
@@ -209,10 +259,5 @@ import Testing
 
     @Test func defaultLocationIsInApplicationSupport() {
         #expect(BudgetDatabase.defaultLocation.path.hasSuffix("Application Support/Abakus/budget.sqlite"))
-    }
-
-    @Test func theDemoBudgetRoundTripsThroughTheDatabase() throws {
-        let budget = DemoBudget.make(today: october23)
-        #expect(try savedAndLoaded(budget).syncedRows == budget.syncedRows)
     }
 }

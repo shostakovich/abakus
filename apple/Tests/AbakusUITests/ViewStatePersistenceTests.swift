@@ -20,7 +20,7 @@ import Testing
     @Test func registerViewStateSurvivesARelaunch() {
         let storage = MemorySettingsStorage()
         let register = launch(storage).register
-        register.toggleColumnVisibility(.runningBalance)
+        register.toggleColumnVisibility(.cleared)
         register.grid.headerClicked(.payee)
         register.setShowingReconciled(false)
         register.scheduledToggleClicked()
@@ -32,7 +32,7 @@ import Testing
         register.search.commit()
 
         let restored = launch(storage).register
-        #expect(restored.columnSettings[.runningBalance]?.visible == true)
+        #expect(restored.columnSettings[.cleared]?.visible == false)
         #expect(restored.sortOrder == RegisterSortOrder(column: .payee, ascending: true))
         #expect(!restored.isShowingReconciled)
         #expect(restored.isSchedulerVisible)

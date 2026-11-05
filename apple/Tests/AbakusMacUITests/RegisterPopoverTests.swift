@@ -83,7 +83,6 @@ private struct Underlay<Opener: View>: View {
             Underlay(clicks: clicks) {
                 Color.clear
                     .registerAnchor(.error(id))
-                    .registerAnchor(.balance(id))
                     .registerAnchor(.schedulerTitle)
             }
             .overlayPreferenceValue(RegisterAnchorKey.self) { anchors in
@@ -124,15 +123,6 @@ private struct Underlay<Opener: View>: View {
         #expect(window.clicksBelow == 0)
     }
 
-    @Test func theRunningBalanceStaysAndLetsTheClickThrough() async {
-        let (model, window) = register { id in .runningBalance(rowId: id) }
-        defer { window.close() }
-        await window.settle()
-        await window.click(PopoverWindow.outside)
-        #expect(model.popup?.rowId != nil)
-        #expect(window.clicksBelow == 1)
-    }
-
     @Test func theScheduledCalloutStaysAndLetsTheClickThrough() async {
         let (model, window) = register { _ in .scheduledCallout(.added) }
         defer { window.close() }
@@ -161,24 +151,6 @@ private struct Underlay<Opener: View>: View {
         await window.click(PopoverWindow.outside)
         #expect(model.adjustmentHelp == nil)
         #expect(window.clicksBelow == 1)
-    }
-
-    @Test func theReconcileHelpClosesAndTakesTheClick() async {
-        let model = RegisterFixture().model()
-        model.reconciliation.showsReconcileHelp = true
-        let window = PopoverWindow { clicks in
-            Underlay(clicks: clicks) {
-                Color.clear.anchorPreference(key: AdjustmentHelpAnchorKey.self, value: .bounds) { $0 }
-            }
-            .overlayPreferenceValue(AdjustmentHelpAnchorKey.self) { anchor in
-                if let anchor { ReconcileHelpLayer(reconciliation: model.reconciliation, anchor: anchor) }
-            }
-        }
-        defer { window.close() }
-        await window.settle()
-        await window.click(PopoverWindow.outside)
-        #expect(!model.reconciliation.showsReconcileHelp)
-        #expect(window.clicksBelow == 0)
     }
 
     @Test func editAccountCancelsAndTakesTheClick() async throws {

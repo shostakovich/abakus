@@ -379,12 +379,8 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert has_element?(view, "#month-2027-02.is-focus")
     end
 
-    test "groups show their totals; categories and groups hidden in YNAB are shown", c do
+    test "groups show their totals", c do
       Categories.assign(budget_scope(), c.groceries, @october, 10_000)
-      hidden = category_fixture(name: "Alt", category_group_id: c.groceries.category_group_id)
-      Categories.update_category(budget_scope(), hidden, %{hidden: true})
-      gone = category_group_fixture(name: "Weg", hidden: true)
-      category_fixture(name: "Auch weg", category_group_id: gone.id)
 
       {:ok, view, _html} = open(c.conn)
 
@@ -396,8 +392,6 @@ defmodule AbakusWeb.BudgetLiveTest do
              )
 
       assert has_element?(view, "#group-#{group}-2026-10-assigned", "100,00")
-      assert has_element?(view, "#category-#{hidden.id}", "Alt")
-      assert has_element?(view, "#group-#{gone.id}", "Weg")
     end
 
     test "income goes into Zu verteilen and has no group of its own", c do

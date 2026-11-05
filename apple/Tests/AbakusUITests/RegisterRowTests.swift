@@ -154,16 +154,6 @@ import Testing
         #expect(model.rows[index + 1...index + 2].map(\.payee) == ["Bakery", ""])
     }
 
-    @Test func runningBalanceIsFilledOnlyWhenTheColumnIsShown() {
-        var fixture = RegisterFixture()
-        fixture.add(fixture.giro, -11)
-        let model = fixture.model()
-        #expect(model.rows.first?.runningBalance == "")
-        model.toggleColumnVisibility(.runningBalance)
-        #expect(model.rows.first?.runningBalance == "1,100.00")
-        #expect(model.visibleColumns.contains(.runningBalance))
-    }
-
     @Test func thePayeeTooltipIsThePayee() {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -3, payee: "Bakery")

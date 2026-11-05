@@ -2,7 +2,7 @@ import CoreGraphics
 
 public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
     case account, date, payee, category, memo, amount
-    case runningBalance, cleared, frequency
+    case cleared, frequency
 
     public enum Header: Hashable, Sendable {
         case text(String)
@@ -17,13 +17,12 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .category: .text("Kategorie")
         case .memo: .text("Memo")
         case .amount: .text("Betrag")
-        case .runningBalance: .text("Saldo")
         case .cleared: .symbol("checkmark.circle", label: "Status")
         case .frequency: .text("Häufigkeit")
         }
     }
 
-    public var isAmount: Bool { self == .amount || self == .runningBalance }
+    public var isAmount: Bool { self == .amount }
 
     public var minWidth: CGFloat {
         switch self {
@@ -31,7 +30,6 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .account, .payee, .category, .memo, .frequency: 50
         case .date: 92
         case .amount: Self.signedAmountWidth
-        case .runningBalance: Self.amountWidth
         }
     }
 
@@ -49,11 +47,9 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         }
     }
 
-    public var isSortable: Bool { self != .runningBalance }
-
     public var canDisable: Bool {
         switch self {
-        case .memo, .runningBalance, .cleared: true
+        case .memo, .cleared: true
         default: false
         }
     }
@@ -66,7 +62,6 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .category: RegisterColumnSetting(visible: true, width: 175)
         case .memo: RegisterColumnSetting(visible: true, width: 50)
         case .amount: RegisterColumnSetting(visible: true, width: Self.signedAmountWidth)
-        case .runningBalance: RegisterColumnSetting(visible: false, width: Self.amountWidth)
         case .cleared: RegisterColumnSetting(visible: true, width: 15)
         case .frequency: nil
         }
@@ -76,7 +71,6 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .cleared: "Status"
         case .memo: "Memo"
-        case .runningBalance: "Laufender Saldo"
         default: rawValue
         }
     }

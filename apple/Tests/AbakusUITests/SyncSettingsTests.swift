@@ -112,13 +112,13 @@ private final class SignInServer: HTTPTransport, @unchecked Sendable {
         #expect(
             model.signOutWarningText
                 == "3 Änderungen wurden noch nicht an Abakus gesendet und gehen beim Abmelden verloren. Dann löscht "
-                + "Abakus das Budget auf diesem Mac und zeigt das Demo-Budget.")
+                + "Abakus das Budget auf diesem Mac.")
         #expect(store.budget.account(withId: "giro") != nil)
 
         await model.confirmSignOut()
 
         #expect(model.signOutWarning == nil)
-        #expect(store.budget.budgetName == "Demo-Budget")
+        #expect(store.budget.accounts.isEmpty)
         #expect(model.sync.status == .notSignedIn)
     }
 
@@ -126,7 +126,7 @@ private final class SignInServer: HTTPTransport, @unchecked Sendable {
         let (store, model, _) = try await signedIn()
         await model.signOutClicked()
         #expect(model.signOutWarning == nil)
-        #expect(store.budget.budgetName == "Demo-Budget")
+        #expect(store.budget.accounts.isEmpty)
     }
 
     @Test func aCancelledWarningKeepsTheBudget() async throws {
@@ -150,7 +150,6 @@ private final class SignInServer: HTTPTransport, @unchecked Sendable {
         let model = SyncSettingsModel(sync: sync, device: .iPhone)
         #expect(
             model.statusText
-                == "Melde dieses iPhone bei Abakus an, um dein Budget zu synchronisieren. Bis dahin zeigt es ein "
-                + "Demo-Budget.")
+                == "Melde dieses iPhone bei Abakus an, um dein Budget zu synchronisieren.")
     }
 }

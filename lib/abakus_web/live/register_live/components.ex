@@ -17,7 +17,7 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   attr :account, Account, default: nil
 
-  @doc "The line below the title: the account's kind, closed, last reconciled (with the lock) and note."
+  @doc "The line below the title: the account's kind, closed and last reconciled (with the lock)."
   def meta(assigns) do
     assigns = assign(assigns, :parts, meta_parts(assigns.account))
 
@@ -41,8 +41,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       [
         AccountGroups.kind_label(account.kind),
         account.closed && "Geschlossen",
-        account.last_reconciled_at && {:reconciled, account.last_reconciled_at},
-        account.note
+        account.last_reconciled_at && {:reconciled, account.last_reconciled_at}
       ],
       & &1
     )
@@ -186,9 +185,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :proposals, :list, required: true
   attr :filter, :atom, required: true
   attr :query, :string, required: true
-  attr :running, :boolean, required: true
-  attr :running_shown, :boolean, required: true
-  attr :paths, :map, required: true
+  attr :filter_paths, :map, required: true
   attr :picking, :boolean, required: true, doc: "whether a click adds a row to the selection"
   attr :all_selected, :boolean, required: true
 
@@ -306,7 +303,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             </:item>
             <:item
               :for={{filter, label} <- filter_labels()}
-              patch={@paths.filters[filter]}
+              patch={@filter_paths[filter]}
               active={@filter == filter}
             >
               {label}
@@ -322,14 +319,11 @@ defmodule AbakusWeb.RegisterLive.Components do
             <:item id="select-all" on_click={JS.push("select_all")} class="max-md:hidden">
               {if @all_selected, do: "Auswahl aufheben", else: "Alle auswählen"}
             </:item>
-            <:item :if={@account} id="running-toggle" patch={@paths.running} divider>
-              {if @running, do: "Laufenden Saldo ausblenden", else: "Laufenden Saldo zeigen"}
-            </:item>
             <:item
               id="memo-toggle"
               on_click={JS.dispatch("abakus:toggle-memo")}
               class="max-md:hidden"
-              divider={!@account}
+              divider
             >
               <span class="app-memo-hide">Memo ausblenden</span><span class="app-memo-show">Memo zeigen</span>
             </:item>
@@ -359,9 +353,6 @@ defmodule AbakusWeb.RegisterLive.Components do
       <p :if={@account && @account.shared_expenses} id="feed-hint" class="app-reg-hint">
         <.icon name="info" class="shrink-0" />
         Buchungen kommen aus der Kasse, keine Buchungen von Hand oder per Datei
-      </p>
-      <p :if={@account && @running && !@running_shown} id="running-hint" class="app-reg-hint">
-        Laufender Saldo nur in „Alle Buchungen“ ohne Suche
       </p>
     </div>
     """
@@ -499,9 +490,8 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :rows, :list, required: true
   attr :proposals, :list, required: true, doc: "the match proposals shown among the rows"
   attr :accounts, :map, required: true
-  attr :columns, :map, required: true, doc: "`%{all, category, running, count}`, see `columns/2`"
+  attr :columns, :map, required: true, doc: "`%{all, category, count}`, see `columns/1`"
   attr :selected, :any, required: true
-  attr :running, :map, default: nil
 
   attr :editor, :any,
     required: true,
@@ -527,8 +517,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         class={[
           "table setzkasten-table-dense tabular-nums app-reg",
           @columns.all && "app-reg-all",
-          !@columns.category && "app-reg-nocat",
-          @columns.running && "app-reg-running"
+          !@columns.category && "app-reg-nocat"
         ]}
       >
         <colgroup>
@@ -538,7 +527,6 @@ defmodule AbakusWeb.RegisterLive.Components do
           <col :if={@columns.category} class="app-col-cat" />
           <col class="app-col-memo" />
           <col class="app-col-amount" />
-          <col :if={@columns.running} class="app-col-run" />
           <col class="app-col-status" />
         </colgroup>
         <thead>
@@ -549,7 +537,6 @@ defmodule AbakusWeb.RegisterLive.Components do
             <th :if={@columns.category} class="app-catcol">Kategorie</th>
             <th class="app-memo-col">Memo</th>
             <th class="text-end app-amount">Betrag</th>
-            <th :if={@columns.running} class="text-end app-run">Saldo</th>
             <th class="app-status-col">
               <span class="sr-only">Status</span><.icon name="check" />
             </th>
@@ -563,7 +550,6 @@ defmodule AbakusWeb.RegisterLive.Components do
           accounts={@accounts}
           columns={@columns}
           selected={@selected}
-          running={@running}
           edited={@edited}
           editor={@editor}
         />
@@ -583,18 +569,17 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp line_key(transaction), do: transaction.id
 
   @doc "The table's columns: the account column in all accounts, none for categories in a tracking account."
-  def columns(account, running) do
+  def columns(account) do
     all = is_nil(account)
     category = all or Account.budget_account?(account)
-    count = 5 + Enum.count([all, category, running], & &1)
-    %{all: all, category: category, running: running, count: count}
+    count = 5 + Enum.count([all, category], & &1)
+    %{all: all, category: category, count: count}
   end
 
   attr :line, :any, required: true, doc: "a transaction or `{:month, first_day}`"
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
   attr :selected, :any, required: true
-  attr :running, :map, default: nil
   attr :edited, :any, required: true
   attr :editor, :any, required: true
 
@@ -617,7 +602,6 @@ defmodule AbakusWeb.RegisterLive.Components do
       accounts={@accounts}
       columns={@columns}
       selected={@line.id in @selected}
-      running={@running && @running[@line.id]}
       editor={@edited == @line.id && @editor}
     />
     """
@@ -627,10 +611,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
   attr :selected, :boolean, required: true
-
-  attr :running, :integer,
-    default: nil,
-    doc: "the balance after it, while the running balance shows"
 
   attr :editor, :any, required: true, doc: "the editor while this row is edited, else false"
 
@@ -647,7 +627,6 @@ defmodule AbakusWeb.RegisterLive.Components do
       accounts={@accounts}
       columns={@columns}
       selected={@selected}
-      running={@running}
     />
     """
   end
@@ -656,7 +635,6 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
   attr :selected, :boolean, required: true
-  attr :running, :integer, default: nil
 
   defp row(assigns) do
     ~H"""
@@ -699,9 +677,6 @@ defmodule AbakusWeb.RegisterLive.Components do
           {@transaction.memo}
         </td>
         <.amount_cell amount={@transaction.amount} {cell(@transaction, "amount")} />
-        <td :if={@running} class="text-end text-base-content/70 app-run">
-          {Money.amount(@running)}
-        </td>
         <td class="app-status-col">
           <.approve
             :if={!@transaction.approved}
@@ -738,7 +713,6 @@ defmodule AbakusWeb.RegisterLive.Components do
           {part.memo}
         </td>
         <.amount_cell amount={part.amount} {cell(@transaction, "amount")} />
-        <td :if={@running}></td>
         <td></td>
       </tr>
     </tbody>
@@ -761,7 +735,6 @@ defmodule AbakusWeb.RegisterLive.Components do
         <td :if={@columns.category} class="app-catcol"></td>
         <td class="text-base-content/70 app-memo-col">{@proposal.memo}</td>
         <.amount_cell amount={@proposal.amount} />
-        <td :if={@columns.running}></td>
         <td></td>
       </tr>
       <tr id={"proposal-#{@proposal.id}-match"} class="app-actrow app-unapproved">

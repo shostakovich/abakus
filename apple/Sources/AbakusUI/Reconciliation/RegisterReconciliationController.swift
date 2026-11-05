@@ -91,9 +91,6 @@ enum UnbalancedChoice: Hashable, Sendable {
 @MainActor
 @Observable
 public final class RegisterReconciliationController {
-    public static let reconcileHelpText =
-        "In „Alle Konten“ lässt sich nicht abgleichen.<br/>Wähle zuerst das Konto, das du abgleichen willst."
-
     static let unbalancedDialog = TaskDialog<UnbalancedChoice>(
         instruction: "Die Salden stimmen nicht überein.",
         content: "Eine Ausgleichsbuchung über die Differenz gleicht den Saldo an die Bank an.",
@@ -105,7 +102,6 @@ public final class RegisterReconciliationController {
 
     unowned let register: RegisterViewModel
     public internal(set) var statementForm: ReconciliationStatementForm?
-    public internal(set) var showsReconcileHelp = false
 
     init(register: RegisterViewModel) {
         self.register = register
@@ -114,11 +110,6 @@ public final class RegisterReconciliationController {
     var current: RegisterReconciliation? { register.viewState.reconciliation }
 
     public var isReconcileEnabled: Bool { !register.isAllAccounts && register.account != nil }
-
-    /// Only Alle Konten explains the disabled button.
-    public var reconcileTooltip: String? {
-        register.isAllAccounts ? "Wähle in der Seitenleiste ein Konto zum Abgleichen." : nil
-    }
 
     public func reconcileClicked() {
         guard let account = register.account, statementForm == nil, !register.clickedOutsideEditors() else { return }
@@ -272,15 +263,5 @@ public final class RegisterReconciliationController {
         state.isSchedulerVisible = saved.savedSchedulerVisible
         register.viewState = state
         register.clearSelection()
-    }
-
-    /// Mouse-down on the disabled button points at the Budget Accounts list.
-    public func reconcileDisabledClicked() {
-        guard !isReconcileEnabled else { return }
-        showsReconcileHelp = true
-    }
-
-    public func reconcileHelpDismissed() {
-        showsReconcileHelp = false
     }
 }

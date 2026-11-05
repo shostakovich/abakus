@@ -46,6 +46,11 @@ private var hasKeychain: Bool {
         return (store, try #require(made))
     }
 
+    private func local(_ database: BudgetDatabase) throws -> BudgetDatabase {
+        try database.save(Budget(budgetName: "Lokal"), over: nil, now: Date())
+        return database
+    }
+
     private func confirm(_ url: URL) throws -> URL {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let state = try #require(items.first { $0.name == "state" }?.value)
@@ -74,12 +79,12 @@ private var hasKeychain: Bool {
         defer { try? FileManager.default.removeItem(at: folder) }
         let url = folder.appendingPathComponent("budget.sqlite")
         do {
-            let (store, sync) = try await signedIn(BudgetDatabase(url: url))
+            let (store, sync) = try await signedIn(local(BudgetDatabase(url: url)))
 
             #expect(store.budget.accounts.map(\.name) == ["Girokonto", "Tagesgeld", "Depot"])
             #expect(store.budget.budgetName == "abakus.test")
             let backup = try BudgetDatabase(url: url.appendingPathExtension("before-sign-in")).budget()
-            #expect(backup.budgetName == "Demo-Budget")
+            #expect(backup.budgetName == "Lokal")
             let database = try #require(store.database)
             #expect(try database.deviceId == "mac-1")
             #expect(try database.cursor == 7)
@@ -162,10 +167,10 @@ private var hasKeychain: Bool {
         #expect(account == "/tmp/budget.sqlite")
     }
 
-    @Test func aCancelledSignInKeepsTheDemoBudget() async throws {
-        let (store, sync) = try opened()
+    @Test func aCancelledSignInKeepsTheLocalBudget() async throws {
+        let (store, sync) = try opened(local(BudgetDatabase()))
         await sync.signIn(to: FakeAbakus.url) { _ in throw SignInError.cancelled }
-        #expect(store.budget.budgetName == "Demo-Budget")
+        #expect(store.budget.budgetName == "Lokal")
         #expect(sync.status == .notSignedIn)
         #expect(sync.signInError == nil)
     }
@@ -215,15 +220,15 @@ private var hasKeychain: Bool {
         server.write(
             accounts.map {
                 SyncMessage(
-                    table: "accounts", rowId: $0, column: "note", value: .text("Neu"),
+                    table: "accounts", rowId: $0, column: "closed", value: .bool(true),
                     clock: "2026-10-23T10:00:00.000Z-0000-web")
             })
 
         #expect(await sync.syncOnce() == .synced(quiet: false))
-        #expect(store.budget.accounts.filter { $0.note == "Neu" }.count == 2)
+        #expect(store.budget.accounts.filter { $0.closed }.count == 2)
         #expect(await sync.syncOnce() == .synced(quiet: false))
 
-        #expect(store.budget.accounts.allSatisfy { $0.note == "Neu" })
+        #expect(store.budget.accounts.allSatisfy { $0.closed })
         #expect(try store.database?.cursor == 10)
     }
 
@@ -434,7 +439,7 @@ private var hasKeychain: Bool {
         #expect(sync.status == .error(.unsupportedProtocol("Bitte aktualisieren.")))
     }
 
-    @Test func signingOutCountsTheUnsentChangesAndShowsTheDemoBudget() async throws {
+    @Test func signingOutCountsTheUnsentChangesAndLeavesAnEmptyBudget() async throws {
         let (store, sync) = try await signedIn()
         server.offline = true
         for amount: Decimal in [10, 20, 30] {
@@ -445,7 +450,8 @@ private var hasKeychain: Bool {
 
         await sync.signOut()
 
-        #expect(store.budget.budgetName == "Demo-Budget")
+        #expect(store.budget.accounts.isEmpty && store.budget.transactions.isEmpty)
+        #expect(store.budget.categoryGroups.flatMap(\.categories).map(\.id) == [store.budget.readyToAssignCategoryId])
         #expect(sync.status == .notSignedIn)
         #expect(tokens.load() == nil)
         #expect(try store.database?.deviceId == BudgetDatabase.unsignedDevice)
@@ -483,12 +489,12 @@ private var hasKeychain: Bool {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("AbakusTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
         let url = folder.appendingPathComponent("budget.sqlite")
-        let (_, sync) = try await signedIn(BudgetDatabase(url: url))
+        let (_, sync) = try await signedIn(local(BudgetDatabase(url: url)))
 
         await sync.signOut()
 
         let backup = try BudgetDatabase(url: url.appendingPathExtension("before-sign-in")).budget()
-        #expect(backup.budgetName == "Demo-Budget")
+        #expect(backup.budgetName == "Lokal")
     }
 
     @Test func aSignedOutDeviceStaysSignedOutAfterARestart() async throws {
@@ -595,16 +601,41 @@ private var hasKeychain: Bool {
                 table: "accounts", rowId: "giro", column: "name", value: .text("Älter"),
                 clock: "2026-11-01T10:00:00.000Z-0000-web"),
             SyncMessage(
-                table: "accounts", rowId: "giro", column: "note", value: .text("Neu"),
+                table: "accounts", rowId: "giro", column: "closed", value: .bool(true),
                 clock: "2026-11-01T10:00:00.000Z-0000-web"),
         ])
 
         let account = try database.budget().account(withId: "giro")
         #expect(account?.name == "Giro")
-        #expect(account?.note == "Neu")
+        #expect(account?.closed == true)
         #expect(
             try database.nextClock(now: Date(timeIntervalSince1970: 0)).description
                 == "2026-11-02T10:00:00.000Z-0001-mac-1")
+    }
+
+    @Test func columnsTheAppsDoNotKnowAreIgnored() throws {
+        let database = try BudgetDatabase()
+        let clock = "2026-11-02T10:00:00.000Z-0000-server"
+        let row = SyncSnapshot.Row(
+            id: "giro", fields: ["name": .text("Giro"), "kind": .text("checking"), "note": .text("Alt")],
+            clocks: ["name": clock, "note": clock])
+        try database.adopt(
+            SyncSnapshot(cursor: 3, tables: ["accounts": [row]]), deviceId: "mac-1", serverURL: FakeAbakus.url,
+            settings: LocalBudgetSettings(budgetName: ""))
+        let before = try database.rows()
+
+        try database.receive(
+            [
+                ("accounts", "giro", "note"), ("category_groups", "G", "hidden"), ("category_groups", "G", "note"),
+                ("categories", "C", "hidden"), ("categories", "C", "note"),
+            ].map { table, id, column in
+                SyncMessage(
+                    table: table, rowId: id, column: column, value: .text("Neu"),
+                    clock: "2026-11-03T10:00:00.000Z-0000-web")
+            })
+
+        #expect(try database.rows() == before)
+        #expect(try database.fieldClocks().keys.sorted() == ["accounts/giro/name"])
     }
 
     @Test func serverAddressesNeedAScheme() {

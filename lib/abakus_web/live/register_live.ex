@@ -2,9 +2,8 @@ defmodule AbakusWeb.RegisterLive do
   @moduledoc """
   The register: one account's transactions (`/accounts/:id`) or every account's (`/accounts/all`), newest first under
   a heading per month. Its header has two rows: the name with its meta line and the pencil, beside them the balances
-  and "Abgleichen" (in Alle Konten "Konto hinzufügen"); below, the toolbar. The view (`filter`), the search (`q`) and
-  the running balance (`running`, one account in the full list only) live in the URL; the selection does not, and
-  whether the memo column shows is kept per device in the browser.
+  and "Abgleichen" (in Alle Konten "Konto hinzufügen"); below, the toolbar. The view (`filter`) and the search (`q`)
+  live in the URL; the selection does not, and whether the memo column shows is kept per device in the browser.
 
   It shows the view's newest 100 transactions and loads 100 more as its end comes near (the `LoadMore` hook), so an
   account opens as fast with thousands of transactions as with a few. A search goes through all of them, and "Alle
@@ -114,9 +113,7 @@ defmodule AbakusWeb.RegisterLive do
           proposals={@proposals}
           filter={@filter}
           query={@query}
-          running={@running}
-          running_shown={@running_balances != nil}
-          paths={@paths}
+          filter_paths={@filter_paths}
           picking={@picking}
           all_selected={@count > 0 and MapSet.size(@selected) == @count}
         />
@@ -127,7 +124,6 @@ defmodule AbakusWeb.RegisterLive do
           accounts={@accounts}
           columns={@columns}
           selected={@selected}
-          running={@running_balances}
           editor={@editor && @editor.layout == :row && @editor}
           empty={empty_text(@accounts, @register_empty, @proposals)}
           empty_hint={empty_hint(@accounts)}
@@ -197,7 +193,6 @@ defmodule AbakusWeb.RegisterLive do
 
         {:noreply,
          socket
-         |> assign(:running, params["running"] == "1")
          |> show(view)
          |> load_transactions()
          |> assign_rows()}
@@ -216,7 +211,7 @@ defmodule AbakusWeb.RegisterLive do
 
   defp depot_portfolio_id(_depot_cash, _params), do: nil
 
-  # Another view or search starts again at its newest transactions; the running balance changes neither.
+  # Another view or search starts again at its newest transactions.
   defp show(socket, view) do
     if Map.take(socket.assigns, [:scope, :filter, :query]) == view,
       do: socket,
@@ -308,8 +303,7 @@ defmodule AbakusWeb.RegisterLive do
 
     shown_proposals = socket.assigns.proposals |> Rows.filter(filter) |> Rows.search(query)
     balances = balances(account, account_rows)
-    running = running_balances(socket.assigns, rows, balances)
-    columns = Components.columns(account, running != nil)
+    columns = Components.columns(account)
 
     socket
     |> assign(
@@ -319,8 +313,7 @@ defmodule AbakusWeb.RegisterLive do
       columns: columns,
       editor: follow_rows(socket.assigns.editor, rows, accounts, columns),
       balances: balances,
-      running_balances: running,
-      paths: view_paths(Map.put(socket.assigns, :accounts, accounts))
+      filter_paths: Map.new(Rows.filters(), &{&1, register_path(socket.assigns, filter: &1)})
     )
     |> select(socket.assigns.selected)
   end
@@ -371,18 +364,6 @@ defmodule AbakusWeb.RegisterLive do
 
   defp balances(account, account_rows),
     do: account_rows |> Enum.find(&(&1.account.id == account.id)) |> Balances.account()
-
-  # Only one account's full list adds up to its balance.
-  defp running_balances(
-         %{account: account, running: true, filter: :all, query: query},
-         rows,
-         balances
-       )
-       when not is_nil(account) do
-    if String.trim(query) == "", do: Rows.running(rows, balances.working)
-  end
-
-  defp running_balances(_assigns, _rows, _balances), do: nil
 
   @impl true
   def handle_info({TransactionEditor, :done, message}, socket) do
@@ -865,13 +846,6 @@ defmodule AbakusWeb.RegisterLive do
 
   defp filter(param), do: Enum.find(Rows.filters(), :all, &(Atom.to_string(&1) == param))
 
-  defp view_paths(assigns) do
-    %{
-      filters: Map.new(Rows.filters(), &{&1, register_path(assigns, filter: &1)}),
-      running: register_path(assigns, running: !assigns.running)
-    }
-  end
-
   # With no account taking manual entries there is nothing to book in.
   defp manual_entry?(nil, account_rows),
     do: Enum.any?(account_rows, &Account.takes_entries?(&1.account))
@@ -879,14 +853,13 @@ defmodule AbakusWeb.RegisterLive do
   defp manual_entry?(account, _accounts), do: Account.takes_entries?(account)
 
   defp register_path(assigns, changes) do
-    current = %{filter: assigns.filter, q: assigns.query, running: assigns.running}
-    %{filter: filter, q: query, running: running} = Map.merge(current, Map.new(changes))
+    current = %{filter: assigns.filter, q: assigns.query}
+    %{filter: filter, q: query} = Map.merge(current, Map.new(changes))
 
     params =
       [
         filter: filter != :all && filter,
-        q: String.trim(query) != "" && query,
-        running: running && "1"
+        q: String.trim(query) != "" && query
       ]
       |> Enum.filter(fn {_key, value} -> value end)
 

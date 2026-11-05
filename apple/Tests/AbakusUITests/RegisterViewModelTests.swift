@@ -25,11 +25,9 @@ import Testing
 
     @Test func columnMenuTogglesOnlyHideableColumns() {
         let model = RegisterFixture().model()
-        #expect(model.columnMenuItems.map(\.label) == ["Status", "Memo", "Laufender Saldo"])
-        model.toggleColumnVisibility(.runningBalance)
+        #expect(model.columnMenuItems.map(\.label) == ["Status", "Memo"])
         model.toggleColumnVisibility(.memo)
         model.toggleColumnVisibility(.payee)
-        #expect(model.visibleColumns.contains(.runningBalance))
         #expect(!model.visibleColumns.contains(.memo))
         #expect(model.visibleColumns.contains(.payee))
         #expect(RegisterFixture().model(selection: .allAccounts).columnMenuItems.count == 2)
@@ -53,7 +51,7 @@ import Testing
         let model = RegisterFixture().model()
         #expect(
             model.viewMenu.map(\.title).filter { !$0.isEmpty } == [
-                "Zeitraum: Alle Daten …", "Abgeglichene Buchungen zeigen", "Status", "Memo", "Laufender Saldo",
+                "Zeitraum: Alle Daten …", "Abgeglichene Buchungen zeigen", "Status", "Memo",
                 "Für alle Konten übernehmen",
             ])
         model.viewMenuChosen(.showReconciled)

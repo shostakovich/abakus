@@ -81,7 +81,7 @@ public final class RegisterScheduler {
 
     nonisolated public static var defaultColumnSettings: RegisterColumnSettings {
         var settings = RegisterColumnSettings()
-        for column in [RegisterColumn.runningBalance, .cleared] { settings[column] = nil }
+        settings[.cleared] = nil
         settings[.memo]?.visible = true
         settings[.frequency] = RegisterColumnSetting(visible: true, width: 70)
         return settings

@@ -8,7 +8,6 @@ public final class BudgetCalloutController {
     unowned let budget: BudgetViewModel
     public internal(set) var category: BudgetCategoryForm?
     public internal(set) var summary: TransactionSummary?
-    public internal(set) var outflowHelp: BudgetOutflowHelp?
     public internal(set) var availableForm: BudgetAvailableForm?
     public internal(set) var assignForm: BudgetAssignForm?
     @ObservationIgnored public var onShowTransaction: @MainActor (String) -> Void = { _ in }
@@ -34,11 +33,6 @@ public final class BudgetCalloutController {
             availableForm = availableForm(month: month, categoryId: id)
         case .outflowSummary(let month, let source):
             summary = store.budget.outflowSummary(source, month: month, today: budget.today, formatter: formatter)
-        case .incomeSummary(let month):
-            summary = store.budget.incomeSummary(month: month, today: budget.today, formatter: formatter)
-        case .outflowHelp(let month, let id):
-            guard let help = outflowHelp(month: month, categoryId: id) else { return nil }
-            outflowHelp = help
         case .available(let month, let id):
             guard let form = availableForm(month: month, categoryId: id) else { return nil }
             availableForm = form
@@ -53,7 +47,6 @@ public final class BudgetCalloutController {
     func reset() {
         category = nil
         summary = nil
-        outflowHelp = nil
         availableForm = nil
         assignForm = nil
     }

@@ -10,11 +10,11 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
 
   @groceries %Category{id: 1, name: "🛒 Lebensmittel"}
   @fuel %Category{id: 2, name: "⛽ Tanken"}
-  @old %Category{id: 3, name: "Alt", hidden: true}
+  @pharmacy %Category{id: 3, name: "💊 Apotheke"}
   @rent %Category{id: 4, name: "🏠 Miete"}
-  @daily %CategoryGroup{id: 10, name: "Alltag", categories: [@groceries, @fuel, @old]}
+  @daily %CategoryGroup{id: 10, name: "Alltag", categories: [@groceries, @fuel, @pharmacy]}
   @housing %CategoryGroup{id: 11, name: "Wohnen", categories: [@rent]}
-  @gone %CategoryGroup{id: 12, name: "Weg", hidden: true, categories: [%Category{id: 5}]}
+  @savings %CategoryGroup{id: 12, name: "Sparen", categories: [%Category{id: 5}]}
 
   # Every category has a row in every month, as `Abakus.Budget` computes them.
   defp month(month, rows, uncategorised \\ %{}) do
@@ -29,9 +29,9 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
     )
   end
 
-  defp rows(months), do: Rows.new([@daily, @housing, @gone], months)
+  defp rows(months), do: Rows.new([@daily, @housing, @savings], months)
 
-  test "lists the groups and categories, those hidden in YNAB too, with their months and the groups' totals" do
+  test "lists the groups and categories with their months and the groups' totals" do
     rows =
       rows([
         month(@oct, %{
@@ -43,13 +43,13 @@ defmodule AbakusWeb.BudgetLive.RowsTest do
       ])
 
     assert [
-             %{group: @daily, categories: [groceries, fuel, old]},
+             %{group: @daily, categories: [groceries, fuel, pharmacy]},
              %{group: @housing},
-             %{group: @gone}
+             %{group: @savings}
            ] =
              rows.groups
 
-    assert old.category == @old
+    assert pharmacy.category == @pharmacy
     assert groceries.category == @groceries
     assert %CategoryMonth{assigned: 500, available: 1_500} = groceries.cells[@nov]
     assert %CategoryMonth{available: -300} = fuel.cells[@oct]

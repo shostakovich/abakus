@@ -87,33 +87,3 @@ private struct BudgetSummaryTable: View {
         }
     }
 }
-
-struct BudgetOutflowHelpPopover: View {
-    static let width: CGFloat = 340
-
-    let controller: BudgetCalloutController
-    let help: BudgetOutflowHelp
-    @State private var isChecked = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            PopoverTitle(BudgetOutflowHelp.title)
-            Text(TextMarkup.attributed(help.message))
-                .fixedSize(horizontal: false, vertical: true)
-            Toggle(
-                BudgetOutflowHelp.checkbox,
-                isOn: Binding(
-                    get: { isChecked },
-                    set: { checked in
-                        guard checked else { return }
-                        isChecked = true
-                        controller.dontShowOutflowHelpAgainClicked()
-                    })
-            )
-            .toggleStyle(.checkbox)
-        }
-        .font(ThemeFont.body.font)
-        .foregroundStyle(ThemeColor.text)
-        .frame(width: Self.width, alignment: .leading)
-    }
-}

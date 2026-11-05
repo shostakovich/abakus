@@ -18,7 +18,6 @@ defmodule Abakus.Ledger.Account do
     field :kind, Ecto.Enum, values: @budget_kinds ++ [:tracking]
     field :shared_expenses, :boolean, default: false
     field :closed, :boolean, default: false
-    field :note, :string
     field :position, :integer, default: 0
     field :last_reconciled_at, :utc_datetime_usec
 
@@ -57,7 +56,7 @@ defmodule Abakus.Ledger.Account do
 
   def changeset(account, attrs) do
     account
-    |> cast(attrs, [:name, :kind, :shared_expenses, :closed, :note, :position])
+    |> cast(attrs, [:name, :kind, :shared_expenses, :closed, :position])
     |> validate_required([:user_id, :name, :kind])
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_budget_side()

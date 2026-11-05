@@ -59,22 +59,6 @@ import Testing
         #expect(!model.reconciliation.isReconcileEnabled)
         model.reconciliation.reconcileClicked()
         #expect(model.reconciliation.statementForm == nil)
-        model.reconciliation.reconcileDisabledClicked()
-        #expect(model.reconciliation.showsReconcileHelp)
-        model.reconciliation.reconcileHelpDismissed()
-        #expect(!model.reconciliation.showsReconcileHelp)
-    }
-
-    @Test func registerKeysWaitForTheReconcileHelp() {
-        let (model, _) = RegisterFixture().spied(selection: .allAccounts)
-        model.reconciliation.reconcileDisabledClicked()
-        #expect(!model.selectAllKeyPressed())
-        model.search.focus()
-        #expect(model.search.focusRequest == 0)
-        model.reconciliation.reconcileHelpDismissed()
-        #expect(model.selectAllKeyPressed())
-        model.search.focus()
-        #expect(model.search.focusRequest == 1)
     }
 
     @Test func theStatementBalanceIsTakenAsTyped() throws {

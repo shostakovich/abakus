@@ -30,8 +30,7 @@ public final class SyncSettingsModel {
     public var statusText: String {
         switch sync.status {
         case .notSignedIn:
-            "Melde \(device.accusative) bei Abakus an, um dein Budget zu synchronisieren. Bis dahin zeigt "
-                + "\(device.pronoun) ein Demo-Budget."
+            "Melde \(device.accusative) bei Abakus an, um dein Budget zu synchronisieren."
         case .signedOutRemotely:
             "\(device.sentenceSubject) wurde in Abakus abgemeldet. Melde \(device.pronounAccusative) wieder an, um "
                 + "weiter zu synchronisieren; bis dahin bleiben das Budget und \(unsent) auf \(device.dative)."
@@ -52,7 +51,7 @@ public final class SyncSettingsModel {
         let count = signOutWarning ?? 0
         let (sent, lost) = count == 1 ? ("wurde", "geht") : ("wurden", "gehen")
         return "\(CloudSyncStatus.changes(count)) \(sent) noch nicht an Abakus gesendet und \(lost) beim Abmelden "
-            + "verloren. Dann löscht Abakus das Budget auf \(device.dative) und zeigt das Demo-Budget."
+            + "verloren. Dann löscht Abakus das Budget auf \(device.dative)."
     }
 
     public func signInClicked() async {

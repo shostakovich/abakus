@@ -221,6 +221,5 @@ button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outlin
 .app-act-name { min-width: 0; hyphens: auto; overflow-wrap: break-word; }
 .app-panel-assign .fieldset { padding: 0; }
 .app-panel-assign label.input { margin-inline-start: auto; }
-.app-note { white-space: pre-line; }
 .app-panel { width: min(26rem, 100vw); max-width: none; }
 dl > div:has(> dd > .app-panel-assign) { align-items: center; }

@@ -9,8 +9,7 @@ public enum BudgetMetrics {
     /// The gap before each month that holds its vertical separator.
     public static let separatorWidth: CGFloat = 12
     public static let minimumMonthWidth: CGFloat = 240
-    public static let defaultCategoryWidth: CGFloat = 190
-    public static let categoryWidthRange: ClosedRange<CGFloat> = 190...380
+    public static let categoryWidth: CGFloat = 190
     public static let maximumFittedCategoryWidth: CGFloat = 220
     public static let pageScroll: CGFloat = 100
     public static let dragThreshold: CGFloat = 11
@@ -42,7 +41,7 @@ public struct BudgetLayout: Hashable, Sendable {
     public var headerLineCount: Int
 
     public init(
-        panelSize: CGSize, categoryWidth: CGFloat = BudgetMetrics.defaultCategoryWidth, headerProgress: CGFloat = 1,
+        panelSize: CGSize, categoryWidth: CGFloat = BudgetMetrics.categoryWidth, headerProgress: CGFloat = 1,
         headerLineCount: Int = 4
     ) {
         self.panelSize = panelSize

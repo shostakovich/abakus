@@ -111,16 +111,6 @@ defmodule AbakusWeb.RegisterLive.RowsTest do
     refute Rows.searching?("  ")
   end
 
-  test "running/2 gives the balance after each transaction, newest first" do
-    rows = [
-      transaction(3, amount: -500),
-      transaction(2, amount: 2_000),
-      transaction(1, amount: -1_000)
-    ]
-
-    assert Rows.running(rows, 500) == %{3 => 500, 2 => 1_000, 1 => -1_000}
-  end
-
   describe "categorisable?/2" do
     test "a transaction in a budget account" do
       assert Rows.categorisable?(transaction(1, []), @accounts)

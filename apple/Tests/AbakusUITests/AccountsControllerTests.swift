@@ -298,7 +298,7 @@ import Testing
             help.message == "Die Saldoanpassung ist ohne Kategorie gebucht, weil ein Trackingkonto keine braucht.")
     }
 
-    @Test func aNewDayEntersDueSchedulesAndAJumpAsksFirst() throws {
+    @Test func aNewDayOrAJumpOfSeveralDaysEntersDueSchedules() throws {
         var fixture = RegisterFixture()
         let tomorrow = editDay.addingDays(1)
         let transaction = Transaction(id: "S1", accountId: fixture.giro, date: tomorrow, amount: -5)
@@ -307,49 +307,10 @@ import Testing
                 ScheduledSave(transaction: transaction, frequency: .daily, payeeName: "Bakery", isNew: true)))
         let app = app(fixture)
         app.dateChecked(today: tomorrow)
-        #expect(!app.dialogs.isPresenting)
-        let entered = app.store.budget.transactions.filter { $0.source == .scheduled }
-        #expect(entered.count == 1)
+        #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 1)
         app.dateChecked(today: tomorrow.addingDays(4))
-        #expect(app.dialogs.presented.last?.dialog.instruction == "Stimmt die Uhr deines Mac?")
-        app.dialogs.presented.last?.answer(ClockChoice.enterDue)
-        #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 5)
-    }
-
-    @Test func theClockQuestionNamesTheDevice() {
-        let app = AppModel(
-            store: BudgetStore(budget: RegisterFixture().budget, today: { editDay }), defaults: nil, device: .iPad)
-        app.dateChecked(today: editDay.addingDays(3))
-        #expect(app.dialogs.presented.last?.dialog.instruction == "Stimmt die Uhr deines iPads?")
-    }
-
-    @Test func aClockJumpCanBeIgnoredAndEscapeTakesTheDate() throws {
-        var fixture = RegisterFixture()
-        let transaction = Transaction(id: "S1", accountId: fixture.giro, date: editDay.addingDays(1), amount: -5)
-        try fixture.budget.apply(
-            .saveScheduledTransaction(
-                ScheduledSave(transaction: transaction, frequency: .daily, payeeName: "Bakery", isNew: true)))
-        let app = app(fixture)
-        app.dateChecked(today: editDay.addingDays(3))
-        let dialog = try #require(app.dialogs.presented.last)
-        #expect(dialog.dialog.dismissal == AnyDialogChoice(ClockChoice.enterDue))
-        dialog.answer(ClockChoice.ignore)
         #expect(!app.dialogs.isPresenting)
-        #expect(!app.store.budget.transactions.contains { $0.source == .scheduled })
-    }
-
-    @Test func aSecondClockJumpReplacesTheOpenQuestionWithTheNewerDate() throws {
-        var fixture = RegisterFixture()
-        let transaction = Transaction(id: "S1", accountId: fixture.giro, date: editDay.addingDays(1), amount: -5)
-        try fixture.budget.apply(
-            .saveScheduledTransaction(
-                ScheduledSave(transaction: transaction, frequency: .daily, payeeName: "Bakery", isNew: true)))
-        let app = app(fixture)
-        app.dateChecked(today: editDay.addingDays(3))
-        app.dateChecked(today: editDay.addingDays(6))
-        #expect(app.dialogs.presented.count == 1)
-        app.dialogs.presented.last?.answer(ClockChoice.enterDue)
-        #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 6)
+        #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 5)
     }
 
     @Test func accountPropertiesOpensTheEditCalloutOfTheShownAccount() throws {

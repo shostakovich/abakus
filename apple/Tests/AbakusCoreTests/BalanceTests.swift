@@ -55,13 +55,20 @@ import Testing
 }
 
 @Suite struct OrderingTests {
+    private func defaultOrder(_ budget: Budget, in accountId: String) -> [String] {
+        let lookup = BudgetLookup(budget)
+        return budget.transactions(inAccount: accountId)
+            .sorted { lookup.defaultOrderKeys(of: $0).compare(lookup.defaultOrderKeys(of: $1)) == .orderedAscending }
+            .map(\.id)
+    }
+
     @Test func ordersByDateThenInflowsFirst() throws {
         var fixture = TestBudget()
         let outflow = try fixture.add(fixture.girokonto, -10, on: "2026-10-10")
         let inflow = try fixture.add(
             fixture.girokonto, 20, on: "2026-10-10", category: fixture.budget.readyToAssignCategoryId)
         let earlier = try fixture.add(fixture.girokonto, -5, on: "2026-10-02")
-        let ids = fixture.budget.transactionsInDefaultOrder(forAccount: fixture.girokonto).map(\.id)
+        let ids = defaultOrder(fixture.budget, in: fixture.girokonto)
         #expect(Array(ids.dropFirst()) == [earlier, inflow, outflow])
     }
 
@@ -70,24 +77,8 @@ import Testing
         let zebra = try fixture.add(fixture.girokonto, -10, payee: "Zebra")
         let alpha = try fixture.add(fixture.girokonto, -10, payee: "alpha")
         let alphaReconciled = try fixture.add(fixture.girokonto, -10, payee: "Alpha", cleared: .reconciled)
-        let ids = fixture.budget.transactionsInDefaultOrder(forAccount: fixture.girokonto).map(\.id)
+        let ids = defaultOrder(fixture.budget, in: fixture.girokonto)
         #expect(Array(ids.dropFirst()) == [alphaReconciled, alpha, zebra])
-    }
-
-    @Test func runningBalanceAccumulatesInDefaultOrder() throws {
-        var fixture = TestBudget()
-        let later = try fixture.add(fixture.girokonto, -100, on: "2026-10-20")
-        let earlier = try fixture.add(fixture.girokonto, decimal("-0.5"), on: "2026-10-05")
-        let running = fixture.budget.runningBalances(forAccount: fixture.girokonto)
-        #expect(running[earlier] == decimal("999.5"))
-        #expect(running[later] == decimal("899.5"))
-    }
-
-    @Test func allAccountsRunningBalanceSpansAccounts() {
-        let fixture = TestBudget()
-        let running = fixture.budget.runningBalances(forAccount: EntityID.allAccounts)
-        #expect(running.count == 3)
-        #expect(running.values.max() == 3500)
     }
 }
 

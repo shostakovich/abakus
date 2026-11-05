@@ -37,7 +37,7 @@ Accepted, 2026-10-10. Replaces "hidden, never deleted" from the spec.
   transactions and split lines (deleted ones, match proposals and the budget side of transfers to tracking accounts
   included), payees' last categories and the assignments, added per month. Targets and snoozes go with the
   category. Reconciled transactions change too, after the user confirms it. A group is deleted only when it is
-  empty. YNAB's hidden flag stays on groups and categories; the budget ignores it.
+  empty.
 - **Consequences:** History keeps its references and every past month's Ready to Assign and sum of available stay
   as they were, as long as neither category was overspent in a month where the other had money; merging
   envelopes covers such overspending, so Ready to Assign changes from that month on, as in YNAB. Deleted

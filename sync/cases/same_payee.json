@@ -47,13 +47,6 @@
     {
       "table": "category_groups",
       "row_id": "01a0f5c0-0000-7000-8000-000000000002",
-      "column": "hidden",
-      "value": false,
-      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
-    },
-    {
-      "table": "category_groups",
-      "row_id": "01a0f5c0-0000-7000-8000-000000000002",
       "column": "internal",
       "value": false,
       "clock": "2026-11-01T08:00:00.000Z-0000-setup"
@@ -82,13 +75,6 @@
     {
       "table": "categories",
       "row_id": "01a0f5c0-0000-7000-8000-000000000003",
-      "column": "hidden",
-      "value": false,
-      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
-    },
-    {
-      "table": "categories",
-      "row_id": "01a0f5c0-0000-7000-8000-000000000003",
       "column": "internal",
       "value": false,
       "clock": "2026-11-01T08:00:00.000Z-0000-setup"
@@ -112,13 +98,6 @@
       "row_id": "01a0f5c0-0000-7000-8000-000000000004",
       "column": "name",
       "value": "Haushalt",
-      "clock": "2026-11-01T08:00:00.000Z-0000-setup"
-    },
-    {
-      "table": "categories",
-      "row_id": "01a0f5c0-0000-7000-8000-000000000004",
-      "column": "hidden",
-      "value": false,
       "clock": "2026-11-01T08:00:00.000Z-0000-setup"
     },
     {

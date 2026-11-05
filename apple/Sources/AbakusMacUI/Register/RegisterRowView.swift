@@ -4,14 +4,11 @@ import AppKit
 import SwiftUI
 
 struct RegisterRowView: View {
-    static let balanceHoverDelay = Duration.milliseconds(650)
-
     let row: RegisterRow
     let layout: RegisterColumnLayout
     let isSelected: Bool
     let owner: any RegisterGridOwner
     let onClick: () -> Void
-    @State private var balanceHover: Task<Void, Never>?
     @State private var glow: Double = 0
     @State private var isGlowing = false
 
@@ -124,8 +121,7 @@ struct RegisterRowView: View {
     static func anchorID(_ column: RegisterColumn, row: RegisterRow, statusColumn: RegisterColumn?)
         -> RegisterAnchorID?
     {
-        if column == statusColumn { return .error(row.id) }
-        return column == .runningBalance && !row.isSubtransaction ? .balance(row.id) : nil
+        column == statusColumn ? .error(row.id) : nil
     }
 
     /// The approve ✓ goes to the status column, other marks to the category; each falls back to the other column.
@@ -151,10 +147,6 @@ struct RegisterRowView: View {
         case .category: category(width: frame.width)
         case .memo: text(row.memo, width: frame.width, tip: .whenTruncated)
         case .amount: signedAmount(width: frame.width)
-        case .runningBalance:
-            amount(row.runningBalance, width: frame.width)
-                .contentShape(Rectangle())
-                .onHover(perform: balanceHovered)
         case .cleared: clearedCell(width: frame.width)
         }
     }
@@ -182,19 +174,6 @@ struct RegisterRowView: View {
 
     private var inflowColor: Color {
         row.isExcludedFromSearch ? ThemeColor.secondaryText : ThemeColor.positive
-    }
-
-    private func balanceHovered(_ inside: Bool) {
-        balanceHover?.cancel()
-        guard inside else {
-            main?.runningBalanceHovered(row, inside: false)
-            return
-        }
-        balanceHover = Task { @MainActor in
-            try? await Task.sleep(for: Self.balanceHoverDelay)
-            guard !Task.isCancelled else { return }
-            main?.runningBalanceHovered(row, inside: true)
-        }
     }
 
     private func text(_ value: String, width: CGFloat, tip: GridCellLabel.Tip = .none) -> some View {

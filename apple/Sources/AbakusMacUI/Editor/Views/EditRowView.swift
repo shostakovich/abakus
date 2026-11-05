@@ -63,15 +63,6 @@ struct EditRowView: View {
             EditTextCell(editor: editor, field: .main(.memo), width: frame.width)
         case .amount:
             EditTextCell(editor: editor, field: .main(.amount), width: frame.width)
-        case .runningBalance:
-            if let row {
-                Text(verbatim: row.runningBalance)
-                    .font(EditCellStyle.font.font)
-                    .foregroundStyle(ThemeColor.secondaryText)
-                    .lineLimit(1)
-                    .padding(.trailing, RegisterGridStyle.cellInset)
-                    .frame(width: frame.width, alignment: .trailing)
-            }
         case .cleared:
             let cleared = editor.clone.cleared
             EditRowSymbolButton(

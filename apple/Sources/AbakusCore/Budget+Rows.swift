@@ -224,7 +224,7 @@ extension Account {
     var row: SyncRow {
         [
             "name": .text(name), "kind": .of(kind), "shared_expenses": .bool(sharedExpenses), "closed": .bool(closed),
-            "note": .of(note), "position": .integer(position), "last_reconciled_at": .moment(lastReconciledAt),
+            "position": .integer(position), "last_reconciled_at": .moment(lastReconciledAt),
         ]
     }
 
@@ -232,7 +232,7 @@ extension Account {
         guard let name = row.text("name"), let kind: AccountKind = row.enumValue("kind") else { return nil }
         self.init(
             id: id, name: name, kind: kind, sharedExpenses: row.bool("shared_expenses") ?? false,
-            closed: row.bool("closed") ?? false, note: row.text("note"), position: row.integer("position") ?? 0,
+            closed: row.bool("closed") ?? false, position: row.integer("position") ?? 0,
             lastReconciledAt: row.moment("last_reconciled_at"))
     }
 }
@@ -275,33 +275,30 @@ extension PayeeRenameCondition {
 extension CategoryGroup {
     var row: SyncRow {
         [
-            "name": .text(name), "hidden": .bool(hidden), "internal": .bool(isInternal), "position": .integer(position),
-            "note": .of(note),
+            "name": .text(name), "internal": .bool(isInternal), "position": .integer(position),
         ]
     }
 
     init?(id: String, row: SyncRow) {
         guard let name = row.text("name") else { return nil }
         self.init(
-            id: id, name: name, hidden: row.bool("hidden") ?? false, isInternal: row.bool("internal") ?? false,
-            position: row.integer("position") ?? 0, note: row.text("note"))
+            id: id, name: name, isInternal: row.bool("internal") ?? false, position: row.integer("position") ?? 0)
     }
 }
 
 extension Category {
     var row: SyncRow {
         [
-            "category_group_id": .text(categoryGroupId), "name": .text(name), "hidden": .bool(hidden),
-            "internal": .bool(isInternal), "position": .integer(position), "note": .of(note),
+            "category_group_id": .text(categoryGroupId), "name": .text(name), "internal": .bool(isInternal),
+            "position": .integer(position),
         ]
     }
 
     init?(id: String, row: SyncRow) {
         guard let groupId = row.text("category_group_id"), let name = row.text("name") else { return nil }
         self.init(
-            id: id, categoryGroupId: groupId, name: name, hidden: row.bool("hidden") ?? false,
-            isInternal: row.bool("internal") ?? false, position: row.integer("position") ?? 0,
-            note: row.text("note"))
+            id: id, categoryGroupId: groupId, name: name, isInternal: row.bool("internal") ?? false,
+            position: row.integer("position") ?? 0)
     }
 }
 

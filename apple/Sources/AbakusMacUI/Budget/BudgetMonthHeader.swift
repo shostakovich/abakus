@@ -93,13 +93,11 @@ private struct BudgetMonthResult: View {
 private struct BudgetMonthDetails: View {
     let model: BudgetViewModel
     let month: BudgetMonth
-    @State private var isIncomeHovered = false
 
     var body: some View {
         let lines = month.headerLines(formatter: model.formatter)
         Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 1) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                let isIncome = index == 2
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                 GridRow {
                     Text(verbatim: line.amount)
                         .font(BudgetStyle.detailAmountFont.font)
@@ -110,35 +108,10 @@ private struct BudgetMonthDetails: View {
                         .foregroundStyle(line.isWarning ? ThemeColor.negative : ThemeColor.secondaryText)
                 }
                 .lineLimit(1)
-                .underline(isIncome && isIncomeHovered)
-                .modifier(
-                    BudgetIncomeLink(model: model, month: month.month, isOn: isIncome, isHovered: $isIncomeHovered))
             }
         }
         .padding(.leading, BudgetMetrics.cellPadding)
         .padding(.bottom, BudgetMetrics.headerDetailsPadding)
-    }
-}
-
-private struct BudgetIncomeLink: ViewModifier {
-    let model: BudgetViewModel
-    let month: DateWithoutTime
-    let isOn: Bool
-    @Binding var isHovered: Bool
-
-    func body(content: Content) -> some View {
-        if isOn {
-            content
-                .contentShape(Rectangle())
-                .onHover { isHovered = $0 }
-                .onTapGesture { model.present(.incomeSummary(month: month)) }
-                .pointerStyle(.link)
-                .toolTip("Einnahmen zeigen")
-                .budgetPopupAnchor(.incomeLine(month), of: model)
-                .accessibilityAddTraits(.isButton)
-        } else {
-            content
-        }
     }
 }
 

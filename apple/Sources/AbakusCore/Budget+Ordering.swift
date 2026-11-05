@@ -100,23 +100,3 @@ public struct BudgetLookup: Sendable {
             cleared: transaction.cleared, errorLevel: errorState(of: transaction).level)
     }
 }
-
-extension Budget {
-    public func transactionsInDefaultOrder(forAccount accountId: String) -> [Transaction] {
-        let list = accountId == EntityID.allAccounts ? transactions : transactions(inAccount: accountId)
-        let lookup = BudgetLookup(self)
-        return list.map { ($0, lookup.defaultOrderKeys(of: $0)) }
-            .sorted { $0.1.compare($1.1) == .orderedAscending }
-            .map(\.0)
-    }
-
-    public func runningBalances(forAccount accountId: String) -> [String: Decimal] {
-        var balance: Decimal = 0
-        var result: [String: Decimal] = [:]
-        for transaction in transactionsInDefaultOrder(forAccount: accountId) {
-            balance = Amount.round(balance + transaction.amount)
-            result[transaction.id] = balance
-        }
-        return result
-    }
-}

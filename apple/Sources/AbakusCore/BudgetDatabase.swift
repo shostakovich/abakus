@@ -62,7 +62,7 @@ public final class BudgetDatabase {
             }
             openNotice =
                 "Dein Budget ließ sich nicht lesen (\(error.message)). Es liegt jetzt als „\(aside.lastPathComponent)“ "
-                + "in \(aside.deletingLastPathComponent().path), stattdessen ist das Demo-Budget geöffnet."
+                + "in \(aside.deletingLastPathComponent().path), stattdessen ist ein leeres Budget geöffnet."
         } catch {
             throw BudgetDatabaseError.unreadable(path: url.path, reason: error.localizedDescription)
         }
@@ -103,15 +103,34 @@ public final class BudgetDatabase {
 
     public var backupURL: URL? { url?.appendingPathExtension("bak") }
 
-    private static let schemaVersion = 2
+    private static let schemaVersion = 3
 
     private static func createSchema(in sqlite: SQLite) throws {
-        let version = try sqlite.query("PRAGMA user_version").first?["user_version"]
-        if version == .integer(1) {
+        let version = try sqlite.query("PRAGMA user_version").first?["user_version"]?.integer ?? 0
+        if version == 1 {
             try sqlite.execute(
                 "CREATE INDEX sync_field_clocks_clock ON sync_field_clocks (clock); PRAGMA user_version = 2;")
         }
-        guard version == .integer(0) else { return }
+        if (1...2).contains(version) {
+            let droppedFields = """
+                ("table" = 'accounts' AND "column" = 'note')
+                  OR ("table" IN ('category_groups', 'categories') AND "column" IN ('hidden', 'note'))
+                """
+            try sqlite.transaction {
+                try sqlite.execute(
+                    """
+                    DELETE FROM sync_field_clocks WHERE \(droppedFields);
+                    DELETE FROM sync_messages WHERE \(droppedFields);
+                    ALTER TABLE accounts DROP COLUMN note;
+                    ALTER TABLE category_groups DROP COLUMN hidden;
+                    ALTER TABLE category_groups DROP COLUMN note;
+                    ALTER TABLE categories DROP COLUMN hidden;
+                    ALTER TABLE categories DROP COLUMN note;
+                    PRAGMA user_version = 3;
+                    """)
+            }
+        }
+        guard version == 0 else { return }
         let tables = SyncTable.all.map { table in
             let columns = table.columns.map { quoted($0.name) }.joined(separator: ", ")
             return "CREATE TABLE \(quoted(table.name)) (id TEXT PRIMARY KEY, \(columns));"

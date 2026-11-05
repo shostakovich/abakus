@@ -4,55 +4,42 @@ public struct Category: Hashable, Identifiable, Sendable, Positioned {
     public var id: String
     public var categoryGroupId: String
     public var name: String
-    /// Hidden categories still count.
-    public var hidden: Bool
     public var isInternal: Bool
     public var position: Int
-    public var note: String?
 
     public init(
         id: String = EntityID.createUID(),
         categoryGroupId: String,
         name: String,
-        hidden: Bool = false,
         isInternal: Bool = false,
-        position: Int = 0,
-        note: String? = nil
+        position: Int = 0
     ) {
         self.id = id
         self.categoryGroupId = categoryGroupId
         self.name = name
-        self.hidden = hidden
         self.isInternal = isInternal
         self.position = position
-        self.note = note
     }
 }
 
 public struct CategoryGroup: Hashable, Identifiable, Sendable, Positioned {
     public var id: String
     public var name: String
-    public var hidden: Bool
     public var isInternal: Bool
     public var position: Int
-    public var note: String?
     public var categories: [Category]
 
     public init(
         id: String = EntityID.createUID(),
         name: String,
-        hidden: Bool = false,
         isInternal: Bool = false,
         position: Int = 0,
-        note: String? = nil,
         categories: [Category] = []
     ) {
         self.id = id
         self.name = name
-        self.hidden = hidden
         self.isInternal = isInternal
         self.position = position
-        self.note = note
         self.categories = categories
     }
 

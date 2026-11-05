@@ -30,21 +30,6 @@ import Testing
         #expect(mac.rows.first { $0.transactionId == now }?.date == "10/05/14")
     }
 
-    @Test func saldoIsAFixedColumnOfASingleAccount() {
-        var fixture = RegisterFixture()
-        fixture.add(fixture.giro, -11)
-        let (model, _) = touch(fixture)
-        #expect(model.visibleColumns.contains(.runningBalance))
-        #expect(model.rows.allSatisfy { !$0.runningBalance.isEmpty })
-        #expect(model.touchViewMenu(showsColumns: true).item(titled: "Laufender Saldo") == nil)
-
-        model.navigation.selection = .allAccounts
-        #expect(!model.visibleColumns.contains(.runningBalance))
-
-        let (mac, _) = fixture.spied()
-        #expect(!mac.visibleColumns.contains(.runningBalance))
-    }
-
     @Test func approvalsShowAlleKontenFilteredAndApproveAllAtOnce() throws {
         var fixture = RegisterFixture()
         let first = fixture.add(fixture.giro, -1, approved: false, source: .bank)

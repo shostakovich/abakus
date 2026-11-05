@@ -321,6 +321,29 @@ defmodule Abakus.SyncTest do
                ])
     end
 
+    test "an older app's notes and hidden flags of categories, groups and accounts are ignored",
+         c do
+      group = category_group_fixture()
+      id = Ids.generate()
+
+      assert {:ok, 2} =
+               Sync.apply_messages(c.scope, "mac", [
+                 message(id, "name", "Urlaub", @mac, "categories"),
+                 message(id, "category_group_id", group.id, @mac, "categories"),
+                 message(id, "hidden", true, @mac, "categories"),
+                 message(id, "note", "Sommer", @mac, "categories"),
+                 message(group.id, "hidden", true, @mac, "category_groups"),
+                 message(group.id, "note", "Fix", @mac, "category_groups"),
+                 message(c.giro.id, "note", "Haupt", @mac, "accounts")
+               ])
+
+      assert %Category{name: "Urlaub"} = Repo.get!(Category, id)
+
+      refute Repo.exists?(
+               from m in Message, where: m.column in ["hidden", "note"] and m.device == "mac"
+             )
+    end
+
     test "refuses a clock of another device, a bad clock, row id or value", c do
       assert {:error, {:invalid_clock, _}} =
                Sync.apply_messages(c.scope, "ipad", [message(c.rewe.id, "memo", "x")])

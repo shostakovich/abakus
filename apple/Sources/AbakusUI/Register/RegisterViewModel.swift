@@ -155,7 +155,6 @@ public final class RegisterViewModel {
             switch column {
             case .account: isAllAccounts
             case .category: onBudget
-            case .runningBalance: isTouch ? !isAllAccounts : settings[column]?.visible ?? false
             case .cleared: isReconciling || (settings[.cleared]?.visible ?? false)
             case .frequency: false
             default: column.canDisable ? settings[column]?.visible ?? false : true
@@ -176,8 +175,8 @@ public final class RegisterViewModel {
     public var columnSettings: RegisterColumnSettings { viewState.columnSettings }
 
     public var columnMenuItems: [RegisterColumnMenuItem] {
-        let order: [RegisterColumn] = [.cleared, .memo, .runningBalance]
-        return order.filter { !((isAllAccounts || isTouch) && $0 == .runningBalance) }.map { column in
+        let order: [RegisterColumn] = [.cleared, .memo]
+        return order.map { column in
             RegisterColumnMenuItem(
                 column: column, label: column.menuLabel,
                 isChecked: viewState.columnSettings[column]?.visible ?? false)
@@ -405,7 +404,6 @@ public final class RegisterViewModel {
         var expandedSplits: Set<String>
         var searchFilter: RegisterSearchFilter?
         var dateFilter: DateFilterSelection?
-        var needsRunningBalance: Bool
         var editingId: String?
         var today: DateWithoutTime
         var reconcileThrough: DateWithoutTime?
@@ -437,7 +435,6 @@ public final class RegisterViewModel {
         let inputs = DerivedInputs(
             budget: store.budget, key: key, sort: state.sort, isShowingReconciled: state.isShowingReconciled,
             expandedSplits: state.expandedSplits, searchFilter: state.searchFilter, dateFilter: state.dateFilter,
-            needsRunningBalance: visibleColumns.contains(.runningBalance),
             editingId: grid.editingId, today: today(),
             reconcileThrough: state.reconciliation?.statementDate
         )
@@ -483,9 +480,7 @@ public final class RegisterViewModel {
             return !(unfiltered && !state.isShowingReconciled && transaction.cleared == .reconciled)
         }
         let showsMonths = inputs.sort.column == .date
-        var builder = RegisterRowBuilder(
-            lookup: lookup,
-            runningBalances: inputs.needsRunningBalance ? budget.runningBalances(forAccount: inputs.key) : [:])
+        var builder = RegisterRowBuilder(lookup: lookup)
         builder.showsYear = !showsMonths
         builder.omitsYear = isTouch ? inputs.today.year : nil
         let formatter = builder.formatter

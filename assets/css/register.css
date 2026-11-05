@@ -25,14 +25,12 @@
   --reg-payee: 22%;
   --reg-cat: 20%;
   --reg-amount: 8rem;
-  --reg-run: 0px;
   --reg-status: 2.75rem;
   --reg-head-h: 2.25rem;
   --reg-month-h: 1.75rem;
 }
 @media (pointer: coarse) { .app-reg { --reg-status: 3.5rem; --reg-head-h: 2.75rem; } }
 .app-reg-all { --reg-konto: 9rem; --reg-payee: 18%; --reg-cat: 18%; }
-.app-reg-running { --reg-run: 7rem; }
 .app-reg.app-reg-nocat { --reg-cat: 0px; }
 .app-reg .app-col-date { width: var(--reg-date); }
 .app-reg .app-col-konto { width: var(--reg-konto); }
@@ -40,7 +38,6 @@
 .app-reg .app-col-cat { width: var(--reg-cat); }
 .app-reg .app-col-memo { width: auto; }
 .app-reg .app-col-amount { width: var(--reg-amount); }
-.app-reg .app-col-run { width: var(--reg-run); }
 .app-reg .app-col-status { width: var(--reg-status); }
 @container register (width < 78rem) {
   .app-reg-all { --reg-konto: 7rem; }
@@ -119,7 +116,7 @@
   grid-template-columns:
     [date] var(--reg-date) [konto] var(--reg-konto) [payee] var(--grid-payee, var(--reg-payee))
     [cat] var(--reg-cat) [memo] var(--grid-memo, minmax(0, 1fr)) [amount] var(--reg-amount)
-    [run] var(--reg-run) [status] var(--reg-status) [end];
+    [status] var(--reg-status) [end];
   padding-block: .125rem;
 }
 .app-edit-grid > * { grid-row: 1; min-width: 0; padding-inline: .5rem; white-space: nowrap; }

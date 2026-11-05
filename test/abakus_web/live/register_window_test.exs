@@ -5,8 +5,8 @@ defmodule AbakusWeb.RegisterWindowTest do
   import Abakus.DomainFixtures
   import Ecto.Query, only: [from: 2]
 
-  alias Abakus.{Ledger, Money, Repo}
   alias Abakus.Ledger.Transaction
+  alias Abakus.Repo
 
   setup :register_and_log_in_user
 
@@ -41,7 +41,22 @@ defmodule AbakusWeb.RegisterWindowTest do
     refute has_element?(view, "#register-more")
   end
 
-  test "toggling the running balance keeps the loaded rows and the open editor", c do
+  test "saving the account keeps the loaded rows and the selection", c do
+    ids = transactions(c.giro, 150)
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+    load_more(view)
+
+    for id <- [hd(ids), List.last(ids)],
+        do: view |> element("#tx-#{id} td.app-payee") |> render_click(%{"toggle" => "true"})
+
+    save_account(view, c.giro)
+
+    assert shown?(view, List.last(ids))
+    assert has_element?(view, "#bulk", "2 Buchungen")
+    assert has_element?(view, "tbody#tx-#{List.last(ids)}-rows.is-selected")
+  end
+
+  test "saving the account keeps the loaded rows and the open editor", c do
     ids = transactions(c.giro, 150)
     {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
     load_more(view)
@@ -50,38 +65,10 @@ defmodule AbakusWeb.RegisterWindowTest do
     view |> element("#tx-#{List.last(ids)} td.app-payee") |> render_click()
     assert has_element?(view, "#tx-editor")
 
-    view |> element("#running-toggle") |> render_click()
+    save_account(view, c.giro)
+
     assert has_element?(view, "#tx-editor")
     assert shown?(view, Enum.at(ids, 148))
-  end
-
-  test "the running balance counts on across loaded pages", c do
-    ids = transactions(c.giro, 250)
-    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?running=1")
-
-    load_more(view)
-
-    # Each transaction is -1,00 € times its place, so the balance after the 150th leaves out the 149 newer ones.
-    balance = -100 * (Enum.sum(1..250) - Enum.sum(1..149))
-    assert has_element?(view, "#tx-#{Enum.at(ids, 149)} .app-run", Money.amount(balance))
-  end
-
-  test "the running balance shows beside a match proposal", c do
-    [newest | _older] = transactions(c.giro, 3)
-
-    {:ok, proposal} =
-      Ledger.create_transaction(budget_scope(), %{
-        account_id: c.giro.id,
-        date: ~D[2026-10-14],
-        amount: -100,
-        source: :bank,
-        matched_transaction_id: newest
-      })
-
-    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?running=1")
-
-    assert has_element?(view, "#proposal-#{proposal.id}")
-    assert has_element?(view, "#tx-#{newest} .app-run", Money.amount(-600))
   end
 
   test "a view with more than 100 shows its newest 100 first", c do
@@ -210,6 +197,13 @@ defmodule AbakusWeb.RegisterWindowTest do
 
   defp shown?(view, id),
     do: has_element?(view, "#tx-#{id}") and has_element?(view, "#tx-card-#{id}")
+
+  defp save_account(view, account) do
+    view |> element("#edit-account") |> render_click()
+    view |> form("#account-form", account: %{name: "Giro 2"}) |> render_submit()
+    assert_patch(view, ~p"/budget/accounts/#{account}")
+    assert has_element?(view, "#register-title", "Giro 2")
+  end
 
   defp load_more(view), do: view |> element("#register-more") |> render_hook("load_more", %{})
 end

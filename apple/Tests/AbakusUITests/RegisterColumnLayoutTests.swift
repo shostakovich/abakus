@@ -89,12 +89,10 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
 
     @Test func onlyTheMenuColumnsCanBeHidden() {
         let hideable = RegisterColumn.allCases.filter(\.canDisable)
-        #expect(hideable == [.memo, .runningBalance, .cleared])
-        #expect(RegisterColumnSettings()[.runningBalance]?.visible == false)
+        #expect(hideable == [.memo, .cleared])
     }
 
-    @Test func onlyTheRunningBalanceDoesNotSort() {
-        #expect(RegisterColumn.allCases.filter { !$0.isSortable } == [.runningBalance])
+    @Test func theHeadersNameTheirColumns() {
         #expect(RegisterColumn.date.header == .text("Datum"))
         #expect(RegisterColumn.cleared.header == .symbol("checkmark.circle", label: "Status"))
     }

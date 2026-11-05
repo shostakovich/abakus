@@ -193,7 +193,7 @@ func render(_ options: SnapshotOptions) throws {
         budget = try BudgetReference.budget(testEdits: options.testEdits)
         store = BudgetStore(budget: budget, today: { BudgetReference.today })
     } else {
-        budget = DemoBudget.make(today: .today())
+        budget = SampleBudget.make(today: .today())
         store = BudgetStore(budget: budget)
     }
     let model = AppModel(

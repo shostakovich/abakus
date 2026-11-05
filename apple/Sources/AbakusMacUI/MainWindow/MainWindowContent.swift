@@ -40,14 +40,6 @@ public struct MainWindowContent: View {
         .overlayPreferenceValue(SidebarRowAnchorKey.self) { anchors in
             AccountEditLayer(controller: model.accounts, anchors: anchors)
         }
-        .overlayPreferenceValue(SidebarGroupAnchorKey.self) { anchors in
-            if model.register.reconciliation.showsReconcileHelp {
-                ReconcileHelpLayer(reconciliation: model.register.reconciliation, anchor: anchors[.budgetAccounts])
-            }
-        }
-        .onChange(of: model.register.reconciliation.showsReconcileHelp) { _, shows in
-            if shows { model.sidebar.reveal(.budget) }
-        }
         .overlayPreferenceValue(BudgetPopupAnchorKey.self) { anchor in
             if model.navigation.selection == .budget {
                 BudgetCalloutLayer(model: model.budget, anchor: anchor)

@@ -2,14 +2,6 @@ import AbakusCore
 import AbakusUI
 import SwiftUI
 
-struct SidebarGroupAnchorKey: PreferenceKey {
-    static let defaultValue: [SidebarGroup: Anchor<CGRect>] = [:]
-
-    static func reduce(value: inout [SidebarGroup: Anchor<CGRect>], nextValue: () -> [SidebarGroup: Anchor<CGRect>]) {
-        value.merge(nextValue()) { $1 }
-    }
-}
-
 public struct SidebarView: View {
     let model: SidebarViewModel
     var onAddAccount: () -> Void = {}
@@ -49,7 +41,6 @@ public struct SidebarView: View {
                         .onMove { model.moveAccount(in: panel.group, from: $0, to: $1) }
                     } header: {
                         SidebarGroupHeader(panel: panel, showsTotal: model.isFullView)
-                            .anchorPreference(key: SidebarGroupAnchorKey.self, value: .bounds) { [panel.group: $0] }
                     }
                 }
             }

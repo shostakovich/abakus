@@ -55,12 +55,6 @@ import Testing
         model.panelSize = CGSize(width: 776, height: 600)
         #expect(model.editor == nil)
         #expect(store.commands == [.setAssigned(month: day("2026-12-01"), categoryId: F.kino, amount: 8)])
-        model.panelSize = CGSize(width: 1652, height: 600)
-        model.beginEdit(BudgetCellID(month: day("2027-02-01"), categoryId: F.kino))
-        model.beginColumnResize(atX: 0)
-        model.columnResizeMoved(toX: 190)
-        #expect(model.shownMonths.count == 4)
-        #expect(model.editor == nil)
     }
 
     @Test func escapeLeavesWithoutStoring() {

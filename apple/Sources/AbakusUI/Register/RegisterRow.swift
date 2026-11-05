@@ -39,7 +39,6 @@ public struct RegisterRow: Identifiable, Hashable, Sendable {
     public var memo = ""
     /// The signed Betrag, "−88,12" or "+3.180,00".
     public var amountText = ""
-    public var runningBalance = ""
     public var cleared = ClearedStatus.uncleared
     public var textStyle = RegisterTextStyle.plain
     public var amount: Decimal = 0
@@ -75,7 +74,6 @@ struct RegisterRowBuilder {
 
     let lookup: BudgetLookup
     let formatter: BudgetFormatter
-    let runningBalances: [String: Decimal]
     /// Under month headings a date leaves out its year.
     var showsYear = true
     /// Touch screens write "24.10." for this year and "24.10.2025" for another, never a two-digit year.
@@ -83,10 +81,9 @@ struct RegisterRowBuilder {
 
     var budget: Budget { lookup.budget }
 
-    init(lookup: BudgetLookup, runningBalances: [String: Decimal] = [:]) {
+    init(lookup: BudgetLookup) {
         self.lookup = lookup
         self.formatter = BudgetFormatter(metaData: lookup.budget.budgetMetaData)
-        self.runningBalances = runningBalances
     }
 
     /// The edited record stays collapsed: its edit row shows the split lines. A heading precedes each run of records
@@ -117,7 +114,6 @@ struct RegisterRowBuilder {
         row.errorMessage = errorState.message
         row.categoryStyle = Self.categoryStyle(errorState.level)
         if needsCategory(transaction, level: errorState.level) { showNeedsCategory(&row) }
-        row.runningBalance = runningBalances[transaction.id].map(formatter.currencyNoSymbol) ?? ""
         row.cleared = transaction.cleared
         row.textStyle = errorState.level == .forReview ? .bold : .plain
         return row
