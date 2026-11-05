@@ -57,6 +57,17 @@ A negative available; the category starts the next month at zero and Ready to As
 "Überzogen".
 _Avoid_: Deficit, borrowing
 
+**Cover**:
+Moving assigned money into an overspent category in the same month, from Ready to Assign or a category with money:
+as much as the source holds, up to the overspending. UI "Decken".
+_Avoid_: Fill (that is a target's), transfer (that is between accounts)
+
+**Undo**:
+Taking back right after it what covering, filling the underfunded or a target's Zuweisen changed in the month:
+each category touched gets back the difference the action made to its assignment, so later changes stay. UI
+"Rückgängig".
+_Avoid_: Revert, restore
+
 **Uncovered month**:
 A later month whose Ready to Assign is below zero, seen from an earlier month, which warns about it; assignments
 are never refused for it. UI "nicht gedeckt".
