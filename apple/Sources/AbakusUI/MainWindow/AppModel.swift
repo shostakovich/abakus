@@ -2,10 +2,6 @@ import AbakusCore
 import Foundation
 import Observation
 
-enum ClockChoice: Hashable, Sendable {
-    case ignore, enterDue
-}
-
 enum SaveErrorChoice: Hashable, Sendable {
     case retry, close
 }
@@ -23,7 +19,6 @@ public final class AppModel {
     public internal(set) var payeeSettings: PayeeSettingsModel?
     public let sync: BudgetSync?
     public let syncSettings: SyncSettingsModel?
-    public let device: DeviceKind
     @ObservationIgnored var lastUsedPayeeId: String?
     @ObservationIgnored let preferences: (any SettingsStorage)?
     @ObservationIgnored let settings: BudgetSettings?
@@ -38,7 +33,6 @@ public final class AppModel {
     ) {
         self.store = store
         self.sync = sync
-        self.device = device
         syncSettings = sync.map { SyncSettingsModel(sync: $0, device: device) }
         let settings = defaults.map { BudgetSettings(storage: $0, store: store) }
         self.settings = settings
@@ -124,31 +118,12 @@ public final class AppModel {
         dialogs.presented + [saveErrorDialog].compactMap(\.self)
     }
 
-    /// A new day enters due schedules; a jump of several days asks first.
     public func dateChecked(today: DateWithoutTime) {
         let days = lastDate.days(until: today)
         lastDate = today
-        if days == 1 {
-            store.enterDueScheduledTransactions(today: today)
-            register.endEditsOvertakenByChanges()
-        } else if days > 1 {
-            dialogs.dismiss(ownedBy: self)
-            dialogs.ask(
-                TaskDialog<ClockChoice>(
-                    instruction: "Stimmt die Uhr \(device.yourGenitive)?",
-                    content: "Das Datum hat sich gerade um mehr als einen Tag geändert. Sollen fällige geplante "
-                        + "Buchungen für das neue Datum angelegt werden?",
-                    buttons: [
-                        .init(.ignore, title: "Nein, Datum ignorieren"),
-                        .init(.enterDue, title: "Ja, das Datum stimmt", isDefault: true),
-                    ],
-                    dismissal: .enterDue), owner: self
-            ) { [weak self] answer in
-                guard let self, answer.choice == .enterDue else { return }
-                store.enterDueScheduledTransactions(today: today)
-                register.endEditsOvertakenByChanges()
-            }
-        }
+        guard days > 0 else { return }
+        store.enterDueScheduledTransactions(today: today)
+        register.endEditsOvertakenByChanges()
     }
 
     public func runDateTimer() async {

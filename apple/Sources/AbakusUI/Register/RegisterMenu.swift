@@ -70,7 +70,6 @@ public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
 public enum RegisterAnchorID: Hashable, Sendable {
     case viewMenu, columnTab, schedulerTitle, schedulerColumnTab
     case error(String)
-    case balance(String)
 }
 
 public struct RegisterMenuRequest: Identifiable, Equatable, Sendable {

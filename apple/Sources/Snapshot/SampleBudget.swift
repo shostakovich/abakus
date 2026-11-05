@@ -1,7 +1,8 @@
+import AbakusCore
 import Foundation
 
-public enum DemoBudget {
-    public static let name = "Demo-Budget"
+enum SampleBudget {
+    static let name = "Beispiel"
 
     static let categories: [(master: String, subs: [String])] = [
         ("🏠 Wohnen", ["🏠 Miete", "💡 Strom", "📱 Handy"]),
@@ -10,7 +11,7 @@ public enum DemoBudget {
         ("🎯 Sparziele", ["🏖️ Urlaub", "📈 ETF-Sparplan"]),
     ]
 
-    public static func make(today: DateWithoutTime) -> Budget {
+    static func make(today: DateWithoutTime) -> Budget {
         var builder = Builder(today: today)
         builder.build()
         return builder.budget
@@ -20,7 +21,7 @@ public enum DemoBudget {
         let today: DateWithoutTime
         let start: DateWithoutTime
         var budget = Budget(
-            budgetName: DemoBudget.name, categoryGroups: DefaultCategories.categoryGroups(DemoBudget.categories))
+            budgetName: SampleBudget.name, categoryGroups: DefaultCategories.categoryGroups(SampleBudget.categories))
         var ids: [String: String] = [:]
         let scheduledSpotifyId = EntityID.createUID()
 
@@ -311,7 +312,7 @@ public enum DemoBudget {
             do {
                 try budget.apply(command)
             } catch {
-                assertionFailure("Demo budget command failed: \(error)")
+                assertionFailure("Sample budget command failed: \(error)")
             }
         }
     }

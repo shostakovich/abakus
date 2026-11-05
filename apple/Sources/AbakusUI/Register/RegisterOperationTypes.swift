@@ -4,14 +4,12 @@ import Foundation
 public enum RegisterPopup: Equatable, Sendable {
     case needsCategory(rowId: String)
     case removeCategory(rowId: String)
-    case runningBalance(rowId: String)
     case timeframe
     case scheduledCallout(RegisterScheduledCallout)
 
     public var anchor: RegisterAnchorID {
         switch self {
         case .needsCategory(let id), .removeCategory(let id): .error(id)
-        case .runningBalance(let id): .balance(id)
         case .timeframe: .viewMenu
         case .scheduledCallout: .schedulerTitle
         }
@@ -19,7 +17,7 @@ public enum RegisterPopup: Equatable, Sendable {
 
     public var rowId: String? {
         switch self {
-        case .needsCategory(let id), .removeCategory(let id), .runningBalance(let id): id
+        case .needsCategory(let id), .removeCategory(let id): id
         case .timeframe, .scheduledCallout: nil
         }
     }

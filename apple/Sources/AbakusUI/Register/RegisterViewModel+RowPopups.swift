@@ -1,16 +1,6 @@
 import AbakusCore
 import Foundation
 
-public struct RunningBalanceInfo: Hashable, Sendable {
-    public struct Line: Hashable, Sendable {
-        public var amount: String
-        public var caption: String
-    }
-
-    public var title: String
-    public var lines: [Line]
-}
-
 public struct StatusPopupOption: Identifiable, Hashable, Sendable {
     public enum Command: Hashable, Sendable { case removeCategory }
 
@@ -84,34 +74,5 @@ extension RegisterViewModel {
         let ids = statusPopupTransactions.map(\.id)
         popup = nil
         perform(.fillMissingCategory(ids, categoryId: categoryId))
-    }
-
-    public func runningBalanceHovered(_ row: RegisterRow, inside: Bool) {
-        if inside {
-            guard popup == nil, row.transactionId != editingTransactionId, !row.isSubtransaction else { return }
-            popup = .runningBalance(rowId: row.id)
-        } else if popup == .runningBalance(rowId: row.id) {
-            popup = nil
-        }
-    }
-
-    public func runningBalanceInfo(for rowId: String) -> RunningBalanceInfo? {
-        guard let transaction = store.budget.transaction(withId: rowId) else { return nil }
-        let balances = store.budget.balances(forAccount: accountKey ?? "", through: transaction.date)
-        let date = formatter.dateLong(transaction.date)
-        let uncleared = balances.uncleared
-        let working = balances.working
-        return RunningBalanceInfo(
-            title: "Saldo bis \(date):",
-            lines: [
-                .init(
-                    amount: formatter.currency(Amount.round(working - uncleared)),
-                    caption: "Gebucht (der Saldo der Bank am \(date))"),
-                .init(
-                    amount: formatter.currency(uncleared),
-                    caption: "Vorgemerkt (Buchungen, die die Bank noch nicht kennt)"),
-                .init(
-                    amount: formatter.currency(working), caption: "Arbeitssaldo (das Geld, das am \(date) da war)"),
-            ])
     }
 }

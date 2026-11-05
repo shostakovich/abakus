@@ -82,11 +82,10 @@ import Testing
         #expect(imports.model.selectedTransactionIds == [second])
     }
 
-    @Test func theTableAddsTheMemoAndBalanceColumnsButNotTheStatusToAnsicht() {
+    @Test func theTableAddsTheMemoButNotTheStatusToAnsicht() {
         let imports = Imports()
         let menu = imports.model.touchViewMenu(showsColumns: true)
         #expect(menu.item(titled: "Memo") != nil)
-        #expect(menu.item(titled: "Laufender Saldo") != nil)
         #expect(menu.item(titled: "Status") == nil)
         #expect(imports.model.touchViewMenu(showsColumns: false).item(titled: "Memo") == nil)
     }

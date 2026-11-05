@@ -29,7 +29,7 @@ public struct SyncTable: Sendable {
         SyncTable(
             "accounts",
             [
-                text("name"), text("kind"), boolean("shared_expenses", false), boolean("closed", false), text("note"),
+                text("name"), text("kind"), boolean("shared_expenses", false), boolean("closed", false),
                 integer("position", 0), text("last_reconciled_at"),
             ]),
         SyncTable(
@@ -44,14 +44,13 @@ public struct SyncTable: Sendable {
         SyncTable(
             "category_groups",
             [
-                text("name"), boolean("hidden", false), boolean("internal", false), integer("position", 0),
-                text("note"), text("deleted_at"),
+                text("name"), boolean("internal", false), integer("position", 0), text("deleted_at"),
             ]),
         SyncTable(
             "categories",
             [
-                text("category_group_id"), text("name"), boolean("hidden", false), boolean("internal", false),
-                integer("position", 0), text("note"), text("deleted_at"), text("successor_id"),
+                text("category_group_id"), text("name"), boolean("internal", false), integer("position", 0),
+                text("deleted_at"), text("successor_id"),
             ]),
         SyncTable("assignments", [text("category_id"), text("month"), integer("amount"), text("deleted_at")]),
         SyncTable(

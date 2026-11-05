@@ -403,9 +403,7 @@ extension RegisterViewModel {
         let settings = columnSettings
         for account in store.budget.accounts {
             var state = viewStates[account.id] ?? RegisterAccountViewState()
-            let runningBalance = state.columnSettings[.runningBalance]
             state.columnSettings = settings
-            if isAllAccounts { state.columnSettings[.runningBalance] = runningBalance }
             viewStates[account.id] = state
         }
     }
@@ -440,7 +438,7 @@ extension RegisterViewModel {
 
     /// Keys are ignored while a modal window or any popup is on screen.
     var acceptsRegisterKeys: Bool {
-        !isBlockedByModal && popup == nil && menuRequest == nil && !reconciliation.showsReconcileHelp
+        !isBlockedByModal && popup == nil && menuRequest == nil
     }
 
     /// Delete, Backspace and Cmd+Delete: ignored in the search box and while a row is edited.

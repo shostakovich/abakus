@@ -18,13 +18,4 @@ import Testing
             rows.first { $0.id == reconciled }?.clearedTooltip
                 == "Abgeglichen: Die Bank kennt diese Buchung, und sie ist mit dem Banksaldo abgeglichen.")
     }
-
-    @Test func theReconcileTooltipOnlyExplainsAllAccounts() {
-        let fixture = RegisterFixture()
-        let giro = fixture.model()
-        let allAccounts = fixture.model(selection: .allAccounts)
-        #expect(giro.reconciliation.reconcileTooltip == nil)
-        #expect(
-            allAccounts.reconciliation.reconcileTooltip == "Wähle in der Seitenleiste ein Konto zum Abgleichen.")
-    }
 }

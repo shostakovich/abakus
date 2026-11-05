@@ -28,7 +28,7 @@ struct RegisterHeaderCell: View {
     let action: () -> Void
 
     var body: some View {
-        let isSorted = frame.column.isSortable && sort.column == frame.column
+        let isSorted = sort.column == frame.column
         Button(action: action) {
             label(isSorted: isSorted)
                 .padding(.horizontal, RegisterGridStyle.cellInset)

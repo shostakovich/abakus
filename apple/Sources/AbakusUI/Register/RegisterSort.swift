@@ -13,8 +13,7 @@ public struct RegisterSortOrder: Hashable, Sendable {
     }
 
     public func clicked(_ column: RegisterColumn) -> RegisterSortOrder {
-        guard column.isSortable else { return self }
-        return column == self.column
+        column == self.column
             ? RegisterSortOrder(column: column, ascending: !ascending)
             : RegisterSortOrder(column: column, ascending: true)
     }
@@ -37,7 +36,6 @@ struct RegisterSortKeys {
         case .amount: Self.order(lhs.amount, rhs.amount)
         case .cleared: Self.order(rhs.cleared.integerValue, lhs.cleared.integerValue)
         case .frequency: Self.order(frequency, other.frequency)
-        case .runningBalance: .orderedSame
         }
     }
 

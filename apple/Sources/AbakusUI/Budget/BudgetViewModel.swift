@@ -20,7 +20,6 @@ public final class BudgetViewModel {
     @ObservationIgnored let settings: BudgetViewSettings
 
     public internal(set) var firstMonth: DateWithoutTime
-    public internal(set) var categoryWidth: CGFloat
     public internal(set) var isHeaderExpanded: Bool
     public var headerProgress: CGFloat
     public var panelSize = CGSize.zero {
@@ -50,7 +49,6 @@ public final class BudgetViewModel {
     @ObservationIgnored public var onShowAllAccountsSearch: @MainActor (String) -> Void = { _ in }
     @ObservationIgnored public var onShowApprovals: @MainActor () -> Void = {}
     @ObservationIgnored var hasPlacedOpeningMonth = false
-    @ObservationIgnored package var resizeOrigin: CGFloat?
     @ObservationIgnored var isAppModalOpen: () -> Bool = { false }
     @ObservationIgnored private var cache: (inputs: SheetInputs, sheet: BudgetSheet, groups: [BudgetGroup])?
     @ObservationIgnored private var formatterCache: (metaData: BudgetMetaData, formatter: BudgetFormatter)?
@@ -62,7 +60,6 @@ public final class BudgetViewModel {
         self.dialogs = dialogs
         self.settings = settings
         firstMonth = settings.lastSelectedMonth ?? store.today().firstOfMonth
-        categoryWidth = settings.categoryColumnWidth
         isHeaderExpanded = settings.isHeaderExpanded
         headerProgress = settings.isHeaderExpanded ? 1 : 0
     }
@@ -104,7 +101,7 @@ public final class BudgetViewModel {
     }
 
     public var shownCategoryWidth: CGFloat {
-        min(max(categoryWidth, fittedCategoryWidth), BudgetMetrics.categoryWidthRange.upperBound)
+        max(BudgetMetrics.categoryWidth, fittedCategoryWidth)
     }
 
     /// Fits every category name at rest, up to 220 pt.
@@ -156,11 +153,6 @@ public final class BudgetViewModel {
 
     public func month(_ date: DateWithoutTime) -> BudgetMonth? {
         sheet.month(date)
-    }
-
-    public var showsEmptyOutflowHelp: Bool {
-        get { settings.showsEmptyOutflowHelp }
-        set { settings.showsEmptyOutflowHelp = newValue }
     }
 
     private func endEditOutsideShownMonths() {
@@ -242,25 +234,6 @@ public final class BudgetViewModel {
 
     public var headerToggleToolTip: String {
         isHeaderExpanded ? "Rechnung ausblenden" : "Rechnung zeigen"
-    }
-
-    public func beginColumnResize(atX x: CGFloat) {
-        resizeOrigin = x
-    }
-
-    public func columnResizeMoved(toX x: CGFloat) {
-        guard let origin = resizeOrigin else { return }
-        let lower = max(BudgetMetrics.categoryWidthRange.lowerBound, fittedCategoryWidth)
-        let upper = BudgetMetrics.categoryWidthRange.upperBound
-        categoryWidth = min(max(shownCategoryWidth + x - origin, lower), upper)
-        if categoryWidth > lower && categoryWidth < upper { resizeOrigin = x }
-        endEditOutsideShownMonths()
-    }
-
-    public func endColumnResize() {
-        guard resizeOrigin != nil else { return }
-        resizeOrigin = nil
-        settings.categoryColumnWidth = categoryWidth
     }
 
     public func rowHovered(_ rowId: String, _ inside: Bool) {
@@ -358,21 +331,13 @@ public final class BudgetViewModel {
     }
 
     public func subOutflowsClicked(month: DateWithoutTime, categoryId: String) {
-        guard let figures = self.month(month)?.category(categoryId) else { return }
-        if figures.hasTransactions {
-            present(.outflowSummary(month: month, source: .category(categoryId)))
-        } else if showsEmptyOutflowHelp {
-            present(.outflowHelp(month: month, categoryId: categoryId))
-        }
+        guard self.month(month)?.category(categoryId)?.hasTransactions == true else { return }
+        present(.outflowSummary(month: month, source: .category(categoryId)))
     }
 
     public func masterOutflowsClicked(month: DateWithoutTime, masterId: String) {
-        guard let figures = self.month(month)?.master(masterId) else { return }
-        if figures.hasTransactions {
-            present(.outflowSummary(month: month, source: .masterCategory(masterId)))
-        } else if showsEmptyOutflowHelp {
-            present(.outflowHelp(month: month, categoryId: masterId))
-        }
+        guard self.month(month)?.master(masterId)?.hasTransactions == true else { return }
+        present(.outflowSummary(month: month, source: .masterCategory(masterId)))
     }
 
     public func balanceClicked(month: DateWithoutTime, categoryId: String) {

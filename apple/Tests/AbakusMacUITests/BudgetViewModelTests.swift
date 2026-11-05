@@ -127,49 +127,17 @@ import Testing
         #expect(ahead.layout.headerHeight == 170 + 2 * BudgetMetrics.headerLineHeight)
     }
 
-    @Test func theCategoryColumnResizesBetween190And380() {
-        let storage = MemorySettingsStorage()
-        let model = F().model(storage: storage).model
-        model.beginColumnResize(atX: 100)
-        model.columnResizeMoved(toX: 150)
-        #expect(model.categoryWidth == 240)
-        model.columnResizeMoved(toX: 400)
-        #expect(model.categoryWidth == 380)
-        model.columnResizeMoved(toX: 160)
-        #expect(model.categoryWidth == 380)
-        model.columnResizeMoved(toX: 140)
-        #expect(model.categoryWidth == 370)
-        model.columnResizeMoved(toX: -200)
-        #expect(model.categoryWidth == 190)
-        model.columnResizeMoved(toX: 150)
-        #expect(model.categoryWidth == 200)
-        model.endColumnResize()
-        #expect(F().model(storage: storage).model.categoryWidth == 200)
-    }
-
     @Test func theCategoryColumnFitsTheLongestNameUpTo220() throws {
         var fixture = F()
         let index = try #require(fixture.budget.categoryGroups.firstIndex { $0.id == F.sparen })
         fixture.budget.categoryGroups[index].name = "Regelmäßige Ausgaben"
         let model = fixture.model().model
         let fitted = 30 + ThemeFont.tableEmphasized.width(of: "Regelmäßige Ausgaben") + 8
-        #expect(model.categoryWidth == 190)
+        #expect(F().model().model.shownCategoryWidth == 190)
         #expect(model.shownCategoryWidth == fitted.rounded(.up))
         #expect(model.layout.categoryWidth == model.shownCategoryWidth)
-        model.beginColumnResize(atX: 100)
-        model.columnResizeMoved(toX: 50)
-        #expect(model.categoryWidth == fitted.rounded(.up))
-        model.columnResizeMoved(toX: 130)
-        #expect(model.categoryWidth == fitted.rounded(.up) + 30)
         fixture.budget.categoryGroups[index].name = String(repeating: "Regelmäßige Ausgaben ", count: 3)
         #expect(fixture.model().model.shownCategoryWidth == 220)
-    }
-
-    @Test func withoutAStoredWidthTheColumnIs190() {
-        let storage = MemorySettingsStorage()
-        #expect(F().model(storage: storage).model.categoryWidth == 190)
-        storage.set("500", forKey: "categoryColumnWidth|Budget")
-        #expect(F().model(storage: storage).model.categoryWidth == 380)
     }
 
     @Test func rowsListUncategorizedAndTheMasters() throws {
@@ -245,7 +213,7 @@ import Testing
         #expect(model.scrollOffset == 0)
     }
 
-    @Test func outflowClicksAskForTheSummaryOrTheHelp() {
+    @Test func outflowClicksShowTheSummaryOfWhatWasSpent() {
         var fixture = F()
         fixture.spend(30, F.lebensmittel, on: "2026-10-03")
         let model = fixture.model().model
@@ -253,8 +221,9 @@ import Testing
         model.subOutflowsClicked(month: october, categoryId: F.lebensmittel)
         #expect(model.presentedPopup == .outflowSummary(month: october, source: .category(F.lebensmittel)))
         #expect(model.popupAnchor == .outflows(october, F.lebensmittel))
+        model.dismissPopup()
         model.subOutflowsClicked(month: october, categoryId: F.kleidung)
-        #expect(model.presentedPopup == .outflowHelp(month: october, categoryId: F.kleidung))
+        #expect(model.presentedPopup == nil)
         model.masterOutflowsClicked(month: october, masterId: F.alltag)
         #expect(model.presentedPopup == .outflowSummary(month: october, source: .masterCategory(F.alltag)))
         model.dismissPopup()
@@ -264,20 +233,16 @@ import Testing
         #expect(model.presentedPopup == nil)
         model.totalsOutflowsClicked(month: october)
         #expect(model.presentedPopup == .outflowSummary(month: october, source: .allOutflows))
-        model.showsEmptyOutflowHelp = false
-        model.dismissPopup()
-        model.subOutflowsClicked(month: october, categoryId: F.kleidung)
-        #expect(model.presentedPopup == nil)
     }
 
     @Test func presentingAPopupCommitsTheEditedCell() {
         let (model, store) = F().model()
         model.beginEdit(model.cell(F.kino))
         model.cellTextChanged("12")
-        model.present(.incomeSummary(month: day("2026-10-01")))
+        model.present(.outflowSummary(month: day("2026-10-01"), source: .allOutflows))
         #expect(model.editor == nil)
         #expect(store.commands == [.setAssigned(month: day("2026-10-01"), categoryId: F.kino, amount: 12)])
-        #expect(model.popupAnchor == .incomeLine(day("2026-10-01")))
+        #expect(model.popupAnchor == .totalsOutflows(day("2026-10-01")))
     }
 
     @Test func everyPopupNamesTheControlItPointsAt() {
@@ -285,7 +250,7 @@ import Testing
         let anchors: [(BudgetPopup, BudgetPopupAnchor)] = [
             (.monthQuickBudget(month: october), .monthQuickBudget(october)),
             (.editCategory(categoryId: F.kino), .categoryRow(F.kino)),
-            (.incomeSummary(month: october), .incomeLine(october)),
+            (.outflowSummary(month: october, source: .allOutflows), .totalsOutflows(october)),
             (.outflowSummary(month: october, source: .masterCategory(F.alltag)), .outflows(october, F.alltag)),
         ]
         for (popup, anchor) in anchors {
@@ -297,7 +262,7 @@ import Testing
         let (model, store) = F().model()
         model.beginEdit(model.cell(F.kino))
         model.cellTextChanged("5")
-        model.present(.incomeSummary(month: day("2026-10-01")))
+        model.present(.outflowSummary(month: day("2026-10-01"), source: .allOutflows))
         model.beginEdit(model.cell(F.kino))
         model.cellTextChanged("6")
         model.leave()
@@ -368,25 +333,18 @@ import Testing
         let first = BudgetViewSettings(budget: BudgetSettings(storage: storage, budgetKey: "A"), app: storage)
         let second = BudgetViewSettings(budget: BudgetSettings(storage: storage, budgetKey: "B"), app: storage)
         first.lastSelectedMonth = day("2023-05-01")
-        first.categoryColumnWidth = 250
-        first.showsEmptyOutflowHelp = false
         first.opensOnBudget = true
         first.isHeaderExpanded = false
         #expect(storage.string(forKey: "lastSelectedMonth|A") == "2023-05")
-        #expect(storage.string(forKey: "showEmptyOutflowTooltip|A") == "false")
         #expect(storage.string(forKey: "lastTabShown|A") == "Budget")
         #expect(second.lastSelectedMonth == nil)
-        #expect(second.categoryColumnWidth == 190)
-        #expect(second.showsEmptyOutflowHelp)
         #expect(!second.opensOnBudget)
         #expect(!second.isHeaderExpanded)
     }
 
     @Test func withoutStorageTheSettingsLastForTheSession() {
         let settings = BudgetViewSettings(budget: nil, app: nil)
-        settings.categoryColumnWidth = 300
         settings.isHeaderExpanded = false
-        #expect(settings.categoryColumnWidth == 300)
         #expect(!settings.isHeaderExpanded)
         #expect(settings.lastSelectedMonth == nil)
     }

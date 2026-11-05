@@ -6,10 +6,33 @@ import Testing
 
 private let today = DateWithoutTime(year: 2026, month: 10, day: 23)
 
+private let sidebarBudget: Budget = {
+    var budget = Budget(budgetName: "Sidebar")
+    let accounts: [(String, AccountKind, Decimal)] = [
+        ("Girokonto", .checking, 2450), ("Tagesgeld", .savings, 5000), ("Kreditkarte", .checking, -1240),
+        ("Bargeld", .cash, 80), ("Depot", .tracking, 12500), ("Bausparvertrag", .tracking, 4200),
+        ("Altes Sparbuch", .savings, 0),
+    ]
+    for (name, kind, balance) in accounts {
+        try! budget.apply(
+            .addAccount(NewAccount(name: name, kind: kind, startingBalance: balance, startDate: today)))
+    }
+    let giro = budget.account(named: "Girokonto")!.id
+    let karte = budget.account(named: "Kreditkarte")!.id
+    let groceries = budget.categoryGroups.first { !$0.isInternal }!.categories[0].id
+    try! budget.apply(.addTransaction(Transaction(accountId: giro, date: today, amount: -12)))
+    let scheduled = Transaction(
+        accountId: karte, date: today, categoryId: groceries, amount: -11, approved: false, source: .scheduled)
+    try! budget.apply(.addTransaction(scheduled))
+    var closed = budget.account(named: "Altes Sparbuch")!
+    closed.closed = true
+    try! budget.apply(.editAccount(closed))
+    return budget
+}()
+
 @MainActor
 private func makeSidebar(
-    selection: SidebarSelection? = nil, defaults: (any SettingsStorage)? = nil,
-    budget: Budget = DemoBudget.make(today: today)
+    selection: SidebarSelection? = nil, defaults: (any SettingsStorage)? = nil, budget: Budget = sidebarBudget
 ) -> SidebarViewModel {
     let navigation = NavigationState(selection: selection ?? AppModel.defaultSelection(in: budget))
     return SidebarViewModel(
@@ -18,7 +41,7 @@ private func makeSidebar(
 }
 
 @MainActor
-private func makeApp(defaults: (any SettingsStorage)? = nil, budget: Budget = DemoBudget.make(today: today))
+private func makeApp(defaults: (any SettingsStorage)? = nil, budget: Budget = sidebarBudget)
     -> AppModel
 {
     AppModel(store: BudgetStore(budget: budget), defaults: defaults)
@@ -111,7 +134,7 @@ private func makeOrderedSidebar() throws -> (sidebar: SidebarViewModel, store: S
     }
 
     @Test func closedAccountsStayOutOfTheSidebar() {
-        let budget = DemoBudget.make(today: today)
+        let budget = sidebarBudget
         let closed = budget.account(named: "Altes Sparbuch")!
         let sidebar = makeSidebar(budget: budget)
         #expect(!sidebar.groupPanels.flatMap(\.rows).contains { $0.id == closed.id })
@@ -179,7 +202,7 @@ private func makeOrderedSidebar() throws -> (sidebar: SidebarViewModel, store: S
     }
 
     @Test func everySelectionChangeExpandsTheAccountsGroup() {
-        let budget = DemoBudget.make(today: today)
+        let budget = sidebarBudget
         let depot = budget.account(named: "Depot")!
         let sidebar = makeSidebar(budget: budget)
         sidebar.setGroup(.offBudgetAccounts, expanded: false)
@@ -211,7 +234,7 @@ private func makeOrderedSidebar() throws -> (sidebar: SidebarViewModel, store: S
         let defaults = MemorySettingsStorage()
         makeApp(defaults: defaults).sidebar.setGroup(.offBudgetAccounts, expanded: false)
         #expect(makeApp(defaults: defaults).sidebar.collapsedGroups.contains(.offBudgetAccounts))
-        let other = makeApp(defaults: defaults, budget: DemoBudget.make(today: today).renamed("Other"))
+        let other = makeApp(defaults: defaults, budget: sidebarBudget.renamed("Other"))
         #expect(!other.sidebar.collapsedGroups.contains(.offBudgetAccounts))
     }
 }

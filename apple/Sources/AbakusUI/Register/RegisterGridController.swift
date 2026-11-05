@@ -97,7 +97,7 @@ package final class RegisterGridController {
     }
 
     package func headerClicked(_ column: RegisterColumn) {
-        guard !swallowsClick(), let owner, column.isSortable else { return }
+        guard !swallowsClick(), let owner else { return }
         owner.sortOrder = owner.sortOrder.clicked(column)
         if let first = selectedIds.first { requestScroll(.row(first)) }
     }

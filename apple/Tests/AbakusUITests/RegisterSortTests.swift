@@ -65,13 +65,6 @@ import Testing
         #expect(model.transactionIds.first == fixture.startingBalanceId(of: fixture.giro))
     }
 
-    @Test func theBalanceHeaderNeverSorts() {
-        let model = RegisterFixture().model()
-        model.grid.headerClicked(.runningBalance)
-        #expect(model.sortOrder == .default)
-        #expect(RegisterSortOrder.default.clicked(.runningBalance) == .default)
-    }
-
     @Test func splitChildrenStayUnderTheirParent() {
         var fixture = RegisterFixture()
         let split = fixture.add(

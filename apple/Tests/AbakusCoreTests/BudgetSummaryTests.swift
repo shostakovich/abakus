@@ -44,7 +44,6 @@ import Testing
                     accountId: EntityID.allAccounts, searchText: "Kategorie: Alltag: Lebensmittel, ",
                     dateFilter: DateFilterSelection(
                         preset: .thisMonth, start: date("2026-10-01"), end: date("2026-10-01"), label: "Dieser Monat")))
-        #expect(result.emptyOutflowHelp == nil)
     }
 
     @Test func aMasterCountsDistinctTransactions() throws {
@@ -63,7 +62,6 @@ import Testing
         #expect(result.message == "159,00\u{00A0}€ ausgegeben in 4 Buchungen:")
         #expect(result.rows.map(\.amount) == [-7, -70, -30, -40, -12])
         #expect(result.accountView?.searchText == "")
-        #expect(result.emptyOutflowHelp == nil)
     }
 
     @Test func uncategorizedTransactionsHaveTheirOwnMessageAndSearch() throws {
@@ -98,8 +96,8 @@ import Testing
         #expect(result.rows.map(\.payee) == ["[Aufgeteilt] / Transfer : Depot", "[Aufgeteilt] "])
         #expect(result.rows.map(\.memo) == ["ETF - Sparen", "Sparen"])
         #expect(result.transactionCount == 1)
-        #expect(result.accountView?.dateFilter?.label == "September 2026")
-        #expect(result.accountView?.dateFilter?.preset == nil)
+        #expect(result.accountView?.dateFilter.label == "September 2026")
+        #expect(result.accountView?.dateFilter.preset == nil)
     }
 
     @Test func aSplitLineWithItsOwnPayeeShowsThatPayee() throws {
@@ -124,37 +122,14 @@ import Testing
         try scenario.add(-10, on: "2025-12-10", category: S.lebensmittel)
         try scenario.split([(-1, S.lebensmittel), (-1, S.kleidung)], on: "2025-10-11", payee: "Markt")
         let lastOctober = summary(scenario.budget, .category(S.kleidung), month: "2025-10-01")
-        #expect(lastOctober.accountView?.dateFilter?.label == "Oktober 2025")
+        #expect(lastOctober.accountView?.dateFilter.label == "Oktober 2025")
         #expect(lastOctober.accountView?.accountId == S.giro)
     }
 
-    @Test func emptyCategoriesOfferTheOutflowHelp() throws {
+    @Test func anEmptyCategoryListsNothing() throws {
         let budget = try scenario().budget
         let result = summary(budget, .category(S.notgroschen))
         #expect(result.rows.isEmpty && result.accountView == nil)
         #expect(result.message == "0,00\u{00A0}€ ausgegeben in 0 Buchungen:")
-        #expect(
-            result.emptyOutflowHelp
-                == "Im Oktober 2026 gibt es noch keine Ausgaben in <b>„Sparen: Notgroschen“</b>.<br/><br/>Um eine "
-                + "Ausgabe einzutragen, wähle ein Konto und lege eine neue Buchung an. Gib ihr die Kategorie "
-                + "<b>„Sparen: Notgroschen“</b> und ein Datum im Oktober 2026, dann erscheint sie hier.")
-        #expect(summary(budget, .masterCategory(S.sparen)).emptyOutflowHelp?.contains("<b>„Sparen“</b>") == true)
-        #expect(summary(budget, .allOutflows, month: "2026-11-01").emptyOutflowHelp == nil)
-    }
-
-    @Test func incomeListsWhatWasBookedToZuVerteilenInTheMonth() throws {
-        var scenario = try scenario()
-        try scenario.add(2000, on: "2026-09-28", category: ScenarioBudget.readyToAssign, payee: "Arbeitgeber")
-        let result = scenario.budget.incomeSummary(month: date("2026-10-01"), today: october24, formatter: german)
-        #expect(result.title == "Einnahmen im Oktober")
-        #expect(result.message == "<b>995,00\u{00A0}€</b> Einnahmen im Oktober.")
-        #expect(result.rows.map(\.amount) == [-5, 0, 1000, 0])
-        #expect(result.accountView?.searchText == "Einnahmen: Oktober 2026, ")
-        #expect(result.accountView?.dateFilter == nil)
-        let september = scenario.budget.incomeSummary(month: date("2026-09-01"), today: october24, formatter: german)
-        #expect(september.rows.map(\.amount) == [2000])
-        let empty = scenario.budget.incomeSummary(month: date("2027-01-01"), today: october24, formatter: german)
-        #expect(empty.message == "Keine Einnahmen im Januar.")
-        #expect(empty.accountView == nil)
     }
 }

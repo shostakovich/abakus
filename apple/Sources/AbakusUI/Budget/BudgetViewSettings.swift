@@ -5,8 +5,6 @@ import Foundation
 @MainActor
 final class BudgetViewSettings {
     static let lastSelectedMonthKey = "lastSelectedMonth"
-    static let categoryColumnWidthKey = "categoryColumnWidth"
-    static let showEmptyOutflowTooltipKey = "showEmptyOutflowTooltip"
     static let lastTabShownKey = "lastTabShown"
     static let headerExpandedKey = "budgetHeaderExpanded"
     static let budgetTab = "Budget"
@@ -24,20 +22,6 @@ final class BudgetViewSettings {
     var lastSelectedMonth: DateWithoutTime? {
         get { budgetValue(Self.lastSelectedMonthKey).flatMap { DateWithoutTime(string: $0 + "-01") } }
         set { setBudgetValue(newValue?.monthKey, Self.lastSelectedMonthKey) }
-    }
-
-    var categoryColumnWidth: CGFloat {
-        get {
-            let stored = budgetValue(Self.categoryColumnWidthKey).flatMap(Double.init).map { CGFloat($0) }
-            let range = BudgetMetrics.categoryWidthRange
-            return min(max(stored ?? BudgetMetrics.defaultCategoryWidth, range.lowerBound), range.upperBound)
-        }
-        set { setBudgetValue(String(Double(newValue)), Self.categoryColumnWidthKey) }
-    }
-
-    var showsEmptyOutflowHelp: Bool {
-        get { budgetValue(Self.showEmptyOutflowTooltipKey) != "false" }
-        set { setBudgetValue(newValue ? "true" : "false", Self.showEmptyOutflowTooltipKey) }
     }
 
     var opensOnBudget: Bool {

@@ -15,23 +15,18 @@ struct RegisterHeader: ToolbarContent {
             RegisterSummaryView(model: model, summary: model.summary)
         }
         .sharedBackgroundVisibility(.hidden)
-        ToolbarItem(placement: .automatic) { reconcileButton }
+        if model.reconciliation.isReconcileEnabled {
+            ToolbarItem(placement: .automatic) { reconcileButton }
+        }
     }
 
     private var reconcileButton: some View {
-        let reconciliation = model.reconciliation
-        return Button(action: reconciliation.reconcileClicked) {
+        Button(action: model.reconciliation.reconcileClicked) {
             Label("Abgleichen", systemImage: "lock")
         }
         .labelStyle(.iconOnly)
         .fixedSize()
-        .disabled(!reconciliation.isReconcileEnabled)
-        .overlay {
-            if !reconciliation.isReconcileEnabled {
-                Color.clear.contentShape(Rectangle()).onTapGesture(perform: reconciliation.reconcileDisabledClicked)
-            }
-        }
-        .toolTip(reconciliation.reconcileTooltip ?? "Abgleichen")
+        .toolTip("Abgleichen")
     }
 }
 

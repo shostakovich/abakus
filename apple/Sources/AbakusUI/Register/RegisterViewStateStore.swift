@@ -72,7 +72,7 @@ struct SavedRegisterViewState: Codable, Equatable {
     }
 
     static func sortOrder(_ column: String, ascending: Bool) -> RegisterSortOrder? {
-        guard let column = RegisterColumn(rawValue: column), column.isSortable else { return nil }
+        guard let column = RegisterColumn(rawValue: column) else { return nil }
         return RegisterSortOrder(column: column, ascending: ascending)
     }
 }

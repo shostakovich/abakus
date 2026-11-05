@@ -159,18 +159,6 @@ import Testing
         #expect(!scenario.month("2026-11-01").hasTransactions)
     }
 
-    /// Category balances and Zu verteilen before what later months assign add up to the money.
-    @Test func everyMonthOfTheDemoBudgetBalancesWithTheAccounts() {
-        let budget = DemoBudget.make(today: october23)
-        let onBudget = Set(budget.accounts.filter(\.onBudget).map(\.id))
-        for month in budget.budgetSheet(today: october23).months {
-            let money = Amount.sum(
-                budget.transactions.filter { onBudget.contains($0.accountId) && $0.date <= month.month.lastOfMonth }
-                    .map(\.amount))
-            #expect(Amount.round(month.balance + month.readyToAssign) == money, "\(month.month)")
-        }
-    }
-
     @Test func staysFastForThousandsOfTransactions() throws {
         let masters = (0..<10).map { master in
             (

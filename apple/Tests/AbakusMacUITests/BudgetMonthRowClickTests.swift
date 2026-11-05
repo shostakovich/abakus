@@ -11,12 +11,13 @@ import Testing
 @Suite struct BudgetMonthRowClickTests {
     typealias F = BudgetScreenFixture
 
-    @Test func aBlankActivityCellTakesClicksAcrossItsWidth() async throws {
-        let model = F().model().model
+    @Test func anActivityCellTakesClicksAcrossItsWidth() async throws {
+        var fixture = F()
+        fixture.spend(3, F.kleidung, on: "2026-10-03")
+        let model = fixture.model().model
         let october = day("2026-10-01")
         let month = try #require(model.month(october))
         let row = try #require(model.groups.flatMap(\.subs).first { $0.id == F.kleidung })
-        #expect(model.subRowDisplay(row.id, in: month).outflows.isEmpty)
         let cells = BudgetCellColumns(width: 300)
         let content = BudgetMonthSubRow(model: model, month: month, row: row, cells: cells)
             .frame(width: cells.width, height: BudgetMetrics.rowHeight)
@@ -38,7 +39,7 @@ import Testing
             NSApp.sendEvent(event)
         }
         await settle(window)
-        #expect(model.presentedPopup == .outflowHelp(month: october, categoryId: F.kleidung))
+        #expect(model.presentedPopup == .outflowSummary(month: october, source: .category(F.kleidung)))
     }
 
     private func settle(_ window: NSWindow) async {

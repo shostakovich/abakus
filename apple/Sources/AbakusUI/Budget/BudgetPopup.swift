@@ -10,19 +10,15 @@ public enum BudgetPopup: Hashable, Sendable {
     /// The touch sheet of a category or group in one month: Verfügbar and assigning beside what `editCategory` has.
     case category(month: DateWithoutTime, categoryId: String)
     case outflowSummary(month: DateWithoutTime, source: OutflowSummarySource)
-    case incomeSummary(month: DateWithoutTime)
-    case outflowHelp(month: DateWithoutTime, categoryId: String)
     case available(month: DateWithoutTime, categoryId: String)
 
     public var anchor: BudgetPopupAnchor {
         switch self {
         case .monthQuickBudget(let month), .assignToCategory(let month): .monthQuickBudget(month)
         case .editCategory(let id, _), .category(_, let id): .categoryRow(id)
-        case .outflowSummary(let month, .category(let id)), .outflowSummary(let month, .masterCategory(let id)),
-            .outflowHelp(let month, let id):
+        case .outflowSummary(let month, .category(let id)), .outflowSummary(let month, .masterCategory(let id)):
             .outflows(month, id)
         case .outflowSummary(let month, .allOutflows): .totalsOutflows(month)
-        case .incomeSummary(let month): .incomeLine(month)
         case .available(let month, let id): .balance(month, id)
         }
     }
@@ -30,7 +26,6 @@ public enum BudgetPopup: Hashable, Sendable {
 
 public enum BudgetPopupAnchor: Hashable, Sendable {
     case monthQuickBudget(DateWithoutTime)
-    case incomeLine(DateWithoutTime)
     case totalsOutflows(DateWithoutTime)
     case categoryRow(String)
     case outflows(DateWithoutTime, String)

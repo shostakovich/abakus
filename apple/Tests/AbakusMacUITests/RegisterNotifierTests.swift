@@ -268,10 +268,9 @@ import Testing
         let menu = model.columnMenu
         #expect(
             menu.map(\.title) == [
-                "Status", "Memo", "Laufender Saldo", "", "Für alle Konten übernehmen",
+                "Status", "Memo", "", "Für alle Konten übernehmen",
             ])
-        #expect(menu[0].isChecked)
-        #expect(!menu[2].isChecked)
+        #expect(menu[0].isChecked && menu[1].isChecked)
     }
 
     @Test func columnTabAndHeaderRightClickOfferTheColumnMenu() {
@@ -282,11 +281,11 @@ import Testing
         #expect(model.headerContextMenu() == model.columnMenu)
     }
 
-    @Test func togglingFromTheMenuShowsTheColumn() {
+    @Test func togglingFromTheMenuHidesTheColumn() {
         let (model, _) = RegisterFixture().spied()
-        model.performMenuAction(.toggleColumn(.runningBalance))
-        #expect(model.visibleColumns.contains(.runningBalance))
-        #expect(model.columnMenu.item(titled: "Laufender Saldo")?.isChecked == true)
+        model.performMenuAction(.toggleColumn(.memo))
+        #expect(!model.visibleColumns.contains(.memo))
+        #expect(model.columnMenu.item(titled: "Memo")?.isChecked == false)
     }
 
     @Test func applyToAllCopiesTheSettings() {
@@ -296,31 +295,5 @@ import Testing
         model.performMenuAction(.applyColumnsToAllAccounts)
         model.navigation.selection = .account(fixture.tagesgeld)
         #expect(!model.visibleColumns.contains(.memo))
-    }
-
-    @Test func runningBalanceFollowsTheAccountOrder() {
-        var fixture = RegisterFixture()
-        let a = fixture.add(fixture.giro, -11, on: "2014-05-02")
-        let (model, _) = fixture.spied()
-        model.performMenuAction(.toggleColumn(.runningBalance))
-        model.grid.headerClicked(.date)
-        #expect(model.rows.first { $0.id == a }?.runningBalance == "1,100.00")
-        #expect(model.rows.last?.id == a)
-    }
-
-    @Test func runningBalanceTooltipShowsTheBalancesThroughTheDate() {
-        var fixture = RegisterFixture()
-        let a = fixture.add(fixture.giro, -11, on: "2014-05-02")
-        fixture.add(fixture.giro, -5, on: "2014-05-03")
-        let (model, _) = fixture.spied()
-        let row = model.rows.first { $0.id == a }!
-        model.runningBalanceHovered(row, inside: true)
-        #expect(model.popup == .runningBalance(rowId: a))
-        let info = model.runningBalanceInfo(for: a)
-        #expect(info?.title == "Saldo bis 02/05/2014:")
-        #expect(info?.lines.map(\.amount) == ["$1,111.00", "−$11.00", "$1,100.00"])
-        #expect(info?.lines.last?.caption == "Arbeitssaldo (das Geld, das am 02/05/2014 da war)")
-        model.runningBalanceHovered(row, inside: false)
-        #expect(model.popup == nil)
     }
 }

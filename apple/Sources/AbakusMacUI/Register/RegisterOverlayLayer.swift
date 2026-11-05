@@ -34,7 +34,7 @@ struct RegisterOverlayLayer: View {
 
     static func closesOnOutsideClick(_ popup: RegisterPopup) -> Bool {
         switch popup {
-        case .runningBalance, .scheduledCallout: false
+        case .scheduledCallout: false
         default: true
         }
     }
@@ -48,11 +48,6 @@ struct RegisterOverlayLayer: View {
             AnchoredPopover(side: .trailing, anchor: anchor, container: size) { NeedsCategoryPopover(model: model) }
         case .timeframe:
             AnchoredPopover(side: .below, anchor: anchor, container: size) { TimeframePopover(search: model.search) }
-        case .runningBalance(let rowId):
-            if let info = model.runningBalanceInfo(for: rowId) {
-                AnchoredPopover(side: .above, anchor: anchor, container: size) { RunningBalancePopover(info: info) }
-                    .allowsHitTesting(false)
-            }
         case .scheduledCallout(let callout):
             AnchoredPopover(side: .above, anchor: anchor, container: size) {
                 ScheduledCalloutPopover(callout: callout) { model.closePopup() }

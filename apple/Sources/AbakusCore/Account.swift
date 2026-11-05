@@ -29,7 +29,6 @@ public struct Account: Hashable, Identifiable, Sendable, Positioned {
     /// The account the Kasse books into; the Mac keeps it as it is.
     public var sharedExpenses: Bool
     public var closed: Bool
-    public var note: String?
     public var position: Int
     public var lastReconciledAt: Date?
 
@@ -42,7 +41,6 @@ public struct Account: Hashable, Identifiable, Sendable, Positioned {
         kind: AccountKind,
         sharedExpenses: Bool = false,
         closed: Bool = false,
-        note: String? = nil,
         position: Int = 0,
         lastReconciledAt: Date? = nil
     ) {
@@ -51,7 +49,6 @@ public struct Account: Hashable, Identifiable, Sendable, Positioned {
         self.kind = kind
         self.sharedExpenses = sharedExpenses
         self.closed = closed
-        self.note = note
         self.position = position
         self.lastReconciledAt = lastReconciledAt
     }

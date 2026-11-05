@@ -30,8 +30,6 @@ import Testing
         _ = largeModel(payees: 8).rows
         let few = largeModel(payees: 800)
         let many = largeModel(payees: 8000)
-        few.toggleColumnVisibility(.runningBalance)
-        many.toggleColumnVisibility(.runningBalance)
         let base = seconds { _ = few.rows }
         #expect(seconds { _ = many.rows } < 2 * base)
     }
@@ -42,13 +40,11 @@ import Testing
         #expect(seconds { _ = model.transactionActionsMenu(withTitle: true) } < 0.1)
     }
 
-    @Test func gridSortAndRunningBalanceUseOneCategoryKey() {
+    @Test func theGridSortsIncomeAndARefundOfOneDayByCategory() {
         var fixture = RegisterFixture()
         let income = fixture.add(fixture.giro, 100, on: "2014-12-10", category: fixture.budget.readyToAssignCategoryId)
         let refund = fixture.add(fixture.giro, 100, on: "2014-12-10", category: fixture.groceries)
         let model = fixture.model()
-        let order = fixture.budget.transactionsInDefaultOrder(forAccount: fixture.giro).map(\.id)
-        #expect(order.filter { [income, refund].contains($0) } == [refund, income])
         #expect(model.transactionIds.filter { [income, refund].contains($0) } == [income, refund])
     }
 }

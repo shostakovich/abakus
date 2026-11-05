@@ -227,12 +227,6 @@
             case .category: RegisterCategoryText(register: register, row: row)
             case .memo: Text(verbatim: row.memo).foregroundStyle(ThemeColor.secondaryText)
             case .amount: RegisterAmountText(row: row)
-            case .runningBalance:
-                Text(verbatim: row.runningBalance)
-                    .monospacedDigit()
-                    .foregroundStyle(
-                        row.runningBalance.hasPrefix(BudgetFormatter.minus)
-                            ? ThemeColor.negative : ThemeColor.secondaryText)
             case .cleared:
                 if !row.isSubtransaction { RegisterStatusButton(register: register, row: row) }
             case .frequency: EmptyView()

@@ -26,7 +26,7 @@ public struct RegisterTouchTable: Hashable, Sendable {
     private func sizing(of column: RegisterColumn) -> Sizing {
         switch column {
         case .date: .fixed(Self.dateWidth * scale)
-        case .amount, .runningBalance: .fixed(Self.amountWidth * scale)
+        case .amount: .fixed(Self.amountWidth * scale)
         case .cleared: .fixed(Self.statusWidth)
         case .payee: .share(3.5)
         case .category: .share(3)

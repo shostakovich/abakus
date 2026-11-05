@@ -47,8 +47,8 @@ import Testing
     @Test func theViewMenuGlowsWhileTheEditHasChanges() throws {
         var fixture = RegisterFixture()
         let (model, _) = editingMemo(&fixture)
-        model.viewMenuChosen(.toggleColumn(.runningBalance))
-        #expect(!model.visibleColumns.contains(.runningBalance))
+        model.viewMenuChosen(.toggleColumn(.cleared))
+        #expect(model.visibleColumns.contains(.cleared))
         #expect(model.editor?.glowCount == 1)
     }
 
@@ -57,9 +57,9 @@ import Testing
         let id = fixture.add(fixture.giro, -10, category: fixture.groceries)
         let model = fixture.model()
         model.beginEditing(id)
-        model.viewMenuChosen(.toggleColumn(.runningBalance))
+        model.viewMenuChosen(.toggleColumn(.cleared))
         #expect(model.editor == nil)
-        #expect(model.visibleColumns.contains(.runningBalance))
+        #expect(!model.visibleColumns.contains(.cleared))
     }
 
     @Test func aSearchThatHidesTheEditedRowEndsTheEdit() {
@@ -73,7 +73,7 @@ import Testing
     @Test func headerClicksGlowWhileTheEditHasChanges() {
         var fixture = RegisterFixture()
         let (model, _) = editingMemo(&fixture)
-        model.grid.headerClicked(.runningBalance)
+        model.grid.headerClicked(.memo)
         model.grid.headerClicked(.payee)
         #expect(model.selection.count == 1)
         #expect(model.sortOrder == .default)

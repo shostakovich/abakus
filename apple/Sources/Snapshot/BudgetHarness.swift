@@ -131,9 +131,7 @@ struct BudgetHarness {
         case renameError = "rename-error"
         case deleteCategory = "delete-category"
         case summary
-        case incomeSummary = "income-summary"
         case uncategorizedSummary = "uncategorized-summary"
-        case outflowHelp = "outflow-help"
         case cover, move
         case accountView = "account-view"
         case targets, target
@@ -248,14 +246,10 @@ struct BudgetHarness {
             budget.present(.outflowSummary(month: month, source: .category(lernen)))
             edit.settle()
             if state == .accountView { callouts.showInAccountViewClicked() }
-        case .incomeSummary:
-            budget.present(.incomeSummary(month: month))
         case .uncategorizedSummary:
             try addUncategorizedOutflow()
             edit.settle()
             budget.present(.outflowSummary(month: month, source: .masterCategory(EntityID.uncategorizedMasterCategory)))
-        case .outflowHelp:
-            budget.present(.outflowHelp(month: month, categoryId: lernen))
         case .cover:
             try overspendLernen()
             edit.settle()

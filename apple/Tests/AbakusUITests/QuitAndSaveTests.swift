@@ -16,25 +16,13 @@ import Testing
         return app
     }
 
-    enum OtherDialog: CaseIterable {
-        case message, clockQuestion
-
-        @MainActor func show(in app: AppModel) {
-            switch self {
-            case .message: app.register.showMessage("Message", "")
-            case .clockQuestion: app.dateChecked(today: app.store.today().addingDays(3))
-            }
-        }
-    }
-
-    @Test(arguments: OtherDialog.allCases)
-    func quittingSavesAnOpenEditUnderAnotherDialog(_ dialog: OtherDialog) throws {
+    @Test func quittingSavesAnOpenEditUnderAnotherDialog() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -10, category: fixture.groceries, memo: "Box")
         let app = app(fixture, selection: .allAccounts)
         app.register.beginEditing(id, column: .memo)
         try #require(app.register.editor).retype("Kiste")
-        dialog.show(in: app)
+        app.register.showMessage("Message", "")
         #expect(app.dialogs.isPresenting)
         #expect(app.commitBeforeQuit())
         #expect(app.store.budget.transaction(withId: id)?.memo == "Kiste")

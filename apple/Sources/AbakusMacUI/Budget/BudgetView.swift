@@ -133,8 +133,6 @@ private struct BudgetTable: View {
                     .offset(x: layout.separatorX(index) - 0.5)
                     .allowsHitTesting(false)
             }
-            BudgetColumnGrabber(model: model, height: size.height)
-                .offset(x: layout.categoryWidth)
             BudgetScroller(
                 contentHeight: model.contentHeight, offset: model.scrollOffset, onScroll: model.scroll(to:)
             )
@@ -158,32 +156,6 @@ private struct BudgetTable: View {
                     .offset(x: layout.columnX(index))
             }
         }
-    }
-}
-
-private struct BudgetColumnGrabber: View {
-    let model: BudgetViewModel
-    let height: CGFloat
-    @GestureState private var isResizing = false
-
-    var body: some View {
-        Color.clear
-            .frame(width: BudgetMetrics.separatorWidth, height: height)
-            .contentShape(Rectangle())
-            .pointerStyle(.columnResize)
-            .gesture(
-                DragGesture(minimumDistance: 0, coordinateSpace: .named(BudgetView.panelSpace))
-                    .updating($isResizing) { _, state, _ in state = true }
-                    .onChanged { value in
-                        if model.resizeOrigin == nil { model.beginColumnResize(atX: value.startLocation.x) }
-                        model.columnResizeMoved(toX: value.location.x)
-                    }
-                    .onEnded { _ in model.endColumnResize() }
-            )
-            .onChange(of: isResizing) { _, resizing in
-                if !resizing { model.endColumnResize() }
-            }
-            .accessibilityHidden(true)
     }
 }
 

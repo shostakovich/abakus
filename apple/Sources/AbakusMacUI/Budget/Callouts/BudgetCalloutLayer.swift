@@ -80,13 +80,9 @@ private struct BudgetCalloutHost: View {
             if let form = callouts.category {
                 placer(owner, bounds) { BudgetCategoryPopover(controller: callouts, form: form) }
             }
-        case .outflowSummary, .incomeSummary:
+        case .outflowSummary:
             if let summary = callouts.summary {
                 placer(owner, bounds) { BudgetSummaryPopover(controller: callouts, summary: summary) }
-            }
-        case .outflowHelp:
-            if let help = callouts.outflowHelp {
-                placer(owner, bounds) { BudgetOutflowHelpPopover(controller: callouts, help: help) }
             }
         case .available:
             if let form = callouts.availableForm {

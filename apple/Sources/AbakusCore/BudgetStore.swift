@@ -36,21 +36,22 @@ public final class BudgetStore: BudgetStoring {
         _ database: BudgetDatabase, today: @escaping () -> DateWithoutTime = { .today() },
         now: @escaping () -> Date = { Date() }
     ) throws -> BudgetStore {
-        let day = today()
-        let store: BudgetStore
         let unsigned = try database.deviceId == BudgetDatabase.unsignedDevice
         if try unsigned && database.isEmpty {
-            store = BudgetStore(budget: DemoBudget.make(today: day), database: database, today: today, now: now)
-        } else {
-            let loaded = try database.budget()
-            store = BudgetStore(budget: loaded, database: database, today: today, now: now)
-            store.savedBudget = loaded
-            store.awaitsPull = !unsigned
-            store.enterDueScheduledTransactions()
+            let store = BudgetStore(budget: emptyBudget, database: database, today: today, now: now)
+            store.save()
             return store
         }
-        store.save()
+        let loaded = try database.budget()
+        let store = BudgetStore(budget: loaded, database: database, today: today, now: now)
+        store.savedBudget = loaded
+        store.awaitsPull = !unsigned
+        store.enterDueScheduledTransactions()
         return store
+    }
+
+    static var emptyBudget: Budget {
+        Budget(budgetName: "", categoryGroups: [DefaultCategories.internalGroup()])
     }
 
     public func enterDueScheduledTransactions(today day: DateWithoutTime? = nil) {
@@ -104,7 +105,7 @@ public final class BudgetStore: BudgetStoring {
         try database.reset()
         savedBudget = nil
         awaitsPull = false
-        budget = DemoBudget.make(today: today())
+        budget = Self.emptyBudget
         save()
         onReceive()
     }

@@ -17,9 +17,7 @@ struct OpsHarness {
         case dateFilter = "date-filter"
         case notifiers
         case columnMenu = "column-menu"
-        case runningBalance = "running-balance"
         case needsCategory = "needs-category"
-        case reconcileHelp = "reconcile-help"
         case deleteDialog = "delete-dialog"
         case makeRecurring = "make-recurring"
         case keys
@@ -56,16 +54,8 @@ struct OpsHarness {
             try addNotifierCases()
         case .columnMenu:
             register.columnOptionsClicked()
-        case .runningBalance:
-            register.performMenuAction(.toggleColumn(.runningBalance))
-            edit.settle()
-            let row = try newestRow { budget.payeeName(of: $0) == "Aral" }
-            register.runningBalanceHovered(row, inside: true)
         case .needsCategory:
             register.errorIconClicked(try newestRow { budget.errorState(of: $0).level == .needsCategory })
-        case .reconcileHelp:
-            register.reconciliation.reconcileDisabledClicked()
-            if !register.reconciliation.showsReconcileHelp { throw SnapshotError.render }
         case .deleteDialog:
             let transfer = try newestRow { budget.isTransfer($0) }
             register.rowClicked(transfer, column: nil, modifiers: .command)

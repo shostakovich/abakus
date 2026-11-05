@@ -183,29 +183,6 @@ private struct TimeframePresetControl: NSViewRepresentable {
     }
 }
 
-struct RunningBalancePopover: View {
-    let info: RunningBalanceInfo
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            PopoverTitle(info.title)
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 10, verticalSpacing: 4) {
-                ForEach(Array(info.lines.enumerated()), id: \.offset) { index, line in
-                    if index == info.lines.count - 1 { Divider() }
-                    GridRow {
-                        Text(verbatim: line.amount)
-                            .font(ThemeFont.body.font.monospacedDigit().weight(.semibold))
-                            .gridColumnAlignment(.trailing)
-                        Text(verbatim: line.caption).foregroundStyle(ThemeColor.secondaryText)
-                    }
-                }
-            }
-        }
-        .font(ThemeFont.body.font)
-        .foregroundStyle(ThemeColor.text)
-    }
-}
-
 struct ScheduledCalloutPopover: View {
     let callout: RegisterScheduledCallout
     let onClose: () -> Void

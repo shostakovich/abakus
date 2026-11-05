@@ -277,39 +277,13 @@ import Testing
         #expect(model.presentedPopup == nil)
     }
 
-    @Test func theIncomeSummaryAndClose() {
-        let model = F().model().model
-        var shown = 0
-        model.callouts.onShowInAccountView = { _ in shown += 1 }
-        model.present(.incomeSummary(month: october))
-        #expect(model.callouts.summary?.title == "Einnahmen im Oktober")
-        model.callouts.showInAccountViewClicked()
-        #expect(model.presentedPopup == .incomeSummary(month: october))
-        model.callouts.summaryClosed()
-        #expect(model.presentedPopup == nil)
-        #expect(shown == 0)
-    }
-
-    @Test func theOutflowHelpNamesTheCategoryAndCanBeTurnedOff() throws {
-        let model = F().model().model
-        model.subOutflowsClicked(month: october, categoryId: F.kleidung)
-        let help = try #require(model.callouts.outflowHelp)
-        #expect(help.message.contains("Im Oktober 2026 gibt es noch keine Ausgaben in <b>„Alltag: Kleidung“</b>."))
-        #expect(model.callouts.escapePressed())
-        model.masterOutflowsClicked(month: october, masterId: F.freizeit)
-        #expect(model.callouts.outflowHelp?.message.contains("<b>„Freizeit“</b>") == true)
-        model.callouts.dontShowOutflowHelpAgainClicked()
-        #expect(!model.showsEmptyOutflowHelp)
-        #expect(model.presentedPopup == nil)
-    }
-
     @Test func aDialogAboveTheCalloutKeepsEscapeAndClicks() {
         let model = F().model().model
-        model.present(.incomeSummary(month: october))
+        model.present(.outflowSummary(month: october, source: .allOutflows))
         model.dialogs.show(.message("Hinweis", ""))
         #expect(!model.callouts.escapePressed())
         model.callouts.mouseDownOutside()
-        #expect(model.presentedPopup == .incomeSummary(month: october))
+        #expect(model.presentedPopup == .outflowSummary(month: october, source: .allOutflows))
     }
 }
 

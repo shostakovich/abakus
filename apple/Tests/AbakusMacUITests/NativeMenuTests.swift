@@ -44,9 +44,10 @@ import Testing
 
     @Test func checkedItemsShowTheirState() {
         let model = RegisterFixture().model()
+        model.toggleColumnVisibility(.memo)
         let target = RegisterMenuTarget { _ in }
         let menu = target.menu(model.columnMenu)
         #expect(menu.item(withTitle: "Status")?.state == .on)
-        #expect(menu.item(withTitle: "Laufender Saldo")?.state == .off)
+        #expect(menu.item(withTitle: "Memo")?.state == .off)
     }
 }
