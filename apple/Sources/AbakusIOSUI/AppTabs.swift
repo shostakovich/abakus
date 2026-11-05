@@ -65,7 +65,8 @@
         }
 
         private var settingsPath: Binding<[PayeeRoute]> {
-            Binding(get: { navigation.settingsPath }, set: navigation.showSettings)
+            // A method reference here crashes the Swift 6.3 compiler of CI's Xcode 26.
+            Binding(get: { navigation.settingsPath }, set: { navigation.showSettings($0) })
         }
     }
 
