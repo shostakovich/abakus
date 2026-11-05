@@ -379,8 +379,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
   end
 
   describe "a category's dialog" do
-    test "the name or the pencil opens the dialog: name, target, note and deleting", c do
-      Categories.update_category(budget_scope(), c.groceries, %{note: "Wocheneinkauf"})
+    test "the name or the pencil opens the dialog: name, target and deleting", c do
       spend(c, nil, -999)
       {:ok, view, _html} = open(c.conn)
 
@@ -395,7 +394,6 @@ defmodule AbakusWeb.BudgetDetailsTest do
       assert has_element?(view, "#category-dialog", "aktueller Monat")
       assert has_element?(view, ~s|#category-name-input[value="🛒 Lebensmittel"]|)
       assert has_element?(view, "#inspector-target", "Kein Ziel")
-      assert has_element?(view, "#inspector-note", "Wocheneinkauf")
       assert has_element?(view, "#category-delete #edit-delete", "Kategorie löschen")
       refute has_element?(view, "#inspector-available")
       refute has_element?(view, "#panel")
@@ -407,7 +405,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
         )
 
       assert List.flatten(sections) ==
-               ~w(category-name inspector-target inspector-note category-delete)
+               ~w(category-name inspector-target category-delete)
 
       render_click(view, "deselect", %{})
 

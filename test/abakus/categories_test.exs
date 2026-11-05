@@ -32,7 +32,7 @@ defmodule Abakus.CategoriesTest do
 
       assert {:error, changeset} =
                Categories.update_category_group(budget_scope(), category.category_group, %{
-                 hidden: true
+                 name: "Intern"
                })
 
       assert %{internal: ["kann nicht geändert werden"]} = errors_on(changeset)
@@ -44,18 +44,13 @@ defmodule Abakus.CategoriesTest do
       assert {:ok, group} =
                Categories.create_category_group(budget_scope(), %{
                  name: "🏠 Wohnen",
-                 note: "Fix",
                  position: 2
                })
 
-      assert %CategoryGroup{name: "🏠 Wohnen", note: "Fix", hidden: false, internal: false} =
-               group
+      assert %CategoryGroup{name: "🏠 Wohnen", position: 2, internal: false} = group
 
-      assert {:ok, %CategoryGroup{name: "🏡 Haus", hidden: true}} =
-               Categories.update_category_group(budget_scope(), group, %{
-                 name: "🏡 Haus",
-                 hidden: true
-               })
+      assert {:ok, %CategoryGroup{name: "🏡 Haus"}} =
+               Categories.update_category_group(budget_scope(), group, %{name: "🏡 Haus"})
     end
 
     test "need a name and a position from zero" do
@@ -84,16 +79,16 @@ defmodule Abakus.CategoriesTest do
     first = category_group_fixture(position: 1)
     b = category_fixture(category_group_id: first.id, position: 1)
     a = category_fixture(category_group_id: first.id, position: 0)
-    hidden = category_fixture(category_group_id: second.id, hidden: true)
+    c = category_fixture(category_group_id: second.id)
 
     assert [
              %{id: first_id, categories: [%{id: a_id}, %{id: b_id}]},
-             %{id: second_id, categories: [%{id: hidden_id}]}
+             %{id: second_id, categories: [%{id: c_id}]}
            ] =
              Categories.list_category_groups(budget_scope())
 
-    assert {first_id, a_id, b_id, second_id, hidden_id} ==
-             {first.id, a.id, b.id, second.id, hidden.id}
+    assert {first_id, a_id, b_id, second_id, c_id} ==
+             {first.id, a.id, b.id, second.id, c.id}
   end
 
   test "list_category_groups(internal: true) lists the internal group with Ready to Assign first" do
@@ -131,26 +126,17 @@ defmodule Abakus.CategoriesTest do
   end
 
   describe "categories" do
-    test "store name, note, hidden and position with the lookup key" do
+    test "store name and position with the lookup key" do
       group = category_group_fixture()
 
       assert {:ok, category} =
                Categories.create_category(budget_scope(), %{
                  category_group_id: group.id,
                  name: "🛒 Lebensmittel",
-                 note: "Supermarkt",
-                 hidden: true,
                  position: 4
                })
 
-      assert %Category{
-               lookup_key: "lebensmittel",
-               note: "Supermarkt",
-               hidden: true,
-               position: 4,
-               internal: false
-             } =
-               category
+      assert %Category{lookup_key: "lebensmittel", position: 4, internal: false} = category
     end
 
     test "need a name and an existing, regular group" do
@@ -232,7 +218,7 @@ defmodule Abakus.CategoriesTest do
 
     test "may share a lookup key" do
       group = category_group_fixture()
-      old = category_fixture(category_group_id: group.id, name: "Urlaub", hidden: true)
+      old = category_fixture(category_group_id: group.id, name: "Urlaub")
       new = category_fixture(category_group_id: group.id, name: "🏖️ Urlaub")
 
       assert old.lookup_key == new.lookup_key
@@ -254,15 +240,6 @@ defmodule Abakus.CategoriesTest do
                Categories.find_category_by_name(budget_scope(), "LEBENSMITTEL")
 
       assert id == category.id
-    end
-
-    test "finds a category hidden in YNAB like any other" do
-      hidden = category_fixture(name: "Altlast", hidden: true)
-
-      assert {:ok, %Category{id: id}} =
-               Categories.find_category_by_name(budget_scope(), "altlast")
-
-      assert id == hidden.id
     end
 
     test "finds Ready to Assign" do
@@ -289,16 +266,11 @@ defmodule Abakus.CategoriesTest do
                Categories.find_category_by_name(budget_scope(), "Inflow: Ready to Assign")
     end
 
-    test "is ambiguous between categories with the same name, hidden in YNAB or not" do
+    test "is ambiguous between categories with the same name" do
       category_fixture(name: "🚗 Auto")
       category_fixture(name: "Auto")
 
       assert Categories.find_category_by_name(budget_scope(), "auto") == {:error, :ambiguous}
-
-      category_fixture(name: "Urlaub", hidden: true)
-      category_fixture(name: "🏖️ Urlaub")
-
-      assert Categories.find_category_by_name(budget_scope(), "urlaub") == {:error, :ambiguous}
     end
 
     test "reports unknown names" do
@@ -489,12 +461,11 @@ defmodule Abakus.CategoriesTest do
   end
 
   describe "reset_assignments/3" do
-    test "resets what every category, hidden in YNAB or not, has assigned in the month" do
+    test "resets what every category has assigned in the month" do
       groceries = category_fixture()
       rent = category_fixture()
-      hidden = category_fixture(hidden: true)
 
-      for c <- [groceries, rent, hidden],
+      for c <- [groceries, rent],
           do: Categories.assign(budget_scope(), c, ~D[2026-10-01], 1_000)
 
       Categories.assign(budget_scope(), groceries, ~D[2026-11-01], 1_000)
@@ -503,7 +474,6 @@ defmodule Abakus.CategoriesTest do
 
       assert assigned(groceries, ~D[2026-10-01]) == 0
       assert assigned(rent, ~D[2026-10-01]) == 0
-      assert assigned(hidden, ~D[2026-10-01]) == 0
       assert assigned(groceries, ~D[2026-11-01]) == 1_000
     end
 

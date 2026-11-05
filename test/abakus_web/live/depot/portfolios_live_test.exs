@@ -241,7 +241,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
       refute has_element?(lv, "#account-form_kind")
 
       lv
-      |> form("#account-form", account: %{name: "Scalable Cash", note: "Beim Broker"})
+      |> form("#account-form", account: %{name: "Scalable Cash"})
       |> render_submit()
 
       assert has_element?(lv, "#flash-info", "Konto gespeichert")
@@ -253,7 +253,7 @@ defmodule AbakusWeb.Depot.PortfoliosLiveTest do
                "Verrechnungskonto „Scalable Cash“"
              )
 
-      assert %{name: "Scalable Cash", note: "Beim Broker"} =
+      assert %{name: "Scalable Cash"} =
                Abakus.Ledger.get_account!(ctx.scope, ctx.cash.id)
 
       lv |> element("#portfolio-#{ctx.broker.id}-account") |> render_click()

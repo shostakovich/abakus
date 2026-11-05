@@ -14,7 +14,7 @@ defmodule AbakusWeb.AccountDialogTest do
 
   describe "the sidebar" do
     setup do
-      giro = account_fixture(name: "💶 Girokonto", kind: :checking, note: "Gehalt")
+      giro = account_fixture(name: "💶 Girokonto", kind: :checking)
       cash = account_fixture(name: "👛 Bargeld", kind: :cash)
       depot = account_fixture(name: "📈 Depot", kind: :tracking)
       old = account_fixture(name: "Altes Sparbuch", kind: :savings, closed: true)
@@ -107,10 +107,10 @@ defmodule AbakusWeb.AccountDialogTest do
       for kind <- ["Girokonto", "Sparkonto", "Bargeld", "Tracking"],
           do: assert(has_element?(view, "#account_kind option", kind))
 
-      submit(view, %{name: "🐷 Sparschwein", kind: "cash", note: "Im Regal"})
+      submit(view, %{name: "🐷 Sparschwein", kind: "cash"})
 
       assert [account] = Ledger.list_accounts(budget_scope())
-      assert %{name: "🐷 Sparschwein", kind: :cash, note: "Im Regal", closed: false} = account
+      assert %{name: "🐷 Sparschwein", kind: :cash, closed: false} = account
 
       path = ~p"/budget/accounts/#{account}"
       assert {^path, %{"info" => "Konto angelegt."}} = assert_redirect(view)
@@ -125,7 +125,7 @@ defmodule AbakusWeb.AccountDialogTest do
       assert Ledger.list_accounts(budget_scope()) == []
     end
 
-    test "takes only name, kind and note from the form", %{conn: conn} do
+    test "takes only name and kind from the form", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
       view |> element("#add-account") |> render_click()
 
@@ -162,16 +162,16 @@ defmodule AbakusWeb.AccountDialogTest do
       assert has_element?(view, ~s|#account_name[value="Giro"]|)
       assert has_element?(view, "#account-dialog #close-account", "Konto schließen")
 
-      submit(view, %{name: "🏦 Gemeinschaftskonto", kind: "savings", note: "Für beide"})
+      submit(view, %{name: "🏦 Gemeinschaftskonto", kind: "savings"})
 
-      assert %{name: "🏦 Gemeinschaftskonto", kind: :savings, note: "Für beide"} =
+      assert %{name: "🏦 Gemeinschaftskonto", kind: :savings} =
                Ledger.get_account!(budget_scope(), account.id)
 
       assert_patch(view, ~p"/budget/accounts/#{account}")
       refute has_element?(view, "#account-dialog")
       assert has_element?(view, "#flash-info", "Konto gespeichert")
       assert has_element?(view, "#register-title", "Gemeinschaftskonto")
-      assert has_element?(view, "#register-meta", "Für beide")
+      assert has_element?(view, "#register-meta", "Sparkonto")
       assert has_element?(view, "#side-account-#{account.id}-sidebar", "Gemeinschaftskonto")
     end
 
@@ -195,7 +195,7 @@ defmodule AbakusWeb.AccountDialogTest do
 
       view = open_edit(conn, tracking)
       refute has_element?(view, "#account_kind")
-      assert has_element?(view, "#account_note")
+      assert has_element?(view, "#account_name")
     end
 
     test "shows errors of an invalid change", %{conn: conn} do

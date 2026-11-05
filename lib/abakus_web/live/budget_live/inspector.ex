@@ -60,7 +60,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
   attr :target_form, :any, required: true, doc: "the target editor's form while it is open"
   attr :edit, :map, required: true, doc: "the selected category's `CategoryEditor` state"
 
-  @doc "The selected category's dialog on desktop: its name, target and note, and deleting it."
+  @doc "The selected category's dialog on desktop: its name and target, and deleting it."
   def dialog(assigns) do
     assigns = assign(assigns, :entry, assigns.inspector.selected)
 
@@ -69,7 +69,6 @@ defmodule AbakusWeb.BudgetLive.Inspector do
       <.month_line cell={@entry.cell} current={@current} />
       <CategoryEditor.category_name edit={@edit} autofocus />
       <.target_section cell={@entry.cell} form={@target_form} />
-      <.note category={@entry.category} />
       <CategoryEditor.category_delete edit={@edit} />
     </div>
     """
@@ -109,7 +108,6 @@ defmodule AbakusWeb.BudgetLive.Inspector do
         underfunded={Status.open_need(@entry.cell)}
       />
       <CategoryEditor.category_name edit={@edit} />
-      <.note category={@entry.category} />
       <CategoryEditor.category_delete edit={@edit} />
     </div>
     """
@@ -126,20 +124,7 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     """
   end
 
-  attr :category, :any, required: true
-
-  defp note(assigns) do
-    ~H"""
-    <section :if={present?(@category.note)} id="inspector-note">
-      <.section_heading level={3}>Notiz</.section_heading>
-      <p class="app-note text-sm">{@category.note}</p>
-    </section>
-    """
-  end
-
   defp key(%__MODULE__{month: month}), do: Window.param(month.month)
-
-  defp present?(text), do: is_binary(text) and String.trim(text) != ""
 
   defp cover(category, anchor) do
     JS.push("open_popover",

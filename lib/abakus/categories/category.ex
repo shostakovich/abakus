@@ -1,9 +1,9 @@
 defmodule Abakus.Categories.Category do
   @moduledoc """
   An envelope in the budget. A category is deleted only into another, its successor
-  (`Abakus.Categories.delete_category/4`), for which whatever still points at it counts. `hidden` is kept,
-  but the budget ignores it. Each user's internal category, Ready to Assign, comes with its first use
-  (`Abakus.Categories.ready_to_assign!/1`) and cannot be changed.
+  (`Abakus.Categories.delete_category/4`), for which whatever still points at it counts. Each user's internal
+  category, Ready to Assign, comes with its first use (`Abakus.Categories.ready_to_assign!/1`) and cannot be
+  changed.
   """
 
   use Abakus.Schema, uuid: true
@@ -18,10 +18,8 @@ defmodule Abakus.Categories.Category do
   schema "categories" do
     field :name, :string
     field :lookup_key, :string
-    field :hidden, :boolean, default: false
     field :internal, :boolean, default: false
     field :position, :integer, default: 0
-    field :note, :string
     field :deleted_at, :utc_datetime_usec
 
     belongs_to :category_group, CategoryGroup
@@ -35,7 +33,7 @@ defmodule Abakus.Categories.Category do
   @doc "Changeset for a category; `category_group_id` moves it to another group."
   def changeset(category, attrs) do
     category
-    |> cast(attrs, [:name, :hidden, :position, :note, :category_group_id])
+    |> cast(attrs, [:name, :position, :category_group_id])
     |> validate_required([:user_id, :name, :category_group_id])
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_not_internal()

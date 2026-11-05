@@ -16,7 +16,7 @@ defmodule Abakus.Ledger.AccountsTest do
 
       assert Repo.get_by!(Payee, transfer_account_id: account.id).id == account.transfer_payee.id
       assert account.transfer_payee.id == Abakus.Ids.transfer_payee(account.id)
-      assert %Account{closed: false, position: 0, shared_expenses: false, note: nil} = account
+      assert %Account{closed: false, position: 0, shared_expenses: false} = account
     end
 
     test "stores every field" do
@@ -26,7 +26,6 @@ defmodule Abakus.Ledger.AccountsTest do
                  kind: "checking",
                  shared_expenses: "true",
                  closed: true,
-                 note: "Wertpapiere",
                  position: 3
                })
 
@@ -34,7 +33,6 @@ defmodule Abakus.Ledger.AccountsTest do
                kind: :checking,
                shared_expenses: true,
                closed: true,
-               note: "Wertpapiere",
                position: 3
              } =
                Ledger.get_account!(budget_scope(), account.id)

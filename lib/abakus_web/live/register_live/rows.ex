@@ -1,7 +1,7 @@
 defmodule AbakusWeb.RegisterLive.Rows do
   @moduledoc """
   Which transactions the register shows and what it shows beside them: the view (all, waiting for approval, not
-  cleared), the search, the running balance and whether a transaction takes a category. Transactions come from
+  cleared), the search and whether a transaction takes a category. Transactions come from
   `Abakus.Ledger.list_transactions/3` (match proposals from `list_match_proposals/2`), newest first, with payee,
   category and subtransactions.
   """
@@ -69,16 +69,6 @@ defmodule AbakusWeb.RegisterLive.Rows do
     |> Enum.flat_map(fn [first | _] = month ->
       [{:month, Date.beginning_of_month(first.date)} | month]
     end)
-  end
-
-  @doc "The balance after each transaction by id, going back from the working balance; newest first."
-  def running(transactions, working) do
-    {after_each, _before} =
-      Enum.map_reduce(transactions, working, fn transaction, balance ->
-        {{transaction.id, balance}, balance - transaction.amount}
-      end)
-
-    Map.new(after_each)
   end
 
   @doc """

@@ -9,10 +9,8 @@ defmodule Abakus.Categories.CategoryGroup do
 
   schema "category_groups" do
     field :name, :string
-    field :hidden, :boolean, default: false
     field :internal, :boolean, default: false
     field :position, :integer, default: 0
-    field :note, :string
     field :deleted_at, :utc_datetime_usec
 
     belongs_to :user, Abakus.Users.User, type: :id
@@ -23,7 +21,7 @@ defmodule Abakus.Categories.CategoryGroup do
 
   def changeset(group, attrs) do
     group
-    |> cast(attrs, [:name, :hidden, :position, :note])
+    |> cast(attrs, [:name, :position])
     |> validate_required([:user_id, :name])
     |> validate_number(:position, greater_than_or_equal_to: 0)
     |> validate_not_internal()

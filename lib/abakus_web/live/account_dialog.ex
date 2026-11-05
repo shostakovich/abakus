@@ -1,7 +1,7 @@
 defmodule AbakusWeb.AccountDialog do
   @moduledoc """
-  The account form as in YNAB, a modal over the current page (on phones a sheet from the bottom): name, kind and
-  note. Closing or reopening sits bottom left; accounts are never deleted. The kind stays on its side of the budget,
+  The account form as in YNAB, a modal over the current page (on phones a sheet from the bottom): name and kind.
+  Closing or reopening sits bottom left; accounts are never deleted. The kind stays on its side of the budget,
   so editing offers only that side's kinds, and none to pick for a tracking account.
 
   Every signed-in page of the budget owner has it through `on_mount(:attach, …)`: the event `open_account_dialog`
@@ -17,7 +17,7 @@ defmodule AbakusWeb.AccountDialog do
   alias Abakus.Money
   alias AbakusWeb.AccountGroups
 
-  @editable ~w(name kind note)
+  @editable ~w(name kind)
 
   def on_mount(:attach, _params, _session, socket) do
     if AbakusWeb.Areas.allowed?(socket.assigns.current_scope, :budget),
@@ -120,7 +120,6 @@ defmodule AbakusWeb.AccountDialog do
             }
             required
           />
-          <.input field={@form[:note]} type="textarea" label="Notiz" rows="2" />
           <.action_bar>
             <:secondary :if={@account.id}>
               <.button

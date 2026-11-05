@@ -12,7 +12,7 @@ defmodule AbakusWeb.RegisterLiveTest do
   setup :register_and_log_in_user
 
   setup do
-    giro = account_fixture(name: "💶 Girokonto", kind: :checking, note: "Gehalt")
+    giro = account_fixture(name: "💶 Girokonto", kind: :checking)
     savings = account_fixture(name: "🏦 Sparkonto", kind: :savings)
     depot = account_fixture(name: "📈 Depot", kind: :tracking)
     groceries = category_fixture(name: "🛒 Lebensmittel")
@@ -193,7 +193,6 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       assert has_element?(view, "h1 #register-title", "💶 Girokonto")
       assert has_element?(view, "#register-meta", "Girokonto")
-      assert has_element?(view, "#register-meta", "Gehalt")
 
       # 3.240,00 − 41,06 cleared − 312,80 reconciled; −87,43 − 200,00 uncleared
       assert has_element?(view, "#balance-cleared", "2.886,14 €")
@@ -327,7 +326,6 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#balance-total", "3.923,71 €")
       assert has_element?(view, "#balance-working[phx-hook]")
       refute has_element?(view, "#balance-total[phx-hook]")
-      refute has_element?(view, "#running-toggle")
     end
   end
 
@@ -450,26 +448,6 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
       assert has_element?(view, "#tx-#{c.imported.id}")
       refute has_element?(view, "#tx-#{c.shopping.id}")
-    end
-
-    test "the running balance shows for one account without view or search", c do
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-      refute has_element?(view, "#register-table th", "Saldo")
-
-      view |> element("#running-toggle") |> render_click()
-      assert_patch(view, ~p"/budget/accounts/#{c.giro}?running=1")
-
-      assert has_element?(view, "#register-table th", "Saldo")
-      assert has_element?(view, "#tx-#{c.imported.id} .app-run", "2.598,71")
-      assert has_element?(view, "#tx-#{c.transfer.id} .app-run", "2.639,77")
-      assert has_element?(view, "#tx-#{c.old.id} .app-run", "−312,80")
-
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?running=1&q=frischmarkt")
-      refute has_element?(view, "#register-table th", "Saldo")
-      assert has_element?(view, "#running-hint")
-
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?running=1&filter=uncleared")
-      refute has_element?(view, "#register-table th", "Saldo")
     end
   end
 
