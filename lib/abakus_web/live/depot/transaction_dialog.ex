@@ -18,13 +18,12 @@ defmodule AbakusWeb.Depot.TransactionDialog do
 
   import AbakusWeb.Depot.Components
 
-  alias Abakus.Depot.{MarketData, Portfolios, Receipts, Securities}
+  alias Abakus.Depot.{MarketData, Portfolios, Receipts}
   alias Abakus.Depot.Portfolios.{Transaction, TransactionForm}
   alias Abakus.Depot.Receipts.{Checks, Fields}
-  alias Abakus.Depot.Securities.ISIN
   alias Abakus.LocalTime
   alias Abakus.Money
-  alias AbakusWeb.Depot.{Format, ReceiptComponents}
+  alias AbakusWeb.Depot.{Format, NewSecurity, ReceiptComponents}
 
   @id "transaction-dialog"
   @kinds [
@@ -328,12 +327,7 @@ defmodule AbakusWeb.Depot.TransactionDialog do
         >
           Neues Wertpapier per ISIN
         </.button>
-        <.new_security
-          :if={@new_security}
-          form={@new_security.form}
-          lookup={@new_security.lookup}
-          myself={@myself}
-        />
+        <.new_security :if={@new_security} new_security={@new_security} myself={@myself} />
       </div>
       <div :if={@security?} class="sm:col-span-2">
         <.number field={@form[:shares]} label="Stück" />
@@ -423,17 +417,12 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     """
   end
 
-  attr :form, Phoenix.HTML.Form, required: true
-  attr :lookup, :any, required: true, doc: "nil, `:searching`, `:found` or `{:error, message}`"
+  attr :new_security, NewSecurity, required: true
   attr :myself, :any, required: true
 
   # Its fields are sent as `security`, as forms do not nest; „Anlegen“ comes first, so Enter creates it.
   defp new_security(assigns) do
-    assigns =
-      assign(assigns,
-        isin: assigns.form[:isin],
-        isin_errors: field_errors(assigns.form[:isin])
-      )
+    assigns = assign(assigns, :form, assigns.new_security.form)
 
     ~H"""
     <fieldset
@@ -442,25 +431,18 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     >
       <legend class="fieldset-legend px-1">Neues Wertpapier</legend>
       <div class="grid gap-x-4 sm:grid-cols-2">
-        <fieldset class="fieldset min-w-0">
-          <label class="fieldset-legend" for={@isin.id}>ISIN</label>
-          <input
-            type="text"
-            id={@isin.id}
-            name={@isin.name}
-            value={@isin.value}
-            autocomplete="off"
-            spellcheck="false"
-            phx-debounce="300"
-            class={["input w-full uppercase font-mono", @isin_errors != [] && "input-error"]}
-            aria-invalid={@isin_errors != [] && "true"}
-            aria-describedby={field_describedby(@isin.id, @isin_errors, true)}
-          />
-          <.field_error id={@isin.id} errors={@isin_errors} />
-          <.field_help id={@isin.id} aria-live="polite">
-            {lookup_text(@lookup, @isin.value)}
-          </.field_help>
-        </fieldset>
+        <.input
+          field={@form[:isin]}
+          label="ISIN"
+          identifier
+          size="13"
+          placeholder="XX0000000000"
+          phx-debounce="300"
+          phx-blur="leave_isin"
+          phx-target={@myself}
+          help={NewSecurity.lookup_text(@new_security)}
+          help_live
+        />
         <.input field={@form[:name]} label="Name" autocomplete="off" />
         <.input
           field={@form[:symbol]}
@@ -481,14 +463,6 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     </fieldset>
     """
   end
-
-  defp lookup_text(nil, isin) when isin in [nil, ""],
-    do: "Name und Symbol kommen aus Yahoos Suche."
-
-  defp lookup_text(nil, _isin), do: nil
-  defp lookup_text(:searching, _isin), do: "Suche bei Yahoo …"
-  defp lookup_text(:found, _isin), do: "Von Yahoo übernommen, bitte prüfen."
-  defp lookup_text({:error, message}, _isin), do: message
 
   attr :field, Phoenix.HTML.FormField, required: true
   attr :receipt, :any, required: true
@@ -562,10 +536,6 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     />
     """
   end
-
-  # Untranslated: `field_error` translates them.
-  defp field_errors(field),
-    do: if(Phoenix.Component.used_input?(field), do: field.errors, else: [])
 
   # What the user typed, not the cast decimal, which would read as thousands in German.
   defp typed(%Phoenix.HTML.FormField{form: form, field: field}),
@@ -747,17 +717,24 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     end
   end
 
-  def handle_event("new_security", _params, socket) do
-    {:noreply,
-     assign(socket, :new_security, %{form: security_form(%{}, nil), lookup: nil, isin: nil})}
-  end
+  def handle_event("new_security", _params, socket),
+    do: {:noreply, assign(socket, :new_security, NewSecurity.new())}
 
   def handle_event("cancel_security", _params, socket),
     do: {:noreply, assign(socket, :new_security, nil)}
 
+  def handle_event(
+        "leave_isin",
+        _params,
+        %{assigns: %{new_security: %{} = new_security}} = socket
+      ),
+      do: {:noreply, assign(socket, :new_security, NewSecurity.leave_isin(new_security))}
+
+  def handle_event("leave_isin", _params, socket), do: {:noreply, socket}
+
   @impl true
   def handle_async(:lookup, result, %{assigns: %{new_security: %{} = new_security}} = socket) do
-    {:noreply, assign(socket, :new_security, looked_up(new_security, result))}
+    {:noreply, assign(socket, :new_security, NewSecurity.looked_up(new_security, result))}
   end
 
   def handle_async(:lookup, _result, socket), do: {:noreply, socket}
@@ -841,10 +818,9 @@ defmodule AbakusWeb.Depot.TransactionDialog do
   defp open_new_security(socket, %Fields{kind: kind, isin: isin} = fields, "")
        when kind in [:purchase, :sale, :dividend] and is_binary(isin) do
     params = %{"isin" => isin, "name" => fields.security_name || ""}
-    new_security = %{form: security_form(params, nil), lookup: nil, isin: nil}
 
     socket
-    |> assign(:new_security, new_security)
+    |> assign(:new_security, NewSecurity.new(params))
     |> change_new_security(params, ["security", "isin"])
   end
 
@@ -855,67 +831,37 @@ defmodule AbakusWeb.Depot.TransactionDialog do
     Portfolios.change_transaction_form(scope, choices, params, editing)
   end
 
-  defp security_form(params, action) do
-    params
-    |> Securities.change_new_security()
-    |> Map.put(:action, action)
-    |> to_form(as: :security)
-  end
-
   defp change_new_security(
          %{assigns: %{new_security: %{} = new_security}} = socket,
          params,
          target
        )
        when is_map(params) do
-    isin = params |> Map.get("isin", "") |> String.replace(" ", "") |> String.upcase()
-    lookup? = target == ["security", "isin"] and isin != new_security.isin and ISIN.valid?(isin)
-    new_security = %{new_security | form: security_form(params, :validate)}
+    case NewSecurity.change(socket.assigns.current_scope, new_security, params, target) do
+      {:lookup, new_security, isin} ->
+        socket
+        |> assign(:new_security, new_security)
+        |> start_async(:lookup, fn -> NewSecurity.lookup(isin) end)
 
-    if lookup? do
-      socket
-      |> assign(:new_security, %{new_security | isin: isin, lookup: :searching})
-      |> start_async(:lookup, fn -> {isin, MarketData.lookup_isin(isin)} end)
-    else
-      assign(socket, :new_security, new_security)
+      {:ok, new_security} ->
+        assign(socket, :new_security, new_security)
     end
   end
 
   defp change_new_security(socket, _params, _target), do: socket
 
-  defp looked_up(%{isin: isin} = new_security, {:ok, {isin, {:ok, found}}}) do
-    params =
-      new_security.form.params
-      |> Map.put("isin", isin)
-      |> Map.merge(%{"name" => found.name, "symbol" => found.symbol})
-
-    %{new_security | form: security_form(params, :validate), lookup: :found}
-  end
-
-  defp looked_up(%{isin: isin} = new_security, {:ok, {isin, {:error, reason}}}),
-    do: %{new_security | lookup: {:error, MarketData.lookup_error(reason)}}
-
-  defp looked_up(new_security, {:exit, _reason}),
-    do: %{new_security | lookup: {:error, MarketData.lookup_error(:unreachable)}}
-
-  # The answer for an ISIN typed over meanwhile.
-  defp looked_up(new_security, _stale), do: new_security
-
   defp create_security(socket) do
     %{current_scope: scope, new_security: new_security, editing: editing} = socket.assigns
 
-    case Securities.create_security(scope, new_security.form.params) do
+    case NewSecurity.create(scope, new_security) do
       {:ok, security} ->
-        if security.quote_feed == :yahoo, do: MarketData.fetch_in_background(security)
-        Receipts.recheck(scope)
         choices = Portfolios.transaction_choices(scope, editing)
         socket = assign(socket, choices: choices, new_security: nil) |> recheck_receipt()
         params = Map.put(socket.assigns.form.params, "security_id", to_string(security.id))
         {:noreply, put_form(socket, Map.put(change_form(socket, params), :action, :validate))}
 
-      {:error, changeset} ->
-        form = to_form(changeset, as: :security)
-        {:noreply, assign(socket, :new_security, %{new_security | form: form})}
+      {:error, new_security} ->
+        {:noreply, assign(socket, :new_security, new_security)}
     end
   end
 

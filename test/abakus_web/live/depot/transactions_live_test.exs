@@ -5,7 +5,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{FakeSymbolSearch, Portfolios}
+  alias Abakus.Depot.{FakeSymbolSearch, FakeSymbolSource, Portfolios}
   alias Abakus.Depot.Portfolios.Transaction
   alias Abakus.Depot.Securities.Security
   alias Abakus.Repo
@@ -344,9 +344,19 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
       {:ok, [%{symbol: "IS3N.DE", name: "iShares Core MSCI EM IMI", exchange: "GER"}]}
     end)
 
+    FakeSymbolSource.stub()
+
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/transactions")
     lv |> element("#depots-book") |> render_click()
     lv |> element("#new-security") |> render_click()
+
+    lv
+    |> form("#transaction-form", security: %{isin: "IE00BKM4GZ6"})
+    |> render_change(%{"_target" => ["security", "isin"]})
+
+    refute has_element?(lv, "#new-security-panel", "Ist keine gültige ISIN")
+    lv |> element("#security_isin") |> render_blur()
+    assert has_element?(lv, "#new-security-panel", "Ist keine gültige ISIN.")
 
     lv
     |> form("#transaction-form", security: %{isin: "IE00BKM4GZ67"})
@@ -374,6 +384,13 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
     assert %{name: "iShares EM IMI", symbol: "IS3N.DE"} = security
     refute has_element?(lv, "#new-security-panel")
     assert has_element?(lv, "#transaction_security_id option[selected]", "iShares EM IMI")
+
+    for pid <- Task.Supervisor.children(Abakus.Depot.TaskSupervisor) do
+      ref = Process.monitor(pid)
+      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}
+    end
+
+    assert_received {:symbol, "IE00BKM4GZ66"}
   end
 
   test "„Buchen“ books while the panel of a new security is open", ctx do
@@ -410,5 +427,7 @@ defmodule AbakusWeb.Depot.TransactionsLiveTest do
              "#security_isin-help[aria-live=polite]",
              "Yahoo kennt diese ISIN nicht."
            )
+
+    assert has_element?(lv, "#security_isin.setzkasten-identifier[size='13']:not([maxlength])")
   end
 end

@@ -12,17 +12,42 @@ defmodule Abakus.Depot.MarketData.DivvyDiary.Response do
   - `dividends` is a list of `{"exDate": "2024-02-21", "payDate": "2024-03-07", "amount": 0.5579,
     "currency": "EUR"}`, the amount per share in the currency of the dividend; the live API also
     marks DivvyDiary's own projections with `"forecast": true`, which PP's recording lacks
+  - the live API's top-level `ter` is a fraction (0.0015 for 0.15 %), `fundSize` whole units of
+    the fund's currency; PP's recording lacks both
   """
 
   require Logger
 
-  @doc "`composition/1` and `dividends/1` in one map."
+  @doc "`composition/1`, `dividends/1`, `ter/1` and `fund_size/1` in one map."
   def symbol(json) do
     with {:ok, composition} <- composition(json),
          {:ok, dividends} <- dividends(json) do
-      {:ok, %{composition: composition, dividends: dividends}}
+      {:ok,
+       %{
+         composition: composition,
+         dividends: dividends,
+         ter: ter(json),
+         fund_size: fund_size(json)
+       }}
     end
   end
+
+  @doc "The TER as a fraction; nil when missing or not a number of at least 0."
+  def ter(%{"ter" => ter}) when is_number(ter) and ter >= 0, do: ter
+  def ter(_json), do: nil
+
+  @doc "The fund size in cents; nil when missing or not a number above 0."
+  def fund_size(%{"fundSize" => size}) when is_integer(size) and size > 0, do: size * 100
+
+  def fund_size(%{"fundSize" => size}) when is_float(size) and size > 0,
+    do:
+      size
+      |> Decimal.from_float()
+      |> Decimal.mult(100)
+      |> Decimal.round(0)
+      |> Decimal.to_integer()
+
+  def fund_size(_json), do: nil
 
   @doc """
   The composition as `%{countries: %{code => weight}, sectors: %{name => weight}}`; null counts as

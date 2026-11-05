@@ -37,10 +37,10 @@ A native macOS client in [`apple/`](apple/), a Swift package with its own setup 
   (465 for TLS, else STARTTLS), `SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM`.
 - A reverse proxy terminates HTTPS and sends `X-Forwarded-Proto: https`. `/up` is the health check.
 - `TZ` (default `Europe/Berlin`) sets "today" and when the jobs run.
-- Optional: `DIVVYDIARY_API_KEY` for countries, sectors and dividend dates; `RECEIPT_MODEL_URL`, `RECEIPT_MODEL`,
-  `RECEIPT_MODEL_KEY`, `RECEIPT_MODEL_THINKING` for receipt recognition with an OpenAI-compatible API;
-  `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES` for MCP; `ENABLE_BANKING_APP_ID`, `ENABLE_BANKING_KEY_FILE`
-  (path of the application's private key) for bank sync.
+- Optional: `DIVVYDIARY_API_KEY` for countries, sectors, dividend dates, TER and fund size; `RECEIPT_MODEL_URL`,
+  `RECEIPT_MODEL`, `RECEIPT_MODEL_KEY`, `RECEIPT_MODEL_THINKING` for receipt recognition with an OpenAI-compatible
+  API; `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES` for MCP; `ENABLE_BANKING_APP_ID`,
+  `ENABLE_BANKING_KEY_FILE` (path of the application's private key) for bank sync.
 
 ```sh
 docker compose exec abakus bin/abakus eval 'Abakus.Release.invite("you@example.com")'

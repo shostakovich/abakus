@@ -29,7 +29,8 @@ config :abakus, Abakus.ExchangeRates, source: Abakus.ExchangeRates.ECB
 config :abakus, Abakus.Depot.MarketData,
   price_feed: Abakus.Depot.MarketData.Yahoo,
   symbol_search: Abakus.Depot.MarketData.Yahoo,
-  symbol_source: Abakus.Depot.MarketData.DivvyDiary
+  symbol_source: Abakus.Depot.MarketData.DivvyDiary,
+  probe_timeout: 5_000
 
 config :abakus, Abakus.BankSync, client: Abakus.BankSync.EnableBanking
 

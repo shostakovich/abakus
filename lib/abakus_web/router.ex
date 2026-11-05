@@ -140,8 +140,11 @@ defmodule AbakusWeb.Router do
       live "/dividends", DividendsLive
       live "/transactions", TransactionsLive
       live "/performance", PerformanceLive
-      live "/securities", SecuritiesLive
-      live "/securities/:id", SecurityLive
+      live "/securities", SecuritiesLive, :index
+      live "/securities/:id/edit", SecuritiesLive, :edit
+      live "/securities/new", SecuritiesLive, :new
+      live "/securities/:id", SecurityLive, :show
+      live "/securities/:id/details/edit", SecurityLive, :edit
       live "/receipts", ReceiptsLive
     end
 

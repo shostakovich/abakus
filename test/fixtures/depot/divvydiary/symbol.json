@@ -1,11 +1,13 @@
 {
-  "_note": "Written by hand with invented numbers, in the shape of the real answer Portfolio Performance recorded for its tests (divvy_diary_response_with_payments.json), which Response.symbol/1 reads the same way; the forecast flag is the live API's, which PP's recording lacks.",
+  "_note": "Written by hand with invented numbers, in the shape of the real answer Portfolio Performance recorded for its tests (divvy_diary_response_with_payments.json), which Response.symbol/1 reads the same way; the forecast flag, ter and fundSize are the live API's, which PP's recording lacks.",
   "name": "Beispiel Welt UCITS ETF",
   "symbol": "BSPW",
   "isin": "XX0000000001",
   "exchange": "XETR",
   "currency": "EUR",
   "securityType": "ETF",
+  "ter": 0.0022,
+  "fundSize": 17800000000,
   "sector": "mixed",
   "sectorWeightings": [
     { "sector": "Information Technology", "weight": 0.25 },

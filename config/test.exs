@@ -21,7 +21,8 @@ config :abakus, Abakus.BankSync, client: Abakus.BankSync.FakeClient
 config :abakus, Abakus.Depot.MarketData,
   price_feed: Abakus.Depot.FakePriceFeed,
   symbol_search: Abakus.Depot.FakeSymbolSearch,
-  symbol_source: Abakus.Depot.FakeSymbolSource
+  symbol_source: Abakus.Depot.FakeSymbolSource,
+  probe_timeout: 200
 
 config :abakus, Abakus.Depot.Receipts,
   paperless: Abakus.Depot.FakePaperless,

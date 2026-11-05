@@ -1,7 +1,7 @@
 defmodule Abakus.Depot.MarketData.DivvyDiary do
   @moduledoc """
-  Compositions and dividends from DivvyDiary's API, one request per ISIN, with the API key from
-  `DIVVYDIARY_API_KEY`. Without a key it is not available.
+  Compositions, dividends, TERs and fund sizes from DivvyDiary's API, one request per ISIN, with
+  the API key from `DIVVYDIARY_API_KEY`. Without a key it is not available.
   """
   @behaviour Abakus.Depot.MarketData.SymbolSource
 

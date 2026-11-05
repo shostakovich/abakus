@@ -4,6 +4,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
   import Phoenix.LiveViewTest
   import Abakus.Depot.{PortfoliosFixtures, SecuritiesFixtures}
   import Abakus.UsersFixtures
+  import Setzkasten.Test.Confirm
 
   alias Abakus.Depot.FakeSymbolSource
   alias Abakus.Depot.Portfolios.TransactionUnit
@@ -434,7 +435,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
   end
 
   describe "data sources" do
-    test "name the quote feed, the composition and the link to the settings", ctx do
+    test "name the quote feed and the composition, edited from the header", ctx do
       FakeSymbolSource.stub()
       fetched = DateTime.add(DateTime.utc_now(), -1, :minute)
 
@@ -448,14 +449,94 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
 
       assert lines(lv, "#sources dl > div", "dt, p") == [
                "Kurse Yahoo\u2060\u00A0· VGWL.DE abgerufen #{Format.datetime(fetched)}",
-               "Länder und Sektoren DivvyDiary Stand 08.10.2026"
+               "Fondsdaten DivvyDiary Stand 08.10.2026"
              ]
 
       assert has_element?(
                lv,
-               "#sources a[href='/depot/securities#security-#{security.id}']",
-               "Kursquelle ändern"
+               "header #security-edit[href='/depot/securities/#{security.id}/details/edit']",
+               "Bearbeiten"
              )
+
+      refute has_element?(lv, "#sources a", "Bearbeiten")
+    end
+
+    test "are edited in place, back on the page with its period", ctx do
+      security = security_fixture(quote_feed: :manual, symbol: nil)
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/securities/#{security}?period=5y")
+
+      lv |> element("#security-edit") |> render_click()
+      assert_patch(lv, ~p"/depot/securities/#{security}/details/edit?period=5y")
+      assert has_element?(lv, "#edit-security-dialog-title", "Wertpapier bearbeiten")
+
+      html = lv |> form("#security-form", security: %{isin: "IE00B3RBWM25"}) |> render_submit()
+
+      assert_patch(lv, ~p"/depot/securities/#{security}?period=5y")
+      assert html =~ "Gespeichert."
+      assert has_element?(lv, "header", "IE00B3RBWM25")
+      assert Repo.reload!(security).isin == "IE00B3RBWM25"
+    end
+
+    test "opening and closing the dialog loads nothing again", ctx do
+      security = security_fixture_with_prices()
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/securities/#{security}")
+      assert_push_event(lv, "price-chart", _chart)
+      Repo.update!(Ecto.Changeset.change(security, name: "Umbenannt"))
+
+      lv |> element("#security-edit") |> render_click()
+      assert has_element?(lv, "#edit-security-dialog")
+      lv |> element("#security-form a", "Abbrechen") |> render_click()
+
+      assert_patch(lv, ~p"/depot/securities/#{security}")
+      refute_push_event(lv, "price-chart", _chart)
+      assert has_element?(lv, "header h1", "Vanguard FTSE All-World")
+    end
+
+    test "deleting there goes to the securities", ctx do
+      security = security_fixture(quote_feed: :manual, symbol: nil)
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/securities/#{security}/details/edit")
+
+      assert {:ok, lv, _html} =
+               lv |> confirm_click("#security-delete") |> follow_redirect(ctx.conn)
+
+      assert render(lv) =~ "„Vanguard FTSE All-World“ gelöscht."
+      assert Repo.reload(security) == nil
+    end
+
+    test "say why DivvyDiary delivered nothing", ctx do
+      FakeSymbolSource.stub()
+
+      security =
+        security_fixture(
+          isin: "IE00B3RBWM25",
+          quote_feed: :manual,
+          divvy_diary_error: "DivvyDiary ist nicht erreichbar."
+        )
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/securities/#{security}")
+
+      assert lines(lv, "#sources dl > div", "dt, p") == [
+               "Kurse Ohne Kursabruf",
+               "Fondsdaten DivvyDiary DivvyDiary ist nicht erreichbar."
+             ]
+
+      assert has_element?(lv, "#sources p.text-error-ink")
+    end
+
+    test "say quietly that DivvyDiary does not know the ISIN", ctx do
+      FakeSymbolSource.stub()
+
+      security =
+        security_fixture(isin: "IE00B3RBWM25", quote_feed: :manual, divvy_diary_unknown: true)
+
+      {:ok, lv, _html} = live(ctx.conn, ~p"/depot/securities/#{security}")
+
+      assert lines(lv, "#sources dl > div", "dt, p") == [
+               "Kurse Ohne Kursabruf",
+               "Fondsdaten DivvyDiary keine Fondsdaten zu dieser ISIN"
+             ]
+
+      refute has_element?(lv, "#sources .text-error-ink")
     end
 
     test "name the ECB rate for a security in another currency", ctx do
@@ -467,7 +548,7 @@ defmodule AbakusWeb.Depot.SecurityLiveTest do
       assert lines(lv, "#sources dl > div", "dt, p") == [
                "Kurse Ohne Kursabruf",
                "Wechselkurs USD EZB\u2060\u00A0· 1,1652 Stand 08.10.2026",
-               "Länder und Sektoren DivvyDiary ohne API-Key"
+               "Fondsdaten DivvyDiary ohne API-Key"
              ]
     end
   end

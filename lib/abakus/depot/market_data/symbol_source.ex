@@ -1,8 +1,8 @@
 defmodule Abakus.Depot.MarketData.SymbolSource do
   @moduledoc """
   A source of the composition of a security, its weights per country, as ISO 3166 code, and per
-  sector, and its dividends, by its ISIN in one request. Without its API key it is not available
-  and must not be asked.
+  sector, its dividends, and its TER as a fraction and fund size in cents (nil when unknown), by
+  its ISIN in one request. Without its API key it is not available and must not be asked.
   """
 
   @type composition :: %{countries: %{String.t() => number}, sectors: %{String.t() => number}}
@@ -12,7 +12,12 @@ defmodule Abakus.Depot.MarketData.SymbolSource do
           per_share: integer,
           currency: String.t()
         }
-  @type symbol :: %{composition: composition, dividends: [dividend]}
+  @type symbol :: %{
+          composition: composition,
+          dividends: [dividend],
+          ter: number | nil,
+          fund_size: pos_integer | nil
+        }
   @type reason ::
           :not_found
           | :unreachable

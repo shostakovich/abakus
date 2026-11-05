@@ -388,7 +388,8 @@ _Avoid_: Portfolio app, investments, Depot area
 **Security**:
 A tradable instrument (ETF, fund, share) identified by its ISIN, with its own price history from Yahoo or manual;
 on one day a manual price wins over Yahoo's. No screen enters prices: prices are shared, so one user's price would
-move everyone's Vermögen. UI "Wertpapier".
+move everyone's Vermögen. A retired one fetches nothing; only one nobody has booked or compares with can be deleted.
+UI "Wertpapier", retired "ausgemustert".
 _Avoid_: Asset, instrument, position
 
 **Portfolio**:
