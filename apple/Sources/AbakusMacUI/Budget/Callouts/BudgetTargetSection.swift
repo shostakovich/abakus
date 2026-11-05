@@ -41,7 +41,7 @@ private struct BudgetTargetView: View {
                 status
                 Spacer(minLength: 0)
                 if let label = display.assignLabel {
-                    Button("Zuweisen", action: controller.assignTargetClicked).accessibilityLabel(label)
+                    Button(label, action: controller.assignTargetClicked)
                 }
             }
             if let progress = display.progress { BudgetTargetBar(progress: progress) }

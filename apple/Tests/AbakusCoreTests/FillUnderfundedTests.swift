@@ -100,14 +100,12 @@ import Testing
         #expect(scenario.month("2026-09-01").free == 0)
     }
 
-    /// Abakus's "Verteilen › In eine Kategorie …" test in `test/abakus_web/live/budget_details_test.exs`.
-    @Test func assigningToOneCategorySuggestsTheFirstUnderfundedWithWhatItStillNeeds() throws {
+    @Test func theSuggestionIsWhatTheTargetStillNeeds() throws {
         var scenario = try scenario(income: 1000)
         try target(120, S.kleidung, on: &scenario)
         let sheet = scenario.sheet
-        #expect(sheet.firstUnderfunded(in: october) == S.kleidung)
         #expect(sheet.assignSuggestion(categoryId: S.kleidung, in: october) == 120)
-        #expect(sheet.assignSuggestion(categoryId: S.lebensmittel, in: october) == 1000)
+        #expect(sheet.assignSuggestion(categoryId: S.lebensmittel, in: october) == 0)
     }
 
     @Test func theSuggestionReachesOnlyAsFarAsZuVerteilenAndSkipsSnoozedTargets() throws {
@@ -115,9 +113,7 @@ import Testing
         try target(120, S.lebensmittel, on: &scenario)
         try target(80, S.kleidung, on: &scenario)
         try scenario.budget.apply(.setTargetSnoozed(month: october, categoryId: S.lebensmittel, true))
-        #expect(scenario.sheet.firstUnderfunded(in: october) == S.kleidung)
         #expect(scenario.sheet.assignSuggestion(categoryId: S.kleidung, in: october) == 50)
-        #expect(scenario.sheet.assignSuggestion(categoryId: S.lebensmittel, in: october) == 50)
-        #expect(ScenarioBudget().sheet.firstUnderfunded(in: october) == nil)
+        #expect(scenario.sheet.assignSuggestion(categoryId: S.lebensmittel, in: october) == 0)
     }
 }

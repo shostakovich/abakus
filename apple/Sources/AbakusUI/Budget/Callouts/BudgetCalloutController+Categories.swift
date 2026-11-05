@@ -1,12 +1,23 @@
 import AbakusCore
 import Foundation
 
+public struct BudgetCategoryChoice: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+}
+
+public struct BudgetCategoryChoiceGroup: Identifiable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let categories: [BudgetCategoryChoice]
+}
+
 public struct BudgetCategoryForm: Hashable, Sendable {
     public let categoryId: String
     public let isMaster: Bool
     public let isNew: Bool
     public let month: DateWithoutTime
-    let originalName: String
+    var originalName: String
     public var name: String
     public internal(set) var closesOnClickOutside = true
     public internal(set) var focusRequest = 0
@@ -100,25 +111,35 @@ extension BudgetCalloutController {
         guard saveOpenTarget(), var form = category else { return }
         form.closesOnClickOutside = false
         category = form
+        guard rename(form) != nil else { return }
+        close()
+    }
+
+    /// The title renames in place; a refused name stays to be changed.
+    public func categoryNameSubmitted() {
+        guard let form = category, !form.isNew, let name = rename(form) else { return }
+        category?.originalName = name
+        category?.name = name
+    }
+
+    /// The trimmed name once saved, nil when it is refused.
+    private func rename(_ form: BudgetCategoryForm) -> String? {
         let name = form.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard name != form.originalName else {
-            close()
-            return
-        }
+        guard name != form.originalName else { return name }
         let command: BudgetCommand =
             form.isMaster
             ? .renameCategoryGroup(groupId: form.categoryId, name: name)
             : .renameCategory(categoryId: form.categoryId, name: name)
         do {
             try store.perform(command)
+            return name
         } catch {
-            guard !dialogs.isPresenting(ownedBy: self) else { return }
+            guard !dialogs.isPresenting(ownedBy: self) else { return nil }
             dialogs.show(.message(Self.renameRefusal, error.localizedDescription), owner: self) { [weak self] in
                 self?.category?.focusRequest += 1
             }
-            return
+            return nil
         }
-        close()
     }
 
     public func categoryCancelled() {
@@ -163,5 +184,16 @@ extension BudgetCalloutController {
         guard let form = category, let successor = form.deletion?.successorId else { return }
         close()
         budget.perform(.deleteCategory(categoryId: form.categoryId, into: successor))
+    }
+}
+
+extension BudgetCalloutController {
+    func categoryChoices(excluding excluded: String) -> [BudgetCategoryChoiceGroup] {
+        budget.sheet.categoryGroups.compactMap { master in
+            let categories = master.categories.filter { $0.id != excluded }
+                .map { BudgetCategoryChoice(id: $0.id, name: $0.name) }
+            guard !categories.isEmpty else { return nil }
+            return BudgetCategoryChoiceGroup(id: master.id, name: master.name, categories: categories)
+        }
     }
 }

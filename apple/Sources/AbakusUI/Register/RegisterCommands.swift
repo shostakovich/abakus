@@ -129,7 +129,7 @@ package struct RegisterMenuItemsView: View {
                     Toggle(isOn: Binding(get: { true }, set: { _ in perform(action) })) { label(item) }
                         .disabled(!item.isEnabled)
                 } else {
-                    Button {
+                    Button(role: item.isDestructive ? .destructive : nil) {
                         perform(action)
                     } label: {
                         label(item)
@@ -145,6 +145,7 @@ package struct RegisterMenuItemsView: View {
                 .disabled(!item.isEnabled)
             }
         }
+        .tint(nil)
     }
 
     @ViewBuilder

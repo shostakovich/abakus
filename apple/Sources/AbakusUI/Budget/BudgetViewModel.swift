@@ -31,6 +31,8 @@ public final class BudgetViewModel {
     /// Set on iPhone and iPad, where it decides the months in place of the Mac's panel.
     public var touchLayout: BudgetTouchLayout? {
         didSet {
+            // The phone has no table cell to keep a refused amount in, so it would block every tap.
+            if touchLayout == .phone { commitOrDropEdit() }
             placeOpeningMonth()
             endEditOutsideShownMonths()
         }
@@ -41,8 +43,12 @@ public final class BudgetViewModel {
     public internal(set) var presentedPopup: BudgetPopup?
     public internal(set) var editor: BudgetCellEdit?
     @ObservationIgnored var sheetAssigned: BudgetCellEdit?
-    public internal(set) var quickBudget: BudgetQuickBudgetList?
-    public internal(set) var calculator: BudgetCalculator?
+    public internal(set) var sheetAssignedError: String?
+    public internal(set) var sheetAssignedRefusals = 0
+    var storedUndoNotice: BudgetUndoNotice?
+    /// The window's, on the Mac, so ⌘Z takes back what the undo notice offers.
+    @ObservationIgnored public weak var undoManager: UndoManager?
+    @ObservationIgnored var undoRegistration: BudgetUndoRegistration?
     public internal(set) var drag: BudgetDrag?
     public internal(set) var panelFocusRequest = 0
     @ObservationIgnored public private(set) lazy var callouts = BudgetCalloutController(budget: self)
@@ -156,7 +162,7 @@ public final class BudgetViewModel {
     }
 
     private func endEditOutsideShownMonths() {
-        if let editor, !shownMonths.contains(editor.cell.month) { commitEdit() }
+        if let editor, !shownMonths.contains(editor.cell.month) { commitOrDropEdit() }
     }
 
     private func placeOpeningMonth() {
@@ -171,8 +177,8 @@ public final class BudgetViewModel {
     }
 
     public func leave() {
-        commitEdit()
-        calculator = nil
+        commitOrDropEdit()
+        storedUndoNotice = nil
         drag = nil
         dismissPopup()
         hoveredRowId = nil
@@ -218,8 +224,7 @@ public final class BudgetViewModel {
     }
 
     public func select(_ month: DateWithoutTime) {
-        commitEdit()
-        calculator = nil
+        guard commitEdit() else { return }
         firstMonth = month.firstOfMonth
         settings.lastSelectedMonth = firstMonth
     }
@@ -296,6 +301,7 @@ public final class BudgetViewModel {
         commitEdit()
         do {
             try store.perform(command)
+            dropStaleUndo()
             callouts.refreshAvailableForm()
         } catch let error as BudgetError {
             dialogs.show(.message(error.dialogInstruction, error.dialogContent ?? ""))
@@ -320,8 +326,7 @@ public final class BudgetViewModel {
     }
 
     private func open(_ callout: (BudgetCalloutController) -> BudgetPopup?) {
-        commitEdit()
-        calculator = nil
+        guard commitEdit() else { return }
         presentedPopup = callout(callouts)
     }
 
@@ -340,7 +345,9 @@ public final class BudgetViewModel {
         present(.outflowSummary(month: month, source: .masterCategory(masterId)))
     }
 
+    /// Only an overspent Verfügbar opens its cover list.
     public func balanceClicked(month: DateWithoutTime, categoryId: String) {
+        guard (self.month(month)?.category(categoryId)?.balance ?? 0) < 0 else { return }
         present(.available(month: month, categoryId: categoryId))
     }
 

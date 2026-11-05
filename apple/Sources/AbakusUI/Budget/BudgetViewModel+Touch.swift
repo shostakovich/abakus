@@ -8,14 +8,10 @@ extension BudgetViewModel {
         present(.category(month: (month ?? focusMonth).firstOfMonth, categoryId: categoryId))
     }
 
-    public func quickBudgetOptions(for cell: BudgetCellID) -> [QuickBudgetOption] {
-        sheet.quickBudgetOptions(categoryId: cell.categoryId, month: cell.month)
-    }
-
-    /// A category's, a group's or "In eine Kategorie …"'s sheet, or the iPad's popover in its place.
+    /// A category's or a group's sheet, or the iPad's popover in its place.
     public var showsTouchCallout: Bool {
         switch presentedPopup {
-        case .category, .editCategory, .assignToCategory: true
+        case .category, .editCategory: true
         default: false
         }
     }
@@ -27,27 +23,56 @@ extension BudgetViewModel {
 
     public var showsTouchSheet: Bool { showsTouchCallout && !showsCategoryPopover }
 
+    /// The phone's cover list is a sheet of its own; the iPad's a popover beside the cell, as the Mac's.
+    public var showsCoverSheet: Bool {
+        guard touchLayout == .phone, case .available = presentedPopup else { return false }
+        return callouts.availableForm != nil
+    }
+
+    public var coverPopover: BudgetCellID? {
+        guard let touchLayout, touchLayout != .phone, case .available(let month, let id) = presentedPopup,
+            callouts.availableForm != nil
+        else { return nil }
+        return BudgetCellID(month: month, categoryId: id)
+    }
+
+    public func coverDismissed() {
+        if case .available = presentedPopup { dismissPopup() }
+    }
+
     public func touchSheetSwipedAway() {
         if showsTouchCallout { touchSheetDismissed() }
     }
 
     /// The sheet's Zugewiesen keeps what is typed here, so closing the sheet with the keyboard up saves it.
     public func sheetAssignedChanged(_ text: String, in cell: BudgetCellID) {
+        guard sheetAssigned?.cell != cell || sheetAssigned?.text != text else { return }
         sheetAssigned = BudgetCellEdit(cell: cell, text: text)
+        sheetAssignedError = nil
     }
 
-    public func commitSheetAssigned() {
-        guard let edit = sheetAssigned else { return }
+    @discardableResult
+    public func commitSheetAssigned() -> Bool {
+        guard let edit = sheetAssigned else { return true }
+        if let error = assign(edit.text, to: edit.cell) {
+            sheetAssignedError = error
+            sheetAssignedRefusals += 1
+            announceRefusal(error)
+            return false
+        }
         sheetAssigned = nil
-        assign(edit.text, to: edit.cell)
+        return true
+    }
+
+    func dropSheetAssigned() {
+        sheetAssigned = nil
+        sheetAssignedError = nil
     }
 
     /// Swiping the sheet away closes it as its Close button does; a category just added is discarded.
     public func touchSheetDismissed() {
-        commitSheetAssigned()
-        if callouts.assignForm != nil {
-            callouts.assignCancelled()
-        } else if let form = callouts.category {
+        if !commitSheetAssigned() { dropSheetAssigned() }
+        if let form = callouts.category {
             if form.isNew || form.deletion != nil {
                 callouts.categoryCancelled()
             } else {
@@ -57,11 +82,6 @@ extension BudgetViewModel {
         } else {
             dismissPopup()
         }
-    }
-
-    public func quickBudgetOptionChosen(_ option: QuickBudgetOption, for cell: BudgetCellID) {
-        if sheetAssigned?.cell == cell { sheetAssigned = nil }
-        setAssigned(option.amount, in: cell)
     }
 }
 
@@ -187,13 +207,13 @@ extension BudgetViewModel {
         return BudgetWaiting(overspentIds: overspent, approvals: store.budget.approvalCount)
     }
 
-    /// Its group unfolds, as the iPad's popover needs the row to stand on.
+    /// Opens the first one's cover list; its group unfolds, as the iPad's popover needs the cell to stand on.
     public func overspentTapped(in month: BudgetMonth) {
         guard let id = waiting(in: month).overspentIds.first else { return }
         if let group = groups.first(where: { $0.subs.contains { $0.id == id } }), !group.isExpanded {
             perform(.setCategoryGroupExpanded(groupId: group.id, true))
         }
-        categoryTapped(id, month: month.month)
+        balanceClicked(month: month.month, categoryId: id)
     }
 
     public func approvalsTapped() {

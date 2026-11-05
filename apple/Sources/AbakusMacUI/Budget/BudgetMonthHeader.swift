@@ -42,9 +42,9 @@ struct BudgetMonthHeader: View {
             BudgetSymbolButton(
                 symbol: "ellipsis", label: "Verteilen", toolTip: "Verteilen", rotation: .degrees(90)
             ) {
-                model.present(.monthQuickBudget(month: month.month))
+                model.present(.monthMenu(month: month.month))
             }
-            .budgetPopupAnchor(.monthQuickBudget(month.month), of: model)
+            .budgetPopupAnchor(.monthMenu(month.month), of: model)
         }
         .padding(.leading, BudgetStyle.resultInset)
         .padding(.trailing, 4)

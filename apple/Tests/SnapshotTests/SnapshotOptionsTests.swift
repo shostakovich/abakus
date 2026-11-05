@@ -25,9 +25,9 @@ import Testing
 
     @Test func budgetStatesTakeAMonthAndTheTestEdits() throws {
         let options = try SnapshotOptions(arguments: [
-            "out.png", "--budget", "quick-budget", "--month", "2023-05", "--test-edits", "--width", "1344",
+            "out.png", "--budget", "month-menu", "--month", "2023-05", "--test-edits", "--width", "1344",
         ])
-        #expect(options.budget == .quickBudget)
+        #expect(options.budget == .monthMenu)
         #expect(options.month?.description == "2023-05-01")
         #expect(options.testEdits)
         #expect(options.width == 1344)

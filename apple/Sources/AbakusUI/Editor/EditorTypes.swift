@@ -96,11 +96,6 @@ public enum EditorMode: Hashable, Sendable {
     case new
 }
 
-public struct EditorCalculator: Hashable, Sendable {
-    public var field: EditorFieldID
-    public var calculator: Calculator
-}
-
 public struct EditorDateCallout: Hashable, Sendable {
     public var title: String
     public var message: String

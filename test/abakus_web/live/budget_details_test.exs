@@ -73,35 +73,63 @@ defmodule AbakusWeb.BudgetDetailsTest do
       assert has_element?(
                view,
                "#distribute-underfunded-2026-10",
-               "Unterfinanzierte füllen (533,34\u00A0€)"
+               "533,34\u00A0€"
              )
 
       view |> element("#distribute-underfunded-2026-10") |> render_click()
 
       assert assigned(c.groceries, @october) == 40_000
       assert assigned(c.rent, @october) == 13_334
-      assert has_element?(view, "#flash-info", "Unterfinanzierte Ziele gefüllt.")
+      assert toast(view, "Ziele mit 533,34 € gefüllt.")
 
       income(c, 50_000, @november)
       monthly(c.fuel, 50_000)
 
       {:ok, view, _html} = open(c.conn, months: 2)
+
+      assert has_element?(
+               view,
+               "#distribute-underfunded-2026-11",
+               "566,66\u00A0€"
+             )
+
       view |> element("#distribute-underfunded-2026-11") |> render_click()
 
       assert assigned(c.groceries, @november) == 40_000
       assert assigned(c.fuel, @november) == 16_666
       assert assigned(c.rent, @november) == 0
-      assert has_element?(view, "#flash-info", "Nur teilweise gefüllt")
+      assert toast(view, "Ziele mit 566,66 € gefüllt.")
     end
 
-    test "Verteilen › Zuweisung zurücksetzen takes back what the month has assigned, after asking",
+    test "filling the underfunded can be undone", c do
+      income(c, 60_000)
+      monthly(c.groceries, 40_000)
+      monthly(c.rent, 50_000)
+      Categories.assign(budget_scope(), c.rent, @october, 10_000)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#distribute-underfunded-2026-10") |> render_click()
+
+      assert assigned(c.groceries, @october) == 40_000
+      assert assigned(c.rent, @october) == 20_000
+
+      undo(view)
+
+      assert assigned(c.groceries, @october) == 0
+      assert assigned(c.rent, @october) == 10_000
+      assert has_element?(view, "#ready-2026-10", "500,00\u00A0€")
+      refute has_element?(view, "#flash-group button", "Rückgängig")
+    end
+
+    test "Verteilen › Zurücksetzen takes back what the month has assigned, after asking",
          c do
       Categories.assign(budget_scope(), c.groceries, @october, 10_000)
       Categories.assign(budget_scope(), c.rent, @october, 20_000)
       Categories.assign(budget_scope(), c.rent, @november, 20_000)
       {:ok, view, _html} = open(c.conn)
 
-      refute has_element?(view, "#distribute-underfunded-2026-10")
+      assert menu_item(view, "underfunded", "2026-10", "Nichts unterfinanziert")
+      assert has_element?(view, "#distribute-reset-2026-10", "Zuweisungen im Okt")
 
       Confirm.confirm_click(
         view,
@@ -113,76 +141,94 @@ defmodule AbakusWeb.BudgetDetailsTest do
       assert assigned(c.rent, @october) == 0
       assert assigned(c.rent, @november) == 20_000
       assert has_element?(view, "#flash-info", "Zuweisungen im Oktober zurückgesetzt.")
-      refute has_element?(view, "#distribute-2026-10")
+      assert menu_item(view, "reset", "2026-10", "Nichts zugewiesen")
     end
 
-    test "Verteilen › In eine Kategorie … assigns Zu verteilen to the category picked", c do
-      income(c, 100_000)
-      monthly(c.fuel, 12_000)
-      {:ok, view, _html} = open(c.conn)
-
-      view |> element("#distribute-pick-2026-10") |> render_click()
-
-      assert has_element?(view, "#popover", "In eine Kategorie verteilen · Oktober")
-
-      assert has_element?(
-               view,
-               ~s|#pick-category-listbox [data-value="#{c.fuel.id}"][data-current]|
-             )
-
-      assert has_element?(view, ~s|#pick-amount[value="120,00"]|)
-
-      view
-      |> form("#pick-form")
-      |> render_change(%{"_target" => ["category"], "category" => "#{c.rent.id}"})
-
-      assert has_element?(view, ~s|#pick-amount[value="1.000,00"]|)
-
-      view
-      |> form("#pick-form", %{"amount" => "250"})
-      |> render_submit(%{"category" => "#{c.rent.id}"})
-
-      assert assigned(c.rent, @october) == 25_000
-      assert has_element?(view, "#flash-info", "250,00\u00A0€ an 🏠 Miete verteilt.")
-      assert has_element?(view, "#ready-2026-10", "750,00\u00A0€")
-    end
-
-    test "Verteilen offers to fill the underfunded only while a target is underfunded", c do
+    test "Verteilen always shows; what cannot run is dimmed and says why", c do
       income(c, 5_000)
       {:ok, view, _html} = open(c.conn)
 
-      assert has_element?(view, "#distribute-pick-2026-10")
-      refute has_element?(view, "#distribute-underfunded-2026-10")
+      assert has_element?(view, ~s|#distribute-2026-10 summary[aria-label="Verteilen"]|)
+      assert menu_item(view, "underfunded", "2026-10", "Nichts unterfinanziert")
+      assert menu_item(view, "reset", "2026-10", "Nichts zugewiesen")
+      refute has_element?(view, "#distribute-underfunded-2026-10", "€")
+
+      Categories.assign(budget_scope(), c.fuel, @october, 7_000)
+      monthly(c.groceries, 10_000)
+      {:ok, view, _html} = open(c.conn)
+
+      assert has_element?(view, "#ready-2026-10", "−20,00")
+      assert menu_item(view, "underfunded", "2026-10", "Nichts zu verteilen")
+      assert has_element?(view, "#distribute-reset-2026-10:not([disabled])")
+      assert has_element?(view, "#distribute-reset-2026-10.text-error-ink")
     end
 
-    test "a closed month offers no Verteilen when later months assigned what it left", c do
+    test "Zurücksetzen runs while any category has an assignment, even when they add up to zero",
+         c do
+      Categories.assign(budget_scope(), c.groceries, @october, 5_000)
+      Categories.assign(budget_scope(), c.rent, @october, -5_000)
+      {:ok, view, _html} = open(c.conn)
+
+      assert has_element?(view, "#total-2026-10-assigned", "0,00")
+      assert has_element?(view, "#distribute-reset-2026-10:not([disabled])")
+
+      Confirm.confirm_click(
+        view,
+        "#distribute-reset-2026-10",
+        "Alle Zuweisungen im Oktober zurücksetzen?"
+      )
+
+      assert assigned(c.groceries, @october) == 0
+      assert assigned(c.rent, @october) == 0
+      assert menu_item(view, "reset", "2026-10", "Nichts zugewiesen")
+    end
+
+    test "Ziele füllen names what it moves: at most what Zu verteilen holds", c do
+      income(c, 3_000)
+      monthly(c.rent, 50_000)
+      {:ok, view, _html} = open(c.conn)
+
+      assert has_element?(
+               view,
+               "#distribute-underfunded-2026-10:not([disabled])",
+               "30,00\u00A0€"
+             )
+
+      view |> element("#distribute-underfunded-2026-10") |> render_click()
+
+      assert assigned(c.rent, @october) == 3_000
+      assert toast(view, "Ziele mit 30,00 € gefüllt.")
+    end
+
+    test "a closed month's Verteilen has nothing to do when later months assigned what it left",
+         c do
       income(c, 5_000, ~D[2026-09-01])
       Categories.assign(budget_scope(), c.fuel, @october, 5_000)
 
       {:ok, view, _html} = live(c.conn, ~p"/budget?month=2026-09")
 
       assert has_element?(view, "#ready-2026-09", "50,00")
-      refute has_element?(view, "#distribute-2026-09")
+      assert menu_item(view, "underfunded", "2026-09", "Nichts unterfinanziert")
+      assert menu_item(view, "reset", "2026-09", "Nichts zugewiesen")
     end
 
-    test "Verteilen offers to fill the underfunded only while money is unassigned", c do
+    test "Verteilen fills the underfunded only while money is unassigned", c do
       monthly(c.fuel, 12_000)
       {:ok, view, _html} = open(c.conn)
 
-      refute has_element?(view, "#distribute-2026-10")
+      assert menu_item(view, "underfunded", "2026-10", "Nichts zu verteilen")
 
       income(c, 5_000)
       {:ok, view, _html} = open(c.conn)
 
-      refute has_element?(view, "#distribute-reset-2026-10")
       view |> element("#distribute-underfunded-2026-10") |> render_click()
 
       assert assigned(c.fuel, @october) == 5_000
-      assert has_element?(view, "#distribute-reset-2026-10")
+      assert has_element?(view, "#distribute-reset-2026-10:not([disabled])")
     end
   end
 
-  describe "the available cell" do
+  describe "Verfügbar" do
     test "the ring shows the month's share of an underfunded target", c do
       income(c, 100_000)
 
@@ -200,12 +246,9 @@ defmodule AbakusWeb.BudgetDetailsTest do
       Categories.assign(budget_scope(), christmas, @november, 2_500)
       {:ok, view, _html} = open(c.conn, months: 2)
 
-      cell = "#available-button-#{christmas.id}-2026-11"
+      cell = "#available-#{christmas.id}-2026-11 .app-avail"
 
-      assert has_element?(
-               view,
-               ~s|#{cell}.text-warning-ink[aria-label*="unterfinanziert, 62 % finanziert"]|
-             )
+      assert has_element?(view, "#{cell}.text-warning-ink .sr-only", "62\u00A0% finanziert")
 
       assert has_element?(
                view,
@@ -220,160 +263,220 @@ defmodule AbakusWeb.BudgetDetailsTest do
       assert has_element?(view, "#target-status", "Noch 15,00 € diesen Monat.")
     end
 
-    test "covers an overspent category from Zu verteilen", c do
+    test "only an overspent Verfügbar is a button", c do
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
+      spend(c, c.fuel, -2_500)
+      {:ok, view, _html} = open(c.conn)
+
+      refute has_element?(view, "#available-button-#{c.groceries.id}-2026-10")
+      refute has_element?(view, "#available-#{c.groceries.id}-2026-10 button")
+      assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .app-avail", "100,00")
+      refute has_element?(view, "#available-button-#{c.rent.id}-2026-10")
+
+      assert has_element?(
+               view,
+               ~s|#available-button-#{c.fuel.id}-2026-10.text-error-ink[aria-label*="überzogen"]|,
+               "−25,00"
+             )
+
+      render_hook(view, "open_popover", %{"category" => "#{c.groceries.id}", "month" => "2026-10"})
+
+      refute has_element?(view, "#popover")
+    end
+
+    test "covering takes as much as the source holds", c do
+      Categories.assign(budget_scope(), c.groceries, @october, 2_000)
+      Categories.assign(budget_scope(), c.rent, @october, 30_000)
+      spend(c, c.fuel, -4_000)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
+
+      assert has_element?(
+               view,
+               ~s|#popover[data-show="true"][data-anchor="available-button-#{c.fuel.id}-2026-10"]|,
+               "40,00\u00A0€ decken aus"
+             )
+
+      assert cover_sources(view) == [{"🏠", "Miete", "300.00"}, {"🛒", "Lebensmittel", "20.00"}]
+      refute has_element?(view, "#popover input")
+      refute has_element?(view, "#popover button[type=submit]")
+      refute has_element?(view, "#category-dialog[data-show=true]")
+
+      view |> element("#cover-from-#{c.groceries.id}") |> render_click()
+
+      assert available(c.groceries) == 0
+      assert available(c.fuel) == -2_000
+      refute has_element?(view, ~s|#popover[data-show="true"]|)
+      assert toast(view, "20,00 € aus Lebensmittel gedeckt.")
+
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
+
+      assert has_element?(view, "#popover", "20,00\u00A0€ decken aus")
+      assert cover_sources(view) == [{"🏠", "Miete", "300.00"}]
+
+      view |> element("#cover-from-#{c.rent.id}") |> render_click()
+
+      assert available(c.rent) == 28_000
+      assert available(c.fuel) == 0
+      refute has_element?(view, "#available-button-#{c.fuel.id}-2026-10")
+    end
+
+    test "covers from Zu verteilen first", c do
       income(c, 100_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 2_000)
       spend(c, c.fuel, -2_500)
       {:ok, view, _html} = open(c.conn)
 
       view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
 
-      assert has_element?(view, "#popover", "⛽ Tanken")
+      assert cover_sources(view) == [
+               {"", "Zu verteilen", "980.00"},
+               {"🛒", "Lebensmittel", "20.00"}
+             ]
 
-      assert has_element?(
-               view,
-               ~s|#cover-from-listbox [data-value=rta][data-current]|,
-               "1.000,00\u00A0€"
-             )
+      assert has_element?(view, "#cover-from-rta[autofocus] svg.lucide")
+      assert has_element?(view, "#cover-from-rta .text-success-ink", "980,00")
+      refute has_element?(view, "#popover", "📥")
 
-      assert has_element?(view, "#cover-after", "Zu verteilen danach")
-      assert has_element?(view, "#cover-after", "975,00\u00A0€")
-
-      view |> form("#cover-form") |> render_submit()
+      view |> element("#cover-from-rta") |> render_click()
 
       assert assigned(c.fuel, @october) == 2_500
-      refute has_element?(view, ~s|#popover[data-show="true"]|)
-      assert has_element?(view, "#flash-info", "25,00\u00A0€ aus „Zu verteilen“ gedeckt.")
+      assert has_element?(view, "#ready-2026-10", "955,00\u00A0€")
+      assert toast(view, "25,00 € aus „Zu verteilen“ gedeckt.")
     end
 
-    test "moves money to another category or to Zu verteilen", c do
-      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
+    test "covering can be undone, which keeps what changed since", c do
+      Categories.assign(budget_scope(), c.groceries, @october, 2_000)
+      Categories.assign(budget_scope(), c.rent, @october, 30_000)
+      spend(c, c.fuel, -4_000)
       {:ok, view, _html} = open(c.conn)
 
-      view |> element("#available-button-#{c.groceries.id}-2026-10") |> render_click()
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
+      view |> element("#cover-from-#{c.rent.id}") |> render_click()
 
-      assert has_element?(view, "#popover", "🛒 Lebensmittel")
-      refute has_element?(view, "#popover-cover")
-      assert has_element?(view, ~s|#move-amount[value="100,00"]|)
-      assert has_element?(view, "#move-form input[name=direction][value=to][checked]")
+      assert assigned(c.rent, @october) == 26_000
+      assert assigned(c.fuel, @october) == 4_000
 
-      view
-      |> form("#move-form", %{"amount" => "30", "direction" => "to"})
-      |> render_submit(%{"other" => "#{c.rent.id}"})
+      undo(view)
 
-      assert assigned(c.groceries, @october) == 7_000
-      assert assigned(c.rent, @october) == 3_000
+      assert assigned(c.rent, @october) == 30_000
+      assert assigned(c.fuel, @october) == 0
+      assert has_element?(view, "#available-button-#{c.fuel.id}-2026-10", "−40,00")
+
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
+      view |> element("#cover-from-#{c.rent.id}") |> render_click()
+      Categories.assign(budget_scope(), c.rent, @october, 25_000)
+
+      undo(view)
+
+      assert assigned(c.rent, @october) == 29_000
+      assert assigned(c.fuel, @october) == 0
+
+      render_click(view, "undo", %{"id" => "stale"})
+      render_click(view, "undo", %{})
+
+      assert assigned(c.rent, @october) == 29_000
+      assert assigned(c.fuel, @october) == 0
+    end
+
+    test "renaming, sorting and deleting end the offer to undo", c do
+      income(c, 10_000)
+      for category <- [c.groceries, c.fuel, c.rent], do: spend(c, category, -1_000)
+      empty = category_group_fixture(name: "Leer", position: 2)
+      {:ok, view, _html} = open(c.conn)
+
+      actions = [
+        {c.groceries,
+         fn ->
+           view |> element("#select-#{c.rent.id}") |> render_click()
+           render_hook(view, "edit_save", %{"name" => "🏠 Wohnung"})
+         end},
+        {c.fuel,
+         fn ->
+           render_hook(view, "sort_category", %{
+             "id" => c.rent.id,
+             "section" => c.groceries.category_group_id,
+             "index" => 0
+           })
+         end},
+        {c.rent, fn -> render_click(view, "delete_group", %{"group" => empty.id}) end}
+      ]
+
+      for {category, action} <- actions do
+        render_click(view, "cover", %{"category" => category.id, "from" => "rta"})
+        assert toast(view, "10,00 € aus „Zu verteilen“ gedeckt.")
+
+        [id] =
+          Regex.run(~r/&quot;id&quot;:&quot;(\d+)&quot;/, render(element(view, "#flash-group")),
+            capture: :all_but_first
+          )
+
+        action.()
+
+        refute toast(view, "gedeckt.")
+        render_click(view, "undo", %{"id" => id})
+        assert assigned(category, @october) == 1_000
+      end
+    end
+
+    test "offers only what has money", c do
+      income(c, 10_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
+      spend(c, c.fuel, -2_500)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
+
+      assert has_element?(view, "#ready-2026-10", "0,00\u00A0€")
+      assert cover_sources(view) == [{"🛒", "Lebensmittel", "100.00"}]
+      refute has_element?(view, "#cover-from-rta")
+      refute has_element?(view, "#cover-from-#{c.rent.id}")
+
+      spend(c, c.groceries, -10_000)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
 
       assert has_element?(
                view,
-               "#flash-info",
-               "30,00\u00A0€ von 🛒 Lebensmittel nach 🏠 Miete verschoben."
+               "#popover #cover-sources .setzkasten-pick-empty",
+               "Kein Geld in „Zu verteilen“ oder anderen Kategorien."
              )
 
-      view |> element("#available-button-#{c.rent.id}-2026-10") |> render_click()
-
-      view
-      |> form("#move-form", %{"amount" => "10", "direction" => "from"})
-      |> render_submit()
-
-      assert assigned(c.rent, @october) == 4_000
+      assert cover_sources(view) == []
     end
 
-    test "refuses Ready to Assign as a category and ids it cannot read", c do
+    test "covers nothing from itself, Ready to Assign as a category or ids it cannot read", c do
       hidden = Categories.ready_to_assign!(budget_scope())
       Categories.assign(budget_scope(), c.groceries, @october, 10_000)
+      spend(c, c.fuel, -2_500)
       {:ok, view, _html} = open(c.conn)
 
-      id = "#{c.groceries.id}"
-      render_hook(view, "move", %{"category" => id, "other" => "#{hidden.id}", "amount" => "5"})
-      render_hook(view, "pick", %{"category" => "#{hidden.id}", "amount" => "5"})
-      render_hook(view, "pick", %{"amount" => "5"})
-      render_hook(view, "cover", %{"category" => id, "from" => %{"a" => "1"}})
-      render_hook(view, "move", %{"category" => %{}, "other" => "rta", "amount" => "5"})
-      render_hook(view, "pick_change", %{"_target" => ["amount"]})
+      fuel = "#{c.fuel.id}"
+
+      for from <- ["#{hidden.id}", fuel, %{"a" => "1"}, "#{c.rent.id}"] do
+        render_hook(view, "cover", %{"category" => fuel, "from" => from})
+      end
+
+      render_hook(view, "cover", %{"category" => "#{c.groceries.id}", "from" => "rta"})
+      render_hook(view, "cover", %{"category" => %{}, "from" => "rta"})
 
       assert assigned(hidden, @october) == 0
       assert assigned(c.groceries, @october) == 10_000
-      assert render(view) =~ "Lebensmittel"
+      assert assigned(c.fuel, @october) == 0
+      assert has_element?(view, "#flash-error", "Daraus lässt sich nichts decken.")
     end
 
-    test "an amount that is no number stays in the popover with a message", c do
-      Categories.assign(budget_scope(), c.groceries, @october, 10_000)
-      {:ok, view, _html} = open(c.conn)
-
-      view |> element("#available-button-#{c.groceries.id}-2026-10") |> render_click()
-
-      view
-      |> form("#move-form", %{"amount" => "viel", "direction" => "to"})
-      |> render_submit()
-
-      assert has_element?(view, "#popover #move-amount-error-0", "Ungültiger Betrag „viel“.")
-      assert has_element?(view, "#move-amount[aria-invalid=true]")
-      assert assigned(c.groceries, @october) == 10_000
-
-      view
-      |> form("#move-form", %{"amount" => "1,234", "direction" => "to"})
-      |> render_submit()
-
-      assert has_element?(
-               view,
-               "#popover #move-amount-error-0",
-               "Höchstens 2 Nachkommastellen erlaubt."
-             )
-
-      view |> form("#move-form", %{"amount" => "0", "direction" => "to"}) |> render_submit()
-
-      assert has_element?(view, "#popover #move-amount-error-0", "über null")
-    end
-
-    test "covers overspending from another category, as far as it has", c do
-      Categories.assign(budget_scope(), c.groceries, @october, 1_000)
+    test "closes on cancel, and a click away closes only its own popover", c do
       spend(c, c.fuel, -2_500)
       {:ok, view, _html} = open(c.conn)
 
       view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
-
-      assert has_element?(view, "#popover-mode button[aria-pressed=true]", "Decken")
-      refute has_element?(view, "#cover-from option[value=rta]")
-
-      view |> form("#cover-form") |> render_change(%{"from" => "#{c.groceries.id}"})
-
-      assert has_element?(view, "#cover-after", "Lebensmittel danach")
-      assert has_element?(view, "#cover-after", "0,00\u00A0€")
-
-      view |> form("#cover-form") |> render_submit(%{"from" => "#{c.groceries.id}"})
-
-      assert assigned(c.groceries, @october) == 0
-      assert assigned(c.fuel, @october) == 1_000
-
-      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
-      view |> element("#popover-mode button", "Verschieben") |> render_click()
-
-      assert has_element?(view, "#move-form")
-      assert has_element?(view, "#move-form input[name=direction][value=from][checked]")
-    end
-
-    test "closes on cancel, and a click away closes only its own popover", c do
-      {:ok, view, _html} = open(c.conn)
-
-      view |> element("#available-button-#{c.groceries.id}-2026-10") |> render_click()
       render_hook(view, "close_popover", %{"anchor" => "available-button-#{c.rent.id}-2026-10"})
       assert has_element?(view, ~s|#popover[data-show="true"]|)
 
-      view |> element("#move-form button", "Abbrechen") |> render_click()
-      refute has_element?(view, ~s|#popover[data-show="true"]|)
-    end
-
-    test "leads to the category's details", c do
-      {:ok, view, _html} = open(c.conn)
-
-      view |> element("#available-button-#{c.groceries.id}-2026-10") |> render_click()
-
-      assert view |> element("#popover-details") |> render() =~
-               ~s|&quot;focus&quot;,{&quot;to&quot;:&quot;#available-button-#{c.groceries.id}-2026-10&quot;}|
-
-      view |> element("#popover-details") |> render_click()
-
-      assert has_element?(view, ~s|dialog#category-dialog[data-show="true"]|, "🛒 Lebensmittel")
+      render_hook(view, "close_popover", %{"anchor" => "available-button-#{c.fuel.id}-2026-10"})
       refute has_element?(view, ~s|#popover[data-show="true"]|)
     end
   end
@@ -389,10 +492,17 @@ defmodule AbakusWeb.BudgetDetailsTest do
       view |> element("#select-#{c.groceries.id}") |> render_click()
 
       assert has_element?(view, ~s|dialog#category-dialog[data-show="true"]|)
-      assert has_element?(view, "#category-dialog-title", "🛒 Lebensmittel")
-      assert has_element?(view, "#category-dialog", "Oktober 2026")
-      assert has_element?(view, "#category-dialog", "aktueller Monat")
-      assert has_element?(view, ~s|#category-name-input[value="🛒 Lebensmittel"]|)
+      assert has_element?(view, ~s|#category-dialog[aria-labelledby="category-dialog-title"]|)
+      refute has_element?(view, "#category-dialog h2")
+
+      assert has_element?(
+               view,
+               ~s|#category-dialog .setzkasten-modal-head #category-dialog-title[value="🛒 Lebensmittel"]|
+             )
+
+      refute has_element?(view, "#category-dialog h3", "Name")
+      assert has_element?(view, "#category-head", "Oktober 2026")
+      assert has_element?(view, "#category-head", "aktueller Monat")
       assert has_element?(view, "#inspector-target", "Kein Ziel")
       assert has_element?(view, "#category-delete #edit-delete", "Kategorie löschen")
       refute has_element?(view, "#inspector-available")
@@ -404,17 +514,16 @@ defmodule AbakusWeb.BudgetDetailsTest do
           capture: :all_but_first
         )
 
-      assert List.flatten(sections) ==
-               ~w(category-name inspector-target category-delete)
+      assert List.flatten(sections) == ~w(inspector-target category-delete)
 
       render_click(view, "deselect", %{})
 
       assert has_element?(view, ~s|dialog#category-dialog[data-show="false"]|)
-      refute has_element?(view, "#category-name")
+      refute has_element?(view, "#category-dialog-title")
 
       view |> element("#edit-category-#{c.fuel.id}") |> render_click()
 
-      assert has_element?(view, "#category-dialog-title", "⛽ Tanken")
+      assert has_element?(view, ~s|#category-dialog-title[value="⛽ Tanken"]|)
     end
 
     test "the bar of a target by a date shows the whole amount", c do
@@ -442,13 +551,53 @@ defmodule AbakusWeb.BudgetDetailsTest do
                "Noch 53,34\u00A0€ diesen Monat."
              )
 
-      assert has_element?(view, ~s|#target-assign[aria-label="53,34\u00A0€ zuweisen"]|)
+      assert has_element?(view, "#target-assign", "53,34\u00A0€ zuweisen")
+      refute has_element?(view, "#target-assign[aria-label]")
 
       view |> element("#target-assign") |> render_click()
 
       assert assigned(c.rent, @october) == 13_334
       assert has_element?(view, "#target-status", "Im Plan.")
       refute has_element?(view, "#target-assign")
+    end
+
+    test "Zuweisen takes at most what Zu verteilen holds", c do
+      income(c, 3_000)
+      monthly(c.rent, 50_000)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#edit-category-#{c.rent.id}") |> render_click()
+
+      assert has_element?(view, "#target-status", "Noch 500,00 € diesen Monat.")
+      assert has_element?(view, "#target-assign", "30,00\u00A0€ zuweisen")
+
+      view |> element("#target-assign") |> render_click()
+
+      assert assigned(c.rent, @october) == 3_000
+      assert toast(view, "30,00 € Miete zugewiesen.")
+      assert has_element?(view, "#ready-2026-10", "0,00 €")
+      assert has_element?(view, "#target-status", "Noch 470,00 € diesen Monat.")
+      refute has_element?(view, "#target-assign")
+
+      render_click(view, "assign_rest", %{})
+      assert assigned(c.rent, @october) == 3_000
+    end
+
+    test "the target's Zuweisen can be undone", c do
+      income(c, 50_000)
+      monthly(c.rent, 20_000)
+      Categories.assign(budget_scope(), c.rent, @october, 5_000)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#edit-category-#{c.rent.id}") |> render_click()
+      view |> element("#target-assign", "150,00\u00A0€ zuweisen") |> render_click()
+
+      assert assigned(c.rent, @october) == 20_000
+
+      undo(view)
+
+      assert assigned(c.rent, @october) == 5_000
+      assert has_element?(view, "#target-assign", "150,00\u00A0€ zuweisen")
     end
 
     test "sets a monthly target from the focus month on", c do
@@ -603,7 +752,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
       assert Categories.target_snoozed?(budget_scope(), c.groceries, @october)
       assert has_element?(view, "#target-status", "Pausiert im Oktober.")
-      assert has_element?(view, "#available-button-#{c.groceries.id}-2026-10 .lucide")
+      assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .app-avail .lucide")
       refute has_element?(view, "#target-assign")
 
       view |> element("#target-snooze", "Fortsetzen") |> render_click()
@@ -635,7 +784,10 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
       view |> element("#select-#{c.groceries.id}") |> render_click()
 
-      assert has_element?(view, ~s|dialog#panel[data-show="true"]|, "🛒 Lebensmittel")
+      assert has_element?(
+               view,
+               ~s|dialog#panel[data-show="true"][aria-labelledby="panel-title"] #panel-title[value="🛒 Lebensmittel"]|
+             )
 
       sections =
         Regex.scan(~r/<section[^>]* id="([a-z-]+)"/, render(element(view, "#panel")),
@@ -643,7 +795,14 @@ defmodule AbakusWeb.BudgetDetailsTest do
         )
 
       assert List.flatten(sections) ==
-               ~w(inspector-available inspector-target inspector-auto category-name category-delete)
+               ~w(inspector-available inspector-target category-delete)
+
+      assert has_element?(
+               view,
+               ~s|#panel .setzkasten-modal-head #panel-title[value="🛒 Lebensmittel"]|
+             )
+
+      refute has_element?(view, "#panel h3", "Name")
 
       assert has_element?(view, ~s|#panel form[method=dialog] button[aria-label="Schließen"]|)
       assert view |> element("#panel") |> render() =~ "deselect"
@@ -651,7 +810,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       render_click(view, "deselect", %{})
 
       assert has_element?(view, ~s|dialog#panel[data-show="false"]|)
-      refute has_element?(view, "#panel", "🛒 Lebensmittel")
+      refute has_element?(view, "#panel #panel-title")
     end
 
     test "the sheet takes the assignment, which phones show nowhere else", c do
@@ -669,34 +828,113 @@ defmodule AbakusWeb.BudgetDetailsTest do
       assert assigned(c.groceries, @october) == 7_500
     end
 
-    test "an overspent category has a hint to cover it", c do
+    test "the sheet's Zugewiesen adds and subtracts; another operator is refused inline", c do
+      {:ok, view, _html} = open(c.conn, compact: true)
+
+      view |> element("#select-#{c.groceries.id}") |> render_click()
+
+      assert has_element?(view, ~s|#panel-assign[inputmode="text"]|)
+
+      view |> form("#panel-assign-form", %{"value" => "50+20"}) |> render_submit()
+
+      assert assigned(c.groceries, @october) == 7_000
+      assert has_element?(view, ~s|#panel-assign[value="70,00"]|)
+
+      view |> form("#panel-assign-form", %{"value" => "60*2"}) |> render_submit()
+
+      assert has_element?(
+               view,
+               ~s|#panel-assign[aria-invalid=true][value="60*2"][aria-describedby="panel-assign-error-0"]|
+             )
+
+      assert has_element?(
+               view,
+               "#panel-assign-error-0",
+               "„60*2“ ist kein gültiger Betrag. Rechnen geht mit +\u00A0und\u00A0−, etwa\u00A050+20."
+             )
+
+      assert_push_event(view, "refocus_amount", %{id: "panel-assign"})
+      assert assigned(c.groceries, @october) == 7_000
+      assert has_element?(view, ~s|#panel-assign[data-saved="70,00"]|)
+
+      view
+      |> element("#budget")
+      |> render_hook("assign_cancel", %{"category" => c.groceries.id, "month" => "2026-10"})
+
+      assert has_element?(view, ~s|#panel-assign[value="70,00"]:not([aria-invalid])|)
+      refute has_element?(view, "#panel-assign-error-0")
+    end
+
+    test "the sheet says when an amount is too large, not how to add and subtract", c do
+      {:ok, view, _html} = open(c.conn, compact: true)
+
+      view |> element("#select-#{c.groceries.id}") |> render_click()
+      view |> form("#panel-assign-form", %{"value" => "1.000.000.000.000"}) |> render_submit()
+
+      assert has_element?(view, ~s|#panel-assign[aria-invalid=true][value="1.000.000.000.000"]|)
+
+      assert has_element?(
+               view,
+               "#panel-assign-error-0",
+               "Der Betrag muss zwischen -100.000.000.000 € und 100.000.000.000 € liegen."
+             )
+
+      refute has_element?(view, "#panel-assign-error-0", "Rechnen")
+      assert assigned(c.groceries, @october) == 0
+    end
+
+    test "a tap on an overspent Verfügbar opens the list to cover from on its own", c do
       income(c, 10_000)
+      Categories.assign(budget_scope(), c.groceries, @october, 1_000)
       spend(c, c.fuel, -2_500)
       {:ok, view, _html} = open(c.conn, compact: true)
 
       view |> element("#select-#{c.fuel.id}") |> render_click()
-      view |> element("#cover-hint-#{c.fuel.id}") |> render_click()
 
-      assert has_element?(view, "#panel #popover", "Überzug decken")
-
-      view |> form("#cover-form") |> render_submit()
-
-      assert assigned(c.fuel, @october) == 2_500
       refute has_element?(view, "#inspector-cover")
+      refute has_element?(view, "#panel #popover")
+      refute has_element?(view, "#panel", "Decken")
+
+      render_click(view, "deselect", %{})
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
+
+      assert has_element?(view, ~s|#popover[data-show="true"]|, "25,00\u00A0€ decken aus")
+      refute has_element?(view, ~s|dialog#panel[data-show="true"]|)
+
+      assert cover_sources(view) == [
+               {"", "Zu verteilen", "90.00"},
+               {"🛒", "Lebensmittel", "10.00"}
+             ]
+
+      view |> element("#cover-from-#{c.groceries.id}") |> render_click()
+
+      assert available(c.groceries) == 0
+      assert available(c.fuel) == -1_500
+      refute has_element?(view, ~s|#popover[data-show="true"]|)
+      assert toast(view, "10,00 € aus Lebensmittel gedeckt.")
+
+      view |> element("#available-button-#{c.fuel.id}-2026-10") |> render_click()
+      assert has_element?(view, "#popover", "15,00\u00A0€ decken aus")
+      view |> element("#cover-from-rta") |> render_click()
+
+      assert available(c.fuel) == 0
+      refute has_element?(view, "#available-button-#{c.fuel.id}-2026-10")
     end
 
-    test "auto-assign works on the category alone, and its target in the sheet", c do
-      income(c, 100_000)
+    test "the sheet's Zuweisen fills the category's target alone, as far as Zu verteilen reaches",
+         c do
+      income(c, 30_000)
       monthly(c.groceries, 40_000)
       monthly(c.rent, 50_000)
       {:ok, view, _html} = open(c.conn, compact: true)
 
       view |> element("#select-#{c.groceries.id}") |> render_click()
 
+      refute has_element?(view, "#inspector-auto")
       assert has_element?(view, "#panel #inspector-target", "Jeden Monat")
-      view |> element("#panel #auto-underfunded button") |> render_click()
+      view |> element("#panel #target-assign") |> render_click()
 
-      assert assigned(c.groceries, @october) == 40_000
+      assert assigned(c.groceries, @october) == 30_000
       assert assigned(c.rent, @october) == 0
     end
   end
@@ -722,6 +960,36 @@ defmodule AbakusWeb.BudgetDetailsTest do
       [value] = line |> LazyHTML.query("data") |> LazyHTML.attribute("value")
       {line |> LazyHTML.query("dt") |> LazyHTML.text(), value}
     end)
+  end
+
+  defp cover_sources(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#popover #cover-sources button[id^='cover-from-']")
+    |> Enum.map(fn row ->
+      [value | _shown_twice] = row |> LazyHTML.query("data") |> LazyHTML.attribute("value")
+      text = &(row |> LazyHTML.query(&1) |> LazyHTML.text() |> String.trim())
+      {text.(".setzkasten-pick-leading"), text.(".setzkasten-pick-label"), value}
+    end)
+  end
+
+  defp toast(view, message) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#flash-group [role=status]")
+    |> Enum.any?(fn toast ->
+      text = toast |> LazyHTML.text() |> String.replace("\u00A0", " ")
+      text =~ message and text =~ "Rückgängig"
+    end)
+  end
+
+  defp undo(view), do: view |> element("#flash-group button", "Rückgängig") |> render_click()
+
+  defp menu_item(view, kind, key, reason) do
+    has_element?(view, "#distribute-#{kind}-#{key}[disabled]", reason) and
+      has_element?(view, "li.menu-disabled #distribute-#{kind}-#{key}")
   end
 
   defp sum(lines),
@@ -775,6 +1043,15 @@ defmodule AbakusWeb.BudgetDetailsTest do
       amount: amount,
       date: date
     )
+  end
+
+  defp available(category) do
+    Categories.budget(budget_scope())
+    |> Abakus.Budget.months(@october, @october)
+    |> Enum.find(&(&1.month == @october))
+    |> Map.fetch!(:categories)
+    |> Enum.find(&(&1.category_id == category.id))
+    |> Map.fetch!(:available)
   end
 
   defp assigned(category, month) do

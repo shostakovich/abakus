@@ -35,6 +35,57 @@ defmodule Abakus.Money do
   def parse(_not_text, _decimals), do: {:error, @not_text}
 
   @doc """
+  Reads what a person types into an amount field: amounts as `parse/2` reads them, joined by `+` and `-` or `−`,
+  added up from left to right, with an optional sign in front (`"-50+20"` is −30,00). Any other operator, or a
+  part that is no amount, makes the whole text invalid.
+  """
+  @spec parse_expression(term(), 0..3) :: {:ok, integer()} | {:error, String.t()}
+  def parse_expression(text, decimals) when is_binary(text) do
+    case amount_text(text) do
+      "" -> {:error, @blank}
+      text -> sum_terms(text, decimals)
+    end
+  end
+
+  def parse_expression(_not_text, _decimals), do: {:error, @not_text}
+
+  defp sum_terms(text, decimals) do
+    {sign, rest} = leading_sign(text)
+    [first | operations] = Regex.split(~r/[+\-−]/u, rest, include_captures: true)
+
+    with {:ok, total} <- term(first, sign, text, decimals),
+         {:ok, total} <- add_terms(operations, total, text, decimals),
+         :ok <- check_size(Integer.to_string(div(abs(total), Integer.pow(10, decimals)))) do
+      {:ok, total}
+    end
+  end
+
+  defp leading_sign("-" <> rest), do: {-1, rest}
+  defp leading_sign("−" <> rest), do: {-1, rest}
+  defp leading_sign("+" <> rest), do: {1, rest}
+  defp leading_sign(text), do: {1, text}
+
+  defp add_terms([], total, _text, _decimals), do: {:ok, total}
+
+  defp add_terms([operator, digits | rest], total, text, decimals) do
+    with {:ok, value} <- term(digits, if(operator == "+", do: 1, else: -1), text, decimals),
+         do: add_terms(rest, total + value, text, decimals)
+  end
+
+  defp term(digits, sign, text, decimals) do
+    unreadable = invalid(digits)
+
+    with true <- digits =~ ~r/\A[0-9.,]*[0-9][0-9.,]*\z/,
+         {:ok, value} <- parse_fixed(digits, decimals) do
+      {:ok, sign * value}
+    else
+      {:error, ^unreadable} -> {:error, invalid(text)}
+      {:error, message} -> {:error, message}
+      false -> {:error, invalid(text)}
+    end
+  end
+
+  @doc """
   Reads a number with any number of decimal places, as the Depot takes shares and prices: a
   dot before exactly three digits groups thousands (`"1.500"` is 1500, `"0.125"` stays).
   """

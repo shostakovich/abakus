@@ -36,16 +36,10 @@ extension BudgetSheet {
         return fills
     }
 
-    public func firstUnderfunded(in date: DateWithoutTime) -> String? {
-        guard let month = month(date) else { return nil }
-        return categoryIdsInBudgetOrder.first { month.openNeed($0) > 0 }
-    }
-
-    /// What the category's target still asks as far as the free money reaches, else all of it.
+    /// What the category's target still asks as far as the free money reaches.
     public func assignSuggestion(categoryId: String, in date: DateWithoutTime) -> Decimal {
         guard let month = month(date) else { return 0 }
-        let need = month.openNeed(categoryId)
-        return need > 0 ? min(need, month.free) : month.free
+        return min(month.openNeed(categoryId), month.free)
     }
 }
 

@@ -31,15 +31,16 @@ terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in this folder.
   in light mode unless `--dark` or `--increase-contrast` (combinable) ask otherwise. The image is the whole window:
   the toolbar (the screen's title and its items) above content of `--width`×`--height`.
   `--budget <state>` shows the budget screen of the test budget "Business" (today 24.10.2026) in a state (`screen`,
-  `edit`, `quick-budget`, `calculator`, `expanded-header`, `collapsed-all`, `drag`, `hover`, `uncategorized`, `targets`
-  with the Verfügbar markers) or with one of its popups open (`quick-budget-menu`, `quick-budget-confirm`, `add-master`,
-  `add-sub`, `edit-category`, `edit-master`, `rename-error`, `delete-category`, `summary`, `uncategorized-summary`,
-  `account-view`, `cover`, `move`, `target`, `target-editor`, `assign`);
+  `edit`, `expanded-header`, `collapsed-all`, `drag`, `hover`, `uncategorized`, `targets` with the Verfügbar markers)
+  or with one of its popups open (`month-menu`, `add-master`, `add-sub`, `edit-category`, `edit-master`,
+  `rename-error`, `delete-category`, `summary`, `uncategorized-summary`, `account-view`, `cover` with an overspent
+  Lernen's cover list, `cover-ready` with Zu verteilen above zero, `undo-notice` after covering, `amount-error` with
+  a refused Zugewiesen, `target`, `target-editor`);
   `--month 2023-05` picks the first shown month and `--test-edits` adds the session's later edits (`summary` and
   `account-view` need them).
   `--edit <state>` first types into the register with real key events (`existing`, `new`, `inflow`, `payee-dropdown`,
-  `category-dropdown`, `split`, `errors`, `unassigned`, `calendar`, `calculator`, `invalid-payee`,
-  `income-check`, `account-field`); `--trace` prints the editor state afterwards. `--ops <state>` opens register
+  `category-dropdown`, `split`, `errors`, `unassigned`, `calendar`, `invalid-payee`, `income-check`,
+  `account-field`); `--trace` prints the editor state afterwards. `--ops <state>` opens register
   operations instead (`context-menu`, `search-suggestions`, `search-active`, `date-filter`, `notifiers`,
   `column-menu`, `needs-category`, `delete-dialog`, `make-recurring`); menus, native in the app, are drawn inline.
   `--ops keys` sends real key and mouse events and prints what the register did with them (add `--native-menus` to

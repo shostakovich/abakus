@@ -5,10 +5,11 @@ extension TransactionEditor {
     @discardableResult
     public func handleKey(_ key: EditorKey) -> Bool {
         guard !hasOpenDialog else { return true }
-        if calculator != nil { return calculatorKey(key) }
+        let sign = leadingSign
+        leadingSign = nil
         switch focus {
         case .button(let button): return buttonKey(key, button)
-        case .field(let field): return fieldKey(key, field)
+        case .field(let field): return fieldKey(key, field, leadingSign: sign?.field == field ? sign?.sign : nil)
         case nil: return false
         }
     }
@@ -28,11 +29,11 @@ extension TransactionEditor {
         return true
     }
 
-    private func fieldKey(_ key: EditorKey, _ field: EditorFieldID) -> Bool {
+    private func fieldKey(_ key: EditorKey, _ field: EditorFieldID, leadingSign sign: String?) -> Bool {
         if let dropDown, dropDown.field == field, let handled = listKey(key, field, dropDown) { return handled }
         if field.column == .date, dateKey(key) { return true }
         if field.column == .frequency, frequencyKey(key) { return true }
-        if field.column.isAmount, amountKey(key, field) { return true }
+        if field.column.isAmount, amountKey(key, field, leadingSign: sign) { return true }
         switch key {
         case .down where dropDownKind(for: field) != nil:
             showDropDown(for: field, unfiltered: true)
@@ -124,66 +125,22 @@ extension TransactionEditor {
         return true
     }
 
-    /// "+" and "−" set the sign, so only "*" and "/" open the calculator.
-    private func amountKey(_ key: EditorKey, _ field: EditorFieldID) -> Bool {
+    /// A sign before any digit sets the direction at once; a digit right after it takes the sign along.
+    private func amountKey(_ key: EditorKey, _ field: EditorFieldID, leadingSign sign: String?) -> Bool {
         guard case .character(let character) = key, let first = character.first else { return false }
-        if let inflow = Self.signs[first] {
+        let current = text(field) as NSString
+        let location = min(fieldSelection.location, current.length)
+        if let inflow = Self.signs[first], !current.substring(to: location).contains(where: \.isNumber) {
             chooseSign(field, inflow: inflow)
+            leadingSign = (field, character)
             return true
         }
-        let op: Calculator.Operator
-        switch character {
-        case "*": op = .multiply
-        case "/": op = .divide
-        default: return false
-        }
-        let value = abs(formatter.parseAmount(text(field)))
-        calculator = EditorCalculator(
-            field: field, calculator: Calculator(value: value, operator: op, formatter: formatter))
+        guard let sign, first.isNumber || character == formatter.currencyLocale.decimalSeparator else { return false }
+        let length = min(fieldSelection.length, current.length - location)
+        let inserted = sign + character
+        setText(field, current.replacingCharacters(in: NSRange(location: location, length: length), with: inserted))
+        select(field, NSRange(location: location + (inserted as NSString).length, length: 0))
         return true
-    }
-
-    public func openCalculator(for field: EditorFieldID) {
-        guard field.column.isAmount, !isLocked(field) else { return }
-        if focus != .field(field) { fieldClicked(field) }
-        calculator = EditorCalculator(
-            field: field,
-            calculator: Calculator(value: formatter.parseAmount(text(field)), operator: nil, formatter: formatter))
-    }
-
-    private func calculatorKey(_ key: EditorKey) -> Bool {
-        switch key {
-        case .enter: calculatorOK()
-        case .escape: calculator = nil
-        case .backspace: calculatorPress(.backspace)
-        case .character(let character):
-            if let typed = Calculator.Key.typed(character, decimalSeparator: formatter.currencyLocale.decimalSeparator)
-            {
-                calculatorPress(typed)
-            }
-        default:
-            break
-        }
-        return true
-    }
-
-    public func calculatorPress(_ key: Calculator.Key) {
-        calculator?.calculator.press(key)
-    }
-
-    /// The result goes into the field as plain amount text; a negative one flips the field's sign.
-    public func calculatorOK() {
-        guard var state = calculator else { return }
-        let result = state.calculator.result()
-        calculator = nil
-        if result < 0 { chooseSign(state.field, inflow: !isInflow(state.field)) }
-        setText(state.field, formatter.currencySimple(abs(result)))
-        if focus != .field(state.field) { setFocus(.field(state.field), commitCurrent: true) }
-        selectAll(state.field)
-    }
-
-    public func calculatorCancel() {
-        calculator = nil
     }
 
     public func toggleCalendar() {
@@ -229,12 +186,16 @@ extension TransactionEditor {
     private func textMatchesOriginal(_ field: EditorFieldID, _ restored: String) -> Bool {
         let current = text(field)
         switch field.column {
-        case .amount: return formatter.parseAmount(current) == formatter.parseAmount(restored)
+        case .amount: return amountValue(current) == amountValue(restored)
         case .date: return formatter.parseDate(current, today: today) == formatter.parseDate(restored, today: today)
         default:
             return current.trimmingCharacters(in: .whitespaces).lowercased()
                 == restored.trimmingCharacters(in: .whitespaces).lowercased()
         }
+    }
+
+    private func amountValue(_ text: String) -> Decimal? {
+        text.trimmingCharacters(in: .whitespaces).isEmpty ? 0 : Calculator.evaluate(text, formatter: formatter)
     }
 
     private func signChanged(_ field: EditorFieldID) -> Bool {

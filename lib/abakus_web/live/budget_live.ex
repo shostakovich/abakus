@@ -6,16 +6,17 @@ defmodule AbakusWeb.BudgetLive do
   below zero.
 
   As in Actual there is no inspector: a month's head shows how Zu verteilen adds up and its Verteilen menu
-  auto-assigns or resets the month; a category's name or pencil opens its dialog (`Inspector`: name, target,
-  deleting), on phones a sheet that also takes the assignment. Targets, snoozing, auto-assign, covering and moving
-  money work in the focus month; covering and moving through the available cell's popover (`Popover`), which makes
-  its month the focus. Groups are added, renamed and deleted in popovers (`CategoryEditor`): "+ Gruppe" above the
-  table (below it on phones), "+" and the name on a group's row. With a mouse, categories and groups are dragged
-  into a new order (`Sortable`: `sort_category`, `sort_group`).
+  fills the underfunded or resets the month; a category's name or pencil opens its dialog (`Inspector`: name,
+  target, deleting), on phones a sheet that also takes the assignment. Targets, snoozing and covering work in the
+  focus month; an overspent Verfügbar opens the popover that covers it (`Popover`), which makes its month the
+  focus. Covering, filling and a target's Zuweisen offer "Rückgängig" in a toast until the next action. Money moves
+  between categories by changing their assignments. Groups are added, renamed and deleted in
+  popovers (`CategoryEditor`): "+ Gruppe" above the table (below it on phones), "+" and the name on a group's row.
+  With a mouse, categories and groups are dragged into a new order (`Sortable`: `sort_category`, `sort_group`).
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{Budget, Categories, Format, LocalTime, Money}
+  alias Abakus.{Amount, Budget, Categories, Format, LocalTime, Money, Names}
 
   alias AbakusWeb.BudgetLive.{
     CategoryEditor,
@@ -175,11 +176,13 @@ defmodule AbakusWeb.BudgetLive do
       <.modal
         :if={not @fit.compact}
         id="category-dialog"
-        title={@open && @inspector.selected.category.name}
         show={@open}
         on_cancel={JS.push("deselect")}
         class="app-dialog"
       >
+        <:heading :if={@open}>
+          <CategoryEditor.category_name id="category-dialog-title" edit={@editing} />
+        </:heading>
         <Inspector.dialog
           :if={@open}
           inspector={@inspector}
@@ -195,8 +198,10 @@ defmodule AbakusWeb.BudgetLive do
         show={@open}
         on_cancel={JS.push("deselect")}
         class="app-panel"
-        aria-label="Details"
       >
+        <:heading :if={@open}>
+          <CategoryEditor.category_name id="panel-title" edit={@editing} />
+        </:heading>
         <Inspector.sheet
           :if={@open}
           inspector={@inspector}
@@ -205,9 +210,8 @@ defmodule AbakusWeb.BudgetLive do
           assign={panel_assign(@invalid, @inspector)}
           edit={@editing}
         />
-        <Popover.editor :if={@popover && @open} popover={@popover} inspector={@inspector} />
       </.modal>
-      <Popover.editor :if={@popover && not @open} popover={@popover} inspector={@inspector} />
+      <Popover.editor :if={@popover} popover={@popover} inspector={@inspector} />
     </Layouts.app>
     """
   end
@@ -215,13 +219,13 @@ defmodule AbakusWeb.BudgetLive do
   defp focus_month(months, window), do: Enum.find(months, &(&1.month == window.focus))
 
   defp panel_assign(
-         {id, month, typed},
+         {id, month, typed, error},
          %Inspector{selected: %{category: %{id: id}, cell: %{month: month}}}
        ),
-       do: %{value: typed, invalid: true}
+       do: %{value: typed, error: error}
 
   defp panel_assign(_invalid, %Inspector{selected: %{cell: cell}}),
-    do: %{value: Money.amount(cell.assigned), invalid: false}
+    do: %{value: Money.amount(cell.assigned), error: nil}
 
   defp panel_assign(_invalid, _inspector), do: nil
 
@@ -240,7 +244,8 @@ defmodule AbakusWeb.BudgetLive do
        selected: nil,
        popover: nil,
        target_form: nil,
-       editing: nil
+       editing: nil,
+       undo: nil
      )
      |> assign_budget()}
   end
@@ -301,6 +306,13 @@ defmodule AbakusWeb.BudgetLive do
     end
   end
 
+  def handle_event("assign_cancel", %{"category" => id, "month" => param}, socket) do
+    case Window.parse_param(param) do
+      {:ok, month} -> {:noreply, clear_invalid(socket, %{id: id}, month)}
+      :error -> {:noreply, socket}
+    end
+  end
+
   def handle_event("select", %{"category" => id}, socket),
     do: {:noreply, select(socket, id)}
 
@@ -308,36 +320,15 @@ defmodule AbakusWeb.BudgetLive do
     {:noreply, socket |> assign(selected: nil, target_form: nil, editing: nil) |> assign_view()}
   end
 
-  def handle_event("open_popover", %{"kind" => "pick", "month" => param} = params, socket) do
-    case shown_month(socket, param) do
-      {:ok, month} ->
-        socket = socket |> assign(:focus, month) |> assign_view()
-        popover = Popover.open(:pick, params["anchor"], nil, socket.assigns.inspector)
-        {:noreply, assign(socket, :popover, popover)}
-
-      :error ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_event("open_popover", %{"kind" => kind, "category" => id} = params, socket)
-      when kind in ["available", "cover"] do
+  def handle_event("open_popover", %{"category" => id} = params, socket) do
     socket = focus_shown(socket, params["month"])
 
     case entry(socket, id) do
-      nil ->
+      %{cell: %{available: available}} = entry when available < 0 ->
+        {:noreply, assign(socket, :popover, Popover.open(params["anchor"], entry))}
+
+      _other ->
         {:noreply, socket}
-
-      entry ->
-        popover =
-          Popover.open(
-            String.to_existing_atom(kind),
-            params["anchor"],
-            entry,
-            socket.assigns.inspector
-          )
-
-        {:noreply, assign(socket, :popover, popover)}
     end
   end
 
@@ -352,137 +343,56 @@ defmodule AbakusWeb.BudgetLive do
   def handle_event("close_popover", _params, socket),
     do: {:noreply, assign(socket, :popover, closed(socket.assigns.popover))}
 
-  def handle_event("popover_mode", %{"value" => mode}, socket) when mode in ["cover", "move"] do
-    case socket.assigns.popover do
-      %{kind: :available} = popover ->
-        {:noreply,
-         assign(socket, :popover, %{popover | mode: String.to_existing_atom(mode), error: nil})}
-
-      _other ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_event("cover_change", %{"from" => from}, socket) do
-    case socket.assigns.popover do
-      %{kind: kind} = popover when kind in [:available, :cover] ->
-        {:noreply, assign(socket, :popover, %{popover | from: from, error: nil})}
-
-      _other ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_event("cover_change", _params, socket), do: {:noreply, socket}
-
   def handle_event("cover", %{"category" => id, "from" => from}, socket) do
     with %{} = entry <- entry(socket, id),
          {source, available} <- cover_source(socket.assigns.inspector, from, entry),
          amount when amount > 0 <- Popover.cover_amount(entry, available) do
-      move(
-        socket,
-        source,
-        entry.category,
-        amount,
+      move(socket, source, entry.category, amount, fn _moved ->
         "#{Money.euros(amount)} aus #{name(source)} gedeckt."
-      )
+      end)
     else
-      _ -> {:noreply, popover_error(socket, "Daraus lässt sich nichts decken.")}
+      _ -> {:noreply, put_flash(socket, :error, "Daraus lässt sich nichts decken.")}
     end
   end
 
-  def handle_event("move", %{"category" => id, "other" => other} = params, socket) do
-    with %{} = entry <- entry(socket, id),
-         {:ok, other} <- other_side(socket, other, entry),
-         {:ok, amount} <- positive_amount(params["amount"]) do
-      {from, to} =
-        if params["direction"] == "from",
-          do: {other, entry.category},
-          else: {entry.category, other}
-
-      move(
-        socket,
-        from,
-        to,
-        amount,
-        "#{Money.euros(amount)} von #{name(from)} nach #{name(to)} verschoben."
-      )
-    else
-      {:error, message} -> {:noreply, popover_error(socket, message)}
-      _ -> {:noreply, socket}
-    end
-  end
-
-  def handle_event("pick_change", %{"_target" => ["category"], "category" => id}, socket) do
-    case {socket.assigns.popover, entry(socket, id)} do
-      {%{kind: :pick} = popover, %{} = entry} ->
-        amount = Popover.pick_amount(entry, socket.assigns.inspector.free)
-
-        {:noreply,
-         assign(socket, :popover, %{
-           popover
-           | category_id: entry.category.id,
-             amount: Money.amount(amount)
-         })}
-
-      _other ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_event("pick_change", %{"amount" => amount}, socket) when is_binary(amount) do
-    case socket.assigns.popover do
-      %{kind: :pick} = popover ->
-        {:noreply, assign(socket, :popover, %{popover | amount: amount})}
-
-      _other ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_event("pick_change", _params, socket), do: {:noreply, socket}
-
-  def handle_event("pick", params, socket) do
-    with %{} = entry <- entry(socket, params["category"]),
-         {:ok, amount} <- positive_amount(params["amount"]) do
-      move(
-        socket,
-        :ready_to_assign,
-        entry.category,
-        amount,
-        "#{Money.euros(amount)} an #{entry.category.name} verteilt."
-      )
-    else
-      {:error, message} -> {:noreply, popover_error(socket, message)}
-      _ -> {:noreply, socket}
-    end
-  end
-
-  def handle_event("auto", %{"kind" => kind, "month" => param} = params, socket)
+  def handle_event("auto", %{"kind" => kind, "month" => param}, socket)
       when kind in ["underfunded", "reset"] do
-    with {:ok, month} <- shown_month(socket, param),
-         {:ok, category} <- auto_category(socket, params["category"]) do
-      {:noreply, socket |> assign(:focus, month) |> auto(kind, month, category)}
-    else
-      _ -> {:noreply, socket}
+    case shown_month(socket, param) do
+      {:ok, month} -> {:noreply, socket |> assign(:focus, month) |> auto(kind, month)}
+      :error -> {:noreply, socket}
     end
   end
 
   def handle_event("assign_rest", _params, socket) do
-    case socket.assigns.inspector.selected do
-      %{cell: %{underfunded: underfunded}} = entry when underfunded > 0 ->
-        move(
-          socket,
-          :ready_to_assign,
-          entry.category,
-          underfunded,
-          "#{Money.euros(underfunded)} zugewiesen."
-        )
+    %{selected: entry, free: free} = socket.assigns.inspector
 
-      _other ->
+    case entry && Status.to_assign(entry.cell, free) do
+      amount when is_integer(amount) and amount > 0 ->
+        move(socket, :ready_to_assign, entry.category, amount, fn _moved ->
+          "#{Money.euros(amount)} #{name(entry.category)} zugewiesen."
+        end)
+
+      _nothing ->
         {:noreply, socket}
     end
   end
+
+  def handle_event("undo", %{"id" => id}, %{assigns: %{undo: %{id: id} = undo}} = socket) do
+    socket = assign(socket, :undo, nil)
+
+    case Categories.undo_assigned(socket.assigns.current_scope, undo.month, undo.changes) do
+      {:ok, _undone} ->
+        {:noreply, changed(socket, nil)}
+
+      _refused ->
+        {:noreply,
+         socket
+         |> changed(nil)
+         |> put_flash(:error, "Das wurde inzwischen geändert oder gelöscht.")}
+    end
+  end
+
+  def handle_event("undo", _params, socket), do: {:noreply, socket}
 
   def handle_event("edit_target", _params, socket) do
     case socket.assigns.inspector.selected do
@@ -744,84 +654,67 @@ defmodule AbakusWeb.BudgetLive do
 
   defp cover_source(_inspector, _id, _entry), do: nil
 
-  defp other_side(_socket, "rta", _entry), do: {:ok, :ready_to_assign}
-
-  defp other_side(socket, id, entry) do
-    case entry(socket, id) do
-      %{category: category} when category.id != entry.category.id -> {:ok, category}
-      _ -> {:error, "Bitte eine andere Kategorie wählen."}
-    end
-  end
-
-  defp positive_amount(text) when is_binary(text) do
-    case Money.parse(text, 2) do
-      {:ok, amount} when amount > 0 -> {:ok, amount}
-      {:ok, _not_positive} -> {:error, "Bitte einen Betrag über null angeben, etwa 12,50."}
-      {:error, message} -> {:error, message}
-    end
-  end
-
-  defp positive_amount(_text), do: {:error, "Bitte einen Betrag angeben."}
-
   defp move(socket, from, to, amount, message) do
-    case Categories.move_assigned(
-           socket.assigns.current_scope,
-           from,
-           to,
-           socket.assigns.window.focus,
-           amount
-         ) do
-      {:ok, _amount} -> {:noreply, changed(socket, message)}
-      {:error, _changeset} -> {:noreply, popover_error(socket, "Der Betrag ist zu groß.")}
-    end
+    month = socket.assigns.window.focus
+    scope = socket.assigns.current_scope
+
+    undoable(socket, month, message, fn ->
+      Categories.move_assigned(scope, from, to, month, amount)
+    end)
   end
 
   defp name(:ready_to_assign), do: "„Zu verteilen“"
-  defp name(category), do: category.name
+  defp name(category), do: category.name |> Names.split_emoji() |> elem(1)
 
-  defp auto_category(_socket, nil), do: {:ok, nil}
+  defp auto(socket, "underfunded", month) do
+    %{current_scope: scope, current: current} = socket.assigns
+    message = &"Ziele mit #{Money.euros(&1)} gefüllt."
 
-  defp auto_category(socket, id) do
-    case entry(socket, id) do
-      %{category: category} -> {:ok, category}
-      nil -> :error
+    {:noreply, socket} =
+      undoable(socket, month, message, fn ->
+        Categories.fill_underfunded(scope, month, current)
+      end)
+
+    socket
+  end
+
+  defp auto(socket, "reset", month) do
+    :ok = Categories.reset_assignments(socket.assigns.current_scope, month)
+    changed(socket, "Zuweisungen im #{Format.month_name(month)} zurückgesetzt.")
+  end
+
+  defp undoable(socket, month, message, write) do
+    case Categories.assigned_changes(socket.assigns.current_scope, month, write) do
+      {:ok, changes} ->
+        moved = changes |> Map.values() |> Enum.map(fn {from, to} -> max(to - from, 0) end)
+
+        {:noreply,
+         socket |> changed(nil) |> offer_undo(month, changes, message.(Enum.sum(moved)))}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Der Betrag ist zu groß.")}
     end
   end
 
-  defp auto(socket, "underfunded", month, category) do
-    {:ok, _fills} =
-      Categories.fill_underfunded(
-        socket.assigns.current_scope,
-        month,
-        socket.assigns.current,
-        category
-      )
+  defp offer_undo(socket, _month, changes, _message) when changes == %{}, do: socket
 
-    socket = changed(socket, nil)
-    inspector = socket.assigns.inspector
+  defp offer_undo(socket, month, changes, message) do
+    id = Integer.to_string(System.unique_integer([:positive]))
 
-    left =
-      if category,
-        do: Status.open_need(Inspector.find(inspector, category.id).cell),
-        else: inspector.month.underfunded
-
-    message =
-      if left > 0,
-        do: "Nur teilweise gefüllt: Zu verteilen reicht nicht für alle Ziele.",
-        else: "Unterfinanzierte Ziele gefüllt."
-
-    put_flash(socket, :info, message)
-  end
-
-  defp auto(socket, "reset", month, category) do
-    :ok = Categories.reset_assignments(socket.assigns.current_scope, month, category)
-    changed(socket, "Zuweisungen im #{Format.month_name(month)} zurückgesetzt.")
+    socket
+    |> assign(:undo, %{id: id, month: month, changes: changes})
+    |> put_toast(message, action: "Rückgängig", on_action: JS.push("undo", value: %{id: id}))
   end
 
   defp changed(socket, message) do
     socket =
       socket
-      |> assign(popover: closed(socket.assigns.popover), target_form: nil, invalid: nil)
+      |> assign(
+        popover: closed(socket.assigns.popover),
+        target_form: nil,
+        invalid: nil,
+        undo: nil
+      )
       |> assign_budget()
       |> assign_view()
       |> clear_flash()
@@ -829,23 +722,21 @@ defmodule AbakusWeb.BudgetLive do
     if message, do: put_flash(socket, :info, message), else: socket
   end
 
-  defp sorted(socket), do: socket |> assign_budget() |> assign_view() |> clear_flash()
+  defp sorted(socket),
+    do: socket |> assign(:undo, nil) |> assign_budget() |> assign_view() |> clear_flash()
 
   defp closed(nil), do: nil
   defp closed(state), do: %{state | open: false}
-
-  defp popover_error(socket, message) do
-    case socket.assigns.popover do
-      nil -> put_flash(socket, :error, message)
-      popover -> assign(socket, :popover, %{popover | error: message})
-    end
-  end
 
   defp target_errors(socket, params, errors),
     do: assign(socket, :target_form, TargetForm.to_target_form(params, errors))
 
   defp edited(socket) do
-    socket = socket |> assign(:editing, closed(socket.assigns.editing)) |> assign_budget()
+    socket =
+      socket
+      |> assign(editing: closed(socket.assigns.editing), undo: nil)
+      |> clear_flash(:toast)
+      |> assign_budget()
 
     socket
     |> assign(:editing, category_editing(socket.assigns.groups, socket.assigns.selected, socket))
@@ -899,27 +790,58 @@ defmodule AbakusWeb.BudgetLive do
   # An amount that is no number keeps what was typed, marked, so it can be corrected.
   defp assign_amount(socket, category, month, value) do
     case cell_amount(value) do
-      {:ok, amount} -> store_amount(socket, category, month, amount, value)
-      {:error, _message} -> mark_invalid(socket, category, month, value)
+      {:ok, amount} ->
+        store_amount(socket, category, month, amount, value)
+
+      {:error, "Der Betrag ist zu groß."} ->
+        mark_invalid(socket, category, month, value, out_of_range())
+
+      {:error, _message} ->
+        mark_invalid(socket, category, month, value, Components.invalid_amount(value))
     end
   end
 
   defp cell_amount(value),
-    do: if(String.trim(value) == "", do: {:ok, 0}, else: Money.parse(value, 2))
+    do: if(String.trim(value) == "", do: {:ok, 0}, else: Money.parse_expression(value, 2))
 
   defp store_amount(socket, category, month, amount, value) do
     if Map.get(socket.assigns.budget.assigned, {category.id, month}, 0) == amount do
-      socket |> assign(:invalid, nil) |> assign_view()
+      socket |> clear_invalid(category, month) |> assign_view()
     else
       case Categories.assign(socket.assigns.current_scope, category, month, amount) do
-        {:ok, _assignment} -> socket |> assign(:invalid, nil) |> assign_budget() |> assign_view()
-        {:error, _changeset} -> mark_invalid(socket, category, month, value)
+        {:ok, _assignment} ->
+          socket
+          |> clear_invalid(category, month)
+          |> assign(:undo, nil)
+          |> clear_flash(:toast)
+          |> assign_budget()
+          |> assign_view()
+
+        {:error, _changeset} ->
+          mark_invalid(socket, category, month, value, out_of_range())
       end
     end
   end
 
-  defp mark_invalid(socket, category, month, value),
-    do: socket |> assign(:invalid, {category.id, month, value}) |> assign_view()
+  # Another cell's blur comes after a refused cell's, while focus returns to it.
+  defp clear_invalid(%{assigns: %{invalid: {id, month, _, _}}} = socket, %{id: id}, month),
+    do: assign(socket, :invalid, nil)
+
+  defp clear_invalid(socket, _category, _month), do: socket
+
+  defp out_of_range, do: "Der Betrag #{Amount.out_of_range_message()}."
+
+  defp mark_invalid(socket, category, month, value, error) do
+    field =
+      if socket.assigns.fit.compact,
+        do: "panel-assign",
+        else: "assign-#{category.id}-#{Window.param(month)}"
+
+    socket
+    |> assign(:invalid, {category.id, month, value, error})
+    |> assign_view()
+    |> push_event("refocus_amount", %{id: field})
+  end
 
   defp find_category(groups, id) do
     Enum.find_value(groups, fn group ->
@@ -968,7 +890,7 @@ defmodule AbakusWeb.BudgetLive do
   defp keep_open(socket, %Window{focus: focus}) when focus == socket.assigns.window.focus do
     %{popover: popover, inspector: inspector} = socket.assigns
 
-    if popover && popover[:category_id] && !Inspector.find(inspector, popover.category_id),
+    if popover && !Inspector.find(inspector, popover.category_id),
       do: assign(socket, :popover, nil),
       else: socket
   end

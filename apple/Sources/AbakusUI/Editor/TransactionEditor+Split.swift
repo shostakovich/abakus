@@ -144,10 +144,10 @@ extension TransactionEditor {
     private func commitSubAmount(index: Int, field: EditorFieldID) {
         guard let subId = field.subId else { return }
         let old = clone.subtransactions[index].amount
-        let amount = typedAmount(field)
+        guard let amount = typedAmount(field) else { return rejectAmount(field) }
         clone.subtransactions[index].amount = amount
         refreshAmountText(subId: subId)
-        if amount != old && remainingAmount != 0 && subIds.last == subId && calculator == nil {
+        if amount != old && remainingAmount != 0 && subIds.last == subId {
             let added = appendSubRow()
             refocusRequest = .sub(added, .payee)
         }

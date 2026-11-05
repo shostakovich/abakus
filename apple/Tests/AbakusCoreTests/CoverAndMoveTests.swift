@@ -44,7 +44,6 @@ import Testing
         #expect(sources.map(\.categoryId) == [ScenarioBudget.readyToAssign, S.kleidung, S.notgroschen])
         #expect(sources.map(\.name) == ["Zu verteilen", "Kleidung", "Notgroschen"])
         #expect(sources.map(\.available) == [10, 60, 30])
-        #expect(sources[0].isReadyToAssign)
     }
 
     @Test func coverSourcesLeaveOutAnEmptyZuVerteilenAndCategoriesWithoutMoney() throws {
@@ -62,7 +61,7 @@ import Testing
         let june = scenario.month("2026-06-01")
         #expect(june.isClosed && june.available == 40 && june.free == 10)
         let source = try #require(scenario.sheet.coverSources(for: Self.restaurant, in: Self.june).first)
-        #expect(source.isReadyToAssign)
+        #expect(source.categoryId == ScenarioBudget.readyToAssign)
         #expect(source.available == 10)
         #expect(source.coverAmount(overspent: -25) == 10)
     }
@@ -70,9 +69,7 @@ import Testing
     @Test func coveringTakesTheOverspendingAsFarAsTheSourceReaches() {
         let source = BudgetFundsSource(categoryId: S.kleidung, name: "Kleidung", available: 15)
         #expect(source.coverAmount(overspent: -25) == 15)
-        #expect(source.remaining(afterCovering: -25) == 0)
         #expect(source.coverAmount(overspent: -10) == 10)
-        #expect(source.remaining(afterCovering: -10) == 5)
     }
 
     @Test func coveringFromZuVerteilenOnlyRaisesTheAssignment() throws {

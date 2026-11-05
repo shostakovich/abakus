@@ -83,7 +83,7 @@ public final class AppModel {
 
     /// Quitting waits while an open edit or the budget cannot be saved.
     public func commitBeforeQuit() -> Bool {
-        budget.commitEdit()
+        guard budget.commitEdit() else { return false }
         register.editor?.commitForQuit()
         register.scheduler.editor?.commitForQuit()
         guard register.editor == nil && register.scheduler.editor == nil else { return false }

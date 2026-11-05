@@ -248,7 +248,7 @@ import Testing
     @Test func everyPopupNamesTheControlItPointsAt() {
         let october = day("2026-10-01")
         let anchors: [(BudgetPopup, BudgetPopupAnchor)] = [
-            (.monthQuickBudget(month: october), .monthQuickBudget(october)),
+            (.monthMenu(month: october), .monthMenu(october)),
             (.editCategory(categoryId: F.kino), .categoryRow(F.kino)),
             (.outflowSummary(month: october, source: .allOutflows), .totalsOutflows(october)),
             (.outflowSummary(month: october, source: .masterCategory(F.alltag)), .outflows(october, F.alltag)),

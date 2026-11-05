@@ -90,6 +90,7 @@
         }
     }
 
+    /// The name opens the category; an overspent Verfügbar opens only its cover list.
     private struct BudgetPhoneCategoryRow: View {
         let model: BudgetViewModel
         let row: BudgetCategoryRow
@@ -98,21 +99,42 @@
 
         var body: some View {
             let display = model.subRowDisplay(row.id, in: month)
-            Button {
-                model.categoryTapped(row.id, month: month.month)
-            } label: {
-                HStack(spacing: 12) {
-                    BudgetCategoryName(name: row.name, bar: display.targetBar)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    BudgetAvailableFigure(display: display, month: month, showsRing: false, amountWidth: amountWidth)
+            let figure = BudgetAvailableFigure(
+                display: display, month: month, showsRing: false, amountWidth: amountWidth)
+            HStack(spacing: 12) {
+                Button(action: openCategory) {
+                    HStack(spacing: 12) {
+                        BudgetCategoryName(name: row.name, bar: display.targetBar)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if !display.isBalanceNegative { figure }
+                    }
+                    .padding(.leading, BudgetTouchStyle.nameIndent)
+                    .contentShape(Rectangle())
                 }
-                .padding(.leading, BudgetTouchStyle.nameIndent)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                if display.isBalanceNegative {
+                    Button(action: cover) {
+                        figure.frame(maxHeight: .infinity).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(row.name)
             .accessibilityValue("Verfügbar \(display.barAccessibilityValue)")
             .accessibilityAddTraits(.isButton)
+            .accessibilityAction(.default, openCategory)
+            .accessibilityActions {
+                if display.isBalanceNegative { Button("Decken", action: cover) }
+            }
+        }
+
+        private func openCategory() {
+            model.categoryTapped(row.id, month: month.month)
+        }
+
+        private func cover() {
+            model.balanceClicked(month: month.month, categoryId: row.id)
         }
     }
 

@@ -24,17 +24,4 @@ extension BudgetViewModel {
         guard let row = rowFrame(of: cell), let index = shownMonths.firstIndex(of: cell.month) else { return nil }
         return layout.cells(at: index).field.offsetBy(dx: row.minX, dy: row.minY)
     }
-
-    public func dropDownButtonFrame(of cell: BudgetCellID) -> CGRect? {
-        guard let box = assignedBoxFrame(of: cell) else { return nil }
-        return CGRect(x: box.minX, y: box.minY, width: BudgetMetrics.fieldButtonWidth, height: box.height)
-    }
-
-    public func quickBudgetFrame() -> CGRect? {
-        guard let list = quickBudget, let box = assignedBoxFrame(of: list.cell) else { return nil }
-        let below = panelSize.height > box.minY + list.height + 18
-        return CGRect(
-            x: box.maxX - list.width, y: below ? box.maxY : box.minY - list.height, width: list.width,
-            height: list.height)
-    }
 }

@@ -12,7 +12,7 @@ struct EditHarness {
         case payeeDropdown = "payee-dropdown"
         case categoryDropdown = "category-dropdown"
         case split, errors
-        case unassigned, calendar, calculator
+        case unassigned, calendar
         case invalidPayee = "invalid-payee"
         case incomeCheck = "income-check"
         case accountField = "account-field"
@@ -89,10 +89,6 @@ struct EditHarness {
             let id = try transaction { self.payee($0) == "Telekom" }
             try edit(id, column: .date)
             type("+")
-        case .calculator:
-            let id = try transaction { self.payee($0) == "Telekom" }
-            try edit(id, column: .amount)
-            type("*3")
         case .invalidPayee:
             let id = try transaction { self.payee($0) == "Telekom" }
             try edit(id, column: .payee)
@@ -127,7 +123,6 @@ struct EditHarness {
                 "  list \(list.kind): \(list.items.count) rows, highlighted \(list.highlightedItem?.label ?? "-")")
         }
         if let callout = editor.dateCallout { lines.append("  callout: \(callout.message)") }
-        if let calculator = editor.calculator { lines.append("  calculator: \(calculator.calculator.display)") }
         if editor.isCalendarOpen { lines.append("  calendar open") }
         if let dialog = editor.dialogs.presented.last?.dialog { lines.append("  dialog: \(dialog.instruction)") }
         return lines.joined(separator: "\n")

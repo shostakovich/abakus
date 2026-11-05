@@ -5,8 +5,10 @@ defmodule AbakusWeb.TransactionForm do
 
   A side's amount is held as an outflow or an inflow (`outflow`, `inflow`): it is inflow − outflow, so a minus
   counts against its column. Each side has a `sign` ("-" or "+"), the transaction's being the whole transaction's
-  on phones. The register's row types each side's amount into `amount`, which its `sign`, or a sign typed in
-  front, makes the outflow or the inflow.
+  on phones. Each side's amount is typed into `amount`, which its `sign` makes the outflow or the inflow; a part
+  on the phone is typed into the column of the transaction's sign instead. It may add and subtract
+  (`Abakus.Money.parse_expression/2`); a sign typed in front makes it a signed amount whose sign sets the direction
+  ("-50+20" is an outflow of 30,00).
 
   The transaction and each subtransaction of a split (with `split` "true", `subtransactions` by index) are sides:
   each has a `payee`, a `transfer_account_id` and a `category_id`; a subtransaction also has a memo, an amount and
@@ -132,7 +134,7 @@ defmodule AbakusWeb.TransactionForm do
   defp follow_payee(side, _accounts), do: side
 
   defp take_amount(%{"amount" => text} = side) do
-    {sign, digits} = typed_sign(text, sign(side))
+    {sign, digits} = typed_amount(text, sign(side))
     {column, other} = columns(sign)
 
     side
@@ -142,16 +144,36 @@ defmodule AbakusWeb.TransactionForm do
 
   defp take_amount(side), do: side
 
-  defp typed_sign(text, sign) when is_binary(text) do
-    case String.trim(text) do
-      "+" <> digits -> {"+", String.trim(digits)}
-      "-" <> digits -> {"-", String.trim(digits)}
-      "−" <> digits -> {"-", String.trim(digits)}
-      digits -> {sign, digits}
+  # A sum is evaluated now, as its result decides the direction; an unreadable one is kept whole to be refused.
+  defp typed_amount(text, sign) when is_binary(text) do
+    text = String.trim(text)
+    {typed, digits} = typed_sign(text)
+
+    with true <- String.contains?(digits, ["+", "-", "−"]),
+         {:ok, cents} <- signed_cents(typed, text, sign) do
+      {direction_sign(cents, typed || sign), Money.amount(abs(cents))}
+    else
+      false -> {typed || sign, digits}
+      {:error, _unreadable} -> {typed || sign, text}
     end
   end
 
-  defp typed_sign(other, sign), do: {sign, other}
+  defp typed_amount(other, sign), do: {sign, other}
+
+  defp typed_sign("+" <> digits), do: {"+", String.trim(digits)}
+  defp typed_sign("-" <> digits), do: {"-", String.trim(digits)}
+  defp typed_sign("−" <> digits), do: {"-", String.trim(digits)}
+  defp typed_sign(digits), do: {nil, digits}
+
+  defp signed_cents(nil, text, sign) do
+    with {:ok, cents} <- Money.parse_expression(text, 2), do: {:ok, direction(sign) * cents}
+  end
+
+  defp signed_cents(_typed, text, _sign), do: Money.parse_expression(text, 2)
+
+  defp direction_sign(cents, _sign) when cents > 0, do: "+"
+  defp direction_sign(cents, _sign) when cents < 0, do: "-"
+  defp direction_sign(0, sign), do: sign
 
   defp map_sides(params, fun) do
     params
@@ -327,7 +349,7 @@ defmodule AbakusWeb.TransactionForm do
     end
   end
 
-  defp cents(text), do: if(blank?(text), do: {:ok, 0}, else: Money.parse(text, 2))
+  defp cents(text), do: if(blank?(text), do: {:ok, 0}, else: Money.parse_expression(text, 2))
 
   @doc """
   Whether the side takes a category: a split does not, a transfer only between a budget and a tracking account,

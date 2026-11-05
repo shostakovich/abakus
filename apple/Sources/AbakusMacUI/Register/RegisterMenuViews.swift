@@ -55,6 +55,15 @@ final class RegisterMenuTarget: NSObject {
                 entry.representedObject = ActionBox(action)
                 entry.isEnabled = item.isEnabled
                 entry.state = item.isChecked ? .on : .off
+                entry.subtitle = item.subtitle
+                let image = item.systemImage.flatMap { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
+                entry.image = image
+                if item.isDestructive && item.isEnabled {
+                    entry.attributedTitle = NSAttributedString(
+                        string: item.title,
+                        attributes: [.foregroundColor: NSColor.systemRed, .font: NSFont.menuFont(ofSize: 0)])
+                    entry.image = image?.withSymbolConfiguration(.init(paletteColors: [.systemRed]))
+                }
                 menu.addItem(entry)
             case .submenu(let children):
                 let entry = NSMenuItem(title: item.title, action: nil, keyEquivalent: "")

@@ -79,7 +79,7 @@ import Testing
         let display = try #require(model.callouts.targetDisplay)
         #expect(display.head == "Jeden Monat auffüllen bis 150,00\u{00A0}€")
         #expect(display.status.text == "Noch 150,00\u{00A0}€ diesen Monat.")
-        #expect(display.assignLabel == "150,00\u{00A0}€ zuweisen")
+        #expect(display.assignLabel == nil)
         #expect(display.progress == nil)
     }
 
@@ -137,6 +137,19 @@ import Testing
         #expect(
             store.commands.last
                 == .setTarget(month: october, categoryId: F.kleidung, target: .byDate(100, due: day("2026-10-01"))))
+    }
+
+    @Test func theTargetAmountTakesASumAndRefusesAnotherOperator() throws {
+        let (model, store) = opened(F())
+        model.callouts.editTargetClicked()
+        model.callouts.targetAmount = "60*2"
+        model.callouts.targetSaveClicked()
+        #expect(store.commands.isEmpty)
+        #expect(model.callouts.category?.target?.error == InvalidAmount.content("60*2"))
+        #expect(!model.dialogs.isPresenting)
+        model.callouts.targetAmount = "50+20"
+        model.callouts.targetSaveClicked()
+        #expect(store.commands == [.setTarget(month: october, categoryId: F.kleidung, target: .monthly(70))])
     }
 
     @Test func fertigSavesAnOpenTargetEditorAndStaysOpenWhenItRefuses() throws {
@@ -201,10 +214,13 @@ import Testing
         var fixture = withTarget(.monthly(50))
         fixture.budget(480, F.lebensmittel, in: "2026-10-01")
         let (model, store) = opened(fixture)
+        #expect(model.callouts.targetDisplay?.assignLabel == "20,00\u{00A0}€ zuweisen")
         model.callouts.assignTargetClicked()
         #expect(
             store.commands
                 == [.moveAssigned(month: october, from: BudgetScreenFixture.readyToAssign, to: F.kleidung, amount: 20)])
+        #expect(model.callouts.targetDisplay?.status.text == "Noch 30,00\u{00A0}€ diesen Monat.")
+        #expect(model.callouts.targetDisplay?.assignLabel == nil)
         model.callouts.assignTargetClicked()
         #expect(store.commands.count == 1)
     }

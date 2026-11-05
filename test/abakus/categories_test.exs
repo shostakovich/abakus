@@ -460,7 +460,78 @@ defmodule Abakus.CategoriesTest do
     end
   end
 
-  describe "reset_assignments/3" do
+  describe "assigned_in/2 and undo_assigned/3" do
+    test "counts each category's assignment with its deleted predecessors'" do
+      groceries = category_fixture()
+      market = category_fixture()
+      rent = category_fixture()
+      Categories.assign(budget_scope(), market, ~D[2026-10-01], 2_000)
+      Categories.assign(budget_scope(), groceries, ~D[2026-10-01], 1_000)
+      Categories.assign(budget_scope(), rent, ~D[2026-11-01], 5_000)
+      {:ok, _deleted} = Categories.delete_category(budget_scope(), market, groceries)
+
+      assert Categories.assigned_in(budget_scope(), ~D[2026-10-20]) == %{groceries.id => 3_000}
+    end
+
+    test "assigned_changes/3 returns what a write changed, in the write's transaction" do
+      groceries = category_fixture()
+      rent = category_fixture()
+      Categories.assign(budget_scope(), groceries, ~D[2026-10-01], 10_000)
+      Categories.assign(budget_scope(), rent, ~D[2026-11-01], 1_000)
+
+      assert {:ok, changes} =
+               Categories.assigned_changes(budget_scope(), ~D[2026-10-20], fn ->
+                 assert Abakus.Repo.in_transaction?()
+                 Categories.move_assigned(budget_scope(), groceries, rent, ~D[2026-10-01], 3_000)
+               end)
+
+      assert changes == %{groceries.id => {10_000, 7_000}, rent.id => {0, 3_000}}
+
+      assert {:error, :refused} =
+               Categories.assigned_changes(budget_scope(), ~D[2026-10-01], fn ->
+                 Categories.assign(budget_scope(), rent, ~D[2026-10-01], 9_000)
+                 {:error, :refused}
+               end)
+
+      assert assigned(rent, ~D[2026-10-01]) == 3_000
+    end
+
+    test "takes back what an action changed, keeping what changed since" do
+      groceries = category_fixture()
+      rent = category_fixture()
+      Categories.assign(budget_scope(), groceries, ~D[2026-10-01], 10_000)
+      {:ok, _} = Categories.move_assigned(budget_scope(), groceries, rent, ~D[2026-10-01], 3_000)
+      changes = %{groceries.id => {10_000, 7_000}, rent.id => {0, 3_000}}
+
+      Categories.assign(budget_scope(), rent, ~D[2026-10-01], 3_500)
+
+      assert {:ok, _undone} = Categories.undo_assigned(budget_scope(), ~D[2026-10-15], changes)
+
+      assert assigned(groceries, ~D[2026-10-01]) == 10_000
+      assert assigned(rent, ~D[2026-10-01]) == 500
+    end
+
+    test "takes back nothing when a category is gone or another user's" do
+      groceries = category_fixture()
+      rent = category_fixture()
+      Categories.assign(budget_scope(), groceries, ~D[2026-10-01], 7_000)
+      Categories.assign(budget_scope(), rent, ~D[2026-10-01], 3_000)
+      changes = %{groceries.id => {10_000, 7_000}, rent.id => {0, 3_000}}
+      other = Abakus.UsersFixtures.user_scope_fixture()
+
+      assert Categories.assigned_in(other, ~D[2026-10-01]) == %{}
+      assert {:error, _refused} = Categories.undo_assigned(other, ~D[2026-10-01], changes)
+
+      {:ok, _deleted} = Categories.delete_category(budget_scope(), rent, groceries)
+
+      assert {:error, _refused} =
+               Categories.undo_assigned(budget_scope(), ~D[2026-10-01], changes)
+
+      assert assigned(groceries, ~D[2026-10-01]) == 10_000
+    end
+  end
+
+  describe "reset_assignments/2" do
     test "resets what every category has assigned in the month" do
       groceries = category_fixture()
       rent = category_fixture()
@@ -475,17 +546,6 @@ defmodule Abakus.CategoriesTest do
       assert assigned(groceries, ~D[2026-10-01]) == 0
       assert assigned(rent, ~D[2026-10-01]) == 0
       assert assigned(groceries, ~D[2026-11-01]) == 1_000
-    end
-
-    test "resets one category" do
-      groceries = category_fixture()
-      rent = category_fixture()
-      for c <- [groceries, rent], do: Categories.assign(budget_scope(), c, ~D[2026-10-01], 1_000)
-
-      assert :ok = Categories.reset_assignments(budget_scope(), ~D[2026-10-01], groceries)
-
-      assert assigned(groceries, ~D[2026-10-01]) == 0
-      assert assigned(rent, ~D[2026-10-01]) == 1_000
     end
   end
 

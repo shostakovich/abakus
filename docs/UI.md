@@ -18,14 +18,15 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 ## Decisions after review round 1
 
 - On phones Zu verteilen lives in a sticky month header; tapping a category opens its sheet (assignment, target,
-  auto-assign, rename)
+  rename)
 
 ## Budget without inspector (as Actual)
 
 - No inspector column and no filters: overspent categories show Verfügbar in red, its popover covers them
 - No income group: income shows only in the month head's calculation
-- A category row shows a pencil on hover and focus; it and the name open the category's dialog: name, target and
-  deleting (the phone sheet shows the same parts after Verfügbar and auto-assign)
+- A category row shows a pencil on hover and focus; it and the name open the category's dialog: the name with its
+  emoji as the title, which renames it in place, then target and deleting (the phone sheet: title, Verfügbar,
+  target, deleting); there is no cover list or overspent hint in it
 - As on the Mac, a mouse drags categories within and between groups and a group as a block between groups;
   "Nicht kategorisiert" stays put, touch does not drag
 - Zugewiesen and Aktivität of a category stay blank at 0 (the assign field stays editable); Verfügbar 0 shows
@@ -39,19 +40,38 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   months being budgeted: the current one and any other with money assigned; elsewhere plain), a green check for a
   funded target, a grey pause while snoozed, else plain. The marks stand behind the number in a slot every Verfügbar
   figure keeps, so the digits line up in every row. The ring fills by the share of the month's need
-  that is assigned, rounded down (25,00 of 40,00 € is 62 %); hovered like an editable cell, Verfügbar opens the
-  popover (cover, move, "Kategorie bearbeiten") for its month, which becomes the focus
-- The category's dialog renames in place (Enter and leaving the field save, Escape puts the name back) and says
-  the target in one sentence ("Jeden Monat auffüllen bis 650,00 €") with one status sentence: "Erfüllt.", "Im
-  Plan." (by a date), "Noch 68,34 € diesen Monat." (with Zuweisen), "Überzogen um 180,20 €.", "Pausiert im
-  Oktober."; only a target by a date has a bar (saved of its amount); spending a funded target leaves it funded
+  that is assigned, rounded down (25,00 of 40,00 € is 62 %). Only an overspent Verfügbar is a button: hovered like an
+  editable cell, it opens the cover list for its month, which becomes the focus
+- Covering: the list "40,00 € decken aus" (the overspending, a quiet title in line with the rows) has a card with
+  Zu verteilen (the inbox symbol, its amount green) while it is above zero, then a card with every category with
+  money, the most first: its emoji in a fixed column, the name, its available amount. Rows are 2.25rem with a
+  mouse and 44 px on touch, divided from the text on. It is a popover at the red cell, as wide as its content and
+  scrolling inside; on phones a bottom sheet of its own. Choosing one moves as much as it holds, up to the
+  overspending, and closes the list; there is no amount field and no button. Money moves between categories that
+  are not overspent by changing both Zugewiesen
+- Covering, "Ziele füllen" and a target's Zuweisen end in a toast with "Rückgängig" ("24,00 € aus Urlaub
+  gedeckt.", "Ziele mit 60,00 € gefüllt.", "60,00 € Urlaub zugewiesen."), for about five seconds or until the next
+  action. Undoing adds back to each category what the action changed in its Zugewiesen, so what changed since stays
+- Zugewiesen and the transaction amount add and subtract: amounts joined by "+" and "−" ("50+20"), worked out from
+  left to right when the field is committed. Any other operator or text that is no amount is refused, and nothing is
+  saved: „60*2“ ist kein gültiger Betrag. Rechnen geht mit + und −, etwa 50+20. It never breaks inside "+ und −,"
+  or before "50+20" (no-break spaces). The field keeps the text and the focus; the message is a bubble at the cell
+  (linked by aria-describedby) that breaks between its two sentences, in the phone sheet a red line under the field.
+  The budget's amount fields take the full keyboard, as the decimal pad has neither + nor −
+- The category's title renames in place (Enter and leaving the field save, Escape puts the name back); the dialog
+  says the target in one sentence ("Jeden Monat auffüllen bis 650,00 €") with one status sentence: "Erfüllt.", "Im
+  Plan." (by a date), "Noch 68,34 € diesen Monat." (with "68,34 € zuweisen", the amount it assigns: at most what
+  Zu verteilen holds, hidden at zero), "Überzogen um 180,20 €.", "Pausiert im Oktober."; only a target by a date has a bar (saved of its amount); spending a funded target leaves it funded
 - A month head is one flat block above its columns: the month and a ghost ⋮ ("Verteilen"), then "Zu verteilen"
   as a tinted row (base-200; a green band above zero in an open month) with its chevron on the left and the amount
   on the right (green above zero, red below, plain at zero; a past month: "Nicht verteilt am Monatsende", muted and
   smaller), then the column titles with their totals; no popover. The corner keeps "Kategorie" and "+ Gruppe" and
   is as tall as the month head. The Mac has the same head, ⋮ instead of ⚡
-- Verteilen (⋮): "Unterfinanzierte füllen (68,34 €)" with the month's underfunded total (only while something is
-  underfunded and money is free), "In eine Kategorie …", "Zuweisung zurücksetzen"
+- Verteilen (⋮), always there: "Ziele füllen" (target) with the amount it moves under it ("68,34 €"), the month's
+  underfunded total up to what Zu verteilen holds, and "Zurücksetzen" (rotate-ccw, red) with "Zuweisungen im Okt"
+  under it, after "Alle Zuweisungen im Oktober zurücksetzen?" · "Zu verteilen bekommt das Geld zurück." ·
+  Zurücksetzen. An item that cannot run is dimmed with the reason under it instead: "Nichts unterfinanziert" (before
+  "Nichts zu verteilen"), "Nichts zugewiesen"
 - Zu verteilen shows and hides YNAB 4's calculation in every shown month at once, per device (collapsed by
   default, on the Mac too): between the month and Zu verteilen, on a base-200 band between hairlines, the amount
   right-aligned in its column, then the text: "5.947,86 € Nicht verteilt im Sep", "0,00 € Überzogen im Sep",
@@ -68,7 +88,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   "02.11.", sentences and pickers the full date, never a two-digit year
 - One base surface and one elevation in both themes (the system's backgrounds); group bands and the calculation
   lie on the elevation, what surrounds them on the base. Text and tinted fills keep 4.5:1 in both themes; text on
-  the accent fill (Abgleichen, "… zuweisen", "… decken") is the accent's content ink, dark in the dark theme, and a
+  the accent fill (Abgleichen, "… zuweisen") is the accent's content ink, dark in the dark theme, and a
   selected row keeps its inks on a fill of the shown theme, also after the theme changes
 - Sheets: the xmark on the leading side, a prominent checkmark on the trailing side where the sheet commits
   something; the xmark reads "Abbrechen" beside a checkmark that commits, else "Schließen". The system's grouped
@@ -79,15 +99,17 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   button, in the system's disabled style while today's month shows. The budget has no ‹ › and no swipe between
   months. With two or three months the title names the first, and each month head names its own; one month needs no
   month in its head
-- Zu verteilen is one tinted block; above zero it ends in a "Verteilen" button that opens Verteilen ("Unterfinanzierte
-  füllen (…)", "In eine Kategorie …", "Zuweisung zurücksetzen"). Below zero it is red without the button, at zero
-  plain. There is no ⋯ menu; a group's context menu adds categories and folds every group, "Neue Kategoriegruppe"
-  ends the list
+- Zu verteilen is one tinted block, red below zero, plain at zero. The month menu is an ellipsis button beside
+  the month: a glass circle in each of the iPad's month heads, the navigation bar's trailing button on phones. It
+  holds "Ziele füllen" with the amount it moves as the subtitle and "Zurücksetzen …" in red with "Zuweisungen im
+  Nov" (behind the web's confirmation); an item that cannot run is dimmed with its reason as the subtitle
+  ("Nichts unterfinanziert", "Nichts zu verteilen", "Nichts zugewiesen"). A group's context menu adds
+  categories and folds every group, "Neue Kategoriegruppe" ends the list
 - The calculation lies on its band between hairlines, its amounts with "€" on Zu verteilen's trailing edge,
   income with "+" whenever it is not zero
 - Phones: the sticky head holds the calculation, Zu verteilen and, only while something is open, what waits: "1
   Kategorie überzogen · 2 Buchungen bestätigen", compact but 44 pt high to tap. The first part opens the first
-  overspent category's sheet, the second shows Alle Konten searching for the transactions to approve. The iPad
+  overspent category's cover list (on the iPad scrolled to its cell, its group unfolded), the second shows Alle Konten searching for the transactions to approve. The iPad
   shows the same parts in the corner beside Zu verteilen, stacked tight from the top of its block (also below an
   open calculation), for today's month while it shows, else the first; the month head follows the title at
   standard spacing.
@@ -101,18 +123,28 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 - Separators start at the names' leading edge, past the emoji's fixed column, the same for groups and categories on
   both devices (category names start where their group's name does), and "Neue Kategoriegruppe" puts its "+" in
   that column
-- The category's sheet: the category with its emoji as title, the month under it. "Verfügbar": "Übrig aus Vormonat",
-  "Zugewiesen im Nov" (the field, its quick amounts as chips under it), "Aktivität im Nov", "Verfügbar" bold in its
-  state colour; only while overspent "Decken aus" with its source by name in the accent, "Zu verteilen danach" as the next
-  row and one prominent "50,00 € decken" on the rows' insets. "Ziel": the target sentence and the status sentence in a card tinted by
-  the status, the tint inset in its row with the card's padding, "68,34 € zuweisen" while something is
-  missing, a bar only for a target by a date, then "Ziel bearbeiten" and "Pausieren". Then "Geld verschieben" (its
-  own page), the name and "Kategorie löschen" in red. The quick amounts wrap onto a second line rather than cut off.
-  Every action applies at once, so the sheet only closes. Sheet and popover lie on the grouped background with an
-  opaque bar, so neither the budget nor scrolled text shows through. It opens at a detent that shows Verfügbar and
-  Ziel, the large one while overspent; on the iPad the same view with the same row surfaces is a popover from
-  Verfügbar's trailing side (a tapped name opens it on the month in focus), as tall as its content up to the
-  screen, without the xmark, and the dock gives way while it shows
+- The category's sheet: its title is the name with its emoji in title 3 semibold on a faint capsule that a tap
+  renames in place (as Reminders' list info), stronger while editing and never focused on opening, the month under it. "Verfügbar": "Übrig aus Vormonat", "Zugewiesen im Nov" (the field), "Aktivität im
+  Nov", "Verfügbar" bold in its state colour; there is no cover list and no overspent hint. "Ziel": the target
+  sentence and the status sentence in a card tinted by the status, the tint inset in its row with the card's
+  padding, "68,34 € zuweisen" while something is missing and Zu verteilen has money (at most what it holds), a bar
+  only for a target by a date, then "Ziel bearbeiten" and "Pausieren". Then "Kategorie löschen" in red. Every
+  action applies at once, so the sheet only closes. Sheet and popover lie on the grouped background with an opaque
+  bar, so neither the budget nor scrolled text shows through. It opens at a detent that shows Verfügbar and Ziel; a
+  group's and a new category's sheet open large. On the iPad the same view with the same row surfaces is a popover
+  from Verfügbar's trailing side (a tapped name opens it on the month in focus), as tall as its content up to the
+  screen and scrolling beyond, without the xmark, and the dock gives way while it shows
+- Covering: an overspent Verfügbar opens only the cover list, the web's "40,00 € decken aus" with Zu verteilen's
+  card and the categories with money, rows 44 pt. On phones it is a sheet of its own at half height, on the iPad a
+  popover at the red cell, as wide as its content, never taller than the screen leaves and scrolling inside. A tap
+  on a source covers as much as it holds and closes the list
+- Covering, "Ziele füllen" and a target's Zuweisen end in a glass banner above the dock with the web's
+  sentence ("25,00 € aus „Zu verteilen“ gedeckt.") and "Rückgängig", a success haptic and a VoiceOver
+  announcement, for five seconds or until the next change; leaving the budget ends it. While a category's sheet or
+  popover is open the banner stands at its bottom, so one tap reaches it
+- A refused amount keeps its text and the focus, again on every refusal, and says the web's sentence inline: in
+  the iPad table a bubble below the cell, red text in the Mac's popover chrome; in the sheet a red line under the
+  field. VoiceOver announces it
 - iPad: Verfügbar's tint is one column from its title down to the bottom of the screen, through the group bands and
   the space above the dock; the mark slot sits inside it.
   Column titles are footnote size in the secondary colour. A month needs 260 pt beside the category column (more
@@ -196,7 +228,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   labelled; an empty choice reads "Wählen", a value that cannot change is secondary. A stored transaction ends with
   its status (Vorgemerkt/Gebucht as a picker that applies at once, "Bestätigen" while it waits, "Abgeglichen" locked)
   and "Buchung löschen" in red behind a confirmation. "Sichern und weitere" is a bordered button in the footer of the form's last card.
-  Above the on-screen keyboard only + − × ÷ and the keyboard-dismiss button at one size, inside the sheet; a hardware
+  Above the on-screen keyboard only + − and the keyboard-dismiss button at one size, inside the sheet; a hardware
   keyboard shows none of them. The iPad types the amount on the docked keyboard's numbers, as its floating number
   pad has no operators and covers the sheet's title and bar. The toolbar's checkmark is the one commit. On the iPad the sheet fits its content
 - Pickers: groups are compact section headers without separators, their emoji at the rows' size in the same fixed
@@ -223,7 +255,10 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 - Fixed columns, so an opened row keeps every column in place: Betrag fits "−10.000,00", the memo takes the
   remaining width and is hidden per device from "Ansicht"; the column header sticks while the list scrolls. Betrag
   is signed, also for parts: "−88,12" in the normal ink, an inflow "+3.180,00" in green. Editing, each side has one
-  amount behind a −/+ button; a click or a typed "+" or "−" sets the sign, a new transaction starts as an outflow
+  amount behind a −/+ button; a click or a sign typed in front sets the direction, a new transaction starts as an
+  outflow. With a sign in front the amount's result is signed and sets the direction ("−50+20" is an outflow of
+  30,00), without one it goes in the button's direction and a negative result turns the button round ("50−70"
+  behind − is an inflow of 20,00)
 - The category with its emoji only ("🛒 Lebensmittel"), also in the phone cards; its group shows in the tooltip and
   the picker. A missing category reads "⚠ Kategorie fehlt", a transfer "⇄ Depot", a split "Aufgeteilt (2)"
 - One status column, last, as in Actual: ○ vorgemerkt, ✓ gebucht, 🔒 abgeglichen; a transaction waiting for approval

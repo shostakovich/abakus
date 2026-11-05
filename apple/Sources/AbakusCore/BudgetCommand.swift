@@ -40,7 +40,8 @@ public enum BudgetCommand: Hashable, Sendable {
     case setAssigned(month: DateWithoutTime, categoryId: String, amount: Decimal)
     /// Moves an assignment within the month; `EntityID.readyToAssignCategory` stands for Zu verteilen on either side.
     case moveAssigned(month: DateWithoutTime, from: String, to: String, amount: Decimal)
-    case quickBudget(month: DateWithoutTime, fill: QuickBudgetFill, today: DateWithoutTime)
+    case resetAssigned(month: DateWithoutTime)
+    case changeAssigned(month: DateWithoutTime, [AssignedChange])
     case fillUnderfunded(month: DateWithoutTime, today: DateWithoutTime)
     /// `.ended` ends the target from the month on.
     case setTarget(month: DateWithoutTime, categoryId: String, target: Target)
@@ -115,7 +116,8 @@ extension Budget {
             try setAssigned(amount, month: month, categoryId: categoryId)
         case .moveAssigned(let month, let from, let to, let amount):
             try moveAssigned(amount, month: month, from: from, to: to)
-        case .quickBudget(let month, let fill, let today): quickBudget(month: month, fill: fill, today: today)
+        case .resetAssigned(let month): resetAssigned(month: month)
+        case .changeAssigned(let month, let changes): try changeAssigned(changes, month: month)
         case .fillUnderfunded(let month, let today): fillUnderfunded(month: month, today: today)
         case .setTarget(let month, let categoryId, let target):
             try setTarget(target, month: month, categoryId: categoryId)

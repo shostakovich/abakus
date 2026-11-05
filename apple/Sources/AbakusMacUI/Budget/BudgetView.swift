@@ -8,6 +8,7 @@ public struct BudgetView: View {
 
     let model: BudgetViewModel
     @FocusState private var isKeySinkFocused: Bool
+    @Environment(\.undoManager) private var undoManager
 
     public init(model: BudgetViewModel) {
         self.model = model
@@ -31,6 +32,15 @@ public struct BudgetView: View {
             .onChange(of: model.editor == nil) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
             .onChange(of: model.dialogs.isPresenting) { if model.takesKeyFocusBack { isKeySinkFocused = true } }
             .onAppear { isKeySinkFocused = true }
+            .onChange(of: undoManager, initial: true) { model.undoManager = undoManager }
+            .overlay(alignment: .bottom) {
+                if let notice = model.undoNotice {
+                    BudgetUndoNoticeView(model: model, notice: notice)
+                        .padding(.bottom, 20)
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: model.undoNotice?.id)
     }
 
     private var panel: some View {
@@ -50,7 +60,7 @@ public struct BudgetView: View {
             model.panelSize = $0
         }
         .overlay {
-            if model.editor != nil || model.quickBudget != nil || model.calculator != nil {
+            if model.editor != nil {
                 WindowEventMonitor { model.mouseDown(at: $0) }
             }
         }
@@ -71,15 +81,9 @@ public struct BudgetView: View {
 
     static func key(_ press: KeyPress) -> BudgetCellKey? {
         switch press.key {
-        case .return: .enter
-        case .escape: .escape
-        case .delete: .backspace
         case .pageUp: .pageUp
         case .pageDown: .pageDown
-        case .upArrow: .up
-        case .downArrow: .down
-        case .tab: press.modifiers.contains(.shift) ? .backTab : .tab
-        default: press.characters.isEmpty ? nil : .character(press.characters)
+        default: nil
         }
     }
 }
@@ -165,19 +169,6 @@ private struct BudgetPopupsLayer: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             Color.clear.allowsHitTesting(false)
-            if let list = model.quickBudget, let frame = model.quickBudgetFrame() {
-                BudgetQuickBudgetListView(model: model, list: list)
-                    .offset(x: frame.minX, y: frame.minY)
-            }
-            if let state = model.calculator, let placement = model.calculatorPlacement() {
-                PopoverChrome(arrowEdge: placement.arrowEdge, arrowOffset: placement.arrowOffset) {
-                    CalculatorPopover(
-                        display: state.calculator.display,
-                        decimalSeparator: model.formatter.currencyLocale.decimalSeparator,
-                        onPress: model.calculatorPress, onOK: model.calculatorOK, onCancel: model.calculatorCancel)
-                }
-                .offset(x: placement.frame.minX, y: placement.frame.minY)
-            }
             if let drag = model.drag, drag.isActive {
                 proxy(drag)
             }

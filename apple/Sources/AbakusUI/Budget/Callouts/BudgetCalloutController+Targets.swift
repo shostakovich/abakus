@@ -47,7 +47,7 @@ public struct BudgetTargetProgress: Hashable, Sendable {
 public struct BudgetTargetDisplay: Hashable, Sendable {
     public let head: String
     public let status: BudgetTargetStatus
-    /// "Zuweisen" assigns what is still missing, as far as Zu verteilen reaches.
+    /// "Zuweisen" assigns what is still missing, as far as Zu verteilen reaches; nil when that is nothing.
     public let assignLabel: String?
     public let progress: BudgetTargetProgress?
     public let isSnoozed: Bool
@@ -71,10 +71,10 @@ extension BudgetCalloutController {
         guard let form = category, let figures = targetFigures, let target = figures.target,
             let status = formatter.targetStatus(figures, month: form.month)
         else { return nil }
-        let assigns = target.openNeed > 0 && figures.balance >= 0
+        let toAssign = budget.sheet.assignSuggestion(categoryId: form.categoryId, in: form.month)
         return BudgetTargetDisplay(
             head: formatter.targetHead(target.target), status: status,
-            assignLabel: assigns ? "\(formatter.currency(target.underfunded)) zuweisen" : nil,
+            assignLabel: figures.balance >= 0 && toAssign > 0 ? "\(formatter.currency(toAssign)) zuweisen" : nil,
             progress: target.target.cadence == .byDate
                 ? BudgetTargetProgress(
                     label: formatter.targetSavedLabel(target), value: target.progress, mark: target.mark) : nil,
@@ -149,8 +149,14 @@ extension BudgetCalloutController {
         return true
     }
 
+    static let missingAmount = "Bitte einen Betrag angeben."
+
     private func targetVersion(_ editor: BudgetTargetForm, from month: DateWithoutTime) -> Target? {
-        guard let amount = typedAmount(editor.amount) else { return targetError(Self.missingAmount) }
+        let typed = editor.amount.trimmingCharacters(in: .whitespaces)
+        if typed.isEmpty { return targetError(Self.missingAmount) }
+        guard let amount = Calculator.evaluate(typed, formatter: formatter) else {
+            return targetError(InvalidAmount.content(typed))
+        }
         let setAside = editor.kind == .setAside
         let version: Target =
             editor.cadence == .byDate
@@ -195,8 +201,11 @@ extension BudgetCalloutController {
         guard let form = category, targetDisplay?.assignLabel != nil,
             case let amount = budget.sheet.assignSuggestion(categoryId: form.categoryId, in: form.month), amount > 0
         else { return }
-        budget.perform(
-            .moveAssigned(month: form.month, from: readyToAssignCategoryId, to: form.categoryId, amount: amount))
+        let name = budget.plainName(of: form.categoryId)
+        budget.performUndoable(
+            .moveAssigned(month: form.month, from: readyToAssignCategoryId, to: form.categoryId, amount: amount),
+            month: form.month, actionName: "Zuweisen"
+        ) { "\(self.formatter.currency($0)) \(name) zugewiesen." }
     }
 }
 

@@ -461,7 +461,7 @@ defmodule Abakus.BudgetTest do
     end
   end
 
-  describe "fill_underfunded/4" do
+  describe "fill_underfunded/3" do
     test "fills in budget order as far as Ready to Assign reaches" do
       budget =
         budget(
@@ -509,16 +509,6 @@ defmodule Abakus.BudgetTest do
         )
 
       assert Budget.fill_underfunded(budget, @sep, @oct) == []
-    end
-
-    test "fills only the category asked for" do
-      budget =
-        budget(
-          income: %{@oct => 10_000},
-          targets: %{1 => [target(amount: 4_000)], 2 => [target(amount: 3_000)]}
-        )
-
-      assert Budget.fill_underfunded(budget, @oct, @oct, 2) == [{2, 3_000}]
     end
   end
 end

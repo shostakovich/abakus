@@ -172,17 +172,18 @@ import Testing
         #expect(host.model.store.budget.transactions.contains { $0.date == day("2014-05-12") })
     }
 
-    @Test func theCalculatorWorksByKeyboard() async throws {
+    @Test func aLeadingSignAndArithmeticWorkByKeyboard() async throws {
         let host = try await editing(column: .amount)
-        await host.type("*3")
-        #expect(host.editor.calculator?.calculator.display == "3")
+        await host.type("+")
+        #expect(host.editor.isInflow(.main(.amount)))
+        #expect(host.editor.text(.main(.amount)) == "10.00")
+        await host.type("-50+20")
+        #expect(host.editor.text(.main(.amount)) == "-50+20")
+        #expect(!host.editor.isInflow(.main(.amount)))
         #expect(host.typesIntoAField)
         await host.press(Self.enter.0, Self.enter.1)
-        #expect(host.editor.calculator == nil)
-        #expect(host.editor.text(.main(.amount)) == "30.00")
-        #expect(host.model.editor != nil)
-        await host.press(Self.enter.0, Self.enter.1)
         #expect(host.model.editor == nil)
+        #expect(host.model.store.budget.transactions.contains { $0.amount == -30 })
     }
 
     @Test func tabMovesOnAndEscapeCancelsAnUnchangedEdit() async throws {

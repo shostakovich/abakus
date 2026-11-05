@@ -420,6 +420,45 @@ defmodule AbakusWeb.TransactionFormTest do
                TransactionForm.side(changed, "0")
     end
 
+    test "a typed sum is the amount in the side's direction, a sign in front makes it signed",
+         c do
+      params = form(c, %{})
+
+      changed = TransactionForm.change(params, %{"amount" => "50+20"}, c.accounts)
+      assert %{"sign" => "-", "outflow" => "70,00", "inflow" => ""} = changed
+      assert {:ok, %{amount: -7_000}} = TransactionForm.to_attrs(changed, c.accounts)
+
+      for {typed, sign, column, digits, amount} <- [
+            {"50-70", "+", "inflow", "20,00", 2_000},
+            {"-50+20", "-", "outflow", "30,00", -3_000},
+            {"+50-20", "+", "inflow", "30,00", 3_000},
+            {"−20+50", "+", "inflow", "30,00", 3_000},
+            {"-20+20", "-", "outflow", "0,00", 0}
+          ] do
+        changed = TransactionForm.change(params, %{"amount" => typed}, c.accounts)
+        assert %{"sign" => ^sign, ^column => ^digits} = changed
+        assert {:ok, %{amount: ^amount}} = TransactionForm.to_attrs(changed, c.accounts)
+      end
+
+      for typed <- ["60*2", "-60*2", "-50+", "--50", "+-50", "-+50", "−-50"] do
+        assert {:error, "Ungültiger Betrag „" <> _} =
+                 params
+                 |> TransactionForm.change(%{"amount" => typed}, c.accounts)
+                 |> TransactionForm.to_attrs(c.accounts)
+      end
+    end
+
+    test "a sum without a sign turns the side round when it comes out negative", c do
+      inflow = TransactionForm.toggle_sign(form(c, %{}))
+
+      changed = TransactionForm.change(inflow, %{"amount" => "50-70"}, c.accounts)
+      assert %{"sign" => "-", "outflow" => "20,00", "inflow" => ""} = changed
+      assert {:ok, %{amount: -2_000}} = TransactionForm.to_attrs(changed, c.accounts)
+
+      changed = TransactionForm.change(inflow, %{"amount" => "20-20"}, c.accounts)
+      assert %{"sign" => "+", "inflow" => "0,00"} = changed
+    end
+
     test "the row's sign button flips one side only", c do
       params =
         split(c, %{"outflow" => "100"}, %{

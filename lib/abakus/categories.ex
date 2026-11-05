@@ -504,16 +504,72 @@ defmodule Abakus.Categories do
   end
 
   @doc """
-  Takes back what the categories, or only `category`, have assigned in a month (any day of it), with their deleted
-  predecessors, so it goes back to Zu verteilen.
+  What each category has assigned in a month (any day of it), its deleted predecessors' counted for it as
+  `budget/1` counts them; categories without an assignment are left out.
   """
-  def reset_assignments(%Scope{} = scope, month, category \\ nil) do
+  def assigned_in(%Scope{} = scope, month) do
+    month = month!(month)
+    successors = successors(scope)
+
+    Repo.all(
+      from a in alive(Assignment, scope),
+        where: a.month == ^month,
+        select: {a.category_id, a.amount}
+    )
+    |> Enum.map(fn {id, amount} -> {Map.get(successors, id, id), amount} end)
+    |> sum_by_key()
+    |> Map.reject(fn {_id, amount} -> amount == 0 end)
+  end
+
+  @doc """
+  Runs `write` (returning `{:ok, result}` or `{:error, reason}`) and returns what it changed in a month (any day of
+  it) as `undo_assigned/3` takes it, category ids to `{before, after}`; in one transaction, so a write from another
+  device cannot land in between and become part of it.
+  """
+  def assigned_changes(%Scope{} = scope, month, write) when is_function(write, 0) do
+    Sync.write(fn ->
+      before = assigned_in(scope, month)
+
+      with {:ok, _result} <- write.(),
+           do: {:ok, changes(before, assigned_in(scope, month))}
+    end)
+  end
+
+  defp changes(before, now) do
+    for id <- Enum.uniq(Map.keys(before) ++ Map.keys(now)),
+        from = Map.get(before, id, 0),
+        to = Map.get(now, id, 0),
+        from != to,
+        into: %{},
+        do: {id, {from, to}}
+  end
+
+  @doc """
+  Takes back what an action changed in a month (any day of it): `changes` maps category ids to `{before, after}`
+  amounts as `assigned_in/2` counts them, and each category gets `before - after` added, so what changed since
+  stays. Refused as a whole when one of them is no regular category of the user's any more.
+  """
+  def undo_assigned(%Scope{} = scope, month, changes) do
     month = month!(month)
 
-    ids =
-      if category,
-        do: [category.id],
-        else: for(%{id: id} <- budget_categories(scope), do: id)
+    Sync.write(fn -> take_back(scope, month, Map.to_list(changes), map_size(changes)) end)
+  end
+
+  defp take_back(_scope, _month, [], count), do: {:ok, count}
+
+  defp take_back(scope, month, [{id, {before, now}} | rest], count) do
+    with {:ok, category} <- regular_category(scope, id),
+         {:ok, _assignment} <- add_assigned(scope, category, month, before - now),
+         do: take_back(scope, month, rest, count)
+  end
+
+  @doc """
+  Takes back what the categories have assigned in a month (any day of it), with their deleted predecessors, so it
+  goes back to Zu verteilen.
+  """
+  def reset_assignments(%Scope{} = scope, month) do
+    month = month!(month)
+    ids = for %{id: id} <- budget_categories(scope), do: id
 
     ids =
       ids ++ for {predecessor, successor} <- successors(scope), successor in ids, do: predecessor
@@ -526,16 +582,14 @@ defmodule Abakus.Categories do
   end
 
   @doc """
-  Fills the month's underfunded categories, or only `category`, from Ready to Assign
-  (`Abakus.Budget.fill_underfunded/4`); `current` is the current month, both any day of it. Returns the new
-  assignments as `{category_id, amount}`.
+  Fills the month's underfunded categories from Ready to Assign (`Abakus.Budget.fill_underfunded/3`); `current` is
+  the current month, both any day of it. Returns the new assignments as `{category_id, amount}`.
   """
-  def fill_underfunded(%Scope{} = scope, month, current, category \\ nil) do
+  def fill_underfunded(%Scope{} = scope, month, current) do
     month = month!(month)
 
     Sync.write(fn ->
-      fills =
-        Budget.fill_underfunded(budget(scope), month, month!(current), category && category.id)
+      fills = Budget.fill_underfunded(budget(scope), month, month!(current))
 
       with :ok <- put_assignments(scope, fills, month), do: {:ok, fills}
     end)

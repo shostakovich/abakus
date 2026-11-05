@@ -167,7 +167,7 @@ extension RegisterViewModel {
         case .skipScheduled: scheduler.skipClicked()
         case .deleteScheduled: scheduler.deleteClicked()
         case .moveScheduled(let accountId): scheduler.moveClicked(to: accountId)
-        case .quickBudget, .fillUnderfunded, .assignToCategory, .frequency: break
+        case .fillUnderfunded, .resetAssigned, .frequency: break
         }
     }
 

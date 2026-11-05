@@ -1,6 +1,5 @@
 import AbakusUI
 import AppKit
-import Carbon.HIToolbox
 import SwiftUI
 
 struct BudgetCellField: NSViewRepresentable {
@@ -72,7 +71,6 @@ struct BudgetCellField: NSViewRepresentable {
         case #selector(NSResponder.moveDown(_:)): .key(.down)
         case #selector(NSResponder.scrollPageUp(_:)), #selector(NSResponder.pageUp(_:)): .key(.pageUp)
         case #selector(NSResponder.scrollPageDown(_:)), #selector(NSResponder.pageDown(_:)): .key(.pageDown)
-        case #selector(NSResponder.deleteBackward(_:)): .key(.backspace)
         default: nil
         }
     }
@@ -102,9 +100,7 @@ struct BudgetCellField: NSViewRepresentable {
         }
 
         func takeFocus(_ edit: BudgetCellEdit) {
-            guard !isDismantled, let view, let window = view.window, model?.editor?.cell == edit.cell,
-                model?.calculator == nil
-            else { return }
+            guard !isDismantled, let view, let window = view.window, model?.editor?.cell == edit.cell else { return }
             if view.currentEditor() == nil || window.firstResponder !== view.currentEditor() {
                 window.makeFirstResponder(view)
             }
@@ -117,13 +113,8 @@ struct BudgetCellField: NSViewRepresentable {
         }
 
         func controlTextDidEndEditing(_ notification: Notification) {
-            guard !isApplying, let model, let cell, model.editor?.cell == cell, model.quickBudget == nil else { return }
+            guard !isApplying, let model, let cell, model.editor?.cell == cell else { return }
             model.commitEdit()
-        }
-
-        func functionKey(_ event: NSEvent) -> Bool {
-            guard let model, event.keyCode == UInt16(kVK_F2) else { return false }
-            return model.cellKey(.f2)
         }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
@@ -136,8 +127,7 @@ struct BudgetCellField: NSViewRepresentable {
         }
 
         func shouldInsert(_ replacement: String, in textView: NSTextView, range: NSRange) -> Bool {
-            guard let model, !isApplying else { return true }
-            if replacement.count == 1, model.cellKey(.character(replacement)) { return false }
+            guard !isApplying else { return true }
             let allowed = BudgetViewModel.allowedText(replacement)
             guard allowed != replacement else { return true }
             if !allowed.isEmpty { textView.insertText(allowed, replacementRange: range) }
@@ -146,34 +136,12 @@ struct BudgetCellField: NSViewRepresentable {
     }
 }
 
-/// F2 has no key binding, so the field editor would drop it before any delegate sees it.
-final class BudgetFieldEditor: NSTextView {
+final class BudgetTextField: NSTextField {
     weak var coordinator: BudgetCellField.Coordinator?
 
-    override func keyDown(with event: NSEvent) {
-        if coordinator?.functionKey(event) == true { return }
-        super.keyDown(with: event)
-    }
-}
-
-final class BudgetTextFieldCell: NSTextFieldCell {
-    let editor: BudgetFieldEditor = {
-        let editor = BudgetFieldEditor()
-        editor.isFieldEditor = true
-        return editor
-    }()
-
-    override func fieldEditor(for controlView: NSView) -> NSTextView? { editor }
-}
-
-final class BudgetTextField: NSTextField {
     override class var cellClass: AnyClass? {
         get { BudgetTextFieldCell.self }
         set {}
-    }
-
-    weak var coordinator: BudgetCellField.Coordinator? {
-        didSet { (cell as? BudgetTextFieldCell)?.editor.coordinator = coordinator }
     }
 
     /// The numpad's decimal key types the locale's separator; "." from the main keys stays a thousands mark.
@@ -193,4 +161,20 @@ final class BudgetTextField: NSTextField {
         }
         return coordinator?.shouldInsert(replacement, in: textView, range: affectedCharRange) ?? true
     }
+}
+
+/// An editor of its own, as changing the window's shared one would reach every other field.
+final class BudgetTextFieldCell: NSTextFieldCell {
+    private lazy var editor: NSTextView = {
+        let editor = NSTextView()
+        editor.isFieldEditor = true
+        editor.isAutomaticSpellingCorrectionEnabled = false
+        editor.isAutomaticTextReplacementEnabled = false
+        editor.isAutomaticTextCompletionEnabled = false
+        editor.isContinuousSpellCheckingEnabled = false
+        editor.inlinePredictionType = .no
+        return editor
+    }()
+
+    override func fieldEditor(for controlView: NSView) -> NSTextView? { editor }
 }

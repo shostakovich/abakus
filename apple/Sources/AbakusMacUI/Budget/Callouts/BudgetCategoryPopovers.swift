@@ -20,37 +20,58 @@ struct BudgetCategoryPopover: View {
         .font(ThemeFont.body.font)
         .foregroundStyle(ThemeColor.text)
         .frame(width: Self.width, alignment: .leading)
-        .onAppear { isFocused = true }
+        .onAppear { if form.isNew { isFocused = true } }
         .onChange(of: form.focusRequest) { isFocused = true }
     }
 
     @ViewBuilder
     private var editing: some View {
         @Bindable var controller = controller
-        PopoverTitle(form.title)
-        TextField("Name", text: $controller.categoryName)
-            .labelsHidden()
-            .textFieldStyle(.roundedBorder)
-            .focused($isFocused)
+        BudgetCategoryTitleField(name: $controller.categoryName, prompt: form.title, isFocused: $isFocused)
             .onSubmit(controller.categoryDone)
-        if !form.isNew && form.canDelete {
-            Button(role: .destructive, action: controller.deleteCategoryClicked) {
-                Label(form.deleteTitle, systemImage: "trash")
-            }
-            .buttonStyle(.borderless)
-            .foregroundStyle(ThemeColor.negative)
-            .fixedSize()
-        }
         if form.hasTarget {
             Divider()
             BudgetTargetSection(controller: controller, form: form)
         }
         Divider()
         HStack(spacing: 8) {
+            if !form.isNew && form.canDelete {
+                Button(role: .destructive, action: controller.deleteCategoryClicked) {
+                    Label(form.deleteTitle, systemImage: "trash")
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(ThemeColor.negative)
+                .fixedSize()
+            }
             Spacer(minLength: 0)
             Button("Abbrechen", action: controller.categoryCancelled)
             Button("Fertig", action: controller.categoryDone).buttonStyle(.borderedProminent)
         }
+    }
+}
+
+/// The popover's title is the name itself, emoji included: a click renames, as in Reminders' list info.
+private struct BudgetCategoryTitleField: View {
+    @Binding var name: String
+    let prompt: String
+    var isFocused: FocusState<Bool>.Binding
+    @State private var isHovered = false
+
+    var body: some View {
+        let isActive = isFocused.wrappedValue || isHovered
+        TextField("Name", text: $name, prompt: Text(verbatim: prompt))
+            .labelsHidden()
+            .textFieldStyle(.plain)
+            .font(.title3.weight(.semibold))
+            .focused(isFocused)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                isActive ? AnyShapeStyle(FillShapeStyle().tertiary) : AnyShapeStyle(ThemeColor.groupFill),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            .onHover { isHovered = $0 }
+            .accessibilityAddTraits(.isHeader)
     }
 }
 

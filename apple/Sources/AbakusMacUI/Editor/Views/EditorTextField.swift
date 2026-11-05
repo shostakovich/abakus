@@ -137,7 +137,7 @@ struct EditorTextField: NSViewRepresentable {
             editor.selectionDidChange(field, selection: fieldEditor.selectedRange)
         }
 
-        /// Characters about to be typed: the editor may take them (shortcuts, calculator operators).
+        /// Characters about to be typed: the editor may take them (shortcuts, a leading sign).
         func shouldInsert(_ string: String) -> Bool {
             guard let editor, !isApplying else { return true }
             reportSelection()

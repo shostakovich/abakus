@@ -216,6 +216,18 @@ import Testing
         #expect(model.editor == nil)
     }
 
+    @Test func escapeRestoresAnAmountTypedAsASum() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -10)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id, column: .amount)
+        let editor = try #require(model.editor)
+        editor.retype("5+10")
+        editor.press(.escape)
+        #expect(editor.text(.main(.amount)) == "10.00")
+        #expect(model.editor === editor)
+    }
+
     @Test func enterSavesThroughTheDefaultButton() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -4)
@@ -583,7 +595,7 @@ import Testing
         let editor = try #require(model.editor)
         editor.fieldClicked(.main(.amount))
         editor.type("+3180")
-        #expect(editor.text(.main(.amount)) == "3180")
+        #expect(editor.text(.main(.amount)) == "+3180")
         #expect(editor.isInflow(.main(.amount)))
         editor.activate(.save)
         let saved = try #require(store.transactionSaves.first).transaction
@@ -606,34 +618,64 @@ import Testing
         #expect(store.transactionSaves.map(\.transaction.amount) == [decimal("-88.12")])
     }
 
-    @Test func plusAndMinusSetTheSignOfAnAmountTypedWithoutOne() throws {
+    @Test func aLeadingSignSetsTheDirectionOfTheAmount() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -4)
         let (model, _) = fixture.spied()
         model.beginEditing(id, column: .amount)
         let editor = try #require(model.editor)
         #expect(editor.text(.main(.amount)) == "4.00")
-        editor.retype("12.5")
         editor.type("+")
-        #expect(editor.text(.main(.amount)) == "12.5")
+        #expect(editor.text(.main(.amount)) == "4.00")
         #expect(editor.isInflow(.main(.amount)))
         editor.press(.tab)
-        #expect(editor.clone.amount == 12.5)
+        #expect(editor.clone.amount == 4)
         editor.press(.backTab)
-        #expect(editor.text(.main(.amount)) == "12.50")
         for minus in ["−", "-"] {
             editor.type("+")
             editor.type(minus)
             #expect(!editor.isInflow(.main(.amount)))
         }
-        #expect(editor.calculator == nil)
         editor.press(.tab)
-        #expect(editor.clone.amount == -12.5)
+        #expect(editor.clone.amount == -4)
         editor.press(.backTab)
-        editor.paste("+1,234")
+        editor.paste("+1,234.00")
         editor.press(.tab)
         #expect(editor.clone.amount == 1234)
         #expect(editor.text(.main(.amount)) == "1,234.00")
+    }
+
+    @Test func aSignAfterDigitsIsArithmetic() throws {
+        let (model, store) = RegisterFixture().spied()
+        model.addTransactionClicked()
+        let editor = try #require(model.editor)
+        editor.fieldClicked(.main(.amount))
+        editor.type("50+20")
+        #expect(editor.text(.main(.amount)) == "50+20")
+        editor.press(.tab)
+        #expect(editor.clone.amount == -70)
+        #expect(editor.text(.main(.amount)) == "70.00")
+        editor.press(.backTab)
+        editor.type("-50+20")
+        #expect(editor.text(.main(.amount)) == "-50+20")
+        editor.press(.enter)
+        #expect(store.transactionSaves.map(\.transaction.amount) == [-30])
+    }
+
+    @Test func aNegativeResultFlipsTheSign() throws {
+        for startsAsInflow in [false, true] {
+            let (model, store) = RegisterFixture().spied()
+            model.addTransactionClicked()
+            let editor = try #require(model.editor)
+            editor.fieldClicked(.main(.amount))
+            if startsAsInflow { editor.toggleSign(.main(.amount)) }
+            editor.type("20-50")
+            editor.press(.tab)
+            #expect(editor.text(.main(.amount)) == "30.00")
+            #expect(editor.isInflow(.main(.amount)) != startsAsInflow)
+            editor.press(.enter)
+            #expect(store.transactionSaves.map(\.transaction.amount) == [startsAsInflow ? -30 : 30])
+        }
     }
 
     @Test func theSignButtonTogglesBetweenOutflowAndInflow() throws {
@@ -689,23 +731,6 @@ import Testing
         #expect(!editor.isInflow(.main(.amount)))
     }
 
-    @Test func aNegativeCalculatorResultFlipsTheSign() throws {
-        for startsAsInflow in [false, true] {
-            let (model, store) = RegisterFixture().spied()
-            model.addTransactionClicked()
-            let editor = try #require(model.editor)
-            editor.fieldClicked(.main(.amount))
-            editor.type(startsAsInflow ? "+20" : "20")
-            editor.openCalculator(for: .main(.amount))
-            editor.type("-50")
-            editor.press(.enter)
-            #expect(editor.text(.main(.amount)) == "30.00")
-            #expect(editor.isInflow(.main(.amount)) != startsAsInflow)
-            editor.press(.enter)
-            #expect(store.transactionSaves.map(\.transaction.amount) == [startsAsInflow ? -30 : 30])
-        }
-    }
-
     @Test func escapeRestoresAChangedSign() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -4)
@@ -720,20 +745,23 @@ import Testing
         #expect(model.editor == nil)
     }
 
-    @Test func timesAndDivideOpenTheCalculator() throws {
+    @Test func anotherOperatorIsRefusedAndTheAmountStays() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -10)
-        let (model, _) = fixture.spied()
+        let (model, store) = fixture.spied()
         model.beginEditing(id, column: .amount)
         let editor = try #require(model.editor)
-        editor.type("*")
-        #expect(editor.calculator?.calculator.display == "10.00")
-        editor.type("2")
+        editor.retype("60*2")
+        #expect(editor.text(.main(.amount)) == "60*2")
         editor.press(.enter)
-        #expect(editor.calculator == nil)
-        #expect(editor.text(.main(.amount)) == "20.00")
-        editor.press(.tab)
-        #expect(editor.clone.amount == -20)
+        let dialog = try #require(editor.taskDialog)
+        #expect(dialog.instruction == "Ungültiger Betrag")
+        #expect(dialog.content == BudgetAssignedAmountTests.refusal)
+        #expect(store.transactionSaves.isEmpty)
+        #expect(editor.clone.amount == -10)
+        #expect(editor.text(.main(.amount)) == "10.00")
+        editor.answer(MessageChoice.close)
+        #expect(editor.focusedField == .main(.amount))
     }
 }
 

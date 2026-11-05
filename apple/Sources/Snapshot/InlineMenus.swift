@@ -74,21 +74,36 @@ private struct InlineMenuLayer: View {
 struct InlineMenuMetrics {
     static let padding: CGFloat = 5
     static let rowHeight: CGFloat = 24
+    static let subtitledRowHeight: CGFloat = 38
+    static let imageWidth: CGFloat = 18
     static let textInset: CGFloat = 16
     static let stateWidth: CGFloat = 14
     static let cornerRadius: CGFloat = 10
 
     let size: CGSize
     let hasState: Bool
+    let hasImage: Bool
 
     @MainActor
     init(_ items: [RegisterMenuItem]) {
         hasState = items.contains(where: \.isChecked)
-        size = Self.menu(items).size
+        hasImage = items.contains { $0.systemImage != nil }
+        let menu = Self.menu(items).size
+        let leading = Self.textInset + (hasState ? Self.stateWidth : 0) + (hasImage ? Self.imageWidth : 0)
+        let text = items.map { item in
+            max(
+                Self.width(item.title, NSFont.menuFont(ofSize: 0)),
+                item.subtitle.map { Self.width($0, NSFont.menuFont(ofSize: NSFont.smallSystemFontSize)) } ?? 0)
+        }
+        size = CGSize(width: max(menu.width, leading + (text.max() ?? 0) + Self.textInset), height: menu.height)
+    }
+
+    private static func width(_ text: String, _ font: NSFont) -> CGFloat {
+        ceil(NSAttributedString(string: text, attributes: [.font: font]).size().width)
     }
 
     var textLeading: CGFloat {
-        Self.textInset + (hasState ? Self.stateWidth : 0)
+        Self.textInset + (hasState ? Self.stateWidth : 0) + (hasImage ? Self.imageWidth : 0)
     }
 
     @MainActor
@@ -105,6 +120,10 @@ struct InlineMenuMetrics {
             case .title, .action:
                 let entry = NSMenuItem(title: item.title, action: nil, keyEquivalent: "")
                 entry.state = item.isChecked ? .on : .off
+                entry.subtitle = item.subtitle
+                if let symbol = item.systemImage {
+                    entry.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+                }
                 menu.addItem(entry)
             }
         }
@@ -146,7 +165,22 @@ private struct InlineMenuView: View {
                         .frame(width: InlineMenuMetrics.stateWidth)
                         .offset(x: InlineMenuMetrics.textInset - 4)
                 }
-                Text(verbatim: item.title).lineLimit(1).offset(x: metrics.textLeading)
+                if let symbol = item.systemImage {
+                    Image(systemName: symbol)
+                        .foregroundStyle(titleStyle(item))
+                        .frame(width: InlineMenuMetrics.imageWidth - 6)
+                        .offset(x: metrics.textLeading - InlineMenuMetrics.imageWidth)
+                }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(verbatim: item.title).foregroundStyle(titleStyle(item))
+                    if let subtitle = item.subtitle {
+                        Text(verbatim: subtitle)
+                            .font(Font(NSFont.menuFont(ofSize: NSFont.smallSystemFontSize)))
+                            .foregroundStyle(item.isEnabled ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tertiary))
+                    }
+                }
+                .lineLimit(1)
+                .offset(x: metrics.textLeading)
                 if case .submenu = item.kind {
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -154,9 +188,17 @@ private struct InlineMenuView: View {
                 }
             }
             .foregroundStyle(item.isEnabled && item.kind != .title ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
-            .frame(width: metrics.size.width, height: InlineMenuMetrics.rowHeight, alignment: .leading)
+            .frame(
+                width: metrics.size.width,
+                height: item.subtitle == nil ? InlineMenuMetrics.rowHeight : InlineMenuMetrics.subtitledRowHeight,
+                alignment: .leading)
         }
     }
+}
+
+private func titleStyle(_ item: RegisterMenuItem) -> AnyShapeStyle {
+    guard item.isEnabled, item.kind != .title else { return AnyShapeStyle(.tertiary) }
+    return item.isDestructive ? AnyShapeStyle(Color(nsColor: .systemRed)) : AnyShapeStyle(.primary)
 }
 
 private struct MenuMaterial: NSViewRepresentable {

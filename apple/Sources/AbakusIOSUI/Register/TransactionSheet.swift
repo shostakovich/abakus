@@ -481,7 +481,7 @@
                         text: Binding(get: { editor.text(field) }, set: { editor.sheetTextChanged(field, to: $0) })
                     )
                     .font(.system(size: amountSize, weight: .semibold))
-                    .keyboardType(keyboard)
+                    .amountKeyboard(keyboard)
                     .fixedSize()
                     .foregroundStyle(ink)
                     .focused(focus, equals: field)

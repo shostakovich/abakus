@@ -1,5 +1,18 @@
 import Foundation
 
+/// What an action adds to a category's assignment; undoing it adds the negation.
+public struct AssignedChange: Hashable, Sendable {
+    public let categoryId: String
+    public let amount: Decimal
+
+    public init(categoryId: String, amount: Decimal) {
+        self.categoryId = categoryId
+        self.amount = amount
+    }
+
+    public var negated: AssignedChange { AssignedChange(categoryId: categoryId, amount: -amount) }
+}
+
 extension Budget {
     mutating func setAssigned(_ amount: Decimal, month: DateWithoutTime, categoryId: String) throws {
         try requireBudgetCategory(categoryId)
@@ -16,6 +29,20 @@ extension Budget {
         guard rounded > 0, from != to else { return }
         addAssigned(-rounded, month: month, categoryId: from)
         addAssigned(rounded, month: month, categoryId: to)
+    }
+
+    mutating func resetAssigned(month: DateWithoutTime) {
+        for id in budgetCategoryGroups.flatMap(\.categories).map(\.id) {
+            setAssignment(0, month: month, categoryId: id)
+        }
+    }
+
+    mutating func changeAssigned(_ changes: [AssignedChange], month: DateWithoutTime) throws {
+        for change in changes {
+            try requireBudgetCategory(change.categoryId)
+            guard change.amount.isFinite else { throw BudgetError.amountNotFinite }
+        }
+        for change in changes { addAssigned(Amount.round(change.amount), month: month, categoryId: change.categoryId) }
     }
 
     mutating func addAssigned(_ amount: Decimal, month: DateWithoutTime, categoryId: String) {

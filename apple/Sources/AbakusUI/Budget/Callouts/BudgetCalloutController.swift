@@ -9,7 +9,6 @@ public final class BudgetCalloutController {
     public internal(set) var category: BudgetCategoryForm?
     public internal(set) var summary: TransactionSummary?
     public internal(set) var availableForm: BudgetAvailableForm?
-    public internal(set) var assignForm: BudgetAssignForm?
     @ObservationIgnored public var onShowTransaction: @MainActor (String) -> Void = { _ in }
     @ObservationIgnored public var onShowInAccountView: @MainActor (AccountViewFilter) -> Void = { _ in }
 
@@ -36,10 +35,7 @@ public final class BudgetCalloutController {
         case .available(let month, let id):
             guard let form = availableForm(month: month, categoryId: id) else { return nil }
             availableForm = form
-        case .assignToCategory(let month):
-            guard let form = assignForm(month: month) else { return nil }
-            assignForm = form
-        case .monthQuickBudget: break
+        case .monthMenu: break
         }
         return popup
     }
@@ -48,7 +44,6 @@ public final class BudgetCalloutController {
         category = nil
         summary = nil
         availableForm = nil
-        assignForm = nil
     }
 
     package func isShowing(_ popup: BudgetPopup) -> Bool {
@@ -63,7 +58,7 @@ public final class BudgetCalloutController {
     public func escapePressed() -> Bool {
         guard let popup = budget.presentedPopup, !budget.isCoveredByModal else { return false }
         switch popup {
-        case .monthQuickBudget: return false
+        case .monthMenu: return false
         case .editCategory, .category: if !targetEscaped() && !deletionEscaped() { categoryCancelled() }
         default: close()
         }
@@ -74,7 +69,7 @@ public final class BudgetCalloutController {
     public func mouseDownOutside() {
         guard let popup = budget.presentedPopup, !budget.isCoveredByModal else { return }
         switch popup {
-        case .monthQuickBudget: break
+        case .monthMenu: break
         case .editCategory, .category: if category?.closesOnClickOutside != false && category?.target == nil { close() }
         default: close()
         }

@@ -95,19 +95,6 @@ extension BudgetFormatter {
             .replacingOccurrences(of: "\u{202F}", with: " ")
     }
 
-    /// The last `.` or `,` is the decimal point.
-    public func parseAmountWithUnknownDecimalSeparator(_ text: String) -> Decimal {
-        let decimal = currencyLocale.decimalSeparator
-        var unified = text.replacingOccurrences(of: ".", with: decimal).replacingOccurrences(of: ",", with: decimal)
-        if let first = unified.range(of: decimal), let last = unified.range(of: decimal, options: .backwards),
-            first != last
-        {
-            let head = unified[..<last.lowerBound].replacingOccurrences(of: decimal, with: "")
-            unified = head + unified[last.lowerBound...]
-        }
-        return parseAmount(unified)
-    }
-
     /// The last run of digits and separators wins.
     static func parseNumberString(_ text: String, decimalSeparator: String, thousandsSeparator: String) -> String? {
         let characters = Array(text).map(String.init)
@@ -148,6 +135,14 @@ extension BudgetFormatter {
             }
         }
         return isNegative ? "-" + number : number
+    }
+}
+
+public enum InvalidAmount {
+    public static let instruction = "Ungültiger Betrag"
+
+    public static func content(_ text: String) -> String {
+        "„\(text)“ ist kein gültiger Betrag.\nRechnen geht mit +\u{00A0}und\u{00A0}−, etwa\u{00A0}50+20."
     }
 }
 

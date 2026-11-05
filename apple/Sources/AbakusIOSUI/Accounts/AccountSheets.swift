@@ -145,7 +145,7 @@
 
         var body: some View {
             TextField(title, text: $text)
-                .keyboardType(.numbersAndPunctuation)
+                .amountKeyboard()
                 .multilineTextAlignment(.trailing)
                 .monospacedDigit()
         }

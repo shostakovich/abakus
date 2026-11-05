@@ -1,6 +1,7 @@
 import AbakusCore
 import CoreGraphics
 import Foundation
+import SwiftUI
 
 public struct BudgetCellID: Hashable, Sendable {
     public let month: DateWithoutTime
@@ -16,42 +17,14 @@ public struct BudgetCellEdit: Hashable, Sendable {
     public let cell: BudgetCellID
     public internal(set) var text: String
     public internal(set) var selectAllRequest = 0
-}
-
-public struct BudgetQuickBudgetList: Hashable, Sendable {
-    public static let calculatorLabel = "Rechner zeigen"
-    public static let rowHeight = SystemChrome.menuRowHeight
-    public static let separatorHeight: CGFloat = 11
-    package static let labelFont = ThemeFont.body
-    package static let amountFont = ThemeFont(size: ThemeFont.body.size, hasTabularDigits: true)
-    package static let iconWidth: CGFloat = 16
-    package static let iconGap: CGFloat = 6
-    package static let gap: CGFloat = 12
-    static let inset = 10 + SystemChrome.menuPadding
-
-    package static func label(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespaces)
-    }
-
-    public let cell: BudgetCellID
-    public let options: [QuickBudgetOption]
-    public let width: CGFloat
-    public internal(set) var highlighted = 0
-
-    public var rowCount: Int { options.count + 1 }
-    public var height: CGFloat {
-        2 * SystemChrome.menuPadding + CGFloat(rowCount) * Self.rowHeight + Self.separatorHeight
-    }
-}
-
-public struct BudgetCalculator: Hashable, Sendable {
-    public let cell: BudgetCellID
-    public internal(set) var calculator: Calculator
+    /// Why the typed text is no amount; the cell keeps it and the focus until it is changed or cancelled.
+    public internal(set) var error: String?
+    /// Counts every refusal, also of the same text, so each one takes the focus back.
+    public internal(set) var refusals = 0
 }
 
 public enum BudgetCellKey: Hashable, Sendable {
-    case tab, backTab, enter, up, down, escape, pageUp, pageDown, f2, backspace
-    case character(String)
+    case tab, backTab, enter, up, down, escape, pageUp, pageDown
 }
 
 extension BudgetViewModel {
@@ -61,66 +34,76 @@ extension BudgetViewModel {
     }
 
     public func beginEdit(_ cell: BudgetCellID) {
-        guard editor?.cell != cell else { return }
-        commitEdit()
-        calculator = nil
+        guard editor?.cell != cell, commitEdit() else { return }
         guard shownMonths.contains(cell.month), groups.editableCategoryIds.contains(cell.categoryId) else { return }
         editor = BudgetCellEdit(cell: cell, text: assignedText(cell), selectAllRequest: 1)
         reveal(cell.categoryId)
     }
 
+    /// A text field hands its unchanged text back when it loses the focus, which keeps a refusal.
     public func cellTextChanged(_ text: String) {
+        guard text != editor?.text else { return }
         editor?.text = text
+        editor?.error = nil
     }
 
-    /// Text that does not parse keeps the stored amount.
-    public func commitEdit() {
-        commitSheetAssigned()
-        guard let edit = editor else { return }
+    /// False while the edited cell or the sheet's Zugewiesen holds text that is no amount.
+    @discardableResult
+    public func commitEdit() -> Bool {
+        let sheetCommitted = commitSheetAssigned()
+        guard let edit = editor else { return sheetCommitted }
+        if let error = assign(edit.text, to: edit.cell) {
+            editor?.error = error
+            editor?.refusals += 1
+            announceRefusal(error)
+            return false
+        }
         editor = nil
-        quickBudget = nil
-        assign(edit.text, to: edit.cell)
+        return sheetCommitted
+    }
+
+    /// Where the edit cannot stay, such as a month scrolled away, a refused amount is dropped.
+    func commitOrDropEdit() {
+        guard !commitEdit() else { return }
+        cancelEdit()
+        dropSheetAssigned()
     }
 
     public func cancelEdit() {
         editor = nil
-        quickBudget = nil
     }
 
-    public func assign(_ text: String, to cell: BudgetCellID) {
-        guard let amount = formatter.parseBudgetAmount(text) else { return }
+    /// Empty text is zero; text that is no sum of amounts keeps the stored one, and the reason is returned.
+    @discardableResult
+    public func assign(_ text: String, to cell: BudgetCellID) -> String? {
+        let typed = text.trimmingCharacters(in: .whitespaces)
+        guard let amount = typed.isEmpty ? 0 : Calculator.evaluate(typed, formatter: formatter) else {
+            return InvalidAmount.content(typed)
+        }
         setAssigned(amount, in: cell)
+        return nil
     }
 
     func setAssigned(_ amount: Decimal, in cell: BudgetCellID) {
         guard amount != month(cell.month)?.category(cell.categoryId)?.assigned else { return }
         try? store.perform(.setAssigned(month: cell.month, categoryId: cell.categoryId, amount: amount))
+        dropStaleUndo()
         callouts.refreshAvailableForm()
+    }
+
+    /// The reason stands beside the field, which VoiceOver does not visit on its own.
+    func announceRefusal(_ error: String) {
+        AccessibilityNotification.Announcement(error).post()
     }
 
     @discardableResult
     public func cellKey(_ key: BudgetCellKey) -> Bool {
         guard let edit = editor else { return false }
-        if quickBudget != nil { return quickBudgetKey(key) }
         switch key {
         case .tab, .enter, .down: moveEdit(from: edit.cell, forward: true)
         case .backTab, .up: moveEdit(from: edit.cell, forward: false)
         case .escape: cancelEdit()
         case .pageUp, .pageDown: pageScroll(down: key == .pageDown)
-        case .f2: openQuickBudget()
-        case .backspace: return false
-        case .character(let character): return cellCharacter(character, edit)
-        }
-        return true
-    }
-
-    private func cellCharacter(_ character: String, _ edit: BudgetCellEdit) -> Bool {
-        switch character {
-        case "+": openCalculator(.add)
-        case "*": openCalculator(.multiply)
-        case "/": openCalculator(.divide)
-        case "-" where formatter.parseAmount(edit.text) != 0: openCalculator(.subtract)
-        default: return false
         }
         return true
     }
@@ -130,7 +113,7 @@ extension BudgetViewModel {
         String(text.replacingOccurrences(of: "\u{2212}", with: "-").filter(allowsTyping))
     }
 
-    /// Everything up to "/" passes, so signs and the calculator's operators can be typed.
+    /// Everything up to "/" passes, so "+" and "−" can be typed and other operators are refused when committed.
     public static func allowsTyping(_ character: Character) -> Bool {
         guard let scalar = character.unicodeScalars.first, character.unicodeScalars.count == 1 else { return false }
         return scalar.value <= 0x2F || ("0"..."9").contains(character) || character == "[" || character == "]"
@@ -148,115 +131,7 @@ extension BudgetViewModel {
         beginEdit(BudgetCellID(month: cell.month, categoryId: next))
     }
 
-    public func dropDownButtonClicked() {
-        if quickBudget != nil {
-            quickBudget = nil
-        } else {
-            openQuickBudget()
-        }
-    }
-
-    public func openQuickBudget() {
-        guard let edit = editor else { return }
-        let options = sheet.quickBudgetOptions(categoryId: edit.cell.categoryId, month: edit.cell.month)
-        quickBudget = BudgetQuickBudgetList(cell: edit.cell, options: options, width: quickBudgetWidth(options))
-    }
-
-    /// Wide enough for the longest row, so no label is cut.
-    func quickBudgetWidth(_ options: [QuickBudgetOption]) -> CGFloat {
-        let list = BudgetQuickBudgetList.self
-        let rows = options.map {
-            list.labelFont.width(of: list.label($0.label))
-                + list.amountFont.width(of: formatter.currencyNoSymbol($0.amount))
-        }
-        let calculator = list.iconWidth + list.iconGap + list.labelFont.width(of: list.calculatorLabel)
-        return (rows + [calculator]).max(by: <)! + list.gap + 2 * list.inset
-    }
-
-    public func quickBudgetRowHovered(_ index: Int) {
-        quickBudget?.highlighted = index
-    }
-
-    private func quickBudgetKey(_ key: BudgetCellKey) -> Bool {
-        guard let list = quickBudget else { return false }
-        switch key {
-        case .up: quickBudget?.highlighted = max(0, list.highlighted - 1)
-        case .down: quickBudget?.highlighted = min(list.rowCount - 1, list.highlighted + 1)
-        case .enter: quickBudgetChosen(list.highlighted)
-        case .escape: quickBudget = nil
-        case .character("+"): openCalculator(.add)
-        case .character("*"): openCalculator(.multiply)
-        case .character("/"): openCalculator(.divide)
-        default: break
-        }
-        return true
-    }
-
-    public func quickBudgetChosen(_ index: Int) {
-        guard let list = quickBudget, var edit = editor else { return }
-        guard list.options.indices.contains(index) else {
-            openCalculator(nil)
-            return
-        }
-        quickBudget = nil
-        let amount = list.options[index].amount
-        setAssigned(amount, in: list.cell)
-        edit.text = formatter.currencyNoSymbol(month(list.cell.month)?.category(list.cell.categoryId)?.assigned ?? 0)
-        edit.selectAllRequest += 1
-        editor = edit
-    }
-
-    /// The field gives its focus to the calculator, so its text is stored first.
-    public func openCalculator(_ operator: Calculator.Operator?) {
-        guard let edit = editor else { return }
-        let value = formatter.parseAmount(edit.text)
-        commitEdit()
-        calculator = BudgetCalculator(
-            cell: edit.cell, calculator: Calculator(value: value, operator: `operator`, formatter: formatter))
-        panelFocusRequest += 1
-    }
-
-    public func calculatorPress(_ key: Calculator.Key) {
-        calculator?.calculator.press(key)
-    }
-
-    /// An "Error" result stays on the display.
-    public func calculatorOK() {
-        guard let state = calculator else { return }
-        var evaluated = state.calculator
-        let result = evaluated.result()
-        guard !evaluated.isError else {
-            calculator?.calculator = evaluated
-            return
-        }
-        calculator = nil
-        setAssigned(result, in: state.cell)
-        beginEdit(state.cell)
-    }
-
-    public func calculatorCancel() {
-        calculator = nil
-    }
-
-    @discardableResult
-    public func calculatorKey(_ key: BudgetCellKey) -> Bool {
-        guard calculator != nil else { return false }
-        switch key {
-        case .enter: calculatorOK()
-        case .escape: calculatorCancel()
-        case .backspace: calculatorPress(.backspace)
-        case .character(let character):
-            if let typed = Calculator.Key.typed(character, decimalSeparator: formatter.currencyLocale.decimalSeparator)
-            {
-                calculatorPress(typed)
-            }
-        default: break
-        }
-        return true
-    }
-
     public func panelKey(_ key: BudgetCellKey) -> Bool {
-        if calculator != nil { return calculatorKey(key) }
         switch key {
         case .pageUp, .pageDown:
             pageScroll(down: key == .pageDown)
@@ -268,13 +143,5 @@ extension BudgetViewModel {
 
     public func mouseDownOutsideEditedRow() {
         commitEdit()
-    }
-
-    public func mouseDownOutsideQuickBudget() {
-        quickBudget = nil
-    }
-
-    public func mouseDownOutsideCalculator() {
-        calculator = nil
     }
 }

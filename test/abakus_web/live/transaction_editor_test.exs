@@ -172,6 +172,49 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert %Transaction{amount: 500, category_id: ^rta} = newest(c.giro)
     end
 
+    test "the amount adds and subtracts; a sign in front sets the direction", c do
+      view = open_new(c, c.giro)
+
+      change(view, %{"amount" => "-50+20"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "−")
+      submit(view, %{amount: "-50+20"})
+      assert %Transaction{amount: -3_000} = newest(c.giro)
+
+      view = open_new(c, c.savings)
+      submit(view, %{amount: "12,50+7,50"})
+      assert %Transaction{amount: -2_000} = newest(c.savings)
+
+      view = open_new(c, c.giro)
+      change(view, %{"amount" => "+50-20"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "+")
+    end
+
+    test "a sum without a sign that comes out negative turns the sign round", c do
+      view = open_new(c, c.giro)
+      rta = Categories.ready_to_assign!(budget_scope()).id
+
+      change(view, %{"amount" => "50-70"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "+")
+      assert has_element?(view, ~s|#tx-amount[value="20,00"]|)
+      assert category(view, rta)
+
+      submit(view)
+      assert %Transaction{amount: 2_000, category_id: ^rta} = newest(c.giro)
+    end
+
+    test "an amount with another operator is refused and nothing is saved", c do
+      view = open_new(c, c.giro)
+
+      submit(view, %{amount: "60*2"})
+
+      assert has_element?(view, "#tx-error", "Ungültiger Betrag „60*2“.")
+      assert has_element?(view, "tbody#tx-editor")
+
+      submit(view, %{amount: "--50"})
+      assert has_element?(view, "#tx-error", "Ungültiger Betrag „--50“.")
+      assert Ledger.list_transactions(budget_scope(), c.giro) == []
+    end
+
     test "an inflow saved before its change arrives goes to Ready to Assign too", c do
       view = open_new(c, c.giro)
       rta = Categories.ready_to_assign!(budget_scope()).id
@@ -240,16 +283,32 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       assert has_element?(
                view,
-               "#tx-editor .app-sheet #tx-amount[name='transaction[outflow]'][aria-describedby='tx-sign']"
+               "#tx-editor .app-sheet #tx-amount[name='transaction[amount]'][aria-describedby='tx-sign']"
              )
 
       refute has_element?(view, "tbody#tx-editor")
 
       view |> element("#tx-sign") |> render_click()
-      assert has_element?(view, "#tx-amount[name='transaction[inflow]']")
+      assert has_element?(view, "#tx-sign", "+")
 
-      submit(view, %{inflow: "100"})
+      submit(view, %{amount: "100"})
       assert %Transaction{amount: 10_000} = newest(c.giro)
+    end
+
+    test "the phone's amount adds and subtracts, a sign in front sets the direction", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      view |> element("#new-transaction-fab") |> render_click()
+
+      change(view, %{"amount" => "-50+20"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "−")
+      submit(view, %{amount: "-50+20"})
+      assert %Transaction{amount: -3_000} = newest(c.giro)
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.savings}")
+      view |> element("#new-transaction-fab") |> render_click()
+      submit(view, %{amount: "60*2"})
+      assert has_element?(view, "#tx-error", "Ungültiger Betrag „60*2“.")
+      assert Ledger.list_transactions(budget_scope(), c.savings) == []
     end
 
     test "from all accounts it books in the first budget account, or the one picked", c do
@@ -540,6 +599,72 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert has_element?(view, "#tx-#{split.id}-part-0 td.app-amount", "−130,00")
       refute has_element?(view, "#tx-#{split.id}-part-0 td.app-inflow")
       assert has_element?(view, "#tx-#{split.id}-part-1 td.app-amount.app-inflow", "+30,00")
+    end
+
+    test "the phone shows and reads a part against the transaction's direction alike", c do
+      split =
+        transaction_fixture(
+          account_id: c.giro.id,
+          amount: -10_000,
+          payee_id: c.market.id,
+          subtransactions: [
+            %{amount: -12_000, category_id: c.groceries.id},
+            %{amount: 2_000, category_id: c.saving.id}
+          ]
+        )
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      view |> element("#tx-card-#{split.id} button", "Frischmarkt") |> render_click()
+
+      assert has_element?(view, ~s|#tx-sub-0-amount[value="120,00"]|)
+      assert has_element?(view, ~s|#tx-sub-1-amount[value="−20,00"]|)
+
+      change(
+        view,
+        %{
+          "memo" => "Wocheneinkauf",
+          "subtransactions" => %{
+            "0" => %{"outflow" => "120,00", "inflow" => ""},
+            "1" => %{"outflow" => "−20,00", "inflow" => ""}
+          }
+        },
+        ["memo"]
+      )
+
+      assert has_element?(view, ~s|#tx-sub-1-amount[value="−20,00"]|)
+      assert has_element?(view, "#tx-remainder", "Aufteilung stimmt")
+      submit(view)
+
+      assert [%Subtransaction{amount: -12_000}, %Subtransaction{amount: 2_000}] =
+               Ledger.get_transaction!(budget_scope(), split.id).subtransactions
+    end
+
+    test "the phone's parts follow an inflow typed after splitting", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      view |> element("#new-transaction-fab") |> render_click()
+      view |> with_target("#tx-editor") |> render_click("split", %{})
+
+      change(view, %{"amount" => "+100"}, ["amount"])
+      assert has_element?(view, "#tx-sign", "+")
+
+      change(
+        view,
+        %{"subtransactions" => %{"0" => %{"inflow" => "60", "outflow" => ""}}},
+        ["subtransactions", "0", "inflow"]
+      )
+
+      assert has_element?(view, ~s|#tx-sub-0-amount[value="60"]|)
+      assert has_element?(view, "#tx-remainder", "Noch aufzuteilen: 40,00")
+
+      pick(view, "0", "category", "#{c.groceries.id}")
+      pick(view, "1", "category", "#{c.saving.id}")
+      submit(view, %{subtransactions: %{"1" => %{inflow: "40"}}})
+
+      split = newest(c.giro)
+      assert split.amount == 10_000
+
+      assert [%Subtransaction{amount: 6_000}, %Subtransaction{amount: 4_000}] =
+               split.subtransactions
     end
 
     test "parts imported from YNAB show their payees and memos and keep them", c do

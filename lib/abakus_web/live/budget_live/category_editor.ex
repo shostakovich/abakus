@@ -2,9 +2,9 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   @moduledoc """
   Adding, renaming and deleting groups and categories, as in YNAB: "+ Gruppe" above the table, "+" on a group's row
   (or "Kategorie hinzufügen" in the group's popover, where there is no hover) and a group's name open small
-  popovers; a category is renamed and deleted in its dialog (its sheet on phones). Deleting a category
-  asks for the category that takes over everything, and says when reconciled transactions change too; a group is
-  deleted only when it is empty.
+  popovers; a category is renamed in its dialog's title and deleted at its end (its sheet on phones). Deleting a
+  category asks for the category that takes over everything, and says when reconciled transactions change too; a
+  group is deleted only when it is empty.
 
   The popover's state is `%{kind, group, category, step, error, open, anchor, ...}`: `kind` is `:new_group`,
   `:new_category`, `:group` or `:category`, `step` is `:name` or (for a category) `:delete`. A closed popover keeps
@@ -259,31 +259,26 @@ defmodule AbakusWeb.BudgetLive.CategoryEditor do
   defp name(%{kind: :group, group: group}), do: group.name
   defp name(_new), do: nil
 
+  attr :id, :string, required: true, doc: "`<modal id>-title`, so the name names the dialog"
   attr :edit, :map, required: true, doc: "the category's state, from `open/2`"
-  attr :autofocus, :boolean, default: false
 
-  @doc "A category's name in its dialog, renamed in place: Enter and leaving the field save, Escape puts it back."
+  @doc """
+  A category's name with its emoji as the title of its dialog, renamed in place on a tap or click: Enter and leaving
+  the field save, Escape puts it back. The dialog opens on itself, not on the name.
+  """
   def category_name(assigns) do
     ~H"""
-    <section id="category-name">
-      <.section_heading level={3}>Name</.section_heading>
-      <form id="category-name-form" phx-submit="edit_save" novalidate>
-        <.input
-          id="category-name-input"
-          name="name"
-          label="Name"
-          hide_label
-          value={@edit.category.name}
-          autocomplete="off"
-          required
-          errors={if @edit.step == :name, do: List.wrap(@edit.error), else: []}
-          autofocus={@autofocus}
-          phx-blur="edit_save"
-          phx-hook="RenameField"
-          data-saved={@edit.category.name}
-        />
-      </form>
-    </section>
+    <form id="category-name-form" phx-submit="edit_save" novalidate>
+      <.title_input
+        id={@id}
+        name="name"
+        label="Name"
+        value={@edit.category.name}
+        required
+        errors={if @edit.step == :name, do: List.wrap(@edit.error), else: []}
+        phx-blur="edit_save"
+      />
+    </form>
     """
   end
 
