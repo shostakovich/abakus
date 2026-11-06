@@ -338,13 +338,19 @@ defmodule Abakus.Ledger do
     |> Sync.insert()
   end
 
+  @doc "Updates a payee as `create_payee/2` stores one; `{:error, :not_found}` for one that is gone."
   def update_payee(%Scope{} = scope, %Payee{} = payee, attrs) do
-    scope
-    |> own!(payee)
-    |> Payee.changeset(attrs)
-    |> References.validate_exists(:last_category_id, owned(Category, scope))
-    |> validate_unique_name(scope)
-    |> Sync.update()
+    case Repo.get(payees(scope), own!(scope, payee).id) do
+      nil ->
+        {:error, :not_found}
+
+      payee ->
+        payee
+        |> Payee.changeset(attrs)
+        |> References.validate_exists(:last_category_id, owned(Category, scope))
+        |> validate_unique_name(scope)
+        |> Sync.update()
+    end
   end
 
   defp validate_unique_name(changeset, scope) do
@@ -880,7 +886,13 @@ defmodule Abakus.Ledger do
     end)
   end
 
-  defp merge_payee(scope, %Payee{id: from_id} = from, %Payee{id: into_id} = into) do
+  @doc """
+  Merges the payee `from` into `into`, as part of a write: what pointed at `from` points at `into`, which takes its
+  last category if it has none, and `from` is deleted with `into` as its successor. Returns `into`.
+  """
+  def merge_payee(%Scope{} = scope, %Payee{id: from_id} = from, %Payee{id: into_id} = into) do
+    own!(scope, from)
+    own!(scope, into)
     repoint_payee(scope, from_id, into_id)
     Sync.update!(Changeset.change(from, deleted_at: DateTime.utc_now(), successor_id: into_id))
 
