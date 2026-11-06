@@ -47,7 +47,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
                {"Für spätere Monate", "-300.00"}
              ]
 
-      assert has_element?(view, "#month-2026-10 #calc-toggle-2026-10", "Zu verteilen")
+      assert has_element?(view, ".app-heads-rta #calc-toggle-2026-10", "Zu verteilen")
 
       for key <- ~w(2026-09 2026-10 2026-11) do
         assert sum(calculation(view, key)) == ready(view, key)
@@ -59,7 +59,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
       assert has_element?(
                view,
-               "#month-2026-09 #calc-toggle-2026-09",
+               ".app-heads-rta #calc-toggle-2026-09",
                "Nicht verteilt am Monatsende"
              )
     end
