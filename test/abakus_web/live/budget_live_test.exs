@@ -246,7 +246,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       assert Categories.budget(budget_scope()).assigned == %{}
     end
 
-    test "the month card warns while a later month is not covered", c do
+    test "the calculation lists no line about a later month that is not covered", c do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       Categories.assign(budget_scope(), c.groceries, @october, 40_000)
       spend(c, c.groceries, -80_000, ~D[2026-10-05])
@@ -255,12 +255,23 @@ defmodule AbakusWeb.BudgetLiveTest do
       {:ok, view, _html} = open(c.conn, ~p"/budget", months: 2)
 
       assert has_element?(view, "#ready-2026-10", "100,00\u00A0€")
-      assert has_element?(view, "#calc-2026-10 .app-mcalc-warn dt", "Nicht gedeckt im Nov")
-      assert has_element?(view, "#calc-2026-10 .app-mcalc-warn dd", "−300,00\u00A0€")
+      assert has_element?(view, "#ready-2026-11", "−300,00\u00A0€")
 
-      view |> element("#assign-#{c.rent.id}-2026-11") |> render_blur(%{"value" => "200"})
+      assert view
+             |> element("#calc-2026-10")
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("dt")
+             |> Enum.map(&LazyHTML.text/1) ==
+               [
+                 "Nicht verteilt im Sep",
+                 "Überzogen im Sep",
+                 "Einnahmen im Okt",
+                 "Zugewiesen im Okt",
+                 "Für spätere Monate"
+               ]
 
-      refute has_element?(view, ".app-mcalc-warn")
+      refute has_element?(view, "#calc-2026-10", "Nov")
     end
 
     test "Zu verteilen shows and hides the calculation of every month on the device", c do
@@ -648,7 +659,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       view |> element("#select-#{c.category.id}") |> render_click()
 
-      assert has_element?(view, "#target-status.text-success-ink", "Erfüllt.")
+      assert has_element?(view, "#target-status.text-success-ink", "Erfüllt")
       refute has_element?(view, "#target-progress")
       refute has_element?(view, "#target-assign")
       refute has_element?(view, "#inspector-target", "ausgegeben")
@@ -663,7 +674,7 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       view |> element("#select-#{c.category.id}") |> render_click()
 
-      assert has_element?(view, "#target-status.text-error-ink", "Überzogen um 2,00\u00A0€.")
+      assert has_element?(view, "#target-status.text-error-ink", "Überzogen um 2,00\u00A0€")
     end
   end
 

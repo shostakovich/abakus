@@ -152,26 +152,44 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
 
     test "one sentence: overspent wins over snoozed, then paused, still missing, funded" do
       assert Status.target_status(row(target: @monthly, snoozed: true, available: -18_020)) ==
-               %{text: "Überzogen um 180,20 €.", tone: :error, icon: nil}
+               %{text: "Überzogen um 180,20 €", tone: :error, icon: nil}
 
       assert Status.target_status(row(target: @monthly, snoozed: true, underfunded: 10)) ==
-               %{text: "Pausiert im Oktober.", tone: :muted, icon: "pause"}
+               %{text: "Pausiert im Oktober", tone: :muted, icon: "pause"}
 
       assert Status.target_status(row(target: @monthly, underfunded: 6_834)) ==
-               %{text: "Noch 68,34 € diesen Monat.", tone: :warning, icon: "clock"}
+               %{text: "Noch 68,34 € im Oktober", tone: :warning, icon: "clock"}
 
-      assert %{text: "Erfüllt.", tone: :success} =
+      assert %{text: "Erfüllt", tone: :success} =
                Status.target_status(row(target: @monthly, assigned: 1_000, activity: -1_000))
     end
 
     test "a target by a date is on track until its amount is saved" do
       by_date = %{cadence: :by_date, amount: 120_000}
 
-      assert %{text: "Im Plan."} =
+      assert %{text: "Im Plan"} =
                Status.target_status(row(target: by_date, saved: 8_000, available: 8_000))
 
-      assert %{text: "Erfüllt."} =
+      assert %{text: "Erfüllt"} =
                Status.target_status(row(target: by_date, saved: 120_000, available: 120_000))
+    end
+  end
+
+  describe "target_progress/1" do
+    test "a target by a date says what it has saved in its rule's verb, others nothing" do
+      set_aside = %{cadence: :by_date, amount: 30_000, set_aside: true}
+      save_up = %{cadence: :by_date, amount: 300_000, set_aside: false}
+
+      assert Status.target_progress(row(target: set_aside, saved: 7_500)) ==
+               "75,00 von 300,00\u00A0€ zurückgelegt"
+
+      assert Status.target_progress(row(target: save_up, saved: 41_539)) ==
+               "415,39 von 3.000,00\u00A0€ angespart"
+
+      assert Status.target_progress(row(target: set_aside)) ==
+               "0,00 von 300,00\u00A0€ zurückgelegt"
+
+      assert Status.target_progress(row(target: @monthly)) == nil
     end
   end
 
@@ -241,14 +259,5 @@ defmodule AbakusWeb.BudgetLive.StatusTest do
                %{label: "Zugewiesen im Nov", value: 0}
              ] = Status.calculation(november)
     end
-  end
-
-  test "uncovered/1 lists the later months that are short as lines of the calculation, with the year when it differs" do
-    month = %Month{month: @oct, uncovered: [{@nov, 30_000}, {~D[2027-01-01], 5}]}
-
-    assert Status.uncovered(month) == [
-             %{label: "Nicht gedeckt im Nov", value: -30_000, tone: :error},
-             %{label: "Nicht gedeckt im Jan 2027", value: -5, tone: :error}
-           ]
   end
 end

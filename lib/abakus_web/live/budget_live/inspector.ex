@@ -200,18 +200,36 @@ defmodule AbakusWeb.BudgetLive.Inspector do
     assigns =
       assign(assigns,
         status: Status.target_status(assigns.cell),
+        progress: Status.target_progress(assigns.cell),
         to_assign: Status.to_assign(assigns.cell, assigns.free)
       )
 
     ~H"""
     <p id="target-head" class="text-sm font-medium">{Status.target_head(@cell.target)}</p>
-    <div class="mt-2 flex min-h-8 flex-wrap items-center justify-between gap-2">
-      <p
+    <.bar
+      :if={@progress}
+      id="target-progress"
+      class="mt-2"
+      label={@progress}
+      value={round((@cell.progress || 0) * 100)}
+      tone={bar_tone(@status.tone)}
+      target={Status.target_mark(@cell)}
+      hide_label
+    />
+    <div class="mt-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-sm">
+      <span :if={@progress} id="target-saved" class="tabular-nums">{@progress}</span>
+      <span
         id="target-status"
-        class={["flex items-center gap-1.5 text-sm", Components.tone_class(@status.tone)]}
+        class={[
+          "flex items-center gap-1.5",
+          @progress && "ms-auto",
+          Components.tone_class(@status.tone)
+        ]}
       >
         <.icon :if={@status.icon} name={@status.icon} />{@status.text}
-      </p>
+      </span>
+    </div>
+    <div class="mt-4 flex flex-wrap gap-2">
       <.button
         :if={@cell.available >= 0 && @to_assign > 0}
         id="target-assign"
@@ -220,18 +238,6 @@ defmodule AbakusWeb.BudgetLive.Inspector do
       >
         {Money.euros(@to_assign)} zuweisen
       </.button>
-    </div>
-    <.bar
-      :if={@cell.target.cadence == :by_date}
-      id="target-progress"
-      class="mt-3"
-      label={"Angespart #{Money.amount(@cell.saved || 0)} von #{Money.euros(@cell.target.amount)}"}
-      value={round((@cell.progress || 0) * 100)}
-      tone={bar_tone(@status.tone)}
-      target={Status.target_mark(@cell)}
-      show_value
-    />
-    <div class="mt-4 flex flex-wrap gap-2">
       <.button
         id="target-snooze"
         size={:sm}

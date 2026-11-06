@@ -93,35 +93,6 @@ defmodule Abakus.BudgetTest do
       assert months[@oct].ready_to_assign_shown == -4_000
     end
 
-    test "lists the later months that are not covered, up to the last one that changes" do
-      months =
-        months(
-          budget(
-            income: %{@oct => 10_000},
-            assigned: %{{1, @oct} => 4_000, {2, @nov} => 5_000, {2, @dec} => 2_000},
-            activity: %{{1, @oct} => -8_000}
-          )
-        )
-
-      assert months[@oct].uncovered == [{@nov, 3_000}, {@dec, 5_000}]
-      assert months[@nov].uncovered == [{@dec, 5_000}]
-      assert months[@dec].uncovered == []
-    end
-
-    test "lists a month with data that only repeats the shortfall, not the empty months after it" do
-      months =
-        months(
-          budget(
-            income: %{@oct => 10_000, @dec => 2_000},
-            assigned: %{{1, @oct} => 4_000, {2, @nov} => 9_000, {2, @dec} => 2_000},
-            activity: %{{1, @oct} => -8_000}
-          )
-        )
-
-      assert months[@oct].uncovered == [{@nov, 7_000}, {@dec, 7_000}]
-      assert months[~D[2027-01-01]].ready_to_assign == -7_000
-    end
-
     test "runs from the first month with data to the month after the last, or further when asked" do
       budget = budget(activity: %{{1, @oct} => -100})
 

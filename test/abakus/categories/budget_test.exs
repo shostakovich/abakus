@@ -37,8 +37,8 @@ defmodule Abakus.Categories.BudgetTest do
     do:
       transaction_fixture(account_id: account.id, category_id: rta.id, amount: amount, date: date)
 
-  describe "scenario: overspending leaves the next month uncovered" do
-    test "October shows 100 € and warns that November is 300 € short", c do
+  describe "scenario: overspending comes off the next month" do
+    test "October shows 100 € and November −300 €", c do
       groceries = category_fixture(name: "Lebensmittel")
       rent = category_fixture(name: "Miete")
       income(c.checking, c.rta, 100_000)
@@ -46,10 +46,8 @@ defmodule Abakus.Categories.BudgetTest do
       transaction_fixture(account_id: c.checking.id, category_id: groceries.id, amount: -80_000)
       Categories.assign(budget_scope(), rent, @november, 50_000)
 
-      october = month(@october)
-
-      assert october.ready_to_assign_shown == 10_000
-      assert october.uncovered == [{@november, 30_000}]
+      assert month(@october).ready_to_assign_shown == 10_000
+      assert month(@november).ready_to_assign_shown == -30_000
     end
   end
 

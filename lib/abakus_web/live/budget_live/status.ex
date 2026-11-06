@@ -1,8 +1,8 @@
 defmodule AbakusWeb.BudgetLive.Status do
   @moduledoc """
   What the budget shows about a category or month, as in YNAB: the available cell, the target in the category
-  dialog, and Zu verteilen with YNAB 4's calculation and the later months it does not cover. A snoozed target counts
-  as done. Colours are tones (`:error`, `:warning`, `:success`, `:muted`); the components map them to theme tokens.
+  dialog, and Zu verteilen with YNAB 4's calculation. A snoozed target counts as done. Colours are tones (`:error`,
+  `:warning`, `:success`, `:muted`); the components map them to theme tokens.
   """
 
   import Abakus.Format,
@@ -77,20 +77,34 @@ defmodule AbakusWeb.BudgetLive.Status do
   def target_status(%CategoryMonth{target: nil}), do: nil
 
   def target_status(%CategoryMonth{available: available}) when available < 0,
-    do: %{text: "Überzogen um #{Money.euros(-available)}.", tone: :error, icon: nil}
+    do: %{text: "Überzogen um #{Money.euros(-available)}", tone: :error, icon: nil}
 
   def target_status(%CategoryMonth{snoozed: true} = row),
-    do: %{text: "Pausiert im #{month_name(row.month)}.", tone: :muted, icon: "pause"}
+    do: %{text: "Pausiert im #{month_name(row.month)}", tone: :muted, icon: "pause"}
 
-  def target_status(%CategoryMonth{underfunded: underfunded}) when underfunded > 0,
-    do: %{text: "Noch #{Money.euros(underfunded)} diesen Monat.", tone: :warning, icon: "clock"}
+  def target_status(%CategoryMonth{underfunded: underfunded} = row) when underfunded > 0,
+    do: %{
+      text: "Noch #{Money.euros(underfunded)} im #{month_name(row.month)}",
+      tone: :warning,
+      icon: "clock"
+    }
 
   def target_status(%CategoryMonth{target: %{cadence: :by_date, amount: amount}, saved: saved})
       when is_integer(saved) and saved < amount,
-      do: %{text: "Im Plan.", tone: :success, icon: "circle-check"}
+      do: %{text: "Im Plan", tone: :success, icon: "circle-check"}
 
   def target_status(%CategoryMonth{}),
-    do: %{text: "Erfüllt.", tone: :success, icon: "circle-check"}
+    do: %{text: "Erfüllt", tone: :success, icon: "circle-check"}
+
+  @doc """
+  What a target by a date has saved of its amount, in the verb of its rule (`target_head/1`); nil for other targets.
+  """
+  def target_progress(%CategoryMonth{target: %{cadence: :by_date} = target, saved: saved}) do
+    verb = if target.set_aside, do: "zurückgelegt", else: "angespart"
+    "#{Money.amount(saved || 0)} von #{Money.euros(target.amount)} #{verb}"
+  end
+
+  def target_progress(%CategoryMonth{}), do: nil
 
   @doc """
   What a target asks for, in one sentence. A repeating target by a date names its day without the year.
@@ -163,16 +177,4 @@ defmodule AbakusWeb.BudgetLive.Status do
 
   defp error(true), do: :error
   defp error(false), do: nil
-
-  @doc "The later months whose Zu verteilen is below zero, as lines of the calculation: the shortfall, negative."
-  def uncovered(%Month{month: month, uncovered: uncovered}) do
-    for {later, shortfall} <- uncovered do
-      name =
-        if later.year == month.year,
-          do: month_abbr(later),
-          else: "#{month_abbr(later)} #{later.year}"
-
-      %{label: "Nicht gedeckt im #{name}", value: -shortfall, tone: :error}
-    end
-  end
 end

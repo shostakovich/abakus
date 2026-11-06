@@ -260,7 +260,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       view |> element("#month-2026-11") |> render_click()
       view |> element("#edit-category-#{christmas.id}") |> render_click()
 
-      assert has_element?(view, "#target-status", "Noch 15,00 € diesen Monat.")
+      assert has_element?(view, "#target-status", "Noch 15,00 € im November")
     end
 
     test "only an overspent Verfügbar is a button", c do
@@ -542,13 +542,19 @@ defmodule AbakusWeb.BudgetDetailsTest do
                "Bis zum 1. Juni 2027 weitere 1.200,00\u00A0€ zurücklegen"
              )
 
-      assert has_element?(view, ~s|#target-progress progress[value="7"]|)
-      assert has_element?(view, "#target-progress", "Angespart 80,00 von 1.200,00\u00A0€")
+      assert has_element?(
+               view,
+               ~s|#target-progress progress.progress-warning[value="7"][aria-label="80,00 von 1.200,00\u00A0€ zurückgelegt"]|
+             )
+
+      assert has_element?(view, ~s|#target-progress svg rect[x="11%"]|)
+      assert has_element?(view, "#target-saved", "80,00 von 1.200,00\u00A0€ zurückgelegt")
+      refute has_element?(view, "#inspector-target", "%")
 
       assert has_element?(
                view,
                "#target-status.text-warning-ink",
-               "Noch 53,34\u00A0€ diesen Monat."
+               "Noch 53,34\u00A0€ im Oktober"
              )
 
       assert has_element?(view, "#target-assign", "53,34\u00A0€ zuweisen")
@@ -557,8 +563,61 @@ defmodule AbakusWeb.BudgetDetailsTest do
       view |> element("#target-assign") |> render_click()
 
       assert assigned(c.rent, @october) == 13_334
-      assert has_element?(view, "#target-status", "Im Plan.")
+      assert has_element?(view, "#target-status", "Im Plan")
+      assert has_element?(view, "#target-progress progress.progress-success")
       refute has_element?(view, "#target-assign")
+    end
+
+    test "a funded target by a date that saves up says what it has angespart, its bar green", c do
+      income(c, 200_000)
+      by_date(c.rent, 120_000, ~D[2027-06-01], false)
+      Categories.assign(budget_scope(), c.rent, @october, 120_000)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#edit-category-#{c.rent.id}") |> render_click()
+
+      assert has_element?(
+               view,
+               "#target-head",
+               "Bis zum 1. Juni 2027 auf 1.200,00\u00A0€ ansparen"
+             )
+
+      assert has_element?(view, ~s|#target-progress progress.progress-success[value="100"]|)
+      assert has_element?(view, "#target-saved", "1.200,00 von 1.200,00\u00A0€ angespart")
+      assert has_element?(view, "#target-status.text-success-ink", "Erfüllt")
+      refute has_element?(view, "#inspector-target", "%")
+    end
+
+    test "an overspent target by a date turns its bar red", c do
+      income(c, 200_000)
+      by_date(c.rent, 120_000, ~D[2027-06-01])
+      Categories.assign(budget_scope(), c.rent, @october, 20_000)
+      spend(c, c.rent, -21_200)
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#edit-category-#{c.rent.id}") |> render_click()
+
+      assert has_element?(view, "#target-progress progress.progress-error")
+
+      assert has_element?(
+               view,
+               "#target-saved",
+               ~r/^\s*200,00 von 1\.200,00\x{00A0}€ zurückgelegt\s*$/u
+             )
+
+      assert has_element?(view, "#target-status.text-error-ink", "Überzogen um 12,00\u00A0€")
+    end
+
+    test "a snoozed target by a date mutes its bar", c do
+      by_date(c.rent, 120_000, ~D[2027-06-01])
+      {:ok, view, _html} = open(c.conn)
+
+      view |> element("#edit-category-#{c.rent.id}") |> render_click()
+      view |> element("#target-snooze", "Pausieren") |> render_click()
+
+      assert has_element?(view, "#target-progress progress.setzkasten-progress-neutral")
+      assert has_element?(view, "#target-saved", "0,00 von 1.200,00\u00A0€ zurückgelegt")
+      assert has_element?(view, "#target-status", "Pausiert im Oktober")
     end
 
     test "Zuweisen takes at most what Zu verteilen holds", c do
@@ -568,7 +627,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
       view |> element("#edit-category-#{c.rent.id}") |> render_click()
 
-      assert has_element?(view, "#target-status", "Noch 500,00 € diesen Monat.")
+      assert has_element?(view, "#target-status", "Noch 500,00 € im Oktober")
       assert has_element?(view, "#target-assign", "30,00\u00A0€ zuweisen")
 
       view |> element("#target-assign") |> render_click()
@@ -576,7 +635,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
       assert assigned(c.rent, @october) == 3_000
       assert toast(view, "30,00 € Miete zugewiesen.")
       assert has_element?(view, "#ready-2026-10", "0,00 €")
-      assert has_element?(view, "#target-status", "Noch 470,00 € diesen Monat.")
+      assert has_element?(view, "#target-status", "Noch 470,00 € im Oktober")
       refute has_element?(view, "#target-assign")
 
       render_click(view, "assign_rest", %{})
@@ -621,8 +680,9 @@ defmodule AbakusWeb.BudgetDetailsTest do
 
       assert has_element?(view, "#inspector-target", "Jeden Monat auffüllen bis 700,00\u00A0€")
       refute has_element?(view, "#inspector-target", "bis zum")
-      assert has_element?(view, "#target-status", "Noch 700,00\u00A0€ diesen Monat.")
+      assert has_element?(view, "#target-status", "Noch 700,00\u00A0€ im Oktober")
       refute has_element?(view, "#target-progress")
+      refute has_element?(view, "#target-saved")
       assert has_element?(view, "#flash-info", "Ziel gespeichert.")
     end
 
@@ -751,14 +811,14 @@ defmodule AbakusWeb.BudgetDetailsTest do
       view |> element("#target-snooze", "Pausieren") |> render_click()
 
       assert Categories.target_snoozed?(budget_scope(), c.groceries, @october)
-      assert has_element?(view, "#target-status", "Pausiert im Oktober.")
+      assert has_element?(view, "#target-status", "Pausiert im Oktober")
       assert has_element?(view, "#available-#{c.groceries.id}-2026-10 .app-avail .lucide")
       refute has_element?(view, "#target-assign")
 
       view |> element("#target-snooze", "Fortsetzen") |> render_click()
 
       refute Categories.target_snoozed?(budget_scope(), c.groceries, @october)
-      assert has_element?(view, "#target-status", "Noch 400,00\u00A0€ diesen Monat.")
+      assert has_element?(view, "#target-status", "Noch 400,00\u00A0€ im Oktober")
     end
 
     test "another focus month closes the target editor", c do
@@ -955,7 +1015,7 @@ defmodule AbakusWeb.BudgetDetailsTest do
     view
     |> render()
     |> LazyHTML.from_fragment()
-    |> LazyHTML.query("#calc-#{key} > div:not(.app-mcalc-warn)")
+    |> LazyHTML.query("#calc-#{key} > div")
     |> Enum.map(fn line ->
       [value] = line |> LazyHTML.query("data") |> LazyHTML.attribute("value")
       {line |> LazyHTML.query("dt") |> LazyHTML.text(), value}
@@ -1013,13 +1073,14 @@ defmodule AbakusWeb.BudgetDetailsTest do
       })
   end
 
-  defp by_date(category, amount, due_on) do
+  defp by_date(category, amount, due_on, set_aside \\ true) do
     {:ok, _} =
       Categories.set_target(budget_scope(), category, %{
         from_month: @october,
         cadence: :by_date,
         amount: amount,
-        due_on: due_on
+        due_on: due_on,
+        set_aside: set_aside
       })
   end
 
