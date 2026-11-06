@@ -14,15 +14,16 @@ terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in this folder.
 ## Setup
 
 - Run the app: `swift run Abakus`. The budget lives in SQLite, `~/Library/Application Support/Abakus/budget.sqlite`,
-  with Abakus's synced tables, the message log and its outbox, the field clocks and the sync state (ADR 0027); an
-  empty database gets an empty budget. `ABAKUS_DATABASE=<path>` uses another one. A database that cannot be
+  with Abakus's synced tables, the message log and its outbox, the field clocks and the sync state (ADR 0027).
+  `ABAKUS_DATABASE=<path>` uses another one. A database that cannot be
   opened stops the launch and stays untouched. The first save of each day keeps the database as it was as
   `budget.sqlite.bak`, and `budget.sqlite.lock` keeps a second copy of the app from opening the same budget. A
   `budget.json` of earlier versions is left alone.
-- Sync: Einstellungen → Sync takes the address of an Abakus server and signs the Mac in through its sign-in page
-  (`sync/PROTOCOL.md`); the tokens live in the Keychain under `local.abakus.sync`. Signing in replaces the budget
-  with the server's and keeps the one before as `budget.sqlite.before-sign-in`; signing out deletes the copy and
-  leaves an empty budget. The cloud at the bottom of the sidebar shows the state and opens the settings.
+- Sync: until it is signed in, the window shows only the sign-in: it takes the address of an Abakus server and signs
+  the Mac in through the server's sign-in page (`sync/PROTOCOL.md`); the tokens live in the Keychain under
+  `local.abakus.sync`. Signing in loads the server's budget and keeps the database as it was before as
+  `budget.sqlite.before-sign-in`; signing out deletes the copy and returns to the sign-in. Einstellungen → Sync and
+  the cloud at the bottom of the sidebar show the state.
 - Build an app bundle: `tools/make_app.sh` makes a release build and wraps it as `build/Abakus.app` (unsigned,
   for local use). It compiles the app icon, `Sources/Abakus/AppIcon.icon` (an Icon Composer document), with
   Xcode's `actool`; `swift run` shows no icon.
@@ -42,13 +43,14 @@ terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in this folder.
   `category-dropdown`, `split`, `errors`, `unassigned`, `calendar`, `invalid-payee`, `income-check`,
   `account-field`, `amount-error`); `--trace` prints the editor state afterwards. `--ops <state>` opens register
   operations instead (`context-menu`, `search-active`, `approvals`, `notifiers`, `needs-category`,
-  `delete-dialog`, `make-recurring`); menus, native in the app, are drawn inline.
+  `delete-dialog`); menus, native in the app, are drawn inline.
   `--ops keys` sends real key and mouse events and prints what the register did with them (add `--native-menus` to
   run it with native menus); without a menu bar, menu key equivalents run their Buchungen menu command and ⌘A sends
-  Select All's `selectAll:`. `--ui <state>` opens a reconciliation, scheduler, account or payee settings state
-  through the view models (`rec-statement-dialog`, `rec-footer`, `sched-pane`, `sched-edit`, `account-add`,
-  `account-edit`, `account-adjusted`, `account-balance`, `account-balance-check`, `payee-settings`,
-  `payee-settings-multi`, `payee-settings-empty`, `payee-settings-category`); it runs before `--ops`, so both can be
+  Select All's `selectAll:`. `--ui <state>` opens a reconciliation, scheduler, account, payee settings or sign-in
+  state through the view models (`rec-statement-dialog`, `rec-footer`, `sched-pane`, `sched-empty`, `sched-edit`,
+  `sched-custom` with Eigene, `account-add`, `account-edit`, `account-close`, `closed-accounts`, `closed-account`,
+  `kasse` with the Kasse's account, `sign-in`, `payee-settings`, `payee-settings-multi`,
+  `payee-settings-empty`, `payee-settings-category`); it runs before `--ops`, so both can be
   combined. Open sheets and alerts are drawn over the window.
 
 ## iPhone and iPad

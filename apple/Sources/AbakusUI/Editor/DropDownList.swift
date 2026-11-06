@@ -153,8 +153,9 @@ package struct DropDownCatalog {
         func header(_ title: String, group: String) -> DropDownItem {
             DropDownItem(id: "header:" + group, kind: .accountHeader, label: title, value: "", group: group)
         }
-        var items = accounts.filter { !$0.closed && $0.onBudget }.map { item($0, group: "onBudget") }
-        let offBudget = accounts.filter { !$0.closed && !$0.onBudget }
+        let open = accounts.filter { $0.takesEntries || ($0.id == transaction.accountId && !$0.closed) }
+        var items = open.filter(\.onBudget).map { item($0, group: "onBudget") }
+        let offBudget = open.filter { !$0.onBudget }
         if !offBudget.isEmpty {
             items.append(header(SidebarGroup.offBudgetAccounts.title, group: "offBudget"))
             items += offBudget.map { item($0, group: "offBudget") }

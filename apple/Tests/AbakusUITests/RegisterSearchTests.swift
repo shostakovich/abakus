@@ -160,7 +160,9 @@ import Testing
         let (model, _) = Views().model()
         #expect(
             model.viewMenu.map(\.title) == [
-                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "", "Status", "Memo",
+                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "", "Geplante Buchungen", "",
+                "Status",
+                "Memo",
             ])
         #expect(model.viewMenu.filter(\.isChecked).map(\.title) == ["Alle Buchungen", "Status", "Memo"])
         model.viewMenuChosen(.filter(.uncleared))

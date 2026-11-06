@@ -73,7 +73,8 @@ import Testing
         }
     }
 
-    @Test(arguments: MainGridClick.allCases)
+    /// The scheduled transaction's sheet holds back the register's menus, so no right click reaches the main grid.
+    @Test(arguments: MainGridClick.allCases.filter { $0 != .rightClick })
     func aMainGridClickWaitsForAChangedScheduleEdit(_ click: MainGridClick) throws {
         let (model, store) = clicksFixture().spied()
         model.scheduler.beginEditing("S2", column: .memo)
@@ -84,7 +85,7 @@ import Testing
         #expect(model.editor == nil)
     }
 
-    @Test(arguments: MainGridClick.allCases)
+    @Test(arguments: MainGridClick.allCases.filter { $0 != .rightClick })
     func aMainGridClickEndsAnUnchangedScheduleEditFirst(_ click: MainGridClick) throws {
         let (model, store) = clicksFixture().spied()
         model.scheduler.beginEditing("S2")
@@ -234,22 +235,6 @@ import Testing
         model.scheduler.grid.navigationKeyPressed(.down, extending: false, caretOnly: false, pageRows: 1)
         #expect(model.scheduler.selectedIds == ["S1"])
         #expect(model.selection.isEmpty)
-    }
-
-    @Test func arrowsWhileEditingStepOnlyTheFrequency() throws {
-        let (model, _) = fixture().spied()
-        model.beginEditing(try #require(model.rows.first).transactionId)
-        #expect(!model.grid.editorArrowPressed(.down))
-        #expect(model.editor?.text(.main(.date)) == "10/05/14")
-        model.editor?.cancel()
-        model.scheduler.beginEditing("S1")
-        let editor = try #require(model.scheduler.editor)
-        #expect(!model.scheduler.grid.editorArrowPressed(.down))
-        #expect(editor.text(.main(.date)) == "02/06/14")
-        editor.press(.tab)
-        #expect(editor.focus == .field(.main(.frequency)))
-        #expect(model.scheduler.grid.editorArrowPressed(.down))
-        #expect(editor.frequency == .everyOtherMonth)
     }
 
     @Test func aSchedulerRightClickWaitsForTheMainEdit() throws {

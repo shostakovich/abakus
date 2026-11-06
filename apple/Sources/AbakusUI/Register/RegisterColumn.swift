@@ -2,7 +2,7 @@ import CoreGraphics
 
 public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
     case account, date, payee, category, memo, amount
-    case cleared, frequency
+    case cleared, repeats
 
     public enum Header: Hashable, Sendable {
         case text(String)
@@ -18,7 +18,7 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .memo: .text("Memo")
         case .amount: .text("Betrag")
         case .cleared: .symbol("checkmark.circle", label: "Status")
-        case .frequency: .text("Häufigkeit")
+        case .repeats: .text("Wiederholen")
         }
     }
 
@@ -27,7 +27,7 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
     public var minWidth: CGFloat {
         switch self {
         case .cleared: 32
-        case .account, .payee, .category, .memo, .frequency: 50
+        case .account, .payee, .category, .memo, .repeats: 50
         case .date: 92
         case .amount: Self.signedAmountWidth
         }
@@ -42,7 +42,7 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
 
     public var isResizable: Bool {
         switch self {
-        case .account, .payee, .category, .memo, .frequency: true
+        case .account, .payee, .category, .memo, .repeats: true
         default: false
         }
     }
@@ -63,7 +63,7 @@ public enum RegisterColumn: String, CaseIterable, Hashable, Sendable {
         case .memo: RegisterColumnSetting(visible: true, width: 50)
         case .amount: RegisterColumnSetting(visible: true, width: Self.signedAmountWidth)
         case .cleared: RegisterColumnSetting(visible: true, width: 15)
-        case .frequency: nil
+        case .repeats: nil
         }
     }
 

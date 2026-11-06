@@ -97,8 +97,8 @@ _Avoid_: Skip, pause
 ### Accounts
 
 **Account**:
-A place money is kept, such as a current account, savings or cash; closed when no longer used, never deleted. UI
-"Konto".
+A place money is kept, such as a current account, savings or cash; closed when no longer used, never deleted. A
+new one starts with its current balance, booked on the day as the payee "Anfangssaldo". UI "Konto".
 _Avoid_: Bank account (some are cash or depots), wallet; not a User
 
 **Budget account**:
@@ -192,8 +192,8 @@ counts them, and the budget's Uncategorised row opens Alle Konten in this view. 
 _Avoid_: Uncategorised (that is the budget row), no category
 
 **Scheduled transaction**:
-A transaction the Ledger enters every day it falls due, once or repeating from daily to every other year, twice a
-month on two days; entered unapproved, recording the scheduled transaction and date, at most once per date.
+A transaction the Ledger enters every day it falls due, once or repeating every n weeks or months (monthly is 1
+month, yearly 12); entered unapproved, recording the scheduled transaction and date, at most once per date.
 UI "Geplante Buchung".
 _Avoid_: Recurring transaction, standing order (that is the bank's); Recurring expense (that is the Kasse's)
 

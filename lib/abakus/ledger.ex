@@ -93,18 +93,43 @@ defmodule Abakus.Ledger do
 
   def change_account(%Account{} = account, attrs \\ %{}), do: Account.changeset(account, attrs)
 
-  @doc "Creates an account together with its transfer payee; without a position it goes after the others."
-  def create_account(%Scope{} = scope, attrs) do
+  @opening_payee "Anfangssaldo"
+
+  @doc """
+  Creates an account together with its transfer payee; without a position it goes after the others. `balance:`
+  (cents) other than 0 is booked on `date:` as the hidden payee "Anfangssaldo", cleared and approved, in a budget
+  account to Ready to Assign, as the apps do.
+  """
+  def create_account(%Scope{} = scope, attrs, opts \\ []) do
     Sync.write(fn ->
       changeset =
         %Account{user_id: user_id(scope)} |> Account.changeset(attrs) |> put_next_position(scope)
 
       with {:ok, account} <- Sync.insert(changeset),
            {:ok, payee} <-
-             Sync.insert(Payee.transfer_changeset(%Payee{user_id: account.user_id}, account)) do
-        {:ok, %{account | transfer_payee: payee}}
+             Sync.insert(Payee.transfer_changeset(%Payee{user_id: account.user_id}, account)),
+           account = %{account | transfer_payee: payee},
+           {:ok, _opening} <- book_opening(scope, account, opts[:balance] || 0, opts[:date]) do
+        {:ok, account}
       end
     end)
+  end
+
+  defp book_opening(_scope, _account, 0, _date), do: {:ok, nil}
+
+  defp book_opening(scope, account, balance, %Date{} = date) do
+    with {:ok, payee} <- payee_named(scope, @opening_payee, %{hidden: true}) do
+      create_transaction(scope, %{
+        account_id: account.id,
+        date: date,
+        amount: balance,
+        payee_id: payee.id,
+        category_id:
+          if(Account.budget_account?(account), do: Categories.ready_to_assign!(scope).id),
+        cleared: :cleared,
+        approved: true
+      })
+    end
   end
 
   @doc "Creates the transfer payee of each of the accounts `ids` that lacks one, as part of a write."
@@ -957,7 +982,11 @@ defmodule Abakus.Ledger do
     }
   end
 
-  defp put_payee_by_name(scope, attrs) do
+  @doc """
+  Replaces a `payee_name` in `attrs` and in their `subtransactions` by its `payee_id`, as `create_transaction/3`
+  does: the regular payee with that lookup key, else a new one; a blank name means none. Part of a write.
+  """
+  def put_payee_by_name(%Scope{} = scope, attrs) do
     with {:ok, attrs} <- put_own_payee(scope, attrs) do
       put_subtransaction_payees(scope, attrs)
     end
@@ -995,13 +1024,14 @@ defmodule Abakus.Ledger do
     end
   end
 
-  defp payee_named(_scope, ""), do: {:ok, nil}
+  defp payee_named(scope, name, attrs \\ %{})
+  defp payee_named(_scope, "", _attrs), do: {:ok, nil}
 
-  defp payee_named(scope, name) do
+  defp payee_named(scope, name, attrs) do
     key = Names.lookup_key(name)
 
     case Repo.one(from p in regular_payees(scope), where: p.lookup_key == ^key) do
-      nil -> create_payee(scope, %{name: name})
+      nil -> create_payee(scope, Map.put(attrs, :name, name))
       payee -> {:ok, payee}
     end
   end
@@ -1097,7 +1127,11 @@ defmodule Abakus.Ledger do
     }
   end
 
-  defp validate_references(changeset, user_id) do
+  @doc """
+  Refuses the payees and categories a transaction or scheduled transaction and its subtransactions change to that
+  are not the user's.
+  """
+  def validate_references(changeset, user_id) do
     sides = [changeset | Transaction.subtransactions(changeset)]
 
     payees =

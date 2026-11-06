@@ -100,8 +100,8 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
 
 @Suite struct ContentSizedColumnTests {
     @Test func contentSizedColumnsKeepTheirWidthAndTheTextColumnsShareTheRest() {
-        let columns: [RegisterColumn] = [.date, .frequency, .payee, .category, .memo, .amount]
-        let content: [RegisterColumn: CGFloat] = [.date: 92, .frequency: 130, .amount: 90]
+        let columns: [RegisterColumn] = [.date, .repeats, .payee, .category, .memo, .amount]
+        let content: [RegisterColumn: CGFloat] = [.date: 92, .repeats: 130, .amount: 90]
         let layout = RegisterColumnLayout(
             gridWidth: 1000, visibleColumns: columns, settings: RegisterScheduler.defaultColumnSettings,
             contentWidths: content)
@@ -112,8 +112,8 @@ private func widths(_ gridWidth: CGFloat, _ columns: [RegisterColumn] = singleAc
     }
 
     @Test func aColumnFitsItsHeaderWhenItsCellsAreShorter() {
-        let header: CGFloat = RegisterGridStyle.headerFont.width(of: "Häufigkeit")
+        let header: CGFloat = RegisterGridStyle.headerFont.width(of: "Wiederholen")
         let expected: CGFloat = header + 2 * RegisterGridStyle.cellInset + RegisterGridStyle.sortIndicatorWidth
-        #expect(RegisterColumn.frequency.contentWidth(fitting: []) == max(RegisterColumn.frequency.minWidth, expected))
+        #expect(RegisterColumn.repeats.contentWidth(fitting: []) == max(RegisterColumn.repeats.minWidth, expected))
     }
 }

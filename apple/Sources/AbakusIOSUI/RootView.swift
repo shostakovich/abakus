@@ -9,14 +9,24 @@
         @Environment(\.scenePhase) private var scenePhase
 
         var body: some View {
+            Group {
+                if model.showsSignIn, let syncSettings = model.syncSettings {
+                    SignInScreen(model: syncSettings)
+                } else {
+                    budgetScreens
+                }
+            }
+            // A sheet shows the dialogs over itself.
+            .modifier(DialogAlert(dialogs: navigation.showsSheet ? [] : model.presentedDialogs))
+        }
+
+        private var budgetScreens: some View {
             AppTabs(model: model, navigation: navigation)
                 .sheet(item: sheet) { sheet in
                     TouchSheetView(model: model, sheet: sheet)
                 }
                 .modifier(TransactionSheetPresenter(model: model))
                 .tint(ThemeColor.accent)
-                // A sheet shows the dialogs over itself.
-                .modifier(DialogAlert(dialogs: navigation.showsSheet ? [] : model.presentedDialogs))
                 .task { await model.runDateTimer() }
                 .onChange(of: scenePhase, initial: true) { _, phase in
                     switch phase {

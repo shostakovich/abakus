@@ -72,53 +72,17 @@ import Testing
         #expect(budget.balances(forAccount: fixture.girokonto).reconciled == 850)
     }
 
-    @Test func adjustmentGoesToIncomeAndTrackingGetsNoCategory() throws {
-        var budget = Budget(budgetName: "Test")
-        try budget.apply(
-            .addAccount(
-                NewAccount(
-                    id: "KARTE", name: "Karte", kind: .checking, startingBalance: -300,
-                    startDate: october23)))
-        try budget.apply(.adjustBalance(BalanceAdjustment(accountId: "KARTE", workingBalance: -350, today: october23)))
-        let karte = budget.transactions(inAccount: "KARTE").last
-        #expect(karte?.amount == -50)
-        #expect(karte?.categoryId == budget.readyToAssignCategoryId)
-        #expect(budget.payeeName(of: karte!) == "Saldoanpassung")
+    @Test func aTrackingAccountsAdjustmentHasNoCategory() throws {
         var fixture = TestBudget()
+        let list = fixture.budget.reconciliationList(accountId: fixture.depot, through: october23)
+        let before = Set(fixture.budget.transactions.map(\.id))
         try fixture.budget.apply(
-            .adjustBalance(BalanceAdjustment(accountId: fixture.depot, workingBalance: 2100, today: october23)))
-        #expect(fixture.budget.transactions(inAccount: fixture.depot).last?.categoryId == nil)
-    }
-
-    @Test func adjustingToTheCurrentBalanceAddsNothing() throws {
-        var fixture = TestBudget()
-        let before = fixture.budget
-        try fixture.budget.apply(
-            .adjustBalance(BalanceAdjustment(accountId: fixture.girokonto, workingBalance: 1000, today: october23)))
-        #expect(fixture.budget == before)
-    }
-
-    @Test func zeroStartingBalanceOfTodayTakesTheAmount() throws {
-        var budget = Budget(budgetName: "Test")
-        try budget.apply(
-            .addAccount(
-                NewAccount(
-                    id: "NEW", name: "Neu", kind: .checking, startingBalance: 0,
-                    startDate: october23)))
-        try budget.apply(.adjustBalance(BalanceAdjustment(accountId: "NEW", workingBalance: 70, today: october23)))
-        #expect(budget.transactions.count == 1)
-        #expect(budget.transactions.first?.amount == 70)
-    }
-
-    @Test func emptyAccountGetsAStartingBalanceDatedToday() throws {
-        var fixture = TestBudget()
-        fixture.budget.transactions.removeAll { $0.accountId == fixture.tagesgeld }
-        try fixture.budget.apply(
-            .adjustBalance(BalanceAdjustment(accountId: fixture.tagesgeld, workingBalance: 300, today: october23)))
-        let start = try #require(fixture.budget.transactions(inAccount: fixture.tagesgeld).first)
-        #expect(fixture.budget.payeeName(of: start) == "Anfangssaldo")
-        #expect(start.date == october23)
-        #expect(start.memo == nil)
-        #expect(start.amount == 300)
+            .finishReconciliation(
+                ReconciliationFinish(
+                    accountId: fixture.depot, statementDate: october23, statementBalance: 2100,
+                    transactionIds: list.map(\.id), createsAdjustment: true, today: october23)))
+        let adjustment = try #require(fixture.budget.transactions.first { !before.contains($0.id) })
+        #expect(adjustment.categoryId == nil)
+        #expect(fixture.budget.balances(forAccount: fixture.depot).reconciled == 2100)
     }
 }

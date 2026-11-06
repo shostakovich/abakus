@@ -162,11 +162,11 @@ extension TransactionEditor {
             transaction: transaction, payeeName: savedPayeeName, subPayeeNames: subPayeeNames, isNew: mode == .new,
             confirmedReconciledChange: pending.reconciledConfirmed ?? false, payeeRename: pending.payeeRename)
         do {
-            if let frequency {
+            if let repeats {
                 try store.perform(
                     .saveScheduledTransaction(
                         ScheduledSave(
-                            transaction: transaction, frequency: frequency, payeeName: payeeName,
+                            transaction: transaction, repeats: repeats, payeeName: payeeName,
                             subPayeeNames: subPayeeNames, isNew: mode == .new)))
             } else {
                 try store.perform(.saveTransaction(save))

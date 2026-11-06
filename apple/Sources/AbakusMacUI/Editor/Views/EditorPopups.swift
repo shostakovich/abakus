@@ -20,7 +20,6 @@ struct EditorPopupsLayer: View {
                     }
                     .frame(width: 0, height: 0)
                 }
-                menus(rects)
                 if let list = editor.dropDown, let frame = frames.dropDown {
                     DropDownListView(editor: editor, state: list, width: frame.width, formatter: editor.formatter)
                         .offset(x: frame.minX, y: frame.minY)
@@ -41,18 +40,6 @@ struct EditorPopupsLayer: View {
                 }
             }
         }
-    }
-
-    @ViewBuilder
-    private func menus(_ rects: [EditorFieldID: CGRect]) -> some View {
-        let frequencyField = rects[.main(.frequency)]
-        PopUpMenu(
-            items: editor.isFrequencyListOpen && frequencyField != nil
-                ? RegisterMenuItem.frequencyMenu(selected: editor.frequency) : nil,
-            location: frequencyField.map { CGPoint(x: $0.minX, y: $0.maxY + 1) } ?? .zero,
-            perform: editor.menuAction, dismiss: editor.frequencyListDismissed
-        )
-        .frame(width: 0, height: 0)
     }
 
     private func dateCallout(_ callout: EditorDateCallout, field: CGRect, size: CGSize) -> some View {
@@ -107,7 +94,6 @@ struct EditorPopupsLayer: View {
         var owners: [CGRect] = []
         if let list = editor.dropDown, let field = anchors[list.field] { owners.append(field) }
         if editor.isCalendarOpen, let field = anchors[.main(.date)] { owners.append(field) }
-        if editor.isFrequencyListOpen, let field = anchors[.main(.frequency)] { owners.append(field) }
         return popupFrames(editor: editor, anchors: anchors, size: size).all + owners
     }
 

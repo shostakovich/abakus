@@ -63,8 +63,8 @@ public struct SyncTable: Sendable {
         SyncTable(
             "scheduled_transactions",
             [
-                text("account_id"), text("next_date"), text("frequency"), integer("first_day"), integer("second_day"),
-                integer("amount"), text("memo"), text("cleared", "uncleared"), text("deleted_at"), text("payee_id"),
+                text("account_id"), text("next_date"), text("repeat_unit"), integer("repeat_every"), integer("amount"),
+                text("memo"), text("cleared", "uncleared"), text("deleted_at"), text("payee_id"),
                 text("category_id"),
             ]),
         SyncTable(

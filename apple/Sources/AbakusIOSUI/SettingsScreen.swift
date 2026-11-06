@@ -106,7 +106,7 @@
     }
 
     /// Disabled, the fill fades and the label stays white, so it reads on the faded fill in both themes.
-    private struct ProminentCapsuleButtonStyle: ButtonStyle {
+    struct ProminentCapsuleButtonStyle: ButtonStyle {
         @Environment(\.isEnabled) private var isEnabled
 
         func makeBody(configuration: Configuration) -> some View {

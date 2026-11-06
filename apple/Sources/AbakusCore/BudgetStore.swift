@@ -19,7 +19,7 @@ public final class BudgetStore: BudgetStoring {
     @ObservationIgnored private var savedBudget: Budget?
     @ObservationIgnored public let today: () -> DateWithoutTime
     @ObservationIgnored private let now: () -> Date
-    /// A synced budget enters due schedules only once it has pulled what other writers entered.
+    /// An opened budget enters due schedules only once it has pulled what other writers entered.
     @ObservationIgnored private var awaitsPull = false
 
     public init(
@@ -36,17 +36,13 @@ public final class BudgetStore: BudgetStoring {
         _ database: BudgetDatabase, today: @escaping () -> DateWithoutTime = { .today() },
         now: @escaping () -> Date = { Date() }
     ) throws -> BudgetStore {
-        let unsigned = try database.deviceId == BudgetDatabase.unsignedDevice
-        if try unsigned && database.isEmpty {
-            let store = BudgetStore(budget: emptyBudget, database: database, today: today, now: now)
-            store.save()
-            return store
+        if try database.deviceId == BudgetDatabase.unsignedDevice && database.isEmpty {
+            return BudgetStore(budget: emptyBudget, database: database, today: today, now: now)
         }
         let loaded = try database.budget()
         let store = BudgetStore(budget: loaded, database: database, today: today, now: now)
         store.savedBudget = loaded
-        store.awaitsPull = !unsigned
-        store.enterDueScheduledTransactions()
+        store.awaitsPull = true
         return store
     }
 
@@ -56,7 +52,9 @@ public final class BudgetStore: BudgetStoring {
 
     public func enterDueScheduledTransactions(today day: DateWithoutTime? = nil) {
         let day = day ?? today()
-        guard !awaitsPull, budget.scheduledTransactions.contains(where: { $0.nextDate <= day }) else { return }
+        guard !awaitsPull,
+            budget.scheduledTransactions.contains(where: { $0.nextDate <= day && budget.entersWhenDue($0) })
+        else { return }
         let taken = (try? database?.transactionIds()) ?? []
         try? perform(.enterDueScheduledTransactions(today: day, taken: taken))
     }
@@ -76,10 +74,16 @@ public final class BudgetStore: BudgetStoring {
     @ObservationIgnored public var onReceive: () -> Void = {}
 
     public func perform(_ command: BudgetCommand) throws {
-        let updated = try budget.applying(command)
+        let updated = try budget.applying(withStoredIds(command))
         guard updated != budget else { return }
         budget = updated
         save()
+    }
+
+    private func withStoredIds(_ command: BudgetCommand) -> BudgetCommand {
+        guard case .enterScheduledTransactions(var entry) = command, let database else { return command }
+        entry.taken = (try? database.transactionIds()) ?? []
+        return .enterScheduledTransactions(entry)
     }
 
     /// Unsaved changes are saved first, so the reload loses none.
@@ -106,7 +110,8 @@ public final class BudgetStore: BudgetStoring {
         savedBudget = nil
         awaitsPull = false
         budget = Self.emptyBudget
-        save()
+        hasUnsavedChanges = false
+        lastSaveError = nil
         onReceive()
     }
 

@@ -42,6 +42,7 @@ extension Budget {
             position: (accounts.map(\.position).max() ?? -1) + 1)
         accounts.append(account)
         refreshTransferPayees()
+        guard new.startingBalance != 0 else { return }
         transactions.append(
             Transaction(
                 accountId: account.id, date: new.startDate,

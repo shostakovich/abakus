@@ -55,29 +55,15 @@
             .overlay {
                 if rows.isEmpty {
                     ContentUnavailableView(
-                        "Keine geplanten Buchungen", systemImage: "calendar",
-                        description: Text("Wiederkehrende und künftige Buchungen erscheinen hier."))
+                        RegisterScheduler.emptyTitle, systemImage: "calendar",
+                        description: Text(RegisterScheduler.emptyMessage))
                 }
             }
         }
 
-        @ViewBuilder
         private var addButton: some View {
-            let label = Label(RegisterScheduler.addTitle, systemImage: "plus")
-            Group {
-                if scheduler.showsTransferButton {
-                    Menu {
-                        Button(RegisterScheduler.transferTitle, action: scheduler.transferClicked)
-                    } label: {
-                        label
-                    } primaryAction: {
-                        scheduler.addClicked()
-                    }
-                } else {
-                    Button(action: scheduler.addClicked) { label }
-                }
-            }
-            .disabled(!scheduler.canAddTransactions)
+            Button(RegisterScheduler.addTitle, systemImage: "plus", action: scheduler.addClicked)
+                .disabled(!scheduler.canAddTransactions)
         }
 
         private func editorSheet(_ isShown: Bool) -> Binding<Bool> {
@@ -123,13 +109,14 @@
                 }
             }
             .swipeActions(edge: .leading) {
-                Button(RegisterScheduler.enterTitle, systemImage: "checkmark") { perform(.enterScheduledNow) }
-                    .tint(ThemeColor.accent)
+                if scheduler.canEnter(ids) {
+                    Button(RegisterScheduler.enterTitle, systemImage: "checkmark") { perform(.enterScheduledNow) }
+                        .tint(ThemeColor.accent)
+                }
             }
             .swipeActions(edge: .trailing) {
-                Button(RegisterScheduler.deleteTitle, systemImage: "trash", role: .destructive) {
-                    perform(.deleteScheduled)
-                }
+                Button(RegisterScheduler.deleteTitle.touchLabel, systemImage: "trash") { perform(.deleteScheduled) }
+                    .tint(ThemeColor.negative)
                 Button(RegisterScheduler.skipTitle, systemImage: "forward") { perform(.skipScheduled) }
                     .tint(ThemeColor.warning)
             }
@@ -162,7 +149,7 @@
         }
 
         private var details: String {
-            ((showsAccount ? [row.account] : []) + [row.frequency, row.date]).joined(separator: " · ")
+            ((showsAccount ? [row.account] : []) + [row.repeatLabel, row.date]).joined(separator: " · ")
         }
 
         private func perform(_ action: RegisterMenuAction) {

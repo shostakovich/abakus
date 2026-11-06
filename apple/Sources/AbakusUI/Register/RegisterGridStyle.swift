@@ -10,7 +10,6 @@ package enum RegisterGridStyle {
     static let sortIndicatorWidth: CGFloat = 12
     package static let subRowIndent: CGFloat = 14
     package static let addedRowCanvas = ThemeColor.accent.opacity(0.15)
-    package static let adjustmentRow = ThemeColor.accent.opacity(0.15)
     package static let addedRowGlow = ThemeColor.accent
 }
 

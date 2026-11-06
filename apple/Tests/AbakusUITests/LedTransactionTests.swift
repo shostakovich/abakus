@@ -82,7 +82,6 @@ import Testing
         let menu = try #require(model.contextMenu(for: row))
         #expect(menu.item(titled: "Löschen")?.isEnabled == false)
         #expect(menu.item(titled: "In Konto verschieben")?.isEnabled == false)
-        #expect(menu.item(titled: "In geplante Buchungen verschieben …")?.isEnabled == false)
 
         model.deleteKeyPressed()
         #expect(model.store.budget.transaction(withId: id) != nil)

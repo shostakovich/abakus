@@ -190,9 +190,11 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   toolbar holds the search and "Ansicht" (⋯) after it; the phone keeps the search field in view under the title, as
   it shows the filter, the iPad has it in the bar with the title leading in every state. "Ansicht" has short labels
   that never wrap, each with a symbol so all share one leading edge: the four views (list.bullet, checkmark.seal,
-  clock, tag.slash) with the system's check mark before the shown one; then Geplant, Auswählen and on the iPad "Memo
-  ausblenden" or "Memo zeigen"; then "Konto bearbeiten" (pencil) while it shows one account. Header
-  and footer lie on the screen's own surface; the header is opaque, so scrolled rows never show through it
+  clock, tag.slash) with the system's check mark before the shown one; then "Geplante Buchungen"
+  (calendar.badge.clock) while nothing is planned, Auswählen and on the iPad "Memo ausblenden" or "Memo zeigen"; then
+  "Konto bearbeiten" (pencil) while it shows one account, the only way to edit an account, and in Alle Konten
+  "Geschlossene Konten (n)" (archivebox) while there are any. No label ends in "…". Header and footer lie on the
+  screen's own surface; the header is opaque, so scrolled rows never show through it
 - Search: the field filters as it is typed, as described under Register
 - Phone cards are always two lines after one glyph column that belongs to the second line (the category's emoji, ⚠,
   a split's square.split.2x1, else blank; ⇄ always follows the payee on the first line, only a split's transfer
@@ -240,7 +242,11 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   card's edge peeks over it. The category reads "Aufgeteilt (2)"
 - Geplante Buchungen: an inset list with the register's amount style, "Keine geplanten Buchungen" when empty on the
   list's own background; on the phone a medium detent while the list is short, on the iPad a sheet fitted to its
-  rows. Jetzt buchen, Überspringen and Löschen are swipes and the row's context menu
+  rows. Jetzt buchen, Überspringen and Löschen are swipes and the row's context menu; "+" is the only way to add
+  one. Its sheet has the web's fields as grouped rows, "Alle 2 Wochen" opening a two-column wheel like the
+  Calendar's (the number, Wochen or Monate), and "Löschen …" as a block of its own at the bottom
+- Without a sign-in only the sign-in screen shows: Abakus, a line that the budget lives on the user's Abakus server,
+  the server field and "Anmelden"; signing out returns to it
 
 ## Register
 
@@ -281,7 +287,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   a part opens. The views are the web's rules, so the chips and the Konten list count what their
   view lists. The view filters first, the text narrows it; each account keeps its own for the
   session. "Ansicht" holds the four views with a check mark, the Mac's button then reads "Ansicht: zu bestätigen",
-  and on the Mac Status and Memo, which show or hide in every account. The chips switch views and end the search,
+  then "Geplante Buchungen" while nothing is planned, on the Mac Status and Memo, which show or hide in every
+  account, and in Alle Konten "Geschlossene Konten (n) …". The chips switch views and end the search,
   and only the chip of the view shown hides: "N bestätigen" to Zu bestätigen, "N braucht eine Kategorie" to Ohne
   Kategorie; "Umbuchung mit Kategorie" only tells. While reconciling the list stays Alle Buchungen: "Ansicht"
   leaves out the views and the chips only tell. Zu bestätigen shows "N Buchungen warten auf Bestätigung." with
@@ -291,7 +298,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   approving button reads "Bestätigen" (the Mac row editor: "Bestätigen" and "Abbrechen", Return approves only the
   open transaction; the sheet: its ✓). Only the status mark switches vorgemerkt and gebucht; the ✓ and the status
   mark act on their own row, also within a selection, and the open Mac row leaves the status cell empty. The
-  context menu (right-click on the Mac, a long press on iOS) holds "Kategorisieren als", "Wiederkehrend machen …", "In geplante Buchungen verschieben …", "In Konto verschieben"
+  context menu (right-click on the Mac, a long press on iOS) holds "Kategorisieren als", "In Konto verschieben"
   and "Löschen" (red on iOS); payees are renamed in "Empfänger verwalten" (⌘Y, Einstellungen) and the editor's
   rename question. The menu "Buchungen" holds "Neue Buchung" (⌘N) and "Suchen" (⌘F). A transfer is a new
   transaction with an account picked as its payee. Every delete (context menu, swipe, the selection bar, the sheet,
@@ -305,6 +312,40 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   that reads as none or lies beyond the Ledger's range as the field is left and on saving, with Zugewiesen's
   messages, quoting the text as typed: a bubble at the field in the row, a red line under it in the sheet. The text
   and the focus stay, typing in the field clears the message, nothing is saved
+
+## Accounts and scheduled transactions
+
+One form pattern per platform, the same fields in the same order: on the web Setzkasten dialogs (a sheet on
+phones) with the label above the field and short fields side by side, on the Mac a sheet (or a popover at the
+sidebar row) with one grouped block of label-left rows and capsule buttons, on iPhone and iPad a sheet with grouped
+rows. A destructive action ("Konto schließen …", "Löschen …") is a red text button on the left of the footer (web,
+Mac) or a block of its own at the bottom (iOS), and asks once.
+
+- "Konto hinzufügen": Name, then Art and "Aktueller Saldo" side by side, the hint "Tracking-Konten zählen nicht zum
+  Budget. Das lässt sich später nicht ändern.", Abbrechen and Hinzufügen. The balance may add and subtract like any
+  amount and is booked today as the hidden payee "Anfangssaldo", cleared and approved, in a budget account to Zu
+  verteilen; 0 books nothing
+- "Konto bearbeiten": Name and Art (on the account's side of the budget), "Konto schließen …" asking "Konto „Giro“
+  schließen?" with the balance left, if any. Closing leaves the account on screen. One way per platform: the pencil
+  beside the name (web), a right click on the sidebar row (Mac), the register's "…" menu (iOS)
+- Closed accounts stay out of the sidebar and the account list; Alle Konten's Ansicht menu has "Geschlossene Konten
+  (n) …" ("Geschlossene Konten (n)" on iOS) while there are any, a small list with name, kind and balance whose rows
+  open the register. A closed account's register says "Dieses Konto ist geschlossen." with "Wieder öffnen" at the top and offers no new
+  transaction, no file import and no reconciling. A portfolio's cash, which no register shows, is closed and opened
+  again in the Depot's settings
+- The Kasse account takes no manual entry anywhere: no "+ Buchung" in its register, never the account of a new
+  transaction or scheduled transaction, no reconciling; transfers into it from other accounts stay
+- Scheduled transactions sit above the register's transactions as "Geplant · 3", collapsed, for the account or for
+  Alle Konten, only while something is planned; Ansicht › "Geplante Buchungen" shows the empty list ("Keine geplanten
+  Buchungen" · "Wiederkehrende und künftige Buchungen erscheinen hier.") with "+ Geplante Buchung". A row reads like a
+  phone card: the payee (a transfer "⇄ Tagesgeld"), then next date, category and repeat ("Monatlich", "Alle 2
+  Wochen"), the amount, with "Jetzt buchen" (approved, as the night would enter it) and "Überspringen"; a click opens
+  the dialog
+- "Geplante Buchung": Konto and Betrag, Empfänger (transfers as in the register), Kategorie and Memo, a split's parts
+  as the transaction sheet has them; below a rule Nächstes Datum and Wiederholen (Einmalig, Monatlich, Jährlich,
+  Eigene). Eigene adds "Alle" with a number from 1 to 99 and Wochen or Monate, a segmented control on the web and the
+  Mac, a select on the web's phone layout. "Danach: 23.12.2026 · 06.01.2027 · 20.01.2027" follows every change. Errors
+  stand at their field. The Mac opens it with a double click on a row
 
 ## Icons
 

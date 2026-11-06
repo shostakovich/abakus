@@ -36,7 +36,7 @@ import Testing
             memo: "Box", amount: -25)
         try fixture.budget.apply(
             .saveScheduledTransaction(
-                ScheduledSave(transaction: transaction, frequency: .monthly, payeeName: "Farm", isNew: true)))
+                ScheduledSave(transaction: transaction, repeats: .monthly, payeeName: "Farm", isNew: true)))
         let app = app(fixture)
         app.register.scheduler.beginEditing("S1", column: .memo)
         try #require(app.register.scheduler.editor).retype("Kiste")

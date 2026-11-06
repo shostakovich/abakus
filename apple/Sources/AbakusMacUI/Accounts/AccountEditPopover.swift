@@ -70,10 +70,6 @@ struct AccountEditPopover: View {
                 label("Art")
                 typeField.frame(width: Self.fieldWidth, alignment: .leading)
             }
-            GridRow {
-                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                Button("Saldo anpassen …", action: controller.adjustBalanceClicked).fixedSize()
-            }
         }
     }
 
@@ -97,12 +93,15 @@ struct AccountEditPopover: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            Button(
-                controller.isClosed(form) ? "Wieder öffnen" : "Konto schließen",
-                action: controller.closeOrReopenClicked)
-            Spacer(minLength: 0)
+            if form.canClose {
+                Button(EditAccountForm.closeTitle, role: .destructive, action: controller.closeAccountClicked)
+                    .buttonStyle(.borderless)
+                    .foregroundStyle(ThemeColor.negative)
+            }
+            Spacer(minLength: 12)
             Button("Abbrechen", action: controller.editCancelled)
             Button("Fertig", action: controller.editDoneClicked).buttonStyle(.borderedProminent)
         }
+        .buttonBorderShape(.capsule)
     }
 }

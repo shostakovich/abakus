@@ -152,6 +152,7 @@ defmodule AbakusWeb.Depot.PortfoliosLive do
         current_scope={@current_scope}
         account={@account_dialog.account}
         balance={@account_dialog.balance}
+        reopenable
       />
     </Layouts.settings>
     """

@@ -439,7 +439,7 @@ private var hasKeychain: Bool {
         #expect(sync.status == .error(.unsupportedProtocol("Bitte aktualisieren.")))
     }
 
-    @Test func signingOutCountsTheUnsentChangesAndLeavesAnEmptyBudget() async throws {
+    @Test func signingOutCountsTheUnsentChangesAndLeavesNoBudget() async throws {
         let (store, sync) = try await signedIn()
         server.offline = true
         for amount: Decimal in [10, 20, 30] {
@@ -451,7 +451,7 @@ private var hasKeychain: Bool {
         await sync.signOut()
 
         #expect(store.budget.accounts.isEmpty && store.budget.transactions.isEmpty)
-        #expect(store.budget.categoryGroups.flatMap(\.categories).map(\.id) == [store.budget.readyToAssignCategoryId])
+        #expect(try store.database?.isEmpty == true)
         #expect(sync.status == .notSignedIn)
         #expect(tokens.load() == nil)
         #expect(try store.database?.deviceId == BudgetDatabase.unsignedDevice)
@@ -468,7 +468,6 @@ private var hasKeychain: Bool {
         let url = folder.appendingPathComponent("budget.sqlite")
         let (store, sync) = try await signedIn(BudgetDatabase(url: url))
         let dailyBackup = url.appendingPathExtension("bak")
-        try FileManager.default.setAttributes([.modificationDate: Date.distantPast], ofItemAtPath: dailyBackup.path)
         try store.perform(.setAssigned(month: december, categoryId: grocery, amount: 50))
         server.refusesTokens = true
         await sync.syncOnce()
@@ -514,7 +513,7 @@ private var hasKeychain: Bool {
         let schedule = Transaction(id: "S1", accountId: budget.girokonto, date: date("2026-10-30"), amount: -9)
         try budget.budget.apply(
             .saveScheduledTransaction(
-                ScheduledSave(transaction: schedule, frequency: .monthly, payeeName: "Netflix", isNew: true)))
+                ScheduledSave(transaction: schedule, repeats: .monthly, payeeName: "Netflix", isNew: true)))
         server.snapshot = SyncSnapshot(of: budget.budget, cursor: 7)
         let database = try BudgetDatabase()
         _ = try await signedIn(database)
@@ -549,7 +548,7 @@ private var hasKeychain: Bool {
         let schedule = Transaction(id: "S1", accountId: budget.girokonto, date: date("2026-10-30"), amount: -9)
         try budget.budget.apply(
             .saveScheduledTransaction(
-                ScheduledSave(transaction: schedule, frequency: .monthly, payeeName: "Netflix", isNew: true)))
+                ScheduledSave(transaction: schedule, repeats: .monthly, payeeName: "Netflix", isNew: true)))
         server.snapshot = SyncSnapshot(of: budget.budget, cursor: 7)
         let database = try BudgetDatabase()
         _ = try await signedIn(database)

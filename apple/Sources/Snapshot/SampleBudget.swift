@@ -36,6 +36,7 @@ enum SampleBudget {
             addKreditkarte()
             addBargeld()
             addSavings()
+            addSharedExpenses()
             addScheduled()
             applyClearedStates()
             closeOldAccount()
@@ -51,6 +52,7 @@ enum SampleBudget {
                 ("Kreditkarte", .checking, -1240),
                 ("Bargeld", .cash, 80),
                 ("Altes Sparbuch", .savings, 600),
+                ("Spliit", .checking, 0),
                 ("Depot", .tracking, 12500),
                 ("Bausparvertrag", .tracking, 4200),
             ]
@@ -162,12 +164,12 @@ enum SampleBudget {
         private mutating func addScheduled() {
             budget.scheduledTransactions = [
                 ScheduledTransaction(
-                    accountId: ids["Girokonto"]!, nextDate: today.firstOfMonth.addingMonths(1), frequency: .monthly,
+                    accountId: ids["Girokonto"]!, nextDate: today.firstOfMonth.addingMonths(1), repeats: .monthly,
                     payeeId: payeeId("Wohnbau Lindenhof eG"), categoryId: category("🏠 Wohnen", "🏠 Miete"),
                     memo: "Miete", amount: -950),
                 ScheduledTransaction(
                     id: scheduledSpotifyId, accountId: ids["Kreditkarte"]!,
-                    nextDate: nextAfterToday(day: 18), frequency: .monthly, payeeId: payeeId("Spotify"),
+                    nextDate: nextAfterToday(day: 18), repeats: .monthly, payeeId: payeeId("Spotify"),
                     categoryId: category("🛒 Alltag", "🎧 Abos"), amount: -10.99),
             ]
         }
@@ -190,6 +192,15 @@ enum SampleBudget {
                 account.lastReconciledAt = reconciledThrough.noon()
                 run(.editAccount(account))
             }
+        }
+
+        private mutating func addSharedExpenses() {
+            guard var account = budget.account(withId: ids["Spliit"]!) else { return }
+            account.sharedExpenses = true
+            run(.editAccount(account))
+            add("Spliit", today.addingDays(-3), "Aldi", -14.03, ("🛒 Alltag", "🛒 Lebensmittel"))
+            add("Spliit", today.addingDays(-5), "Kaufland", -51.27, ("🛒 Alltag", "🛒 Lebensmittel"))
+            add("Spliit", today.addingDays(-12), "Pizzeria Da Gino", -19.17, ("🛒 Alltag", "🍕 Restaurant"))
         }
 
         private mutating func closeOldAccount() {

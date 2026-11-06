@@ -26,20 +26,14 @@ extension RegisterViewModel {
 
     func transactionActionsMenu(of selected: [Transaction]) -> [RegisterMenuItem] {
         let budget = store.budget
-        let single = selected.count == 1 ? selected.first : nil
         let led = budget.ledTransactionIds
         let unled = selected.filter { !led.contains($0.id) }
         let moveTargets = budget.moveTargets(excluding: account?.id)
-        let canSchedule =
-            single.map { $0.date > today() && !budget.isTransferFromSplit($0) && !led.contains($0.id) } ?? false
         return [
             RegisterMenuItem(
                 id: "categorize", title: "Kategorisieren als", kind: .submenu(categorizeItems),
                 isEnabled: canCategorize),
             .separator(1),
-            .action("Wiederkehrend machen …", .makeRecurring, enabled: single != nil),
-            .action("In geplante Buchungen verschieben …", .moveToScheduler, enabled: canSchedule),
-            .separator(2),
             RegisterMenuItem(
                 id: "move", title: "In Konto verschieben",
                 kind: .submenu(moveTargets.map { .action($0.name, .moveToAccount(accountId: $0.id)) }),
@@ -73,13 +67,27 @@ extension RegisterViewModel {
     }
 
     public var viewMenu: [RegisterMenuItem] {
-        filterMenu + columnMenuItems.map { .action($0.label, .toggleColumn($0.column), checked: $0.isChecked) }
+        let closed = closedAccountsMenu
+        return filterMenu + columnMenuItems.map { .action($0.label, .toggleColumn($0.column), checked: $0.isChecked) }
+            + (closed.isEmpty ? [] : [.separator(20)] + closed)
     }
 
-    /// A reconciliation sums what the list shows, so it keeps Alle Buchungen.
+    /// A reconciliation sums what the list shows and hides the scheduled area, so it keeps Alle Buchungen.
     var filterMenu: [RegisterMenuItem] {
         guard !isReconciling else { return [] }
-        return RegisterFilter.allCases.map { .action($0.title, .filter($0), checked: $0 == filter) } + [.separator(10)]
+        let views = RegisterFilter.allCases.map {
+            RegisterMenuItem.action($0.title, .filter($0), checked: $0 == filter)
+        }
+        let scheduled = schedulerMenu()
+        return views + [.separator(10)] + (scheduled.isEmpty ? [] : scheduled + [.separator(12)])
+    }
+
+    /// While something is planned, its collapsed count shows the list instead.
+    func schedulerMenu(systemImage: String? = nil) -> [RegisterMenuItem] {
+        guard scheduler.count == 0 else { return [] }
+        return [
+            .action(RegisterScheduler.title, .toggleScheduler, checked: isSchedulerVisible, systemImage: systemImage)
+        ]
     }
 
     /// „Ansicht: zu bestätigen“ while a view other than Alle Buchungen shows, as on the web.
@@ -126,11 +134,10 @@ extension RegisterViewModel {
         let ids = selected.map(\.id)
         switch action {
         case .categorize(let categoryId): categorize(ids, categoryId: categoryId)
-        case .makeRecurring: schedule(selected.first, recurring: true)
-        case .moveToScheduler: schedule(selected.first, recurring: false)
         case .moveToAccount(let accountId): moveTransactions(ids, to: accountId)
         case .delete: deleteTransactions(ids)
         case .filter(let filter): setFilter(filter)
+        case .closedAccounts: closedAccountsClicked()
         case .togglePicking: togglePicking()
         case .toggleSelectAll: toggleSelectAll()
         case .toggleScheduler: scheduledToggleClicked()
@@ -142,7 +149,7 @@ extension RegisterViewModel {
         case .skipScheduled: scheduler.skipClicked()
         case .deleteScheduled: scheduler.deleteClicked()
         case .moveScheduled(let accountId): scheduler.moveClicked(to: accountId)
-        case .fillUnderfunded, .resetAssigned, .frequency: break
+        case .fillUnderfunded, .resetAssigned: break
         }
     }
 
@@ -333,26 +340,13 @@ extension RegisterViewModel {
         perform(.categorizeTransactions(ids, categoryId: categoryId))
     }
 
-    private func schedule(_ transaction: Transaction?, recurring: Bool) {
-        guard let transaction else { return }
-        let scheduleId = EntityID.createUID()
-        let command: BudgetCommand =
-            recurring
-            ? .makeRecurring(transactionId: transaction.id, scheduleId: scheduleId, today: today())
-            : .moveToScheduler(transactionId: transaction.id, scheduleId: scheduleId)
-        guard perform(command) else { return }
-        lastScheduledTransactionId = scheduleId
-        scheduler.reveal(scheduleId)
-        if !isReconciling { popup = .scheduledCallout(recurring ? .added : .moved) }
-    }
-
     func showMessage(_ instruction: String, _ content: String) {
         dialogs.show(.message(instruction, content))
     }
 
     var isBlockedByModal: Bool {
-        dialogs.isPresenting || editor?.addCategoryForm != nil
-            || scheduler.editor?.addCategoryForm != nil || reconciliation.statementForm != nil || isAppModalOpen()
+        dialogs.isPresenting || editor?.addCategoryForm != nil || scheduler.editor != nil
+            || reconciliation.statementForm != nil || isClosedAccountsListShown || isAppModalOpen()
     }
 
     /// Keys are ignored while a modal window or any popup is on screen.

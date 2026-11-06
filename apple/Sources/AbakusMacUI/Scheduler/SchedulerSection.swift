@@ -2,7 +2,6 @@ import AbakusCore
 import AbakusUI
 import SwiftUI
 
-/// The collapsible Scheduled Transactions section: its title with the + menu over the schedule grid.
 struct SchedulerSection: View {
     let model: RegisterViewModel
     let size: CGSize
@@ -14,20 +13,29 @@ struct SchedulerSection: View {
                 .frame(height: SchedulerMetrics.titleHeight)
             RegisterGridView(owner: model.scheduler, size: CGSize(width: size.width, height: gridHeight))
                 .id(model.accountKey)
+                .overlay {
+                    if model.scheduler.scheduledIds.isEmpty {
+                        VStack(spacing: 4) {
+                            Text(RegisterScheduler.emptyTitle).font(ThemeFont.headline.font)
+                            Text(RegisterScheduler.emptyMessage).foregroundStyle(ThemeColor.secondaryText)
+                        }
+                        .allowsHitTesting(false)
+                    }
+                }
         }
         .frame(width: size.width, height: size.height, alignment: .top)
         .clipped()
     }
 }
 
-private struct SchedulerTitleBar: View {
+struct SchedulerTitleBar: View {
     let model: RegisterViewModel
 
     var body: some View {
         HStack(spacing: 8) {
             collapseButton
             Spacer(minLength: 8)
-            addMenu
+            addButton
         }
         .padding(.horizontal, RegisterHeaderMetrics.horizontalPadding)
         .background(ThemeColor.windowBackground)
@@ -36,11 +44,11 @@ private struct SchedulerTitleBar: View {
     private var collapseButton: some View {
         Button(action: model.scheduledToggleClicked) {
             HStack(spacing: 6) {
-                Image(systemName: "chevron.down")
+                Image(systemName: model.isSchedulerVisible ? "chevron.down" : "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(ThemeColor.secondaryText)
                     .accessibilityHidden(true)
-                Text(verbatim: RegisterScheduler.title)
+                Text(verbatim: model.scheduledSummary ?? RegisterScheduler.title)
                     .font(SchedulerMetrics.titleFont.font)
                     .accessibilityAddTraits(.isHeader)
             }
@@ -48,23 +56,17 @@ private struct SchedulerTitleBar: View {
         }
         .buttonStyle(.plain)
         .help(model.scheduledToggleTooltip)
-        .registerAnchor(.schedulerTitle)
     }
 
-    private var addMenu: some View {
+    private var addButton: some View {
         let scheduler = model.scheduler
-        return Menu {
-            Button(RegisterScheduler.addTitle, action: scheduler.addClicked)
-            if scheduler.showsTransferButton {
-                Button(RegisterScheduler.transferTitle, action: scheduler.transferClicked)
-            }
-        } label: {
-            Label("Hinzufügen", systemImage: "plus")
+        return Button(action: scheduler.addClicked) {
+            Label(RegisterScheduler.addTitle, systemImage: "plus")
                 .labelStyle(.iconOnly)
         }
-        .menuStyle(.button)
         .fixedSize()
         .disabled(!scheduler.canAddTransactions)
+        .help(RegisterScheduler.addTitle)
     }
 }
 

@@ -227,7 +227,7 @@
             case .amount: RegisterAmountText(row: row)
             case .cleared:
                 if !row.isSubtransaction { RegisterStatusButton(register: register, row: row) }
-            case .frequency: EmptyView()
+            case .repeats: EmptyView()
             }
         }
     }

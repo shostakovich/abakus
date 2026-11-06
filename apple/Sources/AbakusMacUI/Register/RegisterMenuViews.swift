@@ -102,40 +102,6 @@ extension EnvironmentValues {
     @Entry public var menuPresenter = MenuPresenter.native
 }
 
-/// A zero-size view at the layer's origin, so it never takes a click.
-struct PopUpMenu: NSViewRepresentable {
-    let items: [RegisterMenuItem]?
-    /// The menu's top-left corner in the layer.
-    let location: CGPoint
-    let perform: @MainActor (RegisterMenuAction) -> Void
-    let dismiss: @MainActor () -> Void
-
-    func makeNSView(context: Context) -> AnchoredMenuPresenter.OriginView {
-        AnchoredMenuPresenter.OriginView()
-    }
-
-    func updateNSView(_ view: AnchoredMenuPresenter.OriginView, context: Context) {
-        guard let items else {
-            view.presentedId = nil
-            return
-        }
-        guard view.presentedId == nil else { return }
-        let id = UUID()
-        view.presentedId = id
-        let (location, perform, dismiss) = (location, perform, dismiss)
-        let presenter = context.environment.menuPresenter
-        DispatchQueue.main.async { [weak view] in
-            guard let view, view.presentedId == id else { return }
-            var chosen = false
-            presenter.present(items, location, view) { action in
-                chosen = true
-                perform(action)
-            }
-            if !chosen { dismiss() }
-        }
-    }
-}
-
 /// Presents the requested menu below its anchor; a zero-size view at the register's origin, so it never takes a click.
 struct AnchoredMenuPresenter: NSViewRepresentable {
     let request: RegisterMenuRequest?

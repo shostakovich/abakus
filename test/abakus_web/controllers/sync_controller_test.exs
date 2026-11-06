@@ -215,7 +215,8 @@ defmodule AbakusWeb.SyncControllerTest do
         |> ScheduledTransaction.changeset(%{
           account_id: c.giro.id,
           next_date: ~D[2026-12-01],
-          frequency: :monthly,
+          repeat_unit: :month,
+          repeat_every: 1,
           payee_id: landlord.id,
           category_id: rent.id,
           memo: "Miete",

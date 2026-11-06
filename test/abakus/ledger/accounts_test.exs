@@ -2,9 +2,10 @@ defmodule Abakus.Ledger.AccountsTest do
   use Abakus.DataCase
 
   import Abakus.DomainFixtures
+  import Ecto.Query
 
-  alias Abakus.Ledger
-  alias Abakus.Ledger.{Account, Payee}
+  alias Abakus.{Categories, Ledger}
+  alias Abakus.Ledger.{Account, Payee, Transaction}
 
   describe "create_account/2" do
     test "creates the account with its transfer payee" do
@@ -80,6 +81,77 @@ defmodule Abakus.Ledger.AccountsTest do
              } =
                errors_on(changeset)
     end
+  end
+
+  describe "create_account/3 with a balance" do
+    defp opening(account) do
+      Repo.all(from t in Transaction, where: t.account_id == ^account.id, preload: :payee)
+    end
+
+    test "books it as „Anfangssaldo“: cleared, approved, to Ready to Assign in a budget account" do
+      assert {:ok, account} =
+               Ledger.create_account(budget_scope(), %{name: "Haushaltskasse", kind: :cash},
+                 balance: 15_000,
+                 date: ~D[2026-11-06]
+               )
+
+      rta = Categories.ready_to_assign!(budget_scope())
+
+      assert [
+               %Transaction{
+                 amount: 15_000,
+                 date: ~D[2026-11-06],
+                 cleared: :cleared,
+                 approved: true,
+                 payee: %Payee{name: "Anfangssaldo", hidden: true}
+               } = transaction
+             ] = opening(account)
+
+      assert transaction.category_id == rta.id
+    end
+
+    test "has no category in a tracking account and reuses the payee" do
+      {:ok, _first} =
+        Ledger.create_account(budget_scope(), %{name: "Bar", kind: :cash},
+          balance: 100,
+          date: ~D[2026-11-06]
+        )
+
+      {:ok, account} =
+        Ledger.create_account(budget_scope(), %{name: "Bausparvertrag", kind: :tracking},
+          balance: 420_000,
+          date: ~D[2026-11-06]
+        )
+
+      assert [%Transaction{amount: 420_000, category_id: nil}] = opening(account)
+      assert [_one] = Repo.all(from p in Payee, where: p.name == "Anfangssaldo")
+    end
+
+    test "books nothing for 0" do
+      {:ok, account} =
+        Ledger.create_account(budget_scope(), %{name: "Kreditkarte 2", kind: :checking},
+          balance: 0,
+          date: ~D[2026-11-06]
+        )
+
+      assert opening(account) == []
+    end
+
+    test "creates neither account nor transaction when the account is refused" do
+      assert {:error, %Ecto.Changeset{}} =
+               Ledger.create_account(budget_scope(), %{name: " ", kind: :cash},
+                 balance: 100,
+                 date: ~D[2026-11-06]
+               )
+
+      assert Repo.aggregate(Transaction, :count) == 0
+    end
+  end
+
+  test "reconcilable?/1 holds for an open account but the shared-expenses one" do
+    assert Account.reconcilable?(%Account{})
+    refute Account.reconcilable?(%Account{closed: true})
+    refute Account.reconcilable?(%Account{shared_expenses: true})
   end
 
   test "budget_account?/1 holds for every kind but tracking" do

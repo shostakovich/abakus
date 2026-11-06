@@ -107,13 +107,81 @@ defmodule AbakusWeb.AccountDialogTest do
       for kind <- ["Girokonto", "Sparkonto", "Bargeld", "Tracking"],
           do: assert(has_element?(view, "#account_kind option", kind))
 
+      assert has_element?(view, "#account_balance")
+      assert has_element?(view, "#account-kind-hint", "Tracking-Konten zählen nicht zum Budget.")
+      assert has_element?(view, "#account-save", "Hinzufügen")
+
       submit(view, %{name: "🐷 Sparschwein", kind: "cash"})
 
       assert [account] = Ledger.list_accounts(budget_scope())
       assert %{name: "🐷 Sparschwein", kind: :cash, closed: false} = account
+      assert Ledger.list_transactions(budget_scope(), account) == []
 
       path = ~p"/budget/accounts/#{account}"
       assert {^path, %{"info" => "Konto angelegt."}} = assert_redirect(view)
+    end
+
+    defp add(conn, params) do
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
+      view |> element("#add-account") |> render_click()
+      submit(view, params)
+      view
+    end
+
+    defp account_named(name),
+      do: Enum.find(Ledger.list_accounts(budget_scope()), &(&1.name == name))
+
+    test "books the current balance today as „Anfangssaldo“", %{conn: conn} do
+      fix_today(~D[2026-11-06])
+
+      add(conn, %{name: "Haushaltskasse", kind: "cash", balance: "100+50"})
+
+      assert [opening] = Ledger.list_transactions(budget_scope(), account_named("Haushaltskasse"))
+
+      assert %{amount: 15_000, date: ~D[2026-11-06], cleared: :cleared, approved: true} = opening
+      assert opening.payee.name == "Anfangssaldo"
+      assert opening.category.internal
+
+      add(conn, %{name: "Bausparvertrag", kind: "tracking", balance: "4.200,00"})
+
+      assert [%{amount: 420_000, category_id: nil}] =
+               Ledger.list_transactions(budget_scope(), account_named("Bausparvertrag"))
+
+      add(conn, %{name: "Kreditkarte 2", kind: "checking", balance: "0,00"})
+      assert Ledger.list_transactions(budget_scope(), account_named("Kreditkarte 2")) == []
+    end
+
+    test "refuses a balance that is no amount and keeps it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
+      view |> element("#add-account") |> render_click()
+
+      assert view |> form("#account-form", account: %{balance: "60*2"}) |> render_change() =~
+               "Ungültiger Betrag"
+
+      submit(view, %{name: "Giro", kind: "checking", balance: "60*2"})
+
+      assert has_element?(view, "#account_balance-error-0", "Ungültiger Betrag")
+      assert has_element?(view, ~s|#account_balance[value="60*2"]|)
+      assert Ledger.list_accounts(budget_scope()) == []
+
+      submit(view, %{name: " ", kind: "checking", balance: "12"})
+      assert has_element?(view, ~s|#account_balance[value="12"]|)
+    end
+
+    test "refuses a balance beyond the amounts' range", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
+      view |> element("#add-account") |> render_click()
+
+      submit(view, %{name: "Giro", kind: "checking", balance: "200000000000"})
+
+      assert has_element?(view, "#account_balance-error-0", "Muss zwischen")
+      assert Ledger.list_accounts(budget_scope()) == []
+
+      assert view |> form("#account-form", account: %{balance: "300000000000"}) |> render_change() =~
+               "Muss zwischen"
+
+      submit(view, %{name: "Giro", kind: "checking", balance: "12"})
+      assert [%{name: "Giro"}] = Ledger.list_accounts(budget_scope())
     end
 
     test "shows what is missing", %{conn: conn} do
@@ -220,11 +288,12 @@ defmodule AbakusWeb.AccountDialogTest do
   end
 
   describe "closing" do
-    test "closes the account and opens it again", %{conn: conn} do
+    test "closes the account, which stays on screen; its register opens it again", %{conn: conn} do
       account = account_fixture(name: "Giro")
+      transaction_fixture(account_id: account.id, amount: -1_200)
       view = open_edit(conn, account)
 
-      refute has_element?(view, "#reopen-account")
+      assert has_element?(view, "#close-account", "Konto schließen …")
       confirm_click(view, "#close-account")
 
       assert Ledger.get_account!(budget_scope(), account.id).closed
@@ -234,14 +303,26 @@ defmodule AbakusWeb.AccountDialogTest do
       assert has_element?(view, "#register-meta", "Geschlossen")
       refute has_element?(view, "#side-account-#{account.id}-sidebar")
 
+      assert has_element?(view, "#closed-banner", "Dieses Konto ist geschlossen.")
+      refute has_element?(view, "#new-transaction")
+      refute has_element?(view, "#new-transaction-fab")
+      refute has_element?(view, "#file-import")
+      refute has_element?(view, "#reconcile-open")
+      render_click(view, "reconcile_open", %{})
+      refute has_element?(view, "#reconcile-question")
+
       view |> element("#edit-account") |> render_click()
-      assert has_element?(view, "#account-closed", "geschlossen")
       refute has_element?(view, "#close-account")
+      refute has_element?(view, "#account-dialog", "Wieder öffnen")
+      view |> element("#account-cancel") |> render_click()
+
       view |> element("#reopen-account") |> render_click()
 
       refute Ledger.get_account!(budget_scope(), account.id).closed
       assert has_element?(view, "#flash-info", "Konto wieder geöffnet")
+      refute has_element?(view, "#closed-banner")
       assert has_element?(view, "#side-account-#{account.id}-sidebar")
+      assert has_element?(view, "#reconcile-open")
     end
 
     test "asks first and names a balance that is left", %{conn: conn} do
@@ -263,6 +344,42 @@ defmodule AbakusWeb.AccountDialogTest do
                question: "Konto „Voll“ schließen?",
                text: "Es hat noch einen Saldo von 12,00 €."
              } = asked(view, "#close-account")
+    end
+  end
+
+  describe "closed accounts" do
+    test "are only behind Alle Konten's Ansicht menu, which opens them", %{conn: conn} do
+      old = account_fixture(name: "Altes Sparbuch", kind: :savings, closed: true)
+      transaction_fixture(account_id: old.id, amount: 300)
+      account_fixture(name: "Giro")
+
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
+      refute has_element?(view, "#side-account-#{old.id}-sidebar")
+      assert has_element?(view, "#closed-accounts-item", "Geschlossene Konten (1) …")
+      refute has_element?(view, "#closed-accounts")
+
+      view |> element("#closed-accounts-item") |> render_click()
+
+      assert has_element?(view, "#closed-accounts h2", "Geschlossene Konten")
+      assert has_element?(view, "#closed-account-#{old.id}", "Altes Sparbuch")
+      assert has_element?(view, "#closed-account-#{old.id}", "Sparkonto")
+      assert has_element?(view, "#closed-account-#{old.id}", "3,00")
+
+      {:ok, view, _html} =
+        view
+        |> element("#closed-account-#{old.id} a")
+        |> render_click()
+        |> follow_redirect(conn, ~p"/budget/accounts/#{old}")
+
+      assert has_element?(view, "#register-title", "Altes Sparbuch")
+      assert has_element?(view, "#closed-banner", "Dieses Konto ist geschlossen.")
+      refute has_element?(view, "#closed-accounts-item")
+
+      view |> element("#reopen-account") |> render_click()
+      assert has_element?(view, "#side-account-#{old.id}-sidebar")
+
+      {:ok, view, _html} = live(conn, ~p"/budget/accounts/all")
+      refute has_element?(view, "#closed-accounts-item")
     end
   end
 end

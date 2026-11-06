@@ -10,19 +10,18 @@ import Testing
         AppModel(store: BudgetStore(budget: fixture.budget, today: { editDay }), defaults: nil)
     }
 
-    @Test func addFormStartsUntypedWithAUniqueName() throws {
-        var fixture = RegisterFixture()
-        try fixture.budget.apply(
-            .addAccount(
-                NewAccount(name: "Neues Konto", kind: .cash, startingBalance: 0, startDate: editDay)))
-        let app = app(fixture)
+    @Test func addFormStartsAsAnUnnamedGirokontoWithoutBalance() throws {
+        let app = app()
         app.accounts.addAccountClicked()
         let form = try #require(app.accounts.addForm)
-        #expect(form.name == "Neues Konto 2")
+        #expect(form.name.isEmpty)
         #expect(form.balanceText == "0.00")
-        #expect(form.date == editDay)
-        #expect(form.type == nil)
+        #expect(form.type == .checking)
         #expect(!form.canCreate)
+        form.name = "  "
+        #expect(!form.canCreate)
+        form.name = "Haushaltskasse"
+        #expect(form.canCreate)
     }
 
     @Test func createAddsTheAccountWithItsStartingBalanceAndSelectsIt() throws {
@@ -41,8 +40,19 @@ import Testing
         let start = try #require(app.store.budget.transactions(inAccount: account.id).first)
         #expect(start.amount == 300)
         #expect(start.date == editDay)
+        #expect(start.cleared == .cleared)
         #expect(start.categoryId == app.store.budget.readyToAssignCategoryId)
         #expect(app.navigation.selection == .account(account.id))
+    }
+
+    @Test func aZeroBalanceBooksNothing() throws {
+        let app = app()
+        app.accounts.addAccountClicked()
+        let form = try #require(app.accounts.addForm)
+        form.name = "Kreditkarte 2"
+        app.accounts.createAccountClicked()
+        let account = try #require(app.store.budget.account(named: "Kreditkarte 2"))
+        #expect(app.store.budget.transactions(inAccount: account.id).isEmpty)
     }
 
     @Test func aTrackingAccountTakesANegativeBalanceWithoutAsking() throws {
@@ -65,11 +75,11 @@ import Testing
         let app = app()
         app.accounts.addAccountClicked()
         let form = try #require(app.accounts.addForm)
+        form.name = "Neues Konto"
         form.balanceText = "-20"
-        form.type = .checking
         app.accounts.createAccountClicked()
         let dialog = try #require(app.dialogs.presented.last?.dialog)
-        #expect(dialog.instruction == "Soll der Anfangssaldo negativ sein? (−$20.00)")
+        #expect(dialog.instruction == "Soll der Saldo negativ sein? (−$20.00)")
         #expect(dialog.buttons.map(\.title) == ["Der Betrag stimmt", "Korrigieren"])
         #expect(dialog.dismissal == AnyDialogChoice(BalanceSignChoice.fix))
         app.dialogs.presented.last?.answer(BalanceSignChoice.fix)
@@ -139,105 +149,51 @@ import Testing
         #expect(app.dialogs.presented.last?.dialog.instruction == "Bitte einen Kontonamen eingeben.")
     }
 
-    @Test func closingTheSelectedAccountSelectsItsNeighbour() throws {
+    @Test func closingAsksOnceAndKeepsTheAccountOnScreen() throws {
         let fixture = RegisterFixture()
         let app = app(fixture)
+        app.navigation.selection = .account(fixture.giro)
         app.accounts.editAccountRequested(fixture.giro)
-        let form = try #require(app.accounts.editForm)
-        #expect(!app.accounts.isClosed(form))
-        app.accounts.closeOrReopenClicked()
-        #expect(app.store.budget.account(withId: fixture.giro)?.closed == true)
-        #expect(app.navigation.selection == .account(fixture.tagesgeld))
-        app.accounts.editAccountRequested(fixture.giro)
-        #expect(app.accounts.isClosed(try #require(app.accounts.editForm)))
-        app.accounts.closeOrReopenClicked()
+        try #require(app.accounts.editForm).name = "Hauskonto"
+        app.accounts.closeAccountClicked()
+        let question = try #require(app.dialogs.presented.last)
+        #expect(question.dialog.instruction == "Konto „Giro“ schließen?")
+        #expect(question.dialog.content == "Es hat noch einen Saldo von <b>$1,111.00</b>.")
+        #expect(question.dialog.buttons.map(\.title) == ["Abbrechen", "Schließen"])
+        question.answer(CloseAccountChoice.cancel)
         #expect(app.store.budget.account(withId: fixture.giro)?.closed == false)
-    }
-
-    @Test func theNeighbourFollowsTheSidebarOrderOfEachGroup() throws {
-        var fixture = RegisterFixture()
-        for var account in fixture.budget.accounts {
-            account.position = 0
-            try fixture.budget.apply(.editAccount(account))
-        }
-        let app = app(fixture)
-        func close(_ id: String) {
-            app.navigation.selection = .account(id)
-            app.accounts.editAccountRequested(id)
-            app.accounts.closeOrReopenClicked()
-        }
-        close(fixture.karte)
-        #expect(app.navigation.selection == .account(fixture.tagesgeld))
-        close(fixture.depot)
-        #expect(app.navigation.selection == .account(fixture.tagesgeld))
-        close(fixture.giro)
-        #expect(app.navigation.selection == .account(fixture.tagesgeld))
-    }
-
-    @Test func adjustBalanceAddsAnAdjustmentAfterTheSignCheck() throws {
-        let fixture = RegisterFixture()
-        let app = app(fixture)
-        app.accounts.editAccountRequested(fixture.giro)
-        app.accounts.adjustBalanceClicked()
-        let form = try #require(app.accounts.balanceForm)
-        #expect(app.accounts.editForm == nil)
-        #expect(form.title == "Saldo von „Giro“ anpassen")
-        #expect(form.fieldLabel == "Neuer Arbeitssaldo")
-        #expect(form.amountText == "1111.00")
-        #expect(form.workingBalanceText == "$1,111.00")
-        form.amountText = "-5"
-        let before = app.store.budget.transactions
-        app.accounts.adjustClicked()
-        let signCheck = try #require(app.dialogs.presented.last)
-        #expect(signCheck.dialog.instruction == "Soll der Saldo negativ sein?")
-        #expect(signCheck.dialog.dismissal == AnyDialogChoice(BalanceSignChoice.fix))
-        signCheck.answer(signCheck.dialog.dismissal)
-        #expect(!app.dialogs.isPresenting)
-        #expect(app.accounts.balanceForm != nil)
-        #expect(app.store.budget.transactions == before)
-        app.accounts.adjustClicked()
-        app.dialogs.presented.last?.answer(BalanceSignChoice.correct)
-        #expect(app.accounts.balanceForm == nil)
-        let adjustment = try #require(app.store.budget.transactions(inAccount: fixture.giro).last)
-        #expect(app.store.budget.payeeName(of: adjustment) == "Saldoanpassung")
-        #expect(adjustment.amount == -1116)
-    }
-
-    @Test func adjustingTheBalanceKeepsTheTypedNameAndKind() throws {
-        let fixture = RegisterFixture()
-        let app = app(fixture)
-        app.accounts.editAccountRequested(fixture.giro)
-        let form = try #require(app.accounts.editForm)
-        form.name = "Hauskonto"
-        form.type = .savings
-        app.accounts.adjustBalanceClicked()
-        #expect(try #require(app.accounts.balanceForm).title == "Saldo von „Hauskonto“ anpassen")
-        #expect(app.store.budget.account(withId: fixture.giro)?.name == "Hauskonto")
-        #expect(app.store.budget.account(withId: fixture.giro)?.kind == .savings)
-    }
-
-    @Test func aRefusedNameKeepsTheAccountFormInsteadOfAdjusting() throws {
-        let fixture = RegisterFixture()
-        let app = app(fixture)
-        app.accounts.editAccountRequested(fixture.giro)
-        try #require(app.accounts.editForm).name = "  "
-        app.accounts.adjustBalanceClicked()
-        #expect(app.dialogs.presented.last?.dialog.instruction == "Bitte einen Kontonamen eingeben.")
         #expect(app.accounts.editForm != nil)
-        #expect(app.accounts.balanceForm == nil)
+        app.accounts.closeAccountClicked()
+        app.dialogs.presented.last?.answer(CloseAccountChoice.close)
+        let account = try #require(app.store.budget.account(withId: fixture.giro))
+        #expect(account.closed)
+        #expect(account.name == "Hauskonto")
+        #expect(app.accounts.editForm == nil)
+        #expect(app.navigation.selection == .account(fixture.giro))
+        #expect(app.register.banner == .closed)
     }
 
-    @Test func fixingTheSignKeepsTheBalanceForm() throws {
+    @Test func aClosedAccountsFormOffersNoClosing() throws {
         let fixture = RegisterFixture()
         let app = app(fixture)
         app.accounts.editAccountRequested(fixture.giro)
-        app.accounts.adjustBalanceClicked()
-        try #require(app.accounts.balanceForm).amountText = "-5"
-        app.accounts.adjustClicked()
-        app.dialogs.presented.last?.answer(BalanceSignChoice.fix)
+        #expect(try #require(app.accounts.editForm).canClose)
+        app.accounts.closeAccountClicked()
+        app.dialogs.presented.last?.answer(CloseAccountChoice.close)
+        app.accounts.editAccountRequested(fixture.giro)
+        #expect(try !#require(app.accounts.editForm).canClose)
+        app.accounts.closeAccountClicked()
         #expect(!app.dialogs.isPresenting)
-        #expect(app.accounts.balanceForm != nil)
-        #expect(app.store.budget.balances(forAccount: fixture.giro).working == 1111)
+    }
+
+    @Test func closingAnEmptyAccountSaysItCanBeReopened() throws {
+        var fixture = RegisterFixture()
+        try fixture.budget.apply(
+            .addAccount(NewAccount(id: "LEER", name: "Leer", kind: .cash, startingBalance: 0, startDate: editDay)))
+        let app = app(fixture)
+        app.accounts.editAccountRequested("LEER")
+        app.accounts.closeAccountClicked()
+        #expect(app.dialogs.presented.last?.dialog.content == "Du kannst es später wieder öffnen.")
     }
 
     @Test func balancesWithoutANumberAreRefused() throws {
@@ -245,7 +201,7 @@ import Testing
         let app = app(fixture)
         app.accounts.addAccountClicked()
         let form = try #require(app.accounts.addForm)
-        form.type = .cash
+        form.name = "Bar"
         form.balanceText = "abc"
         app.accounts.createAccountClicked()
         #expect(app.dialogs.presented.last?.dialog.instruction == "Ungültiger Saldo")
@@ -253,49 +209,6 @@ import Testing
         app.dialogs.presented.last?.answer(MessageChoice.close)
         #expect(app.accounts.addForm === form)
         #expect(app.store.budget.accounts.count == 4)
-        app.accounts.addCancelled()
-        app.accounts.editAccountRequested(fixture.giro)
-        app.accounts.adjustBalanceClicked()
-        try #require(app.accounts.balanceForm).amountText = "x<y"
-        app.accounts.adjustClicked()
-        #expect(app.dialogs.presented.last?.dialog.content == "„x&lt;y“ ist keine gültige Zahl.")
-        #expect(app.accounts.balanceForm != nil)
-    }
-
-    @Test func adjustingJumpsToTheAdjustmentAndExplainsIt() throws {
-        let fixture = RegisterFixture()
-        let app = AppModel(
-            store: BudgetStore(budget: fixture.budget), selection: .account(fixture.tagesgeld), defaults: nil)
-        app.accounts.today = { editDay }
-        app.accounts.editAccountRequested(fixture.giro)
-        app.accounts.adjustBalanceClicked()
-        try #require(app.accounts.balanceForm).amountText = "1200"
-        app.accounts.adjustClicked()
-        let adjustment = try #require(app.store.budget.transactions(inAccount: fixture.giro).last)
-        #expect(app.navigation.selection == .account(fixture.giro))
-        #expect(app.register.selectedTransactionIds == [adjustment.id])
-        #expect(app.register.grid.scrollRequest?.target == .row(adjustment.id))
-        let help = try #require(app.register.adjustmentHelp)
-        #expect(help.transactionId == adjustment.id)
-        #expect(help.message == "Die Saldoanpassung ist als „Zu verteilen“ gebucht.")
-        #expect(app.register.isAppModalOpen())
-        app.register.adjustmentHelpDismissed()
-        #expect(app.register.adjustmentHelp == nil)
-    }
-
-    @Test func adjustingFromAllAccountsStaysThere() throws {
-        let fixture = RegisterFixture()
-        let app = AppModel(store: BudgetStore(budget: fixture.budget), selection: .allAccounts, defaults: nil)
-        app.accounts.today = { editDay }
-        app.accounts.editAccountRequested(fixture.depot)
-        app.accounts.adjustBalanceClicked()
-        try #require(app.accounts.balanceForm).amountText = "-50"
-        app.accounts.adjustClicked()
-        #expect(!app.dialogs.isPresenting)
-        #expect(app.navigation.selection == .allAccounts)
-        let help = try #require(app.register.adjustmentHelp)
-        #expect(
-            help.message == "Die Saldoanpassung ist ohne Kategorie gebucht, weil ein Trackingkonto keine braucht.")
     }
 
     @Test func aNewDayOrAJumpOfSeveralDaysEntersDueSchedules() throws {
@@ -304,13 +217,13 @@ import Testing
         let transaction = Transaction(id: "S1", accountId: fixture.giro, date: tomorrow, amount: -5)
         try fixture.budget.apply(
             .saveScheduledTransaction(
-                ScheduledSave(transaction: transaction, frequency: .daily, payeeName: "Bakery", isNew: true)))
+                ScheduledSave(transaction: transaction, repeats: .every(1, .week), payeeName: "Bakery", isNew: true)))
         let app = app(fixture)
         app.dateChecked(today: tomorrow)
         #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 1)
-        app.dateChecked(today: tomorrow.addingDays(4))
+        app.dateChecked(today: tomorrow.addingDays(14))
         #expect(!app.dialogs.isPresenting)
-        #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 5)
+        #expect(app.store.budget.transactions.filter { $0.source == .scheduled }.count == 3)
     }
 
     @Test func accountPropertiesOpensTheEditCalloutOfTheShownAccount() throws {

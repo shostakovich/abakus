@@ -23,7 +23,7 @@ public struct RegisterSortOrder: Hashable, Sendable {
 struct RegisterSortKeys {
     var accountName: String
     var keys: DefaultOrderKeys
-    var frequency = 0
+    var repeatDays = 0
 
     func compare(_ other: RegisterSortKeys, by column: RegisterColumn) -> ComparisonResult {
         let (lhs, rhs) = (keys, other.keys)
@@ -35,7 +35,7 @@ struct RegisterSortKeys {
         case .memo: lhs.memo.localizedStandardCompare(rhs.memo)
         case .amount: Self.order(lhs.amount, rhs.amount)
         case .cleared: Self.order(rhs.cleared.integerValue, lhs.cleared.integerValue)
-        case .frequency: Self.order(frequency, other.frequency)
+        case .repeats: Self.order(repeatDays, other.repeatDays)
         }
     }
 

@@ -11,7 +11,8 @@ public enum EditorOutcome: Hashable, Sendable {
 /// One edited register row: it edits a clone that Done/Save copies back through `store.perform`.
 @MainActor
 @Observable
-public final class TransactionEditor {
+public final class TransactionEditor: Identifiable {
+    public let id = UUID()
     public let mode: EditorMode
     public let isAllAccounts: Bool
     @ObservationIgnored let store: any BudgetStoring
@@ -54,9 +55,10 @@ public final class TransactionEditor {
     /// Flex draws the focus rectangle only after keyboard navigation.
     public internal(set) var showsButtonFocus = false
     public internal(set) var addCategoryForm: AddCategoryForm?
-    public internal(set) var frequency: ScheduledTransactionFrequency?
-    let originalFrequency: ScheduledTransactionFrequency?
-    public internal(set) var isFrequencyListOpen = false
+    public internal(set) var repeats: Repeat?
+    let originalRepeat: Repeat?
+    /// Eigene stays chosen while its count and unit change, also to what Monatlich or Jährlich would be.
+    public internal(set) var repeatChoice: Repeat.Choice?
 
     var fieldSelection = NSRange(location: 0, length: 0)
     /// A sign typed before any digit, which the next digit takes into the text.
@@ -78,13 +80,14 @@ public final class TransactionEditor {
 
     public init(
         store: any BudgetStoring, transaction: Transaction, mode: EditorMode, columns: [RegisterColumn],
-        isAllAccounts: Bool, today: DateWithoutTime = .today(), frequency: ScheduledTransactionFrequency? = nil,
+        isAllAccounts: Bool, today: DateWithoutTime = .today(), repeats: Repeat? = nil,
         dialogs: DialogStack = DialogStack()
     ) {
         self.store = store
         self.dialogs = dialogs
-        self.frequency = frequency
-        originalFrequency = frequency
+        self.repeats = repeats
+        originalRepeat = repeats
+        repeatChoice = repeats?.choice
         self.mode = mode
         self.columns = columns
         self.isAllAccounts = isAllAccounts
@@ -96,9 +99,9 @@ public final class TransactionEditor {
         let budget = store.budget
         originalPayeeName = budget.payeeName(of: transaction)
         payeeName = originalPayeeName
-        originalErrorLevel = mode == .existing && frequency == nil ? budget.errorState(of: transaction).level : .none
+        originalErrorLevel = mode == .existing && repeats == nil ? budget.errorState(of: transaction).level : .none
         needsApproval = transaction.needsApproval
-        leader = mode == .existing && frequency == nil ? budget.leader(of: transaction.id) : nil
+        leader = mode == .existing && repeats == nil ? budget.leader(of: transaction.id) : nil
         if transaction.isSplit {
             isSplitMode = true
             subIds = transaction.subtransactions.map(\.id)
@@ -113,7 +116,7 @@ public final class TransactionEditor {
     var catalog: DropDownCatalog { DropDownCatalog(budget: budget, formatter: formatter, today: today) }
 
     public var transactionId: String { original.id }
-    public var isScheduled: Bool { originalFrequency != nil }
+    public var isScheduled: Bool { originalRepeat != nil }
     public var account: Account? { budget.account(withId: clone.accountId) }
     public var isOnBudget: Bool { account?.onBudget ?? true }
 
@@ -127,7 +130,7 @@ public final class TransactionEditor {
 
     public func prompt(_ field: EditorFieldID) -> String {
         switch field.column {
-        case .account, .date, .frequency: ""
+        case .account, .date: ""
         case .payee: "Empfänger"
         case .category: categoryPrompts[field.subId] ?? Self.categoryPrompt
         case .memo: "Memo"
@@ -186,7 +189,6 @@ public final class TransactionEditor {
         switch field.column {
         case .account: return budget.account(withId: transaction.accountId)?.name ?? ""
         case .date: return formatter.dateShort(transaction.date)
-        case .frequency: return originalFrequency?.readableName ?? ""
         case .payee: return originalPayeeName
         case .category: return categoryText(transaction.categoryId)
         case .memo: return transaction.memo ?? ""
@@ -372,13 +374,12 @@ public final class TransactionEditor {
     }
 
     public var hasOpenPopup: Bool {
-        dropDown != nil || isCalendarOpen || isFrequencyListOpen
+        dropDown != nil || isCalendarOpen
     }
 
     package func closePopups() {
         dropDown = nil
         isCalendarOpen = false
-        isFrequencyListOpen = false
     }
 
     public func textDidChange(_ field: EditorFieldID, text newText: String, selection: NSRange, isDeletion: Bool) {
@@ -402,7 +403,7 @@ public final class TransactionEditor {
             || payeeName.trimmingCharacters(in: .whitespaces).lowercased()
                 != originalPayeeName.trimmingCharacters(in: .whitespaces).lowercased()
             || clone.categoryId != original.categoryId || (clone.memo ?? "") != (original.memo ?? "")
-            || clone.amount != original.amount || frequency != originalFrequency
+            || clone.amount != original.amount || repeats != originalRepeat
             || clone.accountId != original.accountId || clone.subtransactions != original.subtransactions
             || subPayeeNames.contains { id, name in
                 original.subtransactions.first { $0.id == id }
@@ -431,13 +432,6 @@ public final class TransactionEditor {
         addCategoryForm = nil
         dialogs.dismiss(ownedBy: self)
         onFinish(.cancelled)
-    }
-
-    public func menuAction(_ action: RegisterMenuAction) {
-        switch action {
-        case .frequency(let frequency): frequencyChosen(frequency)
-        default: break
-        }
     }
 }
 

@@ -11,8 +11,14 @@ defmodule AbakusWeb.RegisterLive do
 
   Here transactions are approved (one, or all the view "Zu bestätigen" shows), categorised (the selected) and
   toggled between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
-  `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. The shared-expenses account offers
-  no manual entry and no reconcile.
+  `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. The shared-expenses account and
+  closed accounts offer no manual entry and no reconcile; a closed account says so at the top with "Wieder öffnen".
+  Alle Konten's Ansicht menu lists the closed accounts ("Geschlossene Konten (2) …"), which the sidebar leaves out.
+
+  Above the transactions the scheduled transactions (`Abakus.Ledger.Scheduled`) show while there are any, collapsed;
+  without any, Ansicht › "Geplante Buchungen" shows the empty list. A row enters its next occurrence now, where its
+  account takes entries, or skips it, and opens `ScheduledDialog`, as "Geplante Buchung" adds one where manual
+  entries go.
   Transactions linked to Kasse expenses are deleted only with their expense, those the Depot books not at all here.
 
   Match proposals are not in the register but shown among its rows, waiting like an unapproved transaction, with
@@ -37,11 +43,20 @@ defmodule AbakusWeb.RegisterLive do
 
   alias Abakus.Depot.Portfolios
   alias Abakus.Ledger
-  alias Abakus.Ledger.{Account, Transaction}
+  alias Abakus.Ledger.{Account, Scheduled, Transaction}
   alias Abakus.LocalTime
   alias AbakusWeb.{AccountGroups, CategoryOptions}
   alias AbakusWeb.Depot.Components, as: DepotComponents
-  alias AbakusWeb.RegisterLive.{Balances, Components, Reconcile, Rows, TransactionEditor}
+
+  alias AbakusWeb.RegisterLive.{
+    Balances,
+    Components,
+    Reconcile,
+    Rows,
+    ScheduledDialog,
+    TransactionEditor
+  }
+
   alias Plug.Conn.Query
 
   import TransactionEditor, only: [confirmed: 1]
@@ -49,6 +64,7 @@ defmodule AbakusWeb.RegisterLive do
   on_mount {AccountGroups, {:pass_on, [:synced, :move_account]}}
 
   @page 100
+  @scheduled_gone "Die geplante Buchung gibt es nicht mehr."
 
   @impl true
   def render(assigns) do
@@ -106,6 +122,7 @@ defmodule AbakusWeb.RegisterLive do
           </:actions>
         </.header>
         <Components.balance_line account={@account} balances={@balances} />
+        <Components.closed_banner :if={@account && @account.closed} />
         <Components.toolbar
           account={@account}
           manual={@manual}
@@ -118,8 +135,17 @@ defmodule AbakusWeb.RegisterLive do
           unapproved_path={@unapproved_path}
           picking={@picking}
           all_selected={@count > 0 and MapSet.size(@selected) == @count}
+          scheduled_toggle={if @scheduled == [] and @manual, do: @scheduled_shown}
+          closed_count={if @account, do: 0, else: length(closed_rows(@account_groups))}
         />
         <Reconcile.bar :if={@reconciling} mode={@reconciling} />
+        <Components.scheduled
+          :if={@scheduled != [] or @scheduled_shown}
+          scheduled={@scheduled}
+          accounts={@accounts}
+          all={is_nil(@account)}
+          addable={@manual}
+        />
         <Components.table
           rows={@rows}
           proposals={@shown_proposals}
@@ -150,6 +176,8 @@ defmodule AbakusWeb.RegisterLive do
         module={TransactionEditor}
         {@editor.assigns}
       />
+      <.live_component :if={@scheduled_dialog} module={ScheduledDialog} {@scheduled_dialog} />
+      <Components.closed_accounts :if={@closed_accounts} rows={closed_rows(@account_groups)} />
     </Layouts.app>
     """
   end
@@ -164,6 +192,13 @@ defmodule AbakusWeb.RegisterLive do
     do: "Lege mit „Konto hinzufügen“ ein Konto an, um Buchungen zu erfassen oder zu importieren."
 
   defp empty_hint(_accounts), do: nil
+
+  defp closed_rows(groups) do
+    case Enum.find(groups, &(&1.key == :closed)) do
+      nil -> []
+      group -> group.rows
+    end
+  end
 
   @impl true
   def mount(_params, _session, socket) do
@@ -183,7 +218,10 @@ defmodule AbakusWeb.RegisterLive do
        picking: false,
        categories: nil,
        reconcile: nil,
-       reconciling: nil
+       reconciling: nil,
+       scheduled_shown: false,
+       scheduled_dialog: nil,
+       closed_accounts: false
      )}
   end
 
@@ -197,6 +235,7 @@ defmodule AbakusWeb.RegisterLive do
          socket
          |> show(view)
          |> load_transactions()
+         |> load_scheduled()
          |> assign_rows()}
 
       portfolio_id ->
@@ -242,7 +281,7 @@ defmodule AbakusWeb.RegisterLive do
   defp load(socket, :all) do
     socket
     |> assign(scope: :all, account: nil, selected: MapSet.new(), editor: nil)
-    |> assign(reconcile: nil, reconciling: nil)
+    |> assign(reconcile: nil, reconciling: nil, scheduled_shown: false, scheduled_dialog: nil)
   end
 
   defp load(socket, {:account, id} = scope) do
@@ -250,7 +289,7 @@ defmodule AbakusWeb.RegisterLive do
 
     socket
     |> assign(scope: scope, account: account, selected: MapSet.new(), editor: nil)
-    |> assign(reconcile: nil, reconciling: nil)
+    |> assign(reconcile: nil, reconciling: nil, scheduled_shown: false, scheduled_dialog: nil)
   end
 
   # A search compares in memory, so it goes through all of the view's transactions.
@@ -276,6 +315,11 @@ defmodule AbakusWeb.RegisterLive do
         Ledger.list_transactions(current_scope, register, [filter: :unapproved] ++ shown),
       proposals: Ledger.list_match_proposals(current_scope, register, shown)
     )
+  end
+
+  defp load_scheduled(%{assigns: assigns} = socket) do
+    {register, shown} = register(assigns)
+    assign(socket, :scheduled, Scheduled.list(assigns.current_scope, register, shown))
   end
 
   defp view(assigns, opts) do
@@ -378,6 +422,15 @@ defmodule AbakusWeb.RegisterLive do
     {:noreply,
      socket
      |> assign(:editor, nil)
+     |> clear_flash()
+     |> put_flash(:info, message)
+     |> refresh()}
+  end
+
+  def handle_info({ScheduledDialog, :done, message}, socket) do
+    {:noreply,
+     socket
+     |> assign(:scheduled_dialog, nil)
      |> clear_flash()
      |> put_flash(:info, message)
      |> refresh()}
@@ -496,6 +549,51 @@ defmodule AbakusWeb.RegisterLive do
 
   def handle_event("cancel_edit", _params, socket), do: {:noreply, assign(socket, :editor, nil)}
 
+  def handle_event("toggle_scheduled", _params, socket),
+    do: {:noreply, update(socket, :scheduled_shown, &(!&1))}
+
+  def handle_event("new_scheduled", _params, socket) do
+    if socket.assigns.manual,
+      do: {:noreply, open_scheduled(socket, nil)},
+      else: {:noreply, socket}
+  end
+
+  def handle_event("edit_scheduled", %{"id" => id}, socket) do
+    case Scheduled.get(socket.assigns.current_scope, id) do
+      nil -> {:noreply, socket |> put_flash(:error, @scheduled_gone) |> refresh()}
+      scheduled -> {:noreply, open_scheduled(socket, scheduled)}
+    end
+  end
+
+  def handle_event("close_scheduled_dialog", _params, socket),
+    do: {:noreply, assign(socket, :scheduled_dialog, nil)}
+
+  def handle_event("enter_scheduled", %{"id" => id}, socket) do
+    %{scheduled: scheduled, accounts: accounts} = socket.assigns
+    enterable = Enum.filter(scheduled, &Account.takes_entries?(accounts[&1.account_id]))
+    scheduled_action(socket, enterable, id, &Scheduled.enter_now/2, "Gebucht.")
+  end
+
+  def handle_event("skip_scheduled", %{"id" => id}, socket),
+    do: scheduled_action(socket, socket.assigns.scheduled, id, &Scheduled.skip/2, "Übersprungen.")
+
+  def handle_event(
+        "reopen_account",
+        _params,
+        %{assigns: %{account: %Account{} = account}} = socket
+      ) do
+    {:ok, _account} =
+      Ledger.update_account(socket.assigns.current_scope, account, %{closed: false})
+
+    {:noreply, socket |> clear_flash() |> put_flash(:info, "Konto wieder geöffnet.") |> refresh()}
+  end
+
+  def handle_event("show_closed_accounts", _params, socket),
+    do: {:noreply, assign(socket, :closed_accounts, true)}
+
+  def handle_event("close_closed_accounts", _params, socket),
+    do: {:noreply, assign(socket, :closed_accounts, false)}
+
   def handle_event("delete_selected", params, socket) do
     case socket.assigns.selection do
       [] ->
@@ -584,6 +682,45 @@ defmodule AbakusWeb.RegisterLive do
 
   # Late clicks after the popover closed or the mode ended.
   def handle_event("reconcile_" <> _event, _params, socket), do: {:noreply, socket}
+
+  defp open_scheduled(socket, scheduled) do
+    %{assigns: assigns} = socket
+
+    assign(socket,
+      editor: nil,
+      scheduled_dialog: %{
+        id: "scheduled-dialog",
+        current_scope: assigns.current_scope,
+        scheduled: scheduled,
+        account: assigns.account,
+        accounts: assigns.accounts,
+        depot_cash: assigns.depot_cash,
+        today: assigns.today
+      }
+    )
+  end
+
+  defp scheduled_action(socket, offered, id, action, message) do
+    case Enum.find(offered, &(&1.id == id)) do
+      nil ->
+        {:noreply, socket}
+
+      scheduled ->
+        case action.(socket.assigns.current_scope, scheduled) do
+          {:ok, _scheduled} ->
+            {:noreply, socket |> clear_flash() |> put_flash(:info, message) |> refresh()}
+
+          {:error, :not_found} ->
+            {:noreply, socket |> put_flash(:error, @scheduled_gone) |> refresh()}
+
+          {:error, changeset} ->
+            {:noreply,
+             socket
+             |> put_flash(:error, "Nicht gebucht: #{TransactionEditor.error_message(changeset)}")
+             |> refresh()}
+        end
+    end
+  end
 
   defp ask(socket, account) do
     %{current_scope: current_scope, today: today} = socket.assigns
@@ -821,6 +958,7 @@ defmodule AbakusWeb.RegisterLive do
     |> assign(:account_groups, AccountGroups.load(socket.assigns.current_scope))
     |> assign(categories: nil, selection: [])
     |> load_transactions()
+    |> load_scheduled()
     |> assign_rows()
     |> update(:reconciling, &follow_cleared(&1, socket.assigns))
   end

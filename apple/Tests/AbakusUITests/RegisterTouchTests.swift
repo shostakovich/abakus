@@ -69,13 +69,14 @@ import Testing
         #expect(model.transactionIds.isEmpty)
     }
 
-    @Test func theViewMenuHoldsTheViewsThenGeplantAndAuswaehlenThenKontoBearbeitenEachWithASymbol() {
+    @Test func theViewMenuHoldsTheViewsThenGeplanteBuchungenAndAuswaehlenThenKontoBearbeitenEachWithASymbol() {
         let (model, _) = touch(RegisterFixture())
         let menu = model.touchViewMenu(showsColumns: false)
         #expect(
             menu.map(\.title) == [
-                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "", "Geplant", "Auswählen", "",
-                "Konto bearbeiten",
+                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "", "Geplante Buchungen",
+                "Auswählen",
+                "", "Konto bearbeiten",
             ])
         #expect(menu.filter { $0.kind != .separator }.allSatisfy { $0.systemImage != nil })
         #expect(menu.filter(\.isChecked).map(\.title) == ["Alle Buchungen"])

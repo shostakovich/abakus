@@ -60,21 +60,23 @@ was deleted brings that counterpart back: it writes the counterpart's fields ane
 
 A scheduled transaction is entered on its `next_date` as an unapproved transaction with the id above, which
 records `scheduled_transaction_id` and `scheduled_date`. A writer that finds that id taken does not enter the
-occurrence again. Then `next_date` moves on by the frequency, and one with frequency `once` is deleted. Writers
-must step alike, or their entered ids part:
+occurrence again. Then `next_date` moves on by `repeat_every` (1 to 99) of `repeat_unit`, and one without a
+`repeat_unit` happens once and is deleted. Writers must step alike, or their entered ids part:
 
-- `daily`, `weekly`, `every_other_week`, `every_4_weeks`: 1, 7, 14 or 28 days on.
-- `monthly`, `every_other_month`, `every_3_months`, `every_4_months`, `twice_a_year`: 1, 2, 3, 4 or 6 months
-  on, the same day of the month or the month's last day if it is shorter (January 31 → February 28 → March 28).
-- `yearly`, `every_other_year`: 1 or 2 years on, February 29 becoming February 28.
-- `twice_a_month`: on `first_day` and `second_day` (1 ≤ first < second ≤ 31), a day the month lacks being its
-  last day: the next of the two after the date in its month, else the earlier of the two in the next month.
+- `week`: 7 × `repeat_every` days on.
+- `month`: `repeat_every` months on, the same day of the month or the month's last day if it is shorter (January 31
+  → February 28 → March 28). Monthly is 1 month and yearly 12, which takes February 29 to February 28.
 
-A writer that changes one of `frequency`, `first_day` and `second_day` writes all three, with one clock, and the
-other frequencies have neither day. As messages merge field by field, a writer still takes the two days in either
-order, and steps a `twice_a_month` schedule without two different days from 1 to 31 as `monthly`. Likewise a target
-version whose `cadence` lacks what it needs (`monthly` an `amount`, `by_date` an `amount` and a `due_on`) is no
-target.
+No writer enters a due scheduled transaction of a closed account: it keeps its `next_date` until the account is
+reopened, and then its due occurrences are entered as above.
+
+Every writer labels them alike: „Einmalig“, „Wöchentlich“ (1 week), „Alle n Wochen“, „Monatlich“ (1 month),
+„Jährlich“ (12 months) and „Alle n Monate“.
+
+A writer that changes one of `repeat_unit` and `repeat_every` writes both, with one clock, and one that happens once
+has neither. As messages merge field by field, a writer still steps a `repeat_unit` without a `repeat_every` by 1.
+Likewise a target version whose `cadence` lacks what it needs (`monthly` an `amount`, `by_date` an `amount` and a
+`due_on`) is no target.
 
 ## Messages
 

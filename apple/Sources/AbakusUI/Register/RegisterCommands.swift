@@ -41,20 +41,20 @@ public enum RegisterCommand: CaseIterable, Sendable {
 
 public struct RegisterCommands: Commands {
     let model: AppModel
-    /// iPhone and iPad add a transaction from every screen, as their "+" does.
-    let addsEverywhere: Bool
+    /// iPhone and iPad add a transaction from every screen, as their "+" does, and label without the Mac's „…“.
+    let isTouch: Bool
     let addingWaits: Bool
 
-    public init(model: AppModel, addsEverywhere: Bool = false, addingWaits: Bool = false) {
+    public init(model: AppModel, isTouch: Bool = false, addingWaits: Bool = false) {
         self.model = model
-        self.addsEverywhere = addsEverywhere
+        self.isTouch = isTouch
         self.addingWaits = addingWaits
     }
 
     public var body: some Commands {
         CommandMenu("Buchungen") {
             let isShown = model.showsRegister
-            command(.addTransaction, isShown: (isShown || addsEverywhere) && !addingWaits)
+            command(.addTransaction, isShown: (isShown || isTouch) && !addingWaits)
             Divider()
             command(.search, isShown: isShown)
         }
@@ -62,7 +62,7 @@ public struct RegisterCommands: Commands {
 
     private func command(_ command: RegisterCommand, isShown: Bool) -> some View {
         let register = model.register
-        return Button(command.title) { command.perform(in: register) }
+        return Button(isTouch ? command.title.touchLabel : command.title) { command.perform(in: register) }
             .keyboardShortcut(command.shortcut)
             .disabled(!isShown || !command.isEnabled(in: register))
     }

@@ -3,19 +3,22 @@ import AbakusUI
 import AppKit
 import Foundation
 
-/// Opens the reconciliation, scheduler and account states through the view models before rendering.
 @MainActor
 struct UIHarness {
     enum State: String, CaseIterable {
         case recStatementDialog = "rec-statement-dialog"
         case recFooter = "rec-footer"
         case schedPane = "sched-pane"
+        case schedEmpty = "sched-empty"
         case schedEdit = "sched-edit"
+        case schedCustom = "sched-custom"
         case accountAdd = "account-add"
         case accountEdit = "account-edit"
-        case accountAdjusted = "account-adjusted"
-        case accountBalance = "account-balance"
-        case accountBalanceCheck = "account-balance-check"
+        case accountClose = "account-close"
+        case closedAccounts = "closed-accounts"
+        case closedAccount = "closed-account"
+        case kasse
+        case signIn = "sign-in"
         case payeeSettings = "payee-settings"
         case payeeSettingsMulti = "payee-settings-multi"
         case payeeSettingsEmpty = "payee-settings-empty"
@@ -48,16 +51,21 @@ struct UIHarness {
             try selectAccount("Girokonto")
             try addSchedules()
             register.scheduledToggleClicked()
-        case .schedEdit:
+        case .schedEmpty:
+            try selectAccount("Tagesgeld")
+            register.performMenuAction(.toggleScheduler)
+        case .schedEdit, .schedCustom:
             try selectAccount("Girokonto")
             try addSchedules()
-            register.scheduledToggleClicked()
             edit.settle()
-            let id = try require(register.scheduler.scheduledTransactions.first { $0.frequency == .monthly }).id
-            register.scheduler.beginEditing(id, column: .memo)
-            edit.settle()
-            let editor = try require(register.scheduler.editor)
-            editor.frequencyClicked()
+            let repeats: Repeat = state == .schedEdit ? .monthly : .every(1, .week)
+            let id = try require(register.scheduler.scheduledTransactions.first { $0.repeats == repeats }).id
+            register.scheduler.beginEditing(id)
+            if state == .schedCustom {
+                edit.settle()
+                let editor = try require(register.scheduler.editor)
+                editor.repeatCountChosen(2)
+            }
         case .accountAdd:
             model.accounts.addAccountClicked()
             let form = try require(model.accounts.addForm)
@@ -67,21 +75,23 @@ struct UIHarness {
         case .accountEdit:
             let account = try require(store.budget.account(named: "Tagesgeld"))
             model.accounts.editAccountRequested(account.id)
-        case .accountAdjusted:
+        case .accountClose:
             try selectAccount("Tagesgeld")
-            model.accounts.editAccountRequested(try require(store.budget.account(named: "Girokonto")).id)
-            model.accounts.adjustBalanceClicked()
-            try require(model.accounts.balanceForm).amountText = "2.500,00"
-            model.accounts.adjustClicked()
-        case .accountBalance, .accountBalanceCheck:
-            try selectAccount("Girokonto")
-            model.accounts.editAccountRequested(try require(store.budget.account(named: "Girokonto")).id)
-            model.accounts.adjustBalanceClicked()
-            if state == .accountBalanceCheck {
-                try require(model.accounts.balanceForm).amountText = "-25,00"
-                edit.settle()
-                model.accounts.adjustClicked()
-            }
+            model.accounts.editAccountRequested(try require(store.budget.account(named: "Tagesgeld")).id)
+            edit.settle()
+            model.accounts.closeAccountClicked()
+        case .closedAccounts:
+            model.sidebar.select(.allAccounts)
+            edit.settle()
+            register.performMenuAction(.closedAccounts)
+        case .closedAccount:
+            model.sidebar.select(.allAccounts)
+            edit.settle()
+            register.closedAccountChosen(try require(store.budget.account(named: "Altes Sparbuch")).id)
+        case .kasse:
+            try selectAccount("Spliit")
+        case .signIn:
+            break
         case .payeeSettings:
             try selectAccount("Girokonto")
             let rewe = try require(store.budget.payee(named: "REWE")).id
@@ -123,26 +133,26 @@ struct UIHarness {
         let giro = try require(budget.account(named: "Girokonto")).id
         let groceries = try require(budget.category(fullName: "🛒 Alltag: 🛒 Lebensmittel")).id
         let today = DateWithoutTime.today()
-        let schedules: [(Transaction, ScheduledTransactionFrequency, String?)] = [
+        let schedules: [(Transaction, Repeat, String?)] = [
             (
                 Transaction(
                     accountId: giro, date: today.addingDays(3), categoryId: groceries, memo: "Gemüsekiste",
                     amount: -24.90),
-                .weekly, "Gemüsekiste Hof Sonnenwiese"
+                .every(1, .week), "Gemüsekiste Hof Sonnenwiese"
             ),
             (
                 Transaction(accountId: giro, date: today.addingDays(9), memo: "Sparrate", amount: -200),
-                .twiceAMonth, nil
+                .every(2, .week), nil
             ),
         ]
-        for (transaction, frequency, payee) in schedules {
+        for (transaction, repeats, payee) in schedules {
             var scheduled = transaction
             if payee == nil, let target = budget.account(named: "Tagesgeld") {
                 scheduled.transfer(to: target.id)
             }
             try store.perform(
                 .saveScheduledTransaction(
-                    ScheduledSave(transaction: scheduled, frequency: frequency, payeeName: payee, isNew: true)))
+                    ScheduledSave(transaction: scheduled, repeats: repeats, payeeName: payee, isNew: true)))
         }
     }
 

@@ -21,7 +21,6 @@ extension TransactionEditor {
         case .memo:
             clone.memo = text(field).isEmpty ? nil : text(field)
         case .amount: commitAmount(field)
-        case .frequency: break
         }
         return nil
     }

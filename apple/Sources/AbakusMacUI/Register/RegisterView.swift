@@ -25,13 +25,8 @@ public struct RegisterView: View {
                 IncomeCheckLayer(model: model, check: check, anchor: anchor)
             }
         }
-        .overlayPreferenceValue(AdjustmentHelpAnchorKey.self) { anchor in
-            if let help = model.adjustmentHelp, let anchor {
-                AdjustmentHelpLayer(model: model, help: help, anchor: anchor)
-            }
-        }
         .overlayPreferenceValue(EditorAnchorKey.self) { anchors in
-            if let editor = model.editor ?? model.scheduler.editor {
+            if let editor = model.editor {
                 EditorPopupsLayer(editor: editor, anchors: anchors)
             }
         }
@@ -43,7 +38,7 @@ public struct RegisterView: View {
     }
 }
 
-/// The scheduled section only exists while it is shown.
+/// The scheduled section only exists while it is shown or something is planned.
 private struct RegisterSplit: View {
     let model: RegisterViewModel
     let size: CGSize
@@ -60,6 +55,10 @@ private struct RegisterSplit: View {
                     model.scheduler.setHeight($0)
                 }
                 SchedulerSection(model: model, size: CGSize(width: size.width, height: schedulerHeight))
+            } else if model.scheduledSummary != nil {
+                Divider()
+                SchedulerTitleBar(model: model)
+                    .frame(height: SchedulerMetrics.titleHeight)
             }
         }
         .frame(width: size.width, height: size.height)
@@ -84,6 +83,11 @@ struct RegisterPanelContent: View {
     var body: some View {
         VStack(spacing: 0) {
             // Shown at once: animating its height while the search field edits sends the grid into a layout loop.
+            if let banner = model.banner {
+                RegisterInfoBar(
+                    message: banner.message, buttonTitle: banner == .closed ? RegisterBanner.reopenTitle : nil,
+                    action: model.reopenClicked)
+            }
             ForEach(Self.infoBars(of: model), id: \.self) { bar in
                 switch bar {
                 case .approvals(let line):

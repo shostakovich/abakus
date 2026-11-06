@@ -23,6 +23,14 @@ public struct MainWindowContent: View {
     }
 
     public var body: some View {
+        if model.showsSignIn, let syncSettings = model.syncSettings {
+            SignInView(model: syncSettings)
+        } else {
+            budgetWindow
+        }
+    }
+
+    private var budgetWindow: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(
                 model: model.sidebar, onAddAccount: model.accounts.addAccountClicked,
@@ -82,7 +90,8 @@ struct AppSheetView: View {
         case .payeeSettings(let payees): PayeeSettingsSheet(model: payees)
         case .statement(let form): StatementSheet(model: model.register, form: form)
         case .addAccount(let form): AddAccountSheet(controller: model.accounts, form: form)
-        case .adjustBalance(let form): AdjustBalanceSheet(controller: model.accounts, form: form)
+        case .closedAccounts: ClosedAccountsSheet(register: model.register)
+        case .scheduled(let editor): ScheduledTransactionSheet(scheduler: model.register.scheduler, editor: editor)
         }
     }
 }

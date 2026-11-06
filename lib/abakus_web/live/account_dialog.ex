@@ -1,8 +1,11 @@
 defmodule AbakusWeb.AccountDialog do
   @moduledoc """
-  The account form as in YNAB, a modal over the current page (on phones a sheet from the bottom): name and kind.
-  Closing or reopening sits bottom left; accounts are never deleted. The kind stays on its side of the budget,
-  so editing offers only that side's kinds, and none to pick for a tracking account.
+  The account form as in YNAB, a modal over the current page (on phones a sheet from the bottom). Adding asks for
+  name, kind and the current balance, which is booked today as "Anfangssaldo" (`Abakus.Ledger.create_account/3`);
+  it may add and subtract as the register's amounts do. Editing takes name and kind, with "Konto schließen …" bottom
+  left; accounts are never deleted, and a closed one is opened again in its register, or here with `reopenable` for
+  one no register shows. The kind stays on its side of the budget, so editing offers only that side's kinds, and
+  none to pick for a tracking account.
 
   Every signed-in page of the budget owner has it through `on_mount(:attach, …)`: the event `open_account_dialog`
   opens it, with `id` to edit that account, without to add one; `close_account_dialog` closes it. `Layouts.app`
@@ -12,9 +15,8 @@ defmodule AbakusWeb.AccountDialog do
   """
   use AbakusWeb, :live_component
 
-  alias Abakus.Ledger
+  alias Abakus.{Amount, Ledger, LocalTime, Money}
   alias Abakus.Ledger.Account
-  alias Abakus.Money
   alias AbakusWeb.AccountGroups
 
   @editable ~w(name kind)
@@ -97,7 +99,7 @@ defmodule AbakusWeb.AccountDialog do
           phx-submit="save"
           phx-target={@myself}
         >
-          <.alert :if={@account.closed} id="account-closed" tone={:neutral}>
+          <.alert :if={@reopenable && @account.closed} id="account-closed" tone={:neutral}>
             Dieses Konto ist geschlossen.
           </.alert>
           <.input
@@ -107,40 +109,56 @@ defmodule AbakusWeb.AccountDialog do
             autocomplete="off"
             required
           />
+          <div :if={is_nil(@account.id)} class="grid gap-x-4 sm:grid-cols-2">
+            <.input
+              field={@form[:kind]}
+              type="select"
+              label="Art"
+              options={@kinds}
+              required
+            />
+            <.input
+              field={@form[:balance]}
+              label="Aktueller Saldo"
+              placeholder="0,00"
+              suffix="€"
+              numeric
+              autocomplete="off"
+            />
+          </div>
+          <p :if={is_nil(@account.id)} id="account-kind-hint" class="text-sm text-base-content/70">
+            Tracking-Konten zählen nicht zum Budget. Das lässt sich später nicht ändern.
+          </p>
           <.input
-            :if={length(@kinds) > 1}
+            :if={@account.id && length(@kinds) > 1}
             field={@form[:kind]}
             type="select"
             label="Art"
             options={@kinds}
-            help={
-              if is_nil(@account.id),
-                do:
-                  "Tracking-Konten wie ein Depot zählen nicht zum Budget. Das lässt sich später nicht ändern."
-            }
             required
           />
           <.action_bar>
-            <:secondary :if={@account.id}>
+            <:secondary :if={@account.id && (!@account.closed || @reopenable)}>
+              <.button
+                :if={@reopenable && @account.closed}
+                id="reopen-account"
+                phx-click="reopen"
+                phx-target={@myself}
+              >
+                Wieder öffnen
+              </.button>
               <.button
                 :if={!@account.closed}
                 id="close-account"
-                variant={:danger_outline}
+                variant={:ghost}
+                class="text-error-ink"
                 phx-click="close"
                 phx-target={@myself}
                 confirm={"Konto „#{@account.name}“ schließen?"}
                 confirm_text={close_text(@balance)}
                 confirm_label="Schließen"
               >
-                Konto schließen
-              </.button>
-              <.button
-                :if={@account.closed}
-                id="reopen-account"
-                phx-click="reopen"
-                phx-target={@myself}
-              >
-                Wieder öffnen
+                Konto schließen …
               </.button>
             </:secondary>
             <.button id="account-cancel" phx-click="close_account_dialog">Abbrechen</.button>
@@ -148,9 +166,9 @@ defmodule AbakusWeb.AccountDialog do
               id="account-save"
               type="submit"
               variant={:primary}
-              phx-disable-with="Speichern …"
+              phx-disable-with={if @account.id, do: "Speichern …", else: "Hinzufügen …"}
             >
-              Speichern
+              {if @account.id, do: "Speichern", else: "Hinzufügen"}
             </.button>
           </.action_bar>
         </.form>
@@ -162,7 +180,7 @@ defmodule AbakusWeb.AccountDialog do
   @impl true
   def update(assigns, socket) do
     key = assigns.account.id
-    socket = assign(socket, assigns)
+    socket = socket |> assign(:reopenable, false) |> assign(assigns)
 
     if Map.get(socket.assigns, :loaded) == {key},
       do: {:ok, socket},
@@ -173,32 +191,28 @@ defmodule AbakusWeb.AccountDialog do
 
   @impl true
   def handle_event("validate", %{"account" => params}, socket) do
-    changeset = Ledger.change_account(socket.assigns.account, editable(params))
+    changeset =
+      socket.assigns.account
+      |> Ledger.change_account(form_params(params))
+      |> validate_balance()
+
     {:noreply, assign(socket, :form, to_form(changeset, action: :validate))}
   end
 
   def handle_event("save", %{"account" => params}, socket) do
-    case save(socket.assigns.current_scope, socket.assigns.account, editable(params)) do
-      {:ok, account} -> {:noreply, saved(socket, account)}
-      {:error, changeset} -> {:noreply, assign(socket, :form, to_form(changeset))}
+    case save(socket.assigns.current_scope, socket.assigns.account, params) do
+      {:ok, account} ->
+        {:noreply, saved(socket, account)}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(keep_typed(changeset, params)))}
     end
   end
 
   def handle_event("close", _params, socket), do: set_closed(socket, true, "Konto geschlossen.")
 
-  def handle_event("reopen", _params, socket),
+  def handle_event("reopen", _params, %{assigns: %{reopenable: true}} = socket),
     do: set_closed(socket, false, "Konto wieder geöffnet.")
-
-  defp save(current_scope, %Account{id: nil}, params),
-    do: Ledger.create_account(current_scope, params)
-
-  defp save(current_scope, account, params),
-    do: Ledger.update_account(current_scope, account, params)
-
-  defp saved(%{assigns: %{account: %Account{id: nil}}} = socket, account),
-    do: done(socket, "Konto angelegt.", {:created, account})
-
-  defp saved(socket, _account), do: done(socket, "Konto gespeichert.", :changed)
 
   defp set_closed(socket, closed, message) do
     %{current_scope: current_scope, account: account} = socket.assigns
@@ -206,12 +220,61 @@ defmodule AbakusWeb.AccountDialog do
     {:noreply, done(socket, message, :changed)}
   end
 
+  defp save(current_scope, %Account{id: nil} = account, params) do
+    case balance(params) do
+      {:ok, balance} ->
+        Ledger.create_account(current_scope, editable(params),
+          balance: balance,
+          date: LocalTime.today()
+        )
+
+      {:error, _message} ->
+        {:error,
+         account |> Ledger.change_account(form_params(params)) |> validate_balance() |> failed()}
+    end
+  end
+
+  defp save(current_scope, account, params),
+    do: Ledger.update_account(current_scope, account, editable(params))
+
+  defp failed(changeset), do: %{changeset | action: :insert}
+
+  defp keep_typed(changeset, params),
+    do: %{changeset | params: Map.merge(changeset.params || %{}, form_params(params))}
+
+  defp form_params(params), do: Map.take(params, ["balance" | @editable])
+
+  defp validate_balance(changeset) do
+    case balance(changeset.params) do
+      {:ok, _balance} -> changeset
+      {:error, message} -> Ecto.Changeset.add_error(changeset, :balance, message)
+    end
+  end
+
+  defp balance(params) do
+    with {:ok, cents} <- parse_balance(params["balance"]) do
+      if Amount.valid?(cents), do: {:ok, cents}, else: {:error, Amount.out_of_range_message()}
+    end
+  end
+
+  defp parse_balance(text) do
+    case String.trim(text || "") do
+      "" -> {:ok, 0}
+      text -> Money.parse_expression(text, 2)
+    end
+  end
+
+  defp saved(%{assigns: %{account: %Account{id: nil}}} = socket, account),
+    do: done(socket, "Konto angelegt.", {:created, account})
+
+  defp saved(socket, _account), do: done(socket, "Konto gespeichert.", :changed)
+
   defp done(socket, message, result) do
     send(self(), {__MODULE__, :done, message, result})
     socket
   end
 
-  # Closing has its own buttons; position and the shared-expenses mark are not the user's to set here.
+  # Closing has its own button; position and the shared-expenses mark are not the user's to set here.
   defp editable(params), do: Map.take(params, @editable)
 
   defp kind_options(%Account{id: nil}), do: options(AccountGroups.kinds())

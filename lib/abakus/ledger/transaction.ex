@@ -124,7 +124,7 @@ defmodule Abakus.Ledger.Transaction do
     if Ecto.get_meta(transaction, :state) == :built, do: @create_fields, else: []
   end
 
-  @doc "The subtransactions the transaction has after the changeset, as changesets."
+  @doc "The subtransactions the transaction (or scheduled transaction) has after the changeset, as changesets."
   def subtransactions(changeset) do
     changeset
     |> get_assoc(:subtransactions)
@@ -229,8 +229,19 @@ defmodule Abakus.Ledger.Transaction do
         transfer_accounts,
         counterpart_categories \\ %{}
       ) do
-    rules = &validate_side(&1, account, transfer_accounts, counterpart_categories)
+    validate_sides(
+      changeset,
+      transfer_accounts,
+      &validate_side(&1, account, transfer_accounts, counterpart_categories)
+    )
+  end
 
+  @doc """
+  Applies `rules` to the changeset, or for a split to each subtransaction, the split being no transfer as a whole;
+  when the subtransactions are unchanged, their errors go to the split's `subtransactions`. Also a scheduled
+  transaction's.
+  """
+  def validate_sides(changeset, transfer_accounts, rules) do
     case subtransactions(changeset) do
       [] ->
         rules.(changeset)

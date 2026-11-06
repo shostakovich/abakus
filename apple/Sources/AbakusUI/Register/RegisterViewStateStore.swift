@@ -18,7 +18,7 @@ struct SavedRegisterViewState: Codable, Equatable {
     var sortAscending: Bool
     /// Missing before newest first became the default, when every account saved date ascending.
     var sortVersion: Int?
-    var isSchedulerVisible: Bool
+    var schedulerShown: Bool?
     var schedulerHeight: Double?
     var schedulerSort: Sort?
     var schedulerColumns: [String: Column]?
@@ -29,7 +29,7 @@ struct SavedRegisterViewState: Codable, Equatable {
         sortColumn = sort.column.rawValue
         sortAscending = sort.ascending
         sortVersion = Self.currentSortVersion
-        isSchedulerVisible = reconciliation?.savedSchedulerVisible ?? state.isSchedulerVisible
+        schedulerShown = reconciliation.map(\.savedSchedulerShown) ?? state.schedulerShown
         schedulerHeight = state.schedulerHeight.map { Double($0) }
         schedulerSort = Sort(column: state.schedulerSort.column.rawValue, ascending: state.schedulerSort.ascending)
         schedulerColumns = Self.columns(state.schedulerColumnSettings)
@@ -68,7 +68,7 @@ extension RegisterAccountViewState {
     init(saved: SavedRegisterViewState) {
         self.init()
         sort = saved.restoredSort ?? sort
-        isSchedulerVisible = saved.isSchedulerVisible
+        schedulerShown = saved.schedulerShown
         schedulerHeight = saved.schedulerHeight.map { CGFloat($0) }
         if let saved = saved.schedulerSort {
             schedulerSort = SavedRegisterViewState.sortOrder(saved.column, ascending: saved.ascending) ?? schedulerSort

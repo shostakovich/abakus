@@ -6,30 +6,30 @@ import Testing
 
 @MainActor
 @Suite struct SchedulerTests {
-    private func fixture(frequency: ScheduledTransactionFrequency = .monthly, on date: String = "2014-06-02")
+    private func fixture(repeats: Repeat = .monthly, on date: String = "2014-06-02")
         -> RegisterFixture
     {
         var fixture = RegisterFixture()
         fixture.addSchedule(
-            "S1", on: date, payee: "Farm", category: fixture.groceries, memo: "Box", frequency: frequency)
+            "S1", on: date, payee: "Farm", category: fixture.groceries, memo: "Box", repeats: repeats)
         return fixture
     }
 
     @Test func columnsFollowTheScheduleGrid() {
         let fixture = fixture()
         let giro = fixture.spied().model
-        #expect(giro.scheduler.visibleColumns == [.date, .frequency, .payee, .category, .memo, .amount])
+        #expect(giro.scheduler.visibleColumns == [.date, .repeats, .payee, .category, .memo, .amount])
         let allAccounts = fixture.spied(selection: .allAccounts).model
         #expect(allAccounts.scheduler.visibleColumns.first == .account)
         let depot = fixture.spied(selection: .account(fixture.depot)).model
         #expect(!depot.scheduler.visibleColumns.contains(.category))
     }
 
-    @Test func rowsShowTheNextDateAndTheFrequency() throws {
+    @Test func rowsShowTheNextDateAndTheRepeat() throws {
         let (model, _) = fixture().spied()
         let row = try #require(model.scheduler.rows.first)
         #expect(row.date == "02/06/14")
-        #expect(row.frequency == "Monatlich")
+        #expect(row.repeatLabel == "Monatlich")
         #expect(row.payee == "Farm")
         #expect(row.category == "Groceries")
         #expect(row.amountText == "−25.00")
@@ -45,11 +45,55 @@ import Testing
         #expect(rows.map(\.category) == ["", "Groceries", "Groceries"])
     }
 
-    @Test func toggleShowsThePaneAtItsMinimumHeight() {
+    @Test func somethingPlannedShowsCollapsedWithItsCount() {
+        var fixture = fixture()
+        fixture.addSchedule("S2", account: fixture.tagesgeld)
+        let (planned, _) = fixture.spied()
+        #expect(planned.scheduledSummary == "Geplant · 1")
+        #expect(!planned.scheduler.isVisible)
+        planned.scheduledToggleClicked()
+        #expect(planned.scheduler.isVisible)
+        #expect(planned.scheduledSummary == "Geplant · 1")
+        #expect(fixture.spied(selection: .allAccounts).model.scheduledSummary == "Geplant · 2")
+    }
+
+    @Test func ansichtOffersTheListOnlyWhileNothingIsPlanned() {
+        let (planned, _) = fixture().spied()
+        #expect(!planned.viewMenu.contains { $0.kind == .action(.toggleScheduler) })
+        #expect(!planned.touchViewMenu(showsColumns: false).contains { $0.kind == .action(.toggleScheduler) })
+        let (empty, _) = RegisterFixture().spied()
+        #expect(empty.scheduledSummary == nil)
+        #expect(!empty.scheduler.isVisible)
+        #expect(empty.viewMenu.contains { $0.kind == .action(.toggleScheduler) && !$0.isChecked })
+        let touchItem = empty.touchViewMenu(showsColumns: false).first { $0.kind == .action(.toggleScheduler) }
+        #expect(touchItem?.title == "Geplante Buchungen")
+        empty.performMenuAction(.toggleScheduler)
+        #expect(empty.scheduler.isVisible)
+        #expect(empty.viewMenu.contains { $0.kind == .action(.toggleScheduler) && $0.isChecked })
+        #expect(empty.scheduler.rows.isEmpty)
+        #expect(empty.scheduler.canAddTransactions)
+    }
+
+    @Test func aReconciliationHidesTheCount() {
         let (model, _) = fixture().spied()
-        #expect(!model.scheduler.isVisible)
+        model.reconciliation.reconcileClicked()
+        let form = model.reconciliation.statementForm
+        form?.amountText = "0"
+        if let form { model.reconciliation.begin(form) }
+        #expect(model.isReconciling)
+        #expect(model.scheduledSummary == nil)
+    }
+
+    @Test func touchScreensOpenTheListByHand() {
+        let (model, _) = fixture().spied()
+        model.isTouch = true
+        #expect(!model.isSchedulerVisible)
         model.scheduledToggleClicked()
-        #expect(model.scheduler.isVisible)
+        #expect(model.isSchedulerVisible)
+    }
+
+    @Test func thePaneKeepsItsMinimumHeight() {
+        let (model, _) = fixture().spied()
         #expect(model.scheduler.savedHeight == 185)
         model.scheduler.setHeight(120)
         #expect(model.scheduler.savedHeight == 185)
@@ -64,13 +108,11 @@ import Testing
         model.scheduler.grid.beginNew()
         let editor = try #require(model.scheduler.editor)
         #expect(editor.isScheduled)
-        #expect(editor.frequency == .monthly)
+        #expect(editor.repeats == .monthly)
         #expect(editor.text(.main(.date)) == "20/05/14")
+        editor.repeatChosen(.yearly)
         editor.press(.tab)
-        #expect(editor.focus == .field(.main(.frequency)))
-        editor.press(.down)
-        #expect(editor.frequency == .everyOtherMonth)
-        editor.press(.tab)
+        #expect(editor.focus == .field(.main(.payee)))
         editor.type("Gym")
         editor.press(.tab, .tab, .tab)
         editor.type("30")
@@ -80,7 +122,7 @@ import Testing
             return
         }
         #expect(save.isNew)
-        #expect(save.frequency == .everyOtherMonth)
+        #expect(save.repeats == .yearly)
         #expect(save.transaction.amount == -30)
         #expect(save.payeeName == "Gym")
         #expect(model.transactions.count == 1)
@@ -96,8 +138,7 @@ import Testing
         editor.retype("Ta")
         editor.press(.tab)
         editor.retype("25/05/14")
-        editor.press(.tab)
-        editor.press(.down)
+        editor.repeatChosen(.yearly)
         editor.press(.tab)
         editor.type("Gym")
         editor.press(.tab, .tab, .tab)
@@ -105,12 +146,12 @@ import Testing
         editor.activate(.saveAndAddAnother)
         #expect(store.commands.count == 1)
         guard case .saveScheduledTransaction(let save) = store.commands.first else { return }
-        #expect(save.frequency == .everyOtherMonth)
+        #expect(save.repeats == .yearly)
         #expect(save.transaction.accountId == fixture.tagesgeld)
         let next = try #require(model.scheduler.editor)
         #expect(next !== editor)
         #expect(next.mode == .new)
-        #expect(next.frequency == .monthly)
+        #expect(next.repeats == .monthly)
         #expect(next.clone.accountId == fixture.tagesgeld)
         #expect(next.text(.main(.date)) == "25/05/14")
         next.activate(.cancel)
@@ -129,15 +170,32 @@ import Testing
         #expect(editor.mainColumns().first == .account)
     }
 
-    @Test func frequencyListChoosesAFrequency() throws {
+    @Test func theRepeatChoicesMapToAUnitAndACount() throws {
         let (model, store) = fixture().spied()
         model.scheduler.beginEditing("S1")
         let editor = try #require(model.scheduler.editor)
-        editor.frequencyClicked()
-        #expect(editor.isFrequencyListOpen)
-        #expect(editor.focus == .field(.main(.frequency)))
-        editor.frequencyChosen(.twiceAMonth)
-        #expect(!editor.isFrequencyListOpen)
+        #expect(editor.repeatChoice == .monthly)
+        #expect(!editor.showsCustomRepeat)
+        editor.repeatChosen(.yearly)
+        #expect(editor.repeats == .every(12, .month))
+        editor.repeatChosen(.once)
+        #expect(editor.repeats == .once)
+        #expect(editor.followingDatesText == nil)
+        editor.repeatChosen(.monthly)
+        #expect(editor.repeats == .every(1, .month))
+        editor.repeatChosen(.custom)
+        #expect(editor.repeats == .every(2, .week))
+        #expect(editor.showsCustomRepeat)
+        #expect(editor.customRepeatText == "2 Wochen")
+        editor.repeatCountChosen(3)
+        editor.repeatUnitChosen(.month)
+        #expect(editor.repeats == .every(3, .month))
+        editor.repeatChosen(.custom)
+        #expect(editor.repeats == .every(3, .month))
+        editor.repeatCountChosen(100)
+        #expect(editor.repeats == .every(3, .month))
+        editor.repeatCountChosen(12)
+        #expect(editor.repeatChoice == .custom)
         #expect(editor.hasChanges)
         editor.activate(.done)
         guard case .saveScheduledTransaction(let save) = try #require(store.commands.last) else {
@@ -146,7 +204,20 @@ import Testing
         }
         #expect(!save.isNew)
         #expect(save.transaction.id == "S1")
-        #expect(save.frequency == .twiceAMonth)
+        #expect(save.repeats == .every(12, .month))
+    }
+
+    @Test func eigeneStartsAtEveryTwoWeeksAndListsTheNextThreeDates() throws {
+        let (model, _) = fixture(on: "2014-06-02").spied()
+        model.scheduler.beginEditing("S1")
+        let editor = try #require(model.scheduler.editor)
+        #expect(editor.followingDatesText == "Danach: 02/07/2014 · 02/08/2014 · 02/09/2014")
+        editor.repeatChosen(.custom)
+        #expect(editor.followingDatesText == "Danach: 16/06/2014 · 30/06/2014 · 14/07/2014")
+        #expect(editor.customCount == 2 && editor.customUnit == .week)
+        editor.repeatCountChosen(1)
+        #expect(editor.customRepeatText == "1 Woche")
+        #expect(TransactionEditor.unitLabel(editor.customUnit, count: editor.customCount) == "Woche")
     }
 
     @Test func aDateBeforeTodayIsRejected() throws {
@@ -177,18 +248,8 @@ import Testing
         #expect(store.commands.isEmpty)
     }
 
-    @Test func secondClickEditsTheSchedule() throws {
-        let (model, _) = fixture().spied()
-        let row = try #require(model.scheduler.rows.first)
-        model.scheduler.grid.rowClicked(row.transactionId, column: .memo, modifiers: [])
-        #expect(model.scheduler.selectedIds == ["S1"])
-        model.scheduler.grid.rowClicked(row.transactionId, column: .memo, modifiers: [])
-        #expect(model.scheduler.grid.editingId == "S1")
-        #expect(model.scheduler.editor?.focus == .field(.main(.memo)))
-    }
-
     @Test func enterNowAddsAnApprovedTransactionAndSelectsIt() throws {
-        let fixture = fixture(frequency: .once)
+        let fixture = fixture(repeats: .once)
         let (model, store) = fixture.spied(appliesCommands: true)
         let row = try #require(model.scheduler.rows.first)
         model.scheduler.grid.rowClicked(row.transactionId, column: .payee, modifiers: [])
@@ -210,7 +271,24 @@ import Testing
         model.scheduler.grid.rowClicked(row.transactionId, column: .payee, modifiers: [])
         model.scheduler.skipClicked()
         model.scheduler.deleteClicked()
+        model.dialogs.presented.last?.answer(DeleteChoice.delete)
         #expect(store.commands == [.skipScheduledTransactions(["S1"]), .deleteScheduledTransactions(["S1"])])
+    }
+
+    @Test func deletingFromTheMenuAsksOnce() throws {
+        var fixture = fixture()
+        fixture.addSchedule("S2", on: "2014-06-05")
+        let (model, store) = fixture.spied()
+        model.scheduler.performMenuAction(.deleteScheduled, on: ["S1"])
+        let question = try #require(model.dialogs.presented.last)
+        #expect(question.dialog.instruction == "Geplante Buchung löschen?")
+        question.answer(DeleteChoice.cancel)
+        #expect(store.commands.isEmpty)
+        model.scheduler.performMenuAction(.deleteScheduled, on: ["S1", "S2"])
+        #expect(model.dialogs.presented.last?.dialog.instruction == "2 geplante Buchungen löschen?")
+        model.dialogs.presented.last?.answer(DeleteChoice.delete)
+        #expect(store.commands == [.deleteScheduledTransactions(["S1", "S2"])])
+        #expect(!model.dialogs.isPresenting)
     }
 
     @Test func moveIntoTheTransferTargetIsRefused() throws {
@@ -240,13 +318,26 @@ import Testing
         #expect(model.scheduler.selectedIds == ["S1"])
         #expect(
             items.map(\.title) == [
-                "1 ausgewählte geplante Buchung", "", "Jetzt buchen", "Diesmal überspringen", "", "Löschen", "",
+                "1 ausgewählte geplante Buchung", "", "Jetzt buchen", "Überspringen", "", "Löschen …", "",
                 "In Konto verschieben",
             ])
         #expect(items[0].kind == .title && !items[0].isEnabled)
         #expect(items.filter { $0.kind == .separator }.count == 3)
         #expect(items.dropFirst().allSatisfy { $0.isEnabled })
         #expect(items.last?.submenu?.map(\.title) == ["Depot", "Karte", "Tagesgeld"])
+    }
+
+    @Test func jetztBuchenIsOffMenuAndSwipeInAnAccountThatTakesNoEntries() throws {
+        var fixture = fixture()
+        let index = try #require(fixture.budget.accounts.firstIndex { $0.id == fixture.giro })
+        fixture.budget.accounts[index].sharedExpenses = true
+        let (model, _) = fixture.spied()
+        let row = try #require(model.scheduler.rows.first)
+        let items = try #require(model.scheduler.contextMenu(for: row))
+        #expect(items.item(titled: "Jetzt buchen")?.isEnabled == false)
+        #expect(model.scheduler.actionsMenu(for: ["S1"]).item(titled: "Jetzt buchen")?.isEnabled == false)
+        #expect(!model.scheduler.canEnter(["S1"]))
+        #expect(items.item(titled: RegisterScheduler.skipTitle)?.isEnabled == true)
     }
 
     @Test func moveToAccountIsDisabledWithoutATarget() throws {
@@ -283,6 +374,7 @@ import Testing
         }
         #expect(offers(items))
         model.performMenuAction(action)
+        model.dialogs.presented.last?.answer(DeleteChoice.delete)
         let expected: BudgetCommand =
             switch action {
             case .enterScheduledNow:
@@ -305,82 +397,54 @@ import Testing
         #expect(model.selectedTransactionIds == [row.transactionId])
     }
 
-    @Test func makeRecurringSelectsTheNewScheduleWithoutOpeningThePane() throws {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -9.99, payee: "Spotify")
-        let (model, _) = fixture.spied(appliesCommands: true)
-        model.updateSelection { $0.select(id) }
-        model.performMenuAction(.makeRecurring)
-        let scheduleId = try #require(model.lastScheduledTransactionId)
-        #expect(!model.isSchedulerVisible)
-        #expect(model.scheduler.selectedIds == [scheduleId])
-        #expect(model.selectedTransactionIds.isEmpty)
-        #expect(model.scheduler.grid.scrollRequest?.target == .row(scheduleId))
-        #expect(model.popup == .scheduledCallout(.added))
-        #expect(model.popup?.anchor == .schedulerTitle)
-    }
-
-    @Test func moveToSchedulerSelectsTheSchedule() throws {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -20, on: "2014-07-01")
-        let (model, _) = fixture.spied(appliesCommands: true)
-        model.updateSelection { $0.select(id) }
-        model.performMenuAction(.moveToScheduler)
-        let scheduleId = try #require(model.lastScheduledTransactionId)
-        #expect(model.scheduler.rows.map(\.transactionId) == [scheduleId])
-        #expect(model.scheduler.selectedIds == [scheduleId])
-        #expect(model.selection.isEmpty)
-    }
-
-    @Test func makeRecurringWhileReconcilingLeavesThePaneClosed() throws {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -9.99, payee: "Spotify")
-        let (model, _) = fixture.spied(appliesCommands: true)
-        model.reconciliation.reconcileClicked()
-        let form = try #require(model.reconciliation.statementForm)
-        form.amountText = "1000"
-        model.reconciliation.begin(form)
-        model.updateSelection { $0.select(id) }
-        model.performMenuAction(.makeRecurring)
-        let scheduleId = try #require(model.lastScheduledTransactionId)
-        #expect(!model.isSchedulerVisible)
-        #expect(model.popup == nil)
-        model.reconciliation.stopReconcilingClicked()
-        #expect(!model.isSchedulerVisible)
-        #expect(model.scheduler.selectedIds == [scheduleId])
-    }
-
-    @Test func thePlusMenuSchedulesANewTransactionOrATransfer() throws {
+    @Test func plusStartsANewScheduledTransactionInASheet() throws {
         let (model, _) = RegisterFixture().spied()
         model.scheduler.addClicked()
         let editor = try #require(model.scheduler.editor)
         #expect(editor.mode == .new)
         #expect(editor.isScheduled)
-        #expect(editor.focus == .field(.main(.date)))
+        #expect(model.scheduler.grid.inlineEditor == nil)
+        #expect(model.scheduler.grid.addRowHeight == 0)
         editor.activate(.cancel)
         #expect(model.scheduler.editor == nil)
-        model.scheduler.transferClicked()
-        let transfer = try #require(model.scheduler.editor)
-        #expect(transfer.focus == .field(.main(.payee)))
-        #expect(transfer.text(.main(.payee)) == Payee.transferPrefix)
     }
 
-    @Test func theFrequencyColumnFitsTheLongestFrequency() throws {
+    @Test func aDoubleClickOpensTheSheetAndASingleClickOnlySelects() throws {
+        let (model, _) = fixture().spied()
+        model.scheduler.grid.rowClicked("S1", column: .payee, modifiers: [])
+        model.scheduler.grid.rowClicked("S1", column: .payee, modifiers: [])
+        #expect(model.scheduler.editor == nil)
+        #expect(model.scheduler.selectedIds == ["S1"])
+        model.scheduler.grid.rowDoubleClicked("S1")
+        #expect(model.scheduler.editor?.transactionId == "S1")
+        #expect(model.scheduler.grid.editingId == nil)
+    }
+
+    @Test func deletingFromTheSheetAsksOnce() throws {
+        let (model, store) = fixture().spied()
+        model.scheduler.beginEditing("S1")
+        model.scheduler.deleteEditedClicked()
+        let question = try #require(model.dialogs.presented.last)
+        #expect(question.dialog.instruction == "Geplante Buchung löschen?")
+        question.answer(DeleteChoice.delete)
+        #expect(store.commands.last == .deleteScheduledTransactions(["S1"]))
+        #expect(model.scheduler.editor == nil)
+    }
+
+    @Test func theRepeatColumnFitsTheLongestRepeat() throws {
         var fixture = fixture()
         let before = fixture.spied().model
-        let monthly = try #require(before.scheduler.columnLayout(gridWidth: 1000).frame(of: .frequency))
+        let monthly = try #require(before.scheduler.columnLayout(gridWidth: 1000).frame(of: .repeats))
         #expect(
             monthly.width
-                == RegisterColumn.frequency.contentWidth(
-                    fitting: ["Monatlich"], accessory: SchedulerMetrics.popUpAccessory))
-        fixture.addSchedule("S2", payee: "Gym", frequency: .everyOtherMonth)
+                == RegisterColumn.repeats.contentWidth(fitting: ["Monatlich"]))
+        fixture.addSchedule("S2", payee: "Gym", repeats: .every(2, .month))
         let after = fixture.spied().model
         let layout = after.scheduler.columnLayout(gridWidth: 1000)
-        let longest = try #require(layout.frame(of: .frequency))
+        let longest = try #require(layout.frame(of: .repeats))
         #expect(
             longest.width
-                == RegisterColumn.frequency.contentWidth(
-                    fitting: ["Alle 2 Monate"], accessory: SchedulerMetrics.popUpAccessory))
+                == RegisterColumn.repeats.contentWidth(fitting: ["Alle 2 Monate"]))
         #expect(longest.width > monthly.width)
         let columnsWidth = layout.displayWidth - RegisterMetrics.leadingInset
         #expect(abs(layout.frames.map(\.width).reduce(0, +) - columnsWidth) <= 1)
@@ -419,7 +483,7 @@ import Testing
     @Test func theTouchMenuOffersTheScheduledActionsWithoutATitle() {
         let (model, _) = fixture().spied()
         let titles = model.scheduler.actionsMenu(for: ["S1"]).filter { $0.kind != .separator }.map(\.title)
-        #expect(titles == ["Jetzt buchen", "Diesmal überspringen", "Löschen", "In Konto verschieben"])
+        #expect(titles == ["Jetzt buchen", "Überspringen", "Löschen", "In Konto verschieben"])
     }
 
     @Test func theTouchMenuIsBuiltForTheRowsItNames() throws {

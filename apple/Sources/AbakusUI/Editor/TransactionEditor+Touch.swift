@@ -163,8 +163,7 @@ extension TransactionEditor {
 
     public var sheetTitle: String {
         switch (isScheduled, mode) {
-        case (true, .new): RegisterScheduler.addTitle
-        case (true, .existing): "Geplante Buchung"
+        case (true, _): "Geplante Buchung"
         case (false, .new): RegisterViewModel.addTitle
         case (false, .existing): "Buchung"
         }
@@ -176,8 +175,8 @@ extension TransactionEditor {
         buttons.filter { ![sheetConfirmButton, .cancel].contains($0) }
     }
 
-    /// A stored transaction no other one leads can be deleted from its sheet.
-    public var sheetDeletes: Bool { mode == .existing && !isScheduled && leader == nil }
+    /// A stored transaction no other one leads, or a scheduled one, can be deleted from its sheet.
+    public var sheetDeletes: Bool { mode == .existing && leader == nil }
 
     /// Swiping the sheet away would lose the changes.
     public var keepsSheet: Bool { hasChanges || hasEditedText }

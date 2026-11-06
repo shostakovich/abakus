@@ -6,8 +6,8 @@ import Testing
 @Suite struct RegisterTouchTableTests {
     static let account: [RegisterColumn] = [.date, .payee, .category, .memo, .amount, .cleared]
 
-    @Test func theStatusComesLastAndTheSchedulersFrequencyStaysOut() {
-        let table = RegisterTouchTable(visibleColumns: [.cleared, .date, .frequency, .payee, .amount])
+    @Test func theStatusComesLastAndTheSchedulersRepeatStaysOut() {
+        let table = RegisterTouchTable(visibleColumns: [.cleared, .date, .repeats, .payee, .amount])
         #expect(table.columns == [.date, .payee, .amount, .cleared])
     }
 

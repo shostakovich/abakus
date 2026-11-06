@@ -9,6 +9,8 @@ struct FormSheet<Content: View>: View {
 
     let title: String
     var message: Text?
+    var note: String?
+    var destructive: FormSheetAction?
     let confirmTitle: String
     var canConfirm = true
     let onConfirm: () -> Void
@@ -28,16 +30,33 @@ struct FormSheet<Content: View>: View {
             Form { content }
                 .formStyle(.grouped)
                 .scrollDisabled(true)
+            if let note {
+                Text(note).formFootnote()
+                    .padding(.horizontal, 30)
+                    .padding(.top, -8)
+                    .padding(.bottom, 12)
+            }
             HStack(spacing: 12) {
+                if let destructive {
+                    Button(destructive.title, role: .destructive, action: destructive.action)
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(ThemeColor.negative)
+                }
                 Spacer(minLength: 0)
                 Button("Abbrechen", action: onCancel).keyboardShortcut(.cancelAction)
                 Button(confirmTitle, action: onConfirm).keyboardShortcut(.defaultAction).disabled(!canConfirm)
             }
+            .buttonBorderShape(.capsule)
             .padding([.horizontal, .bottom], 20)
         }
         .frame(width: Self.width)
         .interactiveDismissDisabled()
     }
+}
+
+struct FormSheetAction {
+    let title: String
+    let action: () -> Void
 }
 
 /// A labelled row whose control and footnotes share one width across the form.

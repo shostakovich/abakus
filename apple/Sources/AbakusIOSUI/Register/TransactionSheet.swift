@@ -143,6 +143,8 @@
     private struct TransactionForm: View {
         let editor: TransactionEditor
         var focus: FocusState<EditorFieldID?>.Binding
+        @State private var isConfirmingDelete = false
+        @State private var showsRepeatWheel = false
         @State private var rowX: CGFloat?
         @State private var formX: CGFloat?
 
@@ -167,18 +169,32 @@
                     }
                     ChoiceRow(
                         editor: editor, field: .main(.account), label: "Konto", isLocked: !editor.choosesAccount)
-                    dateRow
-                    if editor.isScheduled { frequencyRow }
+                    if !editor.isScheduled { dateRow }
                     MemoField(editor: editor, field: .main(.memo), focus: focus)
                 } footer: {
                     if !editor.isSplitMode { moreButtons }
                 }
                 if editor.isSplitMode { parts }
+                if editor.isScheduled { schedule }
                 if editor.sheetDeletes {
                     Section {
-                        Button("Buchung löschen", role: .destructive) {
-                            focus.wrappedValue = nil
-                            editor.deleteClicked()
+                        if editor.isScheduled {
+                            Button(RegisterScheduler.deleteTitle.touchLabel, role: .destructive) {
+                                isConfirmingDelete = true
+                            }
+                            .confirmationDialog(
+                                "Geplante Buchung löschen?", isPresented: $isConfirmingDelete, titleVisibility: .visible
+                            ) {
+                                Button("Löschen", role: .destructive) {
+                                    focus.wrappedValue = nil
+                                    editor.deleteClicked()
+                                }
+                            }
+                        } else {
+                            Button("Buchung löschen", role: .destructive) {
+                                focus.wrappedValue = nil
+                                editor.deleteClicked()
+                            }
                         }
                     }
                 }
@@ -198,11 +214,12 @@
         private var dateRow: some View {
             let calendar = editor.formatter.dateLocale.calendar
             let range = editor.pickableDates
+            let label = editor.isScheduled ? "Nächstes Datum" : "Datum"
             if editor.isLocked(.main(.date)) {
-                LabeledContent("Datum", value: editor.sheetValue(.main(.date)).text)
+                LabeledContent(label, value: editor.sheetValue(.main(.date)).text)
             } else {
                 DatePicker(
-                    "Datum",
+                    label,
                     selection: Binding(
                         get: { editor.clone.date.date(in: calendar) },
                         set: { editor.datePicked(DateWithoutTime($0, in: calendar)) }),
@@ -211,15 +228,59 @@
             }
         }
 
-        private var frequencyRow: some View {
-            Picker(
-                "Häufigkeit",
-                selection: Binding(get: { editor.frequency ?? .monthly }, set: { editor.frequencyChosen($0) })
-            ) {
-                ForEach(ScheduledTransactionFrequency.allCases, id: \.self) { frequency in
-                    Text(verbatim: frequency.readableName).tag(frequency)
+        private var schedule: some View {
+            Section {
+                dateRow
+                Picker(
+                    "Wiederholen",
+                    selection: Binding(get: { editor.repeatChoice ?? .monthly }, set: { editor.repeatChosen($0) })
+                ) {
+                    ForEach(Repeat.Choice.allCases, id: \.self) { choice in
+                        Text(verbatim: choice.label).tag(choice)
+                    }
+                }
+                if editor.showsCustomRepeat {
+                    Button {
+                        withAnimation(.smooth) { showsRepeatWheel.toggle() }
+                    } label: {
+                        LabeledContent("Alle") {
+                            Text(verbatim: editor.customRepeatText)
+                                .foregroundStyle(showsRepeatWheel ? ThemeColor.accent : ThemeColor.secondaryText)
+                        }
+                        .foregroundStyle(ThemeColor.text)
+                    }
+                    if showsRepeatWheel { repeatWheel }
+                }
+            } header: {
+                Text("Termin")
+            } footer: {
+                if let dates = editor.followingDatesText { Text(verbatim: dates) }
+            }
+            .onChange(of: editor.repeatChoice) { _, choice in
+                withAnimation(.smooth) { showsRepeatWheel = choice == .custom }
+            }
+        }
+
+        private var repeatWheel: some View {
+            HStack(spacing: 0) {
+                Picker(
+                    "Anzahl",
+                    selection: Binding(get: { editor.customCount }, set: { editor.repeatCountChosen($0) })
+                ) {
+                    ForEach(Repeat.counts, id: \.self) { Text(verbatim: String($0)).tag($0) }
+                }
+                Picker(
+                    "Einheit",
+                    selection: Binding(get: { editor.customUnit }, set: { editor.repeatUnitChosen($0) })
+                ) {
+                    ForEach(Repeat.Unit.allCases, id: \.self) { unit in
+                        Text(TransactionEditor.unitLabel(unit, count: editor.customCount)).tag(unit)
+                    }
                 }
             }
+            .pickerStyle(.wheel)
+            .labelsHidden()
+            .frame(height: 160)
         }
 
         private var parts: some View {

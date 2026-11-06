@@ -81,9 +81,7 @@ private struct Underlay<Opener: View>: View {
         let model = fixture.model()
         let window = PopoverWindow { clicks in
             Underlay(clicks: clicks) {
-                Color.clear
-                    .registerAnchor(.error(id))
-                    .registerAnchor(.schedulerTitle)
+                Color.clear.registerAnchor(.error(id))
             }
             .overlayPreferenceValue(RegisterAnchorKey.self) { anchors in
                 RegisterOverlayLayer(model: model, anchors: anchors)
@@ -108,36 +106,6 @@ private struct Underlay<Opener: View>: View {
         await window.click(PopoverWindow.outside)
         #expect(model.popup == nil)
         #expect(window.clicksBelow == 0)
-    }
-
-    @Test func theScheduledCalloutStaysAndLetsTheClickThrough() async {
-        let (model, window) = register { _ in .scheduledCallout(.added) }
-        defer { window.close() }
-        await window.settle()
-        await window.click(PopoverWindow.outside)
-        #expect(model.popup == .scheduledCallout(.added))
-        #expect(window.clicksBelow == 1)
-    }
-
-    @Test func theAdjustmentHelpClosesAndLetsTheClickThrough() async throws {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -12)
-        let model = fixture.model()
-        model.showAdjustment(RegisterAdjustmentHelp(transactionId: id, message: "Adjusted"))
-        let help = try #require(model.adjustmentHelp)
-        let window = PopoverWindow { clicks in
-            Underlay(clicks: clicks) {
-                Color.clear.anchorPreference(key: AdjustmentHelpAnchorKey.self, value: .bounds) { $0 }
-            }
-            .overlayPreferenceValue(AdjustmentHelpAnchorKey.self) { anchor in
-                if let anchor { AdjustmentHelpLayer(model: model, help: help, anchor: anchor) }
-            }
-        }
-        defer { window.close() }
-        await window.settle()
-        await window.click(PopoverWindow.outside)
-        #expect(model.adjustmentHelp == nil)
-        #expect(window.clicksBelow == 1)
     }
 
     @Test func editAccountCancelsAndTakesTheClick() async throws {

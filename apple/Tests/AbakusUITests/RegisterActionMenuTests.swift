@@ -27,15 +27,14 @@ import Testing
         return budget
     }
 
-    @Test func menuHoldsCategorizingMovingAndDeletingBesideTheScheduledEntries() {
+    @Test func menuHoldsCategorizingMovingAndDeleting() {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -1, approved: false, source: .bank)
         let (model, _) = fixture.spied()
         select(model, [id])
         #expect(
             titles(model.transactionActionsMenu()) == [
-                "Kategorisieren als", "-", "Wiederkehrend machen …", "In geplante Buchungen verschieben …", "-",
-                "In Konto verschieben", "-", "Löschen",
+                "Kategorisieren als", "-", "In Konto verschieben", "-", "Löschen",
             ])
     }
 
@@ -46,7 +45,8 @@ import Testing
         let menu = model.contextMenu(for: model.rows.first { $0.id == id }!) ?? []
         for title in [
             "Als gebucht markieren", "Als vorgemerkt markieren", "Bestätigen", "Ablehnen (löschen)",
-            "Gleiche Empfänger umbenennen …", "Empfänger verwalten …",
+            "Gleiche Empfänger umbenennen …", "Empfänger verwalten …", "Wiederkehrend machen …",
+            "In geplante Buchungen verschieben …",
         ] {
             #expect(menu.item(titled: title) == nil)
         }
@@ -74,30 +74,6 @@ import Testing
         #expect(Set(model.selectedTransactionIds) == [first, second])
         _ = model.contextMenu(for: model.rows.first { $0.id == third }!)
         #expect(model.selectedTransactionIds == [third])
-    }
-
-    @Test func singleSelectionItems() {
-        var fixture = RegisterFixture()
-        let a = fixture.add(fixture.giro, -1, payee: "REWE")
-        let b = fixture.add(fixture.giro, -2, payee: "REWE")
-        let (model, _) = fixture.spied()
-        model.today = { day("2014-05-01") }
-        select(model, [a])
-        var menu = model.transactionActionsMenu()
-        #expect(enabled(menu, "Wiederkehrend machen …"))
-        #expect(enabled(menu, "In geplante Buchungen verschieben …"))
-        select(model, [a, b])
-        menu = model.transactionActionsMenu()
-        #expect(!enabled(menu, "Wiederkehrend machen …"))
-    }
-
-    @Test func moveToSchedulerNeedsAFutureDate() {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -1)
-        let (model, _) = fixture.spied()
-        model.today = { day("2014-06-01") }
-        select(model, [id])
-        #expect(!enabled(model.transactionActionsMenu(), "In geplante Buchungen verschieben …"))
     }
 
     @Test func categorizeSubmenusFollowTheCategoryListWithNoCategoryLast() throws {
@@ -154,11 +130,12 @@ import Testing
         #expect(store.commands == [.categorizeTransactions(selected, categoryId: fixture.groceries)])
     }
 
-    @Test func moveTargetsSkipTheShownAndClosedAccounts() throws {
+    @Test func moveTargetsSkipTheShownClosedAndKasseAccounts() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -1)
         let index = fixture.budget.accounts.firstIndex { $0.id == fixture.karte }!
         fixture.budget.accounts[index].closed = true
+        fixture.budget.accounts.append(Account(id: "KASSE", name: "Spliit", kind: .checking, sharedExpenses: true))
         let (model, _) = fixture.spied()
         select(model, [id])
         let submenu = try #require(
@@ -347,29 +324,6 @@ import Testing
         #expect(model.notifiers.undoSlot != nil)
         model.notifiers.dismissUndo()
         #expect(model.notifiers.list.isEmpty)
-    }
-
-    @Test func makeRecurringSendsTheScheduleAndShowsTheCallout() throws {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -9.99, payee: "Spotify")
-        let (model, store) = fixture.spied()
-        select(model, [id])
-        model.performMenuAction(.makeRecurring)
-        let scheduleId = try #require(model.lastScheduledTransactionId)
-        #expect(store.commands == [.makeRecurring(transactionId: id, scheduleId: scheduleId, today: editDay)])
-        #expect(model.popup == .scheduledCallout(.added))
-    }
-
-    @Test func moveToSchedulerOffersNoUndo() throws {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -20, on: "2014-07-01")
-        let (model, store) = fixture.spied()
-        select(model, [id])
-        model.performMenuAction(.moveToScheduler)
-        let scheduleId = try #require(model.lastScheduledTransactionId)
-        #expect(store.commands == [.moveToScheduler(transactionId: id, scheduleId: scheduleId)])
-        #expect(model.notifiers.undoSlot == nil)
-        #expect(model.popup == .scheduledCallout(.moved))
     }
 
     @Test func everyDeletePathDeletesAtOnceAndOffersUndo() throws {

@@ -56,7 +56,7 @@ struct RegisterFixture {
     mutating func addSchedule(
         _ id: String, _ amount: Decimal = -25, on date: String = "2014-06-02", account: String? = nil,
         payee: String? = "Rent", category: String? = nil, memo: String? = nil, target: String? = nil,
-        frequency: ScheduledTransactionFrequency = .monthly, subtransactions: [Subtransaction] = []
+        repeats: Repeat = .monthly, subtransactions: [Subtransaction] = []
     ) -> String {
         let transaction = Transaction(
             id: id, accountId: account ?? giro, date: day(date), categoryId: category, memo: memo, amount: amount,
@@ -64,7 +64,7 @@ struct RegisterFixture {
         ).transferring(to: target)
         try! budget.apply(
             .saveScheduledTransaction(
-                ScheduledSave(transaction: transaction, frequency: frequency, payeeName: payee, isNew: true)))
+                ScheduledSave(transaction: transaction, repeats: repeats, payeeName: payee, isNew: true)))
         return id
     }
 

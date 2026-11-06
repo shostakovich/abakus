@@ -193,16 +193,6 @@ import Testing
         }
     }
 
-    @Test func theSchedulersAddEditorOpensAtItsTop() {
-        var fixture = RegisterFixture()
-        for number in 1...6 { fixture.addSchedule("S\(number)", on: "2014-06-1\(number)") }
-        let model = fixture.model()
-        let atEnd = model.scheduler.grid.scrollMetrics(at: .greatestFiniteMagnitude, viewport: 100)
-        model.scheduler.addClicked()
-        #expect(model.scheduler.grid.isAdding)
-        #expect(model.scheduler.grid.scrollMetrics(afterResizing: atEnd, to: 100).offset == 0)
-    }
-
     @Test func theRowsMoveDownByTheAddEditorsHeight() throws {
         let model = register(rows: 21)
         let first = try #require(model.grid.row(atY: 1, scrollOffset: 0))

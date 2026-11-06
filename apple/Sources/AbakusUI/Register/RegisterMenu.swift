@@ -3,10 +3,10 @@ import Foundation
 
 public enum RegisterMenuAction: Hashable, Sendable {
     case categorize(categoryId: String?)
-    case makeRecurring, moveToScheduler
     case moveToAccount(accountId: String)
     case delete
     case filter(RegisterFilter)
+    case closedAccounts
     case togglePicking, toggleSelectAll
     case toggleScheduler, editAccount
     case toggleColumn(RegisterColumn)
@@ -15,7 +15,6 @@ public enum RegisterMenuAction: Hashable, Sendable {
     case enterScheduledNow, skipScheduled, deleteScheduled
     case moveScheduled(accountId: String)
     case fillUnderfunded, resetAssigned
-    case frequency(ScheduledTransactionFrequency)
 }
 
 public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
@@ -61,14 +60,26 @@ public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
     static func separator(_ index: Int) -> RegisterMenuItem {
         RegisterMenuItem(id: "separator\(index)", title: "", kind: .separator)
     }
+}
 
-    package static func frequencyMenu(selected: ScheduledTransactionFrequency?) -> [RegisterMenuItem] {
-        ScheduledTransactionFrequency.allCases.map { .action($0.readableName, .frequency($0), checked: $0 == selected) }
+extension String {
+    /// iPhone and iPad drop the Mac's „…“ from what asks for more.
+    package var touchLabel: String { hasSuffix(" …") ? String(dropLast(2)) : self }
+}
+
+extension [RegisterMenuItem] {
+    package var touchLabels: [RegisterMenuItem] {
+        map { item in
+            var item = item
+            item.title = item.title.touchLabel
+            if case .submenu(let children) = item.kind { item.kind = .submenu(children.touchLabels) }
+            return item
+        }
     }
 }
 
 public enum RegisterAnchorID: Hashable, Sendable {
-    case schedulerTitle, schedulerColumnTab
+    case schedulerColumnTab
     case error(String)
 }
 

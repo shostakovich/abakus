@@ -25,6 +25,7 @@ import Testing
         let model = fixture.model().model
         let items = model.callouts.monthMenu(month: october)
         #expect(items.map(\.title) == ["Ziele füllen", "Zurücksetzen …"])
+        #expect(items.touchLabels.map(\.title) == ["Ziele füllen", "Zurücksetzen"])
         #expect(items.map(\.kind) == [.action(.fillUnderfunded), .action(.resetAssigned)])
         #expect(items.map(\.isEnabled) == [true, true])
         #expect(items.map(\.subtitle) == ["90,00\u{00A0}€", "Zuweisungen im Okt"])

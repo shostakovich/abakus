@@ -9,7 +9,6 @@
         case payeeSettings(PayeeSettingsModel)
         case addAccount(AddAccountForm)
         case editAccount(EditAccountForm)
-        case adjustBalance(AdjustBalanceForm)
 
         init?(_ model: AppModel, navigation: TouchNavigation) {
             let accounts = model.accounts
@@ -19,8 +18,6 @@
                 self = .addAccount(form)
             } else if let form = accounts.editForm {
                 self = .editAccount(form)
-            } else if let form = accounts.balanceForm {
-                self = .adjustBalance(form)
             } else {
                 return nil
             }
@@ -31,7 +28,6 @@
             case .payeeSettings(let model): model.id.uuidString
             case .addAccount(let form): form.id.uuidString
             case .editAccount(let form): form.id.uuidString
-            case .adjustBalance(let form): form.id.uuidString
             }
         }
     }
@@ -50,9 +46,6 @@
             case .editAccount(let form):
                 EditAccountSheet(controller: model.accounts, form: form)
                     .modifier(DialogAlert(dialogs: model.presentedDialogs))
-            case .adjustBalance(let form):
-                AdjustBalanceSheet(controller: model.accounts, form: form)
-                    .modifier(DialogAlert(dialogs: model.presentedDialogs))
             }
         }
     }
@@ -64,7 +57,6 @@
             case .payeeSettings(let payees): payees.close()
             case .addAccount: model.accounts.addCancelled()
             case .editAccount: model.accounts.editCancelled()
-            case .adjustBalance: model.accounts.balanceCancelled()
             }
         }
     }

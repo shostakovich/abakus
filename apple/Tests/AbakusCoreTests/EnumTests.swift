@@ -28,57 +28,59 @@ import Testing
     }
 }
 
-@Suite struct FrequencyTests {
-    @Test(arguments: [
-        (ScheduledTransactionFrequency.once, "2026-10-23"), (.daily, "2026-10-24"), (.weekly, "2026-10-30"),
-        (.everyOtherWeek, "2026-11-06"), (.every4Weeks, "2026-11-20"), (.monthly, "2026-11-23"),
-        (.everyOtherMonth, "2026-12-23"), (.every3Months, "2027-01-23"), (.every4Months, "2027-02-23"),
-        (.twiceAYear, "2027-04-23"), (.yearly, "2027-10-23"), (.everyOtherYear, "2028-10-23"),
-    ])
-    func following(frequency: ScheduledTransactionFrequency, expected: String) {
-        #expect(frequency.following(october23) == date(expected))
+@Suite struct RepeatTests {
+    @Test func weeksStepSevenDaysEach() {
+        #expect(Repeat.every(1, .week).following(october23) == date("2026-10-30"))
+        #expect(Repeat.every(2, .week).following(date("2026-12-09")) == date("2026-12-23"))
+        #expect(Repeat.every(4, .week).following(date("2026-12-28")) == date("2027-01-25"))
     }
 
     @Test func monthsKeepTheDayOrTakeTheMonthsLast() {
-        let monthly = ScheduledTransactionFrequency.monthly
-        #expect(monthly.following(date("2026-01-31")) == date("2026-02-28"))
-        #expect(monthly.following(date("2026-02-28")) == date("2026-03-28"))
+        #expect(Repeat.monthly.following(date("2027-01-31")) == date("2027-02-28"))
+        #expect(Repeat.monthly.following(date("2027-02-28")) == date("2027-03-28"))
+        #expect(Repeat.every(6, .month).following(date("2026-08-31")) == date("2027-02-28"))
+        #expect(Repeat.every(24, .month).following(date("2026-12-01")) == date("2028-12-01"))
     }
 
-    @Test func februaryTwentyNinthBecomesTheTwentyEighth() {
-        #expect(ScheduledTransactionFrequency.yearly.following(date("2028-02-29")) == date("2029-02-28"))
-        #expect(ScheduledTransactionFrequency.everyOtherYear.following(date("2028-02-29")) == date("2030-02-28"))
+    @Test func yearlyIsTwelveMonthsSoFebruaryTwentyNinthBecomesTheTwentyEighth() {
+        #expect(Repeat.yearly == .every(12, .month))
+        #expect(Repeat.yearly.following(date("2028-02-29")) == date("2029-02-28"))
     }
 
-    @Test func twiceAMonthDaysStartFromTheDateAndFoldTheSecondHalf() {
-        #expect(ScheduledTransactionFrequency.twiceAMonthDays(for: date("2026-10-05")) == (5, 20))
-        #expect(ScheduledTransactionFrequency.twiceAMonthDays(for: date("2026-10-23")) == (8, 23))
+    @Test func onceHasNoFollowingDate() {
+        #expect(Repeat.once.following(october23) == nil)
+        #expect(Repeat.once.dates(after: october23, count: 3).isEmpty)
     }
 
-    @Test func twiceAMonthGoesToTheNextOfItsDaysElseTheFirstOfTheNextMonth() {
-        let frequency = ScheduledTransactionFrequency.twiceAMonth
-        #expect(frequency.following(date("2026-10-05"), days: (5, 20)) == date("2026-10-20"))
-        #expect(frequency.following(date("2026-10-20"), days: (5, 20)) == date("2026-11-05"))
-        #expect(frequency.following(date("2026-10-10"), days: (5, 20)) == date("2026-10-20"))
+    @Test func theDatesAfterTheNextDate() {
+        #expect(
+            Repeat.every(2, .week).dates(after: date("2026-12-09"), count: 3) == [
+                date("2026-12-23"), date("2027-01-06"), date("2027-01-20"),
+            ])
+        #expect(
+            Repeat.monthly.dates(after: date("2027-01-31"), count: 2) == [date("2027-02-28"), date("2027-03-28")])
     }
 
-    @Test func twiceAMonthTakesTheLastDayOfAShortMonth() {
-        let frequency = ScheduledTransactionFrequency.twiceAMonth
-        #expect(frequency.following(date("2026-02-15"), days: (15, 30)) == date("2026-02-28"))
-        #expect(frequency.following(date("2026-02-28"), days: (15, 30)) == date("2026-03-15"))
+    @Test func labels() {
+        #expect(
+            [Repeat.once, .every(1, .week), .every(2, .week), .monthly, .yearly, .every(3, .month)].map(\.label) == [
+                "Einmalig", "Wöchentlich", "Alle 2 Wochen", "Monatlich", "Jährlich", "Alle 3 Monate",
+            ])
     }
 
-    @Test func aScheduledTransactionTwiceAMonthDerivesItsDays() {
-        let scheduled = ScheduledTransaction(
-            accountId: "A", nextDate: date("2026-10-20"), frequency: .twiceAMonth, amount: -10)
-        #expect(scheduled.firstDay == 5 && scheduled.secondDay == 20)
-        #expect(scheduled.followingDate == date("2026-11-05"))
-        let monthly = ScheduledTransaction(accountId: "A", nextDate: date("2026-10-20"), amount: -10)
-        #expect(monthly.firstDay == nil && monthly.secondDay == nil)
+    @Test func choicesAreOnceMonthlyYearlyOrCustom() {
+        #expect(Repeat.Choice.allCases.map(\.label) == ["Einmalig", "Monatlich", "Jährlich", "Eigene"])
+        #expect(
+            [Repeat.once, .monthly, .yearly, .every(1, .week), .every(2, .month)].map(\.choice) == [
+                .once, .monthly, .yearly, .custom, .custom,
+            ])
     }
 
-    @Test func readableNames() {
-        #expect(ScheduledTransactionFrequency.everyOtherWeek.readableName == "Alle 2 Wochen")
-        #expect(ScheduledTransactionFrequency.allCases.count == 13)
+    @Test func choosingCustomKeepsACustomRepeatElseStartsAtEveryTwoWeeks() {
+        #expect(Repeat.every(3, .month).choosing(.custom) == .every(3, .month))
+        #expect(Repeat.monthly.choosing(.custom) == .every(2, .week))
+        #expect(Repeat.once.choosing(.custom) == .every(2, .week))
+        #expect(Repeat.every(3, .month).choosing(.yearly) == .yearly)
+        #expect(Repeat.monthly.choosing(.once) == .once)
     }
 }

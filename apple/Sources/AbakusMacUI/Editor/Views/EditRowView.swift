@@ -49,8 +49,8 @@ struct EditRowView: View {
             EditTextCell(editor: editor, field: .main(.account), width: frame.width, accessory: .suggestions)
         case .date:
             EditTextCell(editor: editor, field: .main(.date), width: frame.width, accessory: .calendar)
-        case .frequency:
-            FrequencyEditCell(editor: editor, width: frame.width)
+        case .repeats:
+            EmptyView()
         case .payee:
             EditTextCell(
                 editor: editor, field: .main(.payee), width: frame.width, accessory: .suggestions,
@@ -212,37 +212,6 @@ struct EditTextCell: View {
                 .padding(.horizontal, 2)
                 .frame(maxWidth: .infinity, alignment: isAmount ? .trailing : .leading)
         }
-    }
-}
-
-struct FrequencyEditCell: View {
-    let editor: TransactionEditor
-    let width: CGFloat
-
-    var body: some View {
-        let field = EditorFieldID.main(.frequency)
-        let isFocused = editor.focus == .field(field)
-        let shape = RoundedRectangle(cornerRadius: EditCellStyle.fieldCornerRadius)
-        HStack(spacing: 2) {
-            Text(verbatim: editor.frequency?.readableName ?? "")
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.up.chevron.down")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(ThemeColor.secondaryText)
-        }
-        .font(EditCellStyle.font.font)
-        .padding(.horizontal, EditCellStyle.textInset)
-        .frame(width: max(0, width - 2 * EditCellStyle.fieldInset), height: EditRowMetrics.fieldHeight)
-        .background(ThemeColor.fieldBackground, in: shape)
-        .overlay { shape.strokeBorder(ThemeColor.fieldOutline, lineWidth: 1) }
-        .focusRing(isFocused && !editor.isFrequencyListOpen, cornerRadius: EditCellStyle.fieldCornerRadius)
-        .contentShape(shape)
-        .onTapGesture { editor.frequencyClicked() }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .anchorPreference(key: EditorAnchorKey.self, value: .bounds) { [field: $0] }
-        .frame(width: width, height: EditRowMetrics.fieldBandHeight)
     }
 }
 

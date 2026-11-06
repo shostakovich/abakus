@@ -23,6 +23,21 @@ import Testing
         #expect(app.navigation.selection == .account(fixture.tagesgeld))
     }
 
+    @Test func plusWaitsOnlyWhileAClosedRegisterShows() throws {
+        var budget = fixture.budget
+        let index = try #require(budget.accounts.firstIndex { $0.id == fixture.karte })
+        budget.accounts[index].closed = true
+        let app = AppModel(store: BudgetStore(budget: budget, today: { editDay }), defaults: nil)
+        let tabs = TouchNavigation(app: app)
+        tabs.select(.accounts)
+        tabs.showAccounts([.account(fixture.karte)])
+        #expect(!tabs.canAddTransaction)
+        tabs.showAccounts([])
+        #expect(tabs.canAddTransaction)
+        tabs.addTransactionClicked()
+        #expect(app.register.editor?.clone.accountId != fixture.karte)
+    }
+
     @Test func goingBackEndsTheRegistersVisit() {
         let (app, tabs) = open()
         tabs.select(.accounts)

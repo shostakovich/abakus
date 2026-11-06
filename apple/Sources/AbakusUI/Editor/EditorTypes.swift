@@ -3,13 +3,12 @@ import CoreGraphics
 import Foundation
 
 public enum EditorColumn: String, Hashable, Sendable, CaseIterable {
-    case account, date, frequency, payee, category, memo, amount
+    case account, date, payee, category, memo, amount
 
     public var gridColumn: RegisterColumn {
         switch self {
         case .account: .account
         case .date: .date
-        case .frequency: .frequency
         case .payee: .payee
         case .category: .category
         case .memo: .memo
