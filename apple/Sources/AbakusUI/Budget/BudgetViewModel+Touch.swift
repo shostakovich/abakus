@@ -144,25 +144,6 @@ public struct BudgetMonthPickerCell: Hashable, Sendable, Identifiable {
     public var id: DateWithoutTime { month }
 }
 
-public struct BudgetWaiting: Hashable, Sendable {
-    public let overspentIds: [String]
-    public let approvals: Int
-
-    public var isEmpty: Bool { overspentIds.isEmpty && approvals == 0 }
-
-    public var overspentText: String? {
-        switch overspentIds.count {
-        case 0: nil
-        case 1: "1 Kategorie überzogen"
-        case let count: "\(count) Kategorien überzogen"
-        }
-    }
-
-    public var approvalsText: String? {
-        approvals == 0 ? nil : RegisterViewModel.approvalsTitle(approvals)
-    }
-}
-
 public struct BudgetAvailableBreakdown: Hashable, Sendable {
     public static let carriedLabel = "Übrig aus Vormonat"
 
@@ -198,27 +179,6 @@ extension BudgetViewModel {
     }
 
     public var showsTodaysMonth: Bool { shownMonths.first == today.firstOfMonth }
-
-    /// Today's month while it is shown, else the first; the iPad names what waits for it.
-    public var monthInFocus: BudgetMonth? { month(focusMonth) }
-
-    public func waiting(in month: BudgetMonth) -> BudgetWaiting {
-        let overspent = groups.flatMap(\.subs).filter { (month.category($0.id)?.balance ?? 0) < 0 }.map(\.id)
-        return BudgetWaiting(overspentIds: overspent, approvals: store.budget.approvalCount)
-    }
-
-    /// Opens the first one's cover list; its group unfolds, as the iPad's popover needs the cell to stand on.
-    public func overspentTapped(in month: BudgetMonth) {
-        guard let id = waiting(in: month).overspentIds.first else { return }
-        if let group = groups.first(where: { $0.subs.contains { $0.id == id } }), !group.isExpanded {
-            perform(.setCategoryGroupExpanded(groupId: group.id, true))
-        }
-        balanceClicked(month: month.month, categoryId: id)
-    }
-
-    public func approvalsTapped() {
-        onShowApprovals()
-    }
 
     public func uncategorizedTapped() {
         onShowAllAccountsSearch(Self.uncategorizedSearch)

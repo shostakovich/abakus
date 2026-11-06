@@ -59,7 +59,6 @@ public final class AppModel {
         budget.callouts.onShowTransaction = { [weak self] id in self?.register.showTransaction(id) }
         budget.callouts.onShowInAccountView = { [weak self] filter in self?.register.showFilteredView(filter) }
         budget.onShowAllAccountsSearch = { [weak self] text in self?.register.showAllAccounts(searching: text) }
-        budget.onShowApprovals = { [weak self] in self?.register.showApprovals() }
         register.isTouch = device != .mac
         navigation.onSelectionChange { [weak self] old, new in
             guard let self else { return }

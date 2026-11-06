@@ -65,12 +65,9 @@ import Testing
         #expect(
             april.headerText == [
                 "0,00 Nicht verteilt im Mrz", "0,00 Überzogen im Mrz", "+200,00 Einnahmen im Apr",
-                "0,00 Zugewiesen im Apr", "−250,00 Für spätere Monate", "−50,00 Nicht gedeckt im Mai",
-                "= −50,00\u{00A0}€",
+                "0,00 Zugewiesen im Apr", "−250,00 Für spätere Monate", "= −50,00\u{00A0}€",
                 "Zu verteilen",
             ])
-        #expect(try #require(april.headerLines(formatter: german).last).isWarning)
-        #expect(scenario.month("2026-05-01").uncovered.isEmpty)
         #expect(scenario.budget.assigned(in: date("2026-05-01"), categoryId: "URLAUB") == 250)
     }
 

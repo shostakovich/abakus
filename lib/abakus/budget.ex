@@ -8,8 +8,7 @@ defmodule Abakus.Budget do
   - Ready to Assign per month, cumulative as YNAB's `to_be_budgeted`: income up to the month − assigned up to the
     month − overspending of the months before. A month shows it less what later months have assigned; a closed
     month (before the current one) shows it as it ended.
-  - Assignments are never refused, so Ready to Assign can go below zero; a month lists the later months whose
-    Ready to Assign is below zero (`uncovered`), up to the last month with data or that changes it.
+  - Assignments are never refused, so Ready to Assign can go below zero.
 
   The struct holds `categories` (`%{id}` in budget order), `income` per month, `activity` and `assigned` per
   `{category_id, month}` (`nil` is the uncategorised row), `targets` (each category's target versions) and
@@ -43,7 +42,7 @@ defmodule Abakus.Budget do
       Month.new(month, Map.get(budget.income, month, 0), uncategorised, categories)
     end)
     |> chain_ready_to_assign()
-    |> look_ahead(current, Enum.max([hd(range) | data], Date))
+    |> look_ahead(current)
   end
 
   @doc """
@@ -114,36 +113,14 @@ defmodule Abakus.Budget do
     months
   end
 
-  defp look_ahead(months, current, last_data) do
-    horizon = Enum.max([last_data, last_change(months)], Date)
-
-    {months, _acc} =
+  defp look_ahead(months, current) do
+    {months, _assigned_later} =
       months
       |> Enum.reverse()
-      |> Enum.map_reduce({0, []}, fn month, {assigned_later, uncovered} ->
-        shown = Month.look_ahead(month, current, assigned_later, uncovered)
-
-        uncovered =
-          if short?(month, horizon),
-            do: [{month.month, -month.ready_to_assign} | uncovered],
-            else: uncovered
-
-        {shown, {assigned_later + month.assigned, uncovered}}
+      |> Enum.map_reduce(0, fn month, assigned_later ->
+        {Month.look_ahead(month, current, assigned_later), assigned_later + month.assigned}
       end)
 
     Enum.reverse(months)
-  end
-
-  defp short?(%Month{month: month, ready_to_assign: ready_to_assign}, horizon),
-    do: ready_to_assign < 0 and Date.compare(month, horizon) != :gt
-
-  # The last month whose Ready to Assign differs from the month before; the ones after only repeat it.
-  defp last_change(months) do
-    changed =
-      for {month, last} <- Enum.zip(months, [0 | Enum.map(months, & &1.ready_to_assign)]),
-          month.ready_to_assign != last,
-          do: month.month
-
-    List.last(changed, hd(months).month)
   end
 end

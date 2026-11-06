@@ -252,15 +252,6 @@ import Testing
         #expect(model.showsTodaysMonth)
     }
 
-    @Test func theMonthInFocusIsTodaysWhileItIsShownElseTheFirst() {
-        let model = model()
-        model.touchLayout = BudgetTouchLayout(isCompact: false, width: 900)
-        model.select(day("2026-09-01"))
-        #expect(model.monthInFocus?.month == october)
-        model.select(day("2027-01-01"))
-        #expect(model.monthInFocus?.month == day("2027-01-01"))
-    }
-
     @Test func theCalculationSignsIncomeWheneverThereIsSome() throws {
         let model = model()
         let income = { (date: String) in
@@ -270,42 +261,12 @@ import Testing
         #expect(income("2026-11-01") == "0,00\u{00A0}€")
     }
 
-    @Test func whatWaitsNamesTheOverspentAndOpensThemOneByOne() throws {
-        let model = model { $0.spend(10, F.notgroschen, on: "2026-10-11") }
-        let month = try #require(model.month(october))
-        let waiting = model.waiting(in: month)
-        #expect(waiting.overspentIds == [F.notgroschen, F.kino])
-        #expect(waiting.overspentText == "2 Kategorien überzogen")
-        #expect(waiting.approvalsText == nil)
-        model.touchLayout = .phone
-        model.overspentTapped(in: month)
-        #expect(model.presentedPopup == .available(month: october, categoryId: F.notgroschen))
-        #expect(model.showsCoverSheet)
-    }
-
-    @Test func anOverspentCategoryInAFoldedGroupOpensWithItsGroupUnfolded() throws {
-        let model = model()
-        model.touchLayout = BudgetTouchLayout(isCompact: false, width: 900)
-        model.disclosureClicked(F.freizeit)
-        #expect(!model.groups.visibleRows.map(\.id).contains(F.kino))
-        model.overspentTapped(in: try #require(model.monthInFocus))
-        #expect(model.groups.visibleRows.map(\.id).contains(F.kino))
-        #expect(model.coverPopover == model.cell(F.kino))
-    }
-
-    @Test func nothingWaitsWithoutOverspendingOrApprovals() throws {
-        let model = model { $0.budget(25, F.kino, in: "2026-10-01") }
-        #expect(model.waiting(in: try #require(model.month(october))).isEmpty)
-    }
-
-    @Test func theApprovalsAndUncategorizedOpenAlleKontenWithTheirSearch() {
+    @Test func uncategorizedOpensAlleKontenWithItsSearch() {
         let model = model()
         var searches: [String] = []
         model.onShowAllAccountsSearch = { searches.append($0) }
-        model.onShowApprovals = { searches.append("approvals") }
-        model.approvalsTapped()
         model.uncategorizedTapped()
-        #expect(searches == ["approvals", "Ist: Nicht kategorisiert"])
+        #expect(searches == ["Ist: Nicht kategorisiert"])
     }
 
     @Test func theAvailableBreakdownReadsFromTheCarriedToVerfuegbar() throws {

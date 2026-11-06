@@ -3,9 +3,9 @@ defmodule Abakus.Budget.Month do
   A month of the budget. `ready_to_assign` is cumulative, as YNAB's API reports it (`to_be_budgeted`);
   `ready_to_assign_shown` is what the month shows ("Zu verteilen"): Ready to Assign less `assigned_in_future`, or,
   in a closed month, as it ended. The month header explains it: `not_assigned_last_month` −
-  `overspent_last_month` + `income` − `assigned` = `ready_to_assign`. `uncovered` lists later months whose Ready to
-  Assign is below zero as `{month, shortfall}`. Totals include the uncategorised row; `overspent` is the sum of
-  negative availables as a positive amount; `needed` and `underfunded` leave out snoozed categories.
+  `overspent_last_month` + `income` − `assigned` = `ready_to_assign`. Totals include the uncategorised row;
+  `overspent` is the sum of negative availables as a positive amount; `needed` and `underfunded` leave out snoozed
+  categories.
   """
 
   alias Abakus.Budget.CategoryMonth
@@ -27,8 +27,7 @@ defmodule Abakus.Budget.Month do
     overspent_last_month: 0,
     ready_to_assign: 0,
     assigned_in_future: 0,
-    ready_to_assign_shown: 0,
-    uncovered: []
+    ready_to_assign_shown: 0
   ]
 
   @doc "The month with its rows and their totals."
@@ -62,8 +61,8 @@ defmodule Abakus.Budget.Month do
     }
   end
 
-  @doc "What the month shows, given what later months have assigned and which of them are short."
-  def look_ahead(%__MODULE__{} = month, current, assigned_in_future, uncovered) do
+  @doc "What the month shows, given what later months have assigned."
+  def look_ahead(%__MODULE__{} = month, current, assigned_in_future) do
     closed = Date.before?(month.month, current)
 
     %{
@@ -71,8 +70,7 @@ defmodule Abakus.Budget.Month do
       | closed: closed,
         assigned_in_future: assigned_in_future,
         ready_to_assign_shown:
-          if(closed, do: month.ready_to_assign, else: month.ready_to_assign - assigned_in_future),
-        uncovered: uncovered
+          if(closed, do: month.ready_to_assign, else: month.ready_to_assign - assigned_in_future)
     }
   end
 

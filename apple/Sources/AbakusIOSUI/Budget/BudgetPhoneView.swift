@@ -69,7 +69,6 @@
         @State private var amountInset: CGFloat = 14
 
         var body: some View {
-            let waiting = model.waiting(in: month)
             VStack(spacing: 0) {
                 if model.isHeaderExpanded {
                     BudgetCalculation(
@@ -80,11 +79,9 @@
                 }
                 BudgetResultBand(model: model, month: month, amountInset: $amountInset)
                     .padding(.horizontal, 16)
-                BudgetWaitingLine(model: model, month: month, waiting: waiting)
-                    .padding(.horizontal, 16)
             }
             .padding(.top, model.isHeaderExpanded ? 0 : 6)
-            .padding(.bottom, waiting.isEmpty ? 10 : 0)
+            .padding(.bottom, 10)
             .background(ThemeColor.contentBackground)
             .overlay(alignment: .bottom) { Rectangle().fill(ThemeColor.separator).frame(height: 0.5) }
         }

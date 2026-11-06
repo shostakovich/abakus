@@ -37,21 +37,49 @@ private struct BudgetTargetView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(verbatim: display.head).fontWeight(.medium).fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
+            if let progress = display.progress {
+                VStack(alignment: .leading, spacing: 6) {
+                    BudgetTargetProgressBar(
+                        value: progress.value, mark: progress.mark, color: display.status.state.textColor)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text(verbatim: progress.label).font(ThemeFont.caption.font).monospacedDigit()
+                            Spacer(minLength: 0)
+                            status
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(verbatim: progress.label).font(ThemeFont.caption.font).monospacedDigit()
+                            status
+                        }
+                    }
+                }
+            } else {
                 status
-                Spacer(minLength: 0)
-                if let label = display.assignLabel {
-                    Button(label, action: controller.assignTargetClicked)
-                }
             }
-            if let progress = display.progress { BudgetTargetBar(progress: progress) }
-            HStack(spacing: 8) {
-                Button(action: controller.snoozeClicked) {
-                    Label(display.snoozeTitle, systemImage: display.isSnoozed ? "play" : "pause")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    assignButton
+                    targetButtons
                 }
-                Button(action: controller.editTargetClicked) { Label("Ziel bearbeiten", systemImage: "pencil") }
+                VStack(alignment: .leading, spacing: 8) {
+                    assignButton
+                    HStack(spacing: 8) { targetButtons }
+                }
             }
         }
+    }
+
+    @ViewBuilder private var assignButton: some View {
+        if let label = display.assignLabel {
+            Button(label, action: controller.assignTargetClicked)
+        }
+    }
+
+    @ViewBuilder private var targetButtons: some View {
+        Button(action: controller.snoozeClicked) {
+            Label(display.snoozeTitle, systemImage: display.isSnoozed ? "play" : "pause")
+        }
+        Button(action: controller.editTargetClicked) { Label("Ziel bearbeiten", systemImage: "pencil") }
     }
 
     private var status: some View {
@@ -63,43 +91,6 @@ private struct BudgetTargetView: View {
             Text(verbatim: display.status.text).foregroundStyle(display.status.state.textColor)
         }
         .fixedSize(horizontal: false, vertical: true)
-    }
-}
-
-private struct BudgetTargetBar: View {
-    static let height: CGFloat = 6
-    static let markHeight: CGFloat = 12
-
-    let progress: BudgetTargetProgress
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Text(verbatim: progress.label).monospacedDigit()
-                Spacer(minLength: 0)
-                Text(verbatim: progress.percentText).monospacedDigit().foregroundStyle(ThemeColor.secondaryText)
-            }
-            .font(ThemeFont.caption.font)
-            GeometryReader { proxy in
-                let width = proxy.size.width
-                ZStack(alignment: .leading) {
-                    Capsule().fill(ThemeColor.groupFill)
-                    Capsule().fill(ThemeColor.accent).frame(width: width * progress.value)
-                    if let mark = progress.mark {
-                        Capsule()
-                            .fill(ThemeColor.text)
-                            .frame(width: 2, height: Self.markHeight)
-                            .offset(x: min(max(width * mark - 1, 0), width - 2))
-                    }
-                }
-                .frame(height: Self.height)
-                .frame(maxHeight: .infinity)
-            }
-            .frame(height: Self.markHeight)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(progress.label)
-        .accessibilityValue(progress.percentText)
     }
 }
 

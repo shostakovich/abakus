@@ -28,11 +28,6 @@ public struct BudgetMasterFigures: Hashable, Sendable {
     public var hasTransactions: Bool { transactionCount > 0 }
 }
 
-public struct BudgetShortfall: Hashable, Sendable {
-    public let month: DateWithoutTime
-    public let amount: Decimal
-}
-
 /// `readyToAssign` is cumulative; `available` is the Zu verteilen shown, in an open month less later assignments.
 public struct BudgetMonth: Hashable, Sendable {
     public let month: DateWithoutTime
@@ -47,7 +42,6 @@ public struct BudgetMonth: Hashable, Sendable {
     public let overspent: Decimal
     public let readyToAssign: Decimal
     public internal(set) var assignedInFuture: Decimal = 0
-    public internal(set) var uncovered: [BudgetShortfall] = []
     public let transactionCount: Int
     public let uncategorized: BudgetMasterFigures
     let masters: [String: BudgetMasterFigures]
@@ -229,7 +223,6 @@ private struct SheetBuilder {
     var rowCounts: [[String: Int]]
     var monthCounts: [Int]
     var income: [Decimal]
-    var lastActivity: Int?
     var showsUncategorizedRow = false
 
     init(budget: Budget, today: DateWithoutTime, range: ClosedRange<Int>) {
@@ -306,31 +299,14 @@ private struct SheetBuilder {
                     masters: Dictionary(uniqueKeysWithValues: masters.map { ($0.id, row($0.id)) }),
                     categories: figures))
         }
-        let lastAssigned = stored.assigned.keys.max()
-        let lastData = [lastActivity, lastAssigned.map { $0 - first }].compactMap(\.self).max()
-        Self.lookAhead(&months, lastData: lastData)
+        var assignedLater: Decimal = 0
+        for offset in months.indices.reversed() {
+            months[offset].assignedInFuture = assignedLater
+            assignedLater = Amount.round(assignedLater + months[offset].assigned)
+        }
         return BudgetSheet(
             today: today, months: months, categoryGroups: masters,
             showsUncategorizedRow: showsUncategorizedRow, budget: budget)
-    }
-
-    /// Shortfalls count up to the last month with data or a change of Zu verteilen; the months after only repeat it.
-    static func lookAhead(_ months: inout [BudgetMonth], lastData: Int?) {
-        let lastChange = months.indices.last {
-            months[$0].readyToAssign != ($0 > 0 ? months[$0 - 1].readyToAssign : 0)
-        }
-        let horizon = max(lastChange ?? 0, lastData ?? 0)
-        var assignedLater: Decimal = 0
-        var uncovered: [BudgetShortfall] = []
-        for offset in months.indices.reversed() {
-            months[offset].assignedInFuture = assignedLater
-            months[offset].uncovered = uncovered
-            let readyToAssign = months[offset].readyToAssign
-            if readyToAssign < 0 && offset <= horizon {
-                uncovered.insert(BudgetShortfall(month: months[offset].month, amount: -readyToAssign), at: 0)
-            }
-            assignedLater = Amount.round(assignedLater + months[offset].assigned)
-        }
     }
 
     struct MonthData {
@@ -431,7 +407,6 @@ private struct SheetBuilder {
             let entries = activity.entries(of: transaction)
             guard !entries.isEmpty else { continue }
             let offset = transaction.date.monthIndex - first
-            lastActivity = max(lastActivity ?? offset, offset)
             var observed: Set<String> = []
             for entry in entries {
                 switch entry.bucket {

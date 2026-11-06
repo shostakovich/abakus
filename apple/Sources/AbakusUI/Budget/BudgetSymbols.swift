@@ -54,3 +54,39 @@ package struct BudgetTargetRing: View {
         .frame(width: BudgetStyle.ringSize, height: BudgetStyle.ringSize)
     }
 }
+
+/// A target by a date: the fill is what is saved, the mark where it should stand after this month.
+package struct BudgetTargetProgressBar: View {
+    static let height: CGFloat = 6
+    static let markHeight: CGFloat = 12
+
+    let value: Double
+    let mark: Double?
+    let color: Color
+
+    package init(value: Double, mark: Double?, color: Color) {
+        self.value = value
+        self.mark = mark
+        self.color = color
+    }
+
+    package var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            ZStack(alignment: .leading) {
+                Capsule().fill(ThemeColor.groupFill)
+                Capsule().fill(color).frame(width: width * value)
+                if let mark {
+                    Capsule()
+                        .fill(ThemeColor.text)
+                        .frame(width: 2, height: Self.markHeight)
+                        .offset(x: min(max(width * mark - 1, 0), width - 2))
+                }
+            }
+            .frame(height: Self.height)
+            .frame(maxHeight: .infinity)
+        }
+        .frame(height: Self.markHeight)
+        .accessibilityHidden(true)
+    }
+}

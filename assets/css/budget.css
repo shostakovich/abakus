@@ -168,8 +168,6 @@ button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outlin
 .app-mcalc > div { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .app-mcalc dd { grid-area: 1 / 1; margin: 0; text-align: end; }
 .app-mcalc dt { grid-area: 1 / 2; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
-.app-mcalc .app-mcalc-warn { font-weight: 600; color: var(--color-error-ink); }
-.app-mcalc .app-mcalc-warn dt { color: inherit; }
 
 .app-rta {
   display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-block-start: auto;

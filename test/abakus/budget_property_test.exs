@@ -113,38 +113,6 @@ defmodule Abakus.BudgetPropertyTest do
     end
   end
 
-  property "a month lists exactly the later months that are short, up to the last with data or change" do
-    check all({budget, current} <- budget()) do
-      months = Budget.months(budget, current)
-      horizon = Enum.max([last_data(budget, months), last_change(months)], Date)
-
-      for {month, i} <- Enum.with_index(months) do
-        expected =
-          for later <- Enum.drop(months, i + 1),
-              later.ready_to_assign < 0 and Date.compare(later.month, horizon) != :gt,
-              do: {later.month, -later.ready_to_assign}
-
-        assert month.uncovered == expected
-      end
-    end
-  end
-
-  defp last_data(budget, months) do
-    Enum.max(
-      [hd(months).month | Map.keys(budget.income)] ++
-        Enum.map(Map.keys(budget.activity) ++ Map.keys(budget.assigned), &elem(&1, 1)),
-      Date
-    )
-  end
-
-  defp last_change(months) do
-    months
-    |> Enum.zip([0 | Enum.map(months, & &1.ready_to_assign)])
-    |> Enum.filter(fn {month, last} -> month.ready_to_assign != last end)
-    |> Enum.map(fn {month, _last} -> month.month end)
-    |> List.last(hd(months).month)
-  end
-
   property "filling underfunded fills in budget order without taking what later months have" do
     check all(
             {budget, current} <- budget(),

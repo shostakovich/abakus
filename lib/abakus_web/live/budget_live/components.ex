@@ -147,10 +147,6 @@ defmodule AbakusWeb.BudgetLive.Components do
         <dt>{line.label}</dt>
         <dd><.amount value={line.value} signed={index > 0} class={tone_class(line.tone)} /></dd>
       </div>
-      <div :for={line <- Status.uncovered(@month)} class="app-mcalc-warn">
-        <dt>{line.label}</dt>
-        <dd><.amount value={line.value} signed /></dd>
-      </div>
     </dl>
     """
   end
