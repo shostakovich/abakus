@@ -10,7 +10,7 @@ defmodule Abakus.Depot.CashSide do
       inflows to Ready to Assign, none for a transfer between budget accounts. The bank import holds the rest.
 
   Purchases and sales are with the portfolio, other transactions with their security, a cash transfer's side
-  without the other with that account. The source leads amount, date, account and payee; category, memo, cleared
+  without the other with that account; the payees' rename rules apply to those names, so a renamed payee stays. The source leads amount, date, account and payee; category, memo, cleared
   state and approval are the register's after the first write. `sync/1` runs in the database transaction of every
   Depot write, `release/2` before a Depot transaction is deleted.
   """
@@ -22,6 +22,7 @@ defmodule Abakus.Depot.CashSide do
   alias Abakus.Depot.Portfolios.{Portfolio, Transaction}
   alias Abakus.Depot.Valuation
   alias Abakus.{Ledger, Repo}
+  alias Abakus.Ledger.Payees
   alias Abakus.Ledger.Transaction, as: LedgerTransaction
   alias Abakus.Users.{Scope, User}
   alias Ecto.Changeset
@@ -39,7 +40,7 @@ defmodule Abakus.Depot.CashSide do
 
     with :ok <- each(Map.drop(led, Map.keys(wanted)), &remove(scope, &1)) do
       each(Enum.sort(wanted), fn {id, wanted} ->
-        write(scope, id, led[id], wanted, context.accounts)
+        write(scope, id, led[id], wanted, context)
       end)
     end
   end
@@ -69,7 +70,8 @@ defmodule Abakus.Depot.CashSide do
       accounts: Map.new(Ledger.list_accounts(scope), &{&1.id, &1}),
       portfolios:
         Map.new(Repo.all(from p in Portfolio, where: p.user_id == ^user_id), &{&1.id, &1.name}),
-      user_id: user_id
+      user_id: user_id,
+      rename: Payees.renamer(scope)
     }
   end
 
@@ -177,11 +179,11 @@ defmodule Abakus.Depot.CashSide do
     end)
   end
 
-  defp write(scope, depot_transaction_id, nil, wanted, _accounts) do
+  defp write(scope, depot_transaction_id, nil, wanted, context) do
     attrs =
       wanted
       |> Map.take([:account_id, :amount, :date, :memo, :category_id, :cleared, :approved])
-      |> Map.merge(payee_attrs(scope, wanted.payee))
+      |> Map.merge(payee_attrs(scope, context.rename, wanted.payee))
       |> Map.put(:source, :depot)
 
     with {:ok, transaction} <-
@@ -191,15 +193,15 @@ defmodule Abakus.Depot.CashSide do
          do: settle_counterpart(scope, transaction)
   end
 
-  defp write(scope, depot_transaction_id, led, wanted, accounts) do
+  defp write(scope, depot_transaction_id, led, wanted, context) do
     attrs =
       wanted
       |> Map.take([:account_id, :amount, :date])
-      |> Map.merge(payee_attrs(scope, wanted.payee))
+      |> Map.merge(payee_attrs(scope, context.rename, wanted.payee))
       |> Enum.reject(fn {field, value} -> Map.get(led, field) == value end)
       |> Map.new()
       |> with_category(led, wanted)
-      |> with_state(led, wanted, accounts)
+      |> with_state(led, wanted, context.accounts)
 
     cond do
       attrs == %{} ->
@@ -251,10 +253,12 @@ defmodule Abakus.Depot.CashSide do
   defp settled(:uncleared), do: :cleared
   defp settled(cleared), do: cleared
 
-  defp payee_attrs(_scope, {:transfer, payee_id}), do: %{payee_id: payee_id}
-  defp payee_attrs(_scope, {:name, nil}), do: %{payee_id: nil}
+  defp payee_attrs(_scope, _rename, {:transfer, payee_id}), do: %{payee_id: payee_id}
+  defp payee_attrs(_scope, _rename, {:name, nil}), do: %{payee_id: nil}
 
-  defp payee_attrs(scope, {:name, name}) do
+  defp payee_attrs(scope, rename, {:name, name}) do
+    name = rename.(name)
+
     case Ledger.find_payee_by_name(scope, name) do
       {:ok, %{transfer_account_id: nil, id: id}} -> %{payee_id: id}
       _none -> %{payee_name: name}

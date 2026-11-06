@@ -6,7 +6,7 @@ defmodule Abakus.Depot.CashSideTest do
 
   alias Abakus.Depot.{BudgetLink, CashSide, Portfolios}
   alias Abakus.{DomainFixtures, Ledger}
-  alias Abakus.Ledger.{Account, Transaction}
+  alias Abakus.Ledger.{Account, Payees, Transaction}
 
   @day ~D[2026-10-02]
 
@@ -134,6 +134,28 @@ defmodule Abakus.Depot.CashSideTest do
     queries = queries()
     assert Enum.all?(queries, &match?({_source, "SELECT" <> _query}, &1))
     assert Enum.count(queries, &match?({"transactions", _query}, &1)) == 1
+  end
+
+  test "a renamed payee stays after the next sync", c do
+    security = security_fixture(%{name: "World ETF", quote_feed: :manual, symbol: nil})
+
+    for amount <- [3_000, 2_000] do
+      transaction_fixture(c.anna, @day,
+        type: :dividend,
+        account_id: c.broker_cash.id,
+        security_id: security.id,
+        amount: amount
+      )
+    end
+
+    :ok = CashSide.sync(c.anna)
+    [%Transaction{payee: payee} | _rest] = register(c.broker_cash)
+    {:ok, renamed} = Payees.rename(c.anna, payee, "Weltfonds")
+
+    :ok = CashSide.sync(c.anna)
+
+    assert Enum.map(register(c.broker_cash), & &1.payee_id) == [renamed.id, renamed.id]
+    assert Enum.map(Payees.list(c.anna), & &1.payee.name) == ["Weltfonds"]
   end
 
   def report_query(_event, _measurements, %{source: source, query: query}, test),
