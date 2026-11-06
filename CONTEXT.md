@@ -90,8 +90,8 @@ A target counting what is carried into the month plus what is assigned, spending
 _Avoid_: Top up
 
 **Snooze**:
-A target counts as done in one month for one category: it still says what is missing, but the month's
-underfunded total and filling leave it out, as in YNAB. UI "Pausiert".
+A target counts as done in one month for one category: it shows "Pausiert im …" and a grey pause instead of
+what is missing, and the month's underfunded total and filling leave it out, as in YNAB. UI "Pausiert".
 _Avoid_: Skip, pause
 
 ### Accounts
