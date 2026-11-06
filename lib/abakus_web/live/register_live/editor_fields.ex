@@ -27,26 +27,28 @@ defmodule AbakusWeb.RegisterLive.EditorFields do
           not payee.hidden,
           do: %{label: payee.name, value: "p:#{payee.name}"}
 
-    categories =
-      for group <- assigns.categories do
-        {group.name,
-         for(
-           option <- group.options,
-           do: %{
-             label: option.text,
-             value: option.id,
-             name: option.name,
-             available: option.available
-           }
-         )}
-      end
-
     assign(assigns,
       payee_options:
         if(transfers == [], do: [], else: [{"Umbuchungen", transfers}]) ++
           [{"Empfänger", payees}],
-      category_options: categories
+      category_options: category_options(assigns.categories)
     )
+  end
+
+  @doc "The category combobox's options for `AbakusWeb.CategoryOptions` groups."
+  def category_options(categories) do
+    for group <- categories do
+      {group.name,
+       for(
+         option <- group.options,
+         do: %{
+           label: option.text,
+           value: option.id,
+           name: option.name,
+           available: option.available
+         }
+       )}
+    end
   end
 
   defp transfer_options(params, accounts) do

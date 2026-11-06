@@ -281,7 +281,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   a rule of its own, so a transaction can be in two: "Zu bestätigen" holds every transaction not approved, "Ohne
   Kategorie" every one that needs a category, approved or not: in a budget account, no category, not zero and no
   transfer to another budget account; a split by its parts. The budget's "Nicht kategorisiert" opens Alle Konten
-  in that view
+  in that view. "Ansicht" ends with "Empfänger verwalten …", which opens on the selected transaction's payee
 - Search and views in the apps, as on the web: the search filters as it is typed and finds payee, category, memo,
   the amount as written ("48,75") and a split's parts, ignoring case, emoji and "ß" against "ss"; a split found by
   a part opens. The views are the web's rules, so the chips and the Konten list count what their

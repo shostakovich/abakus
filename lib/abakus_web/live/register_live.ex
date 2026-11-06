@@ -28,6 +28,10 @@ defmodule AbakusWeb.RegisterLive do
   "Abgleichen" reconciles one account (`Reconcile`): its popover asks whether the balance is right, reconcile mode
   keeps the difference in a bar while transactions are cleared, until it is finished or cancelled.
 
+  Ansicht › "Empfänger verwalten …" opens `PayeeDialog` on the payee of the one selected transaction, if any; once it
+  renamed transactions, the register shows them anew. Its "(in N Buchungen)" searches Alle Konten for the payee, with
+  the scheduled transactions open when some use it.
+
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
   `account_groups`, so it is as fresh as the sidebar. The portfolios' cash is the Depot's
   (`Abakus.Depot.Portfolios.cash_account_portfolios/1`): Alle Konten leaves out its transactions, no account picker
@@ -51,6 +55,7 @@ defmodule AbakusWeb.RegisterLive do
   alias AbakusWeb.RegisterLive.{
     Balances,
     Components,
+    PayeeDialog,
     Reconcile,
     Rows,
     ScheduledDialog,
@@ -145,6 +150,7 @@ defmodule AbakusWeb.RegisterLive do
           accounts={@accounts}
           all={is_nil(@account)}
           addable={@manual}
+          open={@scheduled_open}
         />
         <Components.table
           rows={@rows}
@@ -177,6 +183,7 @@ defmodule AbakusWeb.RegisterLive do
         {@editor.assigns}
       />
       <.live_component :if={@scheduled_dialog} module={ScheduledDialog} {@scheduled_dialog} />
+      <.live_component :if={@payee_dialog} module={PayeeDialog} {@payee_dialog} />
       <Components.closed_accounts :if={@closed_accounts} rows={closed_rows(@account_groups)} />
     </Layouts.app>
     """
@@ -220,7 +227,9 @@ defmodule AbakusWeb.RegisterLive do
        reconcile: nil,
        reconciling: nil,
        scheduled_shown: false,
+       scheduled_open: false,
        scheduled_dialog: nil,
+       payee_dialog: nil,
        closed_accounts: false
      )}
   end
@@ -319,7 +328,22 @@ defmodule AbakusWeb.RegisterLive do
 
   defp load_scheduled(%{assigns: assigns} = socket) do
     {register, shown} = register(assigns)
-    assign(socket, :scheduled, Scheduled.list(assigns.current_scope, register, shown))
+
+    socket
+    |> assign(:scheduled, Scheduled.list(assigns.current_scope, register, shown))
+    |> keep_scheduled_open()
+  end
+
+  # The list follows `open`, so it turns false only while the list is not there, closing nothing.
+  defp keep_scheduled_open(%{assigns: %{scheduled: [], scheduled_shown: false}} = socket),
+    do: assign(socket, :scheduled_open, false)
+
+  defp keep_scheduled_open(socket), do: socket
+
+  # The list opens when `open` turns true, so it goes false first: it opens also after the user closed it.
+  defp reopen_scheduled(socket) do
+    send(self(), :open_scheduled)
+    assign(socket, :scheduled_open, false)
   end
 
   defp view(assigns, opts) do
@@ -436,7 +460,28 @@ defmodule AbakusWeb.RegisterLive do
      |> refresh()}
   end
 
-  def handle_info({:synced, _device}, socket), do: {:noreply, refresh(socket)}
+  def handle_info({PayeeDialog, :changed}, socket), do: {:noreply, refresh(socket)}
+
+  def handle_info({PayeeDialog, :flash, kind, message}, socket),
+    do: {:noreply, socket |> clear_flash() |> put_flash(kind, message)}
+
+  def handle_info({PayeeDialog, :show_transactions, name, scheduled}, socket) do
+    socket = if scheduled, do: reopen_scheduled(socket), else: socket
+
+    {:noreply,
+     socket
+     |> assign(:payee_dialog, nil)
+     |> push_patch(to: ~p"/budget/accounts/all?#{[q: name]}")}
+  end
+
+  def handle_info(:open_scheduled, socket), do: {:noreply, assign(socket, :scheduled_open, true)}
+
+  def handle_info({:synced, _device}, socket) do
+    if socket.assigns.payee_dialog,
+      do: send_update(PayeeDialog, id: socket.assigns.payee_dialog.id, synced: true)
+
+    {:noreply, refresh(socket)}
+  end
 
   @impl true
   def handle_event("move_account", _params, socket), do: {:noreply, assign_rows(socket)}
@@ -550,7 +595,7 @@ defmodule AbakusWeb.RegisterLive do
   def handle_event("cancel_edit", _params, socket), do: {:noreply, assign(socket, :editor, nil)}
 
   def handle_event("toggle_scheduled", _params, socket),
-    do: {:noreply, update(socket, :scheduled_shown, &(!&1))}
+    do: {:noreply, socket |> update(:scheduled_shown, &(!&1)) |> keep_scheduled_open()}
 
   def handle_event("new_scheduled", _params, socket) do
     if socket.assigns.manual,
@@ -587,6 +632,28 @@ defmodule AbakusWeb.RegisterLive do
 
     {:noreply, socket |> clear_flash() |> put_flash(:info, "Konto wieder geöffnet.") |> refresh()}
   end
+
+  def handle_event("open_payee_dialog", _params, %{assigns: assigns} = socket) do
+    payee_id =
+      case assigns.selection do
+        [transaction] -> transaction.payee_id
+        _selection -> nil
+      end
+
+    {:noreply,
+     assign(socket,
+       editor: nil,
+       payee_dialog: %{
+         id: "payee-dialog",
+         current_scope: assigns.current_scope,
+         today: assigns.today,
+         payee_id: payee_id
+       }
+     )}
+  end
+
+  def handle_event("close_payee_dialog", _params, socket),
+    do: {:noreply, assign(socket, :payee_dialog, nil)}
 
   def handle_event("show_closed_accounts", _params, socket),
     do: {:noreply, assign(socket, :closed_accounts, true)}
