@@ -252,6 +252,10 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
       unit: unit,
       unit_label: unit_label(data, unit),
       weights?: not data.reimbursement and data.split_mode != :equal,
+      # The disclosure follows `open`, so it stays true while it shows: false would close it.
+      split_more_open:
+        not data.reimbursement and
+          (socket.assigns[:split_more_open] == true or data.split_mode != :equal),
       budget_account?: budget_account?(socket.assigns, data),
       all_selected?: Enum.all?(data.rows, & &1.selected)
     )
@@ -499,7 +503,7 @@ defmodule AbakusWeb.Kasse.ExpenseLive do
               id="expense-split-more"
               variant={:button}
               summary="Weitere Aufteilungsoptionen …"
-              open={@data.split_mode != :equal}
+              open={@split_more_open}
               class="mt-4"
             >
               <.input

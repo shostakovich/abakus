@@ -72,6 +72,9 @@ defmodule AbakusWeb.Kasse.ExpenseLiveTest do
     change(view, %{rows: %{"0" => %{weight: "50"}}})
     assert text(view, "#expense-split-sum") == "Summe 116,66 % – 16,66 zu viel %."
     assert has_element?(view, "#expense-split-sum.text-error-ink")
+
+    change(view, %{split_mode: "equal"})
+    assert has_element?(view, "#expense-split-more[open]")
   end
 
   test "selecting everybody or nobody", %{conn: conn} do

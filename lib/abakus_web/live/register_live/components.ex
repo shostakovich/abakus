@@ -439,7 +439,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :all, :boolean, required: true
   attr :addable, :boolean, required: true, doc: "whether \"Geplante Buchung\" adds one here"
-  attr :open, :boolean, default: false, doc: "whether it is open while there are some"
+  attr :open, :boolean, default: false, doc: "whether it is open"
 
   @doc """
   The scheduled transactions above the register's transactions, collapsed with their count ("Geplant · 3"), open and
@@ -450,7 +450,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   def scheduled(assigns) do
     ~H"""
     <section id="scheduled">
-      <.disclosure id="scheduled-list" variant={:row} open={@open or @scheduled == []}>
+      <.disclosure id="scheduled-list" variant={:row} open={@open}>
         <:title>
           Geplant<span :if={@scheduled != []} class="font-normal text-base-content/70"> · {length(
             @scheduled

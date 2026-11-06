@@ -335,8 +335,8 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   # The list follows `open`, so it turns false only while the list is not there, closing nothing.
-  defp keep_scheduled_open(%{assigns: %{scheduled: [], scheduled_shown: false}} = socket),
-    do: assign(socket, :scheduled_open, false)
+  defp keep_scheduled_open(%{assigns: %{scheduled: [], scheduled_shown: shown}} = socket),
+    do: assign(socket, :scheduled_open, shown)
 
   defp keep_scheduled_open(socket), do: socket
 
