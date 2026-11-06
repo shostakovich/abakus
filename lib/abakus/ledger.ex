@@ -358,8 +358,10 @@ defmodule Abakus.Ledger do
   and subtransactions; without deleted ones and match proposals, which count nowhere (see
   `list_match_proposals/2`).
 
-  Options narrow the list: `filter: :unapproved` or `:uncleared` (`:all` for none), `ids:`, `without_accounts:`, the
-  ids of accounts to leave out, and `limit:`, the newest so many.
+  Options narrow the list: `filter: :unapproved`, `:uncleared` or `:needs_category` (`:all` for none), `ids:`,
+  `without_accounts:`, the ids of accounts to leave out, and `limit:`, the newest so many. `:needs_category` are the
+  transactions that need a category: in a budget account, without one, not zero and no transfer to another budget
+  account; a split by its parts.
   """
   def list_transactions(%Scope{} = scope, register, opts \\ []) do
     scope
@@ -389,6 +391,8 @@ defmodule Abakus.Ledger do
   defp narrow(query, {:filter, :all}), do: query
   defp narrow(query, {:filter, :unapproved}), do: where(query, [t], not t.approved)
   defp narrow(query, {:filter, :uncleared}), do: where(query, [t], t.cleared == :uncleared)
+  defp narrow(query, {:filter, :needs_category}), do: needing_category(query)
+
   # One JSON parameter, as SQLite takes at most 32766 variables and a selection can hold more ids.
   defp narrow(query, {:ids, ids}),
     do:
@@ -400,6 +404,32 @@ defmodule Abakus.Ledger do
 
   defp narrow(query, {:without_accounts, ids}), do: where(query, [t], t.account_id not in ^ids)
   defp narrow(query, {:limit, limit}), do: limit(query, ^limit)
+
+  defp needing_category(query) do
+    budget_accounts = from a in Account, where: a.kind in ^Account.budget_kinds(), select: a.id
+
+    between_budget_accounts =
+      from p in Payee, where: p.transfer_account_id in subquery(budget_accounts), select: p.id
+
+    splits = from s in parts(), select: s.transaction_id
+
+    where(
+      query,
+      [t],
+      t.account_id in subquery(budget_accounts) and
+        ((is_nil(t.category_id) and t.amount != 0 and t.id not in subquery(splits) and
+            (is_nil(t.payee_id) or t.payee_id not in subquery(between_budget_accounts))) or
+           t.id in subquery(parts_needing_category(between_budget_accounts)))
+    )
+  end
+
+  defp parts_needing_category(between_budget_accounts) do
+    from s in parts(),
+      where:
+        is_nil(s.category_id) and s.amount != 0 and
+          (is_nil(s.payee_id) or s.payee_id not in subquery(between_budget_accounts)),
+      select: s.transaction_id
+  end
 
   @doc """
   The category last used on a transfer between a budget account and the account of `transfer_payee_id`: on the

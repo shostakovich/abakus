@@ -8,6 +8,7 @@ defmodule AbakusWeb.BudgetLive.Components do
 
   import Abakus.Format, only: [month_name: 1, month_abbr: 1, month_year: 1]
 
+  alias Abakus.Amount
   alias Abakus.Budget.Month
   alias Abakus.Money
   alias Abakus.Names
@@ -248,6 +249,9 @@ defmodule AbakusWeb.BudgetLive.Components do
     do:
       "„#{String.trim(typed)}“ ist kein gültiger Betrag.\nRechnen geht mit +\u00A0und\u00A0−, etwa\u00A050+20."
 
+  @doc "Why an amount typed into Zugewiesen was refused beyond the Ledger's range."
+  def out_of_range_amount, do: "Der Betrag #{Amount.out_of_range_message()}."
+
   @doc "The text colour of a tone (`Status`): only the ink tokens colour text."
   def tone_class(:error), do: "text-error-ink"
   def tone_class(:warning), do: "text-warning-ink"
@@ -436,7 +440,7 @@ defmodule AbakusWeb.BudgetLive.Components do
           </button>
           <.link
             :if={not @assignable}
-            navigate={~p"/budget/accounts/all"}
+            navigate={~p"/budget/accounts/all?filter=needs_category"}
             class="app-catbtn"
             title="In allen Konten zuordnen"
           >

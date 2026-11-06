@@ -88,14 +88,21 @@ defmodule AbakusWeb.RegisterWindowTest do
   end
 
   test "selecting all takes transactions not loaded yet", c do
-    transactions(c.giro, 250, fn _index -> %{approved: false} end)
+    transactions(c.giro, 250)
     {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
     view |> element("#select-all") |> render_click()
     assert has_element?(view, "#bulk", "250 Buchungen")
     assert has_element?(view, "#select-all", "Auswahl aufheben")
+  end
 
-    view |> element("#approve-selected") |> render_click()
+  test "Alle bestätigen approves the whole view, loaded or not", c do
+    ids = transactions(c.giro, 250, fn _index -> %{approved: false} end)
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
+    refute shown?(view, Enum.at(ids, 100))
+
+    assert has_element?(view, "#approve-line", "250 Buchungen warten auf Bestätigung.")
+    view |> element("#approve-shown") |> render_click()
     assert has_element?(view, "#flash-info", "250 bestätigt")
 
     refute Repo.exists?(

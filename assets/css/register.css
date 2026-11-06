@@ -5,12 +5,13 @@
 .app-reg-line > .app-reg-figure { display: flex; min-width: 0; flex-direction: column; }
 .app-reg-line-all { gap: 1.25rem; }
 .app-reg-toolbar { display: flex; align-items: center; gap: .5rem; padding-block: .75rem; }
-.app-reg-actions { flex: 1 1 auto; align-items: center; gap: .25rem; }
+.app-reg-actions { display: flex; flex: 1 1 auto; align-items: center; gap: .25rem; }
 .app-reg-actions > .btn { flex-shrink: 0; }
 .app-reg-hint { display: flex; align-items: center; gap: .25rem; margin-top: -.25rem; padding-bottom: .75rem; font-size: var(--text-sm); color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
 .app-reg-find { display: flex; flex: 0 1 auto; align-items: center; gap: .5rem; min-width: 0; margin-inline-start: auto; }
 .app-reg-search { flex: 0 1 14rem; width: 14rem; min-width: 7rem; }
 @media (width < 48rem) {
+  .app-reg-actions { display: contents; }
   .app-reg-find { flex: 1 1 auto; }
   .app-reg-search { order: -1; flex: 1 1 auto; width: auto; }
 }

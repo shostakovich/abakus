@@ -16,7 +16,7 @@ defmodule AbakusWeb.BudgetLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{Amount, Budget, Categories, Format, LocalTime, Money, Names}
+  alias Abakus.{Budget, Categories, Format, LocalTime, Money, Names}
 
   alias AbakusWeb.BudgetLive.{
     CategoryEditor,
@@ -793,8 +793,8 @@ defmodule AbakusWeb.BudgetLive do
       {:ok, amount} ->
         store_amount(socket, category, month, amount, value)
 
-      {:error, "Der Betrag ist zu groß."} ->
-        mark_invalid(socket, category, month, value, out_of_range())
+      {:error, :too_large} ->
+        mark_invalid(socket, category, month, value, Components.out_of_range_amount())
 
       {:error, _message} ->
         mark_invalid(socket, category, month, value, Components.invalid_amount(value))
@@ -818,7 +818,7 @@ defmodule AbakusWeb.BudgetLive do
           |> assign_view()
 
         {:error, _changeset} ->
-          mark_invalid(socket, category, month, value, out_of_range())
+          mark_invalid(socket, category, month, value, Components.out_of_range_amount())
       end
     end
   end
@@ -828,8 +828,6 @@ defmodule AbakusWeb.BudgetLive do
     do: assign(socket, :invalid, nil)
 
   defp clear_invalid(socket, _category, _month), do: socket
-
-  defp out_of_range, do: "Der Betrag #{Amount.out_of_range_message()}."
 
   defp mark_invalid(socket, category, month, value, error) do
     field =

@@ -1,3 +1,5 @@
+import { refocusAmount } from "./refocus.js"
+
 // Months by the budget's width, as in Actual: two from 760 px, three from 1110 px; below lg one month in a bar.
 const TWO_MONTHS = 760
 const THREE_MONTHS = 1110
@@ -44,18 +46,8 @@ export const BudgetLayout = {
     this.onEscape = (event) => this.restoreOnEscape(event)
     document.addEventListener("keydown", this.onEscape)
     this.el.addEventListener("focusin", ({ target }) => target.matches(".app-assign") && target.select())
-    this.handleEvent("refocus_amount", ({ id }) => this.refocus(id))
+    this.handleEvent("refocus_amount", ({ id }) => refocusAmount(id, (active) => active.matches(".app-assign")))
     this.layout()
-  },
-
-  // Back to a refused amount, unless focus has moved on to something other than another amount.
-  refocus(id) {
-    const input = document.getElementById(id)
-    const active = document.activeElement
-    if (!input || !input.getClientRects().length) return
-    if (active && active !== document.body && active !== input && !active.matches(".app-assign")) return
-    input.focus()
-    input.setSelectionRange(input.value.length, input.value.length)
   },
 
   destroyed() {

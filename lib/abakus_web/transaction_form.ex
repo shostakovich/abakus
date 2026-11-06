@@ -20,8 +20,8 @@ defmodule AbakusWeb.TransactionForm do
   accounts have none. Accounts are `%{id => %Account{}}` with their transfer payees.
   """
 
+  alias Abakus.{Amount, Money}
   alias Abakus.Ledger.{Account, Payee, Transaction}
-  alias Abakus.Money
 
   @main "main"
 
@@ -352,6 +352,33 @@ defmodule AbakusWeb.TransactionForm do
   defp cents(text), do: if(blank?(text), do: {:ok, 0}, else: Money.parse_expression(text, 2))
 
   @doc """
+  Why an amount as typed into a field is refused: `:invalid` while it reads as none, `:out_of_range` beyond the
+  Ledger's range (`Abakus.Amount`); nil when it is taken. A sign may go in front.
+  """
+  def amount_refusal(text), do: refusal(amount(take_amount(%{"amount" => text})))
+
+  @doc """
+  The sides whose amount is refused, as `{side, typed, refusal}`: "main" first, then a split's parts in order.
+  """
+  def refused_amounts(params) do
+    parts = if params["split"] == "true", do: subtransactions(params), else: []
+
+    for {side, values} <- [{@main, params} | parts],
+        {typed, refusal} <- [refused(values)],
+        do: {side, typed, refusal}
+  end
+
+  defp refused(side) do
+    Enum.find_value([side["outflow"], side["inflow"]], fn text ->
+      if refusal = refusal(cents(text)), do: {text, refusal}
+    end)
+  end
+
+  defp refusal({:ok, cents}), do: if(Amount.valid?(cents), do: nil, else: :out_of_range)
+  defp refusal({:error, :too_large}), do: :out_of_range
+  defp refusal({:error, _message}), do: :invalid
+
+  @doc """
   Whether the side takes a category: a split does not, a transfer only between a budget and a tracking account,
   anything else when the transaction's account is a budget account.
   """
@@ -522,6 +549,7 @@ defmodule AbakusWeb.TransactionForm do
   defp parse_amount(side, prefix) do
     case amount(side) do
       {:ok, cents} -> {:ok, cents}
+      {:error, :too_large} -> {:error, prefix <> "Betrag " <> Amount.out_of_range_message()}
       {:error, message} -> {:error, prefix <> message}
     end
   end

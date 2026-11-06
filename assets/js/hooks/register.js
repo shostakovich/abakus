@@ -1,3 +1,5 @@
+import { refocusAmount } from "./refocus.js"
+
 export const EditRow = {
   mounted() {
     // Only inside the row: Escape in a dialog or an open list above it closes just that.
@@ -9,6 +11,13 @@ export const EditRow = {
     input.focus({ preventScroll: true })
     if (typeof input.select === "function" && input.type !== "date") input.select()
     this.el.scrollIntoView({ block: "nearest" })
+  },
+}
+
+// The transaction editor's amounts: focus stays in the editor, in the row or the sheet.
+export const AmountRefocus = {
+  mounted() {
+    this.handleEvent("refocus_amount", ({ id }) => refocusAmount(id, (active) => active.closest("#tx-editor")))
   },
 }
 

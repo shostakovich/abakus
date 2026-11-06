@@ -9,8 +9,8 @@ defmodule AbakusWeb.RegisterLive do
   account opens as fast with thousands of transactions as with a few. A search goes through all of them, and "Alle
   auswählen" takes the whole view, loaded or not.
 
-  Here transactions are approved (one, the selected or all), categorised (the selected) and toggled
-  between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
+  Here transactions are approved (one, or all the view "Zu bestätigen" shows), categorised (the selected) and
+  toggled between uncleared and cleared. A change to a reconciled transaction asks in the browser first and then sends
   `reconciled: "confirmed"`, which goes to the Ledger as `reconciled: :confirmed`. The shared-expenses account offers
   no manual entry and no reconcile.
   Transactions linked to Kasse expenses are deleted only with their expense, those the Depot books not at all here.
@@ -31,7 +31,7 @@ defmodule AbakusWeb.RegisterLive do
   joins the selection, with Shift the rows from the last one clicked; "Auswählen" in Ansicht makes every click join
   it, for touch screens), a click into a cell of a selected row opens the row for editing, "Buchung" adds an empty row
   on top; one row at a time. Phones open a sheet from a list row or the "+" button instead. The counterpart of a
-  split's transfer opens its split. The selection bar approves, categorises and deletes the selected transactions.
+  split's transfer opens its split. The selection bar categorises and deletes the selected transactions.
   """
   use AbakusWeb, :live_view
 
@@ -110,10 +110,12 @@ defmodule AbakusWeb.RegisterLive do
           account={@account}
           manual={@manual}
           unapproved={@unapproved}
+          waiting={@waiting}
           proposals={@proposals}
           filter={@filter}
           query={@query}
           filter_paths={@filter_paths}
+          unapproved_path={@unapproved_path}
           picking={@picking}
           all_selected={@count > 0 and MapSet.size(@selected) == @count}
         />
@@ -302,18 +304,24 @@ defmodule AbakusWeb.RegisterLive do
       assign(socket, account: account, page_title: (account && account.name) || "Alle Konten")
 
     shown_proposals = socket.assigns.proposals |> Rows.filter(filter) |> Rows.search(query)
+
+    waiting =
+      if filter == :unapproved, do: Rows.search(socket.assigns.unapproved, query), else: []
+
     balances = balances(account, account_rows)
     columns = Components.columns(account)
 
     socket
     |> assign(
       shown_proposals: shown_proposals,
+      waiting: waiting,
       accounts: accounts,
       manual: manual_entry?(account, account_rows),
       columns: columns,
       editor: follow_rows(socket.assigns.editor, rows, accounts, columns),
       balances: balances,
-      filter_paths: Map.new(Rows.filters(), &{&1, register_path(socket.assigns, filter: &1)})
+      filter_paths: Map.new(Rows.filters(), &{&1, register_path(socket.assigns, filter: &1)}),
+      unapproved_path: register_path(socket.assigns, filter: :unapproved, q: "")
     )
     |> select(socket.assigns.selected)
   end
@@ -407,9 +415,21 @@ defmodule AbakusWeb.RegisterLive do
     )
   end
 
-  def handle_event("approve_all", params, socket) do
-    approve(socket, socket.assigns.unapproved, params, & &1, open_proposals_text(socket))
+  def handle_event("approve_shown", params, %{assigns: %{waiting: [_ | _] = waiting}} = socket) do
+    socket
+    |> saved(
+      Ledger.update_transactions(
+        socket.assigns.current_scope,
+        waiting,
+        %{approved: true},
+        confirmed(params)
+      ),
+      "#{length(waiting)} bestätigt.#{open_proposals_text(socket.assigns.shown_proposals)}"
+    )
+    |> noreply()
   end
+
+  def handle_event("approve_shown", _params, socket), do: {:noreply, socket}
 
   def handle_event("accept_match", %{"id" => id} = params, socket) do
     decide(
@@ -438,17 +458,6 @@ defmodule AbakusWeb.RegisterLive do
       "#{length(proposals)} zugeordnet."
     )
     |> noreply()
-  end
-
-  def handle_event("approve_selected", params, socket) do
-    case Enum.reject(socket.assigns.selection, & &1.approved) do
-      [] ->
-        {:noreply,
-         put_flash(socket, :info, "Keine der ausgewählten Buchungen wartet auf Bestätigung.")}
-
-      waiting ->
-        approve(socket, waiting, params, &assign(&1, :selected, MapSet.new()))
-    end
   end
 
   def handle_event("categorise_selected", %{"category_id" => id} = params, socket) do
@@ -760,25 +769,10 @@ defmodule AbakusWeb.RegisterLive do
     end
   end
 
-  defp approve(socket, transactions, params, approved, note \\ "") do
-    result =
-      Ledger.update_transactions(
-        socket.assigns.current_scope,
-        transactions,
-        %{approved: true},
-        confirmed(params)
-      )
+  defp open_proposals_text([]), do: ""
+  defp open_proposals_text([_]), do: " 1 Zuordnungsvorschlag bleibt offen: Zuordnen oder Trennen."
 
-    socket = if match?({:ok, _}, result), do: approved.(socket), else: socket
-    socket |> saved(result, "#{length(transactions)} bestätigt.#{note}") |> noreply()
-  end
-
-  defp open_proposals_text(%{assigns: %{proposals: []}}), do: ""
-
-  defp open_proposals_text(%{assigns: %{proposals: [_]}}),
-    do: " 1 Zuordnungsvorschlag bleibt offen: Zuordnen oder Trennen."
-
-  defp open_proposals_text(%{assigns: %{proposals: proposals}}),
+  defp open_proposals_text(proposals),
     do: " #{length(proposals)} Zuordnungsvorschläge bleiben offen: Zuordnen oder Trennen."
 
   defp decide(socket, id, fun, message) do
