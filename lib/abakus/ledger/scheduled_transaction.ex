@@ -1,9 +1,8 @@
 defmodule Abakus.Ledger.ScheduledTransaction do
   @moduledoc """
-  A transaction the Ledger enters on its next date, as often as its frequency says (`Abakus.Ledger.Scheduled`).
-  Twice a month it falls on `first_day` and `second_day`, in either order, and without two days it is monthly; a day
-  past the end of a month, also in a monthly or yearly step, stands for the month's last day. A split has subtransactions instead of a category, and a
-  transfer payee makes it a transfer.
+  A transaction the Ledger enters on its next date (`Abakus.Ledger.Scheduled`), once or repeating every
+  `repeat_every` weeks or months (`repeat_unit`). A monthly step keeps the day of the month, or takes the month's last
+  day if it is shorter. A split has subtransactions instead of a category, and a transfer payee makes it a transfer.
   """
 
   use Abakus.Schema, uuid: true
@@ -12,39 +11,14 @@ defmodule Abakus.Ledger.ScheduledTransaction do
 
   alias Abakus.Amount
   alias Abakus.Categories.Category
-  alias Abakus.Ledger.{Account, Payee, ScheduledSubtransaction}
+  alias Abakus.Ledger.{Account, Payee, ScheduledSubtransaction, Transaction}
 
-  @frequencies [
-    :once,
-    :daily,
-    :weekly,
-    :every_other_week,
-    :twice_a_month,
-    :every_4_weeks,
-    :monthly,
-    :every_other_month,
-    :every_3_months,
-    :every_4_months,
-    :twice_a_year,
-    :yearly,
-    :every_other_year
-  ]
-
-  @days [daily: 1, weekly: 7, every_other_week: 14, every_4_weeks: 28]
-  @months [
-    monthly: 1,
-    every_other_month: 2,
-    every_3_months: 3,
-    every_4_months: 4,
-    twice_a_year: 6
-  ]
-  @years [yearly: 1, every_other_year: 2]
+  @units [:week, :month]
 
   schema "scheduled_transactions" do
     field :next_date, :date
-    field :frequency, Ecto.Enum, values: @frequencies
-    field :first_day, :integer
-    field :second_day, :integer
+    field :repeat_unit, Ecto.Enum, values: @units
+    field :repeat_every, :integer
     field :amount, :integer
     field :memo, :string
     field :cleared, Ecto.Enum, values: [:uncleared, :cleared], default: :uncleared
@@ -63,53 +37,38 @@ defmodule Abakus.Ledger.ScheduledTransaction do
     timestamps()
   end
 
-  def frequencies, do: @frequencies
-
   def changeset(scheduled, attrs) do
     scheduled
     |> cast(attrs, [
       :account_id,
       :next_date,
-      :frequency,
-      :first_day,
-      :second_day,
+      :repeat_unit,
+      :repeat_every,
       :payee_id,
       :category_id,
       :memo,
       :amount,
       :cleared
     ])
-    |> validate_required([:user_id, :account_id, :next_date, :frequency, :amount, :cleared])
+    |> validate_required([:user_id, :account_id, :next_date, :amount, :cleared])
     |> Amount.validate()
-    |> validate_days()
+    |> validate_repeat()
     |> cast_assoc(:subtransactions, with: &ScheduledSubtransaction.changeset/3)
     |> validate_split()
   end
 
-  defp validate_days(changeset) do
-    if get_field(changeset, :frequency) == :twice_a_month do
+  defp validate_repeat(changeset) do
+    if get_field(changeset, :repeat_unit) do
       changeset
-      |> validate_required([:first_day, :second_day])
-      |> validate_number(:first_day, greater_than_or_equal_to: 1, less_than_or_equal_to: 30)
-      |> validate_number(:second_day, less_than_or_equal_to: 31)
-      |> validate_second_day()
+      |> validate_required([:repeat_every])
+      |> validate_number(:repeat_every, greater_than_or_equal_to: 1, less_than_or_equal_to: 99)
     else
-      changeset |> put_change(:first_day, nil) |> put_change(:second_day, nil)
-    end
-  end
-
-  defp validate_second_day(changeset) do
-    with first when is_integer(first) <- get_field(changeset, :first_day),
-         second when is_integer(second) and second <= first <- get_field(changeset, :second_day) do
-      add_error(changeset, :second_day, "muss nach dem ersten Tag liegen")
-    else
-      _ordered -> changeset
+      put_change(changeset, :repeat_every, nil)
     end
   end
 
   defp validate_split(changeset) do
-    case get_assoc(changeset, :subtransactions)
-         |> Enum.reject(&(&1.action in [:replace, :delete])) do
+    case Transaction.subtransactions(changeset) do
       [] ->
         changeset
 
@@ -138,39 +97,94 @@ defmodule Abakus.Ledger.ScheduledTransaction do
       else: changeset
   end
 
-  @doc "The date of the occurrence after `next_date`; nil for one that happens once."
-  def following(%__MODULE__{frequency: :once}), do: nil
+  @doc """
+  The rules for the accounts involved, so that every occurrence can be entered: `account` is its account and
+  `transfer_accounts` maps transfer payee ids to their accounts. No transfer to the own account or to the
+  shared-expenses account, whose transactions the Kasse's budget link writes, and a split is no transfer as a whole.
+  A budget account's side may have a category, and needs one for a transfer to a tracking account, but has none for
+  a transfer to another budget account; a tracking account's has none. A transfer between a tracking and a budget
+  account is scheduled in the budget account, which takes its category. A split's rules apply to each part; when
+  the parts are unchanged, their errors go to `subtransactions`.
+  """
+  def validate_accounts(changeset, %Account{} = account, transfer_accounts) do
+    Transaction.validate_sides(
+      changeset,
+      transfer_accounts,
+      &validate_side(&1, account, transfer_accounts)
+    )
+  end
 
-  def following(%__MODULE__{frequency: :twice_a_month, next_date: date} = scheduled) do
-    case days(scheduled) do
-      [first, _second] = days ->
-        this_month = Enum.map(days, &on_day(date, &1))
+  defp validate_side(changeset, account, transfer_accounts) do
+    other = Map.get(transfer_accounts, get_field(changeset, :payee_id))
+    category? = not is_nil(get_field(changeset, :category_id))
 
-        case Enum.find(this_month, &Date.after?(&1, date)) do
-          nil -> date |> Date.beginning_of_month() |> Date.shift(month: 1) |> on_day(first)
-          later -> later
-        end
-
-      _fewer ->
-        following(%{scheduled | frequency: :monthly})
+    case side_error(account, other, category?) do
+      nil -> changeset
+      {field, message} -> add_error(changeset, field, message)
     end
   end
 
-  def following(%__MODULE__{frequency: frequency, next_date: date}) do
+  defp side_error(%Account{id: id}, %Account{id: id}, _category?),
+    do: {:payee_id, "darf nicht das eigene Konto sein"}
+
+  defp side_error(account, other, category?) do
     cond do
-      days = @days[frequency] -> Date.add(date, days)
-      months = @months[frequency] -> Date.shift(date, month: months)
-      years = @years[frequency] -> Date.shift(date, year: years)
+      other && other.shared_expenses ->
+        {:payee_id, "Das Kasse-Konto nimmt keine geplanten Buchungen an."}
+
+      other && Account.takes_category?(other, account) ->
+        {:payee_id, "wird im Budgetkonto geplant"}
+
+      category? ->
+        category_error(account, other)
+
+      other && Account.takes_category?(account, other) ->
+        {:category_id, "muss bei einer Umbuchung mit einem Tracking-Konto ausgefüllt werden"}
+
+      true ->
+        nil
     end
   end
 
-  # Messages merged field by field may leave the days missing or out of order.
-  defp days(scheduled) do
-    [scheduled.first_day, scheduled.second_day]
-    |> Enum.filter(&(is_integer(&1) and &1 in 1..31))
-    |> Enum.uniq()
-    |> Enum.sort()
+  defp category_error(account, other) do
+    cond do
+      not Account.budget_account?(account) ->
+        {:category_id, "muss in einem Tracking-Konto leer sein"}
+
+      not Account.takes_category?(account, other) ->
+        {:category_id, "muss bei einer Umbuchung zwischen Budget-Konten leer sein"}
+
+      true ->
+        nil
+    end
   end
 
-  defp on_day(date, day), do: %{date | day: min(day, Date.days_in_month(date))}
+  @doc "The date of the occurrence after `next_date`; nil for one that happens once."
+  def following(%__MODULE__{repeat_unit: nil}), do: nil
+
+  def following(%__MODULE__{repeat_unit: :week, repeat_every: every, next_date: date}),
+    do: Date.add(date, 7 * (every || 1))
+
+  def following(%__MODULE__{repeat_unit: :month, repeat_every: every, next_date: date}),
+    do: Date.shift(date, month: every || 1)
+
+  @doc "The dates of the `count` occurrences after `next_date`, fewer for one that happens once."
+  def dates_after(%__MODULE__{} = scheduled, count) do
+    scheduled
+    |> Stream.unfold(fn scheduled ->
+      with %Date{} = date <- following(scheduled), do: {date, %{scheduled | next_date: date}}
+    end)
+    |> Enum.take(count)
+  end
+
+  @doc ~s(How often it happens: `"Einmalig"`, `"Monatlich"`, `"Alle 2 Wochen"`.)
+  def repeat_label(%__MODULE__{repeat_unit: unit, repeat_every: every}),
+    do: label(unit, every || 1)
+
+  defp label(nil, _every), do: "Einmalig"
+  defp label(:week, 1), do: "Wöchentlich"
+  defp label(:week, every), do: "Alle #{every} Wochen"
+  defp label(:month, 1), do: "Monatlich"
+  defp label(:month, 12), do: "Jährlich"
+  defp label(:month, every), do: "Alle #{every} Monate"
 end

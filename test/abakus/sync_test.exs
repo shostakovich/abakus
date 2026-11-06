@@ -160,7 +160,8 @@ defmodule Abakus.SyncTest do
           user_id: c.scope.user.id,
           account_id: c.giro.id,
           next_date: ~D[2026-12-01],
-          frequency: :monthly,
+          repeat_unit: :month,
+          repeat_every: 1,
           amount: -1_000
         })
 
@@ -430,29 +431,99 @@ defmodule Abakus.SyncTest do
       refute Repo.get(Transaction, id)
     end
 
-    test "a twice-a-month schedule may lack its days, and is entered monthly", c do
+    test "a scheduled transaction an app writes with unit and count is entered alike", c do
+      id = Ids.generate()
+
+      fields = [
+        account_id: c.giro.id,
+        next_date: "2026-11-02",
+        repeat_unit: "week",
+        repeat_every: 2,
+        amount: -1_000,
+        cleared: "uncleared"
+      ]
+
+      assert {:ok, 6} =
+               Sync.apply_messages(
+                 c.scope,
+                 "mac",
+                 for(
+                   {column, value} <- fields,
+                   do: message(id, Atom.to_string(column), value, @mac, "scheduled_transactions")
+                 )
+               )
+
+      assert {:ok, 1} = Scheduled.enter_due(c.scope, ~D[2026-11-02])
+      assert Repo.get!(ScheduledTransaction, id).next_date == ~D[2026-11-16]
+    end
+
+    test "a unit without its count steps by 1", c do
       scheduled =
         Repo.insert!(%ScheduledTransaction{
           user_id: c.scope.user.id,
           account_id: c.giro.id,
           next_date: ~D[2026-11-02],
-          frequency: :monthly,
           amount: -1_000
         })
 
       assert {:ok, 1} =
                Sync.apply_messages(c.scope, "mac", [
-                 message(
-                   scheduled.id,
-                   "frequency",
-                   "twice_a_month",
-                   @mac,
-                   "scheduled_transactions"
-                 )
+                 message(scheduled.id, "repeat_unit", "month", @mac, "scheduled_transactions")
                ])
 
       assert {:ok, 1} = Scheduled.enter_due(c.scope, ~D[2026-11-02])
       assert Repo.reload(scheduled).next_date == ~D[2026-12-02]
+    end
+
+    test "refuses a unit other than weeks and months and a count outside 1 to 99", c do
+      scheduled =
+        Repo.insert!(%ScheduledTransaction{
+          user_id: c.scope.user.id,
+          account_id: c.giro.id,
+          next_date: ~D[2026-11-02],
+          amount: -1_000
+        })
+
+      push = fn column, value ->
+        Sync.apply_messages(c.scope, "mac", [
+          message(scheduled.id, column, value, @mac, "scheduled_transactions")
+        ])
+      end
+
+      assert {:error, {:invalid_value, _, "repeat_unit", "day"}} = push.("repeat_unit", "day")
+      assert {:error, {:rejected, _}} = push.("repeat_every", 0)
+      assert {:error, {:rejected, _}} = push.("repeat_every", 100)
+    end
+
+    test "an older app's frequency and days of a scheduled transaction are ignored", c do
+      scheduled =
+        Repo.insert!(%ScheduledTransaction{
+          user_id: c.scope.user.id,
+          account_id: c.giro.id,
+          next_date: ~D[2026-11-02],
+          repeat_unit: :month,
+          repeat_every: 1,
+          amount: -1_000
+        })
+
+      assert {:ok, 0} =
+               Sync.apply_messages(
+                 c.scope,
+                 "mac",
+                 for(
+                   {column, value} <- [frequency: "twice_a_month", first_day: 1, second_day: 15],
+                   do:
+                     message(
+                       scheduled.id,
+                       Atom.to_string(column),
+                       value,
+                       @mac,
+                       "scheduled_transactions"
+                     )
+                 )
+               )
+
+      assert %{repeat_unit: :month, repeat_every: 1} = Repo.reload(scheduled)
     end
 
     test "a reference to a merged payee points at the end of its chain of successors", c do
