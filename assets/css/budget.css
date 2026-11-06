@@ -52,9 +52,17 @@
 .app-budget :is(td, th).app-num { padding-inline: .375rem; }
 .app-budget-wrap { container-type: inline-size; }
 
-.app-budget .app-heads-month > th { height: 1px; padding: .25rem .5rem .375rem; box-shadow: none; vertical-align: bottom; overflow: visible; }
-.app-budget .app-heads-month > th.app-ms { box-shadow: inset 1px 0 0 var(--app-line); }
-.app-budget .app-heads-month > th.app-cat { padding-block: .25rem; box-shadow: inset 0 -1px 0 var(--app-line); }
+.app-budget :is(.app-heads-month, .app-heads-calc, .app-heads-rta) > th { padding: .25rem .5rem 0; box-shadow: none; vertical-align: top; overflow: visible; }
+.app-budget :is(.app-heads-month, .app-heads-calc, .app-heads-rta) > th.app-ms { box-shadow: inset 1px 0 0 var(--app-line); }
+.app-budget .app-heads-month > th.app-cat { padding-block: .25rem; box-shadow: inset 0 -1px 0 var(--app-line); vertical-align: bottom; }
+.app-budget .app-heads-calc { display: none; }
+:root[data-budget-calculation="shown"] .app-budget .app-heads-calc { display: table-row; }
+:root[data-budget-calculation="shown"] .app-budget .app-heads-month > th.app-ms { padding-block-end: .25rem; }
+.app-budget .app-heads-calc > th.app-ms {
+  padding: calc(.375rem + 1px) .5rem; background: var(--color-base-200);
+  box-shadow: inset 1px 0 0 var(--app-line), inset 0 1px 0 var(--app-line), inset 0 -1px 0 var(--app-line);
+}
+.app-budget .app-heads-rta > th { padding-block-end: .375rem; }
 .app-budget .app-heads > th { padding-block: .25rem; vertical-align: bottom; overflow: visible; }
 .app-cathead { display: flex; align-items: flex-end; justify-content: space-between; gap: .5rem; }
 .app-cathead .btn { margin-block-end: -.5rem; margin-inline-end: -.5rem; }
@@ -149,8 +157,8 @@ button.app-avail:hover { background: color-mix(in oklab, var(--color-base-conten
 button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
 @media (pointer: coarse) { button.app-avail::after { content: ""; position: absolute; inset: -.5rem -.25rem; } }
 
-.app-month { display: flex; flex-direction: column; gap: .25rem; height: 100%; white-space: normal; cursor: pointer; }
-.app-month.is-focus { cursor: default; }
+.app-budget .app-month { white-space: normal; cursor: pointer; }
+.app-budget .app-month.is-focus { cursor: default; }
 .app-mhead { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2rem; }
 .app-month .app-distribute { margin-inline-end: -.5rem; }
 .app-distribute .menu { text-align: start; }
@@ -158,19 +166,13 @@ button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outlin
 .app-month .app-mhead { min-height: 1.75rem; }
 .app-month .app-mname { font-size: .9375rem; }
 
-.app-mcalc {
-  --app-mcalc-x: .75rem;
-  display: none; grid-template-columns: auto auto; justify-content: center; gap: .125rem .75rem;
-  margin: 0 calc(-1 * var(--app-mcalc-x)); padding: .375rem var(--app-mcalc-x);
-  border-block: 1px solid var(--app-line); background: var(--color-base-200); font-size: .75rem; line-height: 1rem;
-}
-:root[data-budget-calculation="shown"] .app-mcalc { display: grid; }
+.app-mcalc { display: grid; grid-template-columns: auto auto; justify-content: center; gap: .125rem .75rem; margin: 0; font-size: .75rem; line-height: 1rem; }
 .app-mcalc > div { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; }
 .app-mcalc dd { grid-area: 1 / 1; margin: 0; text-align: end; }
 .app-mcalc dt { grid-area: 1 / 2; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
 
 .app-rta {
-  display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin-block-start: auto;
+  display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; width: 100%;
   padding: .375rem .625rem; border: 0; border-radius: var(--radius-field); background: var(--app-band); color: inherit;
   font: inherit; text-align: start; cursor: pointer;
 }
@@ -195,8 +197,11 @@ button.app-avail:focus-visible { outline: 2px solid var(--color-primary); outlin
   background: var(--color-base-100); border-bottom: 1px solid var(--app-line);
 }
 @media (width >= 40rem) { .app-mbar { --app-bar-x: 1.5rem; } }
-.app-month .app-mcalc { --app-mcalc-x: .5rem; }
-.app-mbar .app-mcalc { --app-mcalc-x: var(--app-bar-x); }
+.app-mbar .app-mcalc {
+  display: none; margin-inline: calc(-1 * var(--app-bar-x)); padding: .375rem var(--app-bar-x);
+  border-block: 1px solid var(--app-line); background: var(--color-base-200);
+}
+:root[data-budget-calculation="shown"] .app-mbar .app-mcalc { display: grid; }
 .app-mbar-nav { display: flex; align-items: center; gap: .25rem; }
 .app-mbar .app-rta-value { font-size: 1.25rem; line-height: 1.75rem; }
 

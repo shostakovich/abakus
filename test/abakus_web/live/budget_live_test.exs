@@ -281,7 +281,7 @@ defmodule AbakusWeb.BudgetLiveTest do
       for key <- ~w(2026-10 2026-11 2026-12) do
         assert has_element?(
                  view,
-                 "#month-#{key} button#calc-toggle-#{key}[phx-hook=CalculationToggle]" <>
+                 ".app-heads-rta th[phx-value-month='#{key}'] button#calc-toggle-#{key}[phx-hook=CalculationToggle]" <>
                    "[aria-expanded=false][aria-controls=calc-#{key}]",
                  "Zu verteilen"
                )
@@ -291,7 +291,11 @@ defmodule AbakusWeb.BudgetLiveTest do
                  "#calc-toggle-#{key}[phx-mounted*=ignore_attrs][phx-mounted*=aria-expanded]"
                )
 
-        assert has_element?(view, "#month-#{key} dl#calc-#{key} dt", "Einnahmen im")
+        assert has_element?(
+                 view,
+                 ".app-heads-calc th[phx-value-month='#{key}'] dl#calc-#{key} dt",
+                 "Einnahmen im"
+               )
       end
     end
 
@@ -340,20 +344,13 @@ defmodule AbakusWeb.BudgetLiveTest do
       Categories.assign(budget_scope(), c.groceries, @november, 30_000)
       {:ok, view, _html} = open(c.conn, ~p"/budget", months: 3)
 
-      assert has_element?(
-               view,
-               "#month-2026-10.is-focus[aria-current=date]",
-               "400,00\u00A0€"
-             )
-
-      assert has_element?(
-               view,
-               "#month-2026-11:not(.is-focus):not([aria-current])",
-               "400,00\u00A0€"
-             )
+      assert has_element?(view, "#month-2026-10.is-focus[aria-current=date]", "Oktober")
+      assert has_element?(view, "#month-2026-11:not(.is-focus):not([aria-current])", "November")
+      assert has_element?(view, "#ready-2026-10", "400,00\u00A0€")
+      assert has_element?(view, "#ready-2026-11", "400,00\u00A0€")
 
       assert has_element?(view, "#month-2026-12:not(.is-focus)")
-      assert has_element?(view, "#month-2026-10 #calc-2026-10", "Für spätere Monate")
+      assert has_element?(view, ".app-heads-calc #calc-2026-10", "Für spätere Monate")
       assert has_element?(view, "#calc-2026-10", "−300,00")
       refute has_element?(view, "#calc-2026-11", "Für spätere Monate")
       refute has_element?(view, "#month-details-2026-10")
@@ -367,8 +364,9 @@ defmodule AbakusWeb.BudgetLiveTest do
       income(c, 100_000, ~D[2026-09-01], "Arbeitgeber")
       {:ok, view, _html} = open(c.conn, ~p"/budget?month=2026-09", months: 2)
 
-      assert has_element?(view, "th.app-past #month-2026-09")
-      refute has_element?(view, "th.app-past #month-2026-10")
+      assert has_element?(view, "th#month-2026-09.app-past")
+      refute has_element?(view, "th#month-2026-10.app-past")
+      assert has_element?(view, ".app-heads-rta th.app-past #calc-toggle-2026-09")
       assert has_element?(view, "#available-#{c.rent.id}-2026-09.app-past.app-av")
       assert has_element?(view, "#activity-#{c.rent.id}-2026-09.app-past.app-quiet")
       assert has_element?(view, "#available-#{c.rent.id}-2026-10.app-av:not(.app-past)")
@@ -392,6 +390,11 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       assert has_element?(view, "#month-2026-11.is-focus")
       refute has_element?(view, "#month-2026-10.is-focus")
+      refute has_element?(view, ".app-heads-rta th[phx-value-month='2026-11'][phx-click]")
+
+      view |> element(".app-heads-calc th[phx-value-month='2026-10']") |> render_click()
+
+      assert has_element?(view, ".app-heads-rta th.is-focus #calc-toggle-2026-10")
 
       view |> element("#assign-#{c.rent.id}-2026-12") |> render_focus()
 

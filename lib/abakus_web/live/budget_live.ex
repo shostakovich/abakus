@@ -89,19 +89,34 @@ defmodule AbakusWeb.BudgetLive do
             </colgroup>
             <thead>
               <tr :if={not @fit.compact} class="app-heads-month">
-                <th class="app-cat" rowspan="2" scope="col">
+                <th class="app-cat" rowspan="4" scope="col">
                   <div class="app-cathead">
                     <span class="app-colh">Kategorie</span>
                     <CategoryEditor.add_group edit={edit_for(@editing, :new_group)} />
                   </div>
                 </th>
-                <th :for={month <- @months} colspan="3" class={["app-ms", month.closed && "app-past"]}>
-                  <Components.month_head
-                    month={month}
-                    focus={month.month == @window.focus}
-                    current={@current}
-                  />
-                </th>
+                <Components.month_head
+                  :for={month <- @months}
+                  part={:name}
+                  month={month}
+                  focus={month.month == @window.focus}
+                  current={@current}
+                />
+              </tr>
+              <tr
+                :for={
+                  {part, class} <- [calculation: "app-heads-calc", ready_to_assign: "app-heads-rta"]
+                }
+                :if={not @fit.compact}
+                class={class}
+              >
+                <Components.month_head
+                  :for={month <- @months}
+                  part={part}
+                  month={month}
+                  focus={month.month == @window.focus}
+                  current={@current}
+                />
               </tr>
               <tr class="app-heads">
                 <th :if={@fit.compact} class="app-cat" scope="col">

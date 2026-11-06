@@ -68,29 +68,32 @@ defmodule AbakusWeb.BudgetLive.Components do
   attr :month, Month, required: true
   attr :focus, :boolean, required: true
   attr :current, Date, required: true
+  attr :part, :atom, required: true, values: [:name, :calculation, :ready_to_assign]
 
   @doc """
-  A month's head, as YNAB 4's month header: the month and its Verteilen menu, YNAB 4's calculation (shown or hidden
-  per device) and Zu verteilen, which shows and hides the calculation in every month.
+  A part of a month's head, as YNAB 4's month header, each part in its own row of the table's head so the months line
+  up: the month and its Verteilen menu (`:name`), YNAB 4's calculation, shown or hidden per device (`:calculation`),
+  and Zu verteilen, which shows and hides the calculation in every month (`:ready_to_assign`).
   """
   def month_head(assigns) do
     assigns = assign(assigns, :key, Window.param(assigns.month.month))
 
     ~H"""
-    <div
-      id={"month-#{@key}"}
-      class={["app-month", @focus && "is-focus"]}
-      aria-current={@month.month == @current && "date"}
+    <th
+      id={@part == :name && "month-#{@key}"}
+      colspan="3"
+      class={["app-ms app-month", @month.closed && "app-past", @focus && "is-focus"]}
+      aria-current={@part == :name && @month.month == @current && "date"}
       phx-click={not @focus && "focus"}
       phx-value-month={@key}
     >
-      <div class="app-mhead">
+      <div :if={@part == :name} class="app-mhead">
         <span class="app-mname">{title(@month.month, @current)}</span>
         <.distribute month={@month} key={@key} />
       </div>
-      <.calculation month={@month} key={@key} />
-      <.ready_to_assign month={@month} key={@key} focus={@focus} />
-    </div>
+      <.calculation :if={@part == :calculation} month={@month} key={@key} />
+      <.ready_to_assign :if={@part == :ready_to_assign} month={@month} key={@key} focus={@focus} />
+    </th>
     """
   end
 
