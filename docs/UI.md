@@ -59,9 +59,13 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   (linked by aria-describedby) that breaks between its two sentences, in the phone sheet a red line under the field.
   The budget's amount fields take the full keyboard, as the decimal pad has neither + nor −
 - The category's title renames in place (Enter and leaving the field save, Escape puts the name back); the dialog
-  says the target in one sentence ("Jeden Monat auffüllen bis 650,00 €") with one status sentence: "Erfüllt.", "Im
-  Plan." (by a date), "Noch 68,34 € diesen Monat." (with "68,34 € zuweisen", the amount it assigns: at most what
-  Zu verteilen holds, hidden at zero), "Überzogen um 180,20 €.", "Pausiert im Oktober."; only a target by a date has a bar (saved of its amount); spending a funded target leaves it funded
+  shows the target as one block: its rule ("Jedes Jahr bis zum 24. Dezember weitere 300,00 € zurücklegen"); for a
+  target by a date a bar (filled by what is saved of its amount, in the status' tone, with a mark where it should
+  stand after the month) and under it what is saved in the rule's verb ("75,00 von 300,00 € zurückgelegt", "415,39
+  von 3.000,00 € angespart") on the left and the month's status on the right; a monthly target shows only the
+  status. The status: "Noch 100,00 € im November", "Im Plan" (by a date), "Erfüllt", "Überzogen um 12,00 €",
+  "Pausiert im November"; no percentage. "100,00 € zuweisen" (the amount it assigns: at most what Zu verteilen
+  holds, hidden at zero) leads the target's buttons. Spending a funded target leaves it funded
 - A month head is one flat block above its columns: the month and a ghost ⋮ ("Verteilen"), then "Zu verteilen"
   as a tinted row (base-200; a green band above zero in an open month) with its chevron on the left and the amount
   on the right (green above zero, red below, plain at zero; a past month: "Nicht verteilt am Monatsende", muted and
@@ -76,7 +80,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   default, on the Mac too): between the month and Zu verteilen, on a base-200 band between hairlines, the amount
   right-aligned in its column, then the text: "5.947,86 € Nicht verteilt im Sep", "0,00 € Überzogen im Sep",
   "+255,00 € Einnahmen im Okt", "−5.915,41 € Zugewiesen im Okt", "Für spätere Monate" when not zero in an open
-  month, then in red the later months it does not cover ("−300,00 € Nicht gedeckt im Nov")
+  month; only the lines that add up to Zu verteilen
 - On phones the sticky month header has the same parts in the same order, compact: the month with ‹ › and ⋮, the
   calculation, Zu verteilen
 - Months follow the budget's width: two from 760 px (a window of about 1100 px with the sidebar), three from
@@ -107,12 +111,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   categories and folds every group, "Neue Kategoriegruppe" ends the list
 - The calculation lies on its band between hairlines, its amounts with "€" on Zu verteilen's trailing edge,
   income with "+" whenever it is not zero
-- Phones: the sticky head holds the calculation, Zu verteilen and, only while something is open, what waits: "1
-  Kategorie überzogen · 2 Buchungen bestätigen", compact but 44 pt high to tap. The first part opens the first
-  overspent category's cover list (on the iPad scrolled to its cell, its group unfolded), the second shows Alle Konten searching for the transactions to approve. The iPad
-  shows the same parts in the corner beside Zu verteilen, stacked tight from the top of its block (also below an
-  open calculation), for today's month while it shows, else the first; the month head follows the title at
-  standard spacing.
+- Phones: the sticky head holds the calculation and Zu verteilen; the iPad's corner beside Zu verteilen stays
+  empty; the month head follows the title at standard spacing.
   "Nicht kategorisiert" is a row like a category, its name on the names' edge, and shows Alle Konten searching for
   what needs a category
 - Phones: a category with a target has a thin bar (3 pt) under its name, filled by the share of the month's need
@@ -125,10 +125,11 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   that column
 - The category's sheet: its title is the name with its emoji in title 3 semibold on a faint capsule that a tap
   renames in place (as Reminders' list info), stronger while editing and never focused on opening, the month under it. "Verfügbar": "Übrig aus Vormonat", "Zugewiesen im Nov" (the field), "Aktivität im
-  Nov", "Verfügbar" bold in its state colour; there is no cover list and no overspent hint. "Ziel": the target
-  sentence and the status sentence in a card tinted by the status, the tint inset in its row with the card's
-  padding, "68,34 € zuweisen" while something is missing and Zu verteilen has money (at most what it holds), a bar
-  only for a target by a date, then "Ziel bearbeiten" and "Pausieren". Then "Kategorie löschen" in red. Every
+  Nov", "Verfügbar" bold in its state colour; there is no cover list and no overspent hint. "Ziel": the web's
+  target block (rule; for a target by a date the bar with its mark, then what is saved and the month's status,
+  stacked where one line does not fit; else only the status) in a card tinted by the status, the tint inset in its
+  row with the card's padding, "68,34 € zuweisen" while something is missing and Zu verteilen has money (at most
+  what it holds), then "Ziel bearbeiten" and "Pausieren". Then "Kategorie löschen" in red. Every
   action applies at once, so the sheet only closes. Sheet and popover lie on the grouped background with an opaque
   bar, so neither the budget nor scrolled text shows through. It opens at a detent that shows Verfügbar and Ziel; a
   group's and a new category's sheet open large. On the iPad the same view with the same row surfaces is a popover
@@ -205,8 +206,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   has the regular weight; only the filled ✓ marks one waiting for approval. The month heading sticks on a quiet band
 - Status at rest is a small grey glyph (○ vorgemerkt, ✓ gebucht, 🔒 abgeglichen); only a transaction waiting for
   approval shows a filled accent ✓, which approves it. A leading swipe approves too
-- Approving: the "bestätigen" chip, the budget's what-waits line and the Konten list's "N Buchungen bestätigen" row
-  (which the Konten tab's badge counts) all show Alle Konten filtered to what waits: a search token "Zu bestätigen"
+- Approving: the "bestätigen" chip and the Konten list's "N Buchungen bestätigen" row
+  (which the Konten tab's badge counts) show Alle Konten filtered to what waits: a search token "Zu bestätigen"
   with its clear button, the header's line "N Buchungen zu bestätigen" with "Alle bestätigen", and no chips but the
   one that undoes. Once all are approved "Alles bestätigt" offers the way back to the Konten. There is no screen of
   its own, and the UI never says "Erinnerung"

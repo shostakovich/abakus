@@ -68,11 +68,6 @@ each category touched gets back the difference the action made to its assignment
 "Rückgängig".
 _Avoid_: Revert, restore
 
-**Uncovered month**:
-A later month whose Ready to Assign is below zero, seen from an earlier month, which warns about it; assignments
-are never refused for it. UI "nicht gedeckt".
-_Avoid_: Shortfall month, borrowed month
-
 ### Targets
 
 **Target**:
