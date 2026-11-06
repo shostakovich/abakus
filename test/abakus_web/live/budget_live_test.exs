@@ -278,6 +278,8 @@ defmodule AbakusWeb.BudgetLiveTest do
       income(c, 100_000, ~D[2026-10-01], "Arbeitgeber")
       {:ok, view, _html} = open(c.conn, ~p"/budget", months: 3)
 
+      assert has_element?(view, "th.app-cat[rowspan='4']")
+
       for key <- ~w(2026-10 2026-11 2026-12) do
         assert has_element?(
                  view,
