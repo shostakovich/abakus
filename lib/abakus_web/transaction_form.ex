@@ -21,7 +21,7 @@ defmodule AbakusWeb.TransactionForm do
   """
 
   alias Abakus.{Amount, Money}
-  alias Abakus.Ledger.{Account, Payee, Transaction}
+  alias Abakus.Ledger.{Account, Payee, ScheduledTransaction, Transaction}
 
   @main "main"
 
@@ -38,7 +38,13 @@ defmodule AbakusWeb.TransactionForm do
   end
 
   @doc "The form for a transaction from `Abakus.Ledger.get_transaction!/2`."
-  def from_transaction(%Transaction{} = transaction) do
+  def from_transaction(%Transaction{} = transaction), do: from(transaction, transaction.date)
+
+  @doc "The form for a scheduled transaction from `Abakus.Ledger.Scheduled.get/2`, dated its next date."
+  def from_scheduled(%ScheduledTransaction{} = scheduled),
+    do: from(scheduled, scheduled.next_date)
+
+  defp from(transaction, date) do
     split? = transaction.subtransactions != []
 
     subtransactions =
@@ -55,7 +61,7 @@ defmodule AbakusWeb.TransactionForm do
     |> side_params()
     |> Map.merge(%{
       "account_id" => to_param(transaction.account_id),
-      "date" => Date.to_iso8601(transaction.date),
+      "date" => Date.to_iso8601(date),
       "split" => to_string(split?),
       "subtransactions" => subtransactions,
       "memo" => transaction.memo || ""
@@ -415,7 +421,8 @@ defmodule AbakusWeb.TransactionForm do
   end
 
   @doc """
-  The Ledger attrs for the form, approved, as a person entered them; `original` is the transaction edited, if any.
+  The Ledger attrs for the form, approved, as a person entered them; `original` is the transaction (or scheduled
+  transaction) edited, if any.
   Returns `{:error, message}` for what the Ledger cannot check: amounts, date and accounts.
   """
   def to_attrs(params, accounts, original \\ nil) do
@@ -513,7 +520,7 @@ defmodule AbakusWeb.TransactionForm do
     end
   end
 
-  defp kept_ids(%Transaction{subtransactions: subtransactions}),
+  defp kept_ids(%{subtransactions: subtransactions}) when is_list(subtransactions),
     do: MapSet.new(subtransactions, &to_param(&1.id))
 
   defp kept_ids(nil), do: MapSet.new()

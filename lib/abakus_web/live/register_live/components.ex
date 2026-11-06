@@ -1,7 +1,8 @@
 defmodule AbakusWeb.RegisterLive.Components do
   @moduledoc """
-  The parts of the register: the header's meta line, balances and toolbar, the selection bar, the table on desktops
-  and the list on phones, both with the match proposals among the transactions. A click into a selected row (on phones
+  The parts of the register: the header's meta line, balances and toolbar, a closed account's banner, the scheduled
+  transactions, the selection bar, the table on desktops and the list on phones, both with the match proposals among
+  the transactions, and Alle Konten's list of closed accounts. A click into a selected row (on phones
   a list row) opens the transaction editor. Actions that change a reconciled transaction ask in the confirmation
   dialog first and send `reconciled: "confirmed"`.
   """
@@ -9,7 +10,7 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   alias Abakus.Categories.Category
   alias Abakus.Format
-  alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
+  alias Abakus.Ledger.{Account, Payee, ScheduledTransaction, Subtransaction, Transaction}
   alias Abakus.Money
   alias Abakus.Names
   alias AbakusWeb.{AccountGroups, TransactionForm}
@@ -199,12 +200,20 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :picking, :boolean, required: true, doc: "whether a click adds a row to the selection"
   attr :all_selected, :boolean, required: true
 
+  attr :scheduled_toggle, :any,
+    default: nil,
+    doc:
+      "whether the empty list of scheduled transactions shows, nil while the menu does not offer it"
+
+  attr :closed_count, :integer, default: 0, doc: "the closed accounts Alle Konten's menu offers"
+
   @doc """
   The header's second row: "Buchung", "Datei-Import" and what waits as chips ("2 bestätigen", "1 zuordnen"), then
   the view menu and the search. "2 bestätigen" opens the view „Zu bestätigen“ without the search, whose line
   approves what it shows.
   Phones keep "2 bestätigen", the search and the menu, which takes the rest; the floating button adds a transaction
-  there.
+  there. The menu shows the scheduled transactions while there are none ("Geplante Buchungen") and, in Alle Konten,
+  lists the closed accounts ("Geschlossene Konten (2) …").
   """
   def toolbar(assigns) do
     ~H"""
@@ -306,6 +315,25 @@ defmodule AbakusWeb.RegisterLive.Components do
               {label}
             </:item>
             <:item
+              :if={!is_nil(@scheduled_toggle)}
+              id="scheduled-toggle"
+              icon="repeat"
+              on_click={JS.push("toggle_scheduled")}
+              active={@scheduled_toggle}
+              divider
+            >
+              Geplante Buchungen
+            </:item>
+            <:item
+              :if={@closed_count > 0}
+              id="closed-accounts-item"
+              icon="archive"
+              on_click={JS.push("show_closed_accounts")}
+              divider={is_nil(@scheduled_toggle)}
+            >
+              Geschlossene Konten ({@closed_count}) …
+            </:item>
+            <:item
               id="pick-toggle"
               on_click={JS.push("toggle_picking")}
               class="max-md:hidden"
@@ -362,6 +390,124 @@ defmodule AbakusWeb.RegisterLive.Components do
     </div>
     """
   end
+
+  @doc "A closed account's register says so at the top and offers to open it again."
+  def closed_banner(assigns) do
+    ~H"""
+    <div class="app-reg-row py-3">
+      <.alert id="closed-banner" tone={:neutral} icon="archive">
+        Dieses Konto ist geschlossen.
+        <:actions>
+          <.button id="reopen-account" size={:sm} phx-click="reopen_account">Wieder öffnen</.button>
+        </:actions>
+      </.alert>
+    </div>
+    """
+  end
+
+  attr :rows, :list, required: true, doc: "the closed accounts' rows (`AbakusWeb.AccountGroups`)"
+
+  @doc "Alle Konten's list of the closed accounts with kind and balance; choosing one opens its register."
+  def closed_accounts(assigns) do
+    ~H"""
+    <.modal
+      id="closed-accounts"
+      show
+      title="Geschlossene Konten"
+      on_cancel={JS.push("close_closed_accounts")}
+    >
+      <.list id="closed-accounts-list">
+        <.list_row
+          :for={row <- @rows}
+          id={"closed-account-#{row.account.id}"}
+          title={row.account.name}
+          navigate={~p"/budget/accounts/#{row.account}"}
+        >
+          <:meta>{AccountGroups.kind_label(row.account.kind)}</:meta>
+          <:trailing><.amount value={row.balance} /></:trailing>
+        </.list_row>
+      </.list>
+      <p class="pt-3 text-sm text-base-content/70">Im Konto kannst du es wieder öffnen.</p>
+    </.modal>
+    """
+  end
+
+  attr :scheduled, :list, required: true
+  attr :accounts, :map, required: true
+  attr :all, :boolean, required: true
+  attr :addable, :boolean, required: true, doc: "whether \"Geplante Buchung\" adds one here"
+
+  @doc """
+  The scheduled transactions above the register's transactions, collapsed with their count ("Geplant · 3"), open and
+  saying so while there are none. A row shows the next date, the payee (a transfer as "⇄ Sparkonto"), category and
+  repeat, and the amount, offers "Jetzt buchen" (in an account that takes entries) and "Überspringen", and opens
+  the scheduled transaction's dialog.
+  """
+  def scheduled(assigns) do
+    ~H"""
+    <section id="scheduled">
+      <.disclosure id="scheduled-list" variant={:row} open={@scheduled == []}>
+        <:title>
+          Geplant<span :if={@scheduled != []} class="font-normal text-base-content/70"> · {length(
+            @scheduled
+          )}</span>
+        </:title>
+        <.list :if={@scheduled != []} id="scheduled-rows">
+          <.list_row
+            :for={scheduled <- @scheduled}
+            id={"scheduled-#{scheduled.id}"}
+            title={title(scheduled, @accounts)}
+            on_click={JS.push("edit_scheduled", value: %{id: to_string(scheduled.id)})}
+            trailing_on_phone={:title}
+          >
+            <:meta>
+              {join_meta([
+                Format.date(scheduled.next_date, year: false),
+                if(@all, do: @accounts[scheduled.account_id].name),
+                scheduled_category(scheduled),
+                ScheduledTransaction.repeat_label(scheduled)
+              ])}
+            </:meta>
+            <:trailing><.signed amount={scheduled.amount} /></:trailing>
+            <:action
+              :if={Account.takes_entries?(@accounts[scheduled.account_id])}
+              id={"scheduled-#{scheduled.id}-enter"}
+              label="Jetzt buchen"
+              icon="check"
+              on_click={JS.push("enter_scheduled", value: %{id: to_string(scheduled.id)})}
+            />
+            <:action
+              id={"scheduled-#{scheduled.id}-skip"}
+              label="Überspringen"
+              icon="chevron-right"
+              on_click={JS.push("skip_scheduled", value: %{id: to_string(scheduled.id)})}
+            />
+          </.list_row>
+        </.list>
+        <.empty_state :if={@scheduled == []} title="Keine geplanten Buchungen" class="py-2">
+          Wiederkehrende und künftige Buchungen erscheinen hier.
+        </.empty_state>
+        <.button
+          :if={@addable}
+          id="new-scheduled"
+          variant={:ghost}
+          size={:sm}
+          icon="plus"
+          class="mt-1"
+          phx-click="new_scheduled"
+        >
+          Geplante Buchung
+        </.button>
+      </.disclosure>
+    </section>
+    """
+  end
+
+  defp scheduled_category(%{subtransactions: [_ | _] = parts}),
+    do: "Aufgeteilt (#{length(parts)})"
+
+  defp scheduled_category(%{category: %Category{} = category}), do: category_name(category)
+  defp scheduled_category(_scheduled), do: nil
 
   defp waiting_text(1), do: "1 Buchung wartet auf Bestätigung."
   defp waiting_text(count), do: "#{count} Buchungen warten auf Bestätigung."
