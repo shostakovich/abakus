@@ -51,7 +51,7 @@ struct EditCommandButton: View {
 
     @ViewBuilder
     private var styled: some View {
-        let base = Button(role: button == .delete ? .destructive : nil, action: action) { label }
+        let base = Button(action: action) { label }
         if isProminent {
             base.buttonStyle(.borderedProminent)
         } else {

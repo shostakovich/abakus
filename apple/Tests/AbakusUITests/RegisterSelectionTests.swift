@@ -169,6 +169,5 @@ private let order = ["a", "b", "c", "d"]
         model.selectAll()
         try model.store.perform(.deleteTransactions([id]))
         #expect(model.selection.count == 1)
-        #expect(model.actionButtonTitle == "1 Buchung bearbeiten")
     }
 }

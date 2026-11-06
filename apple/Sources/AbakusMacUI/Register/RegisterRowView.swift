@@ -18,7 +18,6 @@ struct RegisterRowView: View {
         ZStack(alignment: .topLeading) {
             background
             cells
-                .strikethrough(row.isExcludedFromSearch, color: ThemeColor.secondaryText)
         }
         .frame(
             minWidth: layout.displayWidth, maxWidth: layout.gridWidth, minHeight: RegisterMetrics.rowHeight,
@@ -168,24 +167,16 @@ struct RegisterRowView: View {
         row.textStyle == .bold ? RegisterGridStyle.rowBoldFont : RegisterGridStyle.rowFont
     }
 
-    private var textColor: Color {
-        row.isExcludedFromSearch ? ThemeColor.secondaryText : ThemeColor.text
-    }
-
-    private var inflowColor: Color {
-        row.isExcludedFromSearch ? ThemeColor.secondaryText : ThemeColor.positive
-    }
-
     private func text(_ value: String, width: CGFloat, tip: GridCellLabel.Tip = .none) -> some View {
-        GridCellLabel(text: value, font: textFont, color: textColor, width: width, tip: tip)
+        GridCellLabel(text: value, font: textFont, color: ThemeColor.text, width: width, tip: tip)
     }
 
     private func amount(_ value: String, width: CGFloat, color: Color? = nil) -> some View {
-        GridCellLabel(text: value, font: textFont, color: color ?? textColor, width: width, alignment: .trailing)
+        GridCellLabel(text: value, font: textFont, color: color ?? ThemeColor.text, width: width, alignment: .trailing)
     }
 
     private func signedAmount(width: CGFloat) -> some View {
-        amount(row.amountText, width: width, color: row.isInflow ? inflowColor : nil)
+        amount(row.amountText, width: width, color: row.isInflow ? ThemeColor.positive : nil)
     }
 
     /// A transfer reads "⇄ Girokonto": the symbol jumps to the other side.
@@ -196,7 +187,7 @@ struct RegisterRowView: View {
                 transferButton.padding(.leading, leadingInset - Self.symbolInset)
             }
             GridCellLabel(
-                text: row.payee, font: textFont, color: textColor,
+                text: row.payee, font: textFont, color: ThemeColor.text,
                 width: width - symbolWidth - (row.hasTransferIcon ? leadingInset - Self.symbolInset : 0),
                 leadingInset: row.hasTransferIcon ? 0 : leadingInset, tip: .always(row.payeeTooltip))
         }
@@ -239,8 +230,7 @@ struct RegisterRowView: View {
             statusButton(width: width)
         } else {
             symbolButton(
-                StatusSymbolImage(symbol: row.cleared.symbol).frame(width: width, height: RegisterMetrics.rowHeight),
-                pointer: row.cleared != .reconciled
+                StatusSymbolImage(symbol: row.cleared.symbol).frame(width: width, height: RegisterMetrics.rowHeight)
             ) {
                 main?.clearedClicked(row)
             }
@@ -248,9 +238,7 @@ struct RegisterRowView: View {
         }
     }
 
-    private func symbolButton<Label: View>(_ label: Label, pointer: Bool = true, action: @escaping () -> Void)
-        -> some View
-    {
+    private func symbolButton<Label: View>(_ label: Label, action: @escaping () -> Void) -> some View {
         Button {
             action()
             if !owner.grid.hasOpenEdit { onClick() }
@@ -258,7 +246,7 @@ struct RegisterRowView: View {
             label.contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .pointerStyle(pointer ? .link : nil)
+        .pointerStyle(.link)
     }
 
     private func category(width: CGFloat, leadingInset: CGFloat = RegisterGridStyle.cellInset) -> some View {
@@ -266,8 +254,8 @@ struct RegisterRowView: View {
         let font: ThemeFont
         let color: Color
         switch row.categoryStyle {
-        case .plain: (font, color) = (RegisterGridStyle.rowFont, textColor)
-        case .bold: (font, color) = (RegisterGridStyle.rowBoldFont, textColor)
+        case .plain: (font, color) = (RegisterGridStyle.rowFont, ThemeColor.text)
+        case .bold: (font, color) = (RegisterGridStyle.rowBoldFont, ThemeColor.text)
         case .needsCategory: (font, color) = (RegisterGridStyle.rowFont, ThemeColor.warning)
         case .error: (font, color) = (RegisterGridStyle.rowFont, ThemeColor.negative)
         }

@@ -29,39 +29,34 @@ extension RegisterViewModel {
         }
     }
 
-    /// Short labels with a symbol and the state as subtitle, as a checkmark's column would make them wrap.
+    /// Every item has a symbol, so the shown view's check mark and the icons share one leading edge.
     public func touchViewMenu(showsColumns: Bool) -> [RegisterMenuItem] {
         var items: [RegisterMenuItem] = []
         if !isReconciling {
-            items += [
-                .action("Zeitraum", .timeframe, systemImage: "calendar", subtitle: search.dateSelectorTitle),
-                .action(
-                    Self.touchReconciledTitle, .showReconciled, enabled: isReconciledFilterEnabled,
-                    systemImage: "lock", subtitle: isShowingReconciled ? "Gezeigt" : "Ausgeblendet"),
-                .separator(10),
-            ]
-        }
-        items += [
-            .action(isPicking ? "Auswählen beenden" : "Auswählen", .togglePicking, systemImage: "checkmark.circle"),
-            .action(
-                isAllSelected ? "Auswahl aufheben" : "Alle auswählen", .toggleSelectAll,
-                enabled: !transactionIds.isEmpty, systemImage: "checklist"),
-        ]
-        if showsColumns {
-            let columns = columnMenuItems.filter { $0.column != .cleared }.map {
-                RegisterMenuItem.action($0.label, .toggleColumn($0.column), checked: $0.isChecked)
+            items = RegisterFilter.allCases.map {
+                .action($0.title, .filter($0), checked: $0 == filter, systemImage: $0.touchSymbol)
             }
+            items.append(.separator(10))
+            items.append(.action("Geplant", .toggleScheduler, systemImage: "calendar.badge.clock"))
+        }
+        items.append(
+            .action(isPicking ? "Auswählen beenden" : "Auswählen", .togglePicking, systemImage: "checkmark.circle"))
+        if showsColumns {
+            let isMemoShown = !hiddenColumns.contains(.memo)
             items.append(
-                RegisterMenuItem(
-                    id: "columns", title: "Spalten", kind: .submenu(columns), systemImage: "tablecells"))
+                .action(
+                    isMemoShown ? "Memo ausblenden" : "Memo zeigen", .toggleColumn(.memo), systemImage: "text.alignleft"
+                ))
+        }
+        if account != nil {
+            items.append(.separator(11))
+            items.append(.action("Konto bearbeiten", .editAccount, systemImage: "pencil"))
         }
         return items
     }
 
-    public static let touchReconciledTitle = "Abgeglichene"
-
     public func transactionActionsMenu(for ids: Set<String>) -> [RegisterMenuItem] {
-        transactionActionsMenu(of: transactions.filter { ids.contains($0.id) }, withTitle: false)
+        transactionActionsMenu(of: transactions.filter { ids.contains($0.id) })
     }
 
     /// The rows a context menu or a swipe named become the selection, as a right-click makes them on the Mac.
@@ -70,14 +65,10 @@ extension RegisterViewModel {
         performMenuAction(action)
     }
 
-    public static let approvalSearch = "Ist: Erinnerung"
-
-    /// The chip and the Konten tab both show Alle Konten filtered to what waits for approval.
+    /// The Konten list shows Alle Konten in the view Zu bestätigen.
     public func showApprovals() {
-        showAllAccounts(searching: Self.approvalSearch)
+        showAllAccounts(in: .unapproved)
     }
-
-    public var isShowingApprovals: Bool { isAllAccounts && search.filter?.label == Self.approvalSearch }
 
     public var approvalCount: Int { store.budget.approvalCount }
 
@@ -85,163 +76,85 @@ extension RegisterViewModel {
         transactionCount(count) + " bestätigen"
     }
 
-    /// The header's line while the approvals show; it counts what "Alle bestätigen" approves.
+    /// The view Zu bestätigen's line above the list; it counts what „Alle bestätigen“ approves.
     public var approvalsLine: String? {
-        let count = transactions.filter(\.needsApproval).count
-        return count == 0 ? nil : Self.transactionCount(count) + " zu bestätigen"
+        guard filter == .unapproved, !transactions.isEmpty else { return nil }
+        let count = transactions.count
+        return count == 1 ? "1 Buchung wartet auf Bestätigung." : "\(count) Buchungen warten auf Bestätigung."
     }
 
     private nonisolated static func transactionCount(_ count: Int) -> String {
         count == 1 ? "1 Buchung" : "\(count) Buchungen"
     }
 
+    public static let approveAllTitle = "Alle bestätigen"
+
     public func approveAllClicked() {
-        let ids = Set(transactions.filter(\.needsApproval).map(\.id))
-        guard isShowingApprovals, !ids.isEmpty else { return }
-        performMenuAction(.approve, on: ids)
+        guard approvalsLine != nil, !grid.clickedOutsideEditor() else { return }
+        perform(.approveTransactions(transactionIds))
     }
 
     public var pickingActions: RegisterPickingActions {
         let ids = Set(selectedTransactionIds)
         let menu = transactionActionsMenu(for: ids)
-        let enabled = Set(
-            menu.compactMap { item -> RegisterMenuAction? in
-                guard item.isEnabled, case .action(let action) = item.kind else { return nil }
-                return action
-            })
-        let status: RegisterMenuAction =
-            if enabled.contains(.approve) {
-                .approve
-            } else if enabled.contains(.markUncleared) && !enabled.contains(.markCleared) {
-                .markUncleared
-            } else {
-                .markCleared
-            }
+        let canDelete = menu.contains { $0.isEnabled && $0.kind == .action(.delete) }
         return RegisterPickingActions(
-            ids: ids, status: status, isStatusEnabled: enabled.contains(status),
-            categories: ids.isEmpty || !canCategorize ? [] : categorizeItems, canDelete: enabled.contains(.delete),
+            ids: ids, categories: ids.isEmpty || !canCategorize ? [] : categorizeItems, canDelete: canDelete,
             menu: menu)
     }
 
     /// What tapping a row's status does: approve it while it waits, else switch between vorgemerkt and gebucht.
-    public func statusAction(for row: RegisterRow) -> RegisterMenuAction? {
+    public func statusAction(for row: RegisterRow) -> RegisterStatusAction {
         if row.errorLevel == .forReview { return .approve }
         switch row.cleared {
         case .uncleared: return .markCleared
         case .cleared: return .markUncleared
-        case .reconciled: return nil
+        case .reconciled: return .unlock
         }
+    }
+
+    public func statusTapped(_ row: RegisterRow) {
+        setSelection([row.transactionId])
+        guard statusAction(for: row) != .approve else {
+            perform(.approveTransactions([row.transactionId]))
+            return
+        }
+        clearedClicked(row)
     }
 }
 
-/// Touch screens show the approval search as a token, "Zu bestätigen", in front of what else is typed.
-extension RegisterSearchController {
-    public nonisolated static let approvalTokenTitle = "Zu bestätigen"
-
-    private static var approvalHead: String { RegisterViewModel.approvalSearch + ", " }
-
-    public var showsApprovalToken: Bool {
-        text.hasPrefix(Self.approvalHead) || Self.committedText(text) == RegisterViewModel.approvalSearch
-    }
-
-    private static let transferMark = "⇄ "
-
-    /// What the box shows beside the token, a transfer by its account.
-    public var textBesideTokens: String {
-        let rest = showsApprovalToken ? String(text.dropFirst(min(text.count, Self.approvalHead.count))) : text
-        return rest.replacingOccurrences(of: Payee.transferPrefix, with: Self.transferMark)
-    }
-
-    public func tokenBoxChanged(_ typed: String) {
-        let typed = typed.replacingOccurrences(of: Self.transferMark, with: Payee.transferPrefix)
-        boxChanged(showsApprovalToken ? Self.approvalHead + typed : typed)
-    }
-
-    public func approvalTokenRemoved() {
-        guard showsApprovalToken else { return }
-        text = textBesideTokens
-        commit(focusingGrid: false)
-    }
-
-    /// A search term as the touch screens write it: a transfer by its account, the approval search as its token.
-    public static func touchText(_ text: String) -> String {
-        text.replacingOccurrences(of: RegisterViewModel.approvalSearch, with: approvalTokenTitle)
-            .replacingOccurrences(of: Payee.transferPrefix, with: transferMark)
-    }
-
-    /// What the typed text matches, then where else to look for it; hints and duplicates stay away.
-    public var touchSuggestionGroups: [RegisterTouchSuggestionGroup] {
-        var seen = Set<String>()
-        let rows = (dropDown?.items ?? []).enumerated().compactMap { index, item -> RegisterTouchSuggestion? in
-            guard !item.searchText.isEmpty, !item.isBlank, seen.insert(item.searchText).inserted else { return nil }
-            return RegisterTouchSuggestion(index: index, item: item)
+extension RegisterFilter {
+    fileprivate var touchSymbol: String {
+        switch self {
+        case .all: "list.bullet"
+        case .unapproved: "checkmark.seal"
+        case .uncleared: "clock"
+        case .needsCategory: "tag.slash"
         }
-        return [
-            RegisterTouchSuggestionGroup(title: "Vorschläge", rows: rows.filter { !$0.isScope }),
-            RegisterTouchSuggestionGroup(title: "„\(currentTerm)“ suchen in", rows: rows.filter(\.isScope)),
-        ]
-        .filter { !$0.rows.isEmpty }
     }
 }
 
 extension Budget {
-    var approvalCount: Int { notifierCounts(forAccount: EntityID.allAccounts).forReview }
+    var approvalCount: Int { notifierCounts(forAccount: EntityID.allAccounts).unapproved }
 }
 
 public struct RegisterPickingActions: Hashable, Sendable {
     public let ids: Set<String>
-    public let status: RegisterMenuAction
-    public let isStatusEnabled: Bool
     /// Empty while nothing is picked or the account is outside the budget.
     public let categories: [RegisterMenuItem]
     public let canDelete: Bool
     public let menu: [RegisterMenuItem]
-
-    public var deleteQuestion: String {
-        ids.count == 1 ? "Buchung löschen?" : "\(ids.count) Buchungen löschen?"
-    }
 }
 
-extension RegisterMenuAction {
-    public var statusTitle: String {
+public enum RegisterStatusAction: Hashable, Sendable {
+    case approve, markCleared, markUncleared, unlock
+
+    public var title: String {
         switch self {
         case .approve: "Bestätigen"
         case .markCleared: "Gebucht"
         case .markUncleared: "Vorgemerkt"
-        default: ""
-        }
-    }
-}
-
-public struct RegisterTouchSuggestionGroup: Hashable, Sendable {
-    public let title: String
-    public let rows: [RegisterTouchSuggestion]
-}
-
-public struct RegisterTouchSuggestion: Hashable, Sendable, Identifiable {
-    public let index: Int
-    public let id: String
-    public let field: String
-    public let value: String
-    public let isTransfer: Bool
-    public let isScope: Bool
-
-    init(index: Int, item: RegisterSearchSuggestion) {
-        self.index = index
-        id = item.id
-        isScope = item.isScope
-        let field = item.prefix.trimmingCharacters(in: .whitespaces)
-        let plain = TextMarkup.plain(item.description)
-        isTransfer = Payee.isTransferPayeeName(plain)
-        if isScope {
-            self.field = field.isEmpty ? "Allen Feldern" : String(field.dropLast())
-        } else {
-            self.field = field
-        }
-        if item.isReminder {
-            value = RegisterSearchController.approvalTokenTitle
-        } else {
-            value = isTransfer ? (Payee.transferTargetAccountName(plain) ?? plain) : plain
+        case .unlock: "Entsperren"
         }
     }
 }

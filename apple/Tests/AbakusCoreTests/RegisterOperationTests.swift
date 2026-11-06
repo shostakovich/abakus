@@ -233,7 +233,7 @@ import Testing
         #expect(budget.payee(withId: payeeId) == nil)
     }
 
-    @Test func notifierCountsPerLevel() throws {
+    @Test func notifierCountsWhatEachViewLists() throws {
         var test = TestBudget()
         _ = try test.add(test.girokonto, -5, payee: "Uncategorised")
         _ = try test.transfer(from: test.girokonto, to: test.tagesgeld, -50, category: test.groceries)
@@ -241,10 +241,10 @@ import Testing
             accountId: test.girokonto, date: date("2026-10-11"), amount: -1, approved: false, source: .bank)
         try test.budget.apply(.addTransaction(bank, payeeName: "X"))
         let counts = test.budget.notifierCounts(forAccount: test.girokonto)
-        #expect(counts.needsCategory == 1)
+        #expect(counts.needsCategory == 2)
         #expect(counts.errors == 1)
-        #expect(counts.forReview == 1)
-        #expect(test.budget.notifierCounts(forAccount: EntityID.allAccounts).needsCategory == 1)
+        #expect(counts.unapproved == 1)
+        #expect(test.budget.notifierCounts(forAccount: EntityID.allAccounts).needsCategory == 2)
     }
 
     @Test func deleteAnalysisClassifiesTheSelection() throws {

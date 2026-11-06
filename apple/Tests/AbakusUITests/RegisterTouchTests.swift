@@ -30,20 +30,31 @@ import Testing
         #expect(mac.rows.first { $0.transactionId == now }?.date == "10/05/14")
     }
 
-    @Test func approvalsShowAlleKontenFilteredAndApproveAllAtOnce() throws {
+    @Test func aSwipedDeleteThatAsksKeepsTheRowUntilItIsConfirmed() {
+        var fixture = RegisterFixture()
+        let reconciled = fixture.add(fixture.giro, -5, cleared: .reconciled)
+        let (model, store) = touch(fixture, appliesCommands: true)
+        model.performMenuAction(.delete, on: [reconciled])
+        #expect(model.dialogs.presented.count == 1)
+        model.dialogs.presented.last?.answer(DeleteChoice.cancel)
+        #expect(store.commands.isEmpty)
+        #expect(model.transactionIds.contains(reconciled))
+    }
+
+    @Test func approvalsShowAlleKontenInTheViewZuBestaetigenAndApproveAllAtOnce() throws {
         var fixture = RegisterFixture()
         let first = fixture.add(fixture.giro, -1, approved: false, source: .bank)
         let second = fixture.add(fixture.tagesgeld, -2, approved: false, source: .bank)
         fixture.add(fixture.giro, -3)
         let (model, store) = touch(fixture, appliesCommands: true)
         #expect(model.approvalCount == 2)
-        #expect(!model.isShowingApprovals)
+        #expect(model.approvalsLine == nil)
 
         model.showApprovals()
         #expect(model.navigation.selection == .allAccounts)
-        #expect(model.isShowingApprovals)
+        #expect(model.filter == .unapproved)
         #expect(Set(model.transactionIds) == [first, second])
-        #expect(model.approvalsLine == "2 Buchungen zu bestätigen")
+        #expect(model.approvalsLine == "2 Buchungen warten auf Bestätigung.")
         #expect(RegisterViewModel.approvalsTitle(2) == "2 Buchungen bestätigen")
         #expect(RegisterViewModel.approvalsTitle(1) == "1 Buchung bestätigen")
 
@@ -55,41 +66,45 @@ import Testing
         #expect(Set(approved) == [first, second])
         #expect(model.approvalCount == 0)
         #expect(model.approvalsLine == nil)
+        #expect(model.transactionIds.isEmpty)
     }
 
-    @Test func theApprovalSearchIsATokenBesideWhatElseIsTyped() {
-        var fixture = RegisterFixture()
-        fixture.add(fixture.giro, -1, approved: false, source: .bank)
-        let (model, _) = touch(fixture)
-        let search = model.search
-        model.showApprovals()
-        #expect(search.showsApprovalToken)
-        #expect(search.textBesideTokens == "")
-
-        search.tokenBoxChanged("Bak")
-        #expect(search.text == "Ist: Erinnerung, Bak")
-        #expect(search.textBesideTokens == "Bak")
-
-        search.tokenBoxChanged("")
-        search.approvalTokenRemoved()
-        #expect(!search.showsApprovalToken)
-        #expect(search.filter == nil)
-        #expect(!model.isShowingApprovals)
-    }
-
-    @Test func theBoxShowsATransferByItsAccountAndSearchesItAsTheMacDoes() {
-        let fixture = RegisterFixture()
-        let (model, _) = touch(fixture)
-        let search = model.search
-        search.tokenBoxChanged("Empfänger: ⇄ Tagesgeld")
-        #expect(search.text == "Empfänger: Transfer : Tagesgeld")
-        #expect(search.textBesideTokens == "Empfänger: ⇄ Tagesgeld")
-    }
-
-    @Test func touchScreensWriteTransfersAndTheApprovalSearchInTheirOwnWords() {
+    @Test func theViewMenuHoldsTheViewsThenGeplantAndAuswaehlenThenKontoBearbeitenEachWithASymbol() {
+        let (model, _) = touch(RegisterFixture())
+        let menu = model.touchViewMenu(showsColumns: false)
         #expect(
-            RegisterSearchController.touchText("2 Treffer für „Empfänger: Transfer : Depot, Ist: Erinnerung“")
-                == "2 Treffer für „Empfänger: ⇄ Depot, Zu bestätigen“")
+            menu.map(\.title) == [
+                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "", "Geplant", "Auswählen", "",
+                "Konto bearbeiten",
+            ])
+        #expect(menu.filter { $0.kind != .separator }.allSatisfy { $0.systemImage != nil })
+        #expect(menu.filter(\.isChecked).map(\.title) == ["Alle Buchungen"])
+        #expect(menu.allSatisfy { !$0.title.contains("…") })
+
+        let wide = model.touchViewMenu(showsColumns: true)
+        #expect(wide.map(\.title).suffix(4) == ["Auswählen", "Memo ausblenden", "", "Konto bearbeiten"])
+        guard case .action(let action) = wide.item(titled: "Memo ausblenden")?.kind else {
+            Issue.record("No memo item")
+            return
+        }
+        model.performMenuAction(action)
+        #expect(model.touchViewMenu(showsColumns: true).item(titled: "Memo zeigen") != nil)
+        #expect(!model.visibleColumns.contains(.memo))
+    }
+
+    @Test func geplantShowsTheSchedulerAndKontoBearbeitenEditsTheAccount() {
+        let (model, _) = touch(RegisterFixture())
+        var edits = 0
+        model.onEditAccount = { edits += 1 }
+        model.performMenuAction(.toggleScheduler)
+        #expect(model.isSchedulerVisible)
+        model.performMenuAction(.editAccount)
+        #expect(edits == 1)
+    }
+
+    @Test func alleKontenHasNoKontoBearbeiten() {
+        let (model, _) = touch(RegisterFixture(), selection: .allAccounts)
+        #expect(model.touchViewMenu(showsColumns: false).item(titled: "Konto bearbeiten") == nil)
     }
 
     @Test func aNewTransactionTakesTheRegistersAccountElseTheLastUsedOne() throws {

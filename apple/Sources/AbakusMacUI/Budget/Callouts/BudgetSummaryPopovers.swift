@@ -18,7 +18,7 @@ struct BudgetSummaryPopover: View {
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
                 Button("Im Konto zeigen", action: controller.showInAccountViewClicked)
-                    .disabled(summary.rows.isEmpty)
+                    .disabled(summary.accountView == nil)
                 Button("Schließen", action: controller.summaryClosed)
             }
         }

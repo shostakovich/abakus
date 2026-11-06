@@ -20,11 +20,8 @@ import Testing
 
     @Test func nativeMenuMirrorsTheItems() {
         let (menu, _) = menu { _ in }
-        #expect(menu.items.first?.title == "1 ausgewählte Buchung:")
-        #expect(menu.items.first?.isEnabled == false)
-        #expect(menu.items[1].isSeparatorItem)
-        #expect(menu.items.first { $0.title == "Als gebucht markieren" }?.isEnabled == false)
-        #expect(menu.items.first { $0.title == "Als vorgemerkt markieren" }?.isEnabled == true)
+        #expect(menu.items.first?.title == "Kategorisieren als")
+        #expect(menu.items.first { $0.title == "Löschen" }?.isEnabled == true)
         #expect(
             menu.items.first { $0.title == "In Konto verschieben" }?.submenu?.items.map(\.title) == [
                 "Depot", "Karte", "Tagesgeld",
@@ -46,7 +43,7 @@ import Testing
         let model = RegisterFixture().model()
         model.toggleColumnVisibility(.memo)
         let target = RegisterMenuTarget { _ in }
-        let menu = target.menu(model.columnMenu)
+        let menu = target.menu(model.viewMenu)
         #expect(menu.item(withTitle: "Status")?.state == .on)
         #expect(menu.item(withTitle: "Memo")?.state == .off)
     }

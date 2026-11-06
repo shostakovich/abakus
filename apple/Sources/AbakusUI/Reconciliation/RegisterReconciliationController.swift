@@ -6,9 +6,8 @@ import Observation
 struct RegisterReconciliation {
     var statementDate: DateWithoutTime
     var statementBalance: Decimal
+    var savedFilter: RegisterFilter
     var savedSearchText: String
-    var savedSearchFilter: RegisterSearchFilter?
-    var savedDateFilter: DateFilterSelection?
     var savedExpandedSplitsBeforeSearch: Set<String>?
     var savedScrollBeforeSearch: RegisterScrollRequest.Target?
     var savedSort: RegisterSortOrder
@@ -159,14 +158,12 @@ public final class RegisterReconciliationController {
         register.schedulerHidden()
         register.closeOverlays()
         state.reconciliation = RegisterReconciliation(
-            statementDate: form.date, statementBalance: balance, savedSearchText: state.searchText,
-            savedSearchFilter: state.searchFilter, savedDateFilter: state.dateFilter,
-            savedExpandedSplitsBeforeSearch: state.expandedSplitsBeforeSearch,
+            statementDate: form.date, statementBalance: balance, savedFilter: state.filter,
+            savedSearchText: state.searchText, savedExpandedSplitsBeforeSearch: state.expandedSplitsBeforeSearch,
             savedScrollBeforeSearch: state.scrollBeforeSearch, savedSort: state.sort,
             savedSchedulerVisible: state.isSchedulerVisible)
+        state.filter = .all
         state.searchText = ""
-        state.searchFilter = nil
-        state.dateFilter = nil
         state.expandedSplitsBeforeSearch = nil
         state.scrollBeforeSearch = nil
         state.sort = .default
@@ -252,11 +249,12 @@ public final class RegisterReconciliationController {
         var state = register.viewState
         guard let saved = state.reconciliation else { return }
         register.closeOverlays()
-        if state.searchFilter != nil, let splits = state.expandedSplitsBeforeSearch { state.expandedSplits = splits }
+        if !RegisterSearch(state.searchText).isEmpty, let splits = state.expandedSplitsBeforeSearch {
+            state.expandedSplits = splits
+        }
         state.reconciliation = nil
+        state.filter = saved.savedFilter
         state.searchText = saved.savedSearchText
-        state.searchFilter = saved.savedSearchFilter
-        state.dateFilter = saved.savedDateFilter
         state.expandedSplitsBeforeSearch = saved.savedExpandedSplitsBeforeSearch
         state.scrollBeforeSearch = saved.savedScrollBeforeSearch
         state.sort = saved.savedSort

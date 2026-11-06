@@ -261,12 +261,12 @@ import Testing
         #expect(income("2026-11-01") == "0,00\u{00A0}€")
     }
 
-    @Test func uncategorizedOpensAlleKontenWithItsSearch() {
+    @Test func uncategorizedOpensAlleKontenInItsView() {
         let model = model()
-        var searches: [String] = []
-        model.onShowAllAccountsSearch = { searches.append($0) }
+        var views: [RegisterFilter] = []
+        model.onShowAllAccounts = { views.append($0) }
         model.uncategorizedTapped()
-        #expect(searches == ["Ist: Nicht kategorisiert"])
+        #expect(views == [.needsCategory])
     }
 
     @Test func theAvailableBreakdownReadsFromTheCarriedToVerfuegbar() throws {

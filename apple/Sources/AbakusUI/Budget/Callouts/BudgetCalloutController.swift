@@ -31,7 +31,7 @@ public final class BudgetCalloutController {
             category = form
             availableForm = availableForm(month: month, categoryId: id)
         case .outflowSummary(let month, let source):
-            summary = store.budget.outflowSummary(source, month: month, today: budget.today, formatter: formatter)
+            summary = store.budget.outflowSummary(source, month: month, formatter: formatter)
         case .available(let month, let id):
             guard let form = availableForm(month: month, categoryId: id) else { return nil }
             availableForm = form

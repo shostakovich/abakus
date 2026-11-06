@@ -7,7 +7,6 @@ enum ResetAssignedChoice: Hashable, Sendable {
 
 extension BudgetCalloutController {
     static let fillUnderfundedTitle = "Ziele füllen"
-    static let resetAssignedTitle = "Zurücksetzen …"
 
     /// Verteilen: an entry the month has nothing for is dimmed and says why.
     public func monthMenu(month date: DateWithoutTime) -> [RegisterMenuItem] {
@@ -28,7 +27,7 @@ extension BudgetCalloutController {
                 Self.fillUnderfundedTitle, .fillUnderfunded, enabled: fill > 0, systemImage: "target",
                 subtitle: fillSubtitle),
             .action(
-                Self.resetAssignedTitle, .resetAssigned, enabled: hasAssignments,
+                budget.touchLayout == nil ? "Zurücksetzen …" : "Zurücksetzen", .resetAssigned, enabled: hasAssignments,
                 systemImage: "arrow.counterclockwise",
                 subtitle: hasAssignments
                     ? "Zuweisungen im \(formatter.shortMonthName(date.month))" : "Nichts zugewiesen",

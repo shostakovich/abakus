@@ -2,39 +2,26 @@ import SwiftUI
 
 /// The register's toolbar actions and key equivalents as menu bar commands.
 public enum RegisterCommand: CaseIterable, Sendable {
-    case addTransaction, makeTransfer, approve, toggleCleared, search, timeframe, showReconciled
+    case addTransaction, search
 
     @MainActor public var title: String {
         switch self {
         case .addTransaction: RegisterViewModel.addTitle
-        case .makeTransfer: RegisterViewModel.transferTitle
-        case .approve: "Bestätigen"
-        case .toggleCleared: "Gebucht umschalten"
         case .search: "Suchen"
-        case .timeframe: "Zeitraum …"
-        case .showReconciled: "Abgeglichene Buchungen zeigen"
         }
     }
 
     public var shortcut: KeyboardShortcut? {
         switch self {
         case .addTransaction: KeyboardShortcut("n", modifiers: .command)
-        case .approve: KeyboardShortcut("k", modifiers: .command)
-        case .toggleCleared: KeyboardShortcut("c", modifiers: [.command, .shift])
         case .search: KeyboardShortcut("f", modifiers: .command)
-        case .makeTransfer, .timeframe, .showReconciled: nil
         }
     }
 
     @MainActor public func isEnabled(in register: RegisterViewModel) -> Bool {
         switch self {
         case .addTransaction: register.canAddTransactions
-        case .makeTransfer: register.canAddTransactions && register.showsTransferButton
-        case .approve: register.hasSelection
-        case .toggleCleared: register.hasSelection || register.editor != nil
         case .search: true
-        case .timeframe: !register.isReconciling
-        case .showReconciled: !register.isReconciling && register.isReconciledFilterEnabled
         }
     }
 
@@ -43,12 +30,7 @@ public enum RegisterCommand: CaseIterable, Sendable {
         guard register.acceptsRegisterKeys, isEnabled(in: register) else { return }
         switch self {
         case .addTransaction: register.addTransactionClicked()
-        case .makeTransfer: register.makeTransferClicked()
-        case .approve: register.approveKeyPressed()
-        case .toggleCleared: register.toggleClearedKeyPressed()
         case .search: register.search.focus()
-        case .timeframe: register.search.dateSelectorClicked()
-        case .showReconciled: register.setShowingReconciled(!register.isShowingReconciled)
         }
     }
 
@@ -71,31 +53,10 @@ public struct RegisterCommands: Commands {
 
     public var body: some Commands {
         CommandMenu("Buchungen") {
-            let register = model.register
             let isShown = model.showsRegister
             command(.addTransaction, isShown: (isShown || addsEverywhere) && !addingWaits)
-            command(.makeTransfer, isShown: (isShown || addsEverywhere) && !addingWaits)
-            Divider()
-            Menu(register.actionButtonTitle.trimmingCharacters(in: .whitespaces)) {
-                if isShown && register.hasSelection {
-                    RegisterMenuItemsView(
-                        items: register.transactionActionsMenu(withTitle: false),
-                        perform: register.editTransactionsCommandChosen)
-                }
-            }
-            .disabled(!isShown || !register.hasSelection)
-            command(.approve, isShown: isShown)
-            command(.toggleCleared, isShown: isShown)
             Divider()
             command(.search, isShown: isShown)
-            command(.timeframe, isShown: isShown)
-            Toggle(
-                RegisterCommand.showReconciled.title,
-                isOn: Binding(
-                    get: { register.isShowingReconciled },
-                    set: { _ in RegisterCommand.showReconciled.perform(in: register) })
-            )
-            .disabled(!isShown || !RegisterCommand.showReconciled.isEnabled(in: register))
         }
     }
 

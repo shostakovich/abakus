@@ -7,16 +7,14 @@ import Foundation
 import struct SwiftUI.EventModifiers
 import struct SwiftUI.KeyEquivalent
 
-/// Puts the register into one of its operation states (menus, search, filters, notifiers) for a snapshot.
+/// Puts the register into one of its operation states (menus, search, views, notifiers) for a snapshot.
 @MainActor
 struct OpsHarness {
     enum State: String, CaseIterable {
         case contextMenu = "context-menu"
-        case searchSuggestions = "search-suggestions"
         case searchActive = "search-active"
-        case dateFilter = "date-filter"
+        case approvals
         case notifiers
-        case columnMenu = "column-menu"
         case needsCategory = "needs-category"
         case deleteDialog = "delete-dialog"
         case makeRecurring = "make-recurring"
@@ -38,22 +36,14 @@ struct OpsHarness {
             try mouse([.rightMouseDown], on: .list, yFromTop: 420)
             print("right click -> selected \(register.selectedTransactionIds.count), menu \(menus?.shown != nil)")
             if menus?.shown == nil { throw SnapshotError.render }
-        case .searchSuggestions:
-            register.search.focus()
-            edit.settle()
-            edit.type("re")
-            if register.search.text.isEmpty { register.search.boxChanged("re") }
         case .searchActive:
-            register.search.run("Kategorie: Lebensmittel")
-        case .dateFilter:
-            register.search.dateSelectorClicked()
-            register.search.timeframePresetClicked(.latestThreeMonths)
+            register.search.run("Lebensmittel")
+        case .approvals:
+            try addUnapproved()
             edit.settle()
-            register.search.dateSelectorClicked()
+            register.viewMenuChosen(.filter(.unapproved))
         case .notifiers:
             try addNotifierCases()
-        case .columnMenu:
-            register.columnOptionsClicked()
         case .needsCategory:
             register.errorIconClicked(try newestRow { budget.errorState(of: $0).level == .needsCategory })
         case .deleteDialog:
@@ -74,10 +64,7 @@ struct OpsHarness {
         register.rowClicked(row, column: .payee, modifiers: [])
         edit.settle()
         let id = row.transactionId
-        func cleared() -> String { budget.transaction(withId: id)?.cleared.rawValue ?? "-" }
-        print("selected: \(register.selectedTransactionIds == [id]) cleared: \(cleared())")
-        try menuKey("c", [.command, .shift])
-        print("cmd-shift-c -> cleared: \(cleared())")
+        print("selected: \(register.selectedTransactionIds == [id])")
         try mouse([.leftMouseDown, .leftMouseUp], on: .list, yFromTop: 10)
         selectAll()
         print("cmd-a -> selected \(register.selection.count) of \(register.transactionIds.count)")
@@ -86,21 +73,15 @@ struct OpsHarness {
         try menuKey("f", .command)
         print("cmd-f -> search focused: \(register.search.isFocused)")
         edit.type("tel")
-        edit.key(kVK_DownArrow)
-        edit.key(kVK_DownArrow)
-        print(
-            "typed '\(register.search.text)' -> highlighted \(register.search.dropDown?.highlighted.map(String.init) ?? "-")"
-        )
+        print("typed '\(register.search.text)' -> rows \(register.transactionIds.count)")
+        edit.key(kVK_Return)
+        print("return -> grid has focus: \(!register.search.isFocused)")
+        register.search.focus()
+        edit.settle()
         edit.key(kVK_Escape)
-        print("escape -> drop-down open: \(register.search.dropDown != nil), text '\(register.search.text)'")
-        edit.type(",")
-        print("comma -> search '\(register.search.filter?.label ?? "-")', rows \(register.transactionIds.count)")
-        print("grid has focus: \(!register.search.isFocused)")
+        print("escape -> text '\(register.search.text)', rows \(register.transactionIds.count)")
         register.rowClicked(row, column: .payee, modifiers: [])
         edit.settle()
-        edit.send("c", keyCode: UInt16(kVK_ANSI_C))
-        edit.settle()
-        print("c -> cleared: \(cleared())")
         edit.send("\u{7F}", keyCode: UInt16(kVK_Delete))
         edit.settle()
         print(
@@ -111,8 +92,6 @@ struct OpsHarness {
         print("click elsewhere -> undo: \(register.notifiers.undoSlot?.message ?? "-")")
         register.search.clearClicked()
         edit.settle()
-        try post([.leftMouseDown, .leftMouseUp], at: NSPoint(x: 700, y: 45))
-        print("summary click -> search '\(register.search.filter?.label ?? "-")'")
         var accounts: [String] = []
         for index in [1, 0] {
             try mouse([.leftMouseDown, .leftMouseUp], on: .sidebarRow(index), yFromTop: 12, x: 100)
@@ -148,11 +127,6 @@ struct OpsHarness {
                 "scheduler header control-click -> sort flipped: \(register.scheduler.sortOrder.ascending != ascending)"
             )
         }
-        menus.reset()
-        let click = try mouse([.rightMouseDown], on: .header, yFromTop: 10)
-        print(
-            "header right click -> column menu: \(menus.shown?.items.last?.title ?? "-")\(offset(of: menus, from: click))"
-        )
     }
 
     /// Snapshot has no menu bar, so a key equivalent runs the Transactions menu command it belongs to.

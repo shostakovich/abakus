@@ -11,18 +11,23 @@
 
         var body: some View {
             VStack(alignment: .leading, spacing: 10) {
-                RegisterBalances(register: register, summary: register.summary, isLarge: table != nil)
-                if register.isShowingApprovals {
-                    approvalsLine
+                RegisterBalances(summary: register.summary, isLarge: table != nil)
+                if let view = register.activeViewLine {
+                    infoLine(
+                        view, buttonTitle: RegisterViewModel.allTransactionsTitle,
+                        action: register.allTransactionsClicked)
+                }
+                if let line = register.approvalsLine {
+                    approvalsLine(line)
                 } else if register.account != nil && !register.isReconciling {
                     reconcileLine
                 }
-                let notifiers = shownNotifiers
+                let notifiers = register.notifiers.list
                 if !notifiers.isEmpty {
                     ScrollView(.horizontal) {
                         HStack(spacing: 6) {
                             ForEach(notifiers) { notifier in
-                                RegisterNotifierChip(notifier: notifier) { chipTapped(notifier.kind) }
+                                RegisterNotifierChip(notifier: notifier) { register.notifiers.clicked(notifier.kind) }
                             }
                         }
                     }
@@ -32,9 +37,9 @@
                 if let footer = register.reconciliation.footer {
                     infoLine(
                         "\(register.transactionIds.count) Buchungen bis \(footer.statementDate)",
-                        clearTitle: register.search.info?.clearButtonTitle)
-                } else if !register.isShowingApprovals, let info = register.search.info {
-                    infoLine(RegisterSearchController.touchText(info.message), clearTitle: info.clearButtonTitle)
+                        buttonTitle: register.search.info?.clearButtonTitle, action: register.search.clearClicked)
+                } else if let info = register.search.info {
+                    infoLine(info.message, buttonTitle: info.clearButtonTitle, action: register.search.clearClicked)
                 }
                 if let table {
                     RegisterColumnHeader(table: table)
@@ -47,12 +52,6 @@
             .padding(.top, 4)
             .padding(.bottom, 8)
             .background(ThemeColor.contentBackground.ignoresSafeArea(edges: .top))
-        }
-
-        /// A chip leads to a search of its own, so while another search filters the list only Undo stays.
-        private var shownNotifiers: [RegisterNotifier] {
-            let list = register.notifiers.list
-            return register.search.isFiltered ? list.filter { $0.kind == .undo } : list
         }
 
         private var reconcileLine: some View {
@@ -68,39 +67,28 @@
             }
         }
 
-        @ViewBuilder
-        private var approvalsLine: some View {
-            if let line = register.approvalsLine {
-                HStack(spacing: 12) {
-                    Text(verbatim: line)
-                        .font(.footnote)
-                        .foregroundStyle(ThemeColor.secondaryText)
-                    Spacer(minLength: 8)
-                    ProminentButton(title: "Alle bestätigen", action: register.approveAllClicked)
-                }
+        private func approvalsLine(_ line: String) -> some View {
+            HStack(spacing: 12) {
+                Text(verbatim: line)
+                    .font(.footnote)
+                    .foregroundStyle(ThemeColor.secondaryText)
+                Spacer(minLength: 8)
+                ProminentButton(title: RegisterViewModel.approveAllTitle, action: register.approveAllClicked)
             }
         }
 
-        private func infoLine(_ message: String, clearTitle: String?) -> some View {
+        private func infoLine(_ message: String, buttonTitle: String?, action: @escaping () -> Void) -> some View {
             HStack(spacing: 8) {
                 Text(verbatim: message)
                     .foregroundStyle(ThemeColor.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                if let clearTitle {
-                    Button(clearTitle, action: register.search.clearClicked)
+                if let buttonTitle {
+                    Button(buttonTitle, action: action)
                         .fixedSize()
                 }
             }
             .font(.footnote)
-        }
-
-        private func chipTapped(_ kind: RegisterNotifier.Kind) {
-            if kind == .reminder {
-                register.showApprovals()
-            } else {
-                register.notifiers.clicked(kind)
-            }
         }
     }
 
@@ -125,7 +113,6 @@
 
     /// A search puts its total in the place of Gebucht and Vorgemerkt.
     struct RegisterBalances: View {
-        let register: RegisterViewModel
         let summary: RegisterSummary
         let isLarge: Bool
 
@@ -155,32 +142,12 @@
                     .font((isLarge ? Font.title3 : .subheadline).weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(item.isNegative ? ThemeColor.negative : ThemeColor.text)
-                if item.isClickable {
-                    Button {
-                        register.summaryClicked(item.kind)
-                    } label: {
-                        title
-                    }
-                    .buttonStyle(.plain)
+                title
                     .accessibilityHidden(true)
                     .layoutValue(key: RegisterEquationRole.self, value: .title)
-                    Button {
-                        register.summaryClicked(item.kind)
-                    } label: {
-                        amount
-                    }
-                    .buttonStyle(.plain)
+                amount
                     .accessibilityLabel("\(item.title) \(item.amountText)")
-                    .accessibilityHint(item.tooltip ?? "")
                     .layoutValue(key: RegisterEquationRole.self, value: .amount)
-                } else {
-                    title
-                        .accessibilityHidden(true)
-                        .layoutValue(key: RegisterEquationRole.self, value: .title)
-                    amount
-                        .accessibilityLabel("\(item.title) \(item.amountText)")
-                        .layoutValue(key: RegisterEquationRole.self, value: .amount)
-                }
             }
         }
 
@@ -282,6 +249,8 @@
             .buttonBorderShape(.capsule)
             .controlSize(.small)
             .tint(tint)
+            .allowsHitTesting(notifier.isClickable)
+            .accessibilityRemoveTraits(notifier.isClickable ? [] : .isButton)
             .accessibilityHint(notifier.tooltip ?? "")
         }
 
@@ -291,77 +260,6 @@
             case .warning: ThemeColor.warning
             case .reminder: ThemeColor.accent
             case .undo: ThemeColor.secondaryText
-            }
-        }
-    }
-
-    struct TimeframeSheet: View {
-        let search: RegisterSearchController
-
-        var body: some View {
-            NavigationStack {
-                Form {
-                    Section {
-                        ForEach(DateFilterPreset.allCases, id: \.self) { preset in
-                            Button {
-                                search.timeframePresetClicked(preset)
-                            } label: {
-                                HStack {
-                                    Text(preset.label).foregroundStyle(ThemeColor.text)
-                                    Spacer()
-                                    if search.timeframePreset == preset {
-                                        Image(systemName: "checkmark").foregroundStyle(ThemeColor.accent)
-                                    }
-                                }
-                            }
-                            .disabled(!search.isTimeframePresetEnabled(preset))
-                        }
-                    }
-                    Section("Eigener Zeitraum") {
-                        monthRow("Von", start: true)
-                        monthRow("Bis", start: false)
-                    }
-                }
-                .navigationTitle("Zeitraum")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Abbrechen", systemImage: "xmark", role: .close, action: search.timeframeCancelled)
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Fertig", systemImage: "checkmark", role: .confirm, action: search.timeframeDone)
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
-            .presentationBackground(ThemeColor.groupedBackground)
-            .presentationDragIndicator(.visible)
-        }
-
-        private func monthRow(_ label: String, start: Bool) -> some View {
-            LabeledContent(label) {
-                HStack(spacing: 4) {
-                    Picker(
-                        "\(label) Monat",
-                        selection: Binding(
-                            get: { search.timeframeMonth(start: start) ?? 1 },
-                            set: { search.setTimeframeMonth(start: start, month: $0) })
-                    ) {
-                        ForEach(1...12, id: \.self) { month in Text(verbatim: search.monthName(month)).tag(month) }
-                    }
-                    Picker(
-                        "\(label) Jahr",
-                        selection: Binding(
-                            get: { search.timeframeYear(start: start) ?? 0 },
-                            set: { search.setTimeframeYear(start: start, year: $0) })
-                    ) {
-                        ForEach(search.timeframeYears, id: \.self) { year in
-                            Text(verbatim: String(year)).tag(year)
-                        }
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
             }
         }
     }

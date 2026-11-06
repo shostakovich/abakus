@@ -32,6 +32,12 @@ import Testing
         #expect(items.map(\.isDestructive) == [false, true])
     }
 
+    @Test func touchResetsWithoutTheMacsEllipsis() {
+        let model = fixture().model().model
+        model.touchLayout = .phone
+        #expect(model.callouts.monthMenu(month: october).map(\.title) == ["Ziele füllen", "Zurücksetzen"])
+    }
+
     @Test func withoutMoneyToAssignFillingIsDimmedWithItsReason() {
         var fixture = fixture(income: 0)
         fixture.budget(10, F.kino, in: "2026-10-01")

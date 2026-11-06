@@ -330,7 +330,7 @@
             .accessibilityAddTraits(.isHeader)
             .accessibilityValue(group.isExpanded ? "Aufgeklappt" : "Zugeklappt")
             .contextMenu {
-                Button("Gruppe bearbeiten …", systemImage: "pencil") { model.categoryTapped(header.id) }
+                Button("Gruppe bearbeiten", systemImage: "pencil") { model.categoryTapped(header.id) }
                 Button("Neue Kategorie", systemImage: "plus") { model.addSubCategoryClicked(masterId: header.id) }
                 Divider()
                 Button("Alle Gruppen aufklappen", systemImage: "chevron.down", action: model.expandAllClicked)

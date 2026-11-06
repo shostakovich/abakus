@@ -37,10 +37,6 @@ struct RegisterGridView: View {
         let contentHeight = grid.listContentHeight(viewport: viewport)
         VStack(spacing: 0) {
             RegisterGridHeader(owner: owner, layout: layout)
-                // The column menu opens straight below the mouse, unlike the row menus.
-                .onSecondaryClick(offset: CGSize(width: 0, height: 1), perform: grid.register.performMenuAction) { _ in
-                    owner.headerContextMenu()
-                }
             list(rows: rows, layout: layout, height: viewport, contentHeight: contentHeight)
                 .onSecondaryClick(perform: grid.register.performMenuAction) { point in
                     let items = grid.contextMenu(atY: point.y, scrollOffset: scroll.metrics.offset)
@@ -72,16 +68,9 @@ struct RegisterGridView: View {
             owner.deleteKeyPressed()
             return .handled
         }
-        .onKeyPress(keys: ["c", Self.f5]) { press in
+        .onKeyPress(keys: [Self.f5]) { _ in
             guard let main else { return .ignored }
-            if press.key == Self.f5 {
-                main.refreshSort()
-                return .handled
-            }
-            guard press.modifiers.isEmpty, grid.editor == nil || grid.editor?.focus?.field == nil else {
-                return .ignored
-            }
-            main.toggleClearedKeyPressed()
+            main.refreshSort()
             return .handled
         }
         .onKeyPress(keys: [.return, .tab, .space, .escape, Self.f2]) { press in

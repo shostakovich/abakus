@@ -97,10 +97,6 @@ extension TaskDialog where Choice == MessageChoice {
         .message(InvalidBalance.instruction, InvalidBalance.content(escaped(text), bold: bold))
     }
 
-    public static func invalidAmount(_ text: String) -> Self {
-        .message(InvalidAmount.instruction, InvalidAmount.content(escaped(text)))
-    }
-
     private static func escaped(_ text: String) -> String {
         text.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;")

@@ -30,28 +30,34 @@ extension TransactionEditor {
     public func activate(_ button: EditorButton) {
         guard !hasOpenDialog else { return }
         switch button {
-        case .done, .save: commitChange(addAnother: false, findNext: false)
-        case .saveAndAddAnother: commitChange(addAnother: true, findNext: false)
-        case .approve:
-            clone.approved = true
-            commitChange(addAnother: false, findNext: false)
-        case .approveAndFindNext:
-            clone.approved = true
-            commitChange(addAnother: false, findNext: true)
-        case .delete:
-            closePopups()
-            onFinish(.deleteRequested(transactionId: transactionId))
+        case .done, .save: commitChange(addAnother: false)
+        case .saveAndAddAnother: commitChange(addAnother: true)
+        case .approve: commitChange(addAnother: false, approves: true)
         case .cancel:
             cancel()
         }
     }
 
-    public func commitForQuit() {
-        guard !hasOwnDialog else { return }
-        commitChange(addAnother: false, findNext: false)
+    /// The field commits before the sheet closes, without announcing a refusal the delete makes moot.
+    public func deleteClicked() {
+        guard !hasOpenDialog else { return }
+        closePopups()
+        if let field = focus?.field {
+            refusesQuietly = true
+            blur(field)
+            refusesQuietly = false
+            refocusRequest = nil
+            focus = nil
+        }
+        onFinish(.deleteRequested(transactionId: transactionId))
     }
 
-    func commitChange(addAnother: Bool, findNext: Bool) {
+    public func commitForQuit() {
+        guard !hasOwnDialog else { return }
+        commitChange(addAnother: false)
+    }
+
+    func commitChange(addAnother: Bool, approves: Bool = false) {
         if let field = focus?.field {
             closePopups()
             blur(field)
@@ -59,6 +65,10 @@ extension TransactionEditor {
             focus = .button(defaultButton)
         }
         refocusRequest = nil
+        if let error = amountError {
+            focus = .field(error.field)
+            return
+        }
         if blockNextSave {
             blockNextSave = false
             setFocus(.field(.main(.date)), commitCurrent: false)
@@ -69,7 +79,7 @@ extension TransactionEditor {
             cancel()
             return
         }
-        pendingSave = PendingSave(addAnother: addAnother, findNext: findNext)
+        pendingSave = PendingSave(addAnother: addAnother, approves: approves)
         continueSave()
     }
 
@@ -146,6 +156,8 @@ extension TransactionEditor {
 
     private func perform(_ transaction: Transaction) {
         guard let pending = pendingSave else { return }
+        var transaction = transaction
+        if pending.approves { transaction.approved = true }
         let save = TransactionSave(
             transaction: transaction, payeeName: savedPayeeName, subPayeeNames: subPayeeNames, isNew: mode == .new,
             confirmedReconciledChange: pending.reconciledConfirmed ?? false, payeeRename: pending.payeeRename)
@@ -173,8 +185,7 @@ extension TransactionEditor {
         let incomeCheck = leader == nil && (saved?.outflow ?? 0) > 0 && budget.isReadyToAssign(saved?.categoryId)
         onFinish(
             .saved(
-                transactionId: transaction.id, addAnother: pending.addAnother, findNext: pending.findNext,
-                incomeCheck: incomeCheck))
+                transactionId: transaction.id, addAnother: pending.addAnother, incomeCheck: incomeCheck))
     }
 
     private func ask<Choice>(

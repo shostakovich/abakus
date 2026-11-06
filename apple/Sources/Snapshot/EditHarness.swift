@@ -16,6 +16,7 @@ struct EditHarness {
         case invalidPayee = "invalid-payee"
         case incomeCheck = "income-check"
         case accountField = "account-field"
+        case amountError = "amount-error"
     }
 
     let model: AppModel
@@ -106,6 +107,11 @@ struct EditHarness {
             register.addTransactionClicked()
             settle()
             try require(register.editor).fieldClicked(.main(.account))
+        case .amountError:
+            let id = try transaction { self.payee($0) == "Telekom" }
+            try edit(id, column: .amount)
+            type("5,8x")
+            key(kVK_Tab)
         }
         settle()
         if trace, let editor = register.editor { print(Self.describe(editor)) }
@@ -123,6 +129,7 @@ struct EditHarness {
                 "  list \(list.kind): \(list.items.count) rows, highlighted \(list.highlightedItem?.label ?? "-")")
         }
         if let callout = editor.dateCallout { lines.append("  callout: \(callout.message)") }
+        if let error = editor.amountError { lines.append("  amount error \(error.field): \(error.message)") }
         if editor.isCalendarOpen { lines.append("  calendar open") }
         if let dialog = editor.dialogs.presented.last?.dialog { lines.append("  dialog: \(dialog.instruction)") }
         return lines.joined(separator: "\n")

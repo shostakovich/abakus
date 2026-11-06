@@ -164,7 +164,7 @@
             }
             if isPicking {
                 ToolbarItemGroup(placement: .bottomBar) {
-                    Button("Zusammenfassen …") { isCombining = true }
+                    Button("Zusammenfassen") { isCombining = true }
                         .disabled(model.selection.count < 2)
                     Spacer()
                     Text("\(model.selection.count) ausgewählt").font(.footnote).monospacedDigit()
@@ -249,7 +249,7 @@
                 Section {
                     LabeledContent("Name") { Text(verbatim: model.selectedPayeeName) }
                     if !model.isTransfer {
-                        Button("Umbenennen …", action: model.startRenaming)
+                        Button("Umbenennen", action: model.startRenaming)
                     }
                     Toggle(
                         "Empfänger aufführen und ergänzen",

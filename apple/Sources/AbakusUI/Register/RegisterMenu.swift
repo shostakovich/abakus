@@ -2,15 +2,14 @@ import AbakusCore
 import Foundation
 
 public enum RegisterMenuAction: Hashable, Sendable {
-    case markCleared, markUncleared, approve, reject
     case categorize(categoryId: String?)
-    case renamePayee, payeeSettings, makeRecurring, moveToScheduler
+    case makeRecurring, moveToScheduler
     case moveToAccount(accountId: String)
     case delete
-    case timeframe, showReconciled
+    case filter(RegisterFilter)
     case togglePicking, toggleSelectAll
+    case toggleScheduler, editAccount
     case toggleColumn(RegisterColumn)
-    case applyColumnsToAllAccounts
     case toggleScheduledColumn(RegisterColumn)
     case applyScheduledColumnsToAllAccounts
     case enterScheduledNow, skipScheduled, deleteScheduled
@@ -69,7 +68,7 @@ public struct RegisterMenuItem: Hashable, Sendable, Identifiable {
 }
 
 public enum RegisterAnchorID: Hashable, Sendable {
-    case viewMenu, columnTab, schedulerTitle, schedulerColumnTab
+    case schedulerTitle, schedulerColumnTab
     case error(String)
 }
 

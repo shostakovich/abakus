@@ -16,6 +16,7 @@ import Testing
                 == "Gebucht: Die Bank kennt diese Buchung. Klicken, um sie als vorgemerkt zu markieren.")
         #expect(
             rows.first { $0.id == reconciled }?.clearedTooltip
-                == "Abgeglichen: Die Bank kennt diese Buchung, und sie ist mit dem Banksaldo abgeglichen.")
+                == "Abgeglichen: Die Bank kennt diese Buchung, und sie ist mit dem Banksaldo abgeglichen. Klicken, um "
+                + "sie zu entsperren.")
     }
 }

@@ -16,7 +16,7 @@ extension RegisterViewModel {
         switch row.errorLevel {
         case .forReview:
             popup = nil
-            perform(.approveTransactions(idsAtLevel(.forReview, in: selectedTransactions)))
+            perform(.approveTransactions([row.transactionId]))
         case .needsCategory: popup = .needsCategory(rowId: row.id)
         case .error: popup = .removeCategory(rowId: row.id)
         case .none: popup = nil

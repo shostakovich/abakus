@@ -25,13 +25,10 @@ package protocol RegisterGridOwner: AnyObject {
     var visibleColumns: [RegisterColumn] { get }
     var expandedSplits: Set<String> { get set }
     var sortOrder: RegisterSortOrder { get set }
-    var columnTab: RegisterAnchorID { get }
     var snapsToRows: Bool { get }
     /// The secondary-click menu of a row other than the edited one, nil when an edit or a modal swallows the click.
     func contextMenu(for row: RegisterRow) -> [RegisterMenuItem]?
-    func headerContextMenu() -> [RegisterMenuItem]?
     func columnLayout(gridWidth: CGFloat) -> RegisterColumnLayout
-    func columnOptionsClicked()
     func deleteKeyPressed()
     func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)?
     func followUpEdit(_ outcome: EditorOutcome)
@@ -288,7 +285,7 @@ package final class RegisterGridController {
     private func editorFinished(_ editor: TransactionEditor, _ outcome: EditorOutcome) {
         guard storedEditor?.editor === editor else { return }
         storedEditor = nil
-        if case .saved(let id, let addAnother, _, _) = outcome {
+        if case .saved(let id, let addAnother, _) = outcome {
             updateSelection { $0.select(id) }
             let saved = owner?.editorRecord(id)?.transaction
             if editor.mode == .new {

@@ -13,7 +13,6 @@ package struct AddCategoryRequest: Identifiable {
 package enum AppSheet: Identifiable {
     case addCategory(AddCategoryRequest)
     case payeeSettings(PayeeSettingsModel)
-    case renamePayee(RenamePayeeForm)
     case statement(ReconciliationStatementForm)
     case addAccount(AddAccountForm)
     case adjustBalance(AdjustBalanceForm)
@@ -22,7 +21,6 @@ package enum AppSheet: Identifiable {
         switch self {
         case .addCategory(let request): request.id
         case .payeeSettings(let model): model.id
-        case .renamePayee(let form): form.id
         case .statement(let form): form.id
         case .addAccount(let form): form.id
         case .adjustBalance(let form): form.id
@@ -39,7 +37,6 @@ extension AppModel {
                     onCreate: editor.addCategoryConfirmed, onCancel: editor.addCategoryCancelled))
         }
         if let payeeSettings { return .payeeSettings(payeeSettings) }
-        if let form = register.renamePayeeForm { return .renamePayee(form) }
         if let form = register.reconciliation.statementForm { return .statement(form) }
         if let form = accounts.addForm { return .addAccount(form) }
         if let form = accounts.balanceForm { return .adjustBalance(form) }

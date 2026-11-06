@@ -103,7 +103,7 @@ extension PayeeSettingsModel {
         dialog.showTransactionsClicked()
         #expect(app.payeeSettings == nil)
         #expect(app.navigation.selection == .allAccounts)
-        #expect(app.register.search.filter?.label == "Empfänger: REWE")
+        #expect(app.register.search.text == "REWE")
         #expect(
             Set(app.register.transactionIds)
                 == Set(
@@ -112,18 +112,16 @@ extension PayeeSettingsModel {
                     }.map(\.id)))
     }
 
-    @Test func theCountLinkClearsTheDateFilter() throws {
+    @Test func theCountLinkShowsAlleBuchungen() throws {
         let setup = PayeeSettingsFixture()
         let app = setup.app()
         app.navigation.selection = .allAccounts
-        app.register.search.dateSelectorClicked()
-        app.register.search.timeframePresetClicked(.thisMonth)
-        #expect(app.register.search.dateFilter != nil)
+        app.register.viewMenuChosen(.filter(.uncleared))
         app.navigation.selection = .account(setup.fixture.giro)
         try setup.dialog(app, on: "REWE").showTransactionsClicked()
         #expect(app.navigation.selection == .allAccounts)
-        #expect(app.register.search.dateFilter == nil)
-        #expect(app.register.search.filter?.label == "Empfänger: REWE")
+        #expect(app.register.filter == .all)
+        #expect(app.register.search.text == "REWE")
     }
 }
 

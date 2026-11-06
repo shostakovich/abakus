@@ -11,6 +11,11 @@ extension TransactionEditor {
             blur(current)
         }
         refocusRequest = nil
+        if let error = amountError, error.field != field {
+            focus = .field(error.field)
+            amountRefusals += 1
+            return
+        }
         focus = .field(field)
         didFocus(field)
     }
@@ -20,11 +25,26 @@ extension TransactionEditor {
         closePopups()
         blur(field)
         refocusRequest = nil
-        if focus == .field(field) { focus = nil }
+        if focus == .field(field) && amountError?.field != field { focus = nil }
+    }
+
+    /// The amount field of the page the sheet shows, nil for a list; a refused amount elsewhere cannot keep the
+    /// focus, so it is dropped as the budget drops one where it cannot stay. True when one was.
+    @discardableResult
+    public func sheetShows(amount shown: EditorFieldID?) -> Bool {
+        guard let error = amountError, error.field != shown else { return false }
+        amountError = nil
+        setText(error.field, originalText(error.field, of: clone))
+        if focus == .field(error.field) {
+            focus = nil
+            refocusRequest = nil
+        }
+        return true
     }
 
     public func sheetTextChanged(_ field: EditorFieldID, to newText: String) {
         guard !isLocked(field) else { return }
+        if texts[field] != newText { clearAmountError(field) }
         texts[field] = newText
         fieldSelection = NSRange(location: (newText as NSString).length, length: 0)
     }
@@ -150,32 +170,10 @@ extension TransactionEditor {
         }
     }
 
-    /// A transaction waiting for approval confirms with approving it.
-    public var sheetConfirmButton: EditorButton {
-        buttons.contains(.approve) ? .approve : prominentButton
-    }
+    public var sheetConfirmButton: EditorButton { prominentButton }
 
-    /// Deleting has its own place at the sheet's end.
     public var sheetMoreButtons: [EditorButton] {
-        buttons.filter { ![sheetConfirmButton, .cancel, .delete].contains($0) }
-    }
-
-    /// A stored transaction's status: waiting for approval, else gebucht, vorgemerkt or abgeglichen.
-    public var sheetStatus: EditorSheetStatus? {
-        guard mode == .existing, !isScheduled else { return nil }
-        if needsApproval && !clone.approved { return .waiting }
-        switch clone.cleared {
-        case .uncleared: return .uncleared
-        case .cleared: return .cleared
-        case .reconciled: return .reconciled
-        }
-    }
-
-    public func sheetStatusChosen(_ status: EditorSheetStatus) {
-        let switchable: [EditorSheetStatus] = [.uncleared, .cleared]
-        guard let current = sheetStatus, current != status, switchable.contains(current), switchable.contains(status)
-        else { return }
-        toggleCleared()
+        buttons.filter { ![sheetConfirmButton, .cancel].contains($0) }
     }
 
     /// A stored transaction no other one leads can be deleted from its sheet.
@@ -199,10 +197,6 @@ extension TransactionEditor {
 public struct EditorSheetValue: Hashable, Sendable {
     public var text: String
     public var isTransfer = false
-}
-
-public enum EditorSheetStatus: Hashable, Sendable {
-    case waiting, uncleared, cleared, reconciled
 }
 
 public struct EditorPartSummary: Hashable, Sendable {

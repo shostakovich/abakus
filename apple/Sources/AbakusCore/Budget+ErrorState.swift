@@ -26,6 +26,23 @@ extension Budget {
         errorState(of: sub, inAccount: accountId, transfers: transferAccountId(ofPayee:))
     }
 
+    /// By the category rule alone, approved or not; a split needs one when one of its parts does.
+    public func needsCategory(_ transaction: Transaction) -> Bool {
+        needsCategory(transaction, transfers: transferAccountId(ofPayee:))
+    }
+
+    func needsCategory(_ transaction: Transaction, transfers: (String?) -> String?) -> Bool {
+        guard transaction.isSplit else {
+            return categoryErrorState(
+                accountId: transaction.accountId, categoryId: transaction.categoryId, amount: transaction.amount,
+                transferAccountId: transfers(transaction.payeeId)
+            ).level == .needsCategory
+        }
+        return transaction.subtransactions.contains {
+            errorState(of: $0, inAccount: transaction.accountId, transfers: transfers).level == .needsCategory
+        }
+    }
+
     /// `transfers` gives the account a payee transfers to, so a caller with many rows can look it up fast.
     func errorState(of transaction: Transaction, transfers: (String?) -> String?) -> ErrorState {
         var state: ErrorState

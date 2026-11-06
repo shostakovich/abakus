@@ -745,23 +745,97 @@ import Testing
         #expect(model.editor == nil)
     }
 
-    @Test func anotherOperatorIsRefusedAndTheAmountStays() throws {
+    @Test func anotherOperatorIsRefusedAtTheFieldWithoutADialog() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -10)
         let (model, store) = fixture.spied()
         model.beginEditing(id, column: .amount)
         let editor = try #require(model.editor)
         editor.retype("60*2")
-        #expect(editor.text(.main(.amount)) == "60*2")
         editor.press(.enter)
-        let dialog = try #require(editor.taskDialog)
-        #expect(dialog.instruction == "Ungültiger Betrag")
-        #expect(dialog.content == BudgetAssignedAmountTests.refusal)
-        #expect(store.transactionSaves.isEmpty)
-        #expect(editor.clone.amount == -10)
-        #expect(editor.text(.main(.amount)) == "10.00")
-        editor.answer(MessageChoice.close)
+        #expect(editor.taskDialog == nil)
+        #expect(
+            editor.amountError == EditorAmountError(field: .main(.amount), message: BudgetAssignedAmountTests.refusal))
+        #expect(editor.amountRefusals == 1)
+        #expect(editor.text(.main(.amount)) == "60*2")
         #expect(editor.focusedField == .main(.amount))
+        #expect(editor.clone.amount == -10)
+        #expect(store.transactionSaves.isEmpty)
+        editor.press(.enter)
+        #expect(editor.amountRefusals == 2)
+        #expect(store.transactionSaves.isEmpty)
+        editor.type("0")
+        #expect(editor.amountError == nil)
+    }
+
+    @Test func aRefusedAmountKeepsTheFocusOnTabAndOnAClickElsewhere() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -10)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id, column: .amount)
+        let editor = try #require(model.editor)
+        editor.retype("5,8x")
+        editor.press(.tab)
+        #expect(editor.focusedField == .main(.amount))
+        editor.fieldClicked(.main(.memo))
+        #expect(editor.focusedField == .main(.amount))
+        editor.fieldDidLoseFocus(.main(.amount))
+        #expect(editor.focusedField == .main(.amount))
+        #expect(editor.amountRefusals == 3)
+        #expect(editor.clickedOutside())
+        #expect(model.editor === editor)
+        #expect(editor.text(.main(.amount)) == "5,8x")
+    }
+
+    @Test func aClickElsewhereAnnouncesTheRefusalOnce() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -10)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id, column: .amount)
+        let editor = try #require(model.editor)
+        var announced: [String] = []
+        editor.announce = { announced.append($0) }
+        editor.retype("5,8x")
+        editor.fieldDidLoseFocus(.main(.amount))
+        editor.fieldClicked(.main(.memo))
+        #expect(editor.focusedField == .main(.amount))
+        #expect(announced == [InvalidAmount.content("5,8x")])
+        editor.retype("6,8x")
+        editor.press(.tab)
+        #expect(announced == [InvalidAmount.content("5,8x"), InvalidAmount.content("6,8x")])
+    }
+
+    @Test func escapePutsTheRefusedAmountBack() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -10)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id, column: .amount)
+        let editor = try #require(model.editor)
+        editor.retype("5,8x")
+        editor.press(.tab)
+        editor.press(.escape)
+        #expect(editor.amountError == nil)
+        #expect(editor.text(.main(.amount)) == "10.00")
+    }
+
+    @Test func aPartsAmountIsRefusedAtItsField() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -50)
+        let (model, store) = fixture.spied()
+        model.beginEditing(id, column: .category)
+        let editor = try #require(model.editor)
+        editor.retype(DefaultCategories.splitCategoryName)
+        editor.press(.tab)
+        let part = EditorFieldID.sub(editor.subIds[0], .amount)
+        editor.fieldClicked(part)
+        editor.retype("60*2")
+        editor.press(.tab)
+        #expect(editor.amountError?.field == part)
+        #expect(editor.focusedField == part)
+        #expect(editor.text(part) == "60*2")
+        #expect(editor.taskDialog == nil)
+        editor.activate(.done)
+        #expect(store.transactionSaves.isEmpty)
     }
 }
 
@@ -1054,20 +1128,27 @@ import Testing
         #expect(save.confirmedReconciledChange)
     }
 
-    @Test func unapprovedTransactionsOfferApproveAndFindNext() throws {
+    @Test func aWaitingTransactionOffersOnlyApprovingAndCancelling() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -4, approved: false, source: .bank)
+        let model = fixture.model()
+        model.beginEditing(id)
+        let editor = try #require(model.editor)
+        #expect(editor.buttons == [.approve, .cancel])
+        #expect(editor.buttons.map(\.title) == ["Bestätigen", "Abbrechen"])
+        #expect(editor.defaultButton == .approve)
+    }
+
+    @Test func enterApprovesTheOpenTransactionWithoutMovingOn() throws {
         var fixture = RegisterFixture()
         let first = fixture.add(fixture.giro, -4, on: "2014-05-01", approved: false, source: .bank)
-        let second = fixture.add(fixture.giro, -5, on: "2014-05-02", approved: false, source: .bank)
+        fixture.add(fixture.giro, -5, on: "2014-05-02", approved: false, source: .bank)
         let (model, store) = fixture.spied()
-        model.beginEditing(first)
-        let editor = try #require(model.editor)
-        #expect(editor.buttons == [.approveAndFindNext, .approve, .delete, .cancel])
-        editor.activate(.approveAndFindNext)
+        model.beginEditing(first, column: .memo)
+        model.editor?.press(.enter)
         #expect(store.transactionSaves.map(\.transaction.id) == [first])
         #expect(store.transactionSaves.map(\.transaction.approved) == [true])
-        #expect(model.editingTransactionId == second)
-        model.editor?.activate(.delete)
-        #expect(store.commands.last == .deleteTransactions([second]))
+        #expect(model.editor == nil)
     }
 
     @Test func editingAnUnapprovedTransactionApprovesIt() throws {
@@ -1084,6 +1165,21 @@ import Testing
         model.editor?.activate(.approve)
         #expect(store.transactionSaves.map(\.transaction.approved) == [true])
         #expect(store.transactionSaves.map(\.transaction.memo) == ["geprüft"])
+    }
+
+    @Test func aRefusedAmountLeavesTheTransactionWaiting() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -4, approved: false, source: .bank)
+        let (model, store) = fixture.spied()
+        model.beginEditing(id, column: .amount)
+        let editor = try #require(model.editor)
+        editor.retype("5,8x")
+        editor.activate(.approve)
+        #expect(store.transactionSaves.isEmpty)
+        #expect(!editor.clone.approved)
+        editor.retype("5")
+        editor.commitForQuit()
+        #expect(store.transactionSaves.map(\.transaction.approved) == [false])
     }
 
     @Test func payeeRenameAsksAboutTheOtherTransactions() throws {

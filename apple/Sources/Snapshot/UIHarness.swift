@@ -16,7 +16,6 @@ struct UIHarness {
         case accountAdjusted = "account-adjusted"
         case accountBalance = "account-balance"
         case accountBalanceCheck = "account-balance-check"
-        case renamePayee = "rename-payee"
         case payeeSettings = "payee-settings"
         case payeeSettingsMulti = "payee-settings-multi"
         case payeeSettingsEmpty = "payee-settings-empty"
@@ -83,10 +82,6 @@ struct UIHarness {
                 edit.settle()
                 model.accounts.adjustClicked()
             }
-        case .renamePayee:
-            try selectAccount("Girokonto")
-            register.rowClicked(try require(register.rows.first { $0.payee == "REWE" }), column: nil, modifiers: [])
-            register.performMenuAction(.renamePayee)
         case .payeeSettings:
             try selectAccount("Girokonto")
             let rewe = try require(store.budget.payee(named: "REWE")).id

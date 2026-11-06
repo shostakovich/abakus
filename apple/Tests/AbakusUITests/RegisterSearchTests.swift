@@ -10,7 +10,7 @@ import Testing
         var fixture = RegisterFixture()
         var ids: [String: String] = [:]
         ids["rewe"] = fixture.add(fixture.giro, -40, payee: "REWE", category: fixture.groceries, memo: "Milch")
-        ids["aral"] = fixture.add(fixture.giro, -60, on: "2014-05-12", payee: "Aral")
+        ids["aral"] = fixture.add(fixture.giro, -60.5, on: "2014-05-12", payee: "Aral")
         ids["split"] = fixture.add(
             fixture.giro, -50, on: "2014-05-14", payee: "Kaufland", id: "SPLIT",
             subtransactions: [
@@ -22,175 +22,84 @@ import Testing
         return (fixture, model, ids)
     }
 
-    @Test func typingShowsSuggestionsForTheCurrentTerm() {
-        let (_, model, _) = searchModel()
-        model.search.boxChanged("Empfänger: Ar")
-        #expect(model.search.dropDown?.items.contains { $0.searchText == "Empfänger: Aral" } == true)
-        model.search.boxChanged("Ausgang: 60, rew")
-        #expect(model.search.dropDown?.items.contains { $0.searchText == "Empfänger: REWE" } == true)
-        model.search.boxChanged("")
-        #expect(model.search.dropDown == nil)
-    }
-
-    @Test func touchSuggestionsListValuesThenTheFieldsToSearchIn() throws {
-        let (_, model, _) = searchModel()
-        model.search.boxChanged("re")
-        let groups = model.search.touchSuggestionGroups
-        #expect(groups.map(\.title) == ["Vorschläge", "„re“ suchen in"])
-        let rewe = try #require(groups.first?.rows.first { $0.value == "REWE" })
-        #expect(rewe.field == "Empfänger:")
-        #expect(model.search.dropDown?.items[rewe.index].searchText == "Empfänger: REWE")
-        #expect(groups.last?.rows.map(\.field) == ["Allen Feldern", "Empfänger", "Kategorie", "Memo"])
-    }
-
-    @Test func touchSuggestionsNameATransferByItsAccountAndTheRemindersByTheApprovalToken() {
-        let (_, model, _) = searchModel()
-        model.search.boxChanged("Ist: Erinn")
-        let reminder = model.search.touchSuggestionGroups.flatMap(\.rows).first { $0.id == "is:Erinnerung" }
-        #expect(reminder?.value == "Zu bestätigen")
-        model.search.boxChanged("Empfänger: Transfer")
-        let transfers = model.search.touchSuggestionGroups.flatMap(\.rows).filter(\.isTransfer)
-        #expect(!transfers.isEmpty)
-        #expect(transfers.allSatisfy { !$0.value.contains("Transfer") })
-    }
-
-    @Test func enterRunsTheTypedSearch() {
+    @Test func typingFiltersAtOnce() {
         let (_, model, ids) = searchModel()
-        model.search.boxChanged("rewe")
-        model.search.submitted()
-        #expect(model.transactionIds == [ids["rewe"]!])
-        #expect(model.search.info?.message == "1 Treffer für „rewe“")
-        #expect(model.search.dropDown == nil)
-    }
-
-    @Test func aTypedCommaRunsTheSearch() {
-        let (_, model, ids) = searchModel()
-        model.search.boxChanged("Ausgang: 60")
-        model.search.boxChanged("Ausgang: 60,")
-        #expect(model.transactionIds == [ids["aral"]!])
-        #expect(model.search.filter?.label == "Ausgang: 60")
-    }
-
-    @Test func pickingASuggestionReplacesTheTermAndSearches() throws {
-        let (_, model, ids) = searchModel()
-        model.search.boxChanged("Ausgang: 60, Ar")
-        let index = try #require(model.search.dropDown?.items.firstIndex { $0.searchText == "Empfänger: Aral" })
-        model.search.pickSuggestion(at: index)
-        #expect(model.search.text == "Ausgang: 60, Empfänger: Aral, ")
-        #expect(model.search.filter?.label == "Ausgang: 60, Empfänger: Aral")
-        #expect(model.transactionIds == [ids["aral"]!])
-    }
-
-    @Test func arrowKeysMoveTheHighlightAndEnterPicksIt() {
-        let (_, model, ids) = searchModel()
-        model.search.boxChanged("Empfänger: Aral")
-        let items = model.search.dropDown?.items ?? []
-        let target = items.firstIndex { $0.searchText == "Empfänger: Aral" }!
-        for _ in 0...target { model.search.moveHighlight(by: 1) }
-        #expect(model.search.dropDown?.highlighted == target)
-        model.search.submitted()
-        #expect(model.transactionIds == [ids["aral"]!])
-    }
-
-    @Test func hintRowsCannotBePicked() {
-        let (_, model, _) = searchModel()
-        model.search.boxChanged("x")
-        let hint = model.search.dropDown?.items.firstIndex { $0.prefix == "Dates" }
-        model.search.pickSuggestion(at: hint ?? 0)
-        #expect(model.search.filter == nil)
-        #expect(model.search.text == "x")
-    }
-
-    @Test func unchangedTextDoesNotSearchAgain() {
-        let (_, model, _) = searchModel()
-        model.search.boxChanged("rewe")
-        model.search.submitted()
-        model.selectAll()
-        model.search.boxChanged("rewe, ")
-        model.search.submitted()
-        #expect(model.selection.count == 1)
-    }
-
-    @Test func escapeEmptiesTheBoxThenCancelsTheDateFilter() {
-        let (_, model, _) = searchModel()
-        model.search.dateSelectorClicked()
-        model.search.timeframePresetClicked(.thisMonth)
-        model.search.boxChanged("rewe")
-        model.search.submitted()
-        model.search.escapePressed()
-        #expect(model.search.text == "")
-        #expect(model.search.filter == nil)
-        #expect(model.search.dateFilter != nil)
-        model.search.escapePressed()
-        #expect(model.search.dateFilter == nil)
-    }
-
-    @Test func escapeFirstClosesTheDropDown() {
-        let (_, model, _) = searchModel()
         model.search.boxChanged("rew")
-        model.search.escapePressed()
-        #expect(model.search.dropDown == nil)
-        #expect(model.search.text == "rew")
+        #expect(model.transactionIds == [ids["rewe"]!])
+        #expect(model.search.info?.message == "1 Treffer für „rew“")
+        model.search.boxChanged("milch")
+        #expect(model.transactionIds == [ids["rewe"]!])
     }
 
-    @Test func leavingAnEmptyBoxEndsTheSearch() {
+    @Test func findsPayeeCategoryMemoAmountAndSplitParts() {
+        let (_, model, ids) = searchModel()
+        for (text, id) in [
+            ("aral", "aral"), ("groceries", "rewe"), ("MILCH", "rewe"), ("60.50", "aral"), ("seife", "split"),
+        ] {
+            model.search.boxChanged(text)
+            #expect(model.transactionIds == [ids[id]!], "\(text)")
+        }
+    }
+
+    @Test func textWithAColonIsSearchedAsText() {
         let (_, model, _) = searchModel()
+        model.search.boxChanged("Empfänger: Aral")
+        #expect(model.transactionIds.isEmpty)
+    }
+
+    @Test func returnHandsTheKeysToTheList() {
+        let (_, model, _) = searchModel()
+        let before = model.gridFocusRequest
         model.search.boxChanged("rewe")
         model.search.submitted()
-        model.search.focusChanged(true)
-        model.search.boxChanged("")
-        model.search.focusChanged(false)
-        #expect(model.search.filter == nil)
+        #expect(model.gridFocusRequest == before + 1)
+        #expect(model.search.text == "rewe")
     }
 
-    @Test func emptyingTheBoxEndsTheSearchWithoutLeavingIt() {
+    @Test func escapeEmptiesTheBoxThenLeavesIt() {
         let (_, model, ids) = searchModel()
         model.search.boxChanged("rewe")
-        model.search.submitted()
+        #expect(model.search.escapePressed())
+        #expect(model.search.text == "")
+        #expect(Set(ids.values).isSubset(of: model.transactionIds))
+        #expect(!model.search.escapePressed())
+    }
+
+    @Test func emptyingTheBoxEndsTheSearch() {
+        let (_, model, ids) = searchModel()
+        model.search.boxChanged("rewe")
         model.search.boxChanged("")
-        #expect(model.search.filter == nil)
+        #expect(!model.search.isSearching)
         #expect(model.search.info == nil)
         #expect(Set(ids.values).isSubset(of: model.transactionIds))
     }
 
-    @Test func splitLinesThatDoNotMatchAreStruckAndExpanded() {
+    @Test func aSplitFoundByAPartOpensWithAllItsParts() {
         let (_, model, _) = searchModel()
-        model.search.run("Memo: Essen")
-        let subRows = model.rows.filter(\.isSubtransaction)
-        #expect(subRows.map(\.id) == ["S1", "S2"])
-        #expect(subRows.map(\.isExcludedFromSearch) == [false, true])
-        #expect(model.summary.second.amountText == "−$30.00")
+        model.search.boxChanged("essen")
+        #expect(model.rows.filter(\.isSubtransaction).map(\.id) == ["S1", "S2"])
+        #expect(model.summary.second.amountText == "−$50.00")
     }
 
     @Test func clearingTheSearchRestoresTheSplitExpansion() {
         let (_, model, _) = searchModel()
-        model.search.run("Memo: Essen")
+        model.search.boxChanged("essen")
         model.search.clearClicked()
         #expect(!model.rows.contains { $0.isSubtransaction })
         #expect(model.search.text == "")
     }
 
-    @Test func searchTotalCountsOnlyMatchingSplitLines() {
+    @Test func theSearchTotalSumsWhatItFinds() {
         let (_, model, _) = searchModel()
-        model.search.run("Ausgang: >40")
-        #expect(model.summary.second.title == "Suchsumme (3)")
-        #expect(model.summary.second.amountText == "−$100.00")
-        model.search.run("Ausgang: >10")
-        #expect(model.summary.second.amountText == "−$150.00")
+        model.search.boxChanged("50")
+        #expect(model.summary.second.title == "Suchsumme (2)")
+        #expect(model.summary.second.amountText == "−$110.50")
     }
 
-    @Test func summaryBoxesRunTheirSearches() {
-        var fixture = RegisterFixture()
-        let uncleared = fixture.add(fixture.giro, -1)
-        let (model, _) = fixture.spied()
-        model.summaryClicked(.uncleared)
-        #expect(model.search.filter?.label == "Ist: Vorgemerkt")
-        #expect(model.transactionIds == [uncleared])
-        model.summaryClicked(.cleared)
-        #expect(model.search.filter?.label == "Ist: Gebucht oder abgeglichen")
-        #expect(model.transactionIds == [fixture.startingBalanceId(of: fixture.giro)])
-        model.summaryClicked(.working)
-        #expect(model.search.filter?.label == "Ist: Gebucht oder abgeglichen")
+    @Test func gebuchtAndVorgemerktAreJustNumbers() {
+        let (_, model, _) = searchModel()
+        #expect(model.summary.first.tooltip == "Summe der gebuchten und abgeglichenen Buchungen.")
+        #expect(model.summary.second.tooltip == "Summe der vorgemerkten Buchungen, die die Bank noch nicht kennt.")
     }
 
     @Test func cmdFRequestsSearchFocus() {
@@ -207,149 +116,240 @@ import Testing
         #expect(model.selection.isEmpty)
     }
 
-    @Test func searchesAndDateFiltersStayWithTheirAccount() {
+    @Test func searchesAndViewsStayWithTheirAccount() {
         let (fixture, model, _) = searchModel()
         model.search.run("rewe")
+        model.viewMenuChosen(.filter(.uncleared))
         model.navigation.selection = .account(fixture.tagesgeld)
-        #expect(model.search.filter == nil)
+        #expect(model.search.text == "")
+        #expect(model.filter == .all)
         model.navigation.selection = .account(fixture.giro)
-        #expect(model.search.filter?.label == "rewe")
+        #expect(model.search.text == "rewe")
+        #expect(model.filter == .uncleared)
     }
 }
 
 @MainActor
-@Suite struct RegisterDateFilterTests {
-    private func model() -> (RegisterFixture, RegisterViewModel, String) {
+@Suite struct RegisterViewTests {
+    private struct Views {
         var fixture = RegisterFixture()
-        let june = fixture.add(fixture.giro, -1, on: "2014-06-02")
-        let (model, _) = fixture.spied()
-        model.today = { day("2014-06-20") }
-        return (fixture, model, june)
+        let waiting: String
+        let waitingElsewhere: String
+        let uncleared: String
+        let uncategorized: String
+        let cleared: String
+
+        init() {
+            waiting = fixture.add(
+                fixture.giro, -1, payee: "Netflix", category: fixture.groceries, cleared: .cleared, approved: false,
+                source: .bank)
+            waitingElsewhere = fixture.add(
+                fixture.tagesgeld, -2, category: fixture.groceries, approved: false, source: .bank)
+            uncleared = fixture.add(fixture.giro, -3, payee: "REWE", category: fixture.groceries)
+            uncategorized = fixture.add(fixture.giro, -4, payee: "Kiosk", cleared: .cleared)
+            cleared = fixture.add(fixture.giro, -5, payee: "Aral", category: fixture.groceries, cleared: .cleared)
+        }
+
+        @MainActor
+        func model(selection: SidebarSelection? = nil) -> (RegisterViewModel, SpyBudgetStore) {
+            fixture.spied(selection: selection, appliesCommands: true)
+        }
     }
 
-    @Test func dateButtonTogglesTheTimeframeCallout() {
-        let (_, model, _) = model()
-        model.search.dateSelectorClicked()
-        #expect(model.popup == .timeframe)
-        #expect(model.search.timeframe?.start == day("2014-04-01"))
-        #expect(model.search.timeframe?.end == day("2014-06-01"))
-        model.search.dateSelectorClicked()
-        #expect(model.popup == nil)
+    @Test func theViewMenuListsTheFourViewsWithACheckMarkThenTheColumns() {
+        let (model, _) = Views().model()
+        #expect(
+            model.viewMenu.map(\.title) == [
+                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "", "Status", "Memo",
+            ])
+        #expect(model.viewMenu.filter(\.isChecked).map(\.title) == ["Alle Buchungen", "Status", "Memo"])
+        model.viewMenuChosen(.filter(.uncleared))
+        #expect(model.viewMenu.first { $0.isChecked }?.title == "Vorgemerkt")
+        #expect(model.viewMenuTitle == "Ansicht: vorgemerkt")
     }
 
-    @Test func presetsApplyAtOnce() {
-        let (_, model, june) = model()
-        model.search.dateSelectorClicked()
-        model.search.timeframePresetClicked(.thisMonth)
-        #expect(model.popup == nil)
-        #expect(model.search.dateSelectorTitle == "Dieser Monat")
-        #expect(model.transactionIds == [june])
-        #expect(model.search.info?.message == "1 Treffer im Zeitraum „Dieser Monat“")
-        #expect(model.search.info?.clearButtonTitle == "Zeitraum zurücksetzen")
+    @Test func eachViewFiltersTheAccount() {
+        let views = Views()
+        let (model, _) = views.model()
+        model.viewMenuChosen(.filter(.unapproved))
+        #expect(model.transactionIds == [views.waiting])
+        model.viewMenuChosen(.filter(.uncleared))
+        #expect(Set(model.transactionIds) == [views.uncleared])
+        model.viewMenuChosen(.filter(.needsCategory))
+        #expect(model.transactionIds == [views.uncategorized])
+        model.viewMenuChosen(.filter(.all))
+        #expect(model.transactionIds.count == 5)
+        #expect(model.viewMenuTitle == "Ansicht")
     }
 
-    @Test func allDatesRemovesTheFilter() {
-        let (_, model, _) = model()
-        model.search.dateSelectorClicked()
-        model.search.timeframePresetClicked(.thisMonth)
-        model.search.dateSelectorClicked()
-        model.search.timeframePresetClicked(.allDates)
-        #expect(model.search.dateFilter == nil)
-        #expect(model.search.dateSelectorTitle == "Alle Daten")
+    @Test func aViewOtherThanAlleBuchungenIsNamedWithTheWayBack() {
+        let (model, _) = Views().model()
+        #expect(model.activeViewLine == nil)
+        model.viewMenuChosen(.filter(.needsCategory))
+        #expect(model.activeViewLine == "Ansicht: ohne Kategorie")
+        model.allTransactionsClicked()
+        #expect(model.filter == .all)
+        #expect(model.activeViewLine == nil)
     }
 
-    @Test func lastYearIsDisabledForAYoungAccount() {
-        let (_, model, _) = model()
-        model.search.dateSelectorClicked()
-        #expect(!model.search.isTimeframePresetEnabled(.lastYear))
-        model.search.timeframePresetClicked(.lastYear)
-        #expect(model.search.dateFilter == nil)
+    @Test func theEmptyListNamesItsView() {
+        let views = Views()
+        let (model, _) = views.model(selection: .account(views.fixture.karte))
+        #expect(model.emptyListTitle == "Keine Buchungen")
+        model.viewMenuChosen(.filter(.needsCategory))
+        #expect(model.emptyListTitle == "Keine Buchungen in „Ohne Kategorie“")
+        model.search.boxChanged("rewe")
+        #expect(model.emptyListTitle == "Keine Treffer")
     }
 
-    @Test func customMonthsGetALabelOnDone() {
-        let (_, model, _) = model()
-        model.search.dateSelectorClicked()
-        model.search.setTimeframeMonth(start: true, month: 5)
-        model.search.setTimeframeMonth(start: false, month: 5)
-        #expect(model.search.timeframeMonth(start: true) == 5)
-        #expect(model.search.monthName(5) == "May")
-        model.search.timeframeDone()
-        #expect(model.search.dateSelectorTitle == "May 2014")
-        #expect(model.transactionIds.count == 0)
+    @Test func theSearchNarrowsTheView() {
+        let views = Views()
+        let (model, _) = views.model()
+        model.viewMenuChosen(.filter(.uncleared))
+        model.search.boxChanged("aral")
+        #expect(model.transactionIds.isEmpty)
+        model.search.boxChanged("rewe")
+        #expect(model.transactionIds == [views.uncleared])
+        model.viewMenuChosen(.filter(.all))
+        #expect(model.transactionIds == [views.uncleared])
     }
 
-    @Test func monthChoicesAreClampedToTheRange() {
-        let (_, model, _) = model()
-        model.search.dateSelectorClicked()
-        model.search.setTimeframeMonth(start: true, month: 1)
-        #expect(model.search.timeframe?.start == day("2014-04-01"))
-        #expect(model.search.timeframeYears == [2014])
+    @Test func theChipsSwitchToTheirViewAndEndTheSearch() {
+        let views = Views()
+        let (model, store) = views.model()
+        model.search.boxChanged("aral")
+        model.notifiers.clicked(.reminder)
+        #expect(model.filter == .unapproved)
+        #expect(model.search.text == "")
+        #expect(model.transactionIds == [views.waiting])
+        #expect(store.commands.isEmpty)
+        #expect(model.notifiers.list.map(\.kind) == [.warning])
+        model.notifiers.clicked(.warning)
+        #expect(model.filter == .needsCategory)
+        #expect(model.transactionIds == [views.uncategorized])
     }
 
-    @Test func yearChoicesMoveTheMonthToThatYear() {
-        var fixture = RegisterFixture(start: day("2013-03-04"))
-        fixture.add(fixture.giro, -1, on: "2014-06-02")
-        let (model, _) = fixture.spied()
-        model.today = { day("2014-06-20") }
-        model.search.dateSelectorClicked()
-        #expect(model.search.timeframeYears == [2013, 2014])
-        model.search.setTimeframeYear(start: false, year: 2013)
-        #expect(model.search.timeframe?.end == day("2013-06-01"))
-        #expect(model.search.timeframeYear(start: false) == 2013)
-        model.search.timeframeDone()
-        #expect(model.search.dateSelectorTitle == "March 2013 bis June 2013")
-    }
-
-    @Test func closingThePopupDropsTheTimeframe() {
-        let (_, model, _) = model()
-        model.search.dateSelectorClicked()
-        #expect(model.search.timeframe != nil)
-        model.closePopup()
-        #expect(model.popup == nil)
-        #expect(model.search.timeframe == nil)
-    }
-
-    @Test func theSegmentedPresetsSelectAllDatesWithoutAFilterAndNothingForCustomMonths() {
-        let (_, model, _) = model()
-        #expect(model.search.timeframePreset == .allDates)
-        model.search.dateSelectorClicked()
-        model.search.timeframePresetClicked(.thisMonth)
-        #expect(model.search.timeframePreset == .thisMonth)
-        model.search.dateSelectorClicked()
-        model.search.setTimeframeMonth(start: true, month: 5)
-        model.search.setTimeframeMonth(start: false, month: 5)
-        model.search.timeframeDone()
-        #expect(model.search.timeframePreset == nil)
-    }
-
-    @Test func doneWithoutChangesKeepsThePreset() {
-        let (_, model, _) = model()
-        model.search.dateSelectorClicked()
-        model.search.timeframePresetClicked(.thisMonth)
-        model.search.dateSelectorClicked()
-        model.search.timeframeDone()
-        #expect(model.search.dateSelectorTitle == "Dieser Monat")
-    }
-
-    @Test func cancelKeepsTheFilter() {
-        let (_, model, _) = model()
-        model.search.dateSelectorClicked()
-        model.search.setTimeframeMonth(start: true, month: 5)
-        model.search.timeframeCancelled()
-        #expect(model.search.dateFilter == nil)
-        #expect(model.popup == nil)
-    }
-
-    @Test func reconciledSwitchOnlyWorksWithoutFilters() {
+    @Test func aWaitingImportWithoutCategoryIsCountedAndListedByBothViews() {
         var fixture = RegisterFixture()
-        let reconciled = fixture.add(fixture.giro, -1, on: "2014-06-02", cleared: .reconciled)
+        let waiting = fixture.add(fixture.giro, -3, payee: "Kiosk", approved: false, source: .bank)
         let (model, _) = fixture.spied()
-        model.today = { day("2014-06-20") }
-        model.setShowingReconciled(false)
-        #expect(!model.transactionIds.contains(reconciled))
-        model.search.dateSelectorClicked()
-        model.search.timeframePresetClicked(.thisMonth)
-        #expect(model.transactionIds == [reconciled])
-        #expect(!model.isReconciledFilterEnabled)
+        #expect(model.notifiers.list.map(\.text) == ["1 braucht eine Kategorie", "1 bestätigen"])
+        #expect(model.approvalCount == 1)
+        model.notifiers.clicked(.reminder)
+        #expect(model.transactionIds == [waiting])
+        model.notifiers.clicked(.warning)
+        #expect(model.transactionIds == [waiting])
+    }
+
+    @Test func alleBestaetigenApprovesAWaitingTransferBetweenBudgetAccountsWithACategory() {
+        var fixture = RegisterFixture()
+        let transfer = fixture.add(
+            fixture.giro, -50, category: fixture.groceries, approved: false, source: .bank, target: fixture.tagesgeld)
+        let (model, store) = fixture.spied()
+        #expect(model.notifiers.list.first { $0.kind == .reminder }?.text == "1 bestätigen")
+        model.notifiers.clicked(.reminder)
+        #expect(model.transactionIds == [transfer])
+        model.approveAllClicked()
+        #expect(store.commands == [.approveTransactions([transfer])])
+    }
+
+    @Test func onlyTheChipOfTheShownViewGoesAndASearchKeepsThem() {
+        let (model, _) = Views().model()
+        model.search.boxChanged("e")
+        #expect(model.notifiers.list.map(\.kind) == [.warning, .reminder])
+        model.viewMenuChosen(.filter(.needsCategory))
+        #expect(model.notifiers.list.map(\.kind) == [.reminder])
+        model.viewMenuChosen(.filter(.uncleared))
+        #expect(model.notifiers.list.map(\.kind) == [.warning, .reminder])
+    }
+
+    @Test func theErrorChipLeadsNowhere() {
+        var fixture = RegisterFixture()
+        fixture.add(fixture.giro, -1, category: fixture.groceries, target: fixture.tagesgeld)
+        let (model, _) = fixture.spied()
+        let error = model.notifiers.list.first { $0.kind == .error }
+        #expect(error?.isClickable == false)
+        model.notifiers.clicked(.error)
+        #expect(model.filter == .all)
+    }
+
+    @Test func theViewZuBestaetigenApprovesOnlyWhatItShows() throws {
+        let views = Views()
+        let (model, store) = views.model(selection: .allAccounts)
+        model.viewMenuChosen(.filter(.unapproved))
+        #expect(model.approvalsLine == "2 Buchungen warten auf Bestätigung.")
+        model.search.boxChanged("netflix")
+        #expect(model.approvalsLine == "1 Buchung wartet auf Bestätigung.")
+        model.approveAllClicked()
+        #expect(store.commands == [.approveTransactions([views.waiting])])
+        #expect(model.approvalsLine == nil)
+        #expect(model.transactionIds.isEmpty)
+    }
+
+    @Test func otherViewsHaveNoApprovalLine() {
+        let (model, store) = Views().model()
+        #expect(model.approvalsLine == nil)
+        model.approveAllClicked()
+        #expect(store.commands.isEmpty)
+    }
+
+    @Test func theBudgetAndTheKontenListOpenAlleKontenInAView() {
+        let views = Views()
+        let (model, _) = views.model()
+        model.search.boxChanged("rewe")
+        model.showApprovals()
+        #expect(model.navigation.selection == .allAccounts)
+        #expect(model.filter == .unapproved)
+        #expect(Set(model.transactionIds) == [views.waiting, views.waitingElsewhere])
+        model.showAllAccounts(in: .needsCategory)
+        #expect(model.filter == .needsCategory)
+        #expect(model.transactionIds == [views.uncategorized])
+        model.navigation.selection = .account(views.fixture.giro)
+        #expect(model.filter == .all)
+        #expect(model.search.text == "rewe")
+    }
+
+    @Test func revealingAHiddenTransactionShowsAlleBuchungen() {
+        let views = Views()
+        let (model, _) = views.model()
+        model.viewMenuChosen(.filter(.unapproved))
+        model.showTransaction(views.cleared)
+        #expect(model.filter == .all)
+        #expect(model.selectedTransactionIds == [views.cleared])
+    }
+
+    @Test func aReconciliationStartsWithAlleBuchungenAndBringsTheViewBack() throws {
+        let (model, _) = Views().model()
+        model.viewMenuChosen(.filter(.uncleared))
+        model.reconciliation.reconcileClicked()
+        let form = try #require(model.reconciliation.statementForm)
+        form.amountText = "0"
+        model.reconciliation.begin(form)
+        #expect(model.isReconciling)
+        #expect(model.filter == .all)
+        model.reconciliation.stopReconcilingClicked()
+        #expect(model.filter == .uncleared)
+    }
+
+    @Test func whileReconcilingNeitherTheMenusNorTheChipsSwitchTheView() throws {
+        var fixture = RegisterFixture()
+        fixture.add(fixture.giro, -3, payee: "Kiosk", approved: false, source: .bank)
+        let (model, _) = fixture.spied(appliesCommands: true)
+        model.reconciliation.reconcileClicked()
+        let form = try #require(model.reconciliation.statementForm)
+        form.amountText = "0"
+        model.reconciliation.begin(form)
+        #expect(model.viewMenu.map(\.title) == ["Status", "Memo"])
+        #expect(model.touchViewMenu(showsColumns: false).map(\.title) == ["Auswählen", "", "Konto bearbeiten"])
+        #expect(model.notifiers.list.map(\.isClickable) == [false, false])
+        model.notifiers.clicked(.reminder)
+        model.notifiers.clicked(.warning)
+        model.viewMenuChosen(.filter(.uncleared))
+        #expect(model.filter == .all)
+        #expect(model.approvalsLine == nil)
+        #expect(model.search.info?.message.hasSuffix("(Datum des Banksaldos)") == true)
+        model.reconciliation.stopReconcilingClicked()
+        #expect(model.viewMenu.first?.title == "Alle Buchungen")
+        #expect(model.notifiers.list.map(\.isClickable) == [true, true])
     }
 }

@@ -36,8 +36,6 @@ public struct RegisterSummaryItem: Hashable, Sendable {
     public var isNegative: Bool
     public var tooltip: String?
 
-    public var isClickable: Bool { kind == .cleared || kind == .uncleared }
-
     static let blank = RegisterSummaryItem(kind: .blank, title: "", amountText: "", isNegative: false, tooltip: nil)
 }
 
@@ -53,11 +51,6 @@ public struct RegisterColumnMenuItem: Hashable, Sendable {
     public var column: RegisterColumn
     public var label: String
     public var isChecked: Bool
-}
-
-public struct RegisterSearchFilter: Hashable, Sendable {
-    public var label: String
-    public var query: RegisterSearchQuery
 }
 
 public struct RegisterSearchInfo: Hashable, Sendable {

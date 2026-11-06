@@ -33,32 +33,24 @@ import Testing
         #expect(RegisterFixture().model(selection: .allAccounts).columnMenuItems.count == 2)
     }
 
-    @Test func editTransactionsFollowsTheSelectionCount() {
+    @Test func theContextMenuKeepsTheSelectionAndStartsWithAnAction() {
         var fixture = RegisterFixture()
         fixture.add(fixture.giro, -1)
         fixture.add(fixture.giro, -2)
         let model = fixture.model()
-        #expect(model.actionButtonTitle == "Buchungen bearbeiten")
-        #expect(!model.hasSelection)
-        model.rowClicked(model.rows[0], column: .payee, modifiers: [])
-        #expect(model.actionButtonTitle == "1 Buchung bearbeiten")
         model.selectAll()
-        #expect(model.actionButtonTitle == "3 Buchungen bearbeiten")
-        #expect(model.contextMenu(for: model.rows[0])?.first?.title == "3 ausgewählte Buchungen:")
+        #expect(model.contextMenu(for: model.rows[0])?.first?.title == "Kategorisieren als")
+        #expect(model.selection.count == 3)
     }
 
-    @Test func theViewMenuHoldsTheFiltersAndTheColumns() {
+    @Test func theViewMenuHoldsTheViewsAndTheColumns() {
         let model = RegisterFixture().model()
         #expect(
             model.viewMenu.map(\.title).filter { !$0.isEmpty } == [
-                "Zeitraum: Alle Daten …", "Abgeglichene Buchungen zeigen", "Status", "Memo",
-                "Für alle Konten übernehmen",
+                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "Status", "Memo",
             ])
-        model.viewMenuChosen(.showReconciled)
-        #expect(!model.isShowingReconciled)
-        model.viewMenuChosen(.timeframe)
-        #expect(model.popup == .timeframe)
-        #expect(model.popup?.anchor == .viewMenu)
+        model.viewMenuChosen(.filter(.uncleared))
+        #expect(model.filter == .uncleared)
     }
 
     @Test func theHeaderShowsTheReconcileDateAndEditsTheAccount() {
@@ -83,47 +75,18 @@ import Testing
     @Test func searchTextIsKeptPerAccount() {
         let fixture = RegisterFixture()
         let model = fixture.model()
-        model.search.text = "rewe"
+        model.search.boxChanged("rewe")
         model.navigation.selection = .account(fixture.tagesgeld)
         #expect(model.search.text == "")
         model.navigation.selection = .account(fixture.giro)
         #expect(model.search.text == "rewe")
     }
 
-    @Test func hidingReconciledRowsFiltersThemAndClearsTheSelection() {
-        var fixture = RegisterFixture()
-        let reconciled = fixture.add(fixture.giro, -1, cleared: .reconciled)
-        let model = fixture.model()
-        model.selectAll()
-        model.setShowingReconciled(false)
-        #expect(!model.transactionIds.contains(reconciled))
-        #expect(model.selection.isEmpty)
-        model.setShowingReconciled(true)
-        #expect(model.transactionIds.contains(reconciled))
-    }
-
-    @Test func searchAndDateFiltersOverrideTheReconciledSwitch() {
-        var fixture = RegisterFixture(start: day("2014-05-01"))
-        let reconciled = fixture.add(fixture.giro, -1, cleared: .reconciled)
-        let model = fixture.model()
-        model.setShowingReconciled(false)
-        model.search.dateFilter = .preset(.thisMonth, today: day("2014-05-20"), range: model.search.dateFilterRange)
-        #expect(model.transactionIds.contains(reconciled))
-        #expect(!model.isReconciledFilterEnabled)
-        #expect(model.search.dateSelectorTitle == "Dieser Monat")
-        #expect(model.search.info?.message == "2 Treffer im Zeitraum „Dieser Monat“")
-        #expect(model.search.info?.clearButtonTitle == "Zeitraum zurücksetzen")
-        model.search.clearClicked()
-        #expect(model.search.dateSelectorTitle == "Alle Daten")
-        #expect(model.search.info == nil)
-    }
-
     @Test func searchFilterFeedsTheInfoBarAndTheSearchTotal() {
         var fixture = RegisterFixture()
         let match = fixture.add(fixture.giro, -40, payee: "REWE")
         let model = fixture.model()
-        model.search.text = "rewe"
-        model.search.commit()
+        model.search.boxChanged("rewe")
         #expect(model.transactionIds == [match])
         #expect(model.search.info?.message == "1 Treffer für „rewe“")
         let summary = model.summary
@@ -132,7 +95,7 @@ import Testing
         #expect(summary.second.amountText == "−$40.00")
         #expect(!summary.showsOperands)
         model.search.clearClicked()
-        #expect(model.search.filter == nil)
+        #expect(!model.search.isSearching)
         #expect(model.search.text == "")
     }
 
@@ -161,16 +124,6 @@ import Testing
         #expect(model.summary.showsOperands)
     }
 
-    @Test func onlyClearedAndUnclearedBoxesSearch() {
-        let model = RegisterFixture().model()
-        model.summaryClicked(.working)
-        #expect(model.search.text.isEmpty)
-        model.summaryClicked(.cleared)
-        #expect(model.search.text == "Ist: Gebucht oder abgeglichen")
-        model.summaryClicked(.uncleared)
-        #expect(model.search.text == "Ist: Vorgemerkt")
-    }
-
     @Test func scheduledToggleKeepsItsStatePerAccount() {
         var fixture = RegisterFixture()
         fixture.budget.scheduledTransactions.append(
@@ -194,10 +147,11 @@ import Testing
         #expect(model.reconciliation.statementForm?.accountId == fixture.giro)
     }
 
-    @Test func addingATransactionOrTransferOpensTheAddEditor() {
+    @Test func addingATransactionOpensTheAddEditor() {
         let model = RegisterFixture().model()
         model.addTransactionClicked()
         #expect(model.grid.isAdding)
+        #expect(model.editor?.text(.main(.payee)) == "")
         model.editor?.activate(.cancel)
         model.grid.beginNew(transfer: true)
         #expect(model.editor?.text(.main(.payee)) == "Transfer : ")

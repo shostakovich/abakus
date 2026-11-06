@@ -288,8 +288,6 @@ extension RegisterScheduler: RegisterGridOwner {
     /// Snapped, the reveal of its edit row would stop a point short of the row's end.
     package var snapsToRows: Bool { false }
 
-    package func headerContextMenu() -> [RegisterMenuItem]? { nil }
-
     package func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)? {
         store.budget.scheduledTransaction(withId: id).map { ($0.editableTransaction, $0.frequency) }
     }

@@ -52,6 +52,7 @@ extension TransactionEditor {
         clone.subtransactions.removeAll { $0.id == id }
         subIds.removeAll { $0 == id }
         subPayeeNames[id] = nil
+        if amountError?.field.subId == id { amountError = nil }
         for column in EditorColumn.allCases { texts[.sub(id, column)] = nil }
         categoryPrompts[id] = nil
     }

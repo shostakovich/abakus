@@ -77,8 +77,7 @@
         let model: AppModel
 
         var body: some View {
-            let onEditAccount: (() -> Void)? = model.showsAccountProperties ? { model.accountPropertiesClicked() } : nil
-            RegisterScreen(register: model.register, dialogs: model.presentedDialogs, onEditAccount: onEditAccount)
+            RegisterScreen(register: model.register, dialogs: model.presentedDialogs)
                 .id(model.register.accountKey)
         }
     }

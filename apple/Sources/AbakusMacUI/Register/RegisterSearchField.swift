@@ -3,12 +3,11 @@ import AbakusUI
 import AppKit
 import SwiftUI
 
-/// The toolbar's search box; the field editor's arrow keys, Return and Escape drive the suggestion menu.
+/// The toolbar's search box; Return hands the keys to the list, Escape empties the box, then leaves it.
 struct RegisterSearchField: NSViewRepresentable {
     let search: RegisterSearchController
     let text: String
     let prompt: String
-    let dropDown: SearchDropDownState?
     let focusRequest: Int
 
     func makeCoordinator() -> Coordinator {
@@ -39,18 +38,12 @@ struct RegisterSearchField: NSViewRepresentable {
             coordinator.focusRequest = focusRequest
             field.window?.makeFirstResponder(field)
         }
-        coordinator.suggestions.show(dropDown, search: search, below: field)
-    }
-
-    static func dismantleNSView(_ field: NSSearchField, coordinator: Coordinator) {
-        coordinator.suggestions.close()
     }
 
     @MainActor
     final class Coordinator: NSObject, NSSearchFieldDelegate {
         var search: RegisterSearchController
         var focusRequest: Int
-        let suggestions = SearchSuggestionWindow()
 
         init(search: RegisterSearchController, focusRequest: Int) {
             self.search = search
@@ -73,10 +66,6 @@ struct RegisterSearchField: NSViewRepresentable {
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
             switch selector {
-            case #selector(NSResponder.moveDown(_:)):
-                search.moveHighlight(by: 1)
-            case #selector(NSResponder.moveUp(_:)):
-                search.moveHighlight(by: -1)
             case #selector(NSResponder.insertNewline(_:)):
                 search.submitted()
             case #selector(NSResponder.cancelOperation(_:)):

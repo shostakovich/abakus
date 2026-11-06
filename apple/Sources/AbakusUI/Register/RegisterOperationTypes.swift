@@ -4,13 +4,11 @@ import Foundation
 public enum RegisterPopup: Equatable, Sendable {
     case needsCategory(rowId: String)
     case removeCategory(rowId: String)
-    case timeframe
     case scheduledCallout(RegisterScheduledCallout)
 
     public var anchor: RegisterAnchorID {
         switch self {
         case .needsCategory(let id), .removeCategory(let id): .error(id)
-        case .timeframe: .viewMenu
         case .scheduledCallout: .schedulerTitle
         }
     }
@@ -18,7 +16,7 @@ public enum RegisterPopup: Equatable, Sendable {
     public var rowId: String? {
         switch self {
         case .needsCategory(let id), .removeCategory(let id): id
-        case .timeframe, .scheduledCallout: nil
+        case .scheduledCallout: nil
         }
     }
 }
@@ -59,17 +57,6 @@ public enum RegisterScheduledCallout: Equatable, Sendable {
     }
 }
 
-public struct RenamePayeeForm: Identifiable, Hashable, Sendable {
-    public let id = UUID()
-    public var payeeId: String
-    public var currentName: String
-
-    public var description: String {
-        "Alle Buchungen mit „\(currentName)“ bekommen den neuen Namen als Empfänger. (So lässt sich auch die "
-            + "Groß- und Kleinschreibung ändern.)"
-    }
-}
-
 /// A single undo slot for deletes and moves, shown by the undo notifier until the budget changes again.
 public struct RegisterUndoSlot: Equatable, Sendable {
     enum Restore: Equatable, Sendable {
@@ -94,6 +81,7 @@ public struct RegisterNotifier: Identifiable, Hashable, Sendable {
     public var text: String
     public var link: String?
     public var tooltip: String?
+    public var isClickable = true
 
     public var id: Kind { kind }
 }
@@ -101,18 +89,4 @@ public struct RegisterNotifier: Identifiable, Hashable, Sendable {
 struct RegisterOverlayState {
     var menuRequest: RegisterMenuRequest?
     var popup: RegisterPopup?
-    var searchDropDown: SearchDropDownState?
-    var timeframe: TimeframeState?
-}
-
-public struct SearchDropDownState: Equatable, Sendable {
-    public var items: [RegisterSearchSuggestion]
-    public var highlighted: Int?
-}
-
-public struct TimeframeState: Equatable, Sendable {
-    public var start: DateWithoutTime
-    public var end: DateWithoutTime
-    public var range: DateFilterRange
-    public var isChanged = false
 }

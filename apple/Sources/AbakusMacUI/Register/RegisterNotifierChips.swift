@@ -15,9 +15,11 @@ struct RegisterNotifierChips: View {
                 Group {
                     if notifier.kind == .undo {
                         UndoNotifier(notifier: notifier, notifiers: notifiers).layoutPriority(1)
-                    } else {
+                    } else if notifier.isClickable {
                         NotifierView(notifier: notifier) { notifiers.clicked(notifier.kind) }
                             .toolTip(notifier.tooltip)
+                    } else {
+                        NotifierLabel(notifier: notifier).toolTip(notifier.tooltip)
                     }
                 }
                 .transition(Self.fade)
@@ -33,25 +35,34 @@ struct NotifierView: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: Self.symbolName(notifier.kind))
-                    .foregroundStyle(Self.tint(notifier.kind))
-                if !notifier.text.isEmpty {
-                    Text(verbatim: notifier.text).lineLimit(1).truncationMode(.tail)
-                }
-                if let link = notifier.link {
-                    Text(verbatim: link).foregroundStyle(.link).fixedSize()
-                }
-            }
-            .font(ThemeFont.body.font)
-            .foregroundStyle(notifier.kind == .undo ? ThemeColor.text : Self.tint(notifier.kind))
-            .padding(.horizontal, 10)
-            .frame(height: 22)
-            .background(Capsule().fill(Self.tint(notifier.kind).opacity(0.14)))
-            .contentShape(Capsule())
+            NotifierLabel(notifier: notifier)
         }
         .buttonStyle(.plain)
         .pointerStyle(.link)
+    }
+}
+
+struct NotifierLabel: View {
+    let notifier: RegisterNotifier
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: Self.symbolName(notifier.kind))
+                .foregroundStyle(Self.tint(notifier.kind))
+            if !notifier.text.isEmpty {
+                Text(verbatim: notifier.text).lineLimit(1).truncationMode(.tail)
+            }
+            if let link = notifier.link {
+                Text(verbatim: link).foregroundStyle(.link).fixedSize()
+            }
+        }
+        .font(ThemeFont.body.font)
+        .foregroundStyle(notifier.kind == .undo ? ThemeColor.text : Self.tint(notifier.kind))
+        .padding(.horizontal, 10)
+        .frame(height: 22)
+        .background(Capsule().fill(Self.tint(notifier.kind).opacity(0.14)))
+        .contentShape(Capsule())
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.accessibilityLabel(notifier))
     }
 

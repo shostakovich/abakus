@@ -6,15 +6,6 @@ import Testing
 
 @MainActor
 @Suite struct PayeeSettingsEntryTests {
-    @Test func theActionMenuOpensOnTheFirstSelectedPayee() throws {
-        let setup = PayeeSettingsFixture()
-        let app = setup.app()
-        let row = try #require(app.register.rows.first { $0.id == setup.rewe })
-        app.register.rowClicked(row, column: nil, modifiers: .command)
-        app.register.performMenuAction(.payeeSettings)
-        #expect(app.payeeSettings?.selection == [setup.id(app, "REWE")])
-    }
-
     @Test func theShortcutOpensOnTheSelectedTransaction() throws {
         let setup = PayeeSettingsFixture()
         let app = setup.app()

@@ -63,7 +63,7 @@
                 }
                 if let onNewCategory {
                     Section {
-                        Button("Neue Kategorie …", systemImage: "plus", action: onNewCategory)
+                        Button("Neue Kategorie", systemImage: "plus", action: onNewCategory)
                     }
                     .listSectionSeparator(.hidden)
                 }

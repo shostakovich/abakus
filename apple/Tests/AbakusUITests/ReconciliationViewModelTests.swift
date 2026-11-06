@@ -73,25 +73,23 @@ import Testing
         }
     }
 
-    @Test func beginningClosesTheSearchDropDownAndMenus() throws {
+    @Test func beginningClosesTheMenus() throws {
         let (model, _) = RegisterFixture().spied()
-        model.search.boxChanged("x")
-        #expect(model.search.dropDown != nil)
-        model.columnOptionsClicked()
+        model.scheduledToggleClicked()
+        model.scheduler.columnOptionsClicked()
+        #expect(model.menuRequest != nil)
         model.reconciliation.reconcileClicked()
         let form = try #require(model.reconciliation.statementForm)
         form.amountText = "1111"
         model.reconciliation.begin(form)
         #expect(model.isReconciling)
-        #expect(model.search.dropDown == nil)
         #expect(model.menuRequest == nil)
     }
 
     @Test func reconcilingListsUnreconciledRowsUpToTheStatementDateByDate() throws {
         let (fixture, ids) = fixture()
         let (model, _) = fixture.spied()
-        model.search.text = "shop"
-        model.search.commit()
+        model.search.boxChanged("shop")
         model.grid.headerClicked(.payee)
         model.reconciliation.reconcileClicked()
         let form = try #require(model.reconciliation.statementForm)
@@ -286,49 +284,51 @@ import Testing
     @Test func leavingRestoresTheSearchFromBeforeTheReconciliation() throws {
         let (fixture, ids) = fixture()
         let (model, _) = fixture.spied()
-        model.search.run("Empfänger: Shop")
-        model.search.dateSelectorClicked()
-        #expect(model.popup == .timeframe)
+        model.search.run("Shop")
+        model.viewMenuChosen(.filter(.uncleared))
         model.reconciliation.reconcileClicked()
         let form = try #require(model.reconciliation.statementForm)
         form.amountText = "1011"
         model.reconciliation.begin(form)
-        #expect(model.popup == nil)
-        #expect(model.search.filter == nil)
-        model.search.run("Memo: x")
+        #expect(!model.search.isSearching)
+        #expect(model.filter == .all)
+        model.search.run("xyz")
         #expect(model.transactionIds.isEmpty)
         model.reconciliation.stopReconcilingClicked()
-        #expect(model.search.filter?.label == "Empfänger: Shop")
-        #expect(model.transactionIds == ids.reversed())
+        #expect(model.search.text == "Shop")
+        #expect(model.filter == .uncleared)
+        #expect(model.transactionIds == [ids[1]])
     }
 
     @Test func leavingKeepsTheScrollPositionFromBeforeTheFirstSearch() throws {
         let (fixture, _) = fixture()
         let (model, _) = fixture.spied()
         model.saveScrollOffset(120)
-        model.search.run("Empfänger: Shop")
+        model.search.run("Shop")
         model.reconciliation.reconcileClicked()
         let form = try #require(model.reconciliation.statementForm)
         form.amountText = "1011"
         model.reconciliation.begin(form)
         model.saveScrollOffset(48)
-        model.search.run("Memo: x")
+        model.search.run("xyz")
         model.reconciliation.stopReconcilingClicked()
-        #expect(model.search.filter?.label == "Empfänger: Shop")
+        #expect(model.search.text == "Shop")
         model.search.clearClicked()
         #expect(model.grid.scrollRequest?.target == .offset(120))
     }
 
-    @Test func notifierLinksSearchWithinTheReconciliation() throws {
+    @Test func theChipsKeepAlleBuchungenWithinTheReconciliation() throws {
         var fixture = fixture().0
         let imported = fixture.add(
             fixture.giro, -3, on: "2014-05-15", category: fixture.groceries, approved: false, source: .bank)
-        fixture.add(fixture.giro, -4, on: "2014-05-28", category: fixture.groceries, approved: false, source: .bank)
         let (model, _) = try reconciling(fixture)
-        #expect(model.notifiers.list.first { $0.kind == .reminder }?.text.hasPrefix("2 ") == true)
+        let shown = model.transactionIds
+        #expect(model.notifiers.list.first { $0.kind == .reminder }?.isClickable == false)
         model.notifiers.clicked(.reminder)
         #expect(model.isReconciling)
-        #expect(model.transactionIds == [imported])
+        #expect(model.filter == .all)
+        #expect(model.transactionIds == shown)
+        #expect(shown.contains(imported))
     }
 
     @Test func registerKeysWaitForTheStatementDialog() throws {

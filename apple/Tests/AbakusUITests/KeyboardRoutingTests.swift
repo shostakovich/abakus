@@ -29,18 +29,12 @@ import Testing
         #expect(!model.search.escapePressed())
     }
 
-    @Test func aCommaOrAPickedSuggestionKeepsTypingInTheSearchBox() throws {
+    @Test func typingKeepsTheSearchBoxAndReturnLeavesIt() {
         var fixture = RegisterFixture()
         fixture.add(fixture.giro, -1, payee: "Aral")
         let model = fixture.model()
         model.search.boxChanged("aral,")
         #expect(model.gridFocusRequest == 0)
-        model.search.boxChanged("aral, Ist: Best")
-        let index = try #require(model.search.dropDown?.items.firstIndex { $0.searchText == "Ist: Bestätigt" })
-        model.search.pickSuggestion(at: index)
-        #expect(model.gridFocusRequest == 0)
-        model.search.boxChanged("aral, Ist: Bestätigt, Ar")
-        model.overlayState.searchDropDown = nil
         model.search.submitted()
         #expect(model.gridFocusRequest == 1)
     }

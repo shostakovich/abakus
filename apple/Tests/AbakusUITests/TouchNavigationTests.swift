@@ -55,7 +55,7 @@ import Testing
         app.register.showApprovals()
         #expect(tabs.tab == .accounts)
         #expect(tabs.accountPath == [.allAccounts])
-        #expect(app.register.isShowingApprovals)
+        #expect(app.register.filter == .unapproved)
     }
 
     @Test func showingTheRegisterShownBehindTheSettingsSwitchesToIt() {
@@ -250,7 +250,7 @@ import Testing
         let (app, tabs) = open()
         tabs.select(.settings)
         tabs.showSettings([.payees])
-        tabs.addTransactionClicked(transfer: false)
+        tabs.addTransactionClicked()
         #expect(app.payeeSettings == nil)
         #expect(tabs.settingsPath.isEmpty)
         #expect(app.register.editor != nil)

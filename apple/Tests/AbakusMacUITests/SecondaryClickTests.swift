@@ -88,7 +88,7 @@ private final class PresentedMenus {
 
     @Test func aClickOnARowOpensItsOwnersMenu() {
         let (model, rows) = rows()
-        #expect(model.grid.contextMenu(atY: 30, scrollOffset: 0)?.first?.title == "1 ausgewählte Buchung:")
+        #expect(model.grid.contextMenu(atY: 30, scrollOffset: 0)?.first?.title == "Kategorisieren als")
         #expect(model.selectedTransactionIds == [rows[1].transactionId])
     }
 
