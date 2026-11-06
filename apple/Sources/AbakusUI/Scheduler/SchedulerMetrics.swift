@@ -7,8 +7,6 @@ package enum SchedulerMetrics {
     package static let titleHeight: CGFloat = 36
     static let mainPanelMinimumHeight: CGFloat = 250
     package static let titleFont = ThemeFont(size: 15, weight: .semibold)
-    /// The frequency pop-up's outline and its ↕ beside the text.
-    static let popUpAccessory: CGFloat = 2 * EditCellStyle.fieldInset + 12
     package static var animation: Animation? { .motion(RegisterEffects.schedulerSlide) }
 
     /// The divider keeps the main panel at its 250 pt minimum and the scheduled section at 185 or more.

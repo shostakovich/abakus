@@ -20,7 +20,7 @@
                 }
             }
             .commands {
-                if case .opened(let model, let navigation) = AppLaunch.shared.outcome {
+                if case .opened(let model, let navigation) = AppLaunch.shared.outcome, !model.showsSignIn {
                     let waits = navigation.showsSheet
                     CommandGroup(replacing: .appSettings) {
                         Button("Einstellungen", action: navigation.goToSettings).keyboardShortcut(",").disabled(waits)
@@ -32,13 +32,7 @@
                             .keyboardShortcut("y")
                             .disabled(model.showsScreenSheet)
                     }
-                    RegisterCommands(model: model, addsEverywhere: true, addingWaits: waits)
-                    CommandGroup(after: .pasteboard) {
-                        if model.showsAccountProperties {
-                            Button("Konto bearbeiten", action: model.accountPropertiesClicked)
-                                .disabled(model.showsScreenSheet)
-                        }
-                    }
+                    RegisterCommands(model: model, isTouch: true, addingWaits: waits)
                 }
             }
         }

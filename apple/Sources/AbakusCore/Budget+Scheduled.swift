@@ -1,19 +1,19 @@
 import Foundation
 
-/// The scheduler editor's Done / Save: the edited clone with the schedule's id and the chosen frequency.
+/// The scheduler editor's Done / Save: the edited clone with the schedule's id and the chosen repeat.
 public struct ScheduledSave: Hashable, Sendable {
     public var transaction: Transaction
-    public var frequency: ScheduledTransactionFrequency
+    public var repeats: Repeat
     public var payeeName: String?
     public var subPayeeNames: [String: String]
     public var isNew: Bool
 
     public init(
-        transaction: Transaction, frequency: ScheduledTransactionFrequency, payeeName: String?,
+        transaction: Transaction, repeats: Repeat, payeeName: String?,
         subPayeeNames: [String: String] = [:], isNew: Bool
     ) {
         self.transaction = transaction
-        self.frequency = frequency
+        self.repeats = repeats
         self.payeeName = payeeName
         self.subPayeeNames = subPayeeNames
         self.isNew = isNew
@@ -24,10 +24,12 @@ public struct ScheduledEntry: Hashable, Sendable {
     public var scheduledIds: [String]
     /// "Jetzt buchen" approves; the automatic entry leaves the transactions for review.
     public var approved: Bool
+    public var taken: Set<String>
 
-    public init(scheduledIds: [String], approved: Bool) {
+    public init(scheduledIds: [String], approved: Bool, taken: Set<String> = []) {
         self.scheduledIds = scheduledIds
         self.approved = approved
+        self.taken = taken
     }
 }
 
@@ -50,16 +52,13 @@ extension Budget {
     }
 
     mutating func saveScheduledTransaction(_ save: ScheduledSave) throws {
-        let previous = save.isNew ? nil : scheduledTransaction(withId: save.transaction.id)
-        if !save.isNew && previous == nil { throw BudgetError.transactionNotFound(save.transaction.id) }
+        if !save.isNew && scheduledTransaction(withId: save.transaction.id) == nil {
+            throw BudgetError.transactionNotFound(save.transaction.id)
+        }
         let named = try applyingSubPayeeNames(save.subPayeeNames, to: save.transaction)
         var (edited, payeeName) = normalizedForSave(named, payeeName: save.payeeName)
         try prepare(&edited, payeeName: payeeName)
-        var scheduled = ScheduledTransaction(edited, frequency: save.frequency)
-        if let previous, previous.nextDate == scheduled.nextDate, previous.frequency == scheduled.frequency {
-            scheduled.firstDay = previous.firstDay
-            scheduled.secondDay = previous.secondDay
-        }
+        let scheduled = ScheduledTransaction(edited, repeats: save.repeats)
         if let index = scheduledIndex(scheduled.id) {
             scheduledTransactions[index] = scheduled
         } else {
@@ -75,21 +74,30 @@ extension Budget {
     @discardableResult
     mutating func enterScheduledTransactions(_ entry: ScheduledEntry) -> [String] {
         var entered: [String] = []
+        var once: Set<String> = []
         for id in entry.scheduledIds {
-            guard let index = scheduledIndex(id) else { continue }
-            if let transactionId = addToRegister(scheduledIndex: index, approved: entry.approved) {
+            guard let index = scheduledIndex(id), canEnter(scheduledTransactions[index]) else { continue }
+            if scheduledTransactions[index].repeats == .once { once.insert(id) }
+            if let transactionId = addToRegister(scheduledIndex: index, approved: entry.approved, taken: entry.taken) {
                 entered.append(transactionId)
             }
         }
-        let once = Set(entry.scheduledIds)
-        scheduledTransactions.removeAll { once.contains($0.id) && $0.frequency == .once }
+        scheduledTransactions.removeAll { once.contains($0.id) }
         return entered
+    }
+
+    public func canEnter(_ scheduled: ScheduledTransaction) -> Bool {
+        account(withId: scheduled.accountId)?.takesEntries == true
+    }
+
+    func entersWhenDue(_ scheduled: ScheduledTransaction) -> Bool {
+        account(withId: scheduled.accountId)?.closed != true
     }
 
     mutating func enterDueScheduledTransactions(today: DateWithoutTime, taken: Set<String> = []) {
         var finishedOnce: Set<String> = []
-        for index in scheduledTransactions.indices {
-            if scheduledTransactions[index].frequency == .once {
+        for index in scheduledTransactions.indices where entersWhenDue(scheduledTransactions[index]) {
+            if scheduledTransactions[index].repeats == .once {
                 guard scheduledTransactions[index].nextDate <= today else { continue }
                 addToRegister(scheduledIndex: index, approved: false, taken: taken)
                 finishedOnce.insert(scheduledTransactions[index].id)
@@ -109,6 +117,7 @@ extension Budget {
         for index in scheduledTransactions.indices where wanted.contains(scheduledTransactions[index].id) {
             scheduledTransactions[index].nextDate = scheduledTransactions[index].followingDate
         }
+        scheduledTransactions.removeAll { wanted.contains($0.id) && $0.repeats == .once }
     }
 
     mutating func deleteScheduledTransactions(_ ids: [String]) {

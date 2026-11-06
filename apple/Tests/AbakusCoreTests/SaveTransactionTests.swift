@@ -110,7 +110,7 @@ import Testing
 
         try fixture.budget.apply(
             .saveScheduledTransaction(
-                ScheduledSave(transaction: normalized, frequency: .monthly, payeeName: "", isNew: true)))
+                ScheduledSave(transaction: normalized, repeats: .monthly, payeeName: "", isNew: true)))
         #expect(fixture.budget.scheduledTransaction(withId: "S")?.payeeId == EntityID.transferPayee(accountId: "TAGES"))
     }
 

@@ -97,24 +97,3 @@ struct NeedsCategoryPopover: View {
         }
     }
 }
-
-struct ScheduledCalloutPopover: View {
-    let callout: RegisterScheduledCallout
-    let onClose: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            PopoverTitle(callout.title)
-            Text(TextMarkup.attributed(callout.message))
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer(minLength: 0)
-                Button("Schließen", action: onClose)
-            }
-            .padding(.top, 4)
-        }
-        .font(ThemeFont.body.font)
-        .foregroundStyle(ThemeColor.text)
-        .frame(width: 340, alignment: .leading)
-    }
-}

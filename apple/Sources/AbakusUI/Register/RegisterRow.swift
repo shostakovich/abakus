@@ -26,7 +26,7 @@ public struct RegisterRow: Identifiable, Hashable, Sendable {
     public var title = ""
     public var account = ""
     public var date = ""
-    public var frequency = ""
+    public var repeatLabel = ""
     public var payee = ""
     public var payeeTooltip: String?
     public var hasTransferIcon = false
@@ -126,7 +126,7 @@ struct RegisterRowBuilder {
 
     func row(for scheduled: ScheduledTransaction, isExpanded: Bool) -> RegisterRow {
         var row = baseRow(scheduled.editableTransaction, isExpanded: isExpanded)
-        row.frequency = scheduled.frequency.readableName
+        row.repeatLabel = scheduled.repeats.label
         return row
     }
 

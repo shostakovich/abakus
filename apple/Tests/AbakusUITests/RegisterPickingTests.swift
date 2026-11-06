@@ -62,6 +62,7 @@ import Testing
     @Test func aContextMenuActsOnTheRowsItWasOpenedFor() {
         let imports = Imports()
         let (first, second) = (imports.ids[0], imports.ids[1])
+        #expect(!imports.model.transactionActionsMenu(for: [second]).contains { $0.title.hasSuffix("…") })
         imports.model.setSelection([first])
         imports.model.performMenuAction(.categorize(categoryId: nil), on: [second])
         #expect(imports.store.commands.last == .categorizeTransactions([second], categoryId: nil))
@@ -86,9 +87,10 @@ import Testing
     @Test func ansichtChecksTheViewAndKeepsAlleForPicking() {
         let imports = Imports()
         let items = imports.model.touchViewMenu(showsColumns: true).filter { $0.kind != .separator }
+        #expect(items.allSatisfy { $0.systemImage != nil })
         #expect(
             items.map(\.title) == [
-                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "Geplant", "Auswählen",
+                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "Geplante Buchungen", "Auswählen",
                 "Memo ausblenden", "Konto bearbeiten",
             ])
         #expect(items.filter(\.isChecked).map(\.title) == ["Alle Buchungen"])

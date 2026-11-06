@@ -19,7 +19,7 @@ public struct RegisterTouchTable: Hashable, Sendable {
 
     /// `scale` grows the date, the amounts and the texts' minimum with the text size.
     public init(visibleColumns: [RegisterColumn], scale: CGFloat = 1) {
-        columns = visibleColumns.filter { $0 != .cleared && $0 != .frequency } + [.cleared]
+        columns = visibleColumns.filter { $0 != .cleared && $0 != .repeats } + [.cleared]
         self.scale = scale
     }
 
@@ -30,7 +30,7 @@ public struct RegisterTouchTable: Hashable, Sendable {
         case .cleared: .fixed(Self.statusWidth)
         case .payee: .share(3.5)
         case .category: .share(3)
-        case .account, .frequency: .share(2)
+        case .account, .repeats: .share(2)
         case .memo: .share(1.5)
         }
     }

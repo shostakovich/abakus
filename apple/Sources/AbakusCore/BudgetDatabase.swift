@@ -62,7 +62,7 @@ public final class BudgetDatabase {
             }
             openNotice =
                 "Dein Budget ließ sich nicht lesen (\(error.message)). Es liegt jetzt als „\(aside.lastPathComponent)“ "
-                + "in \(aside.deletingLastPathComponent().path), stattdessen ist ein leeres Budget geöffnet."
+                + "in \(aside.deletingLastPathComponent().path). Melde dich an, um dein Budget vom Server zu laden."
         } catch {
             throw BudgetDatabaseError.unreadable(path: url.path, reason: error.localizedDescription)
         }
@@ -103,7 +103,54 @@ public final class BudgetDatabase {
 
     public var backupURL: URL? { url?.appendingPathExtension("bak") }
 
-    private static let schemaVersion = 3
+    private static let schemaVersion = 4
+
+    private static func repeatScheduledTransactions(in sqlite: SQLite) throws {
+        let repeats: [(frequency: String, unit: String?, every: Int?)] = [
+            ("once", nil, nil), ("daily", "week", 1), ("weekly", "week", 1), ("every_other_week", "week", 2),
+            ("every_4_weeks", "week", 4), ("twice_a_month", "month", 1), ("monthly", "month", 1),
+            ("every_other_month", "month", 2), ("every_3_months", "month", 3), ("every_4_months", "month", 4),
+            ("twice_a_year", "month", 6), ("yearly", "month", 12), ("every_other_year", "month", 24),
+        ]
+        let updates = repeats.map { frequency, unit, every in
+            "UPDATE scheduled_transactions SET repeat_unit = \(unit.map { "'\($0)'" } ?? "NULL"), "
+                + "repeat_every = \(every.map(String.init) ?? "NULL") WHERE frequency = '\(frequency)';"
+        }
+        let mapped = repeats.map { frequency, unit, every in
+            "('\(json(.text(frequency)))', '\(json(.of(unit)))', '\(json(.of(every)))')"
+        }
+        let droppedFields = """
+            "table" = 'scheduled_transactions' AND "column" IN ('frequency', 'first_day', 'second_day')
+            """
+        try sqlite.transaction {
+            try sqlite.execute(
+                """
+                ALTER TABLE scheduled_transactions ADD COLUMN repeat_unit;
+                ALTER TABLE scheduled_transactions ADD COLUMN repeat_every;
+                \(updates.joined(separator: "\n"))
+                CREATE TEMP TABLE unsent_repeats AS
+                  WITH unsent AS (
+                    SELECT row_id, value, max(clock) AS clock FROM sync_messages
+                    WHERE "table" = 'scheduled_transactions' AND "column" = 'frequency' AND outbox = 1
+                    GROUP BY row_id),
+                  mapped (frequency, unit, every) AS (VALUES \(mapped.joined(separator: ", ")))
+                  SELECT row_id, "column", CASE "column" WHEN 'repeat_unit' THEN unit ELSE every END AS value, clock
+                  FROM unsent JOIN mapped ON mapped.frequency = unsent.value
+                  CROSS JOIN (SELECT 'repeat_unit' AS "column" UNION ALL SELECT 'repeat_every');
+                INSERT OR IGNORE INTO sync_messages ("table", row_id, "column", value, clock, outbox)
+                  SELECT 'scheduled_transactions', row_id, "column", value, clock, 1 FROM unsent_repeats;
+                INSERT OR REPLACE INTO sync_field_clocks ("table", row_id, "column", clock)
+                  SELECT 'scheduled_transactions', row_id, "column", clock FROM unsent_repeats;
+                DROP TABLE unsent_repeats;
+                DELETE FROM sync_field_clocks WHERE \(droppedFields);
+                DELETE FROM sync_messages WHERE \(droppedFields);
+                ALTER TABLE scheduled_transactions DROP COLUMN frequency;
+                ALTER TABLE scheduled_transactions DROP COLUMN first_day;
+                ALTER TABLE scheduled_transactions DROP COLUMN second_day;
+                PRAGMA user_version = 4;
+                """)
+        }
+    }
 
     private static func createSchema(in sqlite: SQLite) throws {
         let version = try sqlite.query("PRAGMA user_version").first?["user_version"]?.integer ?? 0
@@ -130,6 +177,7 @@ public final class BudgetDatabase {
                     """)
             }
         }
+        if (1...3).contains(version) { try repeatScheduledTransactions(in: sqlite) }
         guard version == 0 else { return }
         let tables = SyncTable.all.map { table in
             let columns = table.columns.map { quoted($0.name) }.joined(separator: ", ")

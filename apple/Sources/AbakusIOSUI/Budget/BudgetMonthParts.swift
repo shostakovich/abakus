@@ -137,7 +137,7 @@
 
         private func menu<Label: View>(@ViewBuilder label: () -> Label) -> some View {
             Menu {
-                RegisterMenuItemsView(items: model.callouts.monthMenu(month: month)) {
+                RegisterMenuItemsView(items: model.callouts.monthMenu(month: month).touchLabels) {
                     model.callouts.monthMenuChosen($0, month: month)
                 }
             } label: {

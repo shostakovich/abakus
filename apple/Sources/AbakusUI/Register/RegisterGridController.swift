@@ -30,7 +30,7 @@ package protocol RegisterGridOwner: AnyObject {
     func contextMenu(for row: RegisterRow) -> [RegisterMenuItem]?
     func columnLayout(gridWidth: CGFloat) -> RegisterColumnLayout
     func deleteKeyPressed()
-    func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)?
+    func editorRecord(_ id: String) -> (transaction: Transaction, repeats: Repeat?)?
     func followUpEdit(_ outcome: EditorOutcome)
 }
 
@@ -40,7 +40,8 @@ package final class RegisterGridController {
     package unowned let register: RegisterViewModel
     let store: any BudgetStoring
     let navigation: NavigationState
-    let newFrequency: ScheduledTransactionFrequency?
+    let newRepeat: Repeat?
+    package let editsInSheet: Bool
     @ObservationIgnored package weak var owner: (any RegisterGridOwner)?
     @ObservationIgnored weak var peer: RegisterGridController?
     private var storedSelection = (visit: -1, selection: RegisterSelection())
@@ -50,11 +51,12 @@ package final class RegisterGridController {
     var lastUsedDate: DateWithoutTime?
     var lastUsedAccountId: String?
 
-    init(register: RegisterViewModel, newFrequency: ScheduledTransactionFrequency? = nil) {
+    init(register: RegisterViewModel, newRepeat: Repeat? = nil, editsInSheet: Bool = false) {
         self.register = register
         store = register.store
         navigation = register.navigation
-        self.newFrequency = newFrequency
+        self.newRepeat = newRepeat
+        self.editsInSheet = editsInSheet
     }
 
     private var ids: [String] { owner?.gridIds ?? [] }
@@ -89,8 +91,13 @@ package final class RegisterGridController {
         var result = RegisterSelection.ClickResult.selectionChanged
         let order = ids
         updateSelection { result = $0.click(id, modifiers: modifiers, order: order) }
-        if result == .beginEdit { beginEditing(id, column: column) }
+        if result == .beginEdit && !editsInSheet { beginEditing(id, column: column) }
         return !hasOpenEdit
+    }
+
+    package func rowDoubleClicked(_ id: String) {
+        guard editsInSheet, !swallowsClick(on: id) else { return }
+        beginEditing(id)
     }
 
     package func headerClicked(_ column: RegisterColumn) {
@@ -139,28 +146,25 @@ package final class RegisterGridController {
         return storedEditor.editor
     }
 
-    /// Only the frequency field has no AppKit input to take the arrows; other fields' arrows wait for theirs.
-    package func editorArrowPressed(_ key: EditorKey) -> Bool {
-        guard let editor, editor.focus == .field(.main(.frequency)) else { return false }
-        return editor.handleKey(key)
-    }
+    /// The editor drawn in the grid's rows; a scheduled transaction is edited in a sheet.
+    package var inlineEditor: TransactionEditor? { editsInSheet ? nil : editor }
 
     package var editingId: String? {
-        editor.flatMap { $0.mode == .existing ? $0.transactionId : nil }
+        inlineEditor.flatMap { $0.mode == .existing ? $0.transactionId : nil }
     }
 
-    var isAdding: Bool { editor?.mode == .new }
+    var isAdding: Bool { inlineEditor?.mode == .new }
 
     /// An edit in this grid or in its peer keeps the keyboard focus.
     package var hasOpenEdit: Bool { editor != nil || peer?.editor != nil }
 
     package var editRowExtraHeight: CGFloat {
-        guard let editor, editor.mode == .existing else { return 0 }
+        guard let editor = inlineEditor, editor.mode == .existing else { return 0 }
         return editor.rowHeight - RegisterMetrics.rowHeight
     }
 
     /// The add editor's height above the rows, 0 while none is open.
-    package var addRowHeight: CGFloat { isAdding ? editor?.rowHeight ?? 0 : 0 }
+    package var addRowHeight: CGFloat { isAdding ? inlineEditor?.rowHeight ?? 0 : 0 }
 
     /// The list's secondary-click menu at `y` in the viewport: nil hands the click on (to the edited row's fields,
     /// or below the rows), an empty menu takes it, as on a month heading.
@@ -225,7 +229,7 @@ package final class RegisterGridController {
         guard let record = owner?.editorRecord(id) else { return }
         updateSelection { $0.select(id) }
         if record.transaction.isSplit { owner?.expandedSplits.remove(id) }
-        let editor = makeEditor(record.transaction, frequency: record.frequency, mode: .existing)
+        let editor = makeEditor(record.transaction, repeats: record.repeats, mode: .existing)
         let target = column.flatMap(EditorColumn.init) ?? .date
         let field = EditorFieldID.main(editor.mainColumns().contains(target) ? target : .date)
         editor.setFocus(.field(field), commitCurrent: false)
@@ -242,16 +246,16 @@ package final class RegisterGridController {
         if let editor, editor.mode == .new || editor.clickedOutside() { return }
         let budget = store.budget
         let lastUsed = lastUsedAccountId.flatMap(budget.account(withId:)).flatMap { account in
-            register.isTouch && !account.closed ? account : nil
+            register.isTouch ? account : nil
         }
-        guard
-            let account = accountId.flatMap(budget.account(withId:)) ?? register.account ?? lastUsed
-                ?? budget.accounts(in: .budgetAccounts).first ?? budget.accounts(in: .offBudgetAccounts).first
-        else { return }
+        let candidates =
+            [accountId.flatMap(budget.account(withId:)), register.account, lastUsed].compactMap(\.self)
+            + budget.accounts(in: .budgetAccounts) + budget.accounts(in: .offBudgetAccounts)
+        guard let account = candidates.first(where: \.takesEntries) else { return }
         clearSelection()
         let transaction = Transaction(
             accountId: account.id, date: date ?? lastUsedDate ?? register.today(), amount: 0)
-        let editor = makeEditor(transaction, frequency: newFrequency, mode: .new)
+        let editor = makeEditor(transaction, repeats: newRepeat, mode: .new)
         if transfer {
             editor.startTransfer()
         } else {
@@ -265,12 +269,12 @@ package final class RegisterGridController {
         storedEditor = nil
     }
 
-    private func makeEditor(_ transaction: Transaction, frequency: ScheduledTransactionFrequency?, mode: EditorMode)
+    private func makeEditor(_ transaction: Transaction, repeats: Repeat?, mode: EditorMode)
         -> TransactionEditor
     {
         let editor = TransactionEditor(
             store: store, transaction: transaction, mode: mode, columns: owner?.visibleColumns ?? [],
-            isAllAccounts: register.isAllAccounts, today: register.today(), frequency: frequency,
+            isAllAccounts: register.isAllAccounts, today: register.today(), repeats: repeats,
             dialogs: register.dialogs)
         editor.onFinish = { [weak self, weak editor] outcome in
             guard let self, let editor else { return }
@@ -317,7 +321,7 @@ package final class RegisterGridController {
     package func scrollOffset(for target: RegisterScrollRequest.Target, viewport: CGFloat, current: CGFloat?)
         -> CGFloat?
     {
-        if let editor, editor.mode == .new {
+        if let editor = inlineEditor, editor.mode == .new {
             let current = current ?? 0
             let offset =
                 editor.rowHeight > viewport
@@ -341,7 +345,7 @@ package final class RegisterGridController {
             let current = current ?? 0
             let top = CGFloat(index) * RegisterMetrics.rowHeight
             let pinned = rows.contains(where: \.isMonthHeading) ? RegisterMetrics.rowHeight : 0
-            if id == editingId, let editor, editor.rowHeight > viewport {
+            if id == editingId, let editor = inlineEditor, editor.rowHeight > viewport {
                 let offset = Self.tallEditorOffset(
                     editor, top: top, pinned: pinned, viewport: viewport, current: current)
                 let revealed = revealOffset(offset, from: current, maxOffset: maxOffset)
@@ -408,7 +412,7 @@ package final class RegisterGridController {
     package func scrollMetrics(afterResizing list: ScrollMetrics, to viewport: CGFloat) -> ScrollMetrics {
         let maxOffset = max(0, listContentHeight(viewport: viewport) - viewport)
         var offset = keepsEnd(list) ? maxOffset : min(maxOffset, list.offset)
-        if editor != nil, let request = scrollRequest,
+        if inlineEditor != nil, let request = scrollRequest,
             let revealed = scrollOffset(for: request.target, viewport: viewport, current: offset)
         {
             offset = revealed

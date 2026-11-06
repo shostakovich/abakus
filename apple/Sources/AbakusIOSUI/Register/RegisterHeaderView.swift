@@ -19,8 +19,13 @@
                 }
                 if let line = register.approvalsLine {
                     approvalsLine(line)
+                } else if let banner = register.banner {
+                    bannerLine(banner)
                 } else if register.account != nil && !register.isReconciling {
                     reconcileLine
+                }
+                if let scheduled = register.scheduledSummary {
+                    scheduledLine(scheduled)
                 }
                 let notifiers = register.notifiers.list
                 if !notifiers.isEmpty {
@@ -52,6 +57,36 @@
             .padding(.top, 4)
             .padding(.bottom, 8)
             .background(ThemeColor.contentBackground.ignoresSafeArea(edges: .top))
+        }
+
+        private func bannerLine(_ banner: RegisterBanner) -> some View {
+            HStack(spacing: 12) {
+                Label(banner.message, systemImage: "info.circle")
+                    .font(.footnote)
+                    .foregroundStyle(ThemeColor.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if banner == .closed {
+                    ProminentButton(title: RegisterBanner.reopenTitle, action: register.reopenClicked)
+                }
+            }
+        }
+
+        private func scheduledLine(_ summary: String) -> some View {
+            Button(action: register.scheduledToggleClicked) {
+                HStack(spacing: 8) {
+                    Label(summary, systemImage: "calendar.badge.clock")
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(ThemeColor.tertiaryText)
+                        .accessibilityHidden(true)
+                }
+                .font(.footnote)
+                .foregroundStyle(ThemeColor.secondaryText)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
 
         private var reconcileLine: some View {

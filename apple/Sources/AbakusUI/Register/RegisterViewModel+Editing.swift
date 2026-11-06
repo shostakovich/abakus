@@ -17,7 +17,7 @@ extension RegisterViewModel: RegisterGridOwner {
     package var gridIds: [String] { transactionIds }
     package var snapsToRows: Bool { true }
 
-    package func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)? {
+    package func editorRecord(_ id: String) -> (transaction: Transaction, repeats: Repeat?)? {
         store.budget.transaction(withId: id).map { ($0, nil) }
     }
 

@@ -47,7 +47,6 @@ public final class AppModel {
         sidebar.sync = sync
         sidebar.device = device
         accounts = AccountsController(store: store, navigation: navigation, dialogs: dialogs)
-        accounts.register = register
         accounts.sidebar = sidebar
         lastDate = store.today()
         preferences = defaults
@@ -70,8 +69,11 @@ public final class AppModel {
     }
 
     var isAppModalOpen: Bool {
-        accounts.isPresenting || saveErrorDialog != nil || register.adjustmentHelp != nil || payeeSettings != nil
+        accounts.isPresenting || saveErrorDialog != nil || register.isClosedAccountsListShown || payeeSettings != nil
     }
+
+    /// An unsigned device has no budget: only the sign-in shows, and signing out returns to it.
+    public var showsSignIn: Bool { sync?.status == .notSignedIn }
 
     public var selectionTitle: String {
         switch navigation.selection {

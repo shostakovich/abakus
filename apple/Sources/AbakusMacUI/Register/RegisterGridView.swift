@@ -52,10 +52,7 @@ struct RegisterGridView: View {
         .focused($isFocused)
         .focusEffectDisabled()
         .onKeyPress(keys: [.upArrow, .downArrow, .pageUp, .pageDown, .home, .end]) { press in
-            if grid.editor != nil {
-                guard press.key == .upArrow || press.key == .downArrow else { return .ignored }
-                return grid.editorArrowPressed(press.key == .upArrow ? .up : .down) ? .handled : .ignored
-            }
+            if grid.editor != nil { return .ignored }
             guard let key = Self.navigationKey(press.key) else { return .ignored }
             let id = grid.navigationKeyPressed(
                 key, extending: press.modifiers.contains(.shift), caretOnly: press.modifiers.contains(.command),
@@ -74,7 +71,7 @@ struct RegisterGridView: View {
             return .handled
         }
         .onKeyPress(keys: [.return, .tab, .space, .escape, Self.f2]) { press in
-            if let editor = grid.editor {
+            if let editor = grid.inlineEditor {
                 let key: EditorKey? =
                     switch press.key {
                     case .return: .enter
@@ -90,12 +87,12 @@ struct RegisterGridView: View {
             grid.editSelected()
             return .handled
         }
-        .onChange(of: grid.editor?.focus) {
-            switch grid.editor?.focus {
-            case .button, .field(.main(.frequency)): isFocused = true
+        .onChange(of: grid.inlineEditor?.focus) {
+            switch grid.inlineEditor?.focus {
+            case .button: isFocused = true
             default: break
             }
-            if grid.editor != nil { keepPlace() }
+            if grid.inlineEditor != nil { keepPlace() }
         }
         .onChange(of: grid.editor == nil) {
             if grid.editor == nil { isFocused = true }
@@ -106,10 +103,10 @@ struct RegisterGridView: View {
         }
         .onChange(of: grid.scrollRequest) {
             guard let request = grid.scrollRequest else { return }
-            if grid.editor == nil { reveal(request.target) } else { keepPlace() }
+            if grid.inlineEditor == nil { reveal(request.target) } else { keepPlace() }
         }
         .onChange(of: [viewport, contentHeight]) { keepPlace() }
-        .onChange(of: grid.editor?.rowHeight) { keepPlace() }
+        .onChange(of: grid.inlineEditor?.rowHeight) { keepPlace() }
         .onAppear {
             record(grid.scrollMetrics(at: 0, viewport: viewport))
             if let request = grid.scrollRequest {
@@ -149,7 +146,7 @@ struct RegisterGridView: View {
     /// The size-change anchor moves the list, also through animated resizes; only an edit's reveal needs a scroll.
     private func keepPlace() {
         let list = grid.scrollMetrics(afterResizing: placed.list, to: viewport)
-        if grid.editor == nil { record(list) } else { show(list) }
+        if grid.inlineEditor == nil { record(list) } else { show(list) }
     }
 
     private func show(_ list: ScrollMetrics) {
@@ -194,7 +191,7 @@ struct RegisterGridView: View {
         let extraHeight = grid.editRowExtraHeight + grid.addRowHeight
         let selection = grid.selection
         let editingId = grid.editingId
-        let editor = grid.editor
+        let editor = grid.inlineEditor
         // A legacy scroller narrows the content; rows then give up the trailing column-menu slot instead of centring.
         return ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 0) {

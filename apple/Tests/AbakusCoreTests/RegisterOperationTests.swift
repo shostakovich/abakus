@@ -161,58 +161,13 @@ import Testing
         let schedule = Transaction(id: "S1", accountId: test.girokonto, date: date("2026-11-02"), amount: -25)
         try test.budget.apply(
             .saveScheduledTransaction(
-                ScheduledSave(transaction: schedule, frequency: .monthly, payeeName: "Rent", isNew: true)))
+                ScheduledSave(transaction: schedule, repeats: .monthly, payeeName: "Rent", isNew: true)))
         let moved = try applied(test, .moveScheduledTransactions(["S1"], toAccount: test.tagesgeld))
         let restored = try moved.applying(
             .restoreMovedTransactions([
                 MovedTransaction(transactionId: "S1", accountId: test.girokonto, cleared: .uncleared)
             ]))
         #expect(restored == test.budget)
-    }
-
-    @Test func makeRecurringSchedulesMonthlyAfterToday() throws {
-        var test = TestBudget()
-        let id = try test.add(test.girokonto, -9.99, on: "2026-09-05", payee: "Spotify", cleared: .cleared)
-        let budget = try applied(test, .makeRecurring(transactionId: id, scheduleId: "SCHED", today: october23))
-        let schedule = try #require(budget.scheduledTransactions.first { $0.id == "SCHED" })
-        #expect(schedule.frequency == .monthly)
-        #expect(schedule.nextDate == date("2026-11-05"))
-        #expect(schedule.cleared == .uncleared)
-        #expect(schedule.amount == -9.99)
-        #expect(budget.transaction(withId: id) != nil)
-    }
-
-    @Test func makeRecurringOnTheSameDayStepsToNextMonth() throws {
-        var test = TestBudget()
-        let id = try test.add(test.girokonto, -1, on: "2026-10-23")
-        let budget = try applied(test, .makeRecurring(transactionId: id, scheduleId: "S", today: october23))
-        #expect(budget.scheduledTransactions.first?.nextDate == date("2026-11-23"))
-    }
-
-    @Test func moveToSchedulerKeepsTheDateAndDeletesTheOriginal() throws {
-        var test = TestBudget()
-        let id = try test.add(test.girokonto, -20, on: "2026-12-01", payee: "Versicherung")
-        let budget = try applied(test, .moveToScheduler(transactionId: id, scheduleId: "ONCE"))
-        let schedule = try #require(budget.scheduledTransactions.first)
-        #expect(schedule.frequency == .once)
-        #expect(schedule.nextDate == date("2026-12-01"))
-        #expect(budget.transaction(withId: id) == nil)
-        #expect(budget.payee(withId: schedule.payeeId!)?.name == "Versicherung")
-    }
-
-    @Test func schedulingASplitCopiesItsLines() throws {
-        var test = TestBudget()
-        let split = Transaction(
-            id: "SPLIT", accountId: test.girokonto, date: date("2026-12-11"), amount: -10,
-            subtransactions: [
-                Subtransaction(transactionId: "SPLIT", amount: -4, categoryId: test.groceries),
-                Subtransaction(transactionId: "SPLIT", amount: -6),
-            ])
-        try test.budget.apply(.addTransaction(split))
-        let budget = try applied(test, .moveToScheduler(transactionId: "SPLIT", scheduleId: "S"))
-        let schedule = try #require(budget.scheduledTransactions.first)
-        #expect(schedule.subtransactions.map(\.amount) == [-4, -6])
-        #expect(schedule.subtransactions.allSatisfy { $0.transactionId == "S" })
     }
 
     @Test func renamingAPayeeRenamesEveryTransaction() throws {

@@ -34,7 +34,7 @@
                         }
                     }
                 }
-                AccountGroupSections(model: model, accounts: accounts)
+                AccountGroupSections(model: model)
             }
             .listStyle(.insetGrouped)
             .readableListWidth()
@@ -57,7 +57,6 @@
 
     private struct AccountGroupSections: View {
         let model: SidebarViewModel
-        let accounts: AccountsController
 
         var body: some View {
             ForEach(model.groupPanels) { panel in
@@ -65,13 +64,6 @@
                     if !panel.isCollapsed {
                         ForEach(panel.rows) { account in
                             NavigationLink(value: SidebarSelection.account(account.id)) { AccountRow(row: account) }
-                                .contextMenu {
-                                    Button("Konto bearbeiten", systemImage: "pencil") { edit(account) }
-                                }
-                                .swipeActions(edge: .trailing) {
-                                    Button("Bearbeiten", systemImage: "pencil") { edit(account) }
-                                        .tint(ThemeColor.accent)
-                                }
                         }
                         .onMove { model.moveAccount(in: panel.group, from: $0, to: $1) }
                     }
@@ -79,10 +71,6 @@
                     AccountGroupHeader(model: model, panel: panel)
                 }
             }
-        }
-
-        private func edit(_ row: SidebarAccountRow) {
-            accounts.editAccountRequested(row.id)
         }
     }
 

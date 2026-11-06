@@ -118,16 +118,6 @@ import Testing
         #expect(test.budget.deleteAnalysis(["SPLIT"]).deletable.isEmpty)
     }
 
-    @Test func itCannotMoveToTheScheduler() throws {
-        var test = TestBudget()
-        let id = try led(&test)
-        #expect(throws: BudgetError.ledTransaction(.kasse)) {
-            try test.budget.applying(.moveToScheduler(transactionId: id, scheduleId: "S1"))
-        }
-        let recurring = try test.budget.applying(.makeRecurring(transactionId: id, scheduleId: "S1", today: october23))
-        #expect(recurring.transaction(withId: id) != nil)
-    }
-
     @Test func combiningOrRenamingItsPayeeGoesThrough() throws {
         var test = TestBudget()
         let id = try led(&test, payee: "Pizzeria")

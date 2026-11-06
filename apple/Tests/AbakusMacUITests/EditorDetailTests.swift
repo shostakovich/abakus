@@ -9,26 +9,6 @@ import Testing
 
 @MainActor
 @Suite struct EditorDetailTests {
-    @Test func escapeOnTheFrequencyRestoresOnceThenCancels() throws {
-        var fixture = RegisterFixture()
-        let transaction = Transaction(
-            id: "S1", accountId: fixture.giro, date: day("2014-06-02"), categoryId: fixture.groceries,
-            amount: -25)
-        try fixture.budget.apply(
-            .saveScheduledTransaction(
-                ScheduledSave(transaction: transaction, frequency: .monthly, payeeName: "Rent", isNew: true)))
-        let model = fixture.model()
-        model.scheduler.beginEditing("S1", column: .frequency)
-        let editor = try #require(model.scheduler.editor)
-        editor.press(.down)
-        #expect(editor.frequency == .everyOtherMonth)
-        editor.press(.escape)
-        #expect(editor.frequency == .monthly)
-        #expect(model.scheduler.editor != nil)
-        editor.press(.escape)
-        #expect(model.scheduler.editor == nil)
-    }
-
     @Test func aRejectedDateDoesNotPullALaterClickBack() throws {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -1, category: fixture.groceries)

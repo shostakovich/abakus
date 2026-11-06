@@ -106,7 +106,9 @@
                     } else {
                         tabs
                     }
-                    AddTransactionButton(register: model.register, size: Self.height, onAdd: onAdd)
+                    AddTransactionButton(
+                        register: model.register, isEnabled: navigation.canAddTransaction, size: Self.height,
+                        onAdd: onAdd)
                 }
                 .frame(maxWidth: Self.maxWidth)
             }
@@ -224,6 +226,7 @@
 
     private struct AddTransactionButton: View {
         let register: RegisterViewModel
+        let isEnabled: Bool
         let size: CGFloat
         let onAdd: () -> Void
 
@@ -232,7 +235,7 @@
                 .buttonStyle(.plain)
                 .foregroundStyle(ThemeColor.text)
                 .glassEffect(.regular.interactive(), in: .circle)
-                .disabled(!register.canAddTransactions)
+                .disabled(!isEnabled)
                 .accessibilityLabel(RegisterViewModel.addTitle)
                 .accessibilityShowsLargeContentViewer {
                     Label(RegisterViewModel.addTitle, systemImage: "plus")

@@ -87,6 +87,36 @@ private final class SignInServer: HTTPTransport, @unchecked Sendable {
         #expect(model.sync.pendingChanges == 0)
     }
 
+    @Test func anUnsignedAppShowsOnlyTheSignInAndSigningOutReturnsToIt() async throws {
+        var serverBudget = Budget(budgetName: "")
+        serverBudget.accounts = [Account(id: "giro", name: "Girokonto", kind: .checking)]
+        let database = try BudgetDatabase()
+        let store = try BudgetStore.open(database, today: { today })
+        #expect(store.budget.accounts.isEmpty)
+        #expect(try database.isEmpty)
+        let made = BudgetSync(
+            store: store, tokens: MemoryTokenStore(), transport: SignInServer(budget: serverBudget),
+            deviceName: "MacBook", sleep: { _ in })
+        let sync = try #require(made)
+        let app = AppModel(store: store, defaults: nil, sync: sync)
+        #expect(app.showsSignIn)
+        #expect(SignInText.message == "Dein Budget liegt auf deinem Abakus-Server. Melde dich an, um es hier zu sehen.")
+
+        await sync.signIn(to: try #require(URL(string: "https://abakus.test"))) { confirm($0) }
+        sync.stop()
+        #expect(!app.showsSignIn)
+        #expect(store.budget.accounts.map(\.name) == ["Girokonto"])
+
+        await sync.signOut()
+        #expect(app.showsSignIn)
+        #expect(store.budget.accounts.isEmpty)
+    }
+
+    @Test func anAppWithoutSyncShowsItsBudget() {
+        let app = AppModel(store: BudgetStore(budget: Budget(budgetName: "")), defaults: nil)
+        #expect(!app.showsSignIn)
+    }
+
     @Test func anAddressWithoutSchemeIsRefused() async throws {
         let store = try BudgetStore.open(BudgetDatabase(), today: { today })
         let sync = try #require(BudgetSync(store: store, tokens: MemoryTokenStore(), deviceName: "MacBook"))

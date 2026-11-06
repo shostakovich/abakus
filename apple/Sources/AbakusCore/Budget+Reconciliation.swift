@@ -38,18 +38,6 @@ public struct ReconciliationFinish: Hashable, Sendable {
     }
 }
 
-public struct BalanceAdjustment: Hashable, Sendable {
-    public var accountId: String
-    public var workingBalance: Decimal
-    public var today: DateWithoutTime
-
-    public init(accountId: String, workingBalance: Decimal, today: DateWithoutTime) {
-        self.accountId = accountId
-        self.workingBalance = Amount.round(workingBalance)
-        self.today = today
-    }
-}
-
 extension Budget {
     public static let automaticTransactionMemo = "Automatisch angelegt"
 
@@ -76,14 +64,14 @@ extension Budget {
         if finish.createsAdjustment {
             let summary = reconciliationSummary(
                 accountId: finish.accountId, statementBalance: finish.statementBalance, list: list)
-            let working = balances(forAccount: finish.accountId).working
-            if let id = adjustBalance(
-                accountId: finish.accountId, to: Amount.round(working - summary.difference),
-                payee: Payee.reconciliationBalanceAdjustmentName, isReconciliation: true, today: finish.today),
-                let index = transactionIndex(id)
-            {
-                transactions[index].date = finish.statementDate
-                transactions[index].cleared = .reconciled
+            if summary.difference != 0, let account = account(withId: finish.accountId) {
+                transactions.append(
+                    Transaction(
+                        accountId: account.id, date: finish.statementDate,
+                        payeeId: payeeIdCreatingIfNeeded(
+                            named: Payee.reconciliationBalanceAdjustmentName, hidden: false),
+                        categoryId: balanceCategory(of: account), memo: Self.automaticTransactionMemo,
+                        amount: Amount.round(-summary.difference), cleared: .reconciled))
             }
         }
         accounts[accountIndex].lastReconciledAt = finish.today.noon()
@@ -91,50 +79,5 @@ extension Budget {
         for index in transactions.indices where clearedIds.contains(transactions[index].id) {
             transactions[index].cleared = .reconciled
         }
-    }
-
-    mutating func adjustBalance(_ adjustment: BalanceAdjustment) throws {
-        guard account(withId: adjustment.accountId) != nil else {
-            throw BudgetError.accountNotFound(adjustment.accountId)
-        }
-        adjustBalance(
-            accountId: adjustment.accountId, to: adjustment.workingBalance, payee: Payee.manualBalanceAdjustmentName,
-            isReconciliation: false, today: adjustment.today)
-    }
-
-    /// The id of the transaction that now carries the difference, if any.
-    @discardableResult
-    mutating func adjustBalance(
-        accountId: String, to target: Decimal, payee: String, isReconciliation: Bool, today: DateWithoutTime
-    ) -> String? {
-        guard let account = account(withId: accountId) else { return nil }
-        let own = transactions(inAccount: accountId)
-        if own.isEmpty && !isReconciliation {
-            return appendAutomatic(
-                accountId: accountId, date: today, payee: Payee.startingBalanceName, memo: nil,
-                categoryId: balanceCategory(of: account), amount: target)
-        }
-        if own.count == 1, let start = own.first, payeeName(of: start) == Payee.startingBalanceName,
-            start.date == today, start.amount == 0, let index = transactionIndex(start.id)
-        {
-            transactions[index].amount = target
-            return start.id
-        }
-        let difference = Amount.round(target - balances(forAccount: accountId).working)
-        guard difference != 0 else { return nil }
-        return appendAutomatic(
-            accountId: accountId, date: today, payee: payee, memo: Self.automaticTransactionMemo,
-            categoryId: balanceCategory(of: account), amount: difference)
-    }
-
-    private mutating func appendAutomatic(
-        accountId: String, date: DateWithoutTime, payee: String, memo: String?, categoryId: String?, amount: Decimal
-    ) -> String {
-        let transaction = Transaction(
-            accountId: accountId, date: date,
-            payeeId: payeeIdCreatingIfNeeded(named: payee, hidden: payee == Payee.startingBalanceName),
-            categoryId: categoryId, memo: memo, amount: amount, cleared: .cleared)
-        transactions.append(transaction)
-        return transaction.id
     }
 }

@@ -21,8 +21,6 @@ public enum BudgetCommand: Hashable, Sendable {
     case moveTransactions([String], toAccountId: String)
     case restoreTransactions([Transaction], payees: [Payee])
     case restoreMovedTransactions([MovedTransaction])
-    case makeRecurring(transactionId: String, scheduleId: String, today: DateWithoutTime)
-    case moveToScheduler(transactionId: String, scheduleId: String)
     case renamePayee(payeeId: String, name: String)
     case combinePayees([String], name: String)
     case setPayeesHidden([String], Bool)
@@ -30,7 +28,6 @@ public enum BudgetCommand: Hashable, Sendable {
     case setPayeeRenameConditions(payeeId: String, [PayeeRenameCondition])
     case applyRenameRules(payeeId: String)
     case finishReconciliation(ReconciliationFinish)
-    case adjustBalance(BalanceAdjustment)
     case saveScheduledTransaction(ScheduledSave)
     case enterScheduledTransactions(ScheduledEntry)
     case enterDueScheduledTransactions(today: DateWithoutTime, taken: Set<String> = [])
@@ -92,10 +89,6 @@ extension Budget {
         case .moveTransactions(let ids, let accountId): try moveTransactions(ids, to: accountId)
         case .restoreTransactions(let transactions, let payees): restoreTransactions(transactions, payees: payees)
         case .restoreMovedTransactions(let moved): try restoreMovedTransactions(moved)
-        case .makeRecurring(let id, let scheduleId, let today):
-            try scheduleCopy(of: id, scheduleId: scheduleId, monthlyAfter: today)
-        case .moveToScheduler(let id, let scheduleId):
-            try scheduleCopy(of: id, scheduleId: scheduleId, monthlyAfter: nil)
         case .renamePayee(let payeeId, let name): try renamePayeeEverywhere(payeeId, to: name)
         case .combinePayees(let ids, let name): try combinePayees(ids, into: name)
         case .setPayeesHidden(let ids, let hidden): setPayeesHidden(ids, hidden)
@@ -104,7 +97,6 @@ extension Budget {
         case .setPayeeRenameConditions(let payeeId, let conditions): setPayeeRenameConditions(payeeId, conditions)
         case .applyRenameRules(let payeeId): applyRenameRules(payeeId)
         case .finishReconciliation(let finish): try finishReconciliation(finish)
-        case .adjustBalance(let adjustment): try adjustBalance(adjustment)
         case .saveScheduledTransaction(let save): try saveScheduledTransaction(save)
         case .enterScheduledTransactions(let entry): enterScheduledTransactions(entry)
         case .enterDueScheduledTransactions(let today, let taken):

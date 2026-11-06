@@ -57,21 +57,8 @@
                 .sheet(isPresented: schedulerSheet(showsScheduler)) {
                     ScheduledSheet(register: register, dialogs: dialogs, isCompact: sizeClass == .compact)
                 }
-                .alert(
-                    scheduledCallout?.title ?? "", isPresented: isScheduledCalloutShown, presenting: scheduledCallout
-                ) { _ in
-                    Button("Zeigen") {
-                        register.closePopup()
-                        if !register.isSchedulerVisible { register.scheduledToggleClicked() }
-                    }
-                    Button("OK", role: .cancel) { register.closePopup() }
-                } message: { callout in
-                    Text(TextMarkup.plain(callout.touchMessage))
-                }
-                .alert(
-                    Text(TextMarkup.plain(register.adjustmentHelp?.message ?? "")), isPresented: isAdjustmentHelpShown
-                ) {
-                    Button("OK", role: .cancel, action: register.adjustmentHelpDismissed)
+                .sheet(isPresented: closedAccountsSheet) {
+                    ClosedAccountsSheet(register: register)
                 }
         }
 
@@ -138,23 +125,11 @@
             }
         }
 
-        private var scheduledCallout: RegisterScheduledCallout? {
-            if case .scheduledCallout(let callout) = register.popup { callout } else { nil }
-        }
-
-        private var isScheduledCalloutShown: Binding<Bool> {
+        private var closedAccountsSheet: Binding<Bool> {
             Binding {
-                scheduledCallout != nil
+                register.isClosedAccountsListShown
             } set: { shown in
-                if !shown && scheduledCallout != nil { register.closePopup() }
-            }
-        }
-
-        private var isAdjustmentHelpShown: Binding<Bool> {
-            Binding {
-                register.adjustmentHelp != nil
-            } set: { shown in
-                if !shown { register.adjustmentHelpDismissed() }
+                if !shown { register.closedAccountsDismissed() }
             }
         }
     }

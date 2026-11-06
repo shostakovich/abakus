@@ -83,3 +83,10 @@ public final class SyncSettingsModel {
         signOutWarning = nil
     }
 }
+
+public enum SignInText {
+    public static let title = "Abakus"
+    public static let message = "Dein Budget liegt auf deinem Abakus-Server. Melde dich an, um es hier zu sehen."
+    public static let addressPrompt = "https://abakus.example.org"
+    public static let signIn = "Anmelden"
+}

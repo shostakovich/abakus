@@ -352,20 +352,21 @@ extension TargetSnooze {
 extension ScheduledTransaction {
     var row: SyncRow {
         [
-            "account_id": .text(accountId), "next_date": .date(nextDate), "frequency": .of(frequency),
-            "first_day": .of(firstDay), "second_day": .of(secondDay), "amount": .cents(amount), "memo": .of(memo),
+            "account_id": .text(accountId), "next_date": .date(nextDate), "repeat_unit": .of(repeats.unit),
+            "repeat_every": .of(repeats.count), "amount": .cents(amount), "memo": .of(memo),
             "cleared": .of(cleared), "payee_id": .of(payeeId), "category_id": .of(categoryId),
         ]
     }
 
     init?(id: String, row: SyncRow, resolve: SuccessorChain) {
         guard let accountId = row.text("account_id"), let nextDate = row.date("next_date"),
-            let frequency: ScheduledTransactionFrequency = row.enumValue("frequency"),
             let amount = row.amount("amount")
         else { return nil }
-        let days = row.integer("first_day").flatMap { first in row.integer("second_day").map { (first, $0) } }
+        let unit: Repeat.Unit? = row.enumValue("repeat_unit")
+        if unit == nil && row.text("repeat_unit") != nil { return nil }
         self.init(
-            id: id, accountId: accountId, nextDate: nextDate, frequency: frequency, days: days,
+            id: id, accountId: accountId, nextDate: nextDate,
+            repeats: unit.map { .every(row.integer("repeat_every") ?? 1, $0) } ?? .once,
             payeeId: resolve(row.text("payee_id")), categoryId: resolve(row.text("category_id")),
             memo: row.text("memo"), amount: amount, cleared: row.enumValue("cleared") ?? .uncleared)
     }

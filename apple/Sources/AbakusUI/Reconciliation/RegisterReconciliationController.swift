@@ -11,7 +11,7 @@ struct RegisterReconciliation {
     var savedExpandedSplitsBeforeSearch: Set<String>?
     var savedScrollBeforeSearch: RegisterScrollRequest.Target?
     var savedSort: RegisterSortOrder
-    var savedSchedulerVisible: Bool
+    var savedSchedulerShown: Bool?
 }
 
 @MainActor
@@ -108,10 +108,12 @@ public final class RegisterReconciliationController {
 
     var current: RegisterReconciliation? { register.viewState.reconciliation }
 
-    public var isReconcileEnabled: Bool { !register.isAllAccounts && register.account != nil }
+    public var isReconcileEnabled: Bool { register.account?.takesEntries == true }
 
     public func reconcileClicked() {
-        guard let account = register.account, statementForm == nil, !register.clickedOutsideEditors() else { return }
+        guard isReconcileEnabled, let account = register.account, statementForm == nil,
+            !register.clickedOutsideEditors()
+        else { return }
         statementForm = ReconciliationStatementForm(
             accountId: account.id, isContinuing: false, date: register.today(), amountText: "")
     }
@@ -161,13 +163,13 @@ public final class RegisterReconciliationController {
             statementDate: form.date, statementBalance: balance, savedFilter: state.filter,
             savedSearchText: state.searchText, savedExpandedSplitsBeforeSearch: state.expandedSplitsBeforeSearch,
             savedScrollBeforeSearch: state.scrollBeforeSearch, savedSort: state.sort,
-            savedSchedulerVisible: state.isSchedulerVisible)
+            savedSchedulerShown: state.schedulerShown)
         state.filter = .all
         state.searchText = ""
         state.expandedSplitsBeforeSearch = nil
         state.scrollBeforeSearch = nil
         state.sort = .default
-        state.isSchedulerVisible = false
+        state.schedulerShown = false
         register.viewState = state
         register.clearSelection()
     }
@@ -258,7 +260,7 @@ public final class RegisterReconciliationController {
         state.expandedSplitsBeforeSearch = saved.savedExpandedSplitsBeforeSearch
         state.scrollBeforeSearch = saved.savedScrollBeforeSearch
         state.sort = saved.savedSort
-        state.isSchedulerVisible = saved.savedSchedulerVisible
+        state.schedulerShown = saved.savedSchedulerShown
         register.viewState = state
         register.clearSelection()
     }

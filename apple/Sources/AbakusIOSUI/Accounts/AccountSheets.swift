@@ -9,33 +9,19 @@
         @FocusState private var isNameFocused: Bool
 
         var body: some View {
-            let calendar = controller.formatter.dateLocale.calendar
             NavigationStack {
                 Form {
-                    Section("Name") {
+                    Section {
                         TextField("Name", text: $form.name).focused($isNameFocused)
-                    }
-                    Section {
-                        LabeledContent("Aktueller Saldo") {
-                            AmountTextField(title: "Aktueller Saldo", text: $form.balanceText)
-                        }
-                        DatePicker(
-                            "Datum des Saldos",
-                            selection: Binding(
-                                get: { form.date.date(in: calendar) },
-                                set: { form.date = DateWithoutTime($0, in: calendar) }),
-                            displayedComponents: .date)
-                    } footer: {
-                        Text("Lässt sich später jederzeit ändern.")
-                    }
-                    Section {
                         Picker("Art", selection: $form.type) {
-                            Text(AddAccountForm.typePlaceholder).tag(AccountKind?.none)
                             ForEach(AccountKind.budgetKinds, id: \.self) { type in
-                                Text(verbatim: type.label).tag(AccountKind?.some(type))
+                                Text(verbatim: type.label).tag(type)
                             }
                             Divider()
-                            Text(verbatim: AccountKind.tracking.label).tag(AccountKind?.some(.tracking))
+                            Text(verbatim: AccountKind.tracking.label).tag(AccountKind.tracking)
+                        }
+                        LabeledContent("Aktueller Saldo") {
+                            AmountTextField(title: "Aktueller Saldo", text: $form.balanceText)
                         }
                     } footer: {
                         Text(AddAccountForm.typeHint)
@@ -65,13 +51,10 @@
         @Bindable var form: EditAccountForm
 
         var body: some View {
-            let isClosed = controller.isClosed(form)
             NavigationStack {
                 Form {
-                    Section("Name") {
-                        TextField("Name", text: $form.name).onSubmit(controller.editDoneClicked)
-                    }
                     Section {
+                        TextField("Name", text: $form.name).onSubmit(controller.editDoneClicked)
                         if form.typeChoices.count > 1 {
                             Picker("Art", selection: $form.type) {
                                 ForEach(form.typeChoices, id: \.self) { type in
@@ -81,12 +64,13 @@
                         } else {
                             LabeledContent("Art") { Text(verbatim: form.type.label) }
                         }
-                        Button("Saldo anpassen", action: controller.adjustBalanceClicked)
                     }
-                    Section {
-                        Button(
-                            isClosed ? "Wieder öffnen" : "Konto schließen", role: isClosed ? nil : .destructive,
-                            action: controller.closeOrReopenClicked)
+                    if form.canClose {
+                        Section {
+                            Button(
+                                EditAccountForm.closeTitle.touchLabel, role: .destructive,
+                                action: controller.closeAccountClicked)
+                        }
                     }
                 }
                 .navigationTitle(EditAccountForm.title)
@@ -103,38 +87,37 @@
         }
     }
 
-    struct AdjustBalanceSheet: View {
-        let controller: AccountsController
-        @Bindable var form: AdjustBalanceForm
-        @FocusState private var isAmountFocused: Bool
+    struct ClosedAccountsSheet: View {
+        let register: RegisterViewModel
 
         var body: some View {
             NavigationStack {
-                Form {
-                    Section {
-                        LabeledContent(form.fieldLabel) {
-                            AmountTextField(title: form.fieldLabel, text: $form.amountText)
-                                .focused($isAmountFocused)
-                                .onSubmit(controller.adjustClicked)
+                List(register.closedAccounts) { row in
+                    Button {
+                        register.closedAccountChosen(row.id)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(verbatim: row.name).foregroundStyle(ThemeColor.text).lineLimit(1)
+                            Spacer(minLength: 12)
+                            Text(verbatim: row.detail)
+                                .monospacedDigit()
+                                .foregroundStyle(ThemeColor.secondaryText)
+                                .lineLimit(1)
                         }
-                    } footer: {
-                        Text("\(form.instruction)\n\(AdjustBalanceForm.hint)\(Text(form.workingBalanceText).bold())")
+                        .contentShape(Rectangle())
                     }
                 }
-                .navigationTitle("Saldo anpassen")
+                .listStyle(.insetGrouped)
+                .navigationTitle(RegisterViewModel.closedAccountsTitle)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Abbrechen", systemImage: "xmark", role: .close, action: controller.balanceCancelled)
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
                         Button(
-                            AdjustBalanceForm.buttonTitle, systemImage: "checkmark", role: .confirm,
-                            action: controller.adjustClicked)
+                            "Schließen", systemImage: "xmark", role: .close, action: register.closedAccountsDismissed)
                     }
                 }
-                .defaultFocus($isAmountFocused, true)
             }
+            .presentationDetents([.medium, .large])
         }
     }
 

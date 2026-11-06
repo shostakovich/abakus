@@ -69,24 +69,20 @@ struct AbakusApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .saveItem) {}
-            CommandGroup(before: .toolbar) {
-                Button("Zum Budget") { model.goToBudget() }
-                    .keyboardShortcut("b")
-                Button("Zu den Konten") { model.goToAccounts() }
-                    .keyboardShortcut("t")
-                Button("Empfänger verwalten …") { model.register.payeeSettingsShortcut() }
-                    .keyboardShortcut("y")
-                Divider()
-            }
-            CommandGroup(replacing: .sidebar) {
-                Button(model.sidebar.toggleCommandTitle) { model.sidebar.toggleSidebar() }
-            }
-            RegisterCommands(model: model)
-            CommandGroup(after: .pasteboard) {
-                if model.showsAccountProperties {
+            if !model.showsSignIn {
+                CommandGroup(before: .toolbar) {
+                    Button("Zum Budget") { model.goToBudget() }
+                        .keyboardShortcut("b")
+                    Button("Zu den Konten") { model.goToAccounts() }
+                        .keyboardShortcut("t")
+                    Button("Empfänger verwalten …") { model.register.payeeSettingsShortcut() }
+                        .keyboardShortcut("y")
                     Divider()
-                    Button("Konto bearbeiten …") { model.accountPropertiesClicked() }
                 }
+                CommandGroup(replacing: .sidebar) {
+                    Button(model.sidebar.toggleCommandTitle) { model.sidebar.toggleSidebar() }
+                }
+                RegisterCommands(model: model)
             }
         }
         Settings {

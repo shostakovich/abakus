@@ -110,6 +110,13 @@ public final class TouchNavigation {
         }
     }
 
+    /// Only a register on screen holds its own account back; elsewhere any account that takes entries will do.
+    public var canAddTransaction: Bool {
+        let showsRegister = tab == .accounts && !accountPath.isEmpty
+        return showsRegister
+            ? app.register.canAddTransactions : app.store.budget.accounts.contains(where: \.takesEntries)
+    }
+
     /// The payees as a page block the register like their sheet, so a new transaction closes them first.
     public func addTransactionClicked() {
         showSettings([])

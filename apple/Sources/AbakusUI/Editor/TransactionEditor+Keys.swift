@@ -32,7 +32,6 @@ extension TransactionEditor {
     private func fieldKey(_ key: EditorKey, _ field: EditorFieldID, leadingSign sign: String?) -> Bool {
         if let dropDown, dropDown.field == field, let handled = listKey(key, field, dropDown) { return handled }
         if field.column == .date, dateKey(key) { return true }
-        if field.column == .frequency, frequencyKey(key) { return true }
         if field.column.isAmount, amountKey(key, field, leadingSign: sign) { return true }
         switch key {
         case .down where dropDownKind(for: field) != nil:
@@ -240,7 +239,6 @@ extension TransactionEditor {
             chosenSigns.remove(nil)
             setSign(field, inflow: original.amount > 0)
             refreshAmountText(subId: nil)
-        case .frequency: setFrequency(originalFrequency)
         }
     }
 }

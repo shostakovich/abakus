@@ -100,7 +100,7 @@ import Testing
                 ScheduledSave(
                     transaction: Transaction(
                         id: "S", accountId: test.girokonto, date: date("2026-11-01"), amount: -3),
-                    frequency: .monthly, payeeName: "Rewe Markt", isNew: true)))
+                    repeats: .monthly, payeeName: "Rewe Markt", isNew: true)))
         let old = payeeId(test.budget, "Rewe Markt")
         let budget = try test.budget.applying(.renamePayee(payeeId: old, name: "rewe"))
         #expect(budget.payee(withId: old) == nil)
@@ -300,7 +300,7 @@ import Testing
             .saveScheduledTransaction(
                 ScheduledSave(
                     transaction: Transaction(accountId: test.girokonto, date: date("2026-11-01"), amount: -800),
-                    frequency: .monthly, payeeName: "Miete", isNew: true)))
+                    repeats: .monthly, payeeName: "Miete", isNew: true)))
         let id = payeeId(test.budget, "Miete")
         #expect(test.budget.payeeUseCount(id) == 2)
         #expect(test.budget.payeeHasScheduledTransactions(id))
@@ -318,7 +318,7 @@ import Testing
         try test.budget.apply(
             .saveScheduledTransaction(
                 ScheduledSave(
-                    transaction: schedule, frequency: .monthly, payeeName: "Kaufland", subPayeeNames: ["L1": "Miete"],
+                    transaction: schedule, repeats: .monthly, payeeName: "Kaufland", subPayeeNames: ["L1": "Miete"],
                     isNew: true)))
         #expect(test.budget.payeeHasScheduledTransactions(payeeId(test.budget, "Miete")))
     }

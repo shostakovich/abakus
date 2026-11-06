@@ -1,13 +1,11 @@
 import AbakusUI
 import SwiftUI
 
-/// The Scheduled Transactions toggle with its count, and the selected total.
 struct RegisterStatusBar: View {
     let model: RegisterViewModel
 
     var body: some View {
         HStack(spacing: 12) {
-            scheduledToggle
             Spacer(minLength: 0)
             if let total = model.selectedTotal {
                 SelectedTotalLabel(item: total)
@@ -16,27 +14,6 @@ struct RegisterStatusBar: View {
         .padding(.horizontal, RegisterHeaderMetrics.horizontalPadding - 6)
         .frame(height: RegisterMetrics.statusBarHeight)
         .overlay(alignment: .top) { Divider() }
-    }
-
-    private var scheduledToggle: some View {
-        let count = model.scheduler.scheduledTransactions.count
-        let isVisible = Binding(get: { model.isSchedulerVisible }, set: { _ in model.scheduledToggleClicked() })
-        return Toggle(isOn: isVisible) {
-            HStack(spacing: 5) {
-                Image(systemName: "calendar")
-                Text("Geplante Buchungen")
-                if count > 0 {
-                    Text(verbatim: String(count))
-                        .font(ThemeFont.caption.font.monospacedDigit())
-                        .padding(.horizontal, 6)
-                        .background(Capsule().fill(ThemeColor.groupFill))
-                }
-            }
-        }
-        .toggleStyle(.button)
-        .buttonStyle(.borderless)
-        .toolTip(model.scheduledToggleTooltip)
-        .registerAnchor(.schedulerTitle, isActive: !model.isSchedulerVisible)
     }
 }
 

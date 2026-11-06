@@ -47,7 +47,8 @@ import Testing
         let model = RegisterFixture().model()
         #expect(
             model.viewMenu.map(\.title).filter { !$0.isEmpty } == [
-                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "Status", "Memo",
+                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "Geplante Buchungen", "Status",
+                "Memo",
             ])
         model.viewMenuChosen(.filter(.uncleared))
         #expect(model.filter == .uncleared)
@@ -130,6 +131,7 @@ import Testing
             ScheduledTransaction(accountId: fixture.giro, nextDate: day("2014-06-01"), amount: -5))
         let model = fixture.model()
         #expect(model.scheduler.scheduledTransactions.count == 1)
+        #expect(!model.isSchedulerVisible)
         #expect(model.scheduledToggleTooltip == "Geplante Buchungen zeigen")
         model.scheduledToggleClicked()
         #expect(model.isSchedulerVisible)
@@ -137,6 +139,8 @@ import Testing
         model.navigation.selection = .account(fixture.tagesgeld)
         #expect(!model.isSchedulerVisible)
         #expect(model.scheduler.scheduledTransactions.count == 0)
+        model.navigation.selection = .account(fixture.giro)
+        #expect(model.isSchedulerVisible)
     }
 
     @Test func reconcileNeedsASingleAccount() {

@@ -17,7 +17,6 @@ struct OpsHarness {
         case notifiers
         case needsCategory = "needs-category"
         case deleteDialog = "delete-dialog"
-        case makeRecurring = "make-recurring"
         case keys
     }
 
@@ -50,9 +49,6 @@ struct OpsHarness {
             let transfer = try newestRow { budget.isTransfer($0) }
             register.rowClicked(transfer, column: nil, modifiers: .command)
             register.deleteTransactions(register.selectedTransactionIds)
-        case .makeRecurring:
-            selectNewest(1)
-            register.performMenuAction(.makeRecurring)
         case .keys:
             try probeKeys()
         }
@@ -247,13 +243,6 @@ struct OpsHarness {
                 NSApp.sendEvent(next)
             }
             edit.settle()
-        }
-    }
-
-    private func selectNewest(_ count: Int) {
-        for id in register.transactionIds.prefix(count) {
-            guard let row = register.rows.first(where: { $0.id == id }) else { continue }
-            register.rowClicked(row, column: nil, modifiers: .command)
         }
     }
 

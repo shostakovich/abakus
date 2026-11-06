@@ -63,7 +63,7 @@ extension Budget {
     }
 
     public func moveTargets(excluding accountId: String?) -> [Account] {
-        accounts.filter { !$0.closed && $0.id != accountId }
+        accounts.filter { $0.takesEntries && $0.id != accountId }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
@@ -184,24 +184,5 @@ extension Budget {
                 transactions.append(transaction)
             }
         }
-    }
-
-    /// A monthly copy starts with the first monthly step after today, a once copy keeps the date.
-    mutating func scheduleCopy(of transactionId: String, scheduleId: String, monthlyAfter today: DateWithoutTime?)
-        throws
-    {
-        guard let transaction = transaction(withId: transactionId) else {
-            throw BudgetError.transactionNotFound(transactionId)
-        }
-        let recurring = today != nil
-        if !recurring, let leader = leader(of: transactionId) { throw BudgetError.ledTransaction(leader) }
-        var source = transaction
-        source.id = scheduleId
-        if let today {
-            while source.date <= today { source.date = source.date.addingMonths(1) }
-        }
-        source.subtransactions = transaction.subtransactions.map { $0.copy(into: scheduleId) }
-        scheduledTransactions.append(ScheduledTransaction(source, frequency: recurring ? .monthly : .once))
-        if !recurring { deleteTransactions([transactionId]) }
     }
 }

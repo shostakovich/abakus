@@ -42,12 +42,22 @@ enum BudgetDiff {
     private static func fields(of table: SyncTable, id: String, from before: SyncRow?, to after: SyncRow)
         -> [BudgetChange]
     {
-        table.columns.compactMap { column in
-            let value = after[column.name] ?? .null
-            let changed = before.map { ($0[column.name] ?? .null) != value } ?? !value.isNull
-            return changed ? BudgetChange(table: table.name, rowId: id, column: column.name, value: value) : nil
+        let changed = Set(
+            table.columns.map(\.name).filter { column in
+                let value = after[column] ?? .null
+                return before.map { ($0[column] ?? .null) != value } ?? !value.isNull
+            })
+        let written = (writtenTogether[table.name] ?? []).filter { !$0.isDisjoint(with: changed) }
+            .reduce(changed) { $0.union($1) }
+        return table.columns.filter { written.contains($0.name) }.map { column in
+            BudgetChange(table: table.name, rowId: id, column: column.name, value: after[column.name] ?? .null)
         }
     }
+
+    /// One writer's unit never meets another writer's count.
+    private static let writtenTogether: [String: [Set<String>]] = [
+        "scheduled_transactions": [["repeat_unit", "repeat_every"]]
+    ]
 
     private static func tombstone(of table: SyncTable, id: String, successor: String?, deletedAt: SyncValue)
         -> [BudgetChange]

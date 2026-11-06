@@ -6,7 +6,8 @@ import Observation
 struct RegisterAccountViewState {
     var sort = RegisterSortOrder.default
     var expandedSplits: Set<String> = []
-    var isSchedulerVisible = false
+    /// nil leaves the Mac's scheduled area to whether anything is planned; touch screens open their sheet by hand.
+    var schedulerShown: Bool?
     var filter = RegisterFilter.all
     var searchText = ""
     var expandedSplitsBeforeSearch: Set<String>?
@@ -36,12 +37,11 @@ public final class RegisterViewModel {
     var hiddenColumns: Set<RegisterColumn> = [] {
         didSet { viewStateStore?.saveHiddenColumns(hiddenColumns) }
     }
-    var adjustmentHelpSlot: (visit: Int, help: RegisterAdjustmentHelp)?
     private var storedIncomeCheck: (visit: Int, check: RegisterIncomeCheck)?
     private var overlays = (visit: -1, state: RegisterOverlayState())
     var pickingVisit: Int?
+    public internal(set) var isClosedAccountsListShown = false
     public internal(set) var gridFocusRequest = 0
-    public internal(set) var lastScheduledTransactionId: String?
     @ObservationIgnored public private(set) lazy var scheduler = RegisterScheduler(register: self)
     @ObservationIgnored public private(set) lazy var search = RegisterSearchController(register: self)
     @ObservationIgnored public private(set) lazy var reconciliation = RegisterReconciliationController(register: self)
@@ -154,7 +154,7 @@ public final class RegisterViewModel {
             case .account: isAllAccounts
             case .category: onBudget
             case .cleared: isReconciling || !hiddenColumns.contains(.cleared)
-            case .frequency: false
+            case .repeats: false
             default: !column.canDisable || !hiddenColumns.contains(column)
             }
         }
@@ -279,7 +279,10 @@ public final class RegisterViewModel {
         set { viewState.expandedSplits = newValue }
     }
 
-    public var canAddTransactions: Bool { !store.budget.accounts.isEmpty }
+    public var canAddTransactions: Bool {
+        if let account { return account.takesEntries }
+        return store.budget.accounts.contains(where: \.takesEntries)
+    }
 
     public var showsTransferButton: Bool {
         let open = store.budget.accounts.filter { !$0.closed }
@@ -332,12 +335,20 @@ public final class RegisterViewModel {
             kind: kind, title: title, amountText: formatter.currency(amount), isNegative: amount < 0, tooltip: tooltip)
     }
 
-    public var isSchedulerVisible: Bool { viewState.isSchedulerVisible }
+    public var isSchedulerVisible: Bool { viewState.schedulerShown ?? false }
+
+    /// What is planned shows collapsed with its count; with nothing planned only Ansicht shows the list.
+    public var scheduledSummary: String? {
+        let count = scheduler.count
+        guard count > 0, !isReconciling else { return nil }
+        return "Geplant · \(count)"
+    }
 
     public func scheduledToggleClicked() {
-        if viewState.isSchedulerVisible, scheduler.grid.clickedOutsideEditor() { return }
-        viewState.isSchedulerVisible.toggle()
-        if !viewState.isSchedulerVisible { schedulerHidden() }
+        let shown = isSchedulerVisible
+        if shown, scheduler.grid.clickedOutsideEditor() { return }
+        viewState.schedulerShown = !shown
+        if shown { schedulerHidden() }
     }
 
     /// A hidden scheduler would still follow its pending scroll when it shows again.

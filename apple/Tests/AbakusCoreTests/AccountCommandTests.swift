@@ -32,6 +32,16 @@ import Testing
         #expect(try #require(fixture.budget.transactions(inAccount: fixture.depot).first).categoryId == nil)
     }
 
+    @Test func aZeroBalanceBooksNothing() throws {
+        var fixture = TestBudget()
+        try fixture.budget.apply(
+            .addAccount(
+                NewAccount(
+                    id: "KARTE2", name: "Kreditkarte 2", kind: .checking, startingBalance: 0, startDate: october23)))
+        #expect(fixture.budget.account(withId: "KARTE2") != nil)
+        #expect(fixture.budget.transactions(inAccount: "KARTE2").isEmpty)
+    }
+
     @Test func everyAccountHasATransferPayee() throws {
         let fixture = TestBudget()
         let payee = try #require(fixture.budget.payee(withId: EntityID.transferPayee(accountId: fixture.tagesgeld)))

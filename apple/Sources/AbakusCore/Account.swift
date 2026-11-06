@@ -26,7 +26,6 @@ public struct Account: Hashable, Identifiable, Sendable, Positioned {
     public var id: String
     public var name: String
     public var kind: AccountKind
-    /// The account the Kasse books into; the Mac keeps it as it is.
     public var sharedExpenses: Bool
     public var closed: Bool
     public var position: Int
@@ -52,6 +51,9 @@ public struct Account: Hashable, Identifiable, Sendable, Positioned {
         self.position = position
         self.lastReconciledAt = lastReconciledAt
     }
+
+    /// The Kasse books into the shared-expenses account; nothing is entered by hand there or in a closed account.
+    public var takesEntries: Bool { !closed && !sharedExpenses }
 
     public var lastReconciledOn: DateWithoutTime? {
         lastReconciledAt.map { DateWithoutTime.today(now: $0) }

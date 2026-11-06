@@ -35,23 +35,22 @@ struct RegisterRowView: View {
             else { return nil }
             return IncomeCheckAnchor(row: anchor, amount: amount)
         }
-        .anchorPreference(key: AdjustmentHelpAnchorKey.self, value: .bounds) { anchor in
-            isAdjustmentHelpRow ? anchor : nil
-        }
         .contentShape(Rectangle())
         .gesture(
             SpatialTapGesture().onEnded { value in
                 let column = layout.column(atX: value.location.x)
                 if owner.grid.rowClicked(row.transactionId, column: column, modifiers: .current) { onClick() }
-            })
+            }
+        )
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded { owner.grid.rowDoubleClicked(row.transactionId) },
+            isEnabled: owner.grid.editsInSheet)
     }
 
     @ViewBuilder
     private var background: some View {
         if isSelected {
             ThemeColor.selection
-        } else if isAdjustmentHelpRow {
-            RegisterGridStyle.adjustmentRow
         } else if isGlowing {
             RegisterGridStyle.addedRowCanvas
         } else {
@@ -92,10 +91,6 @@ struct RegisterRowView: View {
         try? await Task.sleep(for: remaining)
         guard !Task.isCancelled else { return }
         isGlowing = false
-    }
-
-    private var isAdjustmentHelpRow: Bool {
-        !row.isSubtransaction && main?.adjustmentHelp?.transactionId == row.transactionId
     }
 
     private var cells: some View {
@@ -141,7 +136,7 @@ struct RegisterRowView: View {
         switch frame.column {
         case .account: text(row.account, width: frame.width)
         case .date: text(row.date, width: frame.width)
-        case .frequency: text(row.frequency, width: frame.width)
+        case .repeats: text(row.repeatLabel, width: frame.width)
         case .payee: payee(width: frame.width)
         case .category: category(width: frame.width)
         case .memo: text(row.memo, width: frame.width, tip: .whenTruncated)

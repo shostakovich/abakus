@@ -9,10 +9,10 @@ extension RegisterScheduler {
         guard !accounts.isEmpty else { return [] }
         let targets = budget.moveTargets(excluding: accounts.count == 1 ? accounts.first : register.accountKey)
         return [
-            .action(Self.enterTitle, .enterScheduledNow, systemImage: "checkmark"),
+            .action(Self.enterTitle, .enterScheduledNow, enabled: canEnter(ids), systemImage: "checkmark"),
             .action(Self.skipTitle, .skipScheduled, systemImage: "forward"),
             .separator(1),
-            .action(Self.deleteTitle, .deleteScheduled, systemImage: "trash"),
+            .action(Self.deleteTitle.touchLabel, .deleteScheduled, systemImage: "trash"),
             .separator(2),
             RegisterMenuItem(
                 id: "move", title: Self.moveTitle,

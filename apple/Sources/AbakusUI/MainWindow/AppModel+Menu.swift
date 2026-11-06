@@ -24,7 +24,7 @@ extension AppModel {
     /// The register's toolbar and Buchungen menu exist only while it shows an account.
     public var showsRegister: Bool { navigation.selection != .budget && register.accountKey != nil }
 
-    /// Edit › "Konto bearbeiten …": shown only while the register shows a single account.
+    /// The register's „…“ menu on iPhone and iPad offers "Konto bearbeiten" only for a single account.
     public var showsAccountProperties: Bool { register.account != nil }
 
     public func accountPropertiesClicked() {

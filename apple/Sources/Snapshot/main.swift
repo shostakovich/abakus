@@ -189,7 +189,12 @@ func render(_ options: SnapshotOptions) throws {
     NSApplication.shared.appearance = appearance(options.colorScheme, contrast: options.contrast)
     let budget: Budget
     let store: BudgetStore
-    if options.budget != nil {
+    var sync: BudgetSync?
+    if options.ui == .signIn {
+        store = try BudgetStore.open(BudgetDatabase())
+        budget = store.budget
+        sync = BudgetSync(store: store, tokens: MemoryTokenStore(), deviceName: "Mac")
+    } else if options.budget != nil {
         budget = try BudgetReference.budget(testEdits: options.testEdits)
         store = BudgetStore(budget: budget, today: { BudgetReference.today })
     } else {
@@ -199,7 +204,7 @@ func render(_ options: SnapshotOptions) throws {
     let model = AppModel(
         store: store,
         selection: options.budget != nil ? .budget : try selection(named: options.account, in: store.budget),
-        defaults: nil)
+        defaults: nil, sync: sync)
     if options.collapsedSidebar { model.sidebar.toggleSidebar() }
     if options.expandSplits {
         for transaction in model.register.transactions where transaction.isSplit {

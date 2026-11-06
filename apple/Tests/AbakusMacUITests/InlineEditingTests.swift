@@ -77,12 +77,6 @@ import Testing
         #expect(EditRowMetrics.height(subRows: nil) == 64)
         #expect(EditRowMetrics.height(subRows: 2) == CGFloat(64 + 2 * 28 + 32))
     }
-
-    @Test func theFrequencyMenuChecksTheCurrentFrequency() {
-        let items = RegisterMenuItem.frequencyMenu(selected: .monthly)
-        #expect(items.map(\.title) == ScheduledTransactionFrequency.allCases.map(\.readableName))
-        #expect(items.filter(\.isChecked).map(\.kind) == [.action(.frequency(.monthly))])
-    }
 }
 
 /// The edit row in a window of its own: keys reach its text fields through the field editor as in the app.

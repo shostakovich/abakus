@@ -8,58 +8,36 @@ struct AddAccountSheet: View {
     @FocusState private var nameFocused: Bool
 
     var body: some View {
-        let formatter = controller.formatter
         FormSheet(
-            title: AddAccountForm.title, confirmTitle: "Hinzufügen", canConfirm: form.canCreate,
-            onConfirm: controller.createAccountClicked, onCancel: controller.addCancelled
+            title: AddAccountForm.title, note: AddAccountForm.typeHint, confirmTitle: "Hinzufügen",
+            canConfirm: form.canCreate, onConfirm: controller.createAccountClicked, onCancel: controller.addCancelled
         ) {
             Section {
                 FormSheetRow("Name") {
-                    TextField("Name", text: $form.name)
+                    TextField("Name", text: $form.name, prompt: Text("z. B. Girokonto"))
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
                         .multilineTextAlignment(.leading)
                         .focused($nameFocused)
                 }
-            }
-            Section {
+                FormSheetRow("Art") {
+                    Picker("Art", selection: $form.type) {
+                        ForEach(AccountKind.budgetKinds, id: \.self) { type in
+                            Text(verbatim: type.label).tag(type)
+                        }
+                        Divider()
+                        Text(verbatim: AccountKind.tracking.label).tag(AccountKind.tracking)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                }
                 FormSheetRow("Aktueller Saldo") {
                     TextField("Aktueller Saldo", text: $form.balanceText)
                         .labelsHidden()
                         .textFieldStyle(.roundedBorder)
-                } footnote: {
-                    Text("Lässt sich später jederzeit ändern.").formFootnote()
-                }
-                FormSheetRow("Datum des Saldos") {
-                    HStack(spacing: 8) {
-                        DatePicker(
-                            "Datum des Saldos",
-                            selection: Binding(
-                                get: { form.date.date(in: formatter.dateLocale.calendar) },
-                                set: { form.date = DateWithoutTime($0, in: formatter.dateLocale.calendar) }),
-                            displayedComponents: .date
-                        )
-                        .labelsHidden()
-                        .datePickerStyle(.field)
-                        .environment(\.locale, Locale(identifier: formatter.dateLocale.identifier))
-                        CalendarPopoverButton(date: $form.date, locale: formatter.dateLocale)
-                    }
-                }
-            }
-            Section {
-                FormSheetRow("Art") {
-                    Picker("Art", selection: $form.type) {
-                        Text(AddAccountForm.typePlaceholder + " …").tag(AccountKind?.none)
-                        ForEach(AccountKind.budgetKinds, id: \.self) { type in
-                            Text(type.label).tag(AccountKind?.some(type))
-                        }
-                        Divider()
-                        Text(AccountKind.tracking.label).tag(AccountKind?.some(.tracking))
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                } footnote: {
-                    Text(AddAccountForm.typeHint).formFootnote()
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
                 }
             }
         }
@@ -67,25 +45,46 @@ struct AddAccountSheet: View {
     }
 }
 
-struct AdjustBalanceSheet: View {
-    let controller: AccountsController
-    @Bindable var form: AdjustBalanceForm
-    @FocusState private var amountFocused: Bool
+struct ClosedAccountsSheet: View {
+    let register: RegisterViewModel
+    @State private var selection: String?
 
     var body: some View {
-        FormSheet(
-            title: form.title, message: Text(form.instruction), confirmTitle: AdjustBalanceForm.buttonTitle,
-            onConfirm: controller.adjustClicked, onCancel: controller.balanceCancelled
-        ) {
-            FormSheetRow(form.fieldLabel) {
-                TextField(form.fieldLabel, text: $form.amountText)
-                    .labelsHidden()
-                    .textFieldStyle(.roundedBorder)
-                    .focused($amountFocused)
-            } footnote: {
-                Text("\(AdjustBalanceForm.hint)\(Text(form.workingBalanceText).bold())").formFootnote()
+        let rows = register.closedAccounts
+        VStack(alignment: .leading, spacing: 12) {
+            Text(RegisterViewModel.closedAccountsTitle).font(.headline)
+            List(rows, selection: $selection) { row in
+                HStack(spacing: 12) {
+                    Text(verbatim: row.name).lineLimit(1)
+                    Spacer(minLength: 12)
+                    Text(verbatim: row.detail)
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .tag(row.id)
             }
+            .contextMenu(forSelectionType: String.self) { _ in
+            } primaryAction: { ids in
+                if let id = ids.first { register.closedAccountChosen(id) }
+            }
+            .listStyle(.bordered)
+            .alternatingRowBackgrounds()
+            .frame(height: min(CGFloat(max(rows.count, 3)) * 28 + 8, 280))
+            Text("Doppelklick öffnet das Konto.").formFootnote()
+            HStack(spacing: 12) {
+                Spacer(minLength: 0)
+                Button("Fertig", action: register.closedAccountsDismissed).keyboardShortcut(.cancelAction)
+                Button("Öffnen") {
+                    if let selection { register.closedAccountChosen(selection) }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(selection == nil)
+            }
+            .buttonBorderShape(.capsule)
         }
-        .defaultFocus($amountFocused, true)
+        .padding(20)
+        .frame(width: 420)
+        .onAppear { selection = rows.first?.id }
     }
 }

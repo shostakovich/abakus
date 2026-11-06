@@ -3,7 +3,6 @@ import Foundation
 public struct Payee: Hashable, Identifiable, Sendable {
     public static let transferPrefix = "Transfer : "
     public static let startingBalanceName = "Anfangssaldo"
-    public static let manualBalanceAdjustmentName = "Saldoanpassung"
     public static let reconciliationBalanceAdjustmentName = "Ausgleichsbuchung"
 
     public var id: String

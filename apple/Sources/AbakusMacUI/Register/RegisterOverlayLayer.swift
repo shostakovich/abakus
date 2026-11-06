@@ -11,7 +11,7 @@ struct RegisterOverlayLayer: View {
             let size = proxy.size
             let rects = anchors.mapValues { proxy[$0] }
             ZStack(alignment: .topLeading) {
-                if let popup = model.popup, Self.closesOnOutsideClick(popup) {
+                if model.popup != nil {
                     Color.clear.contentShape(Rectangle()).onTapGesture { model.closePopup() }
                 } else {
                     Color.clear.allowsHitTesting(false)
@@ -32,13 +32,6 @@ struct RegisterOverlayLayer: View {
         }
     }
 
-    static func closesOnOutsideClick(_ popup: RegisterPopup) -> Bool {
-        switch popup {
-        case .scheduledCallout: false
-        default: true
-        }
-    }
-
     @ViewBuilder
     private func popupView(_ popup: RegisterPopup, anchor: CGRect, size: CGSize) -> some View {
         switch popup {
@@ -46,10 +39,6 @@ struct RegisterOverlayLayer: View {
             AnchoredPopover(side: .trailing, anchor: anchor, container: size) { StatusOptionsPopover(model: model) }
         case .needsCategory:
             AnchoredPopover(side: .trailing, anchor: anchor, container: size) { NeedsCategoryPopover(model: model) }
-        case .scheduledCallout(let callout):
-            AnchoredPopover(side: .above, anchor: anchor, container: size) {
-                ScheduledCalloutPopover(callout: callout) { model.closePopup() }
-            }
         }
     }
 }

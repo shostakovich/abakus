@@ -37,7 +37,7 @@ extension RegisterViewModel {
                 .action($0.title, .filter($0), checked: $0 == filter, systemImage: $0.touchSymbol)
             }
             items.append(.separator(10))
-            items.append(.action("Geplant", .toggleScheduler, systemImage: "calendar.badge.clock"))
+            items += schedulerMenu(systemImage: "calendar.badge.clock")
         }
         items.append(
             .action(isPicking ? "Auswählen beenden" : "Auswählen", .togglePicking, systemImage: "checkmark.circle"))
@@ -48,6 +48,12 @@ extension RegisterViewModel {
                     isMemoShown ? "Memo ausblenden" : "Memo zeigen", .toggleColumn(.memo), systemImage: "text.alignleft"
                 ))
         }
+        let closed = closedAccountsMenu.touchLabels.map { item in
+            var item = item
+            item.systemImage = "archivebox"
+            return item
+        }
+        if !closed.isEmpty { items += [.separator(11)] + closed }
         if account != nil {
             items.append(.separator(11))
             items.append(.action("Konto bearbeiten", .editAccount, systemImage: "pencil"))
@@ -56,7 +62,7 @@ extension RegisterViewModel {
     }
 
     public func transactionActionsMenu(for ids: Set<String>) -> [RegisterMenuItem] {
-        transactionActionsMenu(of: transactions.filter { ids.contains($0.id) })
+        transactionActionsMenu(of: transactions.filter { ids.contains($0.id) }).touchLabels
     }
 
     /// The rows a context menu or a swipe named become the selection, as a right-click makes them on the Mac.

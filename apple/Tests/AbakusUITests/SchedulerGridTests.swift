@@ -60,6 +60,7 @@ import Testing
         model.scheduler.grid.rowClicked(
             try #require(model.scheduler.rows.first { $0.id == "S2" }).transactionId, column: .payee, modifiers: [])
         model.scheduler.deleteClicked()
+        model.dialogs.presented.last?.answer(DeleteChoice.delete)
         model.scheduler.grid.navigationKeyPressed(.down, extending: false, caretOnly: false, pageRows: 1)
         #expect(model.scheduler.selectedIds == ["S3"])
     }
@@ -124,6 +125,8 @@ import Testing
         #expect(store.commands.isEmpty)
         model.scheduler.editor?.cancel()
         model.scheduler.deleteKeyPressed()
+        #expect(store.commands.isEmpty)
+        model.dialogs.presented.last?.answer(DeleteChoice.delete)
         #expect(store.commands == [.deleteScheduledTransactions(["S2"])])
     }
 
@@ -134,29 +137,6 @@ import Testing
         #expect(grid.scrollOffset(for: .row("S2"), viewport: 2 * row, current: nil) == nil)
         #expect(grid.scrollOffset(for: .row("S4"), viewport: 2 * row, current: nil) == 2 * row)
         #expect(grid.scrollOffset(for: .row("S1"), viewport: 2 * row, current: 3 * row) == 0)
-    }
-
-    @Test func aTallEditRowKeepsItsFocusedPartInView() throws {
-        var fixture = RegisterFixture()
-        fixture.addSchedule("S2", on: "2014-05-25")
-        fixture.addSchedule("S3", on: "2014-05-28")
-        fixture.addSplitSchedule()
-        let (model, _) = fixture.spied()
-        let grid = model.scheduler.grid
-        let viewport: CGFloat = 78
-        let top = 2 * RegisterMetrics.rowHeight
-        grid.beginEditing("S1")
-        let editor = try #require(grid.editor)
-        #expect(editor.rowHeight == 152)
-        #expect(grid.scrollOffset(for: .row("S1"), viewport: viewport, current: 0) == top)
-        #expect(grid.scrollOffset(for: .row("S1"), viewport: viewport, current: 90) == top)
-        #expect(grid.scrollOffset(for: .row("S1"), viewport: viewport, current: top) == nil)
-        editor.addSubRow()
-        #expect(grid.scrollOffset(for: .row("S1"), viewport: viewport, current: top) == top + 114 - viewport)
-        editor.setFocus(.button(.done), commitCurrent: false)
-        #expect(grid.scrollOffset(for: .row("S1"), viewport: viewport, current: top) == top + 180 - viewport)
-        editor.setFocus(.field(.sub(editor.subIds[0], .memo)), commitCurrent: false)
-        #expect(grid.scrollOffset(for: .row("S1"), viewport: viewport, current: top + 180 - viewport) == top + 30)
     }
 
     @Test func splitLinesHaveNoPayeeTooltip() throws {
