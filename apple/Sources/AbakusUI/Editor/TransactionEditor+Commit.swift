@@ -1,5 +1,6 @@
 import AbakusCore
 import Foundation
+import SwiftUI
 
 struct FocusMove: Hashable {
     var after: EditorFieldID
@@ -274,10 +275,26 @@ extension TransactionEditor {
         refreshAmountText(subId: nil)
     }
 
+    /// The text and the focus stay; the reason stands beside the field, which VoiceOver does not visit on its own.
     func rejectAmount(_ field: EditorFieldID) {
-        let typed = text(field).trimmingCharacters(in: .whitespaces)
-        refreshAmountText(subId: field.subId)
-        showMessage(.invalidAmount(typed), refocus: field)
+        let error = EditorAmountError(
+            field: field, message: InvalidAmount.content(text(field).trimmingCharacters(in: .whitespaces)))
+        let isStanding = amountError == error
+        dropDown = nil
+        amountError = error
+        refocusRequest = field
+        guard !refusesQuietly else { return }
+        amountRefusals += 1
+        // On the Mac a click elsewhere ends the field's editing before it lands, which refuses the text twice.
+        if !isStanding { announce(error.message) }
+    }
+
+    static func postAnnouncement(_ message: String) {
+        AccessibilityNotification.Announcement(message).post()
+    }
+
+    func clearAmountError(_ field: EditorFieldID) {
+        if amountError?.field == field { amountError = nil }
     }
 
     static let signs: [Character: Bool] = ["+": true, "−": false, "-": false]

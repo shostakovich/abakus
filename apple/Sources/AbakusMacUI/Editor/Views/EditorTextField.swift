@@ -51,6 +51,8 @@ struct EditorTextField: NSViewRepresentable {
                 ])
         }
         coordinator.syncFromEditor()
+        // A refused amount takes the focus back from wherever a click put it.
+        if field.column.isAmount { _ = editor.amountRefusals }
         if isActive && editor.focus == .field(field) {
             DispatchQueue.main.async { coordinator.takeFocusIfNeeded() }
         }

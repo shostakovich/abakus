@@ -138,6 +138,7 @@ extension TransactionEditor {
         guard let sign, first.isNumber || character == formatter.currencyLocale.decimalSeparator else { return false }
         let length = min(fieldSelection.length, current.length - location)
         let inserted = sign + character
+        clearAmountError(field)
         setText(field, current.replacingCharacters(in: NSRange(location: location, length: length), with: inserted))
         select(field, NSRange(location: location + (inserted as NSString).length, length: 0))
         return true
@@ -178,6 +179,7 @@ extension TransactionEditor {
             cancel()
             return
         }
+        clearAmountError(field)
         setText(field, restored)
         restoreClone(field)
         selectAll(field)

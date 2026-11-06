@@ -27,31 +27,40 @@ import Testing
         return budget
     }
 
-    @Test func menuListsTheElevenActionsInOrder() {
+    @Test func menuHoldsCategorizingMovingAndDeletingBesideTheScheduledEntries() {
         var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -1)
+        let id = fixture.add(fixture.giro, -1, approved: false, source: .bank)
         let (model, _) = fixture.spied()
         select(model, [id])
         #expect(
-            titles(model.transactionActionsMenu(withTitle: false)) == [
-                "Als gebucht markieren", "Als vorgemerkt markieren", "-", "Bestätigen", "Ablehnen (löschen)", "-",
-                "Kategorisieren als", "-", "Gleiche Empfänger umbenennen …", "Empfänger verwalten …", "-",
-                "Wiederkehrend machen …", "In geplante Buchungen verschieben …", "-", "In Konto verschieben", "-",
-                "Löschen",
+            titles(model.transactionActionsMenu()) == [
+                "Kategorisieren als", "-", "Wiederkehrend machen …", "In geplante Buchungen verschieben …", "-",
+                "In Konto verschieben", "-", "Löschen",
             ])
     }
 
-    @Test func contextMenuStartsWithTheSelectionTitle() {
+    @Test func theMenuOffersNoStatusApprovingOrPayeeItems() {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -1, payee: "REWE", approved: false, source: .bank)
+        let (model, _) = fixture.spied()
+        let menu = model.contextMenu(for: model.rows.first { $0.id == id }!) ?? []
+        for title in [
+            "Als gebucht markieren", "Als vorgemerkt markieren", "Bestätigen", "Ablehnen (löschen)",
+            "Gleiche Empfänger umbenennen …", "Empfänger verwalten …",
+        ] {
+            #expect(menu.item(titled: title) == nil)
+        }
+        #expect(menu.item(titled: "Löschen")?.isDestructive == false)
+    }
+
+    @Test func contextMenuHoldsOnlyTheActions() {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -1)
         let (model, _) = fixture.spied()
         let items = model.contextMenu(for: model.rows.first { $0.id == id }!) ?? []
-        #expect(items.first?.title == "1 ausgewählte Buchung:")
-        #expect(items.first?.kind == .title)
-        #expect(items[1].kind == .separator)
+        #expect(titles(items) == titles(model.transactionActionsMenu()))
+        #expect(items.first?.title == "Kategorisieren als")
         #expect(model.selectedTransactionIds == [id])
-        model.selectAll()
-        #expect(model.contextMenu(for: model.rows[0])?.first?.title == "2 ausgewählte Buchungen:")
     }
 
     @Test func rightClickKeepsASelectionWithTheRowAndReplacesOneWithout() {
@@ -61,82 +70,25 @@ import Testing
         let third = fixture.add(fixture.giro, -3)
         let (model, _) = fixture.spied()
         select(model, [first, second])
-        #expect(
-            model.contextMenu(for: model.rows.first { $0.id == second }!)?.first?.title == "2 ausgewählte Buchungen:")
+        _ = model.contextMenu(for: model.rows.first { $0.id == second }!)
         #expect(Set(model.selectedTransactionIds) == [first, second])
-        #expect(model.contextMenu(for: model.rows.first { $0.id == third }!)?.first?.title == "1 ausgewählte Buchung:")
+        _ = model.contextMenu(for: model.rows.first { $0.id == third }!)
         #expect(model.selectedTransactionIds == [third])
-    }
-
-    @Test func clearedItemsFollowTheSelectedStates() {
-        var fixture = RegisterFixture()
-        let uncleared = fixture.add(fixture.giro, -1)
-        let cleared = fixture.add(fixture.giro, -2, cleared: .cleared)
-        let (model, _) = fixture.spied()
-        select(model, [uncleared])
-        var menu = model.transactionActionsMenu(withTitle: false)
-        #expect(enabled(menu, "Als gebucht markieren"))
-        #expect(!enabled(menu, "Als vorgemerkt markieren"))
-        select(model, [cleared])
-        menu = model.transactionActionsMenu(withTitle: false)
-        #expect(!enabled(menu, "Als gebucht markieren"))
-        #expect(enabled(menu, "Als vorgemerkt markieren"))
-    }
-
-    @Test func markAsClearedSendsOnlyTheUnclearedRows() {
-        var fixture = RegisterFixture()
-        let a = fixture.add(fixture.giro, -1, approved: false, source: .bank)
-        let reconciled = fixture.add(fixture.giro, -2, cleared: .reconciled)
-        let cleared = fixture.add(fixture.giro, -3, cleared: .cleared)
-        let (model, store) = fixture.spied()
-        select(model, [a, reconciled, cleared])
-        model.performMenuAction(.markCleared)
-        model.performMenuAction(.markUncleared)
-        #expect(store.commands == [.setCleared([a], .cleared), .setCleared([cleared], .uncleared)])
-    }
-
-    @Test func approveAndRejectNeedUnapprovedRows() {
-        var fixture = RegisterFixture()
-        let plain = fixture.add(fixture.giro, -1, category: fixture.groceries)
-        let imported = fixture.add(fixture.giro, -2, category: fixture.groceries, approved: false, source: .bank)
-        let (model, store) = fixture.spied()
-        select(model, [plain])
-        #expect(!enabled(model.transactionActionsMenu(withTitle: false), "Bestätigen"))
-        select(model, [plain, imported])
-        #expect(enabled(model.transactionActionsMenu(withTitle: false), "Ablehnen (löschen)"))
-        model.performMenuAction(.approve)
-        #expect(store.commands == [.approveTransactions([imported])])
-    }
-
-    @Test func rejectDeletesOnlyTheUnapprovedRows() {
-        var fixture = RegisterFixture()
-        let plain = fixture.add(fixture.giro, -1, category: fixture.groceries)
-        let imported = fixture.add(fixture.giro, -2, category: fixture.groceries, approved: false, source: .bank)
-        let (model, store) = fixture.spied()
-        select(model, [plain, imported])
-        model.performMenuAction(.reject)
-        #expect(store.commands == [.deleteTransactions([imported])])
-        #expect(model.notifiers.undoSlot?.message == "Buchung gelöscht")
     }
 
     @Test func singleSelectionItems() {
         var fixture = RegisterFixture()
         let a = fixture.add(fixture.giro, -1, payee: "REWE")
         let b = fixture.add(fixture.giro, -2, payee: "REWE")
-        let transfer = fixture.add(fixture.giro, -3, target: fixture.tagesgeld)
         let (model, _) = fixture.spied()
         model.today = { day("2014-05-01") }
         select(model, [a])
-        var menu = model.transactionActionsMenu(withTitle: false)
-        #expect(enabled(menu, "Gleiche Empfänger umbenennen …"))
+        var menu = model.transactionActionsMenu()
         #expect(enabled(menu, "Wiederkehrend machen …"))
         #expect(enabled(menu, "In geplante Buchungen verschieben …"))
         select(model, [a, b])
-        menu = model.transactionActionsMenu(withTitle: false)
-        #expect(!enabled(menu, "Gleiche Empfänger umbenennen …"))
+        menu = model.transactionActionsMenu()
         #expect(!enabled(menu, "Wiederkehrend machen …"))
-        select(model, [transfer])
-        #expect(!enabled(model.transactionActionsMenu(withTitle: false), "Gleiche Empfänger umbenennen …"))
     }
 
     @Test func moveToSchedulerNeedsAFutureDate() {
@@ -145,7 +97,7 @@ import Testing
         let (model, _) = fixture.spied()
         model.today = { day("2014-06-01") }
         select(model, [id])
-        #expect(!enabled(model.transactionActionsMenu(withTitle: false), "In geplante Buchungen verschieben …"))
+        #expect(!enabled(model.transactionActionsMenu(), "In geplante Buchungen verschieben …"))
     }
 
     @Test func categorizeSubmenusFollowTheCategoryListWithNoCategoryLast() throws {
@@ -155,7 +107,7 @@ import Testing
         let (model, store) = fixture.spied()
         select(model, [id])
         let submenu = try #require(
-            model.transactionActionsMenu(withTitle: false).item(titled: "Kategorisieren als")?.submenu)
+            model.transactionActionsMenu().item(titled: "Kategorisieren als")?.submenu)
         #expect(submenu.first?.title == "Einnahmen:")
         #expect(submenu.first?.submenu?.map(\.title) == ["Zu verteilen"])
         #expect(submenu.last?.title == "(Keine Kategorie)")
@@ -170,7 +122,7 @@ import Testing
         let id = fixture.add(fixture.depot, -1)
         let (model, _) = fixture.spied(selection: .account(fixture.depot))
         select(model, [id])
-        #expect(!enabled(model.transactionActionsMenu(withTitle: false), "Kategorisieren als"))
+        #expect(!enabled(model.transactionActionsMenu(), "Kategorisieren als"))
     }
 
     @Test func categorizingSplitsAsksFirst() throws {
@@ -210,7 +162,7 @@ import Testing
         let (model, _) = fixture.spied()
         select(model, [id])
         let submenu = try #require(
-            model.transactionActionsMenu(withTitle: false).item(titled: "In Konto verschieben")?.submenu)
+            model.transactionActionsMenu().item(titled: "In Konto verschieben")?.submenu)
         #expect(submenu.map(\.title) == ["Depot", "Tagesgeld"])
     }
 
@@ -370,19 +322,6 @@ import Testing
         #expect(store.commands.isEmpty)
     }
 
-    @Test func aRefusedRenameShowsTheBudgetsMessage() throws {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -1, payee: "rewe")
-        let (model, store) = fixture.spied()
-        select(model, [id])
-        store.fail(with: BudgetError.transferPayeeName("Transfer : Giro"))
-        model.performMenuAction(.renamePayee)
-        model.renamePayeeConfirmed("Transfer : Giro")
-        let dialog = try #require(model.dialogs.presented.last?.dialog)
-        #expect(dialog.instruction == "Ungültiger Empfängername")
-        #expect(dialog.content.hasPrefix("„Transfer : Giro“ ist kein gültiger Empfängername."))
-    }
-
     @Test func aFailedDeleteReportsTheErrorAndOffersNoUndo() throws {
         struct DiskFull: LocalizedError {
             var errorDescription: String? { "The disk is full." }
@@ -433,51 +372,64 @@ import Testing
         #expect(model.popup == .scheduledCallout(.moved))
     }
 
-    @Test func renamePayeeDialogRenamesThePayee() throws {
-        var fixture = RegisterFixture()
-        let a = fixture.add(fixture.giro, -1, payee: "rewe")
-        let payeeId = try #require(fixture.budget.transaction(withId: a)?.payeeId)
-        let (model, store) = fixture.spied()
-        select(model, [a])
-        model.performMenuAction(.renamePayee)
-        let form = try #require(model.renamePayeeForm)
-        #expect(form.currentName == "rewe")
-        #expect(form.description.hasPrefix("Alle Buchungen mit „rewe“ bekommen den neuen Namen als Empfänger."))
-        model.renamePayeeConfirmed(" REWE ")
-        #expect(store.commands == [.renamePayee(payeeId: payeeId, name: "REWE")])
-        #expect(model.renamePayeeForm == nil)
-    }
-
-    @Test func renamingToTheSameOrABlankNameSendsNothing() {
-        var fixture = RegisterFixture()
-        let a = fixture.add(fixture.giro, -1, payee: "rewe")
-        let (model, store) = fixture.spied()
-        select(model, [a])
-        for name in ["rewe", "  "] {
-            model.performMenuAction(.renamePayee)
-            model.renamePayeeConfirmed(name)
+    @Test func everyDeletePathDeletesAtOnceAndOffersUndo() throws {
+        let paths: [(String, (RegisterViewModel, String) -> Void)] = [
+            (
+                "context menu",
+                { model, id in
+                    _ = model.contextMenu(for: model.rows.first { $0.id == id }!)
+                    model.performMenuAction(.delete)
+                }
+            ),
+            ("swipe or picking bar", { model, id in model.performMenuAction(.delete, on: [id]) }),
+            (
+                "delete key",
+                { model, id in
+                    model.rowClicked(model.rows.first { $0.id == id }!, column: .payee, modifiers: [])
+                    model.deleteKeyPressed()
+                }
+            ),
+            (
+                "sheet",
+                { model, id in
+                    model.beginEditing(id)
+                    model.editor?.deleteClicked()
+                }
+            ),
+        ]
+        for (path, delete) in paths {
+            var fixture = RegisterFixture()
+            let id = fixture.add(fixture.giro, -42.18, payee: "REWE", cleared: .cleared)
+            let (model, store) = fixture.spied(appliesCommands: true)
+            delete(model, id)
+            #expect(!model.dialogs.isPresenting, "\(path)")
+            #expect(store.commands == [.deleteTransactions([id])], "\(path)")
+            #expect(
+                model.notifiers.list.contains { $0.text == "Buchung gelöscht" && $0.link == "Widerrufen" }, "\(path)")
+            model.notifiers.undoClicked()
+            #expect(store.budget.transaction(withId: id) != nil, "\(path)")
         }
-        #expect(store.commands.isEmpty)
-        #expect(model.renamePayeeForm == nil)
     }
 
-    @Test func payeeSettingsOpensForTheSelectedPayee() {
-        var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -1, payee: "Aral")
-        let (model, _) = fixture.spied()
-        var opened: [String?] = []
-        model.onEditPayees = { opened.append($0) }
-        select(model, [id])
-        model.performMenuAction(.payeeSettings)
-        #expect(opened == ["Aral"])
-    }
-
-    @Test func theColumnMenuOpensBelowItsButtonAndCloses() {
-        let (model, _) = RegisterFixture().spied()
-        model.columnOptionsClicked()
-        #expect(model.menuRequest?.anchor == .columnTab)
-        #expect(model.menuRequest?.items.first?.title == "Status")
-        model.menuDismissed()
-        #expect(model.menuRequest == nil)
+    @Test func everyDeletePathAsksOnlyOnAWarning() throws {
+        let paths: [(RegisterViewModel, String) -> Void] = [
+            { model, id in model.performMenuAction(.delete, on: [id]) },
+            { model, id in
+                model.rowClicked(model.rows.first { $0.id == id }!, column: .payee, modifiers: [])
+                model.deleteKeyPressed()
+            },
+            { model, id in
+                model.beginEditing(id)
+                model.editor?.deleteClicked()
+            },
+        ]
+        for delete in paths {
+            var fixture = RegisterFixture()
+            let reconciled = fixture.add(fixture.giro, -1, cleared: .reconciled)
+            let (model, store) = fixture.spied()
+            delete(model, reconciled)
+            #expect(model.dialogs.presented.last?.dialog.instruction == "Buchung löschen?")
+            #expect(store.commands.isEmpty)
+        }
     }
 }

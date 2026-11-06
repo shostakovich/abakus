@@ -13,9 +13,11 @@ struct RegisterGridHeader: View {
                 RegisterHeaderCell(frame: frame, sort: sort) { owner.grid.headerClicked(frame.column) }
                     .offset(x: frame.x)
             }
-            ColumnOptionsButton(action: owner.columnOptionsClicked)
-                .registerAnchor(owner.columnTab)
-                .offset(x: layout.displayWidth)
+            if let scheduler = owner as? RegisterScheduler {
+                ColumnOptionsButton(action: scheduler.columnOptionsClicked)
+                    .registerAnchor(scheduler.columnTab)
+                    .offset(x: layout.displayWidth)
+            }
         }
         .frame(width: layout.gridWidth, height: RegisterMetrics.headerHeight, alignment: .topLeading)
         .overlay(alignment: .bottom) { Divider() }

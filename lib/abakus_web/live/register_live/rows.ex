@@ -1,7 +1,7 @@
 defmodule AbakusWeb.RegisterLive.Rows do
   @moduledoc """
   Which transactions the register shows and what it shows beside them: the view (all, waiting for approval, not
-  cleared), the search and whether a transaction takes a category. Transactions come from
+  cleared, without a category), the search and whether a transaction takes a category. Transactions come from
   `Abakus.Ledger.list_transactions/3` (match proposals from `list_match_proposals/2`), newest first, with payee,
   category and subtransactions.
   """
@@ -11,13 +11,16 @@ defmodule AbakusWeb.RegisterLive.Rows do
   alias Abakus.Money
   alias Abakus.Names
 
-  @filters [:all, :unapproved, :uncleared]
+  @filters [:all, :unapproved, :uncleared, :needs_category]
 
   def filters, do: @filters
 
-  def filter(transactions, :all), do: transactions
-  def filter(transactions, :unapproved), do: Enum.reject(transactions, & &1.approved)
-  def filter(transactions, :uncleared), do: Enum.filter(transactions, &(&1.cleared == :uncleared))
+  @doc "The match proposals a view shows; the Ledger narrows the transactions."
+  def filter(proposals, :all), do: proposals
+  def filter(proposals, :unapproved), do: Enum.reject(proposals, & &1.approved)
+  def filter(proposals, :uncleared), do: Enum.filter(proposals, &(&1.cleared == :uncleared))
+  # A proposal takes its category from the transaction it matches.
+  def filter(_proposals, :needs_category), do: []
 
   @doc """
   The transactions whose payee, category, memo (a split's parts included) or amount ("48,75") contain the query,
@@ -81,6 +84,24 @@ defmodule AbakusWeb.RegisterLive.Rows do
         accounts[transaction.account_id],
         transfer_account(transaction.payee, accounts)
       )
+  end
+
+  @doc """
+  Whether the transaction, or with `transaction` the part of it, needs a category, as the view Ohne Kategorie
+  (`Abakus.Ledger.list_transactions/3`) lists it: in a budget account, without one, not zero and no transfer to
+  another budget account. A split needs one only in its parts.
+  """
+  def needs_category?(%{subtransactions: [_ | _]}, _accounts), do: false
+
+  def needs_category?(transaction, accounts),
+    do: missing_category?(transaction, accounts[transaction.account_id], accounts)
+
+  def needs_category?(part, transaction, accounts),
+    do: missing_category?(part, accounts[transaction.account_id], accounts)
+
+  defp missing_category?(side, account, accounts) do
+    is_nil(side.category_id) and side.amount != 0 and
+      Account.takes_category?(account, transfer_account(side.payee, accounts))
   end
 
   defp transfer_account(%Payee{transfer_account_id: id}, accounts) when not is_nil(id),

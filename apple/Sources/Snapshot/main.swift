@@ -344,7 +344,7 @@ func isBlank(_ image: CGImage) -> Bool {
     return drawn && Set(pixels).count == 1
 }
 
-/// Sheets, alerts and child windows such as the search suggestions, with their own sheets and child windows.
+/// Sheets, alerts and child windows, with their own sheets and child windows.
 @MainActor
 func attachedWindows(of window: NSWindow) -> [NSWindow] {
     let attached = (window.childWindows ?? []) + [window.attachedSheet].compactMap { $0 }

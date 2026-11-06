@@ -5,7 +5,8 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   one waiting for approval) where approve and status stand, Enter saves and Escape cancels; a split's subtransactions as
   rows below, each with a payee field only where it differs from the transaction's. Each side has one amount field
   behind a sign button; a click or a sign typed in front sets the side's direction, a new transaction's is an
-  outflow. Amounts may add and subtract ("50+20").
+  outflow. Amounts may add and subtract ("50+20"); one that reads as none is refused at its field as it is left and
+  on saving, as the budget's Zugewiesen does, keeping the text and the focus.
   Its root is a `<tbody>`, the inputs outside the first row belong to `#tx-form` by their `form` attribute. Phones (`layout: :sheet`) get a sheet
   from the bottom with the amount first. The form's state is `AbakusWeb.TransactionForm` params.
 
@@ -31,6 +32,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   alias Abakus.Ledger.{Account, Transaction}
   alias Abakus.Money
   alias AbakusWeb.{AccountGroups, CategoryOptions, TransactionForm}
+  alias AbakusWeb.BudgetLive.Components, as: BudgetComponents
 
   @main "main"
 
@@ -83,6 +85,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
           phx-submit="save"
           phx-target={@myself}
           phx-mounted={is_nil(@transaction) && JS.focus(to: "#tx-amount")}
+          phx-hook="AmountRefocus"
         >
           <.notes
             split_of={@split_of}
@@ -118,12 +121,16 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                   name="transaction"
                   side={@params}
                   sign={@params["sign"]}
+                  key={@main}
+                  invalid={@invalid[@main]}
+                  target={@myself}
                   disabled={@fixed}
                   class="text-end tabular-nums app-tx-amount-input"
                 />
                 <span class="label">€</span>
               </label>
             </div>
+            <.field_error id="tx-amount" errors={amount_errors(@invalid[@main])} />
           </fieldset>
           <.payee_combo id="tx-payee" side={@main} label {combo_assigns(assigns)} />
           <.category_cell id="tx-category" side={@main} label {combo_assigns(assigns)} />
@@ -169,12 +176,19 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                     name={sub_name(index)}
                     side={sub}
                     sign={@params["sign"]}
+                    key={index}
+                    invalid={@invalid[index]}
+                    target={@myself}
                     class="text-end tabular-nums"
                     part
                   />
                   <span class="label">€</span>
                 </label>
               </div>
+              <.field_error
+                id={"tx-sub-#{index}-amount"}
+                errors={amount_errors(@invalid[index])}
+              />
             </div>
             <div class="flex items-center gap-2">
               <.add_button target={@myself} />
@@ -272,6 +286,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
             phx-change="change"
             phx-submit="save"
             phx-target={@myself}
+            phx-hook="AmountRefocus"
           >
             <div class="app-edit-date">
               <.date_input value={@params["date"]} disabled={@fixed} />
@@ -303,6 +318,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
                 id="tx"
                 side={@main}
                 values={@params}
+                invalid={@invalid[@main]}
                 disabled={@fixed}
                 target={@myself}
               />
@@ -355,7 +371,13 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
               />
             </div>
             <div class="app-amount">
-              <.signed_amount id={"tx-sub-#{index}"} side={index} values={sub} target={@myself} />
+              <.signed_amount
+                id={"tx-sub-#{index}"}
+                side={index}
+                values={sub}
+                invalid={@invalid[index]}
+                target={@myself}
+              />
             </div>
           </div>
         </td>
@@ -588,12 +610,17 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :id, :string, required: true, doc: "prefix of the button's and the field's ids"
   attr :side, :string, required: true
   attr :values, :map, required: true, doc: "the side's params"
+  attr :invalid, :any, default: nil, doc: "`{typed, error}` while the amount reads as none"
   attr :disabled, :boolean, default: false
   attr :target, :any, required: true
 
   # The sign stays out of the tab order, as a sign typed in front sets it too.
   defp signed_amount(assigns) do
-    assigns = assign(assigns, :sign, TransactionForm.sign(assigns.values))
+    assigns =
+      assign(assigns,
+        sign: TransactionForm.sign(assigns.values),
+        errors: amount_errors(assigns.invalid)
+      )
 
     ~H"""
     <div class="join w-full">
@@ -615,18 +642,25 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         id={"#{@id}-amount"}
         form="tx-form"
         name={"#{side_name(@side)}[amount]"}
-        value={TransactionForm.directed(@values, @sign)}
+        value={typed(@invalid) || TransactionForm.directed(@values, @sign)}
         class="input input-sm join-item tabular-nums"
-        inputmode="decimal"
+        inputmode="text"
+        autocapitalize="off"
+        spellcheck="false"
         placeholder="Betrag"
         aria-label="Betrag"
-        aria-describedby={"#{@id}-sign"}
+        aria-invalid={@invalid && "true"}
+        aria-describedby={describedby("#{@id}-sign", "#{@id}-amount", @errors)}
         autocomplete="off"
         size="1"
         phx-debounce="300"
+        phx-blur="check_amount"
+        phx-value-side={@side}
+        phx-target={@target}
         disabled={@disabled}
       />
     </div>
+    <.error_bubble id={"#{@id}-amount"} errors={@errors} align={:end} />
     """
   end
 
@@ -635,6 +669,9 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   attr :name, :string, required: true
   attr :side, :map, required: true
   attr :sign, :string, required: true
+  attr :key, :string, required: true, doc: "the side, \"main\" or a part's index"
+  attr :invalid, :any, default: nil, doc: "`{typed, error}` while the amount reads as none"
+  attr :target, :any, required: true
   attr :class, :string, required: true
   attr :disabled, :boolean, default: false
   attr :part, :boolean, default: false
@@ -655,18 +692,33 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       id={@id}
       form="tx-form"
       name={"#{@name}[#{@column}]"}
-      value={TransactionForm.directed(@side, @sign)}
+      value={typed(@invalid) || TransactionForm.directed(@side, @sign)}
       class={@class}
-      inputmode="decimal"
+      inputmode="text"
+      autocapitalize="off"
+      spellcheck="false"
       placeholder="0,00"
       aria-label="Betrag"
-      aria-describedby="tx-sign"
+      aria-invalid={@invalid && "true"}
+      aria-describedby={describedby("tx-sign", @id, amount_errors(@invalid))}
       autocomplete="off"
       phx-debounce="300"
+      phx-blur="check_amount"
+      phx-value-side={@key}
+      phx-target={@target}
       disabled={@disabled}
     />
     """
   end
+
+  defp typed({typed, _error}), do: typed
+  defp typed(nil), do: nil
+
+  defp amount_errors({_typed, error}), do: [error]
+  defp amount_errors(nil), do: []
+
+  defp describedby(sign_id, id, errors),
+    do: Enum.join([sign_id | List.wrap(field_describedby(id, errors, nil))], " ")
 
   attr :index, :string, required: true
   attr :target, :any, required: true
@@ -1020,6 +1072,7 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       suggested: MapSet.new(),
       payee_shown: MapSet.new(),
       error: nil,
+      invalid: %{},
       payees: payees,
       payees_by_key: Map.new(payees, &{&1.lookup_key, &1}),
       ready_to_assign_id: Categories.ready_to_assign!(socket.assigns.current_scope).id,
@@ -1123,11 +1176,16 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
         nil -> after_change(socket, params, event["_target"])
       end
 
-    {:noreply, socket |> assign(:error, nil) |> assign_ask_person()}
+    {:noreply,
+     socket
+     |> assign(:error, nil)
+     |> retyped(event)
+     |> prune_invalid()
+     |> assign_ask_person()}
   end
 
   def handle_event("split", _params, socket),
-    do: {:noreply, update(socket, :params, &TransactionForm.split/1)}
+    do: {:noreply, socket |> update(:params, &TransactionForm.split/1) |> prune_invalid()}
 
   def handle_event("toggle_sign", %{"side" => @main}, socket),
     do: {:noreply, directed(socket, TransactionForm.toggle_sign(socket.assigns.params, @main))}
@@ -1144,8 +1202,21 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
   def handle_event("add_subtransaction", _params, socket),
     do: {:noreply, update(socket, :params, &TransactionForm.add_subtransaction/1)}
 
-  def handle_event("remove_subtransaction", %{"index" => index}, socket),
-    do: {:noreply, update(socket, :params, &TransactionForm.remove_subtransaction(&1, index))}
+  def handle_event("remove_subtransaction", %{"index" => index}, socket) do
+    {:noreply,
+     socket
+     |> update(:params, &TransactionForm.remove_subtransaction(&1, index))
+     |> prune_invalid()}
+  end
+
+  def handle_event("check_amount", %{"side" => side} = event, socket) do
+    text = event["value"] || ""
+
+    case TransactionForm.amount_refusal(text) do
+      nil -> {:noreply, update(socket, :invalid, &Map.delete(&1, side))}
+      refusal -> {:noreply, refuse_amounts(socket, [{side, text, refusal}])}
+    end
+  end
 
   def handle_event("save", event, socket) do
     %{accounts: accounts, transaction: original, params: before} = socket.assigns
@@ -1160,13 +1231,22 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
           TransactionForm.follow_direction(params, socket.assigns.ready_to_assign_id, accounts)
 
     opts = confirmed(event) ++ [person_id: person_id(params["person_id"])]
+    socket = assign(socket, invalid: %{})
 
-    with {:ok, attrs} <- TransactionForm.to_attrs(params, accounts, original),
+    with [] <- TransactionForm.refused_amounts(params),
+         {:ok, attrs} <- TransactionForm.to_attrs(params, accounts, original),
          {:ok, attrs} <- register_fields(attrs, socket.assigns),
          {:ok, _transaction} <-
            BudgetLink.write_from_register(socket.assigns.current_scope, original, attrs, opts) do
       {:noreply, done(socket, "Gespeichert.")}
     else
+      [_ | _] = refused ->
+        {:noreply,
+         socket
+         |> assign(params: params, error: nil)
+         |> refuse_amounts(as_typed(refused, changed))
+         |> assign_ask_person()}
+
       {:error, error} ->
         {:noreply,
          socket |> assign(params: params, error: error_message(error)) |> assign_ask_person()}
@@ -1187,6 +1267,59 @@ defmodule AbakusWeb.RegisterLive.TransactionEditor do
       {:error, changeset} -> {:noreply, assign(socket, :error, error_message(changeset))}
     end
   end
+
+  # The params keep a typed sign apart from the digits; the field sent both.
+  defp as_typed(refused, changed) do
+    Enum.map(refused, fn {side, text, refusal} ->
+      {side, side_changes(changed, side)["amount"] || text, refusal}
+    end)
+  end
+
+  defp side_changes(changed, @main), do: changed
+  defp side_changes(changed, index), do: get_in(changed, ["subtransactions", index]) || %{}
+
+  # The change a blur flushes carries the refused text again, which keeps its refusal.
+  defp retyped(socket, %{"_target" => target} = event) do
+    with side when side != nil <- amount_side(target),
+         {typed, _error} <- socket.assigns.invalid[side],
+         false <- get_in(event, target) == typed do
+      update(socket, :invalid, &Map.delete(&1, side))
+    else
+      _kept -> socket
+    end
+  end
+
+  defp retyped(socket, _event), do: socket
+
+  defp amount_side(["transaction", "amount"]), do: @main
+
+  defp amount_side(["transaction", "subtransactions", index, field])
+       when field in ~w(amount outflow inflow),
+       do: index
+
+  defp amount_side(_target), do: nil
+
+  # A part made anew under an index that was refused before starts without its refusal.
+  defp prune_invalid(%{assigns: %{params: params}} = socket) do
+    parts = if params["split"] == "true", do: Map.keys(params["subtransactions"] || %{}), else: []
+    update(socket, :invalid, &Map.take(&1, [@main | parts]))
+  end
+
+  defp refuse_amounts(socket, [{first, _text, _refusal} | _rest] = refused) do
+    socket
+    |> update(:invalid, fn invalid ->
+      Enum.reduce(refused, invalid, fn {side, text, refusal}, invalid ->
+        Map.put(invalid, side, {text, refused_amount(text, refusal)})
+      end)
+    end)
+    |> push_event("refocus_amount", %{id: amount_id(first)})
+  end
+
+  defp refused_amount(_text, :out_of_range), do: BudgetComponents.out_of_range_amount()
+  defp refused_amount(text, :invalid), do: BudgetComponents.invalid_amount(text)
+
+  defp amount_id(@main), do: "tx-amount"
+  defp amount_id(index), do: "tx-sub-#{index}-amount"
 
   @picks ~w(payee_pick payee_new category_pick)
 

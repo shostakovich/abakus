@@ -214,7 +214,7 @@ import Testing
         model.callouts.onShowInAccountView = { shownFilters.append($0) }
         model.subOutflowsClicked(month: october, categoryId: F.lebensmittel)
         let expected = store.budget.outflowSummary(
-            .category(F.lebensmittel), month: october, today: F.today, formatter: model.formatter)
+            .category(F.lebensmittel), month: october, formatter: model.formatter)
         #expect(model.callouts.summary == expected)
         model.callouts.showInAccountViewClicked()
         #expect(shownFilters == [try #require(expected.accountView)])
@@ -257,13 +257,13 @@ import Testing
         app.budget.subOutflowsClicked(month: day("2026-10-01"), categoryId: F.lebensmittel)
         app.budget.callouts.showInAccountViewClicked()
         #expect(app.navigation.selection == .account(F.giro))
-        #expect(app.register.search.text == "Kategorie: Alltag: Lebensmittel, ")
-        #expect(app.register.search.filter?.label == "Kategorie: Alltag: Lebensmittel")
-        #expect(app.register.search.dateFilter?.label == "Dieser Monat")
-        #expect(app.register.transactionIds.count == 1)
+        #expect(app.register.search.text == "Lebensmittel")
+        #expect(app.register.filter == .all)
+        #expect(!app.register.transactions.isEmpty)
+        #expect(app.register.transactions.allSatisfy { $0.categoryId == F.lebensmittel })
     }
 
-    @Test func allOutflowsFromTwoAccountsOpenAllAccountsWithoutASearch() throws {
+    @Test func allOutflowsHaveNoAccountViewToOpen() throws {
         var fixture = F()
         try fixture.budget.apply(
             .addAccount(
@@ -277,16 +277,13 @@ import Testing
                 payeeName: "Kino"))
         let store = BudgetStore(budget: fixture.budget, today: { F.today })
         let app = AppModel(store: store, selection: .allAccounts, defaults: nil)
-        app.register.search.run("Empfänger: Laden")
-        #expect(app.register.search.filter != nil)
         app.navigation.selection = .budget
         app.budget.panelSize = F.panel
         app.budget.totalsOutflowsClicked(month: day("2026-10-01"))
+        #expect(app.budget.callouts.summary?.rows.count == 2)
+        #expect(app.budget.callouts.summary?.accountView == nil)
         app.budget.callouts.showInAccountViewClicked()
-        #expect(app.navigation.selection == .allAccounts)
-        #expect(app.register.search.filter == nil)
-        #expect(app.register.search.dateFilter?.label == "Dieser Monat")
-        #expect(app.register.transactionIds.count == 2)
+        #expect(app.navigation.selection == .budget)
     }
 
     @Test func aSummaryRowOpensItsAccountWithTheTransactionSelected() throws {

@@ -138,4 +138,36 @@ defmodule AbakusWeb.RegisterLive.RowsTest do
              )
     end
   end
+
+  describe "needs_category?" do
+    test "a transaction without a category in a budget account" do
+      assert Rows.needs_category?(transaction(1, []), @accounts)
+      refute Rows.needs_category?(transaction(1, category_id: 7), @accounts)
+    end
+
+    test "not at zero, as the view leaves it out" do
+      refute Rows.needs_category?(transaction(1, amount: 0), @accounts)
+    end
+
+    test "a transfer only to a tracking account" do
+      assert Rows.needs_category?(transaction(1, payee: payee("Depot", @depot.id)), @accounts)
+      refute Rows.needs_category?(transaction(1, payee: payee("Sparen", @savings.id)), @accounts)
+    end
+
+    test "not in a tracking account" do
+      refute Rows.needs_category?(transaction(1, account_id: @depot.id), @accounts)
+    end
+
+    test "a split only in its parts" do
+      to_depot = %Subtransaction{amount: -500, payee: payee("Depot", @depot.id)}
+      to_savings = %Subtransaction{amount: -500, payee: payee("Sparen", @savings.id)}
+      split = transaction(1, subtransactions: [to_depot, to_savings])
+
+      refute Rows.needs_category?(split, @accounts)
+      assert Rows.needs_category?(to_depot, split, @accounts)
+      refute Rows.needs_category?(to_savings, split, @accounts)
+      refute Rows.needs_category?(%Subtransaction{amount: 0}, split, @accounts)
+      refute Rows.needs_category?(%Subtransaction{amount: -500, category_id: 7}, split, @accounts)
+    end
+  end
 end

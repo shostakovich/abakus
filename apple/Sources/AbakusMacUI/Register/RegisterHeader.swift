@@ -12,7 +12,7 @@ struct RegisterHeader: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItem(placement: .automatic) {
-            RegisterSummaryView(model: model, summary: model.summary)
+            RegisterSummaryView(summary: model.summary)
         }
         .sharedBackgroundVisibility(.hidden)
         if model.reconciliation.isReconcileEnabled {
@@ -32,7 +32,6 @@ struct RegisterHeader: ToolbarContent {
 
 /// The operands only show while both are Cleared and Uncleared; a search puts its total in their place.
 struct RegisterSummaryView: View {
-    let model: RegisterViewModel
     let summary: RegisterSummary
 
     var body: some View {
@@ -49,18 +48,7 @@ struct RegisterSummaryView: View {
     @ViewBuilder
     private func item(_ item: RegisterSummaryItem) -> some View {
         if item.kind != .blank {
-            if item.isClickable {
-                Button {
-                    model.summaryClicked(item.kind)
-                } label: {
-                    SummaryItemLabel(item: item)
-                }
-                .buttonStyle(.plain)
-                .pointerStyle(.link)
-                .toolTip(item.tooltip)
-            } else {
-                SummaryItemLabel(item: item).toolTip(item.tooltip)
-            }
+            SummaryItemLabel(item: item).toolTip(item.tooltip)
         }
     }
 

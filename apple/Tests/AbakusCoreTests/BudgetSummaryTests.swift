@@ -9,7 +9,7 @@ import Testing
     private func summary(_ budget: Budget, _ source: OutflowSummarySource, month: String = "2026-10-01")
         -> TransactionSummary
     {
-        budget.outflowSummary(source, month: date(month), today: october24, formatter: german)
+        budget.outflowSummary(source, month: date(month), formatter: german)
     }
 
     private func scenario() throws -> ScenarioBudget {
@@ -38,12 +38,7 @@ import Testing
         #expect(result.rows.map(\.transactionId) == ["SPLIT", "REWE", result.rows[2].transactionId])
         #expect(result.rows[0].memo == "Einkauf")
         #expect(result.rows[2].accountName == "Bargeld")
-        #expect(
-            result.accountView
-                == AccountViewFilter(
-                    accountId: EntityID.allAccounts, searchText: "Kategorie: Alltag: Lebensmittel, ",
-                    dateFilter: DateFilterSelection(
-                        preset: .thisMonth, start: date("2026-10-01"), end: date("2026-10-01"), label: "Dieser Monat")))
+        #expect(result.accountView == AccountViewFilter(accountId: EntityID.allAccounts, searchText: "Lebensmittel"))
     }
 
     @Test func aMasterCountsDistinctTransactions() throws {
@@ -52,7 +47,7 @@ import Testing
         #expect(result.title == "Alltag")
         #expect(result.message == "152,00\u{00A0}€ ausgegeben in 3 Buchungen:")
         #expect(result.rows.map(\.amount) == [-70, -30, -40, -12])
-        #expect(result.accountView?.searchText == "Kategorie: Alltag, ")
+        #expect(result.accountView == nil)
     }
 
     @Test func allOutflowsShowsThePositiveTotalAndEveryLineButImmediateIncome() throws {
@@ -61,7 +56,7 @@ import Testing
         #expect(result.title == "Alle Kategorien")
         #expect(result.message == "159,00\u{00A0}€ ausgegeben in 4 Buchungen:")
         #expect(result.rows.map(\.amount) == [-7, -70, -30, -40, -12])
-        #expect(result.accountView?.searchText == "")
+        #expect(result.accountView == nil)
     }
 
     @Test func uncategorizedTransactionsHaveTheirOwnMessageAndSearch() throws {
@@ -69,8 +64,7 @@ import Testing
         let result = summary(budget, .masterCategory(EntityID.uncategorizedMasterCategory))
         #expect(result.title == "Nicht kategorisiert")
         #expect(result.message == "7,00\u{00A0}€ ausgegeben in 1 Buchung ohne Kategorie:")
-        #expect(result.accountView?.accountId == S.giro)
-        #expect(result.accountView?.searchText == "Kategorie: , ")
+        #expect(result.accountView == AccountViewFilter(accountId: S.giro, filter: .needsCategory))
     }
 
     @Test func splitLinesNameTheirTransferAndJoinTheMemos() throws {
@@ -96,8 +90,6 @@ import Testing
         #expect(result.rows.map(\.payee) == ["[Aufgeteilt] / Transfer : Depot", "[Aufgeteilt] "])
         #expect(result.rows.map(\.memo) == ["ETF - Sparen", "Sparen"])
         #expect(result.transactionCount == 1)
-        #expect(result.accountView?.dateFilter.label == "September 2026")
-        #expect(result.accountView?.dateFilter.preset == nil)
     }
 
     @Test func aSplitLineWithItsOwnPayeeShowsThatPayee() throws {
@@ -114,16 +106,6 @@ import Testing
                 TransactionSave(transaction: split, payeeName: "Kaufland", subPayeeNames: ["L1": "dm"], isNew: true)))
         #expect(summary(scenario.budget, .category(S.lebensmittel)).rows.map(\.payee) == ["[Aufgeteilt] dm "])
         #expect(summary(scenario.budget, .category(S.kleidung)).rows.map(\.payee) == ["[Aufgeteilt] Kaufland "])
-    }
-
-    @Test func thisMonthAlsoComparesTheYear() throws {
-        var scenario = ScenarioBudget()
-        try scenario.add(-10, on: "2025-10-10", category: S.kleidung)
-        try scenario.add(-10, on: "2025-12-10", category: S.lebensmittel)
-        try scenario.split([(-1, S.lebensmittel), (-1, S.kleidung)], on: "2025-10-11", payee: "Markt")
-        let lastOctober = summary(scenario.budget, .category(S.kleidung), month: "2025-10-01")
-        #expect(lastOctober.accountView?.dateFilter.label == "Oktober 2025")
-        #expect(lastOctober.accountView?.accountId == S.giro)
     }
 
     @Test func anEmptyCategoryListsNothing() throws {

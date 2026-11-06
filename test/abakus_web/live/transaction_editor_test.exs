@@ -202,16 +202,111 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert %Transaction{amount: 2_000, category_id: ^rta} = newest(c.giro)
     end
 
-    test "an amount with another operator is refused and nothing is saved", c do
+    test "the amount takes the full keyboard, as the decimal pad has neither + nor −", c do
+      view = open_new(c, c.giro)
+
+      assert has_element?(
+               view,
+               ~s|#tx-amount[inputmode="text"][autocapitalize="off"][spellcheck="false"]|
+             )
+    end
+
+    test "an amount that reads as none is refused at the field as it is left, keeping the text",
+         c do
+      view = open_new(c, c.giro)
+
+      view |> element("#tx-amount") |> render_blur(%{"value" => "5,8x"})
+
+      assert_push_event(view, "refocus_amount", %{id: "tx-amount"})
+      assert has_element?(view, ~s|#tx-amount[value="5,8x"][aria-invalid="true"]|)
+      assert has_element?(view, ~s|#tx-amount[aria-describedby="tx-sign tx-amount-error-0"]|)
+      assert has_element?(view, "#tx-amount-errors", "„5,8x“ ist kein gültiger Betrag.")
+      assert has_element?(view, "#tx-amount-errors", "Rechnen geht mit +\u00A0und\u00A0−")
+      refute has_element?(view, "#tx-error")
+
+      view |> element("#tx-amount") |> render_blur(%{"value" => "5,80"})
+      refute has_element?(view, "#tx-amount-errors")
+      refute has_element?(view, "#tx-amount[aria-invalid]")
+      assert Ledger.list_transactions(budget_scope(), c.giro) == []
+    end
+
+    test "an amount beyond the Ledger's range is refused at the field as the budget does", c do
+      view = open_new(c, c.giro)
+      message = "Der Betrag muss zwischen -100.000.000.000 € und 100.000.000.000 € liegen."
+
+      view |> element("#tx-amount") |> render_blur(%{"value" => "200.000.000.000"})
+      assert_push_event(view, "refocus_amount", %{id: "tx-amount"})
+      assert has_element?(view, "#tx-amount-errors", message)
+
+      submit(view, %{amount: "200.000.000.000"})
+      assert has_element?(view, "#tx-amount-errors", message)
+      assert has_element?(view, ~s|#tx-amount[value="200.000.000.000"]|)
+      refute has_element?(view, "#tx-error")
+
+      submit(view, %{amount: String.duplicate("9", 16)})
+      assert has_element?(view, "#tx-amount-errors", message)
+      assert Ledger.list_transactions(budget_scope(), c.giro) == []
+    end
+
+    test "the refusal quotes the text as typed, sign included, on leaving and on saving", c do
+      view = open_new(c, c.giro)
+
+      view |> element("#tx-amount") |> render_blur(%{"value" => "-5,8x"})
+      assert has_element?(view, "#tx-amount-errors", "„-5,8x“ ist kein gültiger Betrag.")
+
+      submit(view, %{amount: "-5,8x"})
+      assert has_element?(view, "#tx-amount-errors", "„-5,8x“ ist kein gültiger Betrag.")
+      assert has_element?(view, ~s|#tx-amount[value="-5,8x"]|)
+
+      view |> with_target("#tx-editor") |> render_click("split", %{})
+      submit(view, %{amount: "30", subtransactions: %{"0" => %{amount: "+2x"}}})
+      assert has_element?(view, "#tx-sub-0-amount-errors", "„+2x“ ist kein gültiger Betrag.")
+    end
+
+    test "typing into a refused amount clears its error", c do
+      view = open_new(c, c.giro)
+      view |> element("#tx-amount") |> render_blur(%{"value" => "5,8x"})
+
+      change(view, %{"amount" => "5,8x"}, ["amount"])
+      assert has_element?(view, "#tx-amount-errors")
+
+      change(view, %{"memo" => "Brot"}, ["memo"])
+      assert has_element?(view, "#tx-amount-errors")
+
+      change(view, %{"amount" => "5,8"}, ["amount"])
+      refute has_element?(view, "#tx-amount-errors")
+      refute has_element?(view, "#tx-amount[aria-invalid]")
+    end
+
+    test "typing into a refused part amount clears only its error", c do
+      view = open_new(c, c.giro)
+      view |> with_target("#tx-editor") |> render_click("split", %{})
+      view |> element("#tx-amount") |> render_blur(%{"value" => "x"})
+      view |> element("#tx-sub-1-amount") |> render_blur(%{"value" => "abc"})
+
+      change(view, %{"subtransactions" => %{"1" => %{"amount" => "ab"}}}, [
+        "subtransactions",
+        "1",
+        "amount"
+      ])
+
+      refute has_element?(view, "#tx-sub-1-amount-errors")
+      assert has_element?(view, "#tx-amount-errors")
+    end
+
+    test "an amount with another operator is refused on saving and nothing is saved", c do
       view = open_new(c, c.giro)
 
       submit(view, %{amount: "60*2"})
 
-      assert has_element?(view, "#tx-error", "Ungültiger Betrag „60*2“.")
+      assert_push_event(view, "refocus_amount", %{id: "tx-amount"})
+      assert has_element?(view, "#tx-amount-errors", "„60*2“ ist kein gültiger Betrag.")
+      assert has_element?(view, ~s|#tx-amount[value="60*2"]|)
+      refute has_element?(view, "#tx-error")
       assert has_element?(view, "tbody#tx-editor")
 
       submit(view, %{amount: "--50"})
-      assert has_element?(view, "#tx-error", "Ungültiger Betrag „--50“.")
+      assert has_element?(view, "#tx-amount-errors", "„--50“ ist kein gültiger Betrag.")
       assert Ledger.list_transactions(budget_scope(), c.giro) == []
     end
 
@@ -306,8 +401,16 @@ defmodule AbakusWeb.TransactionEditorTest do
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.savings}")
       view |> element("#new-transaction-fab") |> render_click()
+      assert has_element?(view, ~s|#tx-amount[inputmode="text"][spellcheck="false"]|)
+
+      view |> element("#tx-amount") |> render_blur(%{"value" => "60*2"})
+      assert has_element?(view, "#tx-amount-error-0", "„60*2“ ist kein gültiger Betrag.")
+      assert has_element?(view, ~s|#tx-amount[aria-describedby="tx-sign tx-amount-error-0"]|)
+
       submit(view, %{amount: "60*2"})
-      assert has_element?(view, "#tx-error", "Ungültiger Betrag „60*2“.")
+      assert_push_event(view, "refocus_amount", %{id: "tx-amount"})
+      assert has_element?(view, "#tx-amount-error-0", "„60*2“ ist kein gültiger Betrag.")
+      refute has_element?(view, "#tx-error")
       assert Ledger.list_transactions(budget_scope(), c.savings) == []
     end
 
@@ -349,9 +452,6 @@ defmodule AbakusWeb.TransactionEditorTest do
 
     test "shows what the Ledger refuses and keeps the row", c do
       view = open_new(c, c.giro)
-
-      submit(view, %{amount: "12,345"})
-      assert has_element?(view, "#tx-error", "Höchstens 2 Nachkommastellen erlaubt.")
 
       view |> with_target("#tx-editor") |> render_click("split", %{})
       submit(view, %{amount: "1", subtransactions: %{"0" => %{amount: "1"}}})
@@ -550,6 +650,45 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert has_element?(view, "#tx-#{split.id}-part-1 .app-transfer", "🏦 Sparkonto")
       assert has_element?(view, "#tx-#{split.id}-part-0", "Lebensmittel")
       assert has_element?(view, "#tx-#{split.id}-parts")
+    end
+
+    test "a part's amount that reads as none is refused at its field", c do
+      view = open_new(c, c.giro)
+      view |> with_target("#tx-editor") |> render_click("split", %{})
+
+      assert has_element?(view, ~s|#tx-sub-1-amount[inputmode="text"][autocapitalize="off"]|)
+      view |> element("#tx-sub-1-amount") |> render_blur(%{"value" => "abc"})
+
+      assert_push_event(view, "refocus_amount", %{id: "tx-sub-1-amount"})
+      assert has_element?(view, ~s|#tx-sub-1-amount[value="abc"][aria-invalid="true"]|)
+      assert has_element?(view, "#tx-sub-1-amount-errors", "„abc“ ist kein gültiger Betrag.")
+
+      submit(view, %{
+        amount: "30",
+        subtransactions: %{"0" => %{amount: "10"}, "1" => %{amount: "20x"}}
+      })
+
+      assert has_element?(view, "#tx-sub-1-amount-errors", "„20x“ ist kein gültiger Betrag.")
+      refute has_element?(view, "#tx-sub-0-amount-errors")
+      refute has_element?(view, "#tx-error")
+      assert Ledger.list_transactions(budget_scope(), c.giro) == []
+
+      view |> element("#tx-sub-1-remove") |> render_click()
+      refute has_element?(view, "#tx-sub-1-amount-errors")
+    end
+
+    test "a part's refusal goes with the split and does not come back when splitting again", c do
+      view = open_new(c, c.giro)
+      view |> with_target("#tx-editor") |> render_click("split", %{})
+      view |> element("#tx-sub-1-amount") |> render_blur(%{"value" => "abc"})
+      assert has_element?(view, "#tx-sub-1-amount-errors")
+
+      view |> element("#tx-sub-0-remove") |> render_click()
+      view |> with_target("#tx-editor") |> render_click("split", %{})
+
+      assert has_element?(view, "#tx-sub-1-amount")
+      refute has_element?(view, "#tx-sub-1-amount-errors")
+      refute has_element?(view, "#tx-sub-1-amount[aria-invalid]")
     end
 
     test "each part has a sign of its own, from its button or a typed sign", c do

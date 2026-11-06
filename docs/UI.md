@@ -105,7 +105,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   month in its head
 - Zu verteilen is one tinted block, red below zero, plain at zero. The month menu is an ellipsis button beside
   the month: a glass circle in each of the iPad's month heads, the navigation bar's trailing button on phones. It
-  holds "Ziele füllen" with the amount it moves as the subtitle and "Zurücksetzen …" in red with "Zuweisungen im
+  holds "Ziele füllen" with the amount it moves as the subtitle and "Zurücksetzen" in red with "Zuweisungen im
   Nov" (behind the web's confirmation); an item that cannot run is dimmed with its reason as the subtitle
   ("Nichts unterfinanziert", "Nichts zu verteilen", "Nichts zugewiesen"). A group's context menu adds
   categories and folds every group, "Neue Kategoriegruppe" ends the list
@@ -113,8 +113,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   income with "+" whenever it is not zero
 - Phones: the sticky head holds the calculation and Zu verteilen; the iPad's corner beside Zu verteilen stays
   empty; the month head follows the title at standard spacing.
-  "Nicht kategorisiert" is a row like a category, its name on the names' edge, and shows Alle Konten searching for
-  what needs a category
+  "Nicht kategorisiert" is a row like a category, its name on the names' edge, and shows Alle Konten in the view
+  "Ohne Kategorie"
 - Phones: a category with a target has a thin bar (3 pt) under its name, filled by the share of the month's need
   that is assigned (the ring's share) over a faint opaque track that stays visible in dark; amber while underfunded in a month being budgeted, green
   when funded, grey while snoozed or in a closed month, red when overspent. Every bar ends at one edge before the
@@ -161,9 +161,10 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   has to act (an error, signed out in the web). ⌘B and ⌘T switch tabs, ⌘, shows the settings, and the app opens on the tab last shown, the
   first time on the budget
 - Tab roots have inline titles, as the budget's month menu needs one
-- "Neue Buchung" from everywhere: the dock's "+"; held, it offers "Neue Umbuchung". It opens the transaction sheet on
-  the shown register's account, else the one last used, with "Sichern und weitere"; ⌘N does the same from every
-  screen
+- Labels end without the Mac's dialog ellipsis ("Konto bearbeiten", "Einstellungen", "Neue Kategorie"), in menus,
+  buttons and the iPad's keyboard menu bar; an ellipsis that means "in progress" stays
+- "Neue Buchung" from everywhere: the dock's "+", a plain button. It opens the transaction sheet on the shown
+  register's account, else the one last used, with "Sichern und weitere"; ⌘N does the same from every screen
 - Konten: the approval row and Alle Konten, then the groups with their totals and an accent chevron that folds them;
   each account pushes its register. An account shows the emoji of its name, else its motif as an SF Symbol
   (building.columns, eurosign.circle for the piggy bank, banknote, chart.line.uptrend.xyaxis, receipt), then the
@@ -174,7 +175,7 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   width
 - Einstellungen: the labelled field "Server" with the short explanation as its footer, a full-width "Anmelden" in
   the accent whose fill fades to 40 % under a white label in both themes (never grey) while the field is empty, then the sync status with
-  "Abmelden …", then "Empfänger" as a row that pushes the payees, and "Info" last with the app's version
+  "Abmelden", then "Empfänger" as a row that pushes the payees, and "Info" last with the app's version
 - Empfänger: the listed payees by initial under compact headers (the initial small and secondary, tight above its
   first name) with a section index ("#" last for names without a
   letter), a search field always in view under the title, a filter for Aufgeführte, Ausgeblendete or Alle (hidden
@@ -184,20 +185,15 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   tab shows or a new transaction starts; from a register they are a sheet with the xmark
 - Register header: the balances, each operator with one spacing on both sides however wide the titles above the
   amounts are, then "Abgeglichen am 28.09." in full with "Abgleichen" as the one filled button beside
-  it, then what waits as chips; while a search filters the list, only the chip that undoes shows. The toolbar holds
-  the search and "Ansicht" (⋯) after it; the phone keeps the search field in view under the title, as it shows the
-  filter, the iPad has it in the bar with the title leading in every state. "Ansicht" has short labels that never
-  wrap, each with its symbol, a state as the subtitle ("Zeitraum · Alle Daten", "Abgeglichene · Gezeigt"): Geplant,
-  Zeitraum, Abgeglichene, Auswählen, Alle auswählen, "Spalten" as a submenu on the iPad, "Konto
-  bearbeiten …" (a space and the typographic ellipsis, on both devices). Header and footer lie on the screen's own
-  surface; the header is opaque, so scrolled rows never show through it
-- Search suggestions: "Vorschläge" lists what the typed text matches (field name in the secondary ink in a fixed
-  column that truncates, never wraps, then the value in one regular weight; a transfer as "⇄ Kreditkarte"), then
-  "„re“ suchen in" the fields, both under section headers; hints that cannot be picked and duplicates stay away. On
-  the phone they take the screen right under the field; the iPad shows the same sections in a panel of its own on
-  the regular material under the bar's field (the system's popover drops the headers). The approvals token is the
-  same on both devices: the system draws its text white, so its fill is a grey that keeps 4.5:1 in both themes. A transfer
-  never reads "Transfer : …" anywhere, also not in the field or the line naming the hits
+  it, then what waits as chips, all but the chip of the view shown, also while a search filters the list. A view
+  other than Alle Buchungen is named above them ("Ansicht: ohne Kategorie") with "Alle Buchungen" to go back. The
+  toolbar holds the search and "Ansicht" (⋯) after it; the phone keeps the search field in view under the title, as
+  it shows the filter, the iPad has it in the bar with the title leading in every state. "Ansicht" has short labels
+  that never wrap, each with a symbol so all share one leading edge: the four views (list.bullet, checkmark.seal,
+  clock, tag.slash) with the system's check mark before the shown one; then Geplant, Auswählen and on the iPad "Memo
+  ausblenden" or "Memo zeigen"; then "Konto bearbeiten" (pencil) while it shows one account. Header
+  and footer lie on the screen's own surface; the header is opaque, so scrolled rows never show through it
+- Search: the field filters as it is typed, as described under Register
 - Phone cards are always two lines after one glyph column that belongs to the second line (the category's emoji, ⚠,
   a split's square.split.2x1, else blank; ⇄ always follows the payee on the first line, only a split's transfer
   part, which has no first line, puts it in the column), so payees and second lines share one leading edge and the
@@ -205,15 +201,15 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   Betrag, then "Lebensmittel · Memo" and the date. A transfer shows its memo, or "Umbuchung" without one. Every row
   has the regular weight; only the filled ✓ marks one waiting for approval. The month heading sticks on a quiet band
 - Status at rest is a small grey glyph (○ vorgemerkt, ✓ gebucht, 🔒 abgeglichen); only a transaction waiting for
-  approval shows a filled accent ✓, which approves it. A leading swipe approves too
-- Approving: the "bestätigen" chip and the Konten list's "N Buchungen bestätigen" row
-  (which the Konten tab's badge counts) show Alle Konten filtered to what waits: a search token "Zu bestätigen"
-  with its clear button, the header's line "N Buchungen zu bestätigen" with "Alle bestätigen", and no chips but the
-  one that undoes. Once all are approved "Alles bestätigt" offers the way back to the Konten. There is no screen of
-  its own, and the UI never says "Erinnerung"
+  approval shows a filled accent ✓, which approves it. A tap on ○ or ✓ switches between vorgemerkt and gebucht; the
+  lock asks "Diese Buchung ist abgeglichen. Entsperren?" first. The only swipe is the trailing "Löschen"
+- Approving: the "bestätigen" chip shows the account in the view "Zu bestätigen"; the Konten list's "N Buchungen
+  bestätigen" row (which the Konten tab's badge counts) shows Alle Konten in it. The header's line "N Buchungen warten
+  auf Bestätigung." has "Alle bestätigen" in place of the reconcile line; once nothing waits, the list reads "Keine
+  Buchungen in „Zu bestätigen“", as every empty view names itself. There is no screen of its own, and the UI never
+  says "Erinnerung"
 - "Auswählen": the title counts ("2 ausgewählt"), "Alle" (⌘A) and "Fertig" sit in the navigation bar, and a bottom bar
-  with labelled actions (Bestätigen or Gebucht/Vorgemerkt, Kategorie, Löschen in red behind a confirmation, ⋯) takes
-  the tab bar's place. On the iPad the column headers move with the selection circles, so they stay over their
+  with labelled actions (Kategorie, Löschen in red, ⋯) takes the tab bar's place. On the iPad the column headers move with the selection circles, so they stay over their
   columns
 - Reconciling: the header names what the list shows ("20 Buchungen bis 02.11.2026"); a glass bar takes the dock's
   place with the bank's balance as its first line ("Banksaldo 5.428,00 € am 02.11.2026", a tap changes
@@ -227,11 +223,14 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   accent ("Ausgabe"/"Einnahme"), focused for a new transaction; then Empfänger, Kategorie ("🛒 Lebensmittel", a
   transfer "⇄ Tagesgeld" with no category row between budget accounts), Konto, Datum (full date), Memo, each
   labelled; an empty choice reads "Wählen", a value that cannot change is secondary. A stored transaction ends with
-  its status (Vorgemerkt/Gebucht as a picker that applies at once, "Bestätigen" while it waits, "Abgeglichen" locked)
-  and "Buchung löschen" in red behind a confirmation. "Sichern und weitere" is a bordered button in the footer of the form's last card.
+  "Buchung löschen" in red, which deletes it, closes the sheet and offers "Widerrufen".
+  "Sichern und weitere" is a bordered button in the footer of the form's last card.
   Above the on-screen keyboard only + − and the keyboard-dismiss button at one size, inside the sheet; a hardware
   keyboard shows none of them. The iPad types the amount on the docked keyboard's numbers, as its floating number
-  pad has no operators and covers the sheet's title and bar. The toolbar's checkmark is the one commit. On the iPad the sheet fits its content
+  pad has no operators and covers the sheet's title and bar. The toolbar's checkmark is the one commit, labelled
+  "Bestätigen" while the transaction waits, so saving approves it. A refused amount keeps its text and the focus and
+  shows Zugewiesen's message under the amount in red, on the iPad as the bubble below it; leaving its page for
+  another puts the stored amount back. On the iPad the sheet fits its content
 - Pickers: groups are compact section headers without separators, their emoji at the rows' size in the same fixed
   column, so every name starts at one edge ("Einnahmen" too); every row keeps the check's place, so names and
   amounts never shift
@@ -248,9 +247,8 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
 - The header in two rows, web and Mac: the account's name, last reconcile and the pencil on the left, the balances
   ("Gebucht + Vorgemerkt = Arbeitssaldo") and "Abgleichen" (the page's only primary button) on the right; below,
   the toolbar with "Buchung", "Datei-Import" and what waits as chips ("2 bestätigen", "1 zuordnen"), then "Ansicht"
-  and the search. The web also names the account's kind; the Mac has no file import and offers "Buchungen
-  bearbeiten" in the context menu.
-  Phones: the balances in one line, search and "Ansicht", "Buchung" as the "+" beside the tab bar
+  and the search. The web also names the account's kind; the Mac has no file import.
+  Phones: the balances in one line, "2 bestätigen", search and "Ansicht", "Buchung" as the "+" beside the tab bar
 - Newest first on both platforms, under a quiet month heading ("Oktober 2026", no total) that sticks while the list
   scrolls; rows then read "24.10.". Headings show only while the list is sorted by date (the web always is)
 - Fixed columns, so an opened row keeps every column in place: Betrag fits "−10.000,00", the memo takes the
@@ -261,11 +259,52 @@ YNAB from the web and YNAB's help center. No screenshots of real budgets in this
   30,00), without one it goes in the button's direction and a negative result turns the button round ("50−70"
   behind − is an inflow of 20,00)
 - The category with its emoji only ("🛒 Lebensmittel"), also in the phone cards; its group shows in the tooltip and
-  the picker. A missing category reads "⚠ Kategorie fehlt", a transfer "⇄ Depot", a split "Aufgeteilt (2)"
+  the picker. What "Ohne Kategorie" lists reads "⚠ Kategorie fehlt", a split on the part that needs one; a
+  transfer "⇄ Depot", a split "Aufgeteilt (2)"
 - One status column, last, as in Actual: ○ vorgemerkt, ✓ gebucht, 🔒 abgeglichen; a transaction waiting for approval
   shows its ✓ to approve there. Selection is a row highlight, not a column: ⌘ or Ctrl adds a row, Shift the rows up
   to it; on the web "Auswählen" in "Ansicht" makes every click add one (touch screens) and "Alle auswählen" takes
   the whole view. An opened row has Abbrechen and Speichern below it
+- Approving on the web: one transaction with its ✓, or by saving it in the row editor or the sheet (✓
+  "Bestätigen"). The chip "2 bestätigen" opens the view "Zu bestätigen", ends the search and approves nothing; the
+  chip hides there. That view has the line "2 Buchungen warten auf Bestätigung." with "Alle bestätigen", which
+  approves what the view shows (as a search typed there narrows it, loaded or not) and leaves match proposals open.
+  The selection bar categorises and deletes; deleting asks first, as the web has no undo. The web has no context
+  menu
+- Views on the web, in "Ansicht" (⋮ on phones): Alle Buchungen, Zu bestätigen, Vorgemerkt, Ohne Kategorie. Each is
+  a rule of its own, so a transaction can be in two: "Zu bestätigen" holds every transaction not approved, "Ohne
+  Kategorie" every one that needs a category, approved or not: in a budget account, no category, not zero and no
+  transfer to another budget account; a split by its parts. The budget's "Nicht kategorisiert" opens Alle Konten
+  in that view
+- Search and views in the apps, as on the web: the search filters as it is typed and finds payee, category, memo,
+  the amount as written ("48,75") and a split's parts, ignoring case, emoji and "ß" against "ss"; a split found by
+  a part opens. The views are the web's rules, so the chips and the Konten list count what their
+  view lists. The view filters first, the text narrows it; each account keeps its own for the
+  session. "Ansicht" holds the four views with a check mark, the Mac's button then reads "Ansicht: zu bestätigen",
+  and on the Mac Status and Memo, which show or hide in every account. The chips switch views and end the search,
+  and only the chip of the view shown hides: "N bestätigen" to Zu bestätigen, "N braucht eine Kategorie" to Ohne
+  Kategorie; "Umbuchung mit Kategorie" only tells. While reconciling the list stays Alle Buchungen: "Ansicht"
+  leaves out the views and the chips only tell. Zu bestätigen shows "N Buchungen warten auf Bestätigung." with
+  "Alle bestätigen" above the list, which approves what the view shows; a search's hit count and "Suche
+  zurücksetzen" follow below
+- One way each in the apps. A single transaction is approved with its ✓ or by saving it in the editor, whose one
+  approving button reads "Bestätigen" (the Mac row editor: "Bestätigen" and "Abbrechen", Return approves only the
+  open transaction; the sheet: its ✓). Only the status mark switches vorgemerkt and gebucht; the ✓ and the status
+  mark act on their own row, also within a selection, and the open Mac row leaves the status cell empty. The
+  context menu (right-click on the Mac, a long press on iOS) holds "Kategorisieren als", "Wiederkehrend machen …", "In geplante Buchungen verschieben …", "In Konto verschieben"
+  and "Löschen" (red on iOS); payees are renamed in "Empfänger verwalten" (⌘Y, Einstellungen) and the editor's
+  rename question. The menu "Buchungen" holds "Neue Buchung" (⌘N) and "Suchen" (⌘F). A transfer is a new
+  transaction with an account picked as its payee. Every delete (context menu, swipe, the selection bar, the sheet,
+  the Delete key) happens at once with "Buchung gelöscht · Widerrufen"; only a reconciled transaction or
+  counterpart, one the Kasse or the Depot leads, a transfer whose other side goes too or a transfer into a split asks
+  first
+- The apps' transaction amounts, parts included, refuse an amount that reads as none as Zugewiesen does: no dialog,
+  the text and the focus stay, VoiceOver announces the message once, any edit clears it and saving waits for it; a
+  bubble below the field on the Mac and the iPad, a red line under the amount on the iPhone
+- The web's transaction amounts (row, sheet, parts) take the full keyboard, as Zugewiesen does, and refuse an amount
+  that reads as none or lies beyond the Ledger's range as the field is left and on saving, with Zugewiesen's
+  messages, quoting the text as typed: a bubble at the field in the row, a red line under it in the sheet. The text
+  and the focus stay, typing in the field clears the message, nothing is saved
 
 ## Icons
 

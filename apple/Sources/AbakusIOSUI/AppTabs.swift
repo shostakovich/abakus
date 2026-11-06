@@ -93,7 +93,7 @@
         let model: AppModel
         let navigation: TouchNavigation
         let state: DockState
-        let onAdd: (_ transfer: Bool) -> Void
+        let onAdd: () -> Void
         @State private var bottomInset: CGFloat = 0
         @Namespace private var glass
 
@@ -225,37 +225,18 @@
     private struct AddTransactionButton: View {
         let register: RegisterViewModel
         let size: CGFloat
-        let onAdd: (_ transfer: Bool) -> Void
+        let onAdd: () -> Void
 
         var body: some View {
-            Group {
-                if register.showsTransferButton {
-                    Menu {
-                        Button(RegisterViewModel.transferTitle, systemImage: "arrow.left.arrow.right") {
-                            onAdd(true)
-                        }
-                    } label: {
-                        plus
-                    } primaryAction: {
-                        onAdd(false)
-                    }
-                    .menuIndicator(.hidden)
-                } else {
-                    Button {
-                        onAdd(false)
-                    } label: {
-                        plus
-                    }
+            Button(action: onAdd) { plus }
+                .buttonStyle(.plain)
+                .foregroundStyle(ThemeColor.text)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .disabled(!register.canAddTransactions)
+                .accessibilityLabel(RegisterViewModel.addTitle)
+                .accessibilityShowsLargeContentViewer {
+                    Label(RegisterViewModel.addTitle, systemImage: "plus")
                 }
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(ThemeColor.text)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .disabled(!register.canAddTransactions)
-            .accessibilityLabel(RegisterViewModel.addTitle)
-            .accessibilityShowsLargeContentViewer {
-                Label(RegisterViewModel.addTitle, systemImage: "plus")
-            }
         }
 
         private var plus: some View {

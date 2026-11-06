@@ -139,8 +139,6 @@ extension BudgetFormatter {
 }
 
 public enum InvalidAmount {
-    public static let instruction = "Ungültiger Betrag"
-
     public static func content(_ text: String) -> String {
         "„\(text)“ ist kein gültiger Betrag.\nRechnen geht mit +\u{00A0}und\u{00A0}−, etwa\u{00A0}50+20."
     }

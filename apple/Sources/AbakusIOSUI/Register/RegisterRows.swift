@@ -19,7 +19,6 @@
                 .font(.subheadline)
                 .padding(.leading, glyphWidth + RegisterCardDetail.spacing)
                 .padding(.trailing, RegisterStatusButton.width + 8)
-                .strikethrough(row.isExcludedFromSearch)
             } else {
                 HStack(spacing: 8) {
                     VStack(alignment: .leading, spacing: 3) {
@@ -215,7 +214,6 @@
             }
             .font(.subheadline)
             .lineLimit(1)
-            .strikethrough(row.isExcludedFromSearch)
         }
 
         @ViewBuilder
@@ -316,14 +314,14 @@
                 glyph
                 .frame(width: Self.width, height: Self.width)
                 .accessibilityLabel(label)
-            if let action, !register.isPicking {
+            if !register.isPicking {
                 Button {
-                    register.performMenuAction(action, on: [row.transactionId])
+                    register.statusTapped(row)
                 } label: {
                     image.frame(height: 44).contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .accessibilityHint(action.statusTitle)
+                .accessibilityHint(action.title)
             } else {
                 image
             }

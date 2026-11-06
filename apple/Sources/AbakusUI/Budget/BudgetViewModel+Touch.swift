@@ -157,8 +157,6 @@ public struct BudgetAvailableBreakdown: Hashable, Sendable {
 }
 
 extension BudgetViewModel {
-    public static let uncategorizedSearch = "Ist: Nicht kategorisiert"
-
     public var shownMonthsTitle: String {
         shownMonths.first.map { formatter.monthHeader($0) } ?? ""
     }
@@ -181,7 +179,7 @@ extension BudgetViewModel {
     public var showsTodaysMonth: Bool { shownMonths.first == today.firstOfMonth }
 
     public func uncategorizedTapped() {
-        onShowAllAccountsSearch(Self.uncategorizedSearch)
+        onShowAllAccounts(.needsCategory)
     }
 
     public func availableBreakdown(of categoryId: String, in date: DateWithoutTime) -> BudgetAvailableBreakdown? {

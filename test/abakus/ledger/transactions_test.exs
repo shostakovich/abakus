@@ -747,6 +747,63 @@ defmodule Abakus.Ledger.TransactionsTest do
     assert Ledger.count_transactions(budget_scope(), account, filter: :uncleared) == 2
   end
 
+  test "filter :needs_category lists what needs a category" do
+    giro = account_fixture(kind: :checking)
+    savings = account_fixture(kind: :savings)
+    broker = account_fixture(kind: :tracking)
+    category = category_fixture()
+    missing = transaction_fixture(account_id: giro.id, date: ~D[2026-10-01], amount: -500)
+    transaction_fixture(account_id: giro.id, date: ~D[2026-10-01], amount: 0)
+    transaction_fixture(account_id: giro.id, amount: -700, category_id: category.id)
+    transaction_fixture(account_id: broker.id, amount: -900)
+
+    part_missing =
+      transaction_fixture(
+        account_id: giro.id,
+        date: ~D[2026-10-02],
+        amount: -3_000,
+        subtransactions: [%{amount: -2_000, category_id: category.id}, %{amount: -1_000}]
+      )
+
+    transaction_fixture(
+      account_id: giro.id,
+      date: ~D[2026-10-02],
+      amount: -2_000,
+      subtransactions: [
+        %{amount: -2_000, category_id: category.id},
+        %{amount: 0},
+        %{amount: 0, payee_id: savings.transfer_payee.id}
+      ]
+    )
+
+    {:ok, _between_budget_accounts} =
+      Ledger.create_transaction(budget_scope(), %{
+        account_id: giro.id,
+        date: ~D[2026-10-03],
+        amount: -20_000,
+        payee_id: savings.transfer_payee.id
+      })
+
+    {:ok, to_tracking} =
+      Ledger.create_transaction(budget_scope(), %{
+        account_id: giro.id,
+        date: ~D[2026-10-04],
+        amount: -10_000,
+        payee_id: broker.transfer_payee.id,
+        category_id: category.id
+      })
+
+    # Imports and the apps' sync can leave it without one.
+    Repo.update_all(from(t in Transaction, where: t.id == ^to_tracking.id),
+      set: [category_id: nil]
+    )
+
+    listed = Ledger.list_transactions(budget_scope(), :all, filter: :needs_category)
+
+    assert Enum.map(listed, & &1.id) == [to_tracking.id, part_missing.id, missing.id]
+    assert Ledger.count_transactions(budget_scope(), :all, filter: :needs_category) == 3
+  end
+
   test "list_transactions, count_transactions and list_match_proposals leave out accounts" do
     giro = account_fixture()
     broker = account_fixture(kind: :tracking)

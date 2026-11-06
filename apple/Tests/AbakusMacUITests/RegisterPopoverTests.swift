@@ -110,19 +110,6 @@ private struct Underlay<Opener: View>: View {
         #expect(window.clicksBelow == 0)
     }
 
-    @Test func theTimeframeClosesWithoutApplyingAndTakesTheClick() async {
-        let (model, window) = register { _ in nil }
-        defer { window.close() }
-        model.search.dateSelectorClicked()
-        model.search.setTimeframeMonth(start: true, month: 5)
-        await window.settle()
-        await window.click(PopoverWindow.outside)
-        #expect(model.popup == nil)
-        #expect(model.search.timeframe == nil)
-        #expect(model.search.dateFilter == nil)
-        #expect(window.clicksBelow == 0)
-    }
-
     @Test func theScheduledCalloutStaysAndLetsTheClickThrough() async {
         let (model, window) = register { _ in .scheduledCallout(.added) }
         defer { window.close() }

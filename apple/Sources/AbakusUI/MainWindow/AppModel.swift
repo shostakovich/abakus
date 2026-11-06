@@ -55,10 +55,11 @@ public final class AppModel {
         register.isAppModalOpen = { [weak self] in self?.isAppModalOpen ?? false }
         budget.isAppModalOpen = { [weak self] in self?.isAppModalOpen ?? false }
         register.onEditPayees = { [weak self] name in self?.openPayeeSettings(payeeName: name) }
+        register.onEditAccount = { [weak self] in self?.accountPropertiesClicked() }
         store.onReceive = { [weak self] in self?.register.endEditsOvertakenByChanges() }
         budget.callouts.onShowTransaction = { [weak self] id in self?.register.showTransaction(id) }
         budget.callouts.onShowInAccountView = { [weak self] filter in self?.register.showFilteredView(filter) }
-        budget.onShowAllAccountsSearch = { [weak self] text in self?.register.showAllAccounts(searching: text) }
+        budget.onShowAllAccounts = { [weak self] filter in self?.register.showAllAccounts(in: filter) }
         register.isTouch = device != .mac
         navigation.onSelectionChange { [weak self] old, new in
             guard let self else { return }

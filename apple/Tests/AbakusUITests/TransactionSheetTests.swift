@@ -78,30 +78,20 @@ import Testing
         #expect(saves.first?.transaction.subtransactions.map(\.amount) == [-30, -20])
     }
 
-    @Test func aTransferSavesAsTheMacSavesIt() throws {
+    @Test func aTransferIsAnAccountPickedAsThePayee() throws {
         let fixture = RegisterFixture()
-        let mac = fixture.spied()
-        mac.model.makeTransferClicked()
-        let row = try #require(mac.model.editor)
-        row.press(.enter, .tab)
-        row.type("50")
-        row.activate(.save)
-
-        let touch = fixture.spied()
-        touch.model.makeTransferClicked()
-        let sheet = try #require(touch.model.editor)
-        let transfers = sheet.choices(for: .main(.payee), matching: sheet.text(.main(.payee)))
-        let account = try #require(transfers.first { $0.isEnabled })
+        let (model, store) = fixture.spied()
+        model.addTransactionClicked()
+        let sheet = try #require(model.editor)
+        let transfers = sheet.choices(for: .main(.payee), matching: "Tagesgeld")
+        let account = try #require(transfers.first { $0.isEnabled && Payee.isTransferPayeeName($0.value) })
         #expect(account.label == "Tagesgeld")
         sheet.choose(account.value, for: .main(.payee))
         #expect(sheet.prompt(.main(.category)) == "(Keine Kategorie nötig)")
         sheet.enter("50", in: .main(.amount))
         sheet.activate(sheet.sheetConfirmButton)
-
-        let saves = Self.normalized(touch.store)
-        #expect(saves.count == 1)
-        #expect(saves == Self.normalized(mac.store))
-        #expect(saves.first?.transaction.payeeId == EntityID.transferPayee(accountId: fixture.tagesgeld))
+        let save = try #require(store.transactionSaves.first)
+        #expect(save.transaction.payeeId == EntityID.transferPayee(accountId: fixture.tagesgeld))
     }
 
     @Test func theAmountWorksOutTypedArithmeticWhenTheKeypadCloses() throws {
@@ -140,18 +130,105 @@ import Testing
         #expect(sheet.clone.amount == 4)
     }
 
-    @Test func anotherOperatorIsRefusedWhenTheKeypadCloses() throws {
+    @Test func anotherOperatorIsRefusedBelowTheAmountWhenTheKeypadCloses() throws {
         var fixture = RegisterFixture()
         fixture.budget.budgetMetaData = BudgetMetaData()
-        let (model, _) = fixture.spied()
+        let (model, store) = fixture.spied()
         model.addTransactionClicked()
         let sheet = try #require(model.editor)
         sheet.enter("-50+20", in: .main(.amount))
         #expect(sheet.clone.amount == -30)
         sheet.enter("60*2", in: .main(.amount))
         #expect(sheet.clone.amount == -30)
-        #expect(sheet.text(.main(.amount)) == "30,00")
-        #expect(sheet.taskDialog?.instruction == "Ungültiger Betrag")
+        #expect(sheet.text(.main(.amount)) == "60*2")
+        #expect(
+            sheet.amountError == EditorAmountError(field: .main(.amount), message: BudgetAssignedAmountTests.refusal))
+        #expect(sheet.taskDialog == nil)
+        #expect(sheet.focusedField == .main(.amount))
+        let refusals = sheet.amountRefusals
+        sheet.sheetFieldFocused(.main(.memo))
+        #expect(sheet.focusedField == .main(.amount))
+        #expect(sheet.amountRefusals > refusals)
+        sheet.activate(sheet.sheetConfirmButton)
+        #expect(store.transactionSaves.isEmpty)
+        #expect(model.editor === sheet)
+        sheet.sheetTextChanged(.main(.amount), to: "60+2")
+        #expect(sheet.amountError == nil)
+        sheet.activate(sheet.sheetConfirmButton)
+        #expect(store.transactionSaves.map(\.transaction.amount) == [-62])
+    }
+
+    @Test func leavingAPartPageDropsItsRefusedAmount() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -50)
+        let (model, store) = fixture.spied()
+        model.beginEditing(id)
+        let sheet = try #require(model.editor)
+        sheet.choose(DefaultCategories.splitCategoryName, for: .main(.category))
+        let (first, second) = (EditorFieldID.sub(sheet.subIds[0], .amount), EditorFieldID.sub(sheet.subIds[1], .amount))
+        sheet.sheetShows(amount: first)
+        sheet.enter("30", in: first)
+        sheet.enter("5,8x", in: first)
+        #expect(sheet.amountError?.field == first)
+        sheet.sheetShows(amount: .main(.amount))
+        #expect(sheet.amountError == nil)
+        #expect(sheet.text(first) == "30.00")
+        #expect(sheet.focusedField == nil)
+        sheet.sheetShows(amount: second)
+        sheet.enter("20", in: second)
+        sheet.sheetShows(amount: .main(.amount))
+        sheet.activate(sheet.sheetConfirmButton)
+        #expect(store.transactionSaves.first?.transaction.subtransactions.map(\.amount) == [-30, -20])
+    }
+
+    @Test func openingAnotherPageDropsARefusedMainAmount() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -50)
+        let (model, store) = fixture.spied()
+        model.beginEditing(id)
+        let sheet = try #require(model.editor)
+        sheet.enter("5,8x", in: .main(.amount))
+        #expect(sheet.amountError != nil)
+        #expect(!sheet.sheetShows(amount: .main(.amount)))
+        #expect(sheet.sheetShows(amount: nil))
+        #expect(sheet.amountError == nil)
+        #expect(sheet.text(.main(.amount)) == "50.00")
+        try sheet.choose(sheet.choice("Groceries", for: .main(.category)), for: .main(.category))
+        sheet.sheetShows(amount: .main(.amount))
+        sheet.activate(sheet.sheetConfirmButton)
+        #expect(store.transactionSaves.map(\.transaction.amount) == [-50])
+    }
+
+    @Test func deletingWithARefusedAmountTypedAnnouncesNothing() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -50)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id)
+        let sheet = try #require(model.editor)
+        var announced: [String] = []
+        sheet.announce = { announced.append($0) }
+        sheet.sheetFieldFocused(.main(.amount))
+        sheet.sheetTextChanged(.main(.amount), to: "5,8x")
+        sheet.deleteClicked()
+        sheet.sheetFieldUnfocused(.main(.amount))
+        #expect(announced.isEmpty)
+        #expect(model.editor == nil)
+    }
+
+    @Test func aPartsAmountIsRefusedAtItsField() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -50)
+        let (model, _) = fixture.spied()
+        model.beginEditing(id)
+        let sheet = try #require(model.editor)
+        sheet.choose(DefaultCategories.splitCategoryName, for: .main(.category))
+        let part = EditorFieldID.sub(sheet.subIds[0], .amount)
+        sheet.enter("5,8x", in: part)
+        #expect(sheet.text(part) == "5,8x")
+        #expect(sheet.amountError?.field == part)
+        #expect(sheet.taskDialog == nil)
+        sheet.deleteSubRow(part.subId!)
+        #expect(sheet.amountError == nil)
     }
 
     @Test func aSavedTransactionChangesTheBalanceAndAvailableAtOnce() throws {
@@ -194,40 +271,42 @@ import Testing
         model.beginEditing(id)
         let sheet = try #require(model.editor)
         #expect(sheet.sheetConfirmButton == .approve)
-        #expect(sheet.sheetMoreButtons == [.approveAndFindNext])
-        #expect(sheet.sheetStatus == .waiting)
+        #expect(sheet.sheetConfirmButton.title == "Bestätigen")
+        #expect(sheet.sheetMoreButtons.isEmpty)
         #expect(sheet.sheetDeletes)
         sheet.activate(sheet.sheetConfirmButton)
         #expect(store.transactionSaves.first?.transaction.approved == true)
     }
 
-    @Test func theStatusRowSwitchesBetweenVorgemerktAndGebuchtAtOnce() throws {
+    @Test func deletingFromTheSheetClosesItAndOffersUndo() throws {
         var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -4)
-        let reconciled = fixture.add(fixture.giro, -5, cleared: .reconciled)
+        let id = fixture.add(fixture.giro, -4, cleared: .cleared)
         let (model, store) = fixture.spied(appliesCommands: true)
         model.beginEditing(id)
         let sheet = try #require(model.editor)
-        #expect(sheet.sheetStatus == .uncleared)
-        sheet.sheetStatusChosen(.cleared)
-        #expect(store.commands.last == .toggleCleared([id]))
-        #expect(sheet.sheetStatus == .cleared)
-        sheet.activate(.cancel)
-
-        model.beginEditing(reconciled)
-        let locked = try #require(model.editor)
-        let count = store.commands.count
-        locked.sheetStatusChosen(.uncleared)
-        #expect(locked.sheetStatus == .reconciled)
-        #expect(store.commands.count == count)
+        sheet.deleteClicked()
+        #expect(model.editor == nil)
+        #expect(!model.dialogs.isPresenting)
+        #expect(store.commands == [.deleteTransactions([id])])
+        #expect(model.notifiers.undoSlot?.message == "Buchung gelöscht")
     }
 
-    @Test func aNewTransactionHasNoStatusAndNoDelete() throws {
+    @Test func deletingAReconciledTransactionFromTheSheetStillAsks() throws {
+        var fixture = RegisterFixture()
+        let id = fixture.add(fixture.giro, -4, cleared: .reconciled)
+        let (model, store) = fixture.spied()
+        model.beginEditing(id)
+        try #require(model.editor).deleteClicked()
+        #expect(model.editor == nil)
+        #expect(model.dialogs.isPresenting)
+        #expect(store.commands.isEmpty)
+    }
+
+    @Test func aNewTransactionHasNoDelete() throws {
         let fixture = RegisterFixture()
         let (model, _) = fixture.spied()
         model.addTransactionClicked()
         let sheet = try #require(model.editor)
-        #expect(sheet.sheetStatus == nil)
         #expect(!sheet.sheetDeletes)
         #expect(sheet.sheetMoreButtons == [.saveAndAddAnother])
     }

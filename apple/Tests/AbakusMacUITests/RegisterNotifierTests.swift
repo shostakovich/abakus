@@ -30,9 +30,9 @@ import Testing
 
     @Test func aChipReadsItsTextAndLinkToVoiceOver() {
         let undo = RegisterNotifier(kind: .undo, text: "Buchung gelöscht", link: "Widerrufen")
-        #expect(NotifierView.accessibilityLabel(undo) == "Buchung gelöscht, Widerrufen")
+        #expect(NotifierLabel.accessibilityLabel(undo) == "Buchung gelöscht, Widerrufen")
         let reminder = RegisterNotifier(kind: .reminder, text: "1 bestätigen")
-        #expect(NotifierView.accessibilityLabel(reminder) == "1 bestätigen")
+        #expect(NotifierLabel.accessibilityLabel(reminder) == "1 bestätigen")
     }
 
     @Test func errorNotifierComesFirst() {
@@ -56,12 +56,13 @@ import Testing
         #expect(model.notifiers.list.first?.text == "2 bestätigen")
     }
 
-    @Test func clickingANotifierSearchesItsRows() {
+    @Test func clickingANotifierShowsItsView() {
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -1)
         let (model, _) = fixture.spied()
         model.notifiers.clicked(.warning)
-        #expect(model.search.text == "Ist: Nicht kategorisiert, ")
+        #expect(model.filter == .needsCategory)
+        #expect(model.viewMenuTitle == "Ansicht: ohne Kategorie")
         #expect(model.transactionIds == [id])
     }
 
@@ -95,62 +96,47 @@ import Testing
         #expect(model.selectedTransactionIds == [id])
     }
 
-    @Test func clearedClickOnASelectedRowTogglesTheWholeSelection() {
+    @Test func clearedClickOnASelectedRowTogglesOnlyThatRow() {
         var fixture = RegisterFixture()
         let a = fixture.add(fixture.giro, -1)
         fixture.add(fixture.giro, -2, cleared: .cleared)
         let (model, store) = fixture.spied()
         model.selectAll()
-        let all = model.selectedTransactionIds
         model.clearedClicked(model.rows.first { $0.id == a }!)
-        #expect(store.commands == [.toggleCleared(all)])
-        #expect(all.count == 3)
+        #expect(store.commands == [.toggleCleared([a])])
+        #expect(model.selectedTransactionIds.count == 3)
     }
 
-    @Test func clearedClickWhileEditingWritesTheStoredRowAndSurvivesDone() throws {
+    @Test func theLockAsksBeforeItUnlocksAReconciledRow() throws {
         var fixture = RegisterFixture()
-        let id = fixture.add(fixture.giro, -1, category: fixture.groceries)
-        var cleared = fixture.budget
-        cleared.transactions[cleared.transactions.firstIndex { $0.id == id }!].cleared = .cleared
+        let id = fixture.add(fixture.giro, -1, category: fixture.groceries, cleared: .reconciled)
         let (model, store) = fixture.spied()
-        model.beginEditing(id)
-        store.budgetAfterNextCommand = cleared
         model.clearedClicked(model.rows.first { $0.id == id }!)
-        #expect(store.commands == [.toggleCleared([id])])
-        #expect(model.editor?.clone.cleared == .cleared)
-        model.editor?.activate(.done)
-        #expect(model.editor == nil)
+        let dialog = try #require(model.dialogs.presented.last)
+        #expect(dialog.dialog.instruction == "Diese Buchung ist abgeglichen. Entsperren?")
+        #expect(dialog.dialog.buttons.map(\.title) == ["Abbrechen", "Entsperren"])
+        #expect(store.commands.isEmpty)
+        dialog.answer(UnlockChoice.unlock)
+        #expect(store.commands == [.setCleared([id], .cleared)])
     }
 
-    @Test func keyboardToggleUsesTheBulkRule() {
+    @Test func theLockStaysLockedWithoutTheConfirmation() throws {
         var fixture = RegisterFixture()
-        let a = fixture.add(fixture.giro, -1, cleared: .cleared)
-        let b = fixture.add(fixture.giro, -2, cleared: .cleared)
+        let id = fixture.add(fixture.giro, -1, category: fixture.groceries, cleared: .reconciled)
         let (model, store) = fixture.spied()
-        model.rowClicked(model.rows.first { $0.id == a }!, column: nil, modifiers: .command)
-        model.rowClicked(model.rows.first { $0.id == b }!, column: nil, modifiers: .command)
-        model.toggleClearedKeyPressed()
-        #expect(store.commands == [.toggleCleared([b, a])])
-    }
-
-    @Test func keyboardToggleReachesTheAddEditorWithoutSelection() {
-        let (model, store) = RegisterFixture().spied()
-        model.addTransactionClicked()
-        #expect(model.selectedTransactionIds.isEmpty)
-        #expect(RegisterCommand.toggleCleared.isEnabled(in: model))
-        RegisterCommand.toggleCleared.perform(in: model)
-        #expect(model.editor?.clone.cleared == .cleared)
+        model.clearedClicked(model.rows.first { $0.id == id }!)
+        try #require(model.dialogs.presented.last).answer(UnlockChoice.cancel)
         #expect(store.commands.isEmpty)
     }
 
-    @Test func theCheckApprovesTheSelectedUnapprovedRowsAtOnce() {
+    @Test func theCheckOnASelectedRowApprovesOnlyThatRow() {
         var fixture = RegisterFixture()
         let a = fixture.add(fixture.giro, -1, category: fixture.groceries, approved: false, source: .bank)
-        let b = fixture.add(fixture.giro, -2, category: fixture.groceries, approved: false, source: .bank)
+        fixture.add(fixture.giro, -2, category: fixture.groceries, approved: false, source: .bank)
         let (model, store) = fixture.spied()
         model.selectAll()
         model.errorIconClicked(model.rows.first { $0.id == a }!)
-        #expect(store.commands == [.approveTransactions([b, a])])
+        #expect(store.commands == [.approveTransactions([a])])
         #expect(model.popup == nil)
     }
 
@@ -173,15 +159,6 @@ import Testing
         #expect(model.statusPopupOptions.map(\.title) == ["Kategorie entfernen"])
         model.statusPopupChosen(.removeCategory)
         #expect(store.commands == [.removeTransferCategories([a])])
-    }
-
-    @Test func approveShortcutApprovesTheSelection() {
-        var fixture = RegisterFixture()
-        let a = fixture.add(fixture.giro, -1, category: fixture.groceries, approved: false, source: .bank)
-        let (model, store) = fixture.spied()
-        model.rowClicked(model.rows.first { $0.id == a }!, column: .payee, modifiers: [])
-        model.approveKeyPressed()
-        #expect(store.commands == [.approveTransactions([a])])
     }
 
     @Test func selectAllShortcutLeavesTextFieldsAlone() {
@@ -219,16 +196,11 @@ import Testing
         #expect(store.commands == [.deleteTransactions([a])])
     }
 
-    @Test func switchingAccountsClosesMenusAndPopups() {
+    @Test func switchingAccountsClosesMenus() {
         let fixture = RegisterFixture()
-        let (model, _) = fixture.spied()
-        model.search.dateSelectorClicked()
-        model.search.boxChanged("x")
-        model.navigation.selection = .account(fixture.tagesgeld)
-        #expect(model.popup == nil)
-        #expect(model.search.timeframe == nil)
-        #expect(model.search.dropDown == nil)
-        model.columnOptionsClicked()
+        let (model, _) = fixture.spied(selection: .account(fixture.tagesgeld))
+        model.scheduledToggleClicked()
+        model.scheduler.columnOptionsClicked()
         model.navigation.selection = .account(fixture.giro)
         #expect(model.menuRequest == nil)
     }
@@ -243,18 +215,19 @@ import Testing
         #expect(model.selectedTransactionIds == [counterpart.id])
     }
 
-    @Test func aJumpToAHiddenOtherSideClearsThatAccountsSearch() throws {
+    @Test func aJumpToAHiddenOtherSideClearsThatAccountsSearchAndView() throws {
         var fixture = RegisterFixture()
         let a = fixture.add(fixture.giro, -1, target: fixture.tagesgeld)
         let (model, _) = fixture.spied()
         let counterpart = try #require(model.store.budget.transaction(withId: a)?.transferTransactionId)
         model.navigation.selection = .account(fixture.tagesgeld)
-        model.search.run("Empfänger: nobody")
+        model.search.run("nobody")
+        model.viewMenuChosen(.filter(.needsCategory))
         #expect(!model.transactionIds.contains(counterpart))
         model.navigation.selection = .account(fixture.giro)
         model.transferIconClicked(try #require(model.rows.first { $0.id == a }))
         #expect(model.navigation.selection == .account(fixture.tagesgeld))
-        #expect(model.search.filter == nil)
+        #expect(model.filter == .all)
         #expect(model.search.text.isEmpty)
         #expect(model.transactionIds.contains(counterpart))
         #expect(model.selectedTransactionIds == [counterpart])
@@ -263,37 +236,42 @@ import Testing
 
 @MainActor
 @Suite struct RegisterColumnMenuTests {
-    @Test func columnMenuListsHideableColumnsThenApplyToAll() {
-        let (model, _) = RegisterFixture().spied()
-        let menu = model.columnMenu
-        #expect(
-            menu.map(\.title) == [
-                "Status", "Memo", "", "Für alle Konten übernehmen",
-            ])
-        #expect(menu[0].isChecked && menu[1].isChecked)
-    }
-
-    @Test func columnTabAndHeaderRightClickOfferTheColumnMenu() {
-        let (model, _) = RegisterFixture().spied()
-        model.columnOptionsClicked()
-        #expect(model.menuRequest?.anchor == .columnTab)
-        #expect(model.menuRequest?.items == model.columnMenu)
-        #expect(model.headerContextMenu() == model.columnMenu)
-    }
-
-    @Test func togglingFromTheMenuHidesTheColumn() {
-        let (model, _) = RegisterFixture().spied()
-        model.performMenuAction(.toggleColumn(.memo))
-        #expect(!model.visibleColumns.contains(.memo))
-        #expect(model.columnMenu.item(titled: "Memo")?.isChecked == false)
-    }
-
-    @Test func applyToAllCopiesTheSettings() {
+    @Test func theViewMenuSwitchesStatusAndMemoForEveryAccount() {
         let fixture = RegisterFixture()
         let (model, _) = fixture.spied()
-        model.performMenuAction(.toggleColumn(.memo))
-        model.performMenuAction(.applyColumnsToAllAccounts)
+        #expect(model.viewMenu.suffix(2).map(\.title) == ["Status", "Memo"])
+        #expect(model.viewMenu.suffix(2).allSatisfy { $0.isChecked })
+        model.viewMenuChosen(.toggleColumn(.cleared))
+        #expect(!model.visibleColumns.contains(.cleared))
         model.navigation.selection = .account(fixture.tagesgeld)
-        #expect(!model.visibleColumns.contains(.memo))
+        #expect(!model.visibleColumns.contains(.cleared))
+        #expect(model.viewMenu.first { $0.title == "Status" }?.isChecked == false)
+    }
+
+    @Test func aReconciliationShowsTheStatusEvenWhenItIsHidden() throws {
+        let (model, _) = RegisterFixture().spied()
+        model.viewMenuChosen(.toggleColumn(.cleared))
+        model.reconciliation.reconcileClicked()
+        let form = try #require(model.reconciliation.statementForm)
+        form.amountText = "1111"
+        model.reconciliation.begin(form)
+        #expect(model.visibleColumns.contains(.cleared))
+    }
+}
+
+@MainActor
+@Suite struct RegisterInfoBarTests {
+    @Test func zuBestaetigenWithASearchShowsTheApprovalsAndTheHits() {
+        var fixture = RegisterFixture()
+        fixture.add(fixture.giro, -1, payee: "Netflix", category: fixture.groceries, approved: false, source: .bank)
+        fixture.add(fixture.giro, -2, payee: "Spotify", category: fixture.groceries, approved: false, source: .bank)
+        let (model, _) = fixture.spied()
+        model.viewMenuChosen(.filter(.unapproved))
+        model.search.boxChanged("netflix")
+        #expect(
+            RegisterPanelContent.infoBars(of: model) == [
+                .approvals("1 Buchung wartet auf Bestätigung."),
+                .search(RegisterSearchInfo(message: "1 Treffer für „netflix“", clearButtonTitle: "Suche zurücksetzen")),
+            ])
     }
 }

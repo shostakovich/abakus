@@ -39,14 +39,12 @@ public struct EditorFieldID: Hashable, Sendable, CustomStringConvertible {
 }
 
 public enum EditorButton: String, Hashable, Sendable, CaseIterable {
-    case done, approveAndFindNext, approve, delete, saveAndAddAnother, save, cancel
+    case done, approve, saveAndAddAnother, save, cancel
 
     public var title: String {
         switch self {
         case .done: "Fertig"
-        case .approveAndFindNext: "Bestätigen und weiter"
         case .approve: "Bestätigen"
-        case .delete: "Löschen"
         case .saveAndAddAnother: "Sichern und weitere"
         case .save: "Sichern"
         case .cancel: "Abbrechen"
@@ -56,8 +54,7 @@ public enum EditorButton: String, Hashable, Sendable, CaseIterable {
     public var systemImage: String? {
         switch self {
         case .approve: "checkmark"
-        case .delete: "trash"
-        case .done, .approveAndFindNext, .saveAndAddAnother, .save, .cancel: nil
+        case .done, .saveAndAddAnother, .save, .cancel: nil
         }
     }
 }
@@ -94,6 +91,12 @@ public struct EditorSelection: Hashable, Sendable {
 public enum EditorMode: Hashable, Sendable {
     case existing
     case new
+}
+
+/// Why the typed amount is none; the field keeps the text and the focus until it is changed.
+public struct EditorAmountError: Hashable, Sendable {
+    public var field: EditorFieldID
+    public var message: String
 }
 
 public struct EditorDateCallout: Hashable, Sendable {

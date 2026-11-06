@@ -528,9 +528,10 @@ defmodule AbakusWeb.BudgetLiveTest do
 
       assert has_element?(view, "#available-uncategorised-2026-10 .sr-only", "überzogen")
       refute has_element?(view, "#available-uncategorised-2026-10 button")
-      assert has_element?(view, ~s|#category-uncategorised a[href="/budget/accounts/all"]|)
-
       refute has_element?(view, "#assign-uncategorised-2026-10")
+
+      assert {:error, {:live_redirect, %{to: "/budget/accounts/all?filter=needs_category"}}} =
+               view |> element("#category-uncategorised a") |> render_click()
     end
 
     test "Verfügbar shows its state the same in a later month, without pills, and opens its popover there",

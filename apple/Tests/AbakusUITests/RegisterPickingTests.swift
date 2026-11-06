@@ -31,20 +31,16 @@ import Testing
         }
     }
 
-    @Test func approvingWhatAuswählenSelectedApprovesExactlyThose() {
+    @Test func thePickingBarDeletesWhatIsPickedAtOnceAndOffersUndo() {
         let imports = Imports()
         let (first, second, third) = (imports.ids[0], imports.ids[1], imports.ids[2])
         imports.choose("Auswählen")
-        #expect(imports.model.isPicking)
         imports.model.setSelection([first, third])
-        imports.model.performMenuAction(.approve)
-        guard case .approveTransactions(let approved) = imports.store.commands.last else {
-            Issue.record("Nothing approved")
-            return
-        }
-        #expect(Set(approved) == [first, third])
-        #expect(imports.store.budget.transaction(withId: second)?.needsApproval == true)
-        #expect(imports.store.budget.transaction(withId: first)?.needsApproval == false)
+        imports.model.performMenuAction(.delete, on: imports.model.pickingActions.ids)
+        #expect(!imports.model.dialogs.isPresenting)
+        #expect(imports.store.budget.transaction(withId: first) == nil)
+        #expect(imports.store.budget.transaction(withId: second) != nil)
+        #expect(imports.model.notifiers.undoSlot?.message == "2 Buchungen gelöscht")
     }
 
     @Test func endingAuswählenClearsTheSelection() {
@@ -53,14 +49,6 @@ import Testing
         imports.model.setSelection([imports.ids[0]])
         imports.choose("Auswählen beenden")
         #expect(!imports.model.isPicking)
-        #expect(imports.model.selection.isEmpty)
-    }
-
-    @Test func alleAuswählenTakesTheWholeViewAndGivesItBack() {
-        let imports = Imports()
-        imports.choose("Alle auswählen")
-        #expect(imports.model.selection.count == imports.model.transactionIds.count)
-        imports.choose("Auswahl aufheben")
         #expect(imports.model.selection.isEmpty)
     }
 
@@ -74,29 +62,36 @@ import Testing
     @Test func aContextMenuActsOnTheRowsItWasOpenedFor() {
         let imports = Imports()
         let (first, second) = (imports.ids[0], imports.ids[1])
-        let menu = imports.model.transactionActionsMenu(for: [second])
-        #expect(menu.item(titled: "Bestätigen")?.isEnabled == true)
         imports.model.setSelection([first])
-        imports.model.performMenuAction(.approve, on: [second])
-        #expect(imports.store.commands.last == .approveTransactions([second]))
+        imports.model.performMenuAction(.categorize(categoryId: nil), on: [second])
+        #expect(imports.store.commands.last == .categorizeTransactions([second], categoryId: nil))
         #expect(imports.model.selectedTransactionIds == [second])
+    }
+
+    @Test func theLongPressMenuDeletesInRed() {
+        let imports = Imports()
+        imports.model.isTouch = true
+        let delete = imports.model.transactionActionsMenu(for: [imports.ids[0]]).item(titled: "Löschen")
+        #expect(delete?.isDestructive == true)
     }
 
     @Test func theTableAddsTheMemoButNotTheStatusToAnsicht() {
         let imports = Imports()
         let menu = imports.model.touchViewMenu(showsColumns: true)
-        #expect(menu.item(titled: "Memo") != nil)
+        #expect(menu.item(titled: "Memo ausblenden") != nil)
         #expect(menu.item(titled: "Status") == nil)
-        #expect(imports.model.touchViewMenu(showsColumns: false).item(titled: "Memo") == nil)
+        #expect(imports.model.touchViewMenu(showsColumns: false).item(titled: "Memo ausblenden") == nil)
     }
 
-    @Test func ansichtNamesEveryTopLevelItemWithASymbolAndShortLabels() {
+    @Test func ansichtChecksTheViewAndKeepsAlleForPicking() {
         let imports = Imports()
         let items = imports.model.touchViewMenu(showsColumns: true).filter { $0.kind != .separator }
-        #expect(items.allSatisfy { $0.systemImage != nil })
-        #expect(items.map(\.title) == ["Zeitraum", "Abgeglichene", "Auswählen", "Alle auswählen", "Spalten"])
-        #expect(items.map(\.subtitle) == ["Alle Daten", "Gezeigt", nil, nil, nil])
-        #expect(items.allSatisfy { !$0.isChecked })
+        #expect(
+            items.map(\.title) == [
+                "Alle Buchungen", "Zu bestätigen", "Vorgemerkt", "Ohne Kategorie", "Geplant", "Auswählen",
+                "Memo ausblenden", "Konto bearbeiten",
+            ])
+        #expect(items.filter(\.isChecked).map(\.title) == ["Alle Buchungen"])
     }
 
     @Test func tappingTheStatusApprovesAWaitingRowElseSwitchesItsCleared() {
@@ -105,33 +100,29 @@ import Testing
         let uncleared = fixture.add(fixture.giro, -2)
         let cleared = fixture.add(fixture.giro, -3, cleared: .cleared)
         let reconciled = fixture.add(fixture.giro, -4, cleared: .reconciled)
-        let (model, _) = fixture.spied()
-        func action(_ id: String) -> RegisterMenuAction? {
-            model.statusAction(for: model.rows.first { $0.id == id }!)
-        }
-        #expect(action(waiting) == .approve)
-        #expect(action(uncleared) == .markCleared)
-        #expect(action(cleared) == .markUncleared)
-        #expect(action(reconciled) == nil)
+        let (model, store) = fixture.spied()
+        func row(_ id: String) -> RegisterRow { model.rows.first { $0.id == id }! }
+        #expect(model.statusAction(for: row(waiting)) == .approve)
+        #expect(model.statusAction(for: row(uncleared)) == .markCleared)
+        #expect(model.statusAction(for: row(cleared)) == .markUncleared)
+        #expect(model.statusAction(for: row(reconciled)) == .unlock)
+        model.statusTapped(row(waiting))
+        model.statusTapped(row(uncleared))
+        #expect(store.commands == [.approveTransactions([waiting]), .toggleCleared([uncleared])])
+        model.statusTapped(row(reconciled))
+        #expect(model.dialogs.presented.last?.dialog.instruction == "Diese Buchung ist abgeglichen. Entsperren?")
+        model.dialogs.presented.last?.answer(UnlockChoice.unlock)
+        #expect(store.commands.last == .setCleared([reconciled], .cleared))
     }
 
-    @Test func thePickingBarOffersApprovingWhileARowWaitsElseTheClearedSwitch() {
+    @Test func thePickingBarHasNoStatusButton() {
         var fixture = RegisterFixture()
         let waiting = fixture.add(fixture.giro, -1, approved: false, source: .bank)
-        let uncleared = fixture.add(fixture.giro, -2)
-        let cleared = fixture.add(fixture.giro, -3, cleared: .cleared)
-        let reconciled = fixture.add(fixture.giro, -4, cleared: .reconciled)
         let (model, _) = fixture.spied()
-        func status(_ ids: Set<String>) -> (RegisterMenuAction, Bool) {
-            model.setSelection(ids)
-            let actions = model.pickingActions
-            return (actions.status, actions.isStatusEnabled)
-        }
-        #expect(status([waiting, cleared]) == (.approve, true))
-        #expect(status([uncleared, cleared]) == (.markCleared, true))
-        #expect(status([cleared]) == (.markUncleared, true))
-        #expect(status([reconciled]) == (.markCleared, false))
-        #expect(status([]) == (.markCleared, false))
+        model.setSelection([waiting])
+        let actions = model.pickingActions
+        #expect(actions.menu.item(titled: "Bestätigen") == nil)
+        #expect(actions.menu.item(titled: "Als gebucht markieren") == nil)
     }
 
     @Test func thePickingBarCategorizesAndDeletesOnlyWhatIsPickedInABudgetAccount() {
@@ -144,7 +135,6 @@ import Testing
         model.setSelection([giro])
         #expect(!model.pickingActions.categories.isEmpty)
         #expect(model.pickingActions.canDelete)
-        #expect(model.pickingActions.deleteQuestion == "Buchung löschen?")
         let (tracking, _) = fixture.spied(selection: .account(fixture.depot))
         tracking.setSelection([depot])
         #expect(tracking.pickingActions.categories.isEmpty)

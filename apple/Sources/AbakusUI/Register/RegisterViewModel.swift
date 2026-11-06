@@ -5,13 +5,10 @@ import Observation
 
 struct RegisterAccountViewState {
     var sort = RegisterSortOrder.default
-    var isShowingReconciled = true
-    var columnSettings = RegisterColumnSettings()
     var expandedSplits: Set<String> = []
     var isSchedulerVisible = false
+    var filter = RegisterFilter.all
     var searchText = ""
-    var searchFilter: RegisterSearchFilter?
-    var dateFilter: DateFilterSelection?
     var expandedSplitsBeforeSearch: Set<String>?
     var scrollBeforeSearch: RegisterScrollRequest.Target?
     var reconciliation: RegisterReconciliation?
@@ -24,11 +21,11 @@ struct RegisterAccountViewState {
 @Observable
 public final class RegisterViewModel {
     public static let addTitle = "Neue Buchung"
-    public static let transferTitle = "Neue Umbuchung"
 
     public let store: any BudgetStoring
     public let navigation: NavigationState
     @ObservationIgnored public var onEditPayees: @MainActor (String?) -> Void = { _ in }
+    @ObservationIgnored public var onEditAccount: @MainActor () -> Void = {}
     @ObservationIgnored public var autoFillSettings = AutoFillSettings()
     @ObservationIgnored private var scrollOffsets: [String: CGFloat] = [:]
     @ObservationIgnored private var cache: (inputs: DerivedInputs, value: Derived)?
@@ -36,11 +33,13 @@ public final class RegisterViewModel {
         didSet { viewStateStore?.save(viewStates) }
     }
     @ObservationIgnored var viewStateStore: RegisterViewStateStore?
+    var hiddenColumns: Set<RegisterColumn> = [] {
+        didSet { viewStateStore?.saveHiddenColumns(hiddenColumns) }
+    }
     var adjustmentHelpSlot: (visit: Int, help: RegisterAdjustmentHelp)?
     private var storedIncomeCheck: (visit: Int, check: RegisterIncomeCheck)?
     private var overlays = (visit: -1, state: RegisterOverlayState())
     var pickingVisit: Int?
-    public internal(set) var renamePayeeForm: RenamePayeeForm?
     public internal(set) var gridFocusRequest = 0
     public internal(set) var lastScheduledTransactionId: String?
     @ObservationIgnored public private(set) lazy var scheduler = RegisterScheduler(register: self)
@@ -149,21 +148,20 @@ public final class RegisterViewModel {
     }
 
     public var visibleColumns: [RegisterColumn] {
-        let settings = viewState.columnSettings
         let onBudget = account?.onBudget ?? true
         return RegisterColumn.allCases.filter { column in
             switch column {
             case .account: isAllAccounts
             case .category: onBudget
-            case .cleared: isReconciling || (settings[.cleared]?.visible ?? false)
+            case .cleared: isReconciling || !hiddenColumns.contains(.cleared)
             case .frequency: false
-            default: column.canDisable ? settings[column]?.visible ?? false : true
+            default: !column.canDisable || !hiddenColumns.contains(column)
             }
         }
     }
 
     public func columnLayout(gridWidth: CGFloat) -> RegisterColumnLayout {
-        var settings = viewState.columnSettings
+        var settings = RegisterColumnSettings()
         guard isReconciling else {
             return RegisterColumnLayout(gridWidth: gridWidth, visibleColumns: visibleColumns, settings: settings)
         }
@@ -172,26 +170,21 @@ public final class RegisterViewModel {
             gridWidth: gridWidth, visibleColumns: visibleColumns, settings: settings, minimumWidths: [.cleared: 90])
     }
 
-    public var columnSettings: RegisterColumnSettings { viewState.columnSettings }
-
     public var columnMenuItems: [RegisterColumnMenuItem] {
         let order: [RegisterColumn] = [.cleared, .memo]
         return order.map { column in
-            RegisterColumnMenuItem(
-                column: column, label: column.menuLabel,
-                isChecked: viewState.columnSettings[column]?.visible ?? false)
+            RegisterColumnMenuItem(column: column, label: column.menuLabel, isChecked: !hiddenColumns.contains(column))
         }
     }
 
     public func toggleColumnVisibility(_ column: RegisterColumn) {
-        guard column.canDisable, var setting = viewState.columnSettings[column] else { return }
-        setting.visible.toggle()
-        viewState.columnSettings[column] = setting
+        guard column.canDisable else { return }
+        if hiddenColumns.contains(column) {
+            hiddenColumns.remove(column)
+        } else {
+            hiddenColumns.insert(column)
+        }
         editor?.columns = visibleColumns
-    }
-
-    public func columnOptionsClicked() {
-        showMenu(columnMenu, below: columnTab)
     }
 
     public var selection: RegisterSelection { grid.selection }
@@ -233,13 +226,25 @@ public final class RegisterViewModel {
     }
 
     public func clearedClicked(_ row: RegisterRow) {
-        if row.transactionId == editingTransactionId, let editor {
-            editor.toggleCleared()
-            return
-        }
         if grid.swallowsClick(on: row.transactionId) { return }
         selectForIconClick(row)
-        perform(.toggleCleared(selectedTransactionIds))
+        guard row.cleared == .reconciled else {
+            perform(.toggleCleared([row.transactionId]))
+            return
+        }
+        let id = row.transactionId
+        dialogs.ask(
+            TaskDialog<UnlockChoice>(
+                instruction: "Diese Buchung ist abgeglichen. Entsperren?",
+                content: "Sie ist danach gebucht, aber nicht mehr gesperrt.",
+                buttons: [
+                    .init(.cancel, title: "Abbrechen"),
+                    .init(.unlock, title: "Entsperren", isDefault: true),
+                ],
+                dismissal: .cancel)
+        ) { [weak self] answer in
+            if answer.choice == .unlock { self?.perform(.setCleared([id], .cleared)) }
+        }
     }
 
     public func errorIconClicked(_ row: RegisterRow) {
@@ -253,38 +258,21 @@ public final class RegisterViewModel {
         jumpToOtherSide(of: row)
     }
 
-    public var actionButtonTitle: String {
-        switch selection.count {
-        case 0: "Buchungen bearbeiten"
-        case 1: "1 Buchung bearbeiten"
-        case let count: "\(count) Buchungen bearbeiten"
-        }
-    }
-
-    public var hasSelection: Bool { !selection.isEmpty }
-
     /// An open edit glows or ends first, as for the menu bar's items.
     package func viewMenuChosen(_ action: RegisterMenuAction) {
         guard !grid.clickedOutsideEditor() else { return }
         performMenuAction(action)
     }
 
-    /// The menu bar's Edit Transactions items: an open edit glows or ends first, as after a click on the button.
-    func editTransactionsCommandChosen(_ action: RegisterMenuAction) {
-        guard acceptsRegisterKeys, !grid.clickedOutsideEditor() else { return }
-        performMenuAction(action)
-    }
+    public var filter: RegisterFilter { viewState.filter }
 
-    public var isShowingReconciled: Bool { viewState.isShowingReconciled }
-
-    public func setShowingReconciled(_ showing: Bool) {
-        guard showing != viewState.isShowingReconciled, !grid.clickedOutsideEditor() else { return }
-        viewState.isShowingReconciled = showing
+    func setFilter(_ filter: RegisterFilter) {
+        guard filter != viewState.filter, !isReconciling else { return }
+        viewState.filter = filter
         clearSelection()
         endEditsOvertakenByChanges()
+        requestScroll(sortOrder.ascending ? .bottom : .top)
     }
-
-    public var isReconciledFilterEnabled: Bool { !search.isFiltered }
 
     package var expandedSplits: Set<String> {
         get { viewState.expandedSplits }
@@ -302,31 +290,24 @@ public final class RegisterViewModel {
         grid.beginNew()
     }
 
-    public func makeTransferClicked() {
-        guard showsTransferButton else { return }
-        grid.beginNew(transfer: true)
-    }
-
     public var summary: RegisterSummary {
         let balances = store.budget.balances(forAccount: key)
-        let isSearching = viewState.searchFilter != nil
+        let isSearching = search.isSearching
         let first =
             isSearching
             ? RegisterSummaryItem.blank
             : summaryItem(
-                .cleared, "Gebucht", balances.cleared,
-                "Summe der gebuchten und abgeglichenen Buchungen. Klicken, um sie zu zeigen.")
+                .cleared, "Gebucht", balances.cleared, "Summe der gebuchten und abgeglichenen Buchungen.")
         let second: RegisterSummaryItem
         if isSearching {
-            let matches = derived.searchMatches
-            let total = Amount.sum(transactions.map { matches[$0.id]?.searchAmount(of: $0) ?? $0.amount })
+            let total = Amount.sum(transactions.map(\.amount))
             second = summaryItem(
                 .search, "Suchsumme (\(transactions.count))", total,
                 "Summe aller Buchungen, die die Suche findet.")
         } else {
             second = summaryItem(
                 .uncleared, "Vorgemerkt", balances.uncleared,
-                "Summe der vorgemerkten Buchungen, die die Bank noch nicht kennt. Klicken, um sie zu zeigen.")
+                "Summe der vorgemerkten Buchungen, die die Bank noch nicht kennt.")
         }
         let working = summaryItem(
             .working, "Arbeitssaldo", balances.working,
@@ -349,12 +330,6 @@ public final class RegisterViewModel {
     {
         RegisterSummaryItem(
             kind: kind, title: title, amountText: formatter.currency(amount), isNegative: amount < 0, tooltip: tooltip)
-    }
-
-    public func summaryClicked(_ kind: RegisterSummaryKind) {
-        guard kind == .cleared || kind == .uncleared, !grid.clickedOutsideEditor() else { return }
-        search.text = kind == .cleared ? "Ist: Gebucht oder abgeglichen" : "Ist: Vorgemerkt"
-        search.commit()
     }
 
     public var isSchedulerVisible: Bool { viewState.isSchedulerVisible }
@@ -400,18 +375,16 @@ public final class RegisterViewModel {
         var budget: Budget
         var key: String
         var sort: RegisterSortOrder
-        var isShowingReconciled: Bool
         var expandedSplits: Set<String>
-        var searchFilter: RegisterSearchFilter?
-        var dateFilter: DateFilterSelection?
+        var filter: RegisterFilter
+        var search: RegisterSearch
         var editingId: String?
         var today: DateWithoutTime
         var reconcileThrough: DateWithoutTime?
 
         /// Only a budget change adds rows to the same list; a new filter or account redraws it without a glow.
         func addsRows(to previous: DerivedInputs) -> Bool {
-            budget != previous.budget && key == previous.key && searchFilter == previous.searchFilter
-                && dateFilter == previous.dateFilter && isShowingReconciled == previous.isShowingReconciled
+            budget != previous.budget && key == previous.key && filter == previous.filter && search == previous.search
                 && reconcileThrough == previous.reconcileThrough && today == previous.today
         }
     }
@@ -425,7 +398,7 @@ public final class RegisterViewModel {
         var transactions: [Transaction]
         var rows: [RegisterRow]
         var gridRows: [RegisterRow]
-        var searchMatches: [String: RegisterSearchMatch] = [:]
+        var searchHits: [String: RegisterSearch.Hit] = [:]
         var notifierCounts = RegisterNotifierCounts()
         var added = AddedRows()
     }
@@ -433,13 +406,12 @@ public final class RegisterViewModel {
     var derived: Derived {
         let state = viewState
         let inputs = DerivedInputs(
-            budget: store.budget, key: key, sort: state.sort, isShowingReconciled: state.isShowingReconciled,
-            expandedSplits: state.expandedSplits, searchFilter: state.searchFilter, dateFilter: state.dateFilter,
-            editingId: grid.editingId, today: today(),
+            budget: store.budget, key: key, sort: state.sort, expandedSplits: state.expandedSplits,
+            filter: state.filter, search: RegisterSearch(state.searchText), editingId: grid.editingId, today: today(),
             reconcileThrough: state.reconciliation?.statementDate
         )
         if let cache, cache.inputs == inputs { return cache.value }
-        var value = derive(inputs, state: state)
+        var value = derive(inputs)
         if let previous = cache, inputs.addsRows(to: previous.inputs) {
             let before = Set(previous.value.transactions.map(\.id))
             let added = Set(value.transactions.map(\.id).filter { !before.contains($0) })
@@ -454,7 +426,7 @@ public final class RegisterViewModel {
         return added.ids.contains(transactionId) ? added.start : nil
     }
 
-    private func derive(_ inputs: DerivedInputs, state: RegisterAccountViewState) -> Derived {
+    private func derive(_ inputs: DerivedInputs) -> Derived {
         let budget = inputs.budget
         guard !inputs.key.isEmpty else { return Derived(transactions: [], rows: [], gridRows: []) }
         let all: [Transaction]
@@ -463,36 +435,30 @@ public final class RegisterViewModel {
         } else {
             all = inputs.key == EntityID.allAccounts ? budget.transactions : budget.transactions(inAccount: inputs.key)
         }
-        let unfiltered = state.searchFilter == nil && state.dateFilter == nil
-        let query = state.searchFilter?.query
         let lookup = BudgetLookup(budget)
-        let environment = query.map { _ in RegisterSearchEnvironment(lookup: lookup, today: inputs.today) }
-        var searchMatches: [String: RegisterSearchMatch] = [:]
+        let formatter = BudgetFormatter(metaData: budget.budgetMetaData)
+        var searchHits: [String: RegisterSearch.Hit] = [:]
         let listed = all.filter { transaction in
-            if inputs.reconcileThrough == nil, let dates = state.dateFilter, !dates.contains(transaction.date) {
-                return false
-            }
-            if let query, let environment {
-                let match = query.match(transaction, in: environment)
-                guard match.isVisible else { return false }
-                searchMatches[transaction.id] = match
-            }
-            return !(unfiltered && !state.isShowingReconciled && transaction.cleared == .reconciled)
+            guard inputs.filter.includes(transaction, in: lookup) else { return false }
+            guard !inputs.search.isEmpty else { return true }
+            guard let hit = inputs.search.hit(transaction, lookup: lookup, formatter: formatter) else { return false }
+            searchHits[transaction.id] = hit
+            return true
         }
         let showsMonths = inputs.sort.column == .date
         var builder = RegisterRowBuilder(lookup: lookup)
         builder.showsYear = !showsMonths
         builder.omitsYear = isTouch ? inputs.today.year : nil
-        let formatter = builder.formatter
+        let rowFormatter = builder.formatter
         let sorted = RegisterSorter.sorted(listed, by: inputs.sort, lookup: lookup)
         let gridRows = builder.rows(
             for: sorted, expandedSplits: inputs.expandedSplits, editingId: inputs.editingId,
-            heading: { showsMonths ? formatter.monthHeader($0.date) : nil },
+            heading: { showsMonths ? rowFormatter.monthHeader($0.date) : nil },
             row: builder.row(for:isExpanded:),
-            subRows: { builder.subRows(for: $0, match: searchMatches[$0.id]) })
+            subRows: { builder.subRows(for: $0) })
         return Derived(
             transactions: sorted, rows: showsMonths ? gridRows.filter { !$0.isMonthHeading } : gridRows,
-            gridRows: gridRows, searchMatches: searchMatches,
+            gridRows: gridRows, searchHits: searchHits,
             notifierCounts: budget.notifierCounts(forAccount: inputs.key))
     }
 }

@@ -81,7 +81,7 @@
                         } else {
                             LabeledContent("Art") { Text(verbatim: form.type.label) }
                         }
-                        Button("Saldo anpassen …", action: controller.adjustBalanceClicked)
+                        Button("Saldo anpassen", action: controller.adjustBalanceClicked)
                     }
                     Section {
                         Button(

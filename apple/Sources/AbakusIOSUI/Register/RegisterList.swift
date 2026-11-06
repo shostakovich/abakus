@@ -10,7 +10,6 @@
         let table: RegisterTouchTable?
         /// Where the table's cells start while picking, so the column header can follow the selection circles.
         @Binding var pickingTableLeading: CGFloat
-        @Environment(\.dismiss) private var dismiss
         @State private var listX: CGFloat?
 
         var body: some View {
@@ -66,20 +65,8 @@
             }
         }
 
-        @ViewBuilder
         private var emptyState: some View {
-            if register.isShowingApprovals {
-                ContentUnavailableView {
-                    Label("Alles bestätigt", systemImage: "checkmark.circle")
-                } description: {
-                    Text("Keine Buchung wartet mehr auf Bestätigung.")
-                } actions: {
-                    Button("Zurück zu den Konten") { dismiss() }
-                }
-            } else {
-                ContentUnavailableView(
-                    register.search.isFiltered ? "Keine Treffer" : "Keine Buchungen", systemImage: "list.bullet")
-            }
+            ContentUnavailableView(register.emptyListTitle, systemImage: "list.bullet")
         }
 
         private func rows(_ rows: [RegisterRow]) -> some View {
@@ -153,21 +140,14 @@
             } else {
                 content
                     .tag(row.transactionId)
-                    .swipeActions(edge: .leading) {
-                        if let action = register.statusAction(for: row) {
-                            Button(action.statusTitle) { perform(action) }
-                                .tint(action == .approve ? ThemeColor.accent : ThemeColor.positive)
-                        }
-                    }
                     .swipeActions(edge: .trailing) {
-                        Button("Löschen", systemImage: "trash") { perform(.delete) }
-                            .tint(ThemeColor.negative)
+                        // Without the destructive role, so a delete that asks or is refused leaves the row in place.
+                        Button("Löschen", systemImage: "trash") {
+                            register.performMenuAction(.delete, on: [row.transactionId])
+                        }
+                        .tint(ThemeColor.negative)
                     }
             }
-        }
-
-        private func perform(_ action: RegisterMenuAction) {
-            register.performMenuAction(action, on: [row.transactionId])
         }
     }
 #endif

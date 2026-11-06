@@ -36,6 +36,9 @@ struct EditorPopupsLayer: View {
                 if let callout = editor.dateCallout, let field = rects[.main(.date)] {
                     dateCallout(callout, field: field, size: size)
                 }
+                if let error = editor.amountError, let anchor = anchors[error.field] {
+                    BudgetAmountErrorBubble(error: error.message, anchor: anchor)
+                }
             }
         }
     }

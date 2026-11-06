@@ -126,7 +126,7 @@ import Testing
         #expect(october.rowText(S.kleidung) == ["", "−30,00", "−30,00"])
         #expect(october.masterText(S.alltag) == ["0,00", "−100,00", "−100,00"])
         let summary = scenario.budget.outflowSummary(
-            .category(S.lebensmittel), month: date("2026-10-01"), today: october24, formatter: german)
+            .category(S.lebensmittel), month: date("2026-10-01"), formatter: german)
         #expect(summary.message == "70,00\u{00A0}€ ausgegeben in 1 Buchung:")
         let row = try #require(summary.rows.first)
         #expect(summary.rows.count == 1)

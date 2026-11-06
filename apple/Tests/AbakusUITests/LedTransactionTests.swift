@@ -64,12 +64,12 @@ import Testing
         #expect(editor.taskDialog?.instruction == "Diese Buchung wird von der Kasse geführt.")
     }
 
-    @Test func anUnapprovedLedTransactionOffersNoDelete() throws {
+    @Test func anUnapprovedLedTransactionOffersApprovingAndCancelling() throws {
         var fixture = RegisterFixture()
         let id = ledByKasse(&fixture, approved: false)
         let model = fixture.model()
         let editor = try editor(of: id, in: model, column: .memo)
-        #expect(editor.buttons == [.approveAndFindNext, .approve, .cancel])
+        #expect(editor.buttons == [.approve, .cancel])
     }
 
     @Test func theRegisterOffersNeitherDeletingNorMovingALedTransaction() throws {
@@ -81,10 +81,8 @@ import Testing
         let row = try #require(model.rows.first { $0.id == id })
         let menu = try #require(model.contextMenu(for: row))
         #expect(menu.item(titled: "Löschen")?.isEnabled == false)
-        #expect(menu.item(titled: "Ablehnen (löschen)")?.isEnabled == false)
         #expect(menu.item(titled: "In Konto verschieben")?.isEnabled == false)
         #expect(menu.item(titled: "In geplante Buchungen verschieben …")?.isEnabled == false)
-        #expect(menu.item(titled: "Bestätigen")?.isEnabled == true)
 
         model.deleteKeyPressed()
         #expect(model.store.budget.transaction(withId: id) != nil)
@@ -98,7 +96,7 @@ import Testing
         let model = fixture.model()
         model.updateSelection { $0.select(led) }
         model.updateSelection { $0.toggle(own) }
-        let menu = model.transactionActionsMenu(withTitle: false)
+        let menu = model.transactionActionsMenu()
         #expect(menu.item(titled: "Löschen")?.isEnabled == true)
 
         model.performMenuAction(.moveToAccount(accountId: fixture.karte))

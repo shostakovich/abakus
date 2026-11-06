@@ -291,6 +291,30 @@ defmodule AbakusWeb.Kasse.BudgetLinkLiveTest do
 
       assert has_element?(view, "#tx-person option", "Cleo")
     end
+
+    test "a refused amount saved with a date past the link's start asks for the person", c do
+      Repo.update_all(BudgetLink.Link, set: [start_date: ~D[2026-10-01]])
+
+      {:ok, transfer} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.checking.id,
+          date: ~D[2026-09-20],
+          amount: -3000,
+          payee_id: c.account.transfer_payee.id,
+          approved: true
+        })
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.checking}")
+      view |> element("#tx-#{transfer.id} td.app-payee") |> render_click()
+      view |> element("#tx-#{transfer.id} td.app-payee") |> render_click()
+
+      view
+      |> form("#tx-form", transaction: %{date: "2026-10-12", amount: "30x"})
+      |> render_submit()
+
+      assert has_element?(view, "#tx-amount-errors")
+      assert has_element?(view, "#tx-person option", "Cleo")
+    end
   end
 
   describe "the register" do

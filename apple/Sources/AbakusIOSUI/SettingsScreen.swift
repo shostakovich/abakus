@@ -85,7 +85,7 @@
                     Text(error).foregroundStyle(ThemeColor.negative).font(.callout)
                 }
                 if model.showsSignOut {
-                    Button("Abmelden …", role: .destructive) { Task { await model.signOutClicked() } }
+                    Button("Abmelden", role: .destructive) { Task { await model.signOutClicked() } }
                 }
             }
             .alert(

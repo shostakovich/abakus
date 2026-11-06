@@ -42,8 +42,6 @@ public struct RegisterRow: Identifiable, Hashable, Sendable {
     public var cleared = ClearedStatus.uncleared
     public var textStyle = RegisterTextStyle.plain
     public var amount: Decimal = 0
-    /// A split line a search did not match: struck through in grey.
-    public var isExcludedFromSearch = false
 
     public var isInflow: Bool { amount > 0 }
 
@@ -64,7 +62,8 @@ public struct RegisterRow: Identifiable, Hashable, Sendable {
         case .uncleared:
             "Vorgemerkt: Die Bank kennt diese Buchung noch nicht. Klicken, um sie als gebucht zu markieren."
         case .reconciled:
-            "Abgeglichen: Die Bank kennt diese Buchung, und sie ist mit dem Banksaldo abgeglichen."
+            "Abgeglichen: Die Bank kennt diese Buchung, und sie ist mit dem Banksaldo abgeglichen. Klicken, um sie zu "
+                + "entsperren."
         }
     }
 }
@@ -131,7 +130,7 @@ struct RegisterRowBuilder {
         return row
     }
 
-    func subRows(for transaction: Transaction, match: RegisterSearchMatch? = nil) -> [RegisterRow] {
+    func subRows(for transaction: Transaction) -> [RegisterRow] {
         zip(transaction.subtransactions, baseSubRows(transaction)).map { sub, base in
             let errorState = lookup.errorState(of: sub, inAccount: transaction.accountId)
             var row = base
@@ -141,7 +140,6 @@ struct RegisterRowBuilder {
             if !EntityID.isCategorized(sub.categoryId) && errorState.level == .needsCategory && sub.amount != 0 {
                 showNeedsCategory(&row)
             }
-            row.isExcludedFromSearch = !(match?.subMatches(sub.id) ?? true)
             return row
         }
     }

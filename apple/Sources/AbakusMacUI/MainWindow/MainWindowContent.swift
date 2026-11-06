@@ -80,10 +80,6 @@ struct AppSheetView: View {
         switch sheet {
         case .addCategory(let request): AddCategorySheet(request: request)
         case .payeeSettings(let payees): PayeeSettingsSheet(model: payees)
-        case .renamePayee(let form):
-            RenamePayeeSheet(
-                form: form, onRename: model.register.renamePayeeConfirmed,
-                onCancel: model.register.renamePayeeCancelled)
         case .statement(let form): StatementSheet(model: model.register, form: form)
         case .addAccount(let form): AddAccountSheet(controller: model.accounts, form: form)
         case .adjustBalance(let form): AdjustBalanceSheet(controller: model.accounts, form: form)

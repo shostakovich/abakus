@@ -4,7 +4,7 @@ import Observation
 
 public enum EditorOutcome: Hashable, Sendable {
     case cancelled
-    case saved(transactionId: String, addAnother: Bool, findNext: Bool, incomeCheck: Bool)
+    case saved(transactionId: String, addAnother: Bool, incomeCheck: Bool)
     case deleteRequested(transactionId: String)
 }
 
@@ -20,6 +20,7 @@ public final class TransactionEditor {
     @ObservationIgnored var onFinish: (EditorOutcome) -> Void = { _ in }
     @ObservationIgnored var onEditPayees: (String?) -> Void = { _ in }
     @ObservationIgnored var autoFillSettings = AutoFillSettings()
+    @ObservationIgnored var announce: @MainActor (String) -> Void = TransactionEditor.postAnnouncement
     /// The transaction being edited; for a new one the defaults it started with.
     public internal(set) var original: Transaction
     let originalPayeeName: String
@@ -45,6 +46,9 @@ public final class TransactionEditor {
     var subPayeeNames: [String: String] = [:]
     public internal(set) var categoryPrompts: [String?: String] = [:]
     public internal(set) var dateCallout: EditorDateCallout?
+    public internal(set) var amountError: EditorAmountError?
+    /// Counts every refusal, also of the same text, so each one takes the focus back.
+    public internal(set) var amountRefusals = 0
     public internal(set) var isCalendarOpen = false
     public internal(set) var glowCount = 0
     /// Flex draws the focus rectangle only after keyboard navigation.
@@ -62,11 +66,12 @@ public final class TransactionEditor {
     var pendingSave: PendingSave?
     var pendingCategoryField: EditorFieldID?
     var refocusRequest: EditorFieldID?
+    var refusesQuietly = false
     private var selectionGeneration = 0
 
     struct PendingSave {
         var addAnother: Bool
-        var findNext: Bool
+        var approves = false
         var reconciledConfirmed: Bool?
         var payeeRename: PayeeRename?
     }
@@ -225,9 +230,7 @@ public final class TransactionEditor {
 
     public var buttons: [EditorButton] {
         if mode == .new { return [.saveAndAddAnother, .save, .cancel] }
-        guard needsApproval else { return [.done, .cancel] }
-        guard leader == nil else { return [.approveAndFindNext, .approve, .cancel] }
-        return [.approveAndFindNext, .approve, .delete, .cancel]
+        return needsApproval ? [.approve, .cancel] : [.done, .cancel]
     }
 
     public var rowHeight: CGFloat {
@@ -319,7 +322,7 @@ public final class TransactionEditor {
         closePopups()
         blur(field)
         refocusRequest = nil
-        if focus == .field(field) { focus = nil }
+        if focus == .field(field) && amountError?.field != field { focus = nil }
     }
 
     /// Focus-out: a highlighted list row is taken, then the field commits.
@@ -383,6 +386,7 @@ public final class TransactionEditor {
         fieldSelection = selection
         leadingSign = nil
         if dateCallout != nil && field == .main(.date) { dateCallout = nil }
+        clearAmountError(field)
         guard let kind = dropDownKind(for: field) else { return }
         autoComplete(field, kind: kind, isDeletion: isDeletion)
     }
@@ -414,7 +418,7 @@ public final class TransactionEditor {
             _ = commit(field, reason: .lostFocus)
             refocusRequest = nil
         }
-        if hasChanges {
+        if hasChanges || amountError != nil {
             glowCount += 1
             return true
         }
@@ -434,31 +438,6 @@ public final class TransactionEditor {
         case .frequency(let frequency): frequencyChosen(frequency)
         default: break
         }
-    }
-
-    /// Writes a stored transaction at once, so Cancel keeps it.
-    public func toggleCleared() {
-        guard mode == .existing, !isScheduled else {
-            switch clone.cleared {
-            case .cleared: clone.cleared = .uncleared
-            case .uncleared:
-                clone.cleared = .cleared
-                clone.approved = true
-            case .reconciled: break
-            }
-            return
-        }
-        do {
-            try store.perform(.toggleCleared([transactionId]))
-        } catch {
-            showMessage(.message(error.localizedDescription, ""), refocus: nil)
-            return
-        }
-        guard let stored = budget.transaction(withId: transactionId) else { return }
-        original.cleared = stored.cleared
-        original.approved = stored.approved
-        clone.cleared = stored.cleared
-        clone.approved = clone.approved || stored.approved
     }
 }
 

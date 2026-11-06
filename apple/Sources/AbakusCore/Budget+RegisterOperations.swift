@@ -15,7 +15,7 @@ public struct DeleteAnalysis: Hashable, Sendable {
 public struct RegisterNotifierCounts: Hashable, Sendable {
     public var errors = 0
     public var needsCategory = 0
-    public var forReview = 0
+    public var unapproved = 0
 
     public init() {}
 }
@@ -71,16 +71,14 @@ extension Budget {
         notifierCounts(of: transactions.lazy.filter { key == EntityID.allAccounts || $0.accountId == key })
     }
 
+    /// The chips count what their views list.
     private func notifierCounts(of listed: some Sequence<Transaction>) -> RegisterNotifierCounts {
         var counts = RegisterNotifierCounts()
         let lookup = BudgetLookup(self)
         for transaction in listed {
-            switch lookup.errorState(of: transaction).level {
-            case .error: counts.errors += 1
-            case .needsCategory: counts.needsCategory += 1
-            case .forReview: counts.forReview += 1
-            case .none: break
-            }
+            if lookup.errorState(of: transaction).level == .error { counts.errors += 1 }
+            if RegisterFilter.needsCategory.includes(transaction, in: lookup) { counts.needsCategory += 1 }
+            if RegisterFilter.unapproved.includes(transaction, in: lookup) { counts.unapproved += 1 }
         }
         return counts
     }

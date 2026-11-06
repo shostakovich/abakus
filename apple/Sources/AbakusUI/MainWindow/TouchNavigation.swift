@@ -111,14 +111,10 @@ public final class TouchNavigation {
     }
 
     /// The payees as a page block the register like their sheet, so a new transaction closes them first.
-    public func addTransactionClicked(transfer: Bool) {
+    public func addTransactionClicked() {
         showSettings([])
         app.payeeSettings?.close()
-        if transfer {
-            app.register.makeTransferClicked()
-        } else {
-            app.register.addTransactionClicked()
-        }
+        app.register.addTransactionClicked()
     }
 
     public func goToBudget() {

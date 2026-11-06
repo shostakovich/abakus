@@ -182,29 +182,42 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :manual, :boolean, required: true, doc: "whether \"Buchung\" adds a transaction here"
 
   attr :unapproved, :list, required: true
+
+  attr :waiting, :list,
+    required: true,
+    doc: "what „Alle bestätigen“ approves in the view „Zu bestätigen“"
+
   attr :proposals, :list, required: true
   attr :filter, :atom, required: true
   attr :query, :string, required: true
   attr :filter_paths, :map, required: true
+
+  attr :unapproved_path, :string,
+    required: true,
+    doc: "the chip's: „Zu bestätigen“ without the search"
+
   attr :picking, :boolean, required: true, doc: "whether a click adds a row to the selection"
   attr :all_selected, :boolean, required: true
 
   @doc """
   The header's second row: "Buchung", "Datei-Import" and what waits as chips ("2 bestätigen", "1 zuordnen"), then
-  the view menu and the search. Phones keep the search and the menu, which takes the rest; the floating button adds
-  a transaction there.
+  the view menu and the search. "2 bestätigen" opens the view „Zu bestätigen“ without the search, whose line
+  approves what it shows.
+  Phones keep "2 bestätigen", the search and the menu, which takes the rest; the floating button adds a transaction
+  there.
   """
   def toolbar(assigns) do
     ~H"""
     <div id="register-toolbar" class="app-reg-row">
       <div class="app-reg-toolbar">
-        <div class="app-reg-actions flex max-md:hidden">
+        <div class="app-reg-actions">
           <.button
             :if={@manual}
             id="new-transaction"
             variant={:ghost}
             size={:sm}
             icon="plus"
+            class="max-md:hidden"
             phx-click="new"
             phx-value-layout="row"
           >
@@ -216,22 +229,22 @@ defmodule AbakusWeb.RegisterLive.Components do
             variant={:ghost}
             size={:sm}
             icon="file-text"
+            class="max-md:hidden"
             navigate={~p"/budget/import"}
           >
             Datei-Import
           </.button>
           <.button
-            :if={@unapproved != []}
-            id="approve-all"
+            :if={@unapproved != [] and @filter != :unapproved}
+            id="unapproved-chip"
             variant={:ghost}
             size={:sm}
             icon="check"
             class="app-reg-notice"
-            aria-label={"Alle #{length(@unapproved)} bestätigen"}
-            phx-click="approve_all"
-            {confirm(@unapproved)}
+            title="Zu bestätigen zeigen"
+            patch={@unapproved_path}
           >
-            <span id="approve-all-count">{length(@unapproved)}</span> bestätigen
+            <span id="unapproved-count">{length(@unapproved)}</span> bestätigen
           </.button>
           <.button
             :if={@proposals != []}
@@ -239,7 +252,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             variant={:ghost}
             size={:sm}
             icon="link"
-            class="app-reg-notice"
+            class="app-reg-notice max-md:hidden"
             aria-label={"Alle #{length(@proposals)} zuordnen"}
             phx-click="accept_all_matches"
             {confirm_merge(@proposals)}
@@ -268,22 +281,6 @@ defmodule AbakusWeb.RegisterLive.Components do
               class="md:hidden"
             >
               Datei-Import
-            </:item>
-            <:item
-              :if={@unapproved != []}
-              id="approve-all-item"
-              icon="check"
-              class="md:hidden"
-              confirm={question(@unapproved)}
-              confirm_text="Der gebuchte Saldo bleibt gleich."
-              confirm_label="Ändern"
-              on_click={
-                JS.push("approve_all",
-                  value: if(reconciled(@unapproved) != [], do: %{reconciled: "confirmed"}, else: %{})
-                )
-              }
-            >
-              Alle bestätigen ({length(@unapproved)})
             </:item>
             <:item
               :if={@proposals != []}
@@ -354,29 +351,45 @@ defmodule AbakusWeb.RegisterLive.Components do
         <.icon name="info" class="shrink-0" />
         Buchungen kommen aus der Kasse, keine Buchungen von Hand oder per Datei
       </p>
+      <.alert :if={@waiting != []} id="approve-line" icon="check" class="mb-3">
+        {waiting_text(length(@waiting))}
+        <:actions>
+          <.button id="approve-shown" size={:sm} phx-click="approve_shown" {confirm(@waiting)}>
+            Alle bestätigen
+          </.button>
+        </:actions>
+      </.alert>
     </div>
     """
   end
 
+  defp waiting_text(1), do: "1 Buchung wartet auf Bestätigung."
+  defp waiting_text(count), do: "#{count} Buchungen warten auf Bestätigung."
+
   defp filter_labels,
-    do: [all: "Alle Buchungen", unapproved: "Zu bestätigen", uncleared: "Vorgemerkt"]
+    do: [
+      all: "Alle Buchungen",
+      unapproved: "Zu bestätigen",
+      uncleared: "Vorgemerkt",
+      needs_category: "Ohne Kategorie"
+    ]
 
   defp view_label(:all), do: "Ansicht"
   defp view_label(:unapproved), do: "Ansicht: zu bestätigen"
   defp view_label(:uncleared), do: "Ansicht: vorgemerkt"
+  defp view_label(:needs_category), do: "Ansicht: ohne Kategorie"
 
   attr :selected, :list, required: true
   attr :categories, :list, required: true
 
   @doc """
-  The selection bar as in YNAB: how many are selected (× clears), approve when one of them waits, categorise with
-  the category picker, and under "Mehr" delete. Always rendered; it shows while something is selected.
+  The selection bar as in YNAB: how many are selected (× clears), categorise with the category picker, and under
+  "Mehr" delete. Always rendered; it shows while something is selected.
   """
   def bulk(assigns) do
     assigns =
       assign(assigns,
         count: length(assigns.selected),
-        waiting: Enum.reject(assigns.selected, & &1.approved),
         options: category_options(assigns.categories)
       )
 
@@ -387,17 +400,6 @@ defmodule AbakusWeb.RegisterLive.Components do
       label={if @count == 1, do: "1 Buchung", else: "%{count} Buchungen"}
       on_clear="clear_selection"
     >
-      <.button
-        :if={@waiting != []}
-        id="approve-selected"
-        variant={:ghost}
-        size={:sm}
-        icon="check"
-        phx-click="approve_selected"
-        {confirm(@waiting)}
-      >
-        Bestätigen
-      </.button>
       <.popover
         :if={@count > 0}
         id="categorise"
@@ -707,7 +709,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           title={group_name(part)}
           {cell(@transaction, "category")}
         >
-          <.part_category part={part} />
+          <.part_category part={part} transaction={@transaction} accounts={@accounts} />
         </td>
         <td class="app-memo-col" {cell(@transaction, "memo")}>
           {part.memo}
@@ -1008,21 +1010,23 @@ defmodule AbakusWeb.RegisterLive.Components do
     <span :if={@transaction.subtransactions != []} class="text-base-content/70">
       {category_text(@transaction, @accounts)}
     </span>
-    <.missing_category :if={uncategorised?(@transaction, @accounts)} />
-    <span :if={@transaction.subtransactions == [] and !uncategorised?(@transaction, @accounts)}>
+    <.missing_category :if={Rows.needs_category?(@transaction, @accounts)} />
+    <span :if={@transaction.subtransactions == [] and !Rows.needs_category?(@transaction, @accounts)}>
       {category_text(@transaction, @accounts)}
     </span>
     """
   end
 
   attr :part, Subtransaction, required: true
+  attr :transaction, Transaction, required: true
+  attr :accounts, :map, required: true
 
-  defp part_category(%{part: %{category: nil, payee: %Payee{transfer_account_id: id}}} = assigns)
-       when not is_nil(id),
-       do: ~H""
-
-  defp part_category(%{part: %{category: nil}} = assigns), do: ~H"<.missing_category />"
-  defp part_category(assigns), do: ~H"{category_name(@part.category)}"
+  defp part_category(assigns) do
+    ~H"""
+    <.missing_category :if={Rows.needs_category?(@part, @transaction, @accounts)} />
+    {@part.category && category_name(@part.category)}
+    """
+  end
 
   defp missing_category(assigns) do
     ~H"""
@@ -1067,16 +1071,13 @@ defmodule AbakusWeb.RegisterLive.Components do
     """
   end
 
-  defp uncategorised?(transaction, accounts),
-    do: is_nil(transaction.category) and Rows.categorisable?(transaction, accounts)
-
   defp category_text(%{subtransactions: [_ | _] = parts}, _accounts),
     do: "Aufgeteilt (#{length(parts)})"
 
   defp category_text(%{category: %Category{} = category}, _accounts), do: category_name(category)
 
   defp category_text(transaction, accounts),
-    do: if(uncategorised?(transaction, accounts), do: "Kategorie fehlt", else: "")
+    do: if(Rows.needs_category?(transaction, accounts), do: "Kategorie fehlt", else: "")
 
   defp category_name(%{internal: true}), do: "Zu verteilen"
   defp category_name(%{name: name}), do: name
@@ -1136,7 +1137,6 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   defp merge_text, do: "Das Datum aus dem Import gilt dann auf beiden Seiten der Umbuchung."
 
-  # A `<.button>` that asks before changing reconciled transactions and tells the server it did.
   attr :title, :string, required: true
   attr :hint, :string, default: nil
   attr :class, :any, default: nil
@@ -1149,6 +1149,7 @@ defmodule AbakusWeb.RegisterLive.Components do
     """
   end
 
+  # A `<.button>` that asks before changing reconciled transactions and tells the server it did.
   defp asking(question, label, text, value \\ ["phx-value-reconciled": "confirmed"])
   defp asking(nil, _label, _text, _value), do: []
 

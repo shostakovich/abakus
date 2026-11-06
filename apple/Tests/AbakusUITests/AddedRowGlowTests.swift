@@ -21,8 +21,7 @@ import Testing
         var fixture = RegisterFixture()
         let id = fixture.add(fixture.giro, -10)
         let model = fixture.model()
-        model.search.text = "zzz"
-        model.search.commit()
+        model.search.boxChanged("zzz")
         #expect(model.rows.isEmpty)
         model.search.clearClicked()
         #expect(model.rows.contains { $0.transactionId == id })

@@ -18,8 +18,14 @@ public struct TransactionSummaryRow: Hashable, Sendable, Identifiable {
 
 public struct AccountViewFilter: Hashable, Sendable {
     public let accountId: String
+    public let filter: RegisterFilter
     public let searchText: String
-    public let dateFilter: DateFilterSelection
+
+    public init(accountId: String, filter: RegisterFilter = .all, searchText: String = "") {
+        self.accountId = accountId
+        self.filter = filter
+        self.searchText = searchText
+    }
 }
 
 public struct TransactionSummary: Hashable, Sendable {
@@ -32,9 +38,9 @@ public struct TransactionSummary: Hashable, Sendable {
 
 extension Budget {
     public func outflowSummary(
-        _ source: OutflowSummarySource, month: DateWithoutTime, today: DateWithoutTime, formatter: BudgetFormatter
+        _ source: OutflowSummarySource, month: DateWithoutTime, formatter: BudgetFormatter
     ) -> TransactionSummary {
-        let (title, wanted, search) = outflowSummarySubject(source)
+        let (title, wanted, view) = outflowSummarySubject(source)
         let activity = BudgetActivity(self)
         var rows: [(row: TransactionSummaryRow, accountId: String)] = []
         var count = 0
@@ -62,62 +68,42 @@ extension Budget {
         let message =
             source == .masterCategory(EntityID.uncategorizedMasterCategory)
             ? "\(amount) ausgegeben in \(transactions) ohne Kategorie:" : "\(amount) ausgegeben in \(transactions):"
-        return summary(
-            title: title, message: message, rows: rows, count: count, search: search, today: today,
-            formatter: formatter)
+        return summary(title: title, message: message, rows: rows, count: count, view: view)
     }
 
+    /// Only a category's name and the uncategorized view find the summary's transactions again in the register.
     private func outflowSummarySubject(_ source: OutflowSummarySource) -> (
-        title: String, categories: Set<String>?, search: String
+        title: String, categories: Set<String>?, view: (filter: RegisterFilter, search: String)?
     ) {
         switch source {
         case .category(let id):
-            let name = categoryDisplayName(id)
-            return (name, [id], "Kategorie: \(name), ")
+            return (categoryDisplayName(id), [id], (.all, categoryName(id)))
         case .masterCategory(EntityID.uncategorizedMasterCategory):
-            return (DefaultCategories.uncategorizedName, [EntityID.uncategorizedCategory], "Kategorie: , ")
+            return (DefaultCategories.uncategorizedName, [EntityID.uncategorizedCategory], (.needsCategory, ""))
         case .masterCategory(let id):
             let master = budgetCategoryGroups.first { $0.id == id }
-            let name = master?.name ?? ""
-            return (name, Set(master?.categories.map(\.id) ?? []), "Kategorie: \(name), ")
+            return (master?.name ?? "", Set(master?.categories.map(\.id) ?? []), nil)
         case .allOutflows:
-            return ("Alle Kategorien", nil, "")
+            return ("Alle Kategorien", nil, nil)
         }
     }
 
     private func summary(
         title: String, message: String, rows: [(row: TransactionSummaryRow, accountId: String)], count: Int,
-        search: String, today: DateWithoutTime, formatter: BudgetFormatter
+        view: (filter: RegisterFilter, search: String)?
     ) -> TransactionSummary {
         let sorted = rows.enumerated().sorted { ($1.element.row.date, $0.offset) < ($0.element.row.date, $1.offset) }
             .map(\.element)
         var accountView: AccountViewFilter?
-        if let first = sorted.first {
+        if let first = sorted.first, let view {
             let accounts = Set(sorted.map(\.accountId))
-            let dates = sorted.map(\.row.date)
             accountView = AccountViewFilter(
-                accountId: accounts.count > 1 ? EntityID.allAccounts : first.accountId, searchText: search,
-                dateFilter: Self.dateFilter(
-                    from: dates.min() ?? today, to: dates.max() ?? today, today: today, formatter: formatter))
+                accountId: accounts.count > 1 ? EntityID.allAccounts : first.accountId, filter: view.filter,
+                searchText: view.search)
         }
         return TransactionSummary(
             title: title, message: message, rows: sorted.map(\.row), transactionCount: count,
             accountView: accountView)
-    }
-
-    private static func dateFilter(
-        from earliest: DateWithoutTime, to latest: DateWithoutTime, today: DateWithoutTime, formatter: BudgetFormatter
-    ) -> DateFilterSelection {
-        let start = earliest.firstOfMonth
-        let end = latest.firstOfMonth
-        if start == end && start == today.firstOfMonth {
-            return DateFilterSelection(
-                preset: .thisMonth, start: start, end: end, label: DateFilterPreset.thisMonth.label)
-        }
-        let label =
-            start == end
-            ? formatter.monthHeader(start) : "\(formatter.monthHeader(start)) bis \(formatter.monthHeader(end))"
-        return DateFilterSelection(preset: nil, start: start, end: end, label: label)
     }
 
     private func summaryRow(_ transaction: Transaction) -> TransactionSummaryRow {

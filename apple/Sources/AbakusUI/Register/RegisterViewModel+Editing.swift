@@ -15,7 +15,6 @@ public struct RegisterIncomeCheck: Hashable, Sendable {
 extension RegisterViewModel: RegisterGridOwner {
     package var mainGrid: RegisterViewModel? { self }
     package var gridIds: [String] { transactionIds }
-    package var columnTab: RegisterAnchorID { .columnTab }
     package var snapsToRows: Bool { true }
 
     package func editorRecord(_ id: String) -> (transaction: Transaction, frequency: ScheduledTransactionFrequency?)? {
@@ -28,9 +27,8 @@ extension RegisterViewModel: RegisterGridOwner {
             break
         case .deleteRequested(let id):
             deleteTransactions([id])
-        case .saved(let id, let addAnother, let findNext, let incomeCheck):
+        case .saved(let id, _, let incomeCheck):
             if incomeCheck { self.incomeCheck = RegisterIncomeCheck(transactionId: id) }
-            if findNext && !addAnother { editNextUnapproved(after: id) }
         }
     }
 }
@@ -42,20 +40,6 @@ extension RegisterViewModel {
 
     public func beginEditing(_ id: String, column: RegisterColumn? = nil) {
         grid.beginEditing(id, column: column)
-    }
-
-    /// The next transaction needing approval, wrapping around.
-    private func editNextUnapproved(after id: String) {
-        let order = transactions
-        guard let start = order.firstIndex(where: { $0.id == id }) else { return }
-        let budget = store.budget
-        for offset in 1..<max(order.count, 1) {
-            let candidate = order[(start + offset) % order.count]
-            if budget.errorState(of: candidate).level == .forReview {
-                beginEditing(candidate.id)
-                return
-            }
-        }
     }
 
     /// An edit whose record a filter or a command took away ends silently.

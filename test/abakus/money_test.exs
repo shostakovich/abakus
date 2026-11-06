@@ -162,7 +162,8 @@ defmodule Abakus.MoneyTest do
     test "refuses a sum beyond what one amount may hold" do
       big = String.duplicate("9", 15)
       assert {:ok, _cents} = Money.parse_expression(big, 2)
-      assert Money.parse_expression(big <> "+" <> big, 2) == {:error, "Der Betrag ist zu groß."}
+      assert Money.parse_expression(big <> "+" <> big, 2) == {:error, :too_large}
+      assert Money.parse_expression("1+" <> big <> "9", 2) == {:error, :too_large}
     end
   end
 

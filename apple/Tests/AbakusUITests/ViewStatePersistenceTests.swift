@@ -22,25 +22,46 @@ import Testing
         let register = launch(storage).register
         register.toggleColumnVisibility(.cleared)
         register.grid.headerClicked(.payee)
-        register.setShowingReconciled(false)
+        register.viewMenuChosen(.filter(.uncleared))
         register.scheduledToggleClicked()
         register.scheduler.setHeight(240)
         register.scheduler.grid.headerClicked(.payee)
         register.scheduler.toggleColumnVisibility(.memo)
-        register.search.timeframePresetClicked(.thisYear)
-        register.search.text = "Shop"
-        register.search.commit()
+        register.search.boxChanged("Shop")
 
         let restored = launch(storage).register
-        #expect(restored.columnSettings[.cleared]?.visible == false)
+        #expect(!restored.visibleColumns.contains(.cleared))
         #expect(restored.sortOrder == RegisterSortOrder(column: .payee, ascending: true))
-        #expect(!restored.isShowingReconciled)
+        #expect(restored.filter == .all)
         #expect(restored.isSchedulerVisible)
         #expect(restored.scheduler.savedHeight == 240)
         #expect(restored.scheduler.sortOrder == RegisterSortOrder(column: .payee, ascending: true))
         #expect(restored.scheduler.columnSettings[.memo]?.visible == false)
-        #expect(restored.search.dateSelectorTitle == "Dieses Jahr")
         #expect(restored.search.text.isEmpty)
+    }
+
+    @Test func theColumnsShowOrHideInEveryAccountAndSurviveARelaunch() {
+        let storage = MemorySettingsStorage()
+        let register = launch(storage).register
+        register.viewMenuChosen(.toggleColumn(.memo))
+        register.navigation.selection = .account(fixture.tagesgeld)
+        #expect(!register.visibleColumns.contains(.memo))
+        register.navigation.selection = .allAccounts
+        #expect(!register.visibleColumns.contains(.memo))
+        #expect(register.viewMenu.first { $0.title == "Memo" }?.isChecked == false)
+        #expect(!launch(storage, selection: .account(fixture.karte)).register.visibleColumns.contains(.memo))
+    }
+
+    @Test func aStateSavedWithTheReconciledSwitchAndADateRangeStillLoads() throws {
+        let saved = try JSONDecoder().decode(
+            SavedRegisterViewState.self,
+            from: Data(
+                """
+                {"sortColumn": "date", "sortAscending": false, "sortVersion": 2, "isShowingReconciled": false,
+                 "columns": {}, "isSchedulerVisible": false,
+                 "dates": {"preset": "thisMonth", "start": "2014-05-01", "end": "2014-05-01"}}
+                """.utf8))
+        #expect(RegisterAccountViewState(saved: saved).filter == .all)
     }
 
     @Test func theOldDefaultSortGivesWayToNewestFirst() throws {
@@ -68,15 +89,27 @@ import Testing
                  "isSchedulerVisible": false, "schedulerSort": {"column": "inflow", "ascending": false},
                  "schedulerColumns": {"outflow": {"visible": false, "width": 300}}}
                 """.utf8))
-        let state = RegisterAccountViewState(saved: saved, today: editDay, formatter: BudgetFormatter())
+        let state = RegisterAccountViewState(saved: saved)
         let defaults = RegisterAccountViewState()
         #expect(state.sort == defaults.sort)
         #expect(state.schedulerSort == defaults.schedulerSort)
-        #expect(state.columnSettings == defaults.columnSettings)
         #expect(state.schedulerColumnSettings == defaults.schedulerColumnSettings)
-        #expect(
-            state.columnSettings[.amount]
-                == RegisterColumnSetting(visible: true, width: RegisterColumn.signedAmountWidth))
+    }
+
+    @Test func theRegisterSavesNoColumnsPerAccountAndIgnoresOldOnes() throws {
+        let data = try JSONEncoder().encode(SavedRegisterViewState(RegisterAccountViewState()))
+        let saved = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(saved["columns"] == nil)
+        #expect(saved["schedulerColumns"] != nil)
+
+        let old = try JSONDecoder().decode(
+            SavedRegisterViewState.self,
+            from: Data(
+                """
+                {"sortColumn": "date", "sortAscending": false, "sortVersion": 2, "isSchedulerVisible": false,
+                 "columns": {"memo": {"visible": false, "width": 300}}}
+                """.utf8))
+        #expect(RegisterAccountViewState(saved: old).sort == RegisterSortOrder.default)
     }
 
     @Test func reconciliationKeepsTheStateToReturnTo() throws {

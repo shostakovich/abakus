@@ -13,9 +13,7 @@ import Testing
         #expect(
             EditButtonRow.displayOrder([.saveAndAddAnother, .save, .cancel]) == [.cancel, .saveAndAddAnother, .save])
         #expect(EditButtonRow.displayOrder([.done, .cancel]) == [.cancel, .done])
-        #expect(
-            EditButtonRow.displayOrder([.approveAndFindNext, .approve, .delete, .cancel])
-                == [.cancel, .approveAndFindNext, .approve, .delete])
+        #expect(EditButtonRow.displayOrder([.approve, .cancel]) == [.cancel, .approve])
     }
 
     @Test func saveIsProminentWhileReturnStillSavesAndAddsAnother() throws {
@@ -43,9 +41,9 @@ import Testing
         #expect(model.editor?.prominentButton == .done)
     }
 
-    @Test func approveAndDeleteCarrySymbols() {
+    @Test func onlyApproveCarriesASymbol() {
         let symbols = EditorButton.allCases.filter { $0.systemImage != nil }
-        #expect(symbols == [.approve, .delete])
+        #expect(symbols == [.approve])
     }
 
     @Test func aPickedDayClosesTheDatePickerAndAMonthStepKeepsItOpen() throws {

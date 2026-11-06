@@ -46,8 +46,6 @@ struct RegisterOverlayLayer: View {
             AnchoredPopover(side: .trailing, anchor: anchor, container: size) { StatusOptionsPopover(model: model) }
         case .needsCategory:
             AnchoredPopover(side: .trailing, anchor: anchor, container: size) { NeedsCategoryPopover(model: model) }
-        case .timeframe:
-            AnchoredPopover(side: .below, anchor: anchor, container: size) { TimeframePopover(search: model.search) }
         case .scheduledCallout(let callout):
             AnchoredPopover(side: .above, anchor: anchor, container: size) {
                 ScheduledCalloutPopover(callout: callout) { model.closePopup() }

@@ -220,16 +220,16 @@ import Testing
     }
 
     /// The view's order: the request places the list, then each frame of the opening info bar resizes it.
-    private func placementAfterDateFilter(ascending: Bool) throws -> ScrollMetrics {
+    private func placementAfterSearch(ascending: Bool) throws -> ScrollMetrics {
         var fixture = RegisterFixture(start: day("2014-01-02"))
         for number in 1...20 {
             fixture.add(fixture.giro, Decimal(-number), on: "2014-01-1\(number % 10)")
-            fixture.add(fixture.giro, Decimal(-number), on: "2014-05-1\(number % 10)")
+            fixture.add(fixture.giro, Decimal(-number), on: "2014-05-1\(number % 10)", memo: "Mai")
         }
         let model = fixture.model()
         if ascending { model.grid.headerClicked(.date) }
         let before = model.grid.scrollMetrics(at: 4 * row, viewport: 300)
-        model.search.timeframePresetClicked(.latestThreeMonths)
+        model.search.boxChanged("mai")
         #expect(model.transactionIds.count == 20)
         let request = try #require(model.grid.scrollRequest)
         var placed = try #require(model.grid.scrollMetrics(revealing: request.target, from: before, viewport: 299))
@@ -239,11 +239,11 @@ import Testing
         return placed
     }
 
-    @Test func aDateFilterLeavesTheRegisterAtItsEndWhileTheInfoBarOpens() throws {
-        let placed = try placementAfterDateFilter(ascending: true)
+    @Test func aSearchLeavesTheRegisterAtItsEndWhileTheInfoBarOpens() throws {
+        let placed = try placementAfterSearch(ascending: true)
         #expect(placed.isAtEnd)
         #expect(placed.offset == 12 * row)
-        #expect(try placementAfterDateFilter(ascending: false).offset == 0)
+        #expect(try placementAfterSearch(ascending: false).offset == 0)
     }
 
     @Test func aSavedNewTransactionIsRevealedWhereItsDateSortsIt() throws {

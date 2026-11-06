@@ -16,6 +16,7 @@ defmodule Abakus.Money do
   @max_cents 1_000_000_000_000
   @blank "Bitte einen Betrag eingeben."
   @not_text "Ungültiger Betrag."
+  @too_large "Der Betrag ist zu groß."
   @zero_decimals ~w(JPY KRW ISK HUF CLP VND XAF XOF PYG UGX IDR)
   @three_decimals ~w(KWD BHD OMR JOD TND LYD IQD)
   @int64_bound :math.pow(2, 63)
@@ -28,7 +29,7 @@ defmodule Abakus.Money do
   def parse(text, decimals) when is_binary(text) do
     case amount_text(text) do
       "" -> {:error, @blank}
-      text -> parse_fixed(text, decimals)
+      text -> text |> parse_fixed(decimals) |> described()
     end
   end
 
@@ -37,9 +38,10 @@ defmodule Abakus.Money do
   @doc """
   Reads what a person types into an amount field: amounts as `parse/2` reads them, joined by `+` and `-` or `−`,
   added up from left to right, with an optional sign in front (`"-50+20"` is −30,00). Any other operator, or a
-  part that is no amount, makes the whole text invalid.
+  part that is no amount, makes the whole text invalid; more than 15 digits before the decimals, in a part or the
+  sum, are `{:error, :too_large}`.
   """
-  @spec parse_expression(term(), 0..3) :: {:ok, integer()} | {:error, String.t()}
+  @spec parse_expression(term(), 0..3) :: {:ok, integer()} | {:error, :too_large | String.t()}
   def parse_expression(text, decimals) when is_binary(text) do
     case amount_text(text) do
       "" -> {:error, @blank}
@@ -93,7 +95,7 @@ defmodule Abakus.Money do
   def parse_number(text) when is_binary(text) do
     case amount_text(text) do
       "" -> {:error, @blank}
-      text -> parse_decimal_places(text)
+      text -> text |> parse_decimal_places() |> described()
     end
   end
 
@@ -173,6 +175,9 @@ defmodule Abakus.Money do
 
   defp invalid(text), do: "Ungültiger Betrag „#{text}“."
 
+  defp described({:error, :too_large}), do: {:error, @too_large}
+  defp described(result), do: result
+
   # Only space and no-break space: U+202F and other spaces are not part of a number.
   defp strip_spaces(text), do: String.replace(text, [" ", "\u00A0"], "")
 
@@ -189,7 +194,7 @@ defmodule Abakus.Money do
   defp check_places(_frac, decimals),
     do: {:error, "Höchstens #{decimals} Nachkommastellen erlaubt."}
 
-  defp check_size(int) when byte_size(int) > 15, do: {:error, "Der Betrag ist zu groß."}
+  defp check_size(int) when byte_size(int) > 15, do: {:error, :too_large}
   defp check_size(_int), do: :ok
 
   defp split_number(text, dot_thousands?) do

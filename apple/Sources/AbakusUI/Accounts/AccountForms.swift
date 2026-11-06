@@ -6,7 +6,7 @@ import Observation
 @Observable
 public final class AddAccountForm: Identifiable {
     public static let title = "Konto hinzufügen"
-    public static let typePlaceholder = "Art wählen …"
+    public static let typePlaceholder = "Art wählen"
     public static let typeHint = "Trackingkonten zählen nicht zum Budget. Das lässt sich später nicht ändern."
 
     public let id = UUID()

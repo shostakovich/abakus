@@ -68,6 +68,10 @@ public struct BudgetLookup: Sendable {
         budget.errorState(of: sub, inAccount: accountId, transfers: transferAccountId(ofPayee:))
     }
 
+    public func needsCategory(_ transaction: Transaction) -> Bool {
+        budget.needsCategory(transaction, transfers: transferAccountId(ofPayee:))
+    }
+
     private func transferAccountId(ofPayee payeeId: String?) -> String? {
         payeeId.flatMap { transferAccounts[$0] }
     }

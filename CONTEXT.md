@@ -185,6 +185,12 @@ A person has looked at an imported or Kasse-created transaction and accepted it;
 "Bestätigt", the action "Bestätigen".
 _Avoid_: Confirmed, reviewed; "gebucht", "abgeglichen" (those are cleared states)
 
+**Needs category**:
+The register's view of the transactions that need a category, approved or not: in a budget account, without one,
+not zero and no transfer to another budget account; a split by its parts. The chip "N braucht eine Kategorie"
+counts them, and the budget's Uncategorised row opens Alle Konten in this view. UI "Ohne Kategorie".
+_Avoid_: Uncategorised (that is the budget row), no category
+
 **Scheduled transaction**:
 A transaction the Ledger enters every day it falls due, once or repeating from daily to every other year, twice a
 month on two days; entered unapproved, recording the scheduled transaction and date, at most once per date.

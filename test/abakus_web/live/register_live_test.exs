@@ -7,7 +7,7 @@ defmodule AbakusWeb.RegisterLiveTest do
   import Ecto.Query, only: [from: 2]
 
   alias Abakus.{Categories, Ledger, Repo}
-  alias Abakus.Ledger.Transaction
+  alias Abakus.Ledger.{Subtransaction, Transaction}
 
   setup :register_and_log_in_user
 
@@ -363,11 +363,10 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute has_element?(view, "#register .btn-primary")
     end
 
-    test "the approve button shows only while something waits", c do
+    test "the waiting chips show only while something waits", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.savings}")
 
-      refute has_element?(view, "#approve-all")
-      refute has_element?(view, "#approve-all-item")
+      refute has_element?(view, "#unapproved-chip")
       refute has_element?(view, "#accept-all-matches")
     end
 
@@ -434,6 +433,88 @@ defmodule AbakusWeb.RegisterLiveTest do
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?q=nichts+davon")
       assert has_element?(view, "#register-table", "Keine Buchungen in dieser Ansicht")
+    end
+
+    test "Ohne Kategorie shows what needs a category", c do
+      {:ok, missing} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.giro.id,
+          date: ~D[2026-10-09],
+          amount: -999
+        })
+
+      {:ok, part_missing} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.giro.id,
+          date: ~D[2026-10-10],
+          amount: -3_000,
+          subtransactions: [
+            %{amount: -2_000, category_id: c.groceries.id},
+            %{amount: -1_000}
+          ]
+        })
+
+      {:ok, categorised_split} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.giro.id,
+          date: ~D[2026-10-11],
+          amount: -3_000,
+          subtransactions: [
+            %{amount: -2_000, category_id: c.groceries.id},
+            %{amount: -1_000, payee_id: c.savings.transfer_payee.id}
+          ]
+        })
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      view |> element("#view-menu a", "Ohne Kategorie") |> render_click()
+      assert_patch(view, ~p"/budget/accounts/#{c.giro}?filter=needs_category")
+      assert has_element?(view, "#view-toggle", "ohne Kategorie")
+
+      assert has_element?(view, "#tx-#{missing.id}")
+      assert has_element?(view, "#tx-#{part_missing.id}")
+      refute has_element?(view, "#tx-#{categorised_split.id}")
+      refute has_element?(view, "#tx-#{c.shopping.id}")
+      refute has_element?(view, "#tx-#{c.transfer.id}")
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all?filter=needs_category&q=9,99")
+      assert has_element?(view, "#tx-#{missing.id}")
+      refute has_element?(view, "#tx-#{part_missing.id}")
+      refute has_element?(view, "#tx-#{c.gain.id}")
+    end
+
+    test "Kategorie fehlt marks what the view Ohne Kategorie lists", c do
+      {:ok, zero} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.giro.id,
+          date: ~D[2026-10-09],
+          amount: 0
+        })
+
+      {:ok, split} =
+        Ledger.create_transaction(budget_scope(), %{
+          account_id: c.giro.id,
+          date: ~D[2026-10-10],
+          amount: -3_000,
+          subtransactions: [
+            %{amount: -2_000, payee_id: c.depot.transfer_payee.id, category_id: c.groceries.id},
+            %{amount: -1_000, payee_id: c.savings.transfer_payee.id}
+          ]
+        })
+
+      # Imports and the apps' sync can leave it without one.
+      Repo.update_all(from(s in Subtransaction, where: s.transaction_id == ^split.id),
+        set: [category_id: nil]
+      )
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      refute has_element?(view, "#tx-#{zero.id} .app-uncategorised")
+      assert has_element?(view, "#tx-#{split.id}-part-0 .app-uncategorised", "Kategorie fehlt")
+      refute has_element?(view, "#tx-#{split.id}-part-1 .app-uncategorised")
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=needs_category")
+      assert has_element?(view, "#tx-#{split.id}")
+      refute has_element?(view, "#tx-#{zero.id}")
     end
 
     test "views show what waits for approval or for the bank", c do
@@ -538,11 +619,9 @@ defmodule AbakusWeb.RegisterLiveTest do
     test "the waiting chip counts what waits and the rows are marked", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
-      assert text(view, "#approve-all") == "2 bestätigen"
-      assert has_element?(view, ~s|#approve-all[aria-label="Alle 2 bestätigen"]|)
-      assert has_element?(view, "#approve-all-count", "2")
-      refute has_element?(view, "#show-unapproved")
-      refute render(view) =~ "Ansehen"
+      assert text(view, "#unapproved-chip") == "2 bestätigen"
+      assert has_element?(view, "#unapproved-count", "2")
+      refute has_element?(view, "#approve-line")
       assert has_element?(view, "tr#tx-#{c.waiting.id}.app-unapproved")
       refute has_element?(view, "tr#tx-#{c.shopping.id}.app-unapproved")
       assert has_element?(view, "#tx-#{c.uncategorised.id} .app-uncategorised svg")
@@ -558,13 +637,58 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert_patch(view, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
     end
 
+    test "the chip opens Zu bestätigen and approves nothing", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      view |> element("#unapproved-chip") |> render_click()
+
+      assert_patch(view, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
+      refute reload(c.waiting).approved or reload(c.uncategorised).approved
+      assert has_element?(view, "#tx-#{c.waiting.id}")
+      refute has_element?(view, "#tx-#{c.shopping.id}")
+      refute has_element?(view, "#unapproved-chip")
+      assert has_element?(view, "#approve-line", "2 Buchungen warten auf Bestätigung.")
+      assert has_element?(view, "#approve-shown", "Alle bestätigen")
+      refute has_element?(view, "#approve-shown[aria-haspopup]")
+    end
+
+    test "a waiting transaction without a category is in both views", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
+      assert has_element?(view, "#tx-#{c.uncategorised.id}")
+
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=needs_category")
+      assert has_element?(view, "#tx-#{c.uncategorised.id}")
+      refute has_element?(view, "#tx-#{c.waiting.id}")
+    end
+
+    test "phones keep the chip of what waits, not the other toolbar buttons", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+      assert has_element?(view, "#unapproved-chip")
+      refute has_element?(view, ".max-md\\:hidden #unapproved-chip")
+      refute has_element?(view, "#unapproved-chip.max-md\\:hidden")
+      assert has_element?(view, "#new-transaction.max-md\\:hidden")
+      assert has_element?(view, "#file-import.max-md\\:hidden")
+    end
+
+    test "the chip ends the search", c do
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?q=frischmarkt")
+
+      view |> element("#unapproved-chip") |> render_click()
+
+      assert_patch(view, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
+      assert has_element?(view, "#register-q[value='']")
+      assert has_element?(view, "#tx-#{c.uncategorised.id}")
+      assert has_element?(view, "#approve-line", "2 Buchungen warten auf Bestätigung.")
+    end
+
     test "approves one on the desktop", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       view |> element("#tx-#{c.waiting.id}-approve") |> render_click()
 
       assert reload(c.waiting).approved
-      assert has_element?(view, "#approve-all-count", "1")
+      assert has_element?(view, "#unapproved-count", "1")
       refute has_element?(view, "#tx-#{c.waiting.id}-approve")
     end
 
@@ -578,7 +702,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       refute has_element?(view, "#tx-card-#{c.waiting.id}.app-unapproved-item")
     end
 
-    test "approves all, match proposals stay open", c do
+    test "Alle bestätigen approves what the view shows, match proposals stay open", c do
       {:ok, proposal} =
         Ledger.create_transaction(budget_scope(), %{
           account_id: c.giro.id,
@@ -592,15 +716,14 @@ defmodule AbakusWeb.RegisterLiveTest do
       elsewhere =
         transaction_fixture(account_id: c.savings.id, approved: false, source: :api)
 
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-      view |> element("#approve-all") |> render_click()
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
+      view |> element("#approve-shown") |> render_click()
 
       assert reload(c.waiting).approved and reload(c.uncategorised).approved
       refute reload(proposal).approved
       assert reload(proposal).matched_transaction_id == c.shopping.id
       refute reload(elsewhere).approved
-      refute has_element?(view, "#approve-all")
-      refute has_element?(view, "#approve-all-item")
+      refute has_element?(view, "#approve-line")
       assert has_element?(view, "#accept-all-matches")
 
       assert has_element?(
@@ -609,10 +732,21 @@ defmodule AbakusWeb.RegisterLiveTest do
                "2 bestätigt. 1 Zuordnungsvorschlag bleibt offen: Zuordnen oder Trennen."
              )
 
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all")
-      assert has_element?(view, "#approve-all-count", "1")
-      view |> element("#approve-all") |> render_click()
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/all?filter=unapproved")
+      assert has_element?(view, "#approve-line", "1 Buchung wartet auf Bestätigung.")
+      view |> element("#approve-shown") |> render_click()
       assert reload(elsewhere).approved
+    end
+
+    test "Alle bestätigen approves only what the search leaves", c do
+      {:ok, view, _html} =
+        live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=unapproved&q=frischmarkt")
+
+      assert has_element?(view, "#approve-line", "1 Buchung wartet auf Bestätigung.")
+      view |> element("#approve-shown") |> render_click()
+
+      assert reload(c.waiting).approved
+      refute reload(c.uncategorised).approved
     end
 
     test "approve all asks first when a reconciled transaction waits", c do
@@ -621,20 +755,20 @@ defmodule AbakusWeb.RegisterLiveTest do
           reconciled: :confirmed
         )
 
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}?filter=unapproved")
 
-      assert asked(view, "#approve-all").label == "Ändern"
+      assert asked(view, "#approve-shown").label == "Ändern"
 
       confirm_click(
         view,
-        "#approve-all",
+        "#approve-shown",
         "Eine abgeglichene Buchung ist dabei. Trotzdem ändern?"
       )
 
       assert reload(c.old).approved
     end
 
-    test "approves and categorises the selected ones", c do
+    test "categorises the selected ones", c do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
       refute bulk?(view)
 
@@ -657,35 +791,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       # A transfer between budget accounts takes no category.
       assert reload(c.transfer).category_id == nil
       assert has_element?(view, "#flash-info", "2 kategorisiert")
-
-      view |> element("#approve-selected") |> render_click()
-      assert reload(c.waiting).approved and reload(c.uncategorised).approved
-      refute bulk?(view)
-    end
-
-    test "approving the selected ones keeps the selection when nothing is approved", c do
-      {:ok, _old} =
-        Ledger.update_transaction(budget_scope(), c.old, %{approved: false},
-          reconciled: :confirmed
-        )
-
-      {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-
-      view |> element("#tx-#{c.shopping.id} td.app-payee") |> render_click(%{"toggle" => "true"})
-      # As in YNAB the bar offers approving only when one of them waits.
-      refute has_element?(view, "#approve-selected")
-      render_click(view, "approve_selected", %{})
-      refute has_element?(view, "#flash-info", "0 bestätigt")
-      assert has_element?(view, "#flash-info", "Keine der ausgewählten Buchungen wartet")
-      assert has_element?(view, "#bulk", "1 Buchung")
-
-      view |> element("#tx-#{c.waiting.id} td.app-payee") |> render_click(%{"toggle" => "true"})
-      view |> element("#tx-#{c.old.id} td.app-payee") |> render_click(%{"toggle" => "true"})
-      # Without the confirmation the reconciled one stays locked, and so do the others.
-      render_click(view, "approve_selected", %{})
-      assert has_element?(view, "#flash-error", "Nicht geändert: Buchung ist abgeglichen")
       refute reload(c.waiting).approved
-      assert has_element?(view, "#bulk", "3 Buchungen")
     end
 
     test "selecting all takes the shown rows, and the selection can be cleared", c do
@@ -702,8 +808,6 @@ defmodule AbakusWeb.RegisterLiveTest do
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
 
       view |> element("#tx-#{c.old.id} td.app-payee") |> render_click(%{"toggle" => "true"})
-      # It is approved already, so approving it changes nothing.
-      refute has_element?(view, "#approve-selected")
 
       confirm_click(
         view,
@@ -752,7 +856,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert has_element?(view, "#proposal-card-#{id}", "passt zu Buchung vom 02.10.2026")
       assert has_element?(view, "#proposal-card-#{id}-accept")
 
-      assert has_element?(view, "#approve-all-count", "1")
+      assert has_element?(view, "#unapproved-count", "1")
       assert has_element?(view, "#accept-all-matches", "1 zuordnen")
       assert has_element?(view, "#accept-all-matches-item", "Alle zuordnen")
 
@@ -796,7 +900,7 @@ defmodule AbakusWeb.RegisterLiveTest do
       assert Repo.get(Transaction, c.proposal.id).deleted_at
       assert has_element?(view, "#flash-info", "Zugeordnet.")
       refute has_element?(view, "#proposal-#{c.proposal.id}")
-      assert has_element?(view, "#approve-all-count", "1")
+      assert has_element?(view, "#unapproved-count", "1")
       refute has_element?(view, "#accept-all-matches")
     end
 
@@ -823,7 +927,7 @@ defmodule AbakusWeb.RegisterLiveTest do
         })
 
       {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
-      assert has_element?(view, "#approve-all-count", "1")
+      assert has_element?(view, "#unapproved-count", "1")
 
       view |> element("#accept-all-matches") |> render_click()
 

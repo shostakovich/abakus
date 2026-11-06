@@ -49,7 +49,7 @@ struct AddAccountSheet: View {
             Section {
                 FormSheetRow("Art") {
                     Picker("Art", selection: $form.type) {
-                        Text(AddAccountForm.typePlaceholder).tag(AccountKind?.none)
+                        Text(AddAccountForm.typePlaceholder + " …").tag(AccountKind?.none)
                         ForEach(AccountKind.budgetKinds, id: \.self) { type in
                             Text(type.label).tag(AccountKind?.some(type))
                         }

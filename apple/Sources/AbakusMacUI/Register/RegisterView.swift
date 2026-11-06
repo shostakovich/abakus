@@ -67,15 +67,32 @@ private struct RegisterSplit: View {
     }
 }
 
-private struct RegisterPanelContent: View {
+struct RegisterPanelContent: View {
+    enum InfoBar: Hashable {
+        case approvals(String)
+        case search(RegisterSearchInfo)
+    }
+
     let model: RegisterViewModel
     let size: CGSize
+
+    /// What waits for approval, then the search's hits or the reconciliation.
+    static func infoBars(of model: RegisterViewModel) -> [InfoBar] {
+        [model.approvalsLine.map(InfoBar.approvals), model.search.info.map(InfoBar.search)].compactMap(\.self)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             // Shown at once: animating its height while the search field edits sends the grid into a layout loop.
-            if let info = model.search.info {
-                RegisterSearchInfoBar(info: info, onClear: model.search.clearClicked)
+            ForEach(Self.infoBars(of: model), id: \.self) { bar in
+                switch bar {
+                case .approvals(let line):
+                    RegisterInfoBar(
+                        message: line, buttonTitle: RegisterViewModel.approveAllTitle, action: model.approveAllClicked)
+                case .search(let info):
+                    RegisterInfoBar(
+                        message: info.message, buttonTitle: info.clearButtonTitle, action: model.search.clearClicked)
+                }
             }
             Divider()
             GeometryReader { proxy in
@@ -92,23 +109,24 @@ private struct RegisterPanelContent: View {
     }
 }
 
-/// A neutral inline banner: the search or reconciliation message and its clear button.
-private struct RegisterSearchInfoBar: View {
-    let info: RegisterSearchInfo
-    let onClear: () -> Void
+/// A neutral inline banner: what waits for approval, the search or the reconciliation, and its button.
+private struct RegisterInfoBar: View {
+    let message: String
+    let buttonTitle: String?
+    let action: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "info.circle.fill")
                 .foregroundStyle(ThemeColor.secondaryText)
                 .accessibilityHidden(true)
-            Text(verbatim: info.message)
+            Text(verbatim: message)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .help(info.message)
+                .help(message)
             Spacer(minLength: 8)
-            if let title = info.clearButtonTitle {
-                Button(title, action: onClear)
+            if let buttonTitle {
+                Button(buttonTitle, action: action)
                     .controlSize(.small)
                     .fixedSize()
             }

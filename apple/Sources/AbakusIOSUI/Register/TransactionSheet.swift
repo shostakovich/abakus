@@ -43,6 +43,14 @@
                     editor.sheetFieldUnfocused(old)
                 }
             }
+            .onChange(of: path) {
+                if editor.sheetShows(amount: Self.amountField(on: path.last)) { focus = nil }
+            }
+            .onChange(of: editor.amountRefusals) {
+                if let error = editor.amountError, error.field == Self.amountField(on: path.last) {
+                    focus = error.field
+                }
+            }
             .modifier(DialogAlert(dialogs: dialogs))
         }
 
@@ -65,6 +73,14 @@
                 formatter: editor.formatter, showsEmoji: field.column == .category,
                 initialSearch: editor.dropDown?.field == field ? current : "", newPayee: newPayee,
                 onNewCategory: newCategory, onPick: { editor.choose($0, for: field) })
+        }
+
+        private static func amountField(on page: TransactionSheetPage?) -> EditorFieldID? {
+            switch page {
+            case nil: .main(.amount)
+            case .part(let id): .sub(id, .amount)
+            case .choice: nil
+            }
         }
 
         private static func title(of field: EditorFieldID) -> String {
@@ -127,7 +143,6 @@
     private struct TransactionForm: View {
         let editor: TransactionEditor
         var focus: FocusState<EditorFieldID?>.Binding
-        @State private var isConfirmingDelete = false
         @State private var rowX: CGFloat?
         @State private var formX: CGFloat?
 
@@ -159,24 +174,17 @@
                     if !editor.isSplitMode { moreButtons }
                 }
                 if editor.isSplitMode { parts }
-                if let status = editor.sheetStatus {
-                    Section { StatusRow(editor: editor, status: status) }
-                }
                 if editor.sheetDeletes {
                     Section {
-                        Button("Buchung löschen", role: .destructive) { isConfirmingDelete = true }
-                            .confirmationDialog(
-                                "Buchung löschen?", isPresented: $isConfirmingDelete, titleVisibility: .visible
-                            ) {
-                                Button("Löschen", role: .destructive) {
-                                    focus.wrappedValue = nil
-                                    editor.activate(.delete)
-                                }
-                            }
+                        Button("Buchung löschen", role: .destructive) {
+                            focus.wrappedValue = nil
+                            editor.deleteClicked()
+                        }
                     }
                 }
             }
             .modifier(ReportsFormHeight())
+            .modifier(AmountErrorBubbleLayer(editor: editor))
             .measuresGlobalMinX($formX)
             .navigationTitle(editor.sheetTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -273,31 +281,6 @@
         }
     }
 
-    private struct StatusRow: View {
-        let editor: TransactionEditor
-        let status: EditorSheetStatus
-
-        var body: some View {
-            switch status {
-            case .waiting:
-                Button {
-                    editor.activate(.approve)
-                } label: {
-                    Label(EditorButton.approve.title, systemImage: "checkmark.circle.fill")
-                }
-            case .reconciled:
-                LabeledContent("Status") {
-                    Label("Abgeglichen", systemImage: "lock.fill").foregroundStyle(ThemeColor.secondaryText)
-                }
-            case .uncleared, .cleared:
-                Picker("Status", selection: Binding(get: { status }, set: editor.sheetStatusChosen)) {
-                    Text("Vorgemerkt").tag(EditorSheetStatus.uncleared)
-                    Text("Gebucht").tag(EditorSheetStatus.cleared)
-                }
-            }
-        }
-    }
-
     private struct PartRow: View {
         let summary: EditorPartSummary
 
@@ -347,6 +330,7 @@
                 }
             }
             .modifier(ReportsFormHeight())
+            .modifier(AmountErrorBubbleLayer(editor: editor))
             .measuresGlobalMinX($formX)
             .navigationTitle("Teil \((editor.subIds.firstIndex(of: id) ?? 0) + 1)")
             .navigationBarTitleDisplayMode(.inline)
@@ -455,11 +439,26 @@
         @ScaledMetric(relativeTo: .largeTitle) private var amountSize: CGFloat = 44
 
         var body: some View {
+            let error = editor.amountError.flatMap { $0.field == field ? $0.message : nil }
+            VStack(spacing: 6) {
+                amount
+                    .budgetAmountErrorAnchor(error != nil && AmountErrorBubbleLayer.showsBubble)
+                if let error, !AmountErrorBubbleLayer.showsBubble {
+                    Text(verbatim: error)
+                        .font(.footnote)
+                        .foregroundStyle(ThemeColor.negative)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+
+        private var amount: some View {
             let isLocked = editor.isLocked(field)
             let isInflow = editor.isInflow(field)
             let locale = editor.formatter.currencyLocale
             let ink = isInflow ? ThemeColor.positive : ThemeColor.text
-            HStack(spacing: 10) {
+            return HStack(spacing: 10) {
                 Spacer(minLength: 0)
                 Button {
                     editor.sheetSignToggled(field)
@@ -504,6 +503,21 @@
 
         private func symbol(_ text: String) -> some View {
             Text(verbatim: text).foregroundStyle(ThemeColor.secondaryText)
+        }
+    }
+
+    /// The iPad shows a refused amount as the bubble of its budget table, the iPhone as a red line under the field.
+    private struct AmountErrorBubbleLayer: ViewModifier {
+        static var showsBubble: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
+        let editor: TransactionEditor
+
+        func body(content: Content) -> some View {
+            content.overlayPreferenceValue(BudgetAmountErrorAnchorKey.self) { anchor in
+                if let anchor, let error = editor.amountError {
+                    BudgetAmountErrorBubble(error: error.message, anchor: anchor)
+                }
+            }
         }
     }
 

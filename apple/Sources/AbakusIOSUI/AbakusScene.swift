@@ -23,19 +23,19 @@
                 if case .opened(let model, let navigation) = AppLaunch.shared.outcome {
                     let waits = navigation.showsSheet
                     CommandGroup(replacing: .appSettings) {
-                        Button("Einstellungen …", action: navigation.goToSettings).keyboardShortcut(",").disabled(waits)
+                        Button("Einstellungen", action: navigation.goToSettings).keyboardShortcut(",").disabled(waits)
                     }
                     CommandGroup(before: .toolbar) {
                         Button("Zum Budget", action: navigation.goToBudget).keyboardShortcut("b").disabled(waits)
                         Button("Zu den Konten", action: navigation.goToAccounts).keyboardShortcut("t").disabled(waits)
-                        Button(PayeeSettingsModel.title + " …", action: model.register.payeeSettingsShortcut)
+                        Button(PayeeSettingsModel.title, action: model.register.payeeSettingsShortcut)
                             .keyboardShortcut("y")
                             .disabled(model.showsScreenSheet)
                     }
                     RegisterCommands(model: model, addsEverywhere: true, addingWaits: waits)
                     CommandGroup(after: .pasteboard) {
                         if model.showsAccountProperties {
-                            Button("Konto bearbeiten …", action: model.accountPropertiesClicked)
+                            Button("Konto bearbeiten", action: model.accountPropertiesClicked)
                                 .disabled(model.showsScreenSheet)
                         }
                     }

@@ -64,33 +64,8 @@ struct EditRowView: View {
         case .amount:
             EditTextCell(editor: editor, field: .main(.amount), width: frame.width)
         case .cleared:
-            let cleared = editor.clone.cleared
-            EditRowSymbolButton(
-                symbol: cleared.symbol, width: frame.width,
-                pointer: cleared != .reconciled
-            ) {
-                if let row, let main { main.clearedClicked(row) } else { editor.toggleCleared() }
-            }
-            .toolTip(RegisterRow.clearedTooltip(cleared))
+            EmptyView()
         }
-    }
-}
-
-struct EditRowSymbolButton: View {
-    let symbol: StatusSymbol
-    let width: CGFloat
-    var pointer = true
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            StatusSymbolImage(symbol: symbol)
-                .frame(width: width, height: EditRowMetrics.fieldBandHeight)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .focusable(false)
-        .pointerStyle(pointer ? .link : nil)
     }
 }
 

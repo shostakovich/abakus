@@ -37,7 +37,7 @@ import Testing
     @Test func theActionMenuDoesNotScanTheBudgetPerSelectedRow() {
         let model = largeModel()
         model.selectAll()
-        #expect(seconds { _ = model.transactionActionsMenu(withTitle: true) } < 0.1)
+        #expect(seconds { _ = model.transactionActionsMenu() } < 0.1)
     }
 
     @Test func theGridSortsIncomeAndARefundOfOneDayByCategory() {

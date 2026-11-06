@@ -66,7 +66,7 @@
                         ForEach(panel.rows) { account in
                             NavigationLink(value: SidebarSelection.account(account.id)) { AccountRow(row: account) }
                                 .contextMenu {
-                                    Button("Konto bearbeiten …", systemImage: "pencil") { edit(account) }
+                                    Button("Konto bearbeiten", systemImage: "pencil") { edit(account) }
                                 }
                                 .swipeActions(edge: .trailing) {
                                     Button("Bearbeiten", systemImage: "pencil") { edit(account) }

@@ -9,6 +9,10 @@ enum CategorizeChoice: Hashable, Sendable {
     case cancel, categorize
 }
 
+enum UnlockChoice: Hashable, Sendable {
+    case cancel, unlock
+}
+
 extension RegisterViewModel {
     var selectedTransactions: [Transaction] {
         let selection = selection
@@ -16,53 +20,33 @@ extension RegisterViewModel {
     }
 
     /// The enable rules are recomputed on every open.
-    public func transactionActionsMenu(withTitle: Bool) -> [RegisterMenuItem] {
-        transactionActionsMenu(of: selectedTransactions, withTitle: withTitle)
+    public func transactionActionsMenu() -> [RegisterMenuItem] {
+        transactionActionsMenu(of: selectedTransactions)
     }
 
-    func transactionActionsMenu(of selected: [Transaction], withTitle: Bool) -> [RegisterMenuItem] {
+    func transactionActionsMenu(of selected: [Transaction]) -> [RegisterMenuItem] {
         let budget = store.budget
         let single = selected.count == 1 ? selected.first : nil
-        var items: [RegisterMenuItem] = []
-        if withTitle {
-            let title =
-                selected.count == 1 ? "1 ausgewählte Buchung:" : "\(selected.count) ausgewählte Buchungen:"
-            items += [RegisterMenuItem(id: "title", title: title, kind: .title, isEnabled: false), .separator(0)]
-        }
-        let needsApproval = selected.contains(where: \.needsApproval)
         let led = budget.ledTransactionIds
         let unled = selected.filter { !led.contains($0.id) }
-        let payeeName = single.map { budget.payeeName(of: $0) } ?? ""
         let moveTargets = budget.moveTargets(excluding: account?.id)
         let canSchedule =
             single.map { $0.date > today() && !budget.isTransferFromSplit($0) && !led.contains($0.id) } ?? false
-        items += [
-            .action("Als gebucht markieren", .markCleared, enabled: selected.contains { $0.cleared == .uncleared }),
-            .action("Als vorgemerkt markieren", .markUncleared, enabled: selected.contains { $0.cleared == .cleared }),
-            .separator(1),
-            .action("Bestätigen", .approve, enabled: needsApproval),
-            .action("Ablehnen (löschen)", .reject, enabled: unled.contains(where: \.needsApproval)),
-            .separator(2),
+        return [
             RegisterMenuItem(
                 id: "categorize", title: "Kategorisieren als", kind: .submenu(categorizeItems),
                 isEnabled: canCategorize),
-            .separator(3),
-            .action(
-                "Gleiche Empfänger umbenennen …", .renamePayee,
-                enabled: single != nil && !payeeName.isEmpty && single.map { !store.budget.isTransfer($0) } == true),
-            .action("Empfänger verwalten …", .payeeSettings, enabled: !selected.isEmpty),
-            .separator(4),
+            .separator(1),
             .action("Wiederkehrend machen …", .makeRecurring, enabled: single != nil),
             .action("In geplante Buchungen verschieben …", .moveToScheduler, enabled: canSchedule),
-            .separator(5),
+            .separator(2),
             RegisterMenuItem(
                 id: "move", title: "In Konto verschieben",
                 kind: .submenu(moveTargets.map { .action($0.name, .moveToAccount(accountId: $0.id)) }),
                 isEnabled: !moveTargets.isEmpty && !unled.isEmpty),
-            .separator(6),
-            .action("Löschen", .delete, enabled: !unled.isEmpty),
+            .separator(3),
+            .action("Löschen", .delete, enabled: !unled.isEmpty, isDestructive: isTouch),
         ]
-        return items
     }
 
     var canCategorize: Bool { account?.onBudget ?? true }
@@ -88,28 +72,34 @@ extension RegisterViewModel {
         return submenus + [.action("(Keine Kategorie)", .categorize(categoryId: nil))]
     }
 
-    public static let reconciledTitle = "Abgeglichene Buchungen zeigen"
-
-    /// The date filter and the reconciled filter, which a reconciliation sets itself, then the columns.
     public var viewMenu: [RegisterMenuItem] {
-        filterMenu + columnMenu
+        filterMenu + columnMenuItems.map { .action($0.label, .toggleColumn($0.column), checked: $0.isChecked) }
     }
 
+    /// A reconciliation sums what the list shows, so it keeps Alle Buchungen.
     var filterMenu: [RegisterMenuItem] {
         guard !isReconciling else { return [] }
-        return [
-            .action("Zeitraum: \(search.dateSelectorTitle) …", .timeframe),
-            .action(
-                Self.reconciledTitle, .showReconciled, enabled: isReconciledFilterEnabled,
-                checked: isShowingReconciled),
-            .separator(10),
-        ]
+        return RegisterFilter.allCases.map { .action($0.title, .filter($0), checked: $0 == filter) } + [.separator(10)]
     }
 
-    public var columnMenu: [RegisterMenuItem] {
-        columnMenuItems.map { .action($0.label, .toggleColumn($0.column), checked: $0.isChecked) } + [
-            .separator(0), .action("Für alle Konten übernehmen", .applyColumnsToAllAccounts),
-        ]
+    /// „Ansicht: zu bestätigen“ while a view other than Alle Buchungen shows, as on the web.
+    public var viewMenuTitle: String {
+        guard filter != .all else { return "Ansicht" }
+        return "Ansicht: " + filter.title.prefix(1).lowercased() + filter.title.dropFirst()
+    }
+
+    /// iOS names a view other than Alle Buchungen above the list, with the way back to it.
+    public var activeViewLine: String? { filter == .all ? nil : viewMenuTitle }
+
+    public static let allTransactionsTitle = RegisterFilter.all.title
+
+    public func allTransactionsClicked() {
+        viewMenuChosen(.filter(.all))
+    }
+
+    public var emptyListTitle: String {
+        if search.isSearching { return "Keine Treffer" }
+        return filter == .all ? "Keine Buchungen" : "Keine Buchungen in „\(filter.title)“"
     }
 
     func showMenu(_ items: [RegisterMenuItem], below anchor: RegisterAnchorID) {
@@ -121,19 +111,13 @@ extension RegisterViewModel {
         menuRequest = nil
     }
 
-    /// The row joins the selection, then the action menu opens with its title.
+    /// The row joins the selection, then the action menu opens.
     public func contextMenu(for row: RegisterRow) -> [RegisterMenuItem]? {
         guard !isBlockedByModal else { return nil }
         if grid.swallowsClick(on: row.transactionId) { return nil }
         closePopup()
         if !selection.contains(row.transactionId) { updateSelection { $0.select(row.transactionId) } }
-        return transactionActionsMenu(withTitle: true)
-    }
-
-    public func headerContextMenu() -> [RegisterMenuItem]? {
-        guard !isBlockedByModal else { return nil }
-        closePopup()
-        return columnMenu
+        return transactionActionsMenu()
     }
 
     public func performMenuAction(_ action: RegisterMenuAction) {
@@ -141,26 +125,17 @@ extension RegisterViewModel {
         let selected = selectedTransactions
         let ids = selected.map(\.id)
         switch action {
-        case .markCleared:
-            perform(.setCleared(selected.filter { $0.cleared == .uncleared }.map(\.id), .cleared))
-        case .markUncleared:
-            perform(.setCleared(selected.filter { $0.cleared == .cleared }.map(\.id), .uncleared))
-        case .approve: approveSelectedTransactions()
-        case .reject: deleteTransactions(idsAtLevel(.forReview, in: selected))
         case .categorize(let categoryId): categorize(ids, categoryId: categoryId)
-        case .renamePayee: showRenamePayee(selected.first)
-        case .payeeSettings:
-            onEditPayees(selected.first.map { store.budget.payeeName(of: $0) })
         case .makeRecurring: schedule(selected.first, recurring: true)
         case .moveToScheduler: schedule(selected.first, recurring: false)
         case .moveToAccount(let accountId): moveTransactions(ids, to: accountId)
         case .delete: deleteTransactions(ids)
-        case .timeframe: search.dateSelectorClicked()
-        case .showReconciled: setShowingReconciled(!isShowingReconciled)
+        case .filter(let filter): setFilter(filter)
         case .togglePicking: togglePicking()
         case .toggleSelectAll: toggleSelectAll()
+        case .toggleScheduler: scheduledToggleClicked()
+        case .editAccount: onEditAccount()
         case .toggleColumn(let column): toggleColumnVisibility(column)
-        case .applyColumnsToAllAccounts: applyColumnSettingsToAllAccounts()
         case .toggleScheduledColumn(let column): scheduler.toggleColumnVisibility(column)
         case .applyScheduledColumnsToAllAccounts: scheduler.applyColumnSettingsToAllAccounts()
         case .enterScheduledNow: scheduler.enterNowClicked()
@@ -169,11 +144,6 @@ extension RegisterViewModel {
         case .moveScheduled(let accountId): scheduler.moveClicked(to: accountId)
         case .fillUnderfunded, .resetAssigned, .frequency: break
         }
-    }
-
-    func idsAtLevel(_ level: ErrorLevel, in transactions: [Transaction]) -> [String] {
-        let budget = store.budget
-        return transactions.filter { budget.errorState(of: $0).level == level }.map(\.id)
     }
 
     @discardableResult
@@ -191,31 +161,8 @@ extension RegisterViewModel {
         }
     }
 
-    public func approveSelectedTransactions() {
-        popup = nil
-        if let editor, editor.mode == .existing, selectedTransactionIds.first == editor.transactionId {
-            editor.activate(.approveAndFindNext)
-            return
-        }
-        let ids = idsAtLevel(.forReview, in: selectedTransactions)
-        guard !ids.isEmpty else { return }
-        perform(.approveTransactions(ids))
-    }
-
-    /// C and Cmd+Shift+C: the bulk rule on the selection, or the add editor's transaction when nothing is selected.
-    public func toggleClearedOfSelection() {
-        let ids = selectedTransactionIds
-        if let editor, editor.mode == .existing || ids.isEmpty {
-            editor.toggleCleared()
-            return
-        }
-        guard !ids.isEmpty else { return }
-        perform(.toggleCleared(ids))
-    }
-
     public func closePopup() {
         popup = nil
-        overlayState.timeframe = nil
     }
 
     /// Warnings need a confirmation, plain deletes happen at once.
@@ -399,40 +346,12 @@ extension RegisterViewModel {
         if !isReconciling { popup = .scheduledCallout(recurring ? .added : .moved) }
     }
 
-    private func applyColumnSettingsToAllAccounts() {
-        let settings = columnSettings
-        for account in store.budget.accounts {
-            var state = viewStates[account.id] ?? RegisterAccountViewState()
-            state.columnSettings = settings
-            viewStates[account.id] = state
-        }
-    }
-
     func showMessage(_ instruction: String, _ content: String) {
         dialogs.show(.message(instruction, content))
     }
 
-    private func showRenamePayee(_ transaction: Transaction?) {
-        guard let transaction, let payeeId = transaction.payeeId, !store.budget.isTransfer(transaction),
-            let payee = store.budget.payee(withId: payeeId)
-        else { return }
-        renamePayeeForm = RenamePayeeForm(payeeId: payeeId, currentName: payee.name)
-    }
-
-    public func renamePayeeConfirmed(_ name: String) {
-        guard let form = renamePayeeForm else { return }
-        renamePayeeForm = nil
-        let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, trimmed != form.currentName else { return }
-        perform(.renamePayee(payeeId: form.payeeId, name: trimmed))
-    }
-
-    public func renamePayeeCancelled() {
-        renamePayeeForm = nil
-    }
-
     var isBlockedByModal: Bool {
-        dialogs.isPresenting || renamePayeeForm != nil || editor?.addCategoryForm != nil
+        dialogs.isPresenting || editor?.addCategoryForm != nil
             || scheduler.editor?.addCategoryForm != nil || reconciliation.statementForm != nil || isAppModalOpen()
     }
 
@@ -445,16 +364,6 @@ extension RegisterViewModel {
     public func deleteKeyPressed() {
         guard acceptsRegisterKeys, editor == nil, !search.isFocused else { return }
         deleteTransactions(selectedTransactionIds)
-    }
-
-    public func approveKeyPressed() {
-        guard acceptsRegisterKeys else { return }
-        approveSelectedTransactions()
-    }
-
-    public func toggleClearedKeyPressed() {
-        guard acceptsRegisterKeys else { return }
-        toggleClearedOfSelection()
     }
 
     /// Cmd+A selects every row unless the search box has focus or a row is edited in either grid.
@@ -488,13 +397,10 @@ extension RegisterViewModel {
         reveal(target.id)
     }
 
-    /// A hidden row turns off the search, the date filter and the hiding of reconciled rows (`showFilteredView`).
     func reveal(_ transactionId: String) {
         if !transactionIds.contains(transactionId) {
-            search.text = ""
-            search.clearFilter()
-            search.dateFilter = nil
-            setShowingReconciled(true)
+            search.cancel()
+            setFilter(.all)
         }
         updateSelection { $0.select(transactionId) }
         requestScroll(.row(transactionId))
@@ -507,22 +413,18 @@ extension RegisterViewModel {
         reveal(transactionId)
     }
 
-    /// The search and the date filter replace the account's current ones.
-    public func showFilteredView(_ filter: AccountViewFilter) {
-        navigation.selection = filter.accountId == EntityID.allAccounts ? .allAccounts : .account(filter.accountId)
-        search.text = filter.searchText
-        search.commit()
-        search.setDateSelection(filter.dateFilter)
+    public func showFilteredView(_ view: AccountViewFilter) {
+        navigation.selection = view.accountId == EntityID.allAccounts ? .allAccounts : .account(view.accountId)
+        setFilter(view.filter)
+        search.run(view.searchText)
     }
 
-    public func showAllAccounts(searching text: String) {
-        navigation.selection = .allAccounts
-        search.dateFilter = nil
-        search.run(text)
+    public func showAllAccounts(in filter: RegisterFilter) {
+        showFilteredView(AccountViewFilter(accountId: EntityID.allAccounts, filter: filter))
     }
 
     public func showPayeeTransactions(_ payeeName: String, showingScheduled: Bool) {
-        showAllAccounts(searching: "Empfänger: " + payeeName)
+        showFilteredView(AccountViewFilter(accountId: EntityID.allAccounts, searchText: payeeName))
         if showingScheduled && !isSchedulerVisible { scheduledToggleClicked() }
     }
 
