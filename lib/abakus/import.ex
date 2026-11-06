@@ -8,13 +8,14 @@ defmodule Abakus.Import do
   imported again, nor one that the entries repeat, nor an entry dated up to the account's newest reconciled
   transaction. One that looks like a transaction in the register comes in as a match proposal for it, never merged
   silently. Imports land unapproved and cleared unless `cleared` says otherwise; the payee comes from `payee_name`
-  (the regular payee with its lookup key, else a new one), the memo from `memo`. Everything goes through the Ledger
+  after the payees' rename rules (`Abakus.Ledger.Payees.renamer/1`): the regular payee with its lookup key, else a
+  new one. The memo comes from `memo`. Everything goes through the Ledger
   with the caller's scope.
   """
 
   alias Abakus.Depot.Portfolios
   alias Abakus.{Ledger, Sync}
-  alias Abakus.Ledger.Account
+  alias Abakus.Ledger.{Account, Payees}
   alias Abakus.Users.Scope
 
   @doc """
@@ -82,21 +83,23 @@ defmodule Abakus.Import do
       rows =
         scope |> rows(account, source, entries) |> Enum.filter(&(&1.status in [:new, :matched]))
 
-      with {:ok, statuses} <- collect(rows, &create(scope, account, source, &1)) do
+      rename = Payees.renamer(scope)
+
+      with {:ok, statuses} <- collect(rows, &create(scope, account, source, rename, &1)) do
         counts = Enum.frequencies(statuses)
         {:ok, %{new: Map.get(counts, :new, 0), matched: Map.get(counts, :matched, 0)}}
       end
     end)
   end
 
-  defp create(scope, account, source, %{transaction: entry, status: status, match: match}) do
+  defp create(scope, account, source, rename, %{transaction: entry, status: status, match: match}) do
     if match, do: Ledger.yield_proposal(scope, match, source)
 
     attrs = %{
       account_id: account.id,
       date: entry.date,
       amount: entry.amount,
-      payee_name: entry.payee_name,
+      payee_name: rename.(entry.payee_name),
       memo: entry.memo,
       cleared: Map.get(entry, :cleared, :cleared),
       source: source,

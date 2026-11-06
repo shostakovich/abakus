@@ -134,6 +134,12 @@ defmodule AbakusWeb.RegisterScheduledTest do
 
       view |> element("#scheduled-toggle") |> render_click()
       refute has_element?(view, "#scheduled")
+
+      view |> element("#scheduled-toggle") |> render_click()
+      scheduled_fixture(c, next_date: ~D[2026-12-09])
+      send(view.pid, {:synced, "other"})
+      assert has_element?(view, "#scheduled summary", "Geplant · 1")
+      assert has_element?(view, "#scheduled-list[open]")
     end
 
     test "the Kasse account and closed accounts take no new scheduled transaction", c do

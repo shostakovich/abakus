@@ -318,13 +318,14 @@ defmodule AbakusWeb.TransactionEditorTest do
       assert %Transaction{amount: 318_000, category_id: ^rta} = newest(c.giro)
     end
 
-    test "a hidden payee is no longer suggested, but its name still books it", c do
+    test "a hidden payee is no longer suggested nor fills in its category, but its name still books it",
+         c do
       {:ok, _hidden} = Ledger.update_payee(budget_scope(), c.market, %{hidden: true})
       view = open_new(c, c.giro)
       refute render(view) =~ ~s|data-value="p:Frischmarkt"|
 
       create_payee(view, "main", "Frischmarkt")
-      assert category(view, c.groceries.id)
+      assert category(view, "")
       submit(view, %{amount: "5,00"})
 
       assert newest(c.giro).payee_id == c.market.id

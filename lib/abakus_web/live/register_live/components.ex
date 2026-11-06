@@ -213,7 +213,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   approves what it shows.
   Phones keep "2 bestätigen", the search and the menu, which takes the rest; the floating button adds a transaction
   there. The menu shows the scheduled transactions while there are none ("Geplante Buchungen") and, in Alle Konten,
-  lists the closed accounts ("Geschlossene Konten (2) …").
+  lists the closed accounts ("Geschlossene Konten (2) …"); its last entry opens "Empfänger verwalten …".
   """
   def toolbar(assigns) do
     ~H"""
@@ -352,6 +352,9 @@ defmodule AbakusWeb.RegisterLive.Components do
             >
               <span class="app-memo-hide">Memo ausblenden</span><span class="app-memo-show">Memo zeigen</span>
             </:item>
+            <:item id="payees-item" on_click={JS.push("open_payee_dialog")} divider>
+              Empfänger verwalten …
+            </:item>
           </.dropdown>
           <form
             id="register-search"
@@ -436,6 +439,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :accounts, :map, required: true
   attr :all, :boolean, required: true
   attr :addable, :boolean, required: true, doc: "whether \"Geplante Buchung\" adds one here"
+  attr :open, :boolean, default: false, doc: "whether it is open"
 
   @doc """
   The scheduled transactions above the register's transactions, collapsed with their count ("Geplant · 3"), open and
@@ -446,7 +450,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   def scheduled(assigns) do
     ~H"""
     <section id="scheduled">
-      <.disclosure id="scheduled-list" variant={:row} open={@scheduled == []}>
+      <.disclosure id="scheduled-list" variant={:row} open={@open}>
         <:title>
           Geplant<span :if={@scheduled != []} class="font-normal text-base-content/70"> · {length(
             @scheduled

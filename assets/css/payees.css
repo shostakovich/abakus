@@ -1,0 +1,27 @@
+/* "Empfänger verwalten": list and detail side by side from sm, one at a time in the phone's full-height sheet. */
+.app-payees { display: flex; flex-direction: column; width: min(56rem, 100vw); max-width: none; height: min(42rem, calc(100dvh - 3rem)); }
+.app-payees-body { display: grid; flex: 1 1 auto; min-height: 0; grid-template-columns: 18rem minmax(0, 1fr); gap: 1.5rem; padding-top: .5rem; }
+.app-payees-list { display: flex; min-height: 0; flex-direction: column; gap: .5rem; }
+.app-payees-list .fieldset { padding: 0; }
+.app-payees-empty, .app-payees-prompt { padding: 1rem; text-align: center; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
+.app-payees-detail { min-height: 0; overflow-y: auto; padding-inline: .25rem; }
+.app-payees-prompt { display: grid; height: 100%; place-items: center; font-size: var(--text-lg); }
+.app-payees-form { display: flex; flex-direction: column; gap: 1.5rem; }
+.app-payees-form .fieldset { padding-block: 0; }
+.app-payees-group { display: flex; flex-direction: column; gap: .75rem; }
+.app-payees-group + .app-payees-group, .app-payees-form > * + * { border-top: var(--border) solid color-mix(in oklab, var(--color-base-content) 10%, transparent); padding-top: 1.25rem; }
+.app-payees-name-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 2.25rem; }
+.app-payees-rename { display: flex; align-items: flex-start; gap: .5rem; }
+.app-payees-rename > .fieldset { flex: 1 1 auto; }
+.app-payees-listed { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.app-payees-listed > :last-child { flex-shrink: 0; }
+.app-payees-rules { display: flex; flex-direction: column; gap: .75rem; }
+.app-payees-rules > form { display: flex; flex-direction: column; gap: .5rem; }
+.app-payees-names { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 6; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
+.app-payees-combine { display: flex; align-items: flex-end; gap: .5rem; }
+.app-payees-combine > .fieldset { flex: 1 1 auto; }
+@media (width < 40rem) {
+  .app-payees { height: calc(100dvh - 5em); }
+  .app-payees-body { grid-template-columns: minmax(0, 1fr); }
+  .app-payees-body[data-pane="list"] > .app-payees-detail, .app-payees-body[data-pane="detail"] > .app-payees-list { display: none; }
+}

@@ -6,9 +6,9 @@ defmodule AbakusWeb.RegisterLive.EditorState do
   transfer payees).
 
   A choice in a combobox arrives as a change of `payee_pick` (with `payee_new` for a payee typed anew) or
-  `category_pick`. A payee suggests its last category, and a suggestion goes again when the payee changes; a chosen
-  category stays. A transfer between a budget and a tracking account suggests the category last used between the
-  two. Income goes to Ready to Assign unless a category is chosen.
+  `category_pick`. A payee that is not hidden suggests its last category, and a suggestion goes again when the payee
+  changes; a chosen category stays. A transfer between a budget and a tracking account suggests the category last
+  used between the two. Income goes to Ready to Assign unless a category is chosen.
   """
 
   import Phoenix.Component, only: [assign: 2, assign: 3, update: 3]
@@ -221,8 +221,8 @@ defmodule AbakusWeb.RegisterLive.EditorState do
 
   defp payee_category(socket, name) do
     case Map.get(socket.assigns.payees_by_key, Names.lookup_key(name)) do
-      %{last_category_id: id} -> offered(socket, id)
-      nil -> nil
+      %{hidden: false, last_category_id: id} -> offered(socket, id)
+      _hidden_or_none -> nil
     end
   end
 

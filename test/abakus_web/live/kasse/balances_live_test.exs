@@ -56,8 +56,10 @@ defmodule AbakusWeb.Kasse.BalancesLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/kasse/balances")
 
-    assert text(view, "#transfer-0") =~ "Ben schuldet Anna 10,00 € Als erstattet markieren"
-    assert text(view, "#transfer-1") =~ "Cleo schuldet Anna 10,00 €"
+    assert has_element?(view, "#transfer-0", "Ben schuldet Anna")
+    assert text(view, "#transfer-0") =~ "10,00 € Als erstattet markieren"
+    assert has_element?(view, "#transfer-1", "Cleo schuldet Anna")
+    assert text(view, "#transfer-1") =~ "10,00 €"
 
     {:ok, form, _html} =
       view |> element("#transfer-0-settle") |> render_click() |> follow_redirect(conn)
