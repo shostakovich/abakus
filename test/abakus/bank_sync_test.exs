@@ -8,7 +8,7 @@ defmodule Abakus.BankSyncTest do
 
   alias Abakus.{BankSync, Ledger, Repo, SyncDevice}
   alias Abakus.BankSync.{AccessError, Connection, FakeClient, LinkedAccount}
-  alias Abakus.Ledger.{Payee, Transaction, TransactionOrigin}
+  alias Abakus.Ledger.{Payee, PayeeRenameCondition, Transaction, TransactionOrigin}
   alias Abakus.Users.Scope
 
   setup do
@@ -459,6 +459,36 @@ defmodule Abakus.BankSyncTest do
 
       assert {:transactions, "uid-giro", ~D[2026-10-06], nil} in FakeClient.fetches()
       assert [_pending, _booked] = Ledger.list_transactions(budget_scope(), ctx.giro)
+    end
+
+    test "renames payees by their rules and keys the entries by the bank's name", ctx do
+      stadtwerke = payee_fixture(name: "Stadtwerke")
+
+      Repo.insert!(%PayeeRenameCondition{
+        user_id: stadtwerke.user_id,
+        payee_id: stadtwerke.id,
+        operator: :starts_with,
+        text: "stadtwerke"
+      })
+
+      FakeClient.put_transactions("uid-giro", [
+        FakeClient.transaction(
+          date: ~D[2026-10-12],
+          amount: -4200,
+          creditor: "Stadtwerke Köln GmbH"
+        )
+      ])
+
+      assert {:ok, %{new: 1}} = BankSync.fetch(budget_scope(), ctx.connection)
+
+      assert [%{payee_id: payee_id} = transaction] =
+               Ledger.list_transactions(budget_scope(), ctx.giro)
+
+      assert payee_id == stadtwerke.id
+      refute Repo.get_by(Payee, name: "Stadtwerke Köln GmbH")
+
+      assert %{external_id: "2026-10-12 -4200 stadtwerke köln gmbh"} =
+               Repo.get_by!(TransactionOrigin, transaction_id: transaction.id)
     end
 
     test "takes nothing dated before the start date, whatever the bank reports", ctx do

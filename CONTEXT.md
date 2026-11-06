@@ -143,7 +143,7 @@ _Avoid_: Merchant, counterparty, vendor
 
 **Payee rename rule**:
 A payee's ordered conditions, each an operator (contains, is, starts with, ends with) and a text, under which a
-payee name is renamed to that payee. Data for the apps; the web does not apply them yet.
+payee name is renamed to that payee. Imports apply those of the regular payees before they look up the payee.
 _Avoid_: Alias, payee mapping
 
 **Register**:

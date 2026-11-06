@@ -4,7 +4,7 @@ defmodule Abakus.ImportTest do
   import Abakus.DomainFixtures
 
   alias Abakus.{Import, Ledger}
-  alias Abakus.Ledger.{BankBalance, Transaction}
+  alias Abakus.Ledger.{BankBalance, Payee, PayeeRenameCondition, Transaction}
 
   defp entry(external_id, date, amount, attrs \\ %{}) do
     Map.merge(
@@ -93,6 +93,72 @@ defmodule Abakus.ImportTest do
 
       assert %{amount: [_]} = errors_on(changeset)
       assert Repo.aggregate(Transaction, :count) == 0
+    end
+  end
+
+  describe "import/4 with rename rules" do
+    defp rule!(payee, operator, text) do
+      Repo.insert!(%PayeeRenameCondition{
+        user_id: payee.user_id,
+        payee_id: payee.id,
+        operator: operator,
+        text: text
+      })
+    end
+
+    defp payee_names, do: Repo.all(from p in Payee, select: p.name, order_by: p.name)
+
+    test "renames the entry's payee before it looks it up or creates it", %{giro: giro} do
+      rewe = payee_fixture(name: "Rewe")
+      rule!(rewe, :starts_with, "rewe markt")
+      bank = entry("B-1", ~D[2026-10-01], -640, %{payee_name: "REWE Markt GmbH 4711"})
+      file = entry("F-1", ~D[2026-10-02], -990, %{payee_name: "REWE MARKT Köln"})
+
+      assert {:ok, %{new: 1}} = Import.import(budget_scope(), giro, :bank, [bank])
+      assert {:ok, %{new: 1}} = Import.import(budget_scope(), giro, :file, [file])
+
+      assert [%{payee_id: id}, %{payee_id: id}] = register(giro)
+      assert id == rewe.id
+      assert "REWE Markt GmbH 4711" not in payee_names()
+    end
+
+    test "takes the first matching payee by lookup key", %{giro: giro} do
+      rule!(payee_fixture(name: "Rewe"), :starts_with, "REWE")
+      rule!(payee_fixture(name: "Edeka"), :contains, "Markt")
+
+      {:ok, _counts} =
+        Import.import(budget_scope(), giro, :file, [
+          entry("F-1", ~D[2026-10-02], -990, %{payee_name: "REWE Markt"})
+        ])
+
+      assert [%{payee: %Payee{name: "Edeka"}}] = register(giro)
+    end
+
+    test "renames past a payee that has the bank's name", %{giro: giro} do
+      rewe = payee_fixture(name: "Rewe")
+      payee_fixture(name: "REWE Markt GmbH 4711")
+      rule!(rewe, :starts_with, "rewe markt")
+
+      {:ok, _counts} =
+        Import.import(budget_scope(), giro, :bank, [
+          entry("B-1", ~D[2026-10-01], -640, %{payee_name: "REWE Markt GmbH 4711"})
+        ])
+
+      assert [%{payee_id: id}] = register(giro)
+      assert id == rewe.id
+    end
+
+    test "leaves out the rules of transfer payees", %{giro: giro} do
+      tagesgeld = account_fixture(name: "Tagesgeld", kind: :savings)
+      rule!(tagesgeld.transfer_payee, :is, "Umbuchung Tagesgeld")
+
+      {:ok, _counts} =
+        Import.import(budget_scope(), giro, :bank, [
+          entry("B-1", ~D[2026-10-02], -10_000, %{payee_name: "Umbuchung Tagesgeld"})
+        ])
+
+      assert [%{payee: %Payee{name: "Umbuchung Tagesgeld", transfer_account_id: nil}}] =
+               register(giro)
     end
   end
 

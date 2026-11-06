@@ -237,6 +237,33 @@ defmodule Abakus.Ledger.Payees do
       else: {:error, :changed}
   end
 
+  @doc """
+  The rename rules of the regular payees as a function from a payee name to the name it is renamed to, itself when
+  no rule matches. The first payee by lookup key wins, and within it the topmost rule.
+  """
+  def renamer(%Scope{} = scope) do
+    rules =
+      Repo.all(
+        from c in owned(PayeeRenameCondition, scope),
+          join: p in subquery(regular(scope)),
+          on: p.id == c.payee_id,
+          where: is_nil(c.deleted_at),
+          order_by: [p.lookup_key, p.id, c.position, c.id],
+          select: {c, p.name}
+      )
+
+    &rename_by(rules, &1)
+  end
+
+  defp rename_by(rules, name) when is_binary(name) do
+    case Enum.find(rules, &PayeeRenameCondition.matches?(elem(&1, 0), name)) do
+      {_condition, payee_name} -> payee_name
+      nil -> name
+    end
+  end
+
+  defp rename_by(_rules, name), do: name
+
   defp matched(scope, target) do
     conditions = conditions_of(scope, target.id)
     uses = scope |> counts(:uses) |> total()

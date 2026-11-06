@@ -662,6 +662,42 @@ defmodule Abakus.Ledger.PayeesTest do
       assert payee_id == theirs.id
     end
 
+    test "renamer/1 renames a name a regular payee's rule matches and keeps others" do
+      rewe = payee_fixture(name: "Rewe")
+      rule!(rewe, :starts_with, "rewe markt")
+      rename = Payees.renamer(budget_scope())
+
+      assert rename.("REWE Markt GmbH 4711") == "Rewe"
+      assert rename.("Aldi") == "Aldi"
+      assert rename.(nil) == nil
+    end
+
+    test "renamer/1 takes the first payee by lookup key, and within it the topmost rule" do
+      edeka = payee_fixture(name: "Edeka")
+      rewe = payee_fixture(name: "Rewe")
+      rule!(rewe, :starts_with, "REWE")
+      rule!(edeka, :is, "REWE Markt", 1)
+      rule!(edeka, :contains, "Markt", 0)
+
+      assert Payees.renamer(budget_scope()).("REWE Markt") == "Edeka"
+    end
+
+    test "renamer/1 leaves out the rules of transfer payees and deleted ones", c do
+      rule!(c.giro.transfer_payee, :is, "Umbuchung Tagesgeld")
+      rewe = payee_fixture(name: "Rewe")
+
+      rewe
+      |> rule!(:is, "REWE Markt")
+      |> Ecto.Changeset.change(deleted_at: DateTime.utc_now())
+      |> Repo.update!()
+
+      rename = Payees.renamer(budget_scope())
+
+      assert rename.("Umbuchung Tagesgeld") == "Umbuchung Tagesgeld"
+      assert rename.("REWE Markt") == "REWE Markt"
+      assert Payees.renamer(user_scope_fixture()).("REWE Markt") == "REWE Markt"
+    end
+
     test "the writes become sync messages", c do
       rewe = payee_fixture(name: "Rewe")
       markt = payee_fixture(name: "REWE Markt")
