@@ -39,8 +39,6 @@ public struct BudgetTargetProgress: Hashable, Sendable {
     public let label: String
     public let value: Double
     public let mark: Double?
-
-    public var percentText: String { "\(Int((value * 100).rounded())) %" }
 }
 
 /// The target as the category callout shows it in its month.
@@ -77,7 +75,7 @@ extension BudgetCalloutController {
             assignLabel: figures.balance >= 0 && toAssign > 0 ? "\(formatter.currency(toAssign)) zuweisen" : nil,
             progress: target.target.cadence == .byDate
                 ? BudgetTargetProgress(
-                    label: formatter.targetSavedLabel(target), value: target.progress, mark: target.mark) : nil,
+                    label: formatter.targetProgressLabel(target), value: target.progress, mark: target.mark) : nil,
             isSnoozed: target.isSnoozed)
     }
 

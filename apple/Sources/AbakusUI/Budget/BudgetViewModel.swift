@@ -53,7 +53,6 @@ public final class BudgetViewModel {
     public internal(set) var panelFocusRequest = 0
     @ObservationIgnored public private(set) lazy var callouts = BudgetCalloutController(budget: self)
     @ObservationIgnored public var onShowAllAccountsSearch: @MainActor (String) -> Void = { _ in }
-    @ObservationIgnored public var onShowApprovals: @MainActor () -> Void = {}
     @ObservationIgnored var hasPlacedOpeningMonth = false
     @ObservationIgnored var isAppModalOpen: () -> Bool = { false }
     @ObservationIgnored private var cache: (inputs: SheetInputs, sheet: BudgetSheet, groups: [BudgetGroup])?

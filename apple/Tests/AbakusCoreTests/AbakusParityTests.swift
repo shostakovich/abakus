@@ -86,44 +86,4 @@ import Testing
         let december = scenario.month("2026-12-01")
         #expect([december.assignedInFuture, december.available] == [0, 60])
     }
-
-    @Test func laterMonthsThatAreNotCoveredAreListedUpToTheLastChange() throws {
-        var scenario = try Self.budget(
-            income: [("2026-10-01", 100)], activity: [("2026-10-05", "RENT", -80)],
-            assigned: [("2026-10-01", "RENT", 40), ("2026-11-01", "GROCERIES", 50), ("2026-12-01", "GROCERIES", 20)])
-        scenario.today = date("2026-10-15")
-        #expect(
-            scenario.month("2026-10-01").uncovered == [
-                BudgetShortfall(month: date("2026-11-01"), amount: 30),
-                BudgetShortfall(month: date("2026-12-01"), amount: 50),
-            ])
-        #expect(scenario.month("2026-11-01").uncovered == [BudgetShortfall(month: date("2026-12-01"), amount: 50)])
-        #expect(scenario.month("2026-12-01").uncovered.isEmpty)
-    }
-
-    @Test func aMonthWithDataThatOnlyRepeatsTheShortfallIsListedButNotTheEmptyMonthsAfterIt() throws {
-        var scenario = try Self.budget(
-            income: [("2026-10-01", 100), ("2026-12-01", 20)], activity: [("2026-10-05", "RENT", -80)],
-            assigned: [("2026-10-01", "RENT", 40), ("2026-11-01", "GROCERIES", 90), ("2026-12-01", "GROCERIES", 20)])
-        scenario.today = date("2026-10-15")
-        #expect(
-            scenario.month("2026-10-01").uncovered == [
-                BudgetShortfall(month: date("2026-11-01"), amount: 70),
-                BudgetShortfall(month: date("2026-12-01"), amount: 70),
-            ])
-        #expect(scenario.month("2027-01-01").readyToAssign == -70)
-        #expect(
-            scenario.month("2026-10-01").headerLines(formatter: german).suffix(2).map(\.text) == [
-                "Nicht gedeckt im Nov", "Nicht gedeckt im Dez",
-            ])
-        #expect(scenario.month("2026-12-01").uncovered.isEmpty)
-    }
-
-    @Test func aShortfallInAnotherYearNamesItsYear() throws {
-        var scenario = try Self.budget(
-            income: [("2026-12-01", 10)], activity: [], assigned: [("2027-01-01", "FUN", 25)])
-        scenario.today = date("2026-12-10")
-        let line = try #require(scenario.month("2026-12-01").headerLines(formatter: german).last)
-        #expect([line.amount, line.text] == ["−15,00", "Nicht gedeckt im Jan 2027"])
-    }
 }

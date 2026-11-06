@@ -122,9 +122,9 @@ import Testing
         let ahead = fixture.model().model
         ahead.headerProgress = 1
         let lines = ahead.month(day("2026-10-01"))?.headerLines(formatter: ahead.formatter).map(\.text)
-        #expect(lines?.suffix(2) == ["Für spätere Monate", "Nicht gedeckt im Nov"])
-        #expect(ahead.layout.headerLineCount == 6)
-        #expect(ahead.layout.headerHeight == 170 + 2 * BudgetMetrics.headerLineHeight)
+        #expect(lines?.last == "Für spätere Monate")
+        #expect(ahead.layout.headerLineCount == 5)
+        #expect(ahead.layout.headerHeight == 170 + BudgetMetrics.headerLineHeight)
     }
 
     @Test func theCategoryColumnFitsTheLongestNameUpTo220() throws {

@@ -49,14 +49,6 @@ extension BudgetMonth {
                 BudgetHeaderLine(
                     amount: amount(-assignedInFuture, prefix: "+"), text: "Für spätere Monate"))
         }
-        for shortfall in uncovered {
-            let later = shortfall.month
-            let name = formatter.shortMonthName(later.month) + (later.year == month.year ? "" : " \(later.year)")
-            lines.append(
-                BudgetHeaderLine(
-                    amount: amount(-shortfall.amount), text: "Nicht gedeckt im " + name,
-                    isWarning: true))
-        }
         return lines
     }
 }

@@ -63,21 +63,21 @@ import Testing
         #expect(german.targetStatus(row(balance: 5, target: nil), month: october) == nil)
         #expect(
             german.targetStatus(row(balance: decimal("-180.20"), snoozed: true), month: october)
-                == BudgetTargetStatus(state: .overspent, text: "Überzogen um 180,20\u{00A0}€."))
+                == BudgetTargetStatus(state: .overspent, text: "Überzogen um 180,20\u{00A0}€"))
         #expect(
             german.targetStatus(row(underfunded: 0.10, snoozed: true), month: october)
-                == BudgetTargetStatus(state: .snoozed, text: "Pausiert im Oktober."))
+                == BudgetTargetStatus(state: .snoozed, text: "Pausiert im Oktober"))
         #expect(
             german.targetStatus(row(underfunded: decimal("68.34")), month: october)
-                == BudgetTargetStatus(state: .underfunded, text: "Noch 68,34\u{00A0}€ diesen Monat."))
-        #expect(german.targetStatus(row(), month: october) == BudgetTargetStatus(state: .met, text: "Erfüllt."))
+                == BudgetTargetStatus(state: .underfunded, text: "Noch 68,34\u{00A0}€ im Oktober"))
+        #expect(german.targetStatus(row(), month: october) == BudgetTargetStatus(state: .met, text: "Erfüllt"))
     }
 
     @Test func aTargetByADateIsOnTrackUntilItsAmountIsSaved() {
         let byDate = Target.byDate(1200, due: date("2027-06-01"))
-        #expect(german.targetStatus(row(balance: 80, saved: 80, target: byDate), month: october)?.text == "Im Plan.")
+        #expect(german.targetStatus(row(balance: 80, saved: 80, target: byDate), month: october)?.text == "Im Plan")
         #expect(
-            german.targetStatus(row(balance: 1200, saved: 1200, target: byDate), month: october)?.text == "Erfüllt.")
+            german.targetStatus(row(balance: 1200, saved: 1200, target: byDate), month: october)?.text == "Erfüllt")
     }
 
     @Test func theBarMarksWhereATargetByADateShouldStandAfterThisMonth() throws {
@@ -87,8 +87,13 @@ import Testing
         let snoozed = try #require(
             row(underfunded: decimal("53.34"), snoozed: true, saved: 80, target: byDate).target?.mark)
         #expect((snoozed * 100).rounded() == 7)
-        #expect(
-            german.targetSavedLabel(try #require(row(saved: 80, target: byDate).target))
-                == "Angespart 80,00 von 1.200,00\u{00A0}€")
+    }
+
+    @Test func theProgressFollowsTheVerbOfTheTarget() throws {
+        let setAside = try #require(row(saved: 75, target: .byDate(300, due: date("2026-12-24"))).target)
+        #expect(german.targetProgressLabel(setAside) == "75,00 von 300,00\u{00A0}€ zurückgelegt")
+        let refill = try #require(
+            row(saved: decimal("415.39"), target: .byDate(3000, due: date("2027-06-01"), setAside: false)).target)
+        #expect(german.targetProgressLabel(refill) == "415,39 von 3.000,00\u{00A0}€ angespart")
     }
 }

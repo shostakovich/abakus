@@ -213,17 +213,7 @@
         var body: some View {
             let lineCount = months.map { $0.headerLines(formatter: model.formatter).count }.max() ?? 0
             VStack(spacing: 0) {
-                BudgetWideRow(
-                    categoryWidth: categoryWidth, months: months, alignment: .resultBandTop, showsSeparators: false
-                ) {
-                    if let month = model.monthInFocus {
-                        BudgetWaitingLine(
-                            model: model, month: month, waiting: model.waiting(in: month), lineHeight: 24
-                        )
-                        .padding(.leading, BudgetTouchStyle.nameIndent)
-                        .padding(.trailing, 8)
-                        .alignmentGuide(.resultBandTop) { $0[.top] }
-                    }
+                BudgetWideRow(categoryWidth: categoryWidth, months: months, showsSeparators: false) {
                 } cells: { month in
                     BudgetWideMonthHead(model: model, month: month, lineCount: lineCount, showsTitle: months.count > 1)
                 }
@@ -309,18 +299,8 @@
                     .clipShape(RoundedRectangle(cornerRadius: BudgetTouchStyle.bandCornerRadius))
                 }
                 BudgetResultBand(model: model, month: month, amountInset: $amountInset)
-                    .alignmentGuide(.resultBandTop) { $0[.top] }
             }
         }
-    }
-
-    extension VerticalAlignment {
-        /// What waits in the corner starts where Zu verteilen does, also below an open calculation.
-        fileprivate enum ResultBandTop: AlignmentID {
-            static func defaultValue(in context: ViewDimensions) -> CGFloat { context[.top] }
-        }
-
-        fileprivate static let resultBandTop = VerticalAlignment(ResultBandTop.self)
     }
 
     /// The rows' three equal figure columns; ideally as wide as three of the widest, so every total fits its column.

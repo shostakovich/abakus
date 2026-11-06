@@ -37,18 +37,19 @@ extension BudgetFormatter {
     public func targetStatus(_ figures: BudgetCategoryFigures, month: DateWithoutTime) -> BudgetTargetStatus? {
         guard let target = figures.target else { return nil }
         if figures.balance < 0 {
-            return BudgetTargetStatus(state: .overspent, text: "Überzogen um \(currency(-figures.balance)).")
+            return BudgetTargetStatus(state: .overspent, text: "Überzogen um \(currency(-figures.balance))")
         }
         if target.isSnoozed {
-            return BudgetTargetStatus(state: .snoozed, text: "Pausiert im \(monthName(month.month)).")
+            return BudgetTargetStatus(state: .snoozed, text: "Pausiert im \(monthName(month.month))")
         }
         if target.underfunded > 0 {
-            return BudgetTargetStatus(state: .underfunded, text: "Noch \(currency(target.underfunded)) diesen Monat.")
+            return BudgetTargetStatus(
+                state: .underfunded, text: "Noch \(currency(target.underfunded)) im \(monthName(month.month))")
         }
         if let saved = target.saved, saved < target.target.amount {
-            return BudgetTargetStatus(state: .onTrack, text: "Im Plan.")
+            return BudgetTargetStatus(state: .onTrack, text: "Im Plan")
         }
-        return BudgetTargetStatus(state: .met, text: "Erfüllt.")
+        return BudgetTargetStatus(state: .met, text: "Erfüllt")
     }
 
     /// A repeating target by a date names its day without the year.
@@ -69,8 +70,10 @@ extension BudgetFormatter {
         }
     }
 
-    public func targetSavedLabel(_ target: BudgetTargetFigures) -> String {
-        "Angespart \(currencyNoSymbol(target.saved ?? 0)) von \(currency(target.target.amount))"
+    /// Follows the head's verb: "weitere … zurücklegen" has put aside, "auf … ansparen" has saved.
+    public func targetProgressLabel(_ target: BudgetTargetFigures) -> String {
+        let verb = target.target.setAside ? "zurückgelegt" : "angespart"
+        return "\(currencyNoSymbol(target.saved ?? 0)) von \(currency(target.target.amount)) \(verb)"
     }
 }
 

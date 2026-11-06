@@ -72,7 +72,7 @@ extension RegisterViewModel {
 
     public static let approvalSearch = "Ist: Erinnerung"
 
-    /// The chip, the budget and the Konten tab all show Alle Konten filtered to what waits for approval.
+    /// The chip and the Konten tab both show Alle Konten filtered to what waits for approval.
     public func showApprovals() {
         showAllAccounts(searching: Self.approvalSearch)
     }

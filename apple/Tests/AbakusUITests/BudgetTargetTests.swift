@@ -1,7 +1,7 @@
-import AbakusCore
 import Foundation
 import Testing
 
+@testable import AbakusCore
 @testable import AbakusUI
 
 @MainActor
@@ -31,7 +31,7 @@ import Testing
         model.perform(.setAssigned(month: june, categoryId: F.kleidung, amount: 80))
         model.present(.editCategory(categoryId: F.kleidung, month: june))
         let display = try #require(model.callouts.targetDisplay)
-        #expect(display.status.text == "Noch 30,00\u{00A0}€ diesen Monat.")
+        #expect(display.status.text == "Noch 30,00\u{00A0}€ im Juni")
         #expect(display.status.state == .underfunded)
         let row = model.subRowDisplay(F.kleidung, in: try #require(model.month(june)))
         #expect(row.marker == .underfunded)
@@ -78,7 +78,7 @@ import Testing
         #expect(model.presentedPopup == .editCategory(categoryId: F.kleidung))
         let display = try #require(model.callouts.targetDisplay)
         #expect(display.head == "Jeden Monat auffüllen bis 150,00\u{00A0}€")
-        #expect(display.status.text == "Noch 150,00\u{00A0}€ diesen Monat.")
+        #expect(display.status.text == "Noch 150,00\u{00A0}€ im Oktober")
         #expect(display.assignLabel == nil)
         #expect(display.progress == nil)
     }
@@ -89,11 +89,68 @@ import Testing
         let (model, _) = opened(fixture)
         let display = try #require(model.callouts.targetDisplay)
         #expect(display.head == "Bis zum 1. Juni 2027 weitere 1.200,00\u{00A0}€ zurücklegen")
-        #expect(display.status.text == "Noch 53,34\u{00A0}€ diesen Monat.")
+        #expect(display.status.text == "Noch 53,34\u{00A0}€ im Oktober")
         let progress = try #require(display.progress)
-        #expect(progress.label == "Angespart 80,00 von 1.200,00\u{00A0}€")
-        #expect(progress.percentText == "7 %")
+        #expect(progress.label == "80,00 von 1.200,00\u{00A0}€ zurückgelegt")
+        #expect(abs(progress.value - 80.0 / 1200) < 1e-9)
         #expect(progress.mark.map { ($0 * 100).rounded() } == 11)
+    }
+
+    @Test func aTargetByADateNamesTheMonthsStatusBelowItsBar() throws {
+        let byDate = Target.byDate(1200, due: day("2027-06-01"))
+        let status = { (assigned: Decimal, spent: Decimal, snoozed: Bool) throws -> (BudgetTargetState, String) in
+            var fixture = withTarget(byDate)
+            fixture.budget(assigned, F.kleidung, in: "2026-10-01")
+            if spent != 0 { fixture.spend(spent, F.kleidung, on: "2026-10-05") }
+            if snoozed {
+                try fixture.budget.apply(.setTargetSnoozed(month: october, categoryId: F.kleidung, true))
+            }
+            let (model, _) = opened(fixture)
+            let display = try #require(model.callouts.targetDisplay)
+            #expect(display.progress != nil)
+            return (display.status.state, display.status.text)
+        }
+        #expect(try status(80, 0, false) == (BudgetTargetState.underfunded, "Noch 53,34\u{00A0}€ im Oktober"))
+        #expect(try status(200, 0, false) == (BudgetTargetState.onTrack, "Im Plan"))
+        #expect(try status(1200, 0, false) == (BudgetTargetState.met, "Erfüllt"))
+        #expect(
+            try status(10, 22, false) == (BudgetTargetState.overspent, "Überzogen um 12,00\u{00A0}€"))
+        #expect(try status(80, 0, true) == (BudgetTargetState.snoozed, "Pausiert im Oktober"))
+    }
+
+    @Test func aTargetByADateWithoutAnAmountIsMetWithAFullBarAndNoMark() throws {
+        var fixture = withTarget(.byDate(240, due: day("2027-06-01")))
+        // Commands refuse a target without an amount; only a synced row can bring one.
+        fixture.budget.targetVersions[0].amount = 0
+        let (model, _) = opened(fixture)
+        let display = try #require(model.callouts.targetDisplay)
+        #expect(display.status.state == .met)
+        #expect(display.status.text == "Erfüllt")
+        let progress = try #require(display.progress)
+        #expect(progress.label == "0,00 von 0,00\u{00A0}€ zurückgelegt")
+        #expect(progress.value == 1)
+        #expect(progress.mark == nil)
+    }
+
+    @Test func aTargetThatSavesUpToAnAmountCountsWhatIsSaved() throws {
+        var fixture = withTarget(.byDate(3000, due: day("2027-06-01"), setAside: false))
+        fixture.budget(decimal("415.39"), F.kleidung, in: "2026-10-01")
+        let (model, _) = opened(fixture)
+        let display = try #require(model.callouts.targetDisplay)
+        #expect(display.head == "Bis zum 1. Juni 2027 auf 3.000,00\u{00A0}€ ansparen")
+        #expect(display.progress?.label == "415,39 von 3.000,00\u{00A0}€ angespart")
+    }
+
+    @Test func aMonthlyTargetShowsOnlyItsStatus() throws {
+        var fixture = withTarget(.monthly(50))
+        fixture.budget(10, F.kleidung, in: "2026-10-01")
+        fixture.spend(22, F.kleidung, on: "2026-10-05")
+        let (model, _) = opened(fixture)
+        let display = try #require(model.callouts.targetDisplay)
+        #expect(display.progress == nil)
+        #expect(display.status.state == .overspent)
+        #expect(display.status.text == "Überzogen um 12,00\u{00A0}€")
+        #expect(display.assignLabel == nil)
     }
 
     @Test func editingARepeatingTargetStartsFromItsNextDueDate() throws {
@@ -189,7 +246,7 @@ import Testing
         model.callouts.snoozeClicked()
         #expect(store.commands == [.setTargetSnoozed(month: october, categoryId: F.kleidung, true)])
         let display = try #require(model.callouts.targetDisplay)
-        #expect(display.status.text == "Pausiert im Oktober.")
+        #expect(display.status.text == "Pausiert im Oktober")
         #expect(display.snoozeTitle == "Fortsetzen")
         #expect(display.assignLabel == nil)
         #expect(model.subRowDisplay(F.kleidung, in: try #require(model.month(october))).marker == .snoozed)
@@ -206,7 +263,7 @@ import Testing
         #expect(
             store.commands
                 == [.moveAssigned(month: october, from: BudgetScreenFixture.readyToAssign, to: F.kleidung, amount: 30)])
-        #expect(model.callouts.targetDisplay?.status.text == "Erfüllt.")
+        #expect(model.callouts.targetDisplay?.status.text == "Erfüllt")
         #expect(model.subRowDisplay(F.kleidung, in: try #require(model.month(october))).marker == .funded)
     }
 
@@ -219,7 +276,7 @@ import Testing
         #expect(
             store.commands
                 == [.moveAssigned(month: october, from: BudgetScreenFixture.readyToAssign, to: F.kleidung, amount: 20)])
-        #expect(model.callouts.targetDisplay?.status.text == "Noch 30,00\u{00A0}€ diesen Monat.")
+        #expect(model.callouts.targetDisplay?.status.text == "Noch 30,00\u{00A0}€ im Oktober")
         #expect(model.callouts.targetDisplay?.assignLabel == nil)
         model.callouts.assignTargetClicked()
         #expect(store.commands.count == 1)

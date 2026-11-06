@@ -36,29 +36,25 @@
             let state = display.status.state
             VStack(alignment: .leading, spacing: 8) {
                 Text(verbatim: display.head).font(.subheadline.weight(.semibold)).foregroundStyle(ThemeColor.text)
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    if let symbol = state.symbol {
-                        Image(systemName: symbol.name).foregroundStyle(symbol.color).accessibilityHidden(true)
-                    } else if state == .overspent {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .foregroundStyle(ThemeColor.negative)
-                            .accessibilityHidden(true)
-                    }
-                    Text(verbatim: display.status.text).foregroundStyle(ThemeColor.text)
-                }
-                .font(.subheadline)
                 if let progress = display.progress {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ProgressView(value: progress.value).tint(state.textColor)
-                        HStack {
-                            Text(verbatim: progress.label)
-                            Spacer(minLength: 8)
-                            Text(verbatim: progress.percentText)
+                    VStack(alignment: .leading, spacing: 6) {
+                        BudgetTargetProgressBar(value: progress.value, mark: progress.mark, color: state.textColor)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text(verbatim: progress.label).font(.footnote).monospacedDigit()
+                                Spacer(minLength: 0)
+                                status
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(verbatim: progress.label).font(.footnote).monospacedDigit()
+                                status
+                            }
                         }
-                        .font(.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(ThemeColor.secondaryText)
+                        .font(.subheadline)
+                        .foregroundStyle(ThemeColor.text)
                     }
+                } else {
+                    status.font(.subheadline)
                 }
                 if let label = display.assignLabel {
                     ProminentButton(title: label, action: controller.assignTargetClicked)
@@ -70,6 +66,20 @@
             .background(state.textColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
             .accessibilityElement(children: .contain)
             .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
+        }
+
+        private var status: some View {
+            let state = display.status.state
+            return HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if let symbol = state.symbol {
+                    Image(systemName: symbol.name).foregroundStyle(symbol.color).accessibilityHidden(true)
+                } else if state == .overspent {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundStyle(ThemeColor.negative)
+                        .accessibilityHidden(true)
+                }
+                Text(verbatim: display.status.text).foregroundStyle(ThemeColor.text)
+            }
         }
     }
 
