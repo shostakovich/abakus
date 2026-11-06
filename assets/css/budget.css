@@ -62,7 +62,7 @@
   padding: calc(.375rem + 1px) .5rem; background: var(--color-base-200);
   box-shadow: inset 1px 0 0 var(--app-line), inset 0 1px 0 var(--app-line), inset 0 -1px 0 var(--app-line);
 }
-.app-budget .app-heads-rta > th { padding-block-end: .375rem; }
+.app-budget .app-heads-rta > th { padding-block-end: .375rem; vertical-align: bottom; }
 .app-budget .app-heads > th { padding-block: .25rem; vertical-align: bottom; overflow: visible; }
 .app-cathead { display: flex; align-items: flex-end; justify-content: space-between; gap: .5rem; }
 .app-cathead .btn { margin-block-end: -.5rem; margin-inline-end: -.5rem; }
