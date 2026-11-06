@@ -40,14 +40,14 @@ terms ([`../CONTEXT.md`](../CONTEXT.md)). Commands below run in this folder.
   `account-view` need them).
   `--edit <state>` first types into the register with real key events (`existing`, `new`, `inflow`, `payee-dropdown`,
   `category-dropdown`, `split`, `errors`, `unassigned`, `calendar`, `invalid-payee`, `income-check`,
-  `account-field`); `--trace` prints the editor state afterwards. `--ops <state>` opens register
-  operations instead (`context-menu`, `search-suggestions`, `search-active`, `date-filter`, `notifiers`,
-  `column-menu`, `needs-category`, `delete-dialog`, `make-recurring`); menus, native in the app, are drawn inline.
+  `account-field`, `amount-error`); `--trace` prints the editor state afterwards. `--ops <state>` opens register
+  operations instead (`context-menu`, `search-active`, `approvals`, `notifiers`, `needs-category`,
+  `delete-dialog`, `make-recurring`); menus, native in the app, are drawn inline.
   `--ops keys` sends real key and mouse events and prints what the register did with them (add `--native-menus` to
   run it with native menus); without a menu bar, menu key equivalents run their Buchungen menu command and ⌘A sends
   Select All's `selectAll:`. `--ui <state>` opens a reconciliation, scheduler, account or payee settings state
   through the view models (`rec-statement-dialog`, `rec-footer`, `sched-pane`, `sched-edit`, `account-add`,
-  `account-edit`, `account-adjusted`, `account-balance`, `account-balance-check`, `rename-payee`, `payee-settings`,
+  `account-edit`, `account-adjusted`, `account-balance`, `account-balance-check`, `payee-settings`,
   `payee-settings-multi`, `payee-settings-empty`, `payee-settings-category`); it runs before `--ops`, so both can be
   combined. Open sheets and alerts are drawn over the window.
 
