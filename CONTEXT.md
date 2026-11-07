@@ -601,3 +601,15 @@ An invoice as EN 16931 XML in UN/CEFACT's Cross Industry Invoice syntax (ZUGFeRD
 invoice's PDF/A-3 as `factur-x.xml` (ADR 0034). Code: `Abakus.Bookkeeping.EInvoice`, `Abakus.Bookkeeping.InvoicePdf`.
 UI "E-Rechnung".
 _Avoid_: XRechnung (that is the pure XML format for public clients)
+
+**VAT return**:
+What the owner declares to the tax office for a period, computed from the tax lines: the quarterly advance return
+and the annual return, each line under its form's Kennzahlen with a base in whole euros, rounded down, and its tax.
+Taxed on receipts (Ist-Versteuerung), a tax line counts on its transaction's date; private categories and income at
+0 % count for none. The annual return owes what its quarters left. Code: `Abakus.Bookkeeping.VatReturn`,
+`Abakus.Bookkeeping.VatReturns`. UI "Umsatzsteuer", "Voranmeldung", "Umsatzsteuererklärung".
+_Avoid_: Tax return (that is the income tax), report
+
+**Kennzahl**:
+The number of a field on an ELSTER form, such as 81 for the base of sales at 19 % in the advance return. Code:
+`kennzahl`, `VatReturn.kennzahlen/1`. UI "Kz".

@@ -9,7 +9,12 @@ defmodule AbakusWeb.Layouts do
   @budget_pages [:budget, :accounts, :all_accounts, :import]
   @kasse_pages [:kasse_expenses, :kasse_balances, :kasse_activity]
   @depot_pages [:depot_wealth, :depots, :import_receipts]
-  @bookkeeping_pages [:bookkeeping_inbox, :bookkeeping_invoices, :bookkeeping_customers]
+  @bookkeeping_pages [
+    :bookkeeping_inbox,
+    :bookkeeping_invoices,
+    :bookkeeping_customers,
+    :bookkeeping_vat
+  ]
 
   embed_templates "layouts/*"
 
@@ -266,6 +271,16 @@ defmodule AbakusWeb.Layouts do
         icon="users"
         navigate={navigate(~p"/buchhaltung/customers", @current)}
         href={href(~p"/buchhaltung/customers", @current)}
+      />
+      <:nav
+        :if={@bookkeeping?}
+        key={:bookkeeping_vat}
+        id="side-bookkeeping-vat"
+        label="Umsatzsteuer"
+        plush="landmark"
+        icon="landmark"
+        navigate={navigate(~p"/buchhaltung/vat", @current)}
+        href={href(~p"/buchhaltung/vat", @current)}
       />
       <:nav
         key={:settings}
