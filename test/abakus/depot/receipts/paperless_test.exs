@@ -7,9 +7,10 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
   import Abakus.Depot.ReceiptsFixtures
   import Abakus.UsersFixtures
 
-  alias Abakus.Depot.{FakeModel, FakePaperless, FakeTextExtractor, Receipts, Settings}
+  alias Abakus.Depot.{FakeModel, FakeTextExtractor, Receipts, Settings}
   alias Abakus.Depot.Portfolios.Receipt
   alias Abakus.Depot.Receipts.PaperlessJob
+  alias Abakus.FakePaperless
   alias Abakus.Paperless
 
   @url "http://paperless.test"
@@ -46,9 +47,9 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
       @url => %{
         token: "token",
         documents: [
-          FakePaperless.document(4812, ["abakus", "Bank"]),
-          FakePaperless.document(4813, ["belege"], filename: nil),
-          FakePaperless.document(4814, ["Rechnung"])
+          FakePaperless.fixture(4812, ["abakus", "Bank"]),
+          FakePaperless.fixture(4813, ["belege"], filename: nil),
+          FakePaperless.fixture(4814, ["Rechnung"])
         ]
       }
     })
@@ -69,7 +70,7 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
     user = paperless_user("abakus")
 
     FakePaperless.serve(%{
-      @url => %{token: "token", documents: [FakePaperless.document(1, ["abakus"])]}
+      @url => %{token: "token", documents: [FakePaperless.fixture(1, ["abakus"])]}
     })
 
     poll_all()
@@ -82,7 +83,7 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
 
   test "a document whose tag swap failed lands once and has its tag swapped on the next poll" do
     user = paperless_user("abakus")
-    document = FakePaperless.document(1, ["abakus"], swap_fails: true)
+    document = FakePaperless.fixture(1, ["abakus"], swap_fails: true)
     FakePaperless.serve(%{@url => %{token: "token", documents: [document]}})
 
     poll_all()
@@ -98,7 +99,7 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
 
   test "a discarded document stays discarded while its tag swap keeps failing" do
     user = paperless_user("abakus")
-    document = FakePaperless.document(1, ["abakus"], swap_fails: true)
+    document = FakePaperless.fixture(1, ["abakus"], swap_fails: true)
     FakePaperless.serve(%{@url => %{token: "token", documents: [document]}})
 
     poll_all()
@@ -121,7 +122,7 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
   test "has the model read Paperless' text, not the PDF's" do
     FakeTextExtractor.stub("pdftotext")
     user = paperless_user("abakus")
-    document = FakePaperless.document(1, ["abakus"], content: receipt_text("PL-1"))
+    document = FakePaperless.fixture(1, ["abakus"], content: receipt_text("PL-1"))
     FakePaperless.serve(%{@url => %{token: "token", documents: [document]}})
 
     poll_all()
@@ -134,7 +135,7 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
   test "reads the PDF's text when Paperless has none" do
     FakeTextExtractor.stub("pdftotext")
     paperless_user("abakus")
-    document = FakePaperless.document(1, ["abakus"], content: "  ")
+    document = FakePaperless.fixture(1, ["abakus"], content: "  ")
     FakePaperless.serve(%{@url => %{token: "token", documents: [document]}})
 
     poll_all()
@@ -144,7 +145,7 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
 
   test "a file uploaded already lands once and still loses its tag" do
     user = paperless_user("abakus")
-    document = FakePaperless.document(1, ["abakus"])
+    document = FakePaperless.fixture(1, ["abakus"])
     path = pdf_file("beleg.pdf", document.pdf)
     {:ok, :added} = Receipts.upload(user, path, "beleg.pdf")
     FakePaperless.serve(%{@url => %{token: "token", documents: [document]}})
@@ -164,10 +165,10 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
       @url => %{
         token: "token",
         documents: [
-          FakePaperless.document(1, ["abakus"], raise: true),
-          FakePaperless.document(2, ["abakus"], pdf: "no PDF"),
-          FakePaperless.document(3, ["abakus"]),
-          FakePaperless.document(4, ["abakus"],
+          FakePaperless.fixture(1, ["abakus"], raise: true),
+          FakePaperless.fixture(2, ["abakus"], pdf: "no PDF"),
+          FakePaperless.fixture(3, ["abakus"]),
+          FakePaperless.fixture(4, ["abakus"],
             pdf: "%PDF-1.4\n" <> String.duplicate(" ", 20_000_000)
           )
         ]

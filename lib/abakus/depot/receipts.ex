@@ -166,7 +166,7 @@ defmodule Abakus.Depot.Receipts do
     %Setting{user: user} = setting = Repo.preload(setting, :user)
     connection = Paperless.get_connection(Scope.for_user(user))
 
-    case paperless().documents(connection, setting.paperless_tag) do
+    case Paperless.client().documents(connection, setting.paperless_tag) do
       {:ok, documents} ->
         Enum.each(documents, &take_document(setting, connection, &1))
         :ok = Settings.paperless_polled(setting)
@@ -182,7 +182,7 @@ defmodule Abakus.Depot.Receipts do
   def done_tag(tag), do: tag <> "-erledigt"
 
   defp take_document(%Setting{user: user} = setting, connection, document) do
-    with {:ok, content} <- paperless().download(connection, document.id),
+    with {:ok, content} <- Paperless.client().download(connection, document.id),
          :ok <- if(byte_size(content) > @max_file_size, do: {:error, :too_large}, else: :ok),
          {:ok, _added_or_known} <-
            take(
@@ -196,7 +196,7 @@ defmodule Abakus.Depot.Receipts do
              :keep_discarded
            ),
          :ok <-
-           paperless().swap_tag(
+           Paperless.client().swap_tag(
              connection,
              document,
              setting.paperless_tag,
@@ -471,7 +471,6 @@ defmodule Abakus.Depot.Receipts do
   end
 
   defp model, do: config(:model)
-  defp paperless, do: config(:paperless)
   defp text_extractor, do: config(:text_extractor)
   defp config(key), do: Application.fetch_env!(:abakus, __MODULE__)[key]
 end

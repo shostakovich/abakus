@@ -24,7 +24,10 @@ defmodule Abakus.HTTP do
   @spec get(String.t(), keyword()) :: {:ok, pos_integer(), binary()} | {:error, reason()}
   def get(url, opts \\ []), do: request(:get, url, opts)
 
-  @doc "POSTs `:json` to `url` and returns the status and body; other options as `get/2`."
+  @doc """
+  POSTs `:json`, or `:body` as `{content_type, body}`, to `url` and returns the status and body; other options as
+  `get/2`.
+  """
   @spec post(String.t(), keyword()) :: {:ok, pos_integer(), binary()} | {:error, reason()}
   def post(url, opts \\ []), do: request(:post, url, opts)
 
@@ -41,7 +44,7 @@ defmodule Abakus.HTTP do
       ssl: ssl_options(uri.host)
     ]
 
-    request = build_request(uri, headers, Keyword.fetch(opts, :json))
+    request = build_request(uri, headers, body(opts))
     stream_options = [sync: false, stream: :self, body_format: :binary]
 
     case :httpc.request(method, request, http_options, stream_options) do
@@ -55,13 +58,20 @@ defmodule Abakus.HTTP do
   defp with_query(uri, []), do: uri
   defp with_query(uri, params), do: URI.append_query(uri, URI.encode_query(params))
 
-  defp build_request(uri, headers, json) do
+  defp build_request(uri, headers, body) do
     url = uri |> URI.to_string() |> String.to_charlist()
     headers = headers |> with_user_agent() |> Enum.map(&charlists/1)
 
-    case json do
-      {:ok, body} -> {url, headers, ~c"application/json", JSON.encode!(body)}
-      :error -> {url, headers}
+    case body do
+      {content_type, body} -> {url, headers, String.to_charlist(content_type), body}
+      nil -> {url, headers}
+    end
+  end
+
+  defp body(opts) do
+    case Keyword.fetch(opts, :json) do
+      {:ok, json} -> {"application/json", JSON.encode!(json)}
+      :error -> Keyword.get(opts, :body)
     end
   end
 

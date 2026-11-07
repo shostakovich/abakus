@@ -34,8 +34,9 @@ config :abakus, Abakus.Depot.MarketData,
 
 config :abakus, Abakus.BankSync, client: Abakus.BankSync.EnableBanking
 
+config :abakus, Abakus.Paperless, client: Abakus.Paperless.API
+
 config :abakus, Abakus.Depot.Receipts,
-  paperless: Abakus.Depot.Receipts.PaperlessAPI,
   model: Abakus.Depot.Receipts.ChatAPI,
   text_extractor: Abakus.Depot.Receipts.Pdftotext
 

@@ -1,7 +1,7 @@
 defmodule Abakus.Paperless do
   @moduledoc """
   Each user's connection to their own Paperless-ngx (ADR 0016), kept in their settings and used by every area that
-  reads or files documents there.
+  reads or files documents there, through `client/0`.
   """
 
   import Ecto.Query
@@ -34,4 +34,7 @@ defmodule Abakus.Paperless do
     Repo.delete_all(from c in Connection, where: c.user_id == ^user.id)
     {:ok, %Connection{user_id: user.id}}
   end
+
+  @doc "The `Abakus.Paperless.Client` that reaches Paperless."
+  def client, do: Application.fetch_env!(:abakus, __MODULE__)[:client]
 end

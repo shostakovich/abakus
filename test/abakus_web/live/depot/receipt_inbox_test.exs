@@ -6,13 +6,14 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
 
   alias Abakus.Depot.{
     FakeModel,
-    FakePaperless,
     FakeSymbolSearch,
     FakeTextExtractor,
     Portfolios,
     Receipts,
     Settings
   }
+
+  alias Abakus.FakePaperless
 
   alias Abakus.Depot.Portfolios.Receipt
   alias Abakus.{Paperless, Repo}
@@ -244,7 +245,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
     url = "http://paperless.test"
 
     FakePaperless.serve(%{
-      url => %{token: "t", documents: [FakePaperless.document(4812, ["zf"])]}
+      url => %{token: "t", documents: [FakePaperless.fixture(4812, ["zf"])]}
     })
 
     {:ok, _connection} = Paperless.update_connection(ctx.scope, %{"url" => url, "token" => "t"})

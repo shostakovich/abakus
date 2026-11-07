@@ -24,8 +24,12 @@ config :abakus, Abakus.Depot.MarketData,
   symbol_source: Abakus.Depot.FakeSymbolSource,
   probe_timeout: 200
 
+config :abakus, Abakus.Paperless,
+  client: Abakus.FakePaperless,
+  poll_interval: 1,
+  consume_timeout: 100
+
 config :abakus, Abakus.Depot.Receipts,
-  paperless: Abakus.Depot.FakePaperless,
   model: Abakus.Depot.FakeModel,
   text_extractor: Abakus.Depot.FakeTextExtractor
 
