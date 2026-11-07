@@ -603,13 +603,33 @@ UI "E-Rechnung".
 _Avoid_: XRechnung (that is the pure XML format for public clients)
 
 **VAT return**:
-What the owner declares to the tax office for a period, computed from the tax lines: the quarterly advance return
-and the annual return, each line under its form's Kennzahlen with a base in whole euros, rounded down, and its tax.
-Taxed on receipts (Ist-Versteuerung), a tax line counts on its transaction's date; private categories and income at
-0 % count for none. The annual return owes what its quarters left. Code: `Abakus.Bookkeeping.VatReturn`,
+What the owner declares to the tax office for a period, computed from the tax lines and the disposals: the quarterly
+advance return and the annual return, each line under its form's Kennzahlen with a base in whole euros, rounded
+down, and its tax. Taxed on receipts (Ist-Versteuerung), a tax line counts on its transaction's date, a disposal on
+its own; private categories and income at 0 % count for none. The annual return owes what its quarters left. Code: `Abakus.Bookkeeping.VatReturn`,
 `Abakus.Bookkeeping.VatReturns`. UI "Umsatzsteuer", "Voranmeldung", "Umsatzsteuererklärung".
 _Avoid_: Tax return (that is the income tax), report
 
 **Kennzahl**:
 The number of a field on an ELSTER form, such as 81 for the base of sales at 19 % in the advance return. Code:
-`kennzahl`, `VatReturn.kennzahlen/1`. UI "Kz".
+`kennzahl`, `VatReturn.kennzahlen/1`, `IncomeStatement.kennzahlen/1`. UI "Kz".
+
+**Fixed asset**:
+A purchase the business uses for years, in the asset register with its purchase date, net amount and useful life.
+Up to the low-value limit of 800 € net it is expensed at once ("geringwertig"), above it depreciated straight-line
+by month from the month of purchase. Code: `Abakus.Bookkeeping.FixedAsset`, `Abakus.Bookkeeping.FixedAssets`,
+`Abakus.Bookkeeping.Depreciation`. UI "Anlage", the page "Anlagen", "Nutzungsdauer", "Buchwert".
+_Avoid_: Asset unqualified (that is a security), inventory
+
+**Disposal**:
+How a fixed asset left the register: a sale, a trade-in among them, or a withdrawal for private use, on a date and
+for an amount with its VAT, the proceeds or the fair value. Depreciation runs up to and including its month; the book
+value left is an expense, the amount income. The transaction that pays a sale is linked to it and carries no tax line
+of its own. Code: `Abakus.Bookkeeping.Disposal`. UI "Abgang", "Verkauf", "Entnahme", "Teilwert".
+
+**EÜR**:
+The Einnahmenüberschussrechnung of a year under the Kennzahlen of the Anlage EÜR, in cents, computed from the tax
+lines and the fixed assets: each line's net amount on its category's line and its VAT as received or paid; a
+purchase in an Anlagevermögen category only with its VAT, since the asset register writes it off. Code:
+`Abakus.Bookkeeping.IncomeStatement`, `Abakus.Bookkeeping.IncomeStatements`. UI "EÜR".
+_Avoid_: Profit and loss, balance sheet (the owner keeps no double-entry books)

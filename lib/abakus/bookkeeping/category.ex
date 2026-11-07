@@ -14,6 +14,7 @@ defmodule Abakus.Bookkeeping.Category do
   @type t :: %__MODULE__{}
 
   @eu 46
+  @fixed_assets "Anlagevermögen"
   @third_country 84
 
   @all [
@@ -144,6 +145,9 @@ defmodule Abakus.Bookkeeping.Category do
 
   @doc "Whether the category is a reverse-charge one under §13b."
   def reverse_charge?(%__MODULE__{vat: vat}), do: vat == :reverse_charge
+
+  @doc "Whether the category is one of the Anlagevermögen, whose purchases the asset register writes off."
+  def fixed_asset?(%__MODULE__{group: group}), do: group == @fixed_assets
 
   @doc "The categories in their Lexoffice groups, in order: `[{group, [category]}]`."
   def grouped do

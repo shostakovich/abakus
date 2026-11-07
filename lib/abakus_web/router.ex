@@ -167,7 +167,9 @@ defmodule AbakusWeb.Router do
       live "/invoices", InvoicesLive
       live "/invoices/new", InvoiceFormLive
       live "/customers", CustomersLive
+      live "/assets", FixedAssetsLive
       live "/vat", VatReturnsLive
+      live "/euer", IncomeStatementLive
     end
 
     get "/paperless/:id", PaperlessController, :show

@@ -2,8 +2,9 @@ defmodule Abakus.Bookkeeping.VatReturn do
   @moduledoc """
   A VAT return under its form's Kennzahlen: the quarterly Umsatzsteuer-Voranmeldung or the annual
   Umsatzsteuererklärung, computed from the entries of its period (`Abakus.Bookkeeping.VatReturns`). Each entry is a
-  tax line with its category, treatment, signed amount and date; one in a private category counts for none, and
-  income at 0 % for none either.
+  tax line with its category, treatment, signed amount and date, or a fixed asset's disposal (category
+  `:disposal`), which counts like income; one in a private category counts for none, and income at 0 % for none
+  either.
 
   A line's base is whole euros, rounded down in the owner's favour, its tax cents; where the form takes only the base
   (19 % and 7 %), the tax is the base at that rate. `due` is the VAT the period comes to (negative: a surplus); the
@@ -14,7 +15,12 @@ defmodule Abakus.Bookkeeping.VatReturn do
 
   defstruct [:year, :quarter, :first, :last, :lines, :totals, :due, :prepaid, :balance]
 
-  @type entry :: %{date: Date.t(), category: Category.t(), vat: atom(), amount: integer()}
+  @type entry :: %{
+          date: Date.t(),
+          category: Category.t() | :disposal,
+          vat: atom(),
+          amount: integer()
+        }
 
   @forms %{
     quarter: %{
@@ -145,10 +151,13 @@ defmodule Abakus.Bookkeeping.VatReturn do
     end)
   end
 
+  defp shares(%{category: :disposal, vat: treatment} = entry),
+    do: income_shares(treatment, Vat.amounts(entry.amount, treatment, entry.date))
+
   defp shares(%{category: %Category{euer: nil}}), do: []
 
   defp shares(%{category: %Category{} = category, vat: treatment} = entry) do
-    %{net: net, vat: vat} = Vat.amounts(entry.amount, treatment, entry.date)
+    %{net: net, vat: vat} = amounts = Vat.amounts(entry.amount, treatment, entry.date)
 
     case {category.kind, treatment} do
       {:expense, :reverse_charge} ->
@@ -157,19 +166,18 @@ defmodule Abakus.Bookkeeping.VatReturn do
       {:expense, _rate} ->
         [{:input, 0, -vat}]
 
-      {:income, :rate_19} ->
-        [{:sales_19, net, vat}]
-
-      {:income, :rate_7} ->
-        [{:sales_7, net, vat}]
-
-      {:income, rate} when rate in [:rate_16, :rate_5] ->
-        [{:sales_other, net, vat}]
-
-      {:income, _untaxed} ->
-        []
+      {:income, treatment} ->
+        income_shares(treatment, amounts)
     end
   end
+
+  defp income_shares(:rate_19, %{net: net, vat: vat}), do: [{:sales_19, net, vat}]
+  defp income_shares(:rate_7, %{net: net, vat: vat}), do: [{:sales_7, net, vat}]
+
+  defp income_shares(rate, %{net: net, vat: vat}) when rate in [:rate_16, :rate_5],
+    do: [{:sales_other, net, vat}]
+
+  defp income_shares(_untaxed, _amounts), do: []
 
   defp reverse_charge_line(%Category{vat_return: 46}), do: :reverse_charge_eu
   defp reverse_charge_line(%Category{}), do: :reverse_charge_other

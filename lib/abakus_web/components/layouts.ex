@@ -13,7 +13,9 @@ defmodule AbakusWeb.Layouts do
     :bookkeeping_inbox,
     :bookkeeping_invoices,
     :bookkeeping_customers,
-    :bookkeeping_vat
+    :bookkeeping_assets,
+    :bookkeeping_vat,
+    :bookkeeping_euer
   ]
 
   embed_templates "layouts/*"
@@ -274,6 +276,16 @@ defmodule AbakusWeb.Layouts do
       />
       <:nav
         :if={@bookkeeping?}
+        key={:bookkeeping_assets}
+        id="side-bookkeeping-assets"
+        label="Anlagen"
+        plush="package"
+        icon="package"
+        navigate={navigate(~p"/buchhaltung/assets", @current)}
+        href={href(~p"/buchhaltung/assets", @current)}
+      />
+      <:nav
+        :if={@bookkeeping?}
         key={:bookkeeping_vat}
         id="side-bookkeeping-vat"
         label="Umsatzsteuer"
@@ -281,6 +293,16 @@ defmodule AbakusWeb.Layouts do
         icon="landmark"
         navigate={navigate(~p"/buchhaltung/vat", @current)}
         href={href(~p"/buchhaltung/vat", @current)}
+      />
+      <:nav
+        :if={@bookkeeping?}
+        key={:bookkeeping_euer}
+        id="side-bookkeeping-euer"
+        label="EÜR"
+        plush="calculator"
+        icon="calculator"
+        navigate={navigate(~p"/buchhaltung/euer", @current)}
+        href={href(~p"/buchhaltung/euer", @current)}
       />
       <:nav
         key={:settings}

@@ -1,7 +1,7 @@
 defmodule Abakus.BookkeepingFixtures do
-  @moduledoc "The sender, customers and invoices of the Buchhaltung for tests."
+  @moduledoc "The sender, customers, invoices and fixed assets of the Buchhaltung for tests."
 
-  alias Abakus.Bookkeeping.Invoices
+  alias Abakus.Bookkeeping.{FixedAssets, Invoices}
   alias Abakus.Users.Scope
 
   def sender_attrs(attrs \\ %{}) do
@@ -65,5 +65,36 @@ defmodule Abakus.BookkeepingFixtures do
   def invoice_fixture(%Scope{} = scope, customer, attrs \\ %{}) do
     {:ok, invoice} = Invoices.write_invoice(scope, invoice_attrs(customer, attrs))
     invoice
+  end
+
+  def fixed_asset_fixture(%Scope{} = scope, attrs \\ %{}) do
+    {:ok, asset} =
+      FixedAssets.create(
+        scope,
+        Enum.into(attrs, %{
+          "name" => "Notebook",
+          "purchased_on" => "2027-04-10",
+          "net" => "2.400,00",
+          "useful_life" => "3"
+        })
+      )
+
+    asset
+  end
+
+  def disposal_fixture(%Scope{} = scope, asset, attrs \\ %{}) do
+    {:ok, asset} =
+      FixedAssets.record_disposal(
+        scope,
+        asset,
+        Enum.into(attrs, %{
+          "kind" => "sale",
+          "date" => "2027-01-20",
+          "amount" => "238",
+          "vat" => "19"
+        })
+      )
+
+    asset
   end
 end

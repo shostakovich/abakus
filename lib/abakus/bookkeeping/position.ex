@@ -7,6 +7,7 @@ defmodule Abakus.Bookkeeping.Position do
   use Ecto.Schema
 
   import Ecto.Changeset
+  import Abakus.Bookkeeping.NumberInput
 
   alias Abakus.Money
 
@@ -35,7 +36,7 @@ defmodule Abakus.Bookkeeping.Position do
     position
     |> cast(attrs, [:description, :unit])
     |> cast_number(attrs, :quantity, &Money.parse_number/1, "ist keine Zahl")
-    |> cast_number(attrs, :unit_price, &Money.parse(&1, 2), "ist kein Betrag")
+    |> cast_cents(attrs, :unit_price)
     |> update_change(:description, &String.trim/1)
     |> validate_required([:description, :quantity, :unit, :unit_price])
     |> validate_length(:description, max: 500)
@@ -43,29 +44,6 @@ defmodule Abakus.Bookkeeping.Position do
     |> validate_number(:quantity, greater_than: 0, less_than: 1_000_000)
     |> validate_number(:unit_price, greater_than_or_equal_to: 0, less_than: Money.max_cents())
   end
-
-  defp cast_number(changeset, attrs, field, parse, invalid) do
-    case attrs[Atom.to_string(field)] || attrs[field] do
-      nil ->
-        changeset
-
-      text when is_binary(text) ->
-        if String.trim(text) == "" do
-          put_change(changeset, field, nil)
-        else
-          put_parsed(changeset, field, parse.(text), invalid)
-        end
-
-      value ->
-        cast(changeset, %{field => value}, [field])
-    end
-  end
-
-  defp put_parsed(changeset, field, {:ok, value}, _invalid),
-    do: put_change(changeset, field, value)
-
-  defp put_parsed(changeset, field, {:error, _}, invalid),
-    do: add_error(changeset, field, invalid)
 
   @doc "The net amount in cents."
   def net(%__MODULE__{quantity: quantity, unit_price: price}),

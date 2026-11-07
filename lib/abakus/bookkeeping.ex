@@ -7,13 +7,23 @@ defmodule Abakus.Bookkeeping do
   The inbox lists the business accounts' transactions that still miss a category or a receipt
   (`Abakus.Bookkeeping.Attachments`): in the register, not zero, no transfer and no opening balance, a split while one
   of its parts does; a receipt of the whole split counts for all its parts, and a transaction marked so needs none,
-  as does an invoice's payment (`Abakus.Bookkeeping.InvoicePayments`), whose receipt is the invoice.
+  as does an invoice's payment (`Abakus.Bookkeeping.InvoicePayments`), whose receipt is the invoice. A transaction
+  that pays a disposal (`Abakus.Bookkeeping.FixedAssets`) needs no category.
   """
 
   import Ecto.Query
   import Abakus.Owned
 
-  alias Abakus.Bookkeeping.{Attachment, BusinessAccount, InvoicePayment, ReceiptWaiver, TaxLine}
+  alias Abakus.Bookkeeping.{
+    Attachment,
+    BusinessAccount,
+    Category,
+    Disposal,
+    InvoicePayment,
+    ReceiptWaiver,
+    TaxLine
+  }
+
   alias Abakus.{Ids, Ledger, Repo}
   alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
   alias Abakus.Users.{Scope, User}
@@ -72,8 +82,10 @@ defmodule Abakus.Bookkeeping do
     end)
   end
 
-  defp without_category(scope),
-    do: open(scope, whole_lines(scope), part_lines(scope))
+  defp without_category(scope) do
+    from t in open(scope, whole_lines(scope), part_lines(scope)),
+      where: t.id not in subquery(disposal_payments(scope))
+  end
 
   defp without_receipt(scope) do
     whole = whole_attachments(scope)
@@ -181,6 +193,49 @@ defmodule Abakus.Bookkeeping do
     |> Map.new(&{{&1.transaction_id, &1.subtransaction_id}, &1})
     |> Map.filter(fn {key, _line} -> key in counting end)
   end
+
+  @doc """
+  The tax lines that count from `first` to `last`, as `Abakus.Bookkeeping.VatReturn` takes them, on any of the user's
+  accounts. The owner is taxed on receipts (Ist-Versteuerung), so a tax line counts on its transaction's date; a
+  part of a split counts with its own amount. A transaction that pays a disposal counts through the disposal.
+  """
+  def entries(%Scope{} = scope, %Date{} = first, %Date{} = last) do
+    transactions =
+      Repo.all(
+        from t in Ledger.in_register(scope),
+          where: t.date >= ^first and t.date <= ^last,
+          where: t.id in subquery(from l in owned(TaxLine, scope), select: l.transaction_id),
+          where: t.id not in subquery(disposal_payments(scope)),
+          preload: :subtransactions
+      )
+
+    by_id = Map.new(transactions, &{&1.id, &1})
+
+    for {{id, side}, line} <- tax_lines(scope, transactions),
+        category = Category.get(line.category),
+        category != nil do
+      transaction = by_id[id]
+
+      %{
+        date: transaction.date,
+        category: category,
+        vat: line.vat,
+        amount: amount(transaction, side)
+      }
+    end
+  end
+
+  defp amount(transaction, nil), do: transaction.amount
+
+  defp amount(transaction, part_id),
+    do: Enum.find_value(transaction.subtransactions, &(&1.id == part_id && &1.amount))
+
+  defp disposal_payments(scope),
+    do:
+      from(d in owned(Disposal, scope),
+        where: not is_nil(d.transaction_id),
+        select: d.transaction_id
+      )
 
   @doc "The user's transaction with what `sides/1` needs, nil if there is none in the register."
   def get_transaction(%Scope{} = scope, id) do
