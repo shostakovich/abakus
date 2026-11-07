@@ -9,6 +9,7 @@ defmodule AbakusWeb.Layouts do
   @budget_pages [:budget, :accounts, :all_accounts, :import]
   @kasse_pages [:kasse_expenses, :kasse_balances, :kasse_activity]
   @depot_pages [:depot_wealth, :depots, :import_receipts]
+  @bookkeeping_pages [:bookkeeping_inbox]
 
   embed_templates "layouts/*"
 
@@ -19,7 +20,7 @@ defmodule AbakusWeb.Layouts do
     default: nil,
     values:
       [nil, :budget, :accounts, :all_accounts, :import] ++
-        @kasse_pages ++ @depot_pages,
+        @kasse_pages ++ @depot_pages ++ @bookkeeping_pages,
     doc: "the page shown; Import & Sync's tabs are `:import` and `:import_receipts`"
 
   attr :areas, :list, required: true, doc: "the areas the user may use, from `AbakusWeb.Areas`"
@@ -65,7 +66,8 @@ defmodule AbakusWeb.Layouts do
   open budget and tracking accounts but the portfolios' cash with their emoji (else `AbakusWeb.AccountMotif`), their
   balance and how many transactions wait for approval; then the section Depots with the active portfolios and their
   values, each shown with the leading emoji of its name, else the briefcase; a user without the budget sees only
-  Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. Accounts and portfolios
+  Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. The Buchhaltung:
+  Posteingang. Accounts and portfolios
   stay out of the icon rail and the dock. Entries show plush images, the Lucide icon only where a plush has no image.
 
   With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
@@ -81,6 +83,7 @@ defmodule AbakusWeb.Layouts do
         budget?: finanzen? and Areas.allowed?(assigns.current_scope, :budget),
         depot?: finanzen? and Areas.allowed?(assigns.current_scope, :depot),
         kasse?: assigns.area == :kasse,
+        bookkeeping?: assigns.area == :bookkeeping,
         groups: sidebar_groups(finanzen?, assigns),
         portfolios: portfolio_rows(finanzen?, assigns.depot_sidebar),
         import_path: import_path(assigns.current_scope),
@@ -236,6 +239,16 @@ defmodule AbakusWeb.Layouts do
         href={href(~p"/kasse/activity", @current)}
       />
       <:nav
+        :if={@bookkeeping?}
+        key={:bookkeeping_inbox}
+        id="side-bookkeeping-inbox"
+        label="Posteingang"
+        plush="inbox"
+        icon="inbox"
+        navigate={navigate(~p"/buchhaltung", @current)}
+        href={href(~p"/buchhaltung", @current)}
+      />
+      <:nav
         key={:settings}
         id="side-settings"
         label="Einstellungen"
@@ -352,6 +365,7 @@ defmodule AbakusWeb.Layouts do
   defp same_live_session?("/budget" <> _, current), do: current in @budget_pages
   defp same_live_session?("/kasse" <> _, current), do: current in @kasse_pages
   defp same_live_session?("/depot" <> _, current), do: current in @depot_pages
+  defp same_live_session?("/buchhaltung" <> _, current), do: current in @bookkeeping_pages
 
   defp brand_name([area]), do: area.label
   defp brand_name(_areas), do: "Abakus"
@@ -536,6 +550,7 @@ defmodule AbakusWeb.Layouts do
   end
 
   defp back_label(%{key: :kasse}), do: "Zurück zur Kasse"
+  defp back_label(%{key: :bookkeeping}), do: "Zurück zur Buchhaltung"
   defp back_label(area), do: "Zurück zu #{area.label}"
 
   attr :flash, :map, required: true

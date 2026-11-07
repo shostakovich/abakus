@@ -1,10 +1,11 @@
 defmodule AbakusWeb.Areas do
   @moduledoc """
-  The app's areas, Finanzen and Kasse (ADR 0020), each with its own sidebar and dock on phones.
+  The app's areas, Finanzen, Kasse and Buchhaltung, each with its own sidebar and dock on phones.
 
   Access is checked per part: the budget's pages (`/budget`) are its owner's (ADR 0007), the Kasse's (`/kasse`) its
-  people's (ADR 0008), and the Depot's (`/depot`) everyone's in Finanzen, i.e. the budget owner and every user with
-  a portfolio; anyone else gets 404 on them. The area used last is kept in the session, so `/` opens it.
+  people's (ADR 0008), the Depot's (`/depot`) everyone's in Finanzen, i.e. the budget owner and every user with
+  a portfolio, and the Buchhaltung's (`/buchhaltung`) every user's with a business account; anyone else gets 404 on
+  them. The area used last is kept in the session, so `/` opens it.
   """
   use AbakusWeb, :verified_routes
 
@@ -25,7 +26,15 @@ defmodule AbakusWeb.Areas do
           path: finanzen_path(scope)
         },
       allowed?(scope, :kasse) &&
-        %{key: :kasse, label: "Kasse", plush: "receipt", icon: "receipt", path: ~p"/kasse"}
+        %{key: :kasse, label: "Kasse", plush: "receipt", icon: "receipt", path: ~p"/kasse"},
+      allowed?(scope, :bookkeeping) &&
+        %{
+          key: :bookkeeping,
+          label: "Buchhaltung",
+          plush: "clipboard-list",
+          icon: "clipboard-list",
+          path: ~p"/buchhaltung"
+        }
     ]
     |> Enum.filter(& &1)
   end
@@ -35,14 +44,15 @@ defmodule AbakusWeb.Areas do
   defp finanzen_path(scope), do: if(allowed?(scope, :budget), do: ~p"/budget", else: ~p"/depot")
 
   @doc """
-  Whether the scope's user may use a part: `:budget`, `:kasse`, `:depot` (has a portfolio) or `:finanzen` (the
-  budget or a portfolio, which opens the Depot's pages).
+  Whether the scope's user may use a part: `:budget`, `:kasse`, `:depot` (has a portfolio), `:finanzen` (the
+  budget or a portfolio, which opens the Depot's pages) or `:bookkeeping` (has a business account).
   """
   def allowed?(nil, _part), do: false
   def allowed?(%Scope{} = scope, :budget), do: Scope.budget_owner?(scope)
   def allowed?(%Scope{} = scope, :kasse), do: scope.participant != nil
   def allowed?(%Scope{} = scope, :depot), do: scope.depot
   def allowed?(%Scope{} = scope, :finanzen), do: Scope.budget_owner?(scope) or scope.depot
+  def allowed?(%Scope{} = scope, :bookkeeping), do: scope.bookkeeping
 
   @doc "Where `/` leads: the area used last if the user may still use it, else their first one, else the settings."
   def home_path(scope, last_area) do
@@ -102,7 +112,17 @@ defmodule AbakusWeb.Areas do
     )
   end
 
+  @doc "Shows or hides the Buchhaltung as the user's first business account comes or their last one goes."
+  def keep_books(socket, in_use?) do
+    scope = %{socket.assigns.current_scope | bookkeeping: in_use?}
+    areas = for_scope(scope)
+    area = Enum.find(areas, List.first(areas), &(&1.key == socket.assigns.area))
+
+    Phoenix.Component.assign(socket, current_scope: scope, areas: areas, area: area && area.key)
+  end
+
   defp area_of(:kasse), do: :kasse
+  defp area_of(:bookkeeping), do: :bookkeeping
   defp area_of(part) when part in [:budget, :depot, :finanzen], do: :finanzen
 
   defp shown_area(areas, last_area),

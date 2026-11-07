@@ -8,6 +8,8 @@ defmodule AbakusWeb.RegisterLive.Components do
   """
   use AbakusWeb, :html
 
+  alias Abakus.Bookkeeping
+  alias Abakus.Bookkeeping.Vat
   alias Abakus.Categories.Category
   alias Abakus.Format
   alias Abakus.Ledger.{Account, Payee, ScheduledTransaction, Subtransaction, Transaction}
@@ -642,7 +644,8 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :rows, :list, required: true
   attr :proposals, :list, required: true, doc: "the match proposals shown among the rows"
   attr :accounts, :map, required: true
-  attr :columns, :map, required: true, doc: "`%{all, category, count}`, see `columns/1`"
+  attr :columns, :map, required: true, doc: "`%{all, category, tax, count}`, see `columns/2`"
+  attr :tax_lines, :map, required: true, doc: "from `Abakus.Bookkeeping.tax_lines/2`"
   attr :selected, :any, required: true
 
   attr :editor, :any,
@@ -658,6 +661,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   heading above each month sticks while it scrolls. Each transaction is a `<tbody>` of its own, so a split keeps its
   subtransactions below it, collapsible, and the editor (`TransactionEditor`) takes its place while it is edited.
   A match proposal is no row to select or edit: below it is what it matches, with "Zuordnen" and "Trennen".
+  For a user who keeps books, the column Buchhaltung shows each side's bookkeeping category and opens its dialog.
   """
   def table(assigns) do
     assigns = assign(assigns, :edited, assigns.editor && assigns.editor.row_id)
@@ -669,7 +673,8 @@ defmodule AbakusWeb.RegisterLive.Components do
         class={[
           "table setzkasten-table-dense tabular-nums app-reg",
           @columns.all && "app-reg-all",
-          !@columns.category && "app-reg-nocat"
+          !@columns.category && "app-reg-nocat",
+          @columns.tax && "app-reg-tax"
         ]}
       >
         <colgroup>
@@ -677,6 +682,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           <col :if={@columns.all} class="app-col-konto" />
           <col class="app-col-payee" />
           <col :if={@columns.category} class="app-col-cat" />
+          <col :if={@columns.tax} class="app-col-tax" />
           <col class="app-col-memo" />
           <col class="app-col-amount" />
           <col class="app-col-status" />
@@ -687,6 +693,7 @@ defmodule AbakusWeb.RegisterLive.Components do
             <th :if={@columns.all} class="app-konto">Konto</th>
             <th class="app-payee">Empfänger</th>
             <th :if={@columns.category} class="app-catcol">Kategorie</th>
+            <th :if={@columns.tax} class="app-taxcol">Buchhaltung</th>
             <th class="app-memo-col">Memo</th>
             <th class="text-end app-amount">Betrag</th>
             <th class="app-status-col">
@@ -701,6 +708,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           line={line}
           accounts={@accounts}
           columns={@columns}
+          tax_lines={@tax_lines}
           selected={@selected}
           edited={@edited}
           editor={@editor}
@@ -720,17 +728,21 @@ defmodule AbakusWeb.RegisterLive.Components do
   defp line_key({:month, month}), do: "month-#{Date.to_iso8601(month)}"
   defp line_key(transaction), do: transaction.id
 
-  @doc "The table's columns: the account column in all accounts, none for categories in a tracking account."
-  def columns(account) do
+  @doc """
+  The table's columns: the account column in all accounts, none for categories in a tracking account, Buchhaltung
+  for a user who keeps books (`tax`).
+  """
+  def columns(account, tax) do
     all = is_nil(account)
     category = all or Account.budget_account?(account)
-    count = 5 + Enum.count([all, category], & &1)
-    %{all: all, category: category, count: count}
+    count = 5 + Enum.count([all, category, tax], & &1)
+    %{all: all, category: category, tax: tax, count: count}
   end
 
   attr :line, :any, required: true, doc: "a transaction or `{:month, first_day}`"
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
+  attr :tax_lines, :map, required: true
   attr :selected, :any, required: true
   attr :edited, :any, required: true
   attr :editor, :any, required: true
@@ -753,6 +765,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       transaction={@line}
       accounts={@accounts}
       columns={@columns}
+      tax_lines={@tax_lines}
       selected={@line.id in @selected}
       editor={@edited == @line.id && @editor}
     />
@@ -762,6 +775,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :transaction, :map, required: true
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
+  attr :tax_lines, :map, required: true
   attr :selected, :boolean, required: true
 
   attr :editor, :any, required: true, doc: "the editor while this row is edited, else false"
@@ -778,6 +792,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       transaction={@transaction}
       accounts={@accounts}
       columns={@columns}
+      tax_lines={@tax_lines}
       selected={@selected}
     />
     """
@@ -786,6 +801,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :transaction, :map, required: true
   attr :accounts, :map, required: true
   attr :columns, :map, required: true
+  attr :tax_lines, :map, required: true
   attr :selected, :boolean, required: true
 
   defp row(assigns) do
@@ -825,6 +841,15 @@ defmodule AbakusWeb.RegisterLive.Components do
           </button>
           <.category transaction={@transaction} accounts={@accounts} />
         </td>
+        <td :if={@columns.tax} class="app-taxcol">
+          <.tax_line
+            :if={@transaction.subtransactions == []}
+            id={"tx-#{@transaction.id}-tax"}
+            transaction={@transaction}
+            side={nil}
+            tax_lines={@tax_lines}
+          />
+        </td>
         <td class="text-base-content/70 app-memo-col" {cell(@transaction, "memo")}>
           {@transaction.memo}
         </td>
@@ -861,6 +886,14 @@ defmodule AbakusWeb.RegisterLive.Components do
         >
           <.part_category part={part} transaction={@transaction} accounts={@accounts} />
         </td>
+        <td :if={@columns.tax} class="app-taxcol">
+          <.tax_line
+            id={"tx-#{@transaction.id}-part-#{index}-tax"}
+            transaction={@transaction}
+            side={part.id}
+            tax_lines={@tax_lines}
+          />
+        </td>
         <td class="app-memo-col" {cell(@transaction, "memo")}>
           {part.memo}
         </td>
@@ -885,6 +918,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         </td>
         <td class="app-payee"><.payee side={@proposal} accounts={@accounts} /></td>
         <td :if={@columns.category} class="app-catcol"></td>
+        <td :if={@columns.tax} class="app-taxcol"></td>
         <td class="text-base-content/70 app-memo-col">{@proposal.memo}</td>
         <.amount_cell amount={@proposal.amount} />
         <td></td>
@@ -933,6 +967,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :rows, :list, required: true
   attr :proposals, :list, required: true
   attr :accounts, :map, required: true
+  attr :tax_lines, :map, required: true
   attr :all, :boolean, required: true
   attr :empty, :string, required: true
   attr :empty_hint, :string, default: nil
@@ -950,6 +985,7 @@ defmodule AbakusWeb.RegisterLive.Components do
         :key={transaction.id}
         transaction={transaction}
         accounts={@accounts}
+        tax_lines={@tax_lines}
         all={@all}
       />
       <li :if={@rows == [] and @proposals == []} class="px-4">
@@ -961,6 +997,7 @@ defmodule AbakusWeb.RegisterLive.Components do
 
   attr :transaction, Transaction, required: true
   attr :accounts, :map, required: true
+  attr :tax_lines, :map, required: true
   attr :all, :boolean, required: true
 
   defp card_entry(assigns) do
@@ -1023,6 +1060,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           Format.date(@transaction.date, year: false),
           if(@all, do: @accounts[@transaction.account_id].name),
           category_text(@transaction, @accounts),
+          tax_text(@transaction, @tax_lines),
           @transaction.memo
         ])}
       </:meta>
@@ -1139,6 +1177,48 @@ defmodule AbakusWeb.RegisterLive.Components do
       />
     </.tooltip>
     """
+  end
+
+  attr :id, :string, required: true
+  attr :transaction, Transaction, required: true
+  attr :side, :any, required: true, doc: "nil for the whole transaction, else the part's id"
+  attr :tax_lines, :map, required: true
+
+  defp tax_line(assigns) do
+    assigns =
+      assign(assigns,
+        taxed?: assigns.side in Bookkeeping.sides(assigns.transaction),
+        line: assigns.tax_lines[{assigns.transaction.id, assigns.side}]
+      )
+
+    ~H"""
+    <button
+      :if={@taxed?}
+      id={@id}
+      type="button"
+      class="app-tax"
+      title={@line && Vat.label(@line.vat)}
+      aria-label={if !@line, do: "Buchhaltung bearbeiten"}
+      phx-click="edit_tax_lines"
+      phx-value-id={@transaction.id}
+    >
+      <span :if={@line}>{tax_name(@line)}</span>
+      <.icon :if={!@line} name="pencil" class="app-tax-add size-3.5" />
+    </button>
+    """
+  end
+
+  defp tax_name(line), do: Bookkeeping.Category.get(line.category).name
+
+  defp tax_text(transaction, tax_lines) do
+    for(
+      side <- Bookkeeping.sides(transaction),
+      line = tax_lines[{transaction.id, side}],
+      line != nil,
+      do: tax_name(line)
+    )
+    |> Enum.uniq()
+    |> Enum.join(", ")
   end
 
   attr :account, Account, required: true

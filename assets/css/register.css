@@ -25,6 +25,7 @@
   --reg-konto: 0px;
   --reg-payee: 22%;
   --reg-cat: 20%;
+  --reg-tax: 0px;
   --reg-amount: 8rem;
   --reg-status: 2.75rem;
   --reg-head-h: 2.25rem;
@@ -33,10 +34,12 @@
 @media (pointer: coarse) { .app-reg { --reg-status: 3.5rem; --reg-head-h: 2.75rem; } }
 .app-reg-all { --reg-konto: 9rem; --reg-payee: 18%; --reg-cat: 18%; }
 .app-reg.app-reg-nocat { --reg-cat: 0px; }
+.app-reg.app-reg-tax { --reg-tax: 14%; }
 .app-reg .app-col-date { width: var(--reg-date); }
 .app-reg .app-col-konto { width: var(--reg-konto); }
 .app-reg .app-col-payee { width: var(--reg-payee); }
 .app-reg .app-col-cat { width: var(--reg-cat); }
+.app-reg .app-col-tax { width: var(--reg-tax); }
 .app-reg .app-col-memo { width: auto; }
 .app-reg .app-col-amount { width: var(--reg-amount); }
 .app-reg .app-col-status { width: var(--reg-status); }
@@ -46,6 +49,7 @@
 @container register (width < 56rem) {
   .app-reg { --reg-amount: 7.5rem; --reg-payee: 20%; --reg-cat: 18%; }
   .app-reg-all { --reg-konto: 5rem; --reg-payee: 18%; --reg-cat: 16%; }
+  .app-reg.app-reg-tax { --reg-tax: 12%; }
   .app-reg .app-wide { display: none; }
 }
 
@@ -69,7 +73,12 @@
 .app-reg :where(th, td):last-child { padding-inline-end: 1rem; }
 .app-reg :is(th, td).app-status-col { padding-inline: .25rem .75rem; text-align: center; }
 .app-reg th.app-status-col .lucide { display: inline-block; color: color-mix(in oklab, var(--color-base-content) 70%, transparent); }
-.app-reg td:is(.app-payee, .app-catcol, .app-memo-col, .app-konto) { overflow: hidden; text-overflow: ellipsis; }
+.app-reg td:is(.app-payee, .app-catcol, .app-taxcol, .app-memo-col, .app-konto) { overflow: hidden; text-overflow: ellipsis; }
+.app-reg .app-tax { display: block; width: 100%; min-height: 1.25rem; overflow: hidden; text-overflow: ellipsis; text-align: start; border: 0; padding: 0; background: none; color: inherit; cursor: pointer; }
+.app-reg .app-tax:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.app-reg .app-tax-add { display: inline-block; opacity: 0; color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
+.app-reg tr:hover .app-tax-add, .app-reg .app-tax:focus-visible .app-tax-add { opacity: 1; }
+@media (pointer: coarse) { .app-reg .app-tax-add { opacity: 1; } }
 .app-reg .lucide { flex-shrink: 0; }
 .app-reg > tbody > tr > * { border-bottom: 0; }
 .app-reg > tbody > tr:last-child > * { border-bottom: var(--border) solid color-mix(in oklab, var(--color-base-content) 10%, transparent); }
@@ -116,7 +125,7 @@
   align-items: center;
   grid-template-columns:
     [date] var(--reg-date) [konto] var(--reg-konto) [payee] var(--grid-payee, var(--reg-payee))
-    [cat] var(--reg-cat) [memo] var(--grid-memo, minmax(0, 1fr)) [amount] var(--reg-amount)
+    [cat] var(--reg-cat) [tax] var(--reg-tax) [memo] var(--grid-memo, minmax(0, 1fr)) [amount] var(--reg-amount)
     [status] var(--reg-status) [end];
   padding-block: .125rem;
 }

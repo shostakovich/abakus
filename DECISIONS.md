@@ -379,3 +379,16 @@ Accepted, 2026-11-01 (#123).
   each platform keeps its own screens and its interaction, the Mac's AppKit pieces included.
 - **Consequences:** A rule in a view model reaches both platforms at once, but a screen is laid out per platform,
   and the Mac's view models lose what they know of AppKit.
+
+## 0032. The Buchhaltung annotates the Ledger in tables of its own
+
+Accepted, 2026-11-07 (#147, #150). Adds a third area to those of 0020.
+
+- **Context:** The owner's business moves from Lexoffice into Abakus; its transactions are already in the Ledger, on
+  the business account and, for some expenses, on private accounts.
+- **Decision:** A per-user area Buchhaltung (`Abakus.Bookkeeping`, tables `bookkeeping_…`) gives transactions and
+  split parts a tax line: a category from a fixed list in code (the owner's Lexoffice categories, mapped to the
+  Anlage EÜR and the VAT return) and a VAT treatment. It leads no Ledger transaction, and its tables are not synced.
+  The accounts the user marks as business accounts feed its inbox and bring the area.
+- **Consequences:** The Apple apps neither show nor change tax lines; a line whose split part is gone stops counting
+  without the Ledger knowing about it. A new category is a code change.

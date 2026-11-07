@@ -95,6 +95,9 @@ defmodule Abakus.Ledger do
 
   @opening_payee "Anfangssaldo"
 
+  @doc "The name of the hidden payee of an account's opening balance."
+  def opening_payee, do: @opening_payee
+
   @doc """
   Creates an account together with its transfer payee; without a position it goes after the others. `balance:`
   (cents) other than 0 is booked on `date:` as the hidden payee "Anfangssaldo", cleared and approved, in a budget

@@ -87,6 +87,32 @@ defmodule AbakusWeb.AreasTest do
       assert has_element?(view, sidebar_link("/depot") <> "[aria-current=page]", "Vermögen")
       assert view |> element("#net-worth") |> render() =~ "1.200"
     end
+
+    test "gets the Buchhaltung once they have a business account", %{conn: conn, scope: scope} do
+      kontist = account_fixture(name: "Kontist", kind: :tracking)
+
+      for path <- get_paths("/buchhaltung", kontist.id) do
+        assert_error_sent 404, fn -> get(conn, path) end
+      end
+
+      {:ok, _ids} = Abakus.Bookkeeping.put_business_accounts(scope, [kontist.id])
+
+      conn = get(conn, ~p"/buchhaltung")
+      assert get_session(conn, :area) == "bookkeeping"
+      assert conn |> recycle() |> get(~p"/") |> redirected_to() == ~p"/buchhaltung"
+
+      {:ok, view, _html} = live(conn, ~p"/buchhaltung")
+      assert has_element?(view, ~s|#area-switcher a[href="/budget"]|)
+      assert has_element?(view, ~s|#area-switcher a[href="/buchhaltung"][aria-current=page]|)
+
+      {:ok, view, _html} = live(conn, ~p"/settings/appearance")
+
+      assert has_element?(
+               view,
+               ~s|#settings-back-sidebar[href="/buchhaltung"]|,
+               "Zurück zur Buchhaltung"
+             )
+    end
   end
 
   describe "a user who does not own the budget" do

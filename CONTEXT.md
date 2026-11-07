@@ -268,8 +268,8 @@ whole budget and syncs it, and is listed with its name, sign-in and last sync un
 _Avoid_: Client (that is the app as OAuth knows it), session (that is the browser's), app
 
 **Area**:
-A part of the app with its own sidebar and dock: Finanzen and Kasse (ADR 0020). A user with both switches between
-them at the top of the sidebar; `/` opens the area used last. Code areas such as `Abakus.Depot` are not areas of the
+A part of the app with its own sidebar and dock: Finanzen, Kasse (ADR 0020) and Buchhaltung (ADR 0032). A user with
+several switches between them at the top of the sidebar; `/` opens the area used last. Code areas such as `Abakus.Depot` are not areas of the
 UI. UI "Bereich".
 _Avoid_: Module, app, section (that is the sidebar's)
 
@@ -286,7 +286,7 @@ _Avoid_: Settings (it is a task, not a setting)
 **Settings hub**:
 The sidebar's settings mode: a way back to the area used last, then the sections grouped by area, Allgemein for
 everyone with Paperless and, for the budget owner, Geräte; Kasse for its participants; Depot for everyone, so anyone may start a
-Depot, with Belegeingang once they have a portfolio. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI "Einstellungen".
+Depot, with Belegeingang once they have a portfolio; Buchhaltung with Geschäftskonten for everyone in Finanzen. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI "Einstellungen".
 _Avoid_: Settings page, Mehr (that is the dock's button)
 
 **Paperless connection**:
@@ -516,3 +516,40 @@ _Avoid_: Look-through
 **Allocation**:
 The shares of the shown securities' value per region or sector, or of the assigned value per top-level
 classification, against its target weight. UI "Aufteilung".
+
+## Buchhaltung
+
+Each user's books for their business: which transactions count in the VAT return and the EÜR, and how. Code lives in
+`Abakus.Bookkeeping` and `AbakusWeb.Bookkeeping`, tables start with `bookkeeping_`. Its categories are not the
+budget's and are qualified in code (`Abakus.Bookkeeping.Category`).
+
+**Buchhaltung**:
+The area of the books, for a user with a business account (ADR 0032). Code: `:bookkeeping`. UI "Buchhaltung".
+_Avoid_: Accounting, Lexoffice
+
+**Business account**:
+An account in Finanzen the user marks as their business's, such as the Kontist account; its transactions are the
+business transactions the inbox asks a category for. A business expense on another account is a business
+transaction too, once it has a tax line. UI "Geschäftskonto", the settings page "Geschäftskonten".
+_Avoid_: Company account
+
+**Bookkeeping category**:
+What a business transaction is for the tax office: one of a fixed list, the owner's Lexoffice categories under their
+Lexoffice names plus §13b variants, each with its line of the Anlage EÜR and, for reverse charge, its Kennzahl of the
+VAT return. UI "Kategorie" in the Buchhaltung, the register's column "Buchhaltung".
+_Avoid_: Category unqualified in code (that is the budget's), account (as in a chart of accounts)
+
+**VAT treatment**:
+How a tax line carries VAT: a rate the amount includes (19, 16, 7, 5 or 0 %), or reverse charge under §13b, where the
+amount is net and the VAT is owed and deducted at once. UI "Umsatzsteuer".
+_Avoid_: Tax code
+
+**Tax line**:
+A transaction's, or a split part's, bookkeeping category and VAT treatment; net and VAT amount follow from the
+amount. Transfers between the user's accounts take none. Code: `Abakus.Bookkeeping.TaxLine`.
+_Avoid_: Booking, voucher
+
+**Bookkeeping inbox**:
+The business transactions still missing a category, worked through one after another. Code:
+`Abakus.Bookkeeping.inbox/1`. UI "Posteingang".
+_Avoid_: Inbox unqualified (that is the Depot's receipts)

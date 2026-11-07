@@ -32,6 +32,8 @@ defmodule AbakusWeb.RegisterLive do
   renamed transactions, the register shows them anew. Its "(in N Buchungen)" searches Alle Konten for the payee, with
   the scheduled transactions open when some use it.
 
+  For a user who keeps books the column Buchhaltung opens `AbakusWeb.Bookkeeping.TaxLineDialog` on a transaction.
+
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
   `account_groups`, so it is as fresh as the sidebar. The portfolios' cash is the Depot's
   (`Abakus.Depot.Portfolios.cash_account_portfolios/1`): Alle Konten leaves out its transactions, no account picker
@@ -45,11 +47,13 @@ defmodule AbakusWeb.RegisterLive do
   """
   use AbakusWeb, :live_view
 
+  alias Abakus.Bookkeeping
   alias Abakus.Depot.Portfolios
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Scheduled, Transaction}
   alias Abakus.LocalTime
   alias AbakusWeb.{AccountGroups, CategoryOptions}
+  alias AbakusWeb.Bookkeeping.TaxLineDialog
   alias AbakusWeb.Depot.Components, as: DepotComponents
 
   alias AbakusWeb.RegisterLive.{
@@ -157,6 +161,7 @@ defmodule AbakusWeb.RegisterLive do
           proposals={@shown_proposals}
           accounts={@accounts}
           columns={@columns}
+          tax_lines={@tax_lines}
           selected={@selected}
           editor={@editor && @editor.layout == :row && @editor}
           empty={empty_text(@accounts, @register_empty, @proposals)}
@@ -166,6 +171,7 @@ defmodule AbakusWeb.RegisterLive do
           rows={@rows}
           proposals={@shown_proposals}
           accounts={@accounts}
+          tax_lines={@tax_lines}
           all={is_nil(@account)}
           empty={empty_text(@accounts, @register_empty, @proposals)}
           empty_hint={empty_hint(@accounts)}
@@ -184,6 +190,14 @@ defmodule AbakusWeb.RegisterLive do
       />
       <.live_component :if={@scheduled_dialog} module={ScheduledDialog} {@scheduled_dialog} />
       <.live_component :if={@payee_dialog} module={PayeeDialog} {@payee_dialog} />
+      <.live_component
+        :if={@tax_dialog}
+        module={TaxLineDialog}
+        id="tax-lines"
+        current_scope={@current_scope}
+        transaction={@tax_dialog}
+        next={false}
+      />
       <Components.closed_accounts :if={@closed_accounts} rows={closed_rows(@account_groups)} />
     </Layouts.app>
     """
@@ -230,6 +244,7 @@ defmodule AbakusWeb.RegisterLive do
        scheduled_open: false,
        scheduled_dialog: nil,
        payee_dialog: nil,
+       tax_dialog: nil,
        closed_accounts: false
      )}
   end
@@ -317,6 +332,7 @@ defmodule AbakusWeb.RegisterLive do
 
     assign(socket,
       rows: rows,
+      tax_lines: tax_lines(current_scope, rows),
       count: count,
       register_empty:
         count == 0 and Ledger.count_transactions(current_scope, register, shown) == 0,
@@ -325,6 +341,9 @@ defmodule AbakusWeb.RegisterLive do
       proposals: Ledger.list_match_proposals(current_scope, register, shown)
     )
   end
+
+  defp tax_lines(%{bookkeeping: true} = scope, rows), do: Bookkeeping.tax_lines(scope, rows)
+  defp tax_lines(_scope, _rows), do: %{}
 
   defp load_scheduled(%{assigns: assigns} = socket) do
     {register, shown} = register(assigns)
@@ -377,7 +396,7 @@ defmodule AbakusWeb.RegisterLive do
       if filter == :unapproved, do: Rows.search(socket.assigns.unapproved, query), else: []
 
     balances = balances(account, account_rows)
-    columns = Components.columns(account)
+    columns = Components.columns(account, socket.assigns.current_scope.bookkeeping)
 
     socket
     |> assign(
@@ -472,6 +491,10 @@ defmodule AbakusWeb.RegisterLive do
      socket
      |> assign(:payee_dialog, nil)
      |> push_patch(to: ~p"/budget/accounts/all?#{[q: name]}")}
+  end
+
+  def handle_info({TaxLineDialog, :done, _id}, socket) do
+    {:noreply, socket |> assign(:tax_dialog, nil) |> refresh()}
   end
 
   def handle_info(:open_scheduled, socket), do: {:noreply, assign(socket, :scheduled_open, true)}
@@ -651,6 +674,16 @@ defmodule AbakusWeb.RegisterLive do
        }
      )}
   end
+
+  def handle_event("edit_tax_lines", %{"id" => id}, socket) do
+    case Bookkeeping.get_transaction(socket.assigns.current_scope, id) do
+      nil -> {:noreply, socket |> put_flash(:error, "Buchung nicht gefunden.") |> refresh()}
+      transaction -> {:noreply, assign(socket, :tax_dialog, transaction)}
+    end
+  end
+
+  def handle_event("close_tax_lines", _params, socket),
+    do: {:noreply, assign(socket, :tax_dialog, nil)}
 
   def handle_event("close_payee_dialog", _params, socket),
     do: {:noreply, assign(socket, :payee_dialog, nil)}

@@ -59,7 +59,9 @@ defmodule AbakusWeb.SettingsLiveTest do
                "Export",
                "Depot",
                "Depots",
-               "Belegeingang"
+               "Belegeingang",
+               "Buchhaltung",
+               "Geschäftskonten"
              ]
 
       assert has_element?(view, ~s|#settings-back-sidebar[href="/budget"]|)
@@ -80,7 +82,8 @@ defmodule AbakusWeb.SettingsLiveTest do
             kasse_budget: "link",
             kasse_export: "archive",
             depots: "briefcase",
-            receipt_intake: "file-text"
+            receipt_intake: "file-text",
+            business_accounts: "landmark"
           ] do
         id = id |> Atom.to_string() |> String.replace("_", "-")
         assert has_element?(view, ~s|#settings-#{id}-sidebar img[src^="/images/plush/#{plush}"]|)

@@ -1,16 +1,17 @@
 defmodule Abakus.Users.Scope do
   @moduledoc """
   The caller of a context function (ADR 0019): which user is signed in, which person of the Kasse they are, and
-  whether they have portfolios in the Depot; or the system, for callers without a person, such as jobs and tasks.
+  whether they have portfolios in the Depot and keep books; or the system, for callers without a person, such as jobs and tasks.
   """
 
+  alias Abakus.Bookkeeping
   alias Abakus.Depot.Portfolios
   alias Abakus.Kasse.Participants
   alias Abakus.Kasse.Participants.Participant
   alias Abakus.Repo
   alias Abakus.Users.User
 
-  defstruct user: nil, participant: nil, depot: false, system: false
+  defstruct user: nil, participant: nil, depot: false, bookkeeping: false, system: false
 
   @type t :: %__MODULE__{}
 
@@ -18,9 +19,13 @@ defmodule Abakus.Users.Scope do
   def for_user(%User{} = user, participant), do: %__MODULE__{user: user, participant: participant}
   def for_user(nil, _participant), do: nil
 
-  @doc "The scope of a signed-in user with the active person of the Kasse they are, if any, and their Depot."
+  @doc "The scope of a signed-in user with the active person of the Kasse they are, if any, their Depot and books."
   def load(%User{} = user),
-    do: %{for_user(user, Participants.for_user(user)) | depot: Portfolios.any?(user)}
+    do: %{
+      for_user(user, Participants.for_user(user))
+      | depot: Portfolios.any?(user),
+        bookkeeping: Bookkeeping.in_use?(user)
+    }
 
   def load(nil), do: nil
 

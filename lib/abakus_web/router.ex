@@ -41,6 +41,10 @@ defmodule AbakusWeb.Router do
     plug :require_area, :finanzen
   end
 
+  pipeline :bookkeeping do
+    plug :require_area, :bookkeeping
+  end
+
   pipeline :kasse_settings do
     plug :require_part, :kasse
   end
@@ -151,6 +155,18 @@ defmodule AbakusWeb.Router do
     get "/receipts/:id", ReceiptController, :show
   end
 
+  scope "/buchhaltung", AbakusWeb.Bookkeeping do
+    pipe_through [:browser, :require_authenticated_user, :bookkeeping]
+
+    live_session :bookkeeping,
+      on_mount: [
+        {AbakusWeb.UserAuth, :require_authenticated},
+        {AbakusWeb.Areas, {:require, :bookkeeping}}
+      ] do
+      live "/", InboxLive
+    end
+  end
+
   scope "/settings", AbakusWeb do
     pipe_through [:browser, :require_authenticated_user]
 
@@ -165,6 +181,7 @@ defmodule AbakusWeb.Router do
       live "/paperless", PaperlessLive
       live "/depot/portfolios", Depot.PortfoliosLive
       live "/depot/receipt-intake", Depot.ReceiptIntakeLive
+      live "/buchhaltung/accounts", Bookkeeping.BusinessAccountsLive
     end
   end
 
