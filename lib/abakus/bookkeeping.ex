@@ -6,13 +6,14 @@ defmodule Abakus.Bookkeeping do
 
   The inbox lists the business accounts' transactions that still miss a category or a receipt
   (`Abakus.Bookkeeping.Attachments`): in the register, not zero, no transfer and no opening balance, a split while one
-  of its parts does; a receipt of the whole split counts for all its parts, and a transaction marked so needs none.
+  of its parts does; a receipt of the whole split counts for all its parts, and a transaction marked so needs none,
+  as does an invoice's payment (`Abakus.Bookkeeping.InvoicePayments`), whose receipt is the invoice.
   """
 
   import Ecto.Query
   import Abakus.Owned
 
-  alias Abakus.Bookkeeping.{Attachment, BusinessAccount, ReceiptWaiver, TaxLine}
+  alias Abakus.Bookkeeping.{Attachment, BusinessAccount, InvoicePayment, ReceiptWaiver, TaxLine}
   alias Abakus.{Ids, Ledger, Repo}
   alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
   alias Abakus.Users.{Scope, User}
@@ -79,20 +80,28 @@ defmodule Abakus.Bookkeeping do
 
     from t in open(scope, whole, part_attachments(scope)),
       where: t.id not in subquery(whole),
-      where: t.id not in subquery(from w in owned(ReceiptWaiver, scope), select: w.transaction_id)
+      where:
+        t.id not in subquery(from w in owned(ReceiptWaiver, scope), select: w.transaction_id),
+      where:
+        t.id not in subquery(from p in owned(InvoicePayment, scope), select: p.transaction_id)
   end
 
   # A transaction that is no split counts while its whole is not `done`, a split while one of its parts is not.
   defp open(scope, whole_done, parts_done) do
-    from t in Ledger.in_register(scope),
-      where: t.account_id in subquery(business_accounts(scope)),
-      where: is_nil(t.payee_id) or t.payee_id not in subquery(opening_payees(scope)),
+    from t in business_transactions(scope),
       where:
         (t.id not in subquery(split_ids()) and t.amount != 0 and
            is_nil(t.transfer_transaction_id) and is_nil(t.transfer_subtransaction_id) and
            t.id not in subquery(whole_done)) or
           t.id in subquery(open_parts(parts_done)),
       select: t.id
+  end
+
+  @doc "The business accounts' transactions in the register, without their opening balance."
+  def business_transactions(%Scope{} = scope) do
+    from t in Ledger.in_register(scope),
+      where: t.account_id in subquery(business_accounts(scope)),
+      where: is_nil(t.payee_id) or t.payee_id not in subquery(opening_payees(scope))
   end
 
   defp business_accounts(scope),

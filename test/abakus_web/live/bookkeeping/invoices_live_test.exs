@@ -7,14 +7,15 @@ defmodule AbakusWeb.Bookkeeping.InvoicesLiveTest do
   import Setzkasten.Test.Confirm
 
   alias Abakus.Bookkeeping
-  alias Abakus.Bookkeeping.Invoices
+  alias Abakus.Bookkeeping.{InvoicePayments, Invoices}
 
   setup :register_and_log_in_user
 
   setup %{scope: scope} do
-    {:ok, _ids} = Bookkeeping.put_business_accounts(scope, [account_fixture(kind: :tracking).id])
+    business = account_fixture(kind: :tracking)
+    {:ok, _ids} = Bookkeeping.put_business_accounts(scope, [business.id])
     fix_today(~D[2027-01-15])
-    :ok
+    %{business: business}
   end
 
   defp position(description, quantity, price),
@@ -108,6 +109,54 @@ defmodule AbakusWeb.Bookkeeping.InvoicesLiveTest do
     assert has_element?(view, ~s|#invoice-no-sender a[href="/settings/buchhaltung/invoices"]|)
     assert has_element?(view, ~s|#invoice-no-customers a[href="/buchhaltung/customers"]|)
     assert has_element?(view, "#invoice-write[disabled]")
+  end
+
+  test "the owner confirms an incoming payment and can release it again", %{
+    conn: conn,
+    scope: scope,
+    business: business
+  } do
+    sender_fixture(scope)
+    invoice = invoice_fixture(scope, customer_fixture(scope))
+
+    payment =
+      transaction_fixture(%{
+        account_id: business.id,
+        date: ~D[2027-01-20],
+        amount: invoice.total,
+        payee_id: payee_fixture(name: "Muster & Söhne").id
+      })
+
+    {:ok, view, _html} = live(conn, ~p"/buchhaltung/invoices")
+    row = "#invoice-#{invoice.id}"
+    assert has_element?(view, row, "Zahlung eingegangen")
+
+    asked = asked(view, "#{row}-pay-#{payment.id}")
+    assert asked.question == "Zahlung bestätigen?"
+
+    assert asked.text ==
+             "Muster & Söhne hat am 20.01.2027 #{Abakus.Money.euros(99_068)} überwiesen."
+
+    html = confirm_click(view, "#{row}-pay-#{payment.id}")
+    assert html =~ "Rechnung 2027001 ist bezahlt."
+    assert has_element?(view, row, "bezahlt am 20.01.2027")
+    refute has_element?(view, "#{row}-pay-#{payment.id}")
+    assert InvoicePayments.payments(scope, [invoice])[invoice.id].id == payment.id
+
+    confirm_click(view, "#{row}-release", "Zahlung lösen?")
+    assert has_element?(view, row, "Zahlung eingegangen")
+    assert InvoicePayments.payments(scope, [invoice]) == %{}
+  end
+
+  test "shows an invoice without payment as open", %{conn: conn, scope: scope} do
+    sender_fixture(scope)
+    invoice = invoice_fixture(scope, customer_fixture(scope))
+
+    {:ok, view, _html} = live(conn, ~p"/buchhaltung/invoices")
+
+    assert has_element?(view, "#invoice-#{invoice.id}", "offen")
+    assert has_element?(view, "#invoice-#{invoice.id}", "fällig 29.01.2027")
+    refute has_element?(view, "#invoice-#{invoice.id}-release")
   end
 
   test "lists no invoice of another user", %{conn: conn} do

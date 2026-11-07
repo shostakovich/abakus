@@ -576,6 +576,12 @@ It keeps its sender and recipient as they were when it was written. Its PDF is a
 `Abakus.Bookkeeping.Invoice`, `Abakus.Bookkeeping.Invoices`. UI "Rechnung".
 _Avoid_: Bill, receipt (that is the Depot's), attachment (that is a transaction's proof)
 
+**Invoice payment**:
+The incoming business transaction the owner confirmed as an invoice's payment, proposed by the invoice's total from
+its date on. An invoice with one is paid, else open; the invoice is that transaction's receipt. Code:
+`Abakus.Bookkeeping.InvoicePayment`, `Abakus.Bookkeeping.InvoicePayments`. UI "Zahlung", "bezahlt", "offen".
+_Avoid_: Settlement, attachment (that is a receipt in Paperless)
+
 **Invoice number**:
 The year of the invoice's date followed by a counter that runs on across years, continuing the Lexoffice sequence:
 2026125 is followed by 2027126. Code: `number`, `counter`. UI "Rechnungsnummer".
