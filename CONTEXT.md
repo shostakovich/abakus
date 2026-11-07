@@ -562,7 +562,7 @@ _Avoid_: Exemption (that is a tax term)
 
 **Bookkeeping inbox**:
 The business transactions still missing a category or an attachment, worked through one after another with the
-attachment beside them. Code: `Abakus.Bookkeeping.inbox/1`. UI "Posteingang".
+attachment beside them; those of a locked period stay out. Code: `Abakus.Bookkeeping.inbox/1`. UI "Posteingang".
 _Avoid_: Inbox unqualified (that is the Depot's receipts)
 
 **Customer**:
@@ -633,3 +633,20 @@ lines and the fixed assets: each line's net amount on its category's line and it
 purchase in an Anlagevermögen category only with its VAT, since the asset register writes it off. Code:
 `Abakus.Bookkeeping.IncomeStatement`, `Abakus.Bookkeeping.IncomeStatements`. UI "EÜR".
 _Avoid_: Profit and loss, balance sheet (the owner keeps no double-entry books)
+
+**Filing**:
+A return sent to ELSTER through ERiC (ADR 0035), for now a quarter's advance VAT return, kept with the Kennzahlen it
+declared, ELSTER's transfer ticket and its transmission protocol. A quarter is sent once it is over, and once. Code:
+`Abakus.Bookkeeping.Filing`, `Abakus.Bookkeeping.Filings`. UI "An ELSTER senden", "gesendet", "Übertragungsprotokoll".
+_Avoid_: Submission, report, declaration
+
+**Locked period**:
+The period of a filing: its tax lines and disposals can no longer change, and a change in the Ledger that alters its
+numbers needs a corrected return, which Abakus does not send yet. Code: `Filings.locked?/2`. UI "Zeitraum ist
+festgeschrieben".
+_Avoid_: Closed, frozen
+
+**ELSTER certificate**:
+The owner's certificate file (.pfx) from "Mein ELSTER", kept in the bookkeeping settings with the state of their tax
+office, which ERiC needs to write the tax number in ELSTER's format; its PIN is asked at every send and never stored.
+Code: `Abakus.Bookkeeping.Settings`, `Abakus.Bookkeeping.States`. UI "Zertifikat", "PIN", the settings page "ELSTER".

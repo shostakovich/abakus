@@ -6,7 +6,7 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Bookkeeping.{Depreciation, Disposal, FixedAsset, FixedAssets, Vat}
+  alias Abakus.Bookkeeping.{Depreciation, Disposal, Filings, FixedAsset, FixedAssets, Vat}
   alias Abakus.{Format, LocalTime, Money}
 
   @impl true
@@ -320,16 +320,36 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
   def handle_event("undispose", %{"id" => id}, socket) do
     {:noreply,
      with_asset(socket, id, fn socket, asset ->
-       {:ok, asset} = FixedAssets.remove_disposal(socket.assigns.current_scope, asset)
-       socket |> put_flash(:info, "„#{asset.name}“ ist wieder im Anlagenverzeichnis.") |> load()
+       case FixedAssets.remove_disposal(socket.assigns.current_scope, asset) do
+         {:ok, asset} ->
+           socket
+           |> put_flash(:info, "„#{asset.name}“ ist wieder im Anlagenverzeichnis.")
+           |> load()
+
+         {:error, :locked} ->
+           put_flash(
+             socket,
+             :error,
+             "#{Filings.locked_message()}: Der Abgang zählt in einer gesendeten Voranmeldung."
+           )
+       end
      end)}
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
     {:noreply,
      with_asset(socket, id, fn socket, asset ->
-       {:ok, _asset} = FixedAssets.delete(socket.assigns.current_scope, asset)
-       socket |> put_flash(:info, "„#{asset.name}“ gelöscht.") |> load()
+       case FixedAssets.delete(socket.assigns.current_scope, asset) do
+         {:ok, _asset} ->
+           socket |> put_flash(:info, "„#{asset.name}“ gelöscht.") |> load()
+
+         {:error, :locked} ->
+           put_flash(
+             socket,
+             :error,
+             "#{Filings.locked_message()}: Der Abgang zählt in einer gesendeten Voranmeldung."
+           )
+       end
      end)}
   end
 

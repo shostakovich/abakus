@@ -13,10 +13,11 @@ config :abakus, :scopes,
     test_setup_helper: :register_and_log_in_user
   ]
 
-# The file import accepts bank exports by extension.
+# The file import accepts bank exports by extension, the ELSTER settings the certificate.
 config :mime, :types, %{
   "application/x-ofx" => ["ofx"],
-  "application/vnd.intu.qfx" => ["qfx"]
+  "application/vnd.intu.qfx" => ["qfx"],
+  "application/x-pkcs12" => ["pfx", "p12"]
 }
 
 config :abakus,
@@ -35,6 +36,8 @@ config :abakus, Abakus.Depot.MarketData,
 config :abakus, Abakus.BankSync, client: Abakus.BankSync.EnableBanking
 
 config :abakus, Abakus.Paperless, client: Abakus.Paperless.API
+
+config :abakus, Abakus.Bookkeeping.Elster, client: Abakus.Bookkeeping.Elster.Eric
 
 config :abakus, Abakus.Depot.Receipts,
   model: Abakus.Depot.Receipts.ChatAPI,
@@ -98,7 +101,7 @@ config :logger, :default_formatter,
   metadata: [:request_id]
 
 config :phoenix, :json_library, JSON
-config :phoenix, :filter_parameters, ["password", "token", "secret", "code"]
+config :phoenix, :filter_parameters, ["password", "token", "secret", "code", "pin"]
 config :ecto_sqlite3, json_library: JSON
 
 import_config "#{config_env()}.exs"

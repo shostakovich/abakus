@@ -36,6 +36,10 @@ COPY priv priv
 COPY lib lib
 COPY assets assets
 
+# The ELSTER helper loads ERiC at run time, so it builds without ERiC (ADR 0035).
+COPY c_src c_src
+RUN cc -O2 -Wall -Wextra -Werror -o priv/elster c_src/elster.c -ldl
+
 RUN mix compile
 
 RUN mix assets.deploy

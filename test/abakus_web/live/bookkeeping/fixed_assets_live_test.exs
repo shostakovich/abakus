@@ -5,10 +5,10 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLiveTest do
   import Setzkasten.Test.Confirm
   import Abakus.BookkeepingFixtures
   import Abakus.DomainFixtures
-  import AbakusWeb.PageText, only: [text: 2]
+  import AbakusWeb.PageText, only: [text: 2, flash: 2]
 
   alias Abakus.Bookkeeping
-  alias Abakus.Bookkeeping.FixedAssets
+  alias Abakus.Bookkeeping.{FakeElster, Filings, FixedAssets}
 
   setup :register_and_log_in_user
 
@@ -96,5 +96,23 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLiveTest do
     confirm_click(view, "#{row}-delete-menu-item", "„Lastenrad“ löschen?")
     assert FixedAssets.list(c.scope) == []
     assert has_element?(view, "#assets-empty")
+  end
+
+  test "keeps a disposal of a sent quarter in the register", c do
+    asset = fixed_asset_fixture(c.scope, %{"name" => "Lastenrad", "purchased_on" => "2025-03-01"})
+    disposal_fixture(c.scope, asset, %{"date" => "2027-01-20"})
+    elster_fixture(c.scope)
+    FakeElster.serve()
+    {:ok, _filing} = Filings.send_vat_quarter(c.scope, 2027, 1, "4711")
+
+    {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/assets")
+    row = "#asset-#{asset.id}"
+
+    confirm_click(view, "#{row}-undispose-menu-item", "Abgang zurücknehmen?")
+    assert flash(view, :error) =~ "Zeitraum ist festgeschrieben"
+
+    confirm_click(view, "#{row}-delete-menu-item", "„Lastenrad“ löschen?")
+    assert flash(view, :error) =~ "Zeitraum ist festgeschrieben"
+    assert FixedAssets.get(c.scope, asset.id).disposal.date == ~D[2027-01-20]
   end
 end

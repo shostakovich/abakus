@@ -174,6 +174,7 @@ defmodule AbakusWeb.Router do
 
     get "/paperless/:id", PaperlessController, :show
     get "/invoices/:id/pdf", InvoiceController, :show
+    get "/filings/:id/protocol", FilingController, :protocol
   end
 
   scope "/settings", AbakusWeb do
@@ -192,6 +193,7 @@ defmodule AbakusWeb.Router do
       live "/depot/receipt-intake", Depot.ReceiptIntakeLive
       live "/buchhaltung/accounts", Bookkeeping.BusinessAccountsLive
       live "/buchhaltung/invoices", Bookkeeping.InvoiceSettingsLive
+      live "/buchhaltung/elster", Bookkeeping.ElsterSettingsLive
     end
   end
 

@@ -14,6 +14,9 @@ erl_crash.dump
 !/storage/.keep
 /data/
 
+# Built from c_src/elster.c.
+/priv/elster
+
 # Built by esbuild and phx.digest.
 /priv/static/assets/
 /priv/static/cache_manifest.json

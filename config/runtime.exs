@@ -38,6 +38,13 @@ config :abakus, Abakus.BankSync.EnableBanking,
   app_id: optional_env.("ENABLE_BANKING_APP_ID"),
   key_file: optional_env.("ENABLE_BANKING_KEY_FILE")
 
+# ELSTER through ERiC, mounted at ERIC_HOME and never part of the image; ELSTER_VENDOR_ID is the Hersteller-ID, and
+# ELSTER's demo id 74931 sends every return as a test case. Tests configure ELSTER themselves.
+if config_env() != :test do
+  config :abakus, Abakus.Bookkeeping.Elster, vendor_id: optional_env.("ELSTER_VENDOR_ID")
+  config :abakus, Abakus.Bookkeeping.Elster.Eric, home: optional_env.("ERIC_HOME")
+end
+
 port = String.to_integer(System.get_env("PORT", "4000"))
 
 if config_env() == :dev do

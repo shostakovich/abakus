@@ -6,6 +6,9 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   Proposed as the payment of a sale are the business accounts' incoming transactions of exactly its amount, from a
   month before to a month after it, that are no transfer and pay no invoice or other disposal. A trade-in moves no
   money and has none.
+
+  A disposal in a period locked by a sent return (`Abakus.Bookkeeping.Filings`) can no longer change, be taken back
+  or go with its asset.
   """
 
   import Ecto.Changeset
@@ -13,7 +16,7 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   import Abakus.Owned
 
   alias Abakus.{Bookkeeping, Ids, Repo}
-  alias Abakus.Bookkeeping.{Disposal, FixedAsset, InvoicePayment}
+  alias Abakus.Bookkeeping.{Disposal, Filings, FixedAsset, InvoicePayment}
   alias Abakus.Users.Scope
 
   @preloads [disposal: [transaction: :payee]]
@@ -69,8 +72,14 @@ defmodule Abakus.Bookkeeping.FixedAssets do
     end
   end
 
-  def delete(%Scope{} = scope, %FixedAsset{} = asset),
-    do: scope |> own!(asset) |> Repo.delete(allow_stale: true)
+  @doc "Deletes the asset with its disposal; `{:error, :locked}` while the disposal is in a locked period."
+  def delete(%Scope{} = scope, %FixedAsset{} = asset) do
+    asset = scope |> own!(asset) |> Repo.preload(:disposal, force: true)
+
+    if locked_disposal?(scope, asset.disposal),
+      do: {:error, :locked},
+      else: Repo.delete(asset, allow_stale: true)
+  end
 
   def change_disposal(%FixedAsset{} = asset, attrs \\ %{}),
     do: Disposal.changeset(asset.disposal || %Disposal{}, attrs, asset.purchased_on)
@@ -86,6 +95,7 @@ defmodule Abakus.Bookkeeping.FixedAssets do
       (asset.disposal || %Disposal{user_id: user_id(scope), fixed_asset_id: asset.id})
       |> Disposal.changeset(attrs, asset.purchased_on)
       |> validate_payment(scope)
+      |> validate_unlocked(scope)
 
     with {:ok, _disposal} <- Repo.insert_or_update(changeset) do
       {:ok, Repo.preload(asset, @preloads, force: true)}
@@ -105,12 +115,34 @@ defmodule Abakus.Bookkeeping.FixedAssets do
     end
   end
 
-  @doc "Takes the disposal back: the asset is in the register again."
-  def remove_disposal(%Scope{} = scope, %FixedAsset{} = asset) do
-    asset = own!(scope, asset)
-    Repo.delete_all(from d in owned(Disposal, scope), where: d.fixed_asset_id == ^asset.id)
-    {:ok, Repo.preload(asset, @preloads, force: true)}
+  defp validate_unlocked(%{changes: changes} = changeset, _scope) when changes == %{},
+    do: changeset
+
+  defp validate_unlocked(changeset, scope) do
+    dates = [changeset.data.date, get_field(changeset, :date)]
+
+    if Enum.any?(dates, &(&1 && Filings.locked?(scope, &1))),
+      do: add_error(changeset, :date, Filings.locked_message()),
+      else: changeset
   end
+
+  @doc """
+  Takes the disposal back: the asset is in the register again. `{:error, :locked}` while the disposal is in a
+  locked period.
+  """
+  def remove_disposal(%Scope{} = scope, %FixedAsset{} = asset) do
+    asset = scope |> own!(asset) |> Repo.preload(:disposal, force: true)
+
+    if locked_disposal?(scope, asset.disposal) do
+      {:error, :locked}
+    else
+      Repo.delete_all(from d in owned(Disposal, scope), where: d.fixed_asset_id == ^asset.id)
+      {:ok, Repo.preload(asset, @preloads, force: true)}
+    end
+  end
+
+  defp locked_disposal?(_scope, nil), do: false
+  defp locked_disposal?(scope, %Disposal{date: date}), do: Filings.locked?(scope, date)
 
   @doc "The transactions proposed as the payment of a sale, with their payees, the earliest first."
   def payment_proposals(%Scope{} = scope, %Disposal{kind: :sale, date: %Date{} = date} = disposal)

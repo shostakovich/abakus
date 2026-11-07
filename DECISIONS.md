@@ -420,3 +420,23 @@ Accepted, 2026-11-07 (#147, #152).
   write yet. Typst's PDF/A-3 has no XMP extension schema for ZUGFeRD's own metadata (document type, profile), so a
   strict ZUGFeRD validator warns about it while readers of e-invoices take the attached XML. A new Typst release can
   change how a PDF looks; the image pins its version.
+
+## 0035. ELSTER through ERiC in a helper process
+
+Accepted, 2026-11-08 (#147, #156).
+
+- **Context:** The VAT returns go to the tax office through ELSTER, whose only supported client is ERiC, a native C
+  library that ELSTER hands to registered vendors under a licence that forbids passing it on. A crash in native code
+  inside the BEAM takes the whole app down.
+- **Decision:** A small C helper (`c_src/elster.c`, built into the image as `priv/elster`) runs as a port for each
+  return and loads ERiC with `dlopen` from `ERIC_HOME`, a directory mounted into the container; neither the
+  repository nor the image contains ERiC, and the helper builds without its headers. It writes the tax number in
+  ELSTER's format from the stored number and state, validates and sends the XML Abakus writes, and prints ELSTER's
+  transmission protocol, which is kept with the filing. The vendor id comes from `ELSTER_VENDOR_ID`; ELSTER's demo id
+  sends test cases. The certificate is stored in the bookkeeping settings, its PIN only travels through the port.
+  Sending locks the period. Tests use a fake behind `Abakus.Bookkeeping.Elster`, and the helper's against a stand-in
+  library.
+- **Consequences:** A crash or hang of ERiC fails only that send. Every ERiC release brings the year's form versions,
+  so the mounted ERiC has to be updated each year, and the helper follows the ERiC 44 signatures. A change to a sent
+  quarter needs a corrected return, which Abakus does not send yet.
+

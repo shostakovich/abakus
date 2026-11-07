@@ -40,7 +40,9 @@ A native macOS client in [`apple/`](apple/), a Swift package with its own setup 
 - Optional: `DIVVYDIARY_API_KEY` for countries, sectors, dividend dates, TER and fund size; `RECEIPT_MODEL_URL`,
   `RECEIPT_MODEL`, `RECEIPT_MODEL_KEY`, `RECEIPT_MODEL_THINKING` for receipt recognition with an OpenAI-compatible
   API; `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES` for MCP; `ENABLE_BANKING_APP_ID`,
-  `ENABLE_BANKING_KEY_FILE` (path of the application's private key) for bank sync.
+  `ENABLE_BANKING_KEY_FILE` (path of the application's private key) for bank sync; `ERIC_HOME` (ERiC, mounted read
+  only, with its `lib/`) and `ELSTER_VENDOR_ID` (your Hersteller-ID; ELSTER's demo id `74931` sends test cases) for
+  sending VAT returns to ELSTER.
 
 ```sh
 docker compose exec abakus bin/abakus eval 'Abakus.Release.invite("you@example.com")'

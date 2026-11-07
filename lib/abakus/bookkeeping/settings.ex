@@ -1,14 +1,15 @@
 defmodule Abakus.Bookkeeping.Settings do
   @moduledoc """
   A user's bookkeeping settings: the sender their invoices name, with the tax number or VAT id an invoice must
-  carry, the IBAN it is paid to and the days until it is due.
+  carry, the IBAN it is paid to and the days until it is due; the state of the tax office, which ELSTER needs with
+  the tax number, and the ELSTER certificate (a .pfx file) returns are sent with. Its PIN is never stored.
   """
 
   use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
 
-  alias Abakus.Bookkeeping.Party
+  alias Abakus.Bookkeeping.{Party, States}
 
   schema "bookkeeping_settings" do
     field :name, :string
@@ -19,13 +20,28 @@ defmodule Abakus.Bookkeeping.Settings do
     field :tax_number, :string
     field :iban, :string
     field :payment_days, :integer, default: 14
+    field :tax_state, :string
+    field :elster_certificate, :binary, redact: true
+    field :elster_certificate_name, :string
 
     belongs_to :user, Abakus.Users.User, type: :id
 
     timestamps()
   end
 
-  @fields [:name, :street, :postal_code, :city, :vat_id, :tax_number, :iban, :payment_days]
+  @fields [
+    :name,
+    :street,
+    :postal_code,
+    :city,
+    :vat_id,
+    :tax_number,
+    :tax_state,
+    :iban,
+    :payment_days
+  ]
+
+  @max_certificate_size 100_000
 
   def changeset(settings, attrs) do
     settings
@@ -33,6 +49,7 @@ defmodule Abakus.Bookkeeping.Settings do
     |> Party.normalize([:vat_id, :iban])
     |> validate_required([:payment_days])
     |> validate_number(:payment_days, greater_than_or_equal_to: 0, less_than_or_equal_to: 365)
+    |> validate_inclusion(:tax_state, States.codes())
     |> Party.validate_vat_id()
     |> validate_iban()
   end
@@ -47,6 +64,35 @@ defmodule Abakus.Bookkeeping.Settings do
   end
 
   def complete?(nil), do: false
+
+  @doc "Stores the ELSTER certificate `content` under its file name, or forgets it with `nil`."
+  def certificate_changeset(settings, nil),
+    do: change(settings, elster_certificate: nil, elster_certificate_name: nil)
+
+  def certificate_changeset(settings, {content, filename}) do
+    settings
+    |> change(elster_certificate: content, elster_certificate_name: Path.basename(filename))
+    |> validate_change(:elster_certificate, fn :elster_certificate, content ->
+      if byte_size(content) in 1..@max_certificate_size,
+        do: [],
+        else: [elster_certificate: "ist kein ELSTER-Zertifikat"]
+    end)
+  end
+
+  @doc "What sending to ELSTER still lacks, in the words of the settings: none when nothing does."
+  def missing_for_elster(%__MODULE__{} = settings) do
+    for {field, label} <- [
+          name: "Name",
+          street: "Straße",
+          postal_code: "PLZ",
+          city: "Ort",
+          tax_number: "Steuernummer",
+          tax_state: "Bundesland",
+          elster_certificate: "ELSTER-Zertifikat"
+        ],
+        not present?(Map.fetch!(settings, field)),
+        do: label
+  end
 
   defp present?(value), do: value not in [nil, ""]
 

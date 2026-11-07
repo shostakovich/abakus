@@ -3,10 +3,11 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
 
   import Phoenix.LiveViewTest
   import Abakus.DomainFixtures
+  import Abakus.BookkeepingFixtures
   import AbakusWeb.PageText, only: [text: 2]
 
   alias Abakus.{Bookkeeping, FakePaperless, Ledger, Paperless}
-  alias Abakus.Bookkeeping.Attachments
+  alias Abakus.Bookkeeping.{Attachments, FakeElster, Filings}
 
   @url "http://paperless.test"
 
@@ -58,6 +59,36 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
     assert text(view, "#tx-#{c.book.id}-tax") == "Zeitschriften/Bücher"
     assert has_element?(view, "#tx-#{c.book.id}-tax[title='7 %']")
     assert has_element?(view, "#tx-card-#{c.book.id}", "Zeitschriften/Bücher")
+  end
+
+  test "refuses to change the VAT rate of a transaction in a sent quarter", c do
+    keep_books(c)
+    fix_today(~D[2027-04-15])
+
+    licence =
+      transaction_fixture(account_id: c.kontist.id, date: ~D[2027-02-10], amount: -11_900)
+
+    {:ok, _lines} =
+      Bookkeeping.save_tax_lines(c.scope, Bookkeeping.get_transaction(c.scope, licence.id), %{
+        "transaction" => %{"category" => "office_supplies", "vat" => "19"}
+      })
+
+    elster_fixture(c.scope)
+    FakeElster.serve()
+    {:ok, _filing} = Filings.send_vat_quarter(c.scope, 2027, 1, "4711")
+
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.kontist}")
+    view |> element("#tx-#{licence.id}-tax") |> render_click()
+
+    view
+    |> form("#tax-lines-form", %{"sides" => %{"transaction" => %{"vat" => "7"}}})
+    |> render_submit()
+
+    assert text(view, "#tax-lines-locked p") == "Zeitraum ist festgeschrieben"
+    assert has_element?(view, "#tax-transaction-vat option[value='19'][selected]")
+
+    render_click(view, "close_tax_lines", %{})
+    assert has_element?(view, "#tx-#{licence.id}-tax[title='19 %']")
   end
 
   test "annotates a split per part and a transfer not at all", c do

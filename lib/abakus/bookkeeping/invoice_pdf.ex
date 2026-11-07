@@ -20,7 +20,7 @@ defmodule Abakus.Bookkeeping.InvoicePdf do
         :error
 
       typst ->
-        in_tmp_dir(&compile(typst, &1, invoice))
+        Abakus.TmpDir.run("abakus-invoice", &compile(typst, &1, invoice))
     end
   end
 
@@ -44,17 +44,6 @@ defmodule Abakus.Bookkeeping.InvoicePdf do
       {output, status} ->
         Logger.error("typst failed with #{status}: #{output}")
         :error
-    end
-  end
-
-  defp in_tmp_dir(fun) do
-    dir = Path.join(System.tmp_dir!(), "abakus-invoice-#{System.unique_integer([:positive])}")
-    File.mkdir_p!(dir)
-
-    try do
-      fun.(dir)
-    after
-      File.rm_rf!(dir)
     end
   end
 

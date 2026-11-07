@@ -8,7 +8,8 @@ defmodule Abakus.Bookkeeping do
   (`Abakus.Bookkeeping.Attachments`): in the register, not zero, no transfer and no opening balance, a split while one
   of its parts does; a receipt of the whole split counts for all its parts, and a transaction marked so needs none,
   as does an invoice's payment (`Abakus.Bookkeeping.InvoicePayments`), whose receipt is the invoice. A transaction
-  that pays a disposal (`Abakus.Bookkeeping.FixedAssets`) needs no category.
+  that pays a disposal (`Abakus.Bookkeeping.FixedAssets`) needs no category. A transaction in a period locked by a
+  sent return (`Abakus.Bookkeeping.Filings`) is out of the inbox, and its tax lines can no longer change.
   """
 
   import Ecto.Query
@@ -19,6 +20,7 @@ defmodule Abakus.Bookkeeping do
     BusinessAccount,
     Category,
     Disposal,
+    Filings,
     InvoicePayment,
     ReceiptWaiver,
     TaxLine
@@ -100,13 +102,21 @@ defmodule Abakus.Bookkeeping do
 
   # A transaction that is no split counts while its whole is not `done`, a split while one of its parts is not.
   defp open(scope, whole_done, parts_done) do
-    from t in business_transactions(scope),
+    from(t in business_transactions(scope),
       where:
         (t.id not in subquery(split_ids()) and t.amount != 0 and
            is_nil(t.transfer_transaction_id) and is_nil(t.transfer_subtransaction_id) and
            t.id not in subquery(whole_done)) or
           t.id in subquery(open_parts(parts_done)),
       select: t.id
+    )
+    |> outside_locked(scope)
+  end
+
+  defp outside_locked(query, scope) do
+    Enum.reduce(Filings.locked_spans(scope), query, fn {first, last}, query ->
+      where(query, [t], t.date < ^first or t.date > ^last)
+    end)
   end
 
   @doc "The business accounts' transactions in the register, without their opening balance."
@@ -249,7 +259,8 @@ defmodule Abakus.Bookkeeping do
   Sets the tax lines of a transaction's sides from `params`, keyed by side (`"transaction"` for the whole, else the
   part's id) with `"category"` and `"vat"`; a side without category loses its line, and sides not in `params` keep
   theirs. `{:error, changesets}` maps each invalid side to its changeset, and nothing is saved; `{:error,
-  :not_found}` when the transaction is no longer in the user's register.
+  :not_found}` when the transaction is no longer in the user's register, `{:error, :locked}` when it would change a
+  tax line of a locked period.
   """
   def save_tax_lines(%Scope{} = scope, %Transaction{id: id}, params) do
     case get_transaction(scope, id) do
@@ -266,11 +277,23 @@ defmodule Abakus.Bookkeeping do
         change(scope, transaction, side, lines[{transaction.id, side}], attrs)
       end
 
-    case for({side, %Ecto.Changeset{valid?: false} = c} <- changes, into: %{}, do: {side, c}) do
-      invalid when invalid == %{} -> apply_changes(changes)
-      invalid -> {:error, invalid}
+    invalid = for {side, %Ecto.Changeset{valid?: false} = c} <- changes, into: %{}, do: {side, c}
+
+    cond do
+      Enum.any?(changes, &changes?/1) and Filings.locked?(scope, transaction.date) ->
+        {:error, :locked}
+
+      invalid != %{} ->
+        {:error, invalid}
+
+      true ->
+        apply_changes(changes)
     end
   end
+
+  defp changes?({_side, nil}), do: false
+  defp changes?({_side, {:delete, _line}}), do: true
+  defp changes?({_side, %Ecto.Changeset{changes: changes}}), do: changes != %{}
 
   defp change(scope, transaction, side, line, attrs) do
     if blank?(attrs["category"]) do

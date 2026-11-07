@@ -29,6 +29,10 @@ config :abakus, Abakus.Paperless,
   poll_interval: 1,
   consume_timeout: 100
 
+config :abakus, Abakus.Bookkeeping.Elster,
+  client: Abakus.Bookkeeping.FakeElster,
+  vendor_id: "74931"
+
 config :abakus, Abakus.Depot.Receipts,
   model: Abakus.Depot.FakeModel,
   text_extractor: Abakus.Depot.FakeTextExtractor
