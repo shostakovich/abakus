@@ -39,7 +39,10 @@ defmodule Abakus.BookkeepingTest do
       )
   end
 
-  defp inbox_ids(scope), do: scope |> Bookkeeping.inbox() |> Enum.map(& &1.id)
+  defp inbox_ids(scope), do: for({t, _missing} <- Bookkeeping.inbox(scope), do: t.id)
+
+  defp without_category(scope),
+    do: for({t, missing} <- Bookkeeping.inbox(scope), :category in missing, do: t.id)
 
   describe "business accounts" do
     test "are only the user's own accounts", %{scope: scope, business: business} do
@@ -72,7 +75,11 @@ defmodule Abakus.BookkeepingTest do
       categorised = transaction(c.business)
       save!(c.scope, categorised, %{"transaction" => %{"category" => "internet", "vat" => "19"}})
 
-      assert inbox_ids(c.scope) == [newer.id, older.id]
+      assert without_category(c.scope) == [newer.id, older.id]
+
+      assert Enum.find_value(Bookkeeping.inbox(c.scope), fn {t, missing} ->
+               t.id == categorised.id && missing
+             end) == [:receipt]
     end
 
     test "leaves out transfers, deleted transactions, match proposals and the opening balance",
@@ -115,10 +122,10 @@ defmodule Abakus.BookkeepingTest do
       [first, second] = split.subtransactions
 
       save!(c.scope, split, %{first.id => %{"category" => "internet", "vat" => "19"}})
-      assert inbox_ids(c.scope) == [split.id]
+      assert without_category(c.scope) == [split.id]
 
       save!(c.scope, split, %{second.id => %{"category" => "bank_fees", "vat" => "0"}})
-      assert inbox_ids(c.scope) == []
+      assert without_category(c.scope) == []
     end
 
     test "is the user's own", c do

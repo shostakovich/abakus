@@ -165,6 +165,8 @@ defmodule AbakusWeb.Router do
       ] do
       live "/", InboxLive
     end
+
+    get "/paperless/:id", PaperlessController, :show
   end
 
   scope "/settings", AbakusWeb do

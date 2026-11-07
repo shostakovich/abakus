@@ -22,7 +22,8 @@ defmodule AbakusWeb.Bookkeeping.BusinessAccountsLive do
     >
       <.header>Geschäftskonten</.header>
       <p class="mb-4 max-w-prose text-sm text-base-content/70">
-        Die Buchungen dieser Konten erscheinen im Posteingang der Buchhaltung, bis sie eine Kategorie haben.
+        Die Buchungen dieser Konten erscheinen im Posteingang der Buchhaltung, bis sie eine Kategorie und
+        einen Beleg haben.
         Geschäftliche Ausgaben von anderen Konten bekommen ihre Kategorie im Konto selbst.
       </p>
       <.form for={%{}} id="business-accounts-form" phx-submit="save">

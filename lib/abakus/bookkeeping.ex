@@ -4,14 +4,15 @@ defmodule Abakus.Bookkeeping do
   a part of a split, a bookkeeping category and VAT treatment, on any of their accounts. It annotates the Ledger's
   transactions and leads none; its tables are not synced. Transfers between the user's accounts take no tax line.
 
-  The inbox lists the business accounts' transactions that still miss a category: in the register, not zero, no
-  transfer and no opening balance, a split while one of its parts does.
+  The inbox lists the business accounts' transactions that still miss a category or a receipt
+  (`Abakus.Bookkeeping.Attachments`): in the register, not zero, no transfer and no opening balance, a split while one
+  of its parts does; a receipt of the whole split counts for all its parts, and a transaction marked so needs none.
   """
 
   import Ecto.Query
   import Abakus.Owned
 
-  alias Abakus.Bookkeeping.{BusinessAccount, TaxLine}
+  alias Abakus.Bookkeeping.{Attachment, BusinessAccount, ReceiptWaiver, TaxLine}
   alias Abakus.{Ids, Ledger, Repo}
   alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
   alias Abakus.Users.{Scope, User}
@@ -45,20 +46,53 @@ defmodule Abakus.Bookkeeping do
     end)
   end
 
-  @doc "The business transactions still missing a category, newest first, with payees and parts."
+  @doc """
+  The business transactions still missing a category or a receipt, newest first, with payees and parts, each as
+  `{transaction, missing}` with `:category`, `:receipt` or both.
+  """
   def inbox(%Scope{} = scope) do
-    from(t in Ledger.in_register(scope),
+    without_category = MapSet.new(Repo.all(without_category(scope)))
+    without_receipt = MapSet.new(Repo.all(without_receipt(scope)))
+    ids = without_category |> MapSet.union(without_receipt) |> MapSet.to_list()
+
+    from(t in Transaction,
+      where: fragment("? IN (SELECT value FROM json_each(?))", t.id, ^JSON.encode!(ids)),
+      order_by: [desc: t.date, desc: t.id],
+      preload: [:payee, subtransactions: :payee]
+    )
+    |> Repo.all()
+    |> Enum.map(fn t ->
+      {t,
+       for(
+         {kind, open} <- [category: without_category, receipt: without_receipt],
+         t.id in open,
+         do: kind
+       )}
+    end)
+  end
+
+  defp without_category(scope),
+    do: open(scope, whole_lines(scope), part_lines(scope))
+
+  defp without_receipt(scope) do
+    whole = whole_attachments(scope)
+
+    from t in open(scope, whole, part_attachments(scope)),
+      where: t.id not in subquery(whole),
+      where: t.id not in subquery(from w in owned(ReceiptWaiver, scope), select: w.transaction_id)
+  end
+
+  # A transaction that is no split counts while its whole is not `done`, a split while one of its parts is not.
+  defp open(scope, whole_done, parts_done) do
+    from t in Ledger.in_register(scope),
       where: t.account_id in subquery(business_accounts(scope)),
       where: is_nil(t.payee_id) or t.payee_id not in subquery(opening_payees(scope)),
       where:
         (t.id not in subquery(split_ids()) and t.amount != 0 and
            is_nil(t.transfer_transaction_id) and is_nil(t.transfer_subtransaction_id) and
-           t.id not in subquery(whole_lines(scope))) or
-          t.id in subquery(open_parts(scope)),
-      order_by: [desc: t.date, desc: t.id],
-      preload: [:payee, subtransactions: :payee]
-    )
-    |> Repo.all()
+           t.id not in subquery(whole_done)) or
+          t.id in subquery(open_parts(parts_done)),
+      select: t.id
   end
 
   defp business_accounts(scope),
@@ -82,16 +116,30 @@ defmodule Abakus.Bookkeeping do
         select: l.transaction_id
       )
 
-  defp open_parts(scope) do
-    part_lines =
-      from l in owned(TaxLine, scope),
+  defp part_lines(scope),
+    do:
+      from(l in owned(TaxLine, scope),
         where: not is_nil(l.subtransaction_id),
         select: l.subtransaction_id
+      )
 
+  defp whole_attachments(scope),
+    do:
+      from(a in owned(Attachment, scope),
+        where: is_nil(a.subtransaction_id),
+        select: a.transaction_id
+      )
+
+  defp part_attachments(scope),
+    do:
+      from(a in owned(Attachment, scope),
+        where: not is_nil(a.subtransaction_id),
+        select: a.subtransaction_id
+      )
+
+  defp open_parts(done) do
     from s in parts(),
-      where:
-        s.amount != 0 and is_nil(s.transfer_transaction_id) and
-          s.id not in subquery(part_lines),
+      where: s.amount != 0 and is_nil(s.transfer_transaction_id) and s.id not in subquery(done),
       select: s.transaction_id
   end
 

@@ -529,7 +529,7 @@ _Avoid_: Accounting, Lexoffice
 
 **Business account**:
 An account in Finanzen the user marks as their business's, such as the Kontist account; its transactions are the
-business transactions the inbox asks a category for. A business expense on another account is a business
+business transactions the inbox asks a category and a receipt for. A business expense on another account is a business
 transaction too, once it has a tax line. UI "Geschäftskonto", the settings page "Geschäftskonten".
 _Avoid_: Company account
 
@@ -549,7 +549,18 @@ A transaction's, or a split part's, bookkeeping category and VAT treatment; net 
 amount. Transfers between the user's accounts take none. Code: `Abakus.Bookkeeping.TaxLine`.
 _Avoid_: Booking, voucher
 
+**Attachment**:
+A bookkeeping receipt: a document in the user's Paperless that a transaction, or a split part, links to as its
+proof (ADR 0033), uploaded through Abakus or proposed from Paperless by amount and date. One of the whole transaction
+counts for all its parts. Code: `Abakus.Bookkeeping.Attachment`, `Abakus.Bookkeeping.Attachments`. UI "Beleg".
+_Avoid_: Receipt (that is the Depot's bank PDF), voucher
+
+**Receipt waiver**:
+The mark that a business transaction needs no attachment, such as a bank fee. Code:
+`Abakus.Bookkeeping.ReceiptWaiver`. UI "Kein Beleg nötig".
+_Avoid_: Exemption (that is a tax term)
+
 **Bookkeeping inbox**:
-The business transactions still missing a category, worked through one after another. Code:
-`Abakus.Bookkeeping.inbox/1`. UI "Posteingang".
+The business transactions still missing a category or an attachment, worked through one after another with the
+attachment beside them. Code: `Abakus.Bookkeeping.inbox/1`. UI "Posteingang".
 _Avoid_: Inbox unqualified (that is the Depot's receipts)

@@ -32,7 +32,8 @@ defmodule AbakusWeb.RegisterLive do
   renamed transactions, the register shows them anew. Its "(in N Buchungen)" searches Alle Konten for the payee, with
   the scheduled transactions open when some use it.
 
-  For a user who keeps books the column Buchhaltung opens `AbakusWeb.Bookkeeping.TaxLineDialog` on a transaction.
+  For a user who keeps books the column Buchhaltung opens `AbakusWeb.Bookkeeping.TaxLineDialog` on a transaction and
+  its receipts' PDFs.
 
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
   `account_groups`, so it is as fresh as the sidebar. The portfolios' cash is the Depot's
@@ -48,6 +49,7 @@ defmodule AbakusWeb.RegisterLive do
   use AbakusWeb, :live_view
 
   alias Abakus.Bookkeeping
+  alias Abakus.Bookkeeping.Attachments
   alias Abakus.Depot.Portfolios
   alias Abakus.Ledger
   alias Abakus.Ledger.{Account, Scheduled, Transaction}
@@ -161,7 +163,7 @@ defmodule AbakusWeb.RegisterLive do
           proposals={@shown_proposals}
           accounts={@accounts}
           columns={@columns}
-          tax_lines={@tax_lines}
+          bookkeeping={@bookkeeping}
           selected={@selected}
           editor={@editor && @editor.layout == :row && @editor}
           empty={empty_text(@accounts, @register_empty, @proposals)}
@@ -171,7 +173,7 @@ defmodule AbakusWeb.RegisterLive do
           rows={@rows}
           proposals={@shown_proposals}
           accounts={@accounts}
-          tax_lines={@tax_lines}
+          bookkeeping={@bookkeeping}
           all={is_nil(@account)}
           empty={empty_text(@accounts, @register_empty, @proposals)}
           empty_hint={empty_hint(@accounts)}
@@ -332,7 +334,7 @@ defmodule AbakusWeb.RegisterLive do
 
     assign(socket,
       rows: rows,
-      tax_lines: tax_lines(current_scope, rows),
+      bookkeeping: bookkeeping(current_scope, rows),
       count: count,
       register_empty:
         count == 0 and Ledger.count_transactions(current_scope, register, shown) == 0,
@@ -342,8 +344,10 @@ defmodule AbakusWeb.RegisterLive do
     )
   end
 
-  defp tax_lines(%{bookkeeping: true} = scope, rows), do: Bookkeeping.tax_lines(scope, rows)
-  defp tax_lines(_scope, _rows), do: %{}
+  defp bookkeeping(%{bookkeeping: true} = scope, rows),
+    do: %{tax_lines: Bookkeeping.tax_lines(scope, rows), receipts: Attachments.list(scope, rows)}
+
+  defp bookkeeping(_scope, _rows), do: %{tax_lines: %{}, receipts: %{}}
 
   defp load_scheduled(%{assigns: assigns} = socket) do
     {register, shown} = register(assigns)
@@ -683,7 +687,7 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   def handle_event("close_tax_lines", _params, socket),
-    do: {:noreply, assign(socket, :tax_dialog, nil)}
+    do: {:noreply, socket |> assign(:tax_dialog, nil) |> refresh()}
 
   def handle_event("close_payee_dialog", _params, socket),
     do: {:noreply, assign(socket, :payee_dialog, nil)}

@@ -4,7 +4,8 @@ defmodule Abakus.FakePaperless do
   documents, which `documents/1` shows as they are now. An unknown URL is unreachable, a wrong
   token gets 401, a document `raise: true` raises when downloaded and one `swap_fails: true`
   keeps its tags, with 500. An upload of a file the instance has is that document, else a new one;
-  an instance `uploads_fail: true` takes none.
+  an instance `uploads_fail: true` takes none, one `uploads_fail: reason` fails with that reason, and one with `upload_gate: pid` sends
+  `{:uploading, uploader}` to that pid and waits for `:go`.
   """
   @behaviour Abakus.Paperless.Client
 
@@ -84,11 +85,24 @@ defmodule Abakus.FakePaperless do
   @impl true
   def upload(connection, content, filename) do
     with {:ok, instance} <- instance(connection) do
+      await_gate(instance[:upload_gate])
+
       cond do
-        instance[:uploads_fail] -> {:error, :not_consumed}
+        instance[:uploads_fail] == true -> {:error, :not_consumed}
+        instance[:uploads_fail] -> {:error, instance.uploads_fail}
         known = Enum.find(instance.documents, &(&1.pdf == content)) -> {:ok, known.id}
         true -> {:ok, add_upload(connection, instance, content, filename)}
       end
+    end
+  end
+
+  defp await_gate(nil), do: :ok
+
+  defp await_gate(pid) do
+    send(pid, {:uploading, self()})
+
+    receive do
+      :go -> :ok
     end
   end
 

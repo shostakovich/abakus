@@ -16,7 +16,7 @@ defmodule Abakus.Paperless.Connection do
 
   @doc """
   URL and API token, both required; a blank token keeps the one stored, unless the URL changes, so a token never
-  goes to another server.
+  goes to another server. The URL is the address and path of Paperless only, as the API's paths are put after it.
   """
   def changeset(connection, attrs) do
     connection
@@ -30,9 +30,13 @@ defmodule Abakus.Paperless.Connection do
     |> validate_length(:token, max: 200)
     |> validate_change(:url, fn :url, url ->
       case URI.new(url) do
-        {:ok, %URI{scheme: scheme, host: host}}
+        {:ok, %URI{userinfo: nil, query: nil, fragment: nil, scheme: scheme, host: host}}
         when scheme in ["http", "https"] and is_binary(host) and host != "" ->
           []
+
+        {:ok, %URI{scheme: scheme, host: host}}
+        when scheme in ["http", "https"] and is_binary(host) and host != "" ->
+          [url: "nur Adresse und Pfad, ohne Zugangsdaten, „?“ oder „#“"]
 
         _other ->
           [url: "braucht http:// oder https:// und einen Host"]

@@ -42,6 +42,26 @@ defmodule Abakus.PaperlessTest do
     end
   end
 
+  test "refuses a URL with credentials, a query or a fragment", %{scope: scope} do
+    for url <- [
+          "https://anna:geheim@paperless.example.org",
+          "https://paperless.example.org/?x=1",
+          "https://paperless.example.org?",
+          "https://paperless.example.org/#x"
+        ] do
+      assert {:error, changeset} =
+               Paperless.update_connection(scope, %{"url" => url, "token" => "t"})
+
+      assert errors_on(changeset).url == ["nur Adresse und Pfad, ohne Zugangsdaten, „?“ oder „#“"]
+    end
+
+    assert {:ok, _connection} =
+             Paperless.update_connection(scope, %{
+               "url" => "https://example.org/paperless",
+               "token" => "t"
+             })
+  end
+
   test "needs a URL", %{scope: scope} do
     assert {:error, changeset} = Paperless.update_connection(scope, %{"url" => " "})
     assert errors_on(changeset).url == ["can't be blank"]

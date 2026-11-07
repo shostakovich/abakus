@@ -5,7 +5,10 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
   import Abakus.DomainFixtures
   import AbakusWeb.PageText, only: [text: 2]
 
-  alias Abakus.{Bookkeeping, Ledger}
+  alias Abakus.{Bookkeeping, FakePaperless, Ledger, Paperless}
+  alias Abakus.Bookkeeping.Attachments
+
+  @url "http://paperless.test"
 
   setup :register_and_log_in_user
 
@@ -98,5 +101,93 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
 
     assert text(view, "#tx-#{split.id}-part-0-tax") == "Internet"
     assert text(view, "#tx-#{split.id}-part-1-tax") == "Nebenkosten des Geldverkehrs"
+  end
+
+  test "shows a paperclip per receipt that opens its PDF, a split's own on its row", c do
+    keep_books(c)
+
+    FakePaperless.serve(%{
+      @url => %{
+        token: "t",
+        documents: [
+          FakePaperless.fixture(1, [], title: "Quittung"),
+          FakePaperless.fixture(2, [], title: "Rechnung")
+        ]
+      }
+    })
+
+    {:ok, _connection} = Paperless.update_connection(c.scope, %{"url" => @url, "token" => "t"})
+
+    {:ok, split} =
+      Ledger.create_transaction(c.scope, %{
+        account_id: c.giro.id,
+        date: ~D[2026-10-06],
+        amount: -1_500,
+        subtransactions: [%{amount: -1_000}, %{amount: -500}]
+      })
+
+    split = Bookkeeping.get_transaction(c.scope, split.id)
+    [first, _second] = split.subtransactions
+    {:ok, _attachment} = Attachments.attach(c.scope, c.book, nil, 1)
+    {:ok, _attachment} = Attachments.attach(c.scope, c.book, nil, 2)
+    {:ok, _attachment} = Attachments.attach(c.scope, split, nil, 2)
+    {:ok, _attachment} = Attachments.attach(c.scope, split, first.id, 1)
+
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+    assert has_element?(
+             view,
+             "a#tx-#{c.book.id}-tax-receipt-0[href='/buchhaltung/paperless/1'][target=_blank][title=Quittung]"
+           )
+
+    assert has_element?(view, "a#tx-#{c.book.id}-tax-receipt-1[href='/buchhaltung/paperless/2']")
+    assert has_element?(view, "#tx-#{split.id}-tax-receipt-0[href='/buchhaltung/paperless/2']")
+
+    assert has_element?(
+             view,
+             "#tx-#{split.id}-part-0-tax-receipt-0[href='/buchhaltung/paperless/1']"
+           )
+
+    refute has_element?(view, "#tx-#{split.id}-part-1-tax-receipt-0")
+    assert has_element?(view, "#tx-card-#{c.book.id}", "2 Belege")
+  end
+
+  test "attaches a receipt to one part of a split", c do
+    keep_books(c)
+
+    FakePaperless.serve(%{
+      @url => %{
+        token: "t",
+        documents: [FakePaperless.fixture(3, [], content: "Summe 15,00", created: ~D[2026-10-06])]
+      }
+    })
+
+    {:ok, _connection} = Paperless.update_connection(c.scope, %{"url" => @url, "token" => "t"})
+
+    {:ok, split} =
+      Ledger.create_transaction(c.scope, %{
+        account_id: c.kontist.id,
+        date: ~D[2026-10-06],
+        amount: -1_500,
+        subtransactions: [%{amount: -1_000, memo: "Server"}, %{amount: -500, memo: "Domain"}]
+      })
+
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.kontist}")
+    view |> element("#tx-#{split.id}-part-1-tax") |> render_click()
+    render_async(view)
+
+    assert has_element?(view, "#receipts-side option", "Ganze Buchung")
+    [_server, domain] = Bookkeeping.get_transaction(c.scope, split.id).subtransactions
+    view |> form("#receipts-side-form", %{"side" => domain.id}) |> render_change()
+    view |> element("#proposal-3-attach") |> render_click()
+
+    assert [%{subtransaction_id: part_id}] =
+             c.scope
+             |> Attachments.list([Bookkeeping.get_transaction(c.scope, split.id)])
+             |> Map.values()
+             |> List.flatten()
+
+    assert part_id == domain.id
+    assert text(view, "#receipts-attached") =~ "Domain · −5,00 €"
   end
 end

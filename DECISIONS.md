@@ -392,3 +392,16 @@ Accepted, 2026-11-07 (#147, #150). Adds a third area to those of 0020.
   The accounts the user marks as business accounts feed its inbox and bring the area.
 - **Consequences:** The Apple apps neither show nor change tax lines; a line whose split part is gone stops counting
   without the Ledger knowing about it. A new category is a code change.
+
+## 0033. Bookkeeping receipts stay in Paperless
+
+Accepted, 2026-11-07 (#147, #151).
+
+- **Context:** GoBD asks for every booking's receipt to be kept for ten years. The owner's Paperless is backed up as
+  an archive, while Abakus's backup holds only the database; the Depot keeps its bank PDFs in `receipts/` itself.
+- **Decision:** A transaction's receipts are links to documents in the user's Paperless (`bookkeeping_attachments`,
+  by Paperless id, with the title cached). An upload in Abakus goes to Paperless; a file Paperless has already, by
+  its checksum, is linked as that document. Abakus shows and serves a receipt by reading it from Paperless.
+- **Consequences:** No receipt files in Abakus's backup, and no second copy to keep in step. Receipts need the
+  Paperless connection: without it, or while Paperless is down, they cannot be shown, proposed or uploaded. A
+  document deleted in Paperless leaves a link to nothing.
