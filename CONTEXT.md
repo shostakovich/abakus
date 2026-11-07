@@ -564,3 +564,34 @@ _Avoid_: Exemption (that is a tax term)
 The business transactions still missing a category or an attachment, worked through one after another with the
 attachment beside them. Code: `Abakus.Bookkeeping.inbox/1`. UI "Posteingang".
 _Avoid_: Inbox unqualified (that is the Depot's receipts)
+
+**Customer**:
+Whom the owner's invoices go to: a name, an address and, for a business abroad, its VAT id. Code:
+`Abakus.Bookkeeping.Customer`. UI "Kunde", the page "Kunden".
+_Avoid_: Contact, client, account
+
+**Invoice**:
+What the owner bills a customer: positions, a service period, the VAT and a number, written once and never changed.
+It keeps its sender and recipient as they were when it was written. Its PDF is an e-invoice. Code:
+`Abakus.Bookkeeping.Invoice`, `Abakus.Bookkeeping.Invoices`. UI "Rechnung".
+_Avoid_: Bill, receipt (that is the Depot's), attachment (that is a transaction's proof)
+
+**Invoice number**:
+The year of the invoice's date followed by a counter that runs on across years, continuing the Lexoffice sequence:
+2026125 is followed by 2027126. Code: `number`, `counter`. UI "Rechnungsnummer".
+
+**Position**:
+A line of an invoice: what was done, quantity × unit × net unit price. Code: `Abakus.Bookkeeping.Position`. UI
+"Position".
+_Avoid_: Item, line item
+
+**Sender**:
+The owner as their invoices name them, with address, tax number or VAT id, IBAN and payment days; part of the
+bookkeeping settings. Code: `Abakus.Bookkeeping.Settings`, the snapshot `Abakus.Bookkeeping.Party`. UI "Absender",
+the settings page "Rechnungen".
+
+**E-invoice**:
+An invoice as EN 16931 XML in UN/CEFACT's Cross Industry Invoice syntax (ZUGFeRD's profile EN 16931), attached to the
+invoice's PDF/A-3 as `factur-x.xml` (ADR 0034). Code: `Abakus.Bookkeeping.EInvoice`, `Abakus.Bookkeeping.InvoicePdf`.
+UI "E-Rechnung".
+_Avoid_: XRechnung (that is the pure XML format for public clients)

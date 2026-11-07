@@ -9,7 +9,7 @@ defmodule AbakusWeb.Layouts do
   @budget_pages [:budget, :accounts, :all_accounts, :import]
   @kasse_pages [:kasse_expenses, :kasse_balances, :kasse_activity]
   @depot_pages [:depot_wealth, :depots, :import_receipts]
-  @bookkeeping_pages [:bookkeeping_inbox]
+  @bookkeeping_pages [:bookkeeping_inbox, :bookkeeping_invoices, :bookkeeping_customers]
 
   embed_templates "layouts/*"
 
@@ -67,8 +67,7 @@ defmodule AbakusWeb.Layouts do
   balance and how many transactions wait for approval; then the section Depots with the active portfolios and their
   values, each shown with the leading emoji of its name, else the briefcase; a user without the budget sees only
   Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. The Buchhaltung:
-  Posteingang. Accounts and portfolios
-  stay out of the icon rail and the dock. Entries show plush images, the Lucide icon only where a plush has no image.
+  Posteingang, Rechnungen and Kunden. Accounts and portfolios stay out of the icon rail and the dock. Entries show plush images, the Lucide icon only where a plush has no image.
 
   With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
   brand is a menu that switches the area. On phones the dock holds the current area's pages; its "Mehr" opens
@@ -247,6 +246,26 @@ defmodule AbakusWeb.Layouts do
         icon="inbox"
         navigate={navigate(~p"/buchhaltung", @current)}
         href={href(~p"/buchhaltung", @current)}
+      />
+      <:nav
+        :if={@bookkeeping?}
+        key={:bookkeeping_invoices}
+        id="side-bookkeeping-invoices"
+        label="Rechnungen"
+        plush="file-text"
+        icon="file-text"
+        navigate={navigate(~p"/buchhaltung/invoices", @current)}
+        href={href(~p"/buchhaltung/invoices", @current)}
+      />
+      <:nav
+        :if={@bookkeeping?}
+        key={:bookkeeping_customers}
+        id="side-bookkeeping-customers"
+        label="Kunden"
+        plush="users"
+        icon="users"
+        navigate={navigate(~p"/buchhaltung/customers", @current)}
+        href={href(~p"/buchhaltung/customers", @current)}
       />
       <:nav
         key={:settings}

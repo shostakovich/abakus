@@ -164,9 +164,13 @@ defmodule AbakusWeb.Router do
         {AbakusWeb.Areas, {:require, :bookkeeping}}
       ] do
       live "/", InboxLive
+      live "/invoices", InvoicesLive
+      live "/invoices/new", InvoiceFormLive
+      live "/customers", CustomersLive
     end
 
     get "/paperless/:id", PaperlessController, :show
+    get "/invoices/:id/pdf", InvoiceController, :show
   end
 
   scope "/settings", AbakusWeb do
@@ -184,6 +188,7 @@ defmodule AbakusWeb.Router do
       live "/depot/portfolios", Depot.PortfoliosLive
       live "/depot/receipt-intake", Depot.ReceiptIntakeLive
       live "/buchhaltung/accounts", Bookkeeping.BusinessAccountsLive
+      live "/buchhaltung/invoices", Bookkeeping.InvoiceSettingsLive
     end
   end
 

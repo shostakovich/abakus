@@ -48,8 +48,22 @@ FROM ${RUNNER_IMAGE} AS final
 
 # sqlite3 lets operators inspect and back up the database inside the container.
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y libstdc++6 openssl libncurses6 ca-certificates tzdata curl sqlite3 poppler-utils && \
+    apt-get install --no-install-recommends -y libstdc++6 openssl libncurses6 ca-certificates tzdata curl sqlite3 poppler-utils xz-utils && \
     rm -rf /var/lib/apt/lists/*
+
+# Typst sets the invoices' PDFs; Debian has no current release of it.
+ARG TYPST_VERSION=0.15.1
+RUN arch="$(uname -m)" && \
+    case "$arch" in \
+      x86_64) sha256=a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c ;; \
+      aarch64) sha256=5aa8d74a3d906e60ea12a66ac2f37f8eef1b14cbad7182a745e393a10c23dcee ;; \
+      *) echo "no Typst for $arch" && exit 1 ;; \
+    esac && \
+    curl -fsSL -o /tmp/typst.tar.xz "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-${arch}-unknown-linux-musl.tar.xz" && \
+    echo "${sha256}  /tmp/typst.tar.xz" | sha256sum -c - && \
+    tar -xJf /tmp/typst.tar.xz -C /tmp && \
+    mv "/tmp/typst-${arch}-unknown-linux-musl/typst" /usr/local/bin/typst && \
+    rm -rf /tmp/typst*
 
 # The Kasse's dates and its jobs follow the local time.
 ENV LANG=C.UTF-8 \

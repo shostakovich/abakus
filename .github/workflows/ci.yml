@@ -43,9 +43,15 @@ jobs:
       - name: Credo
         run: mix credo --strict
 
-      # The receipt tests tagged :pdftotext need poppler's pdftotext.
-      - name: Install pdftotext
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+      # The receipt tests tagged :pdftotext need poppler's pdftotext, the invoice tests tagged :typst Typst and
+      # poppler's pdfinfo and pdfdetach, in the image's versions.
+      - name: Install poppler and Typst
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends poppler-utils
+          curl -fsSL -o /tmp/typst.tar.xz https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz
+          echo "a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c  /tmp/typst.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/typst.tar.xz -C /tmp
+          sudo mv /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst
 
       - name: Run tests
         run: mix test

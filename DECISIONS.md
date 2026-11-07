@@ -405,3 +405,18 @@ Accepted, 2026-11-07 (#147, #151).
 - **Consequences:** No receipt files in Abakus's backup, and no second copy to keep in step. Receipts need the
   Paperless connection: without it, or while Paperless is down, they cannot be shown, proposed or uploaded. A
   document deleted in Paperless leaves a link to nothing.
+
+## 0034. Invoices are written once and set by Typst as ZUGFeRD
+
+Accepted, 2026-11-07 (#147, #152).
+
+- **Context:** Invoices move from Lexoffice into Abakus. Since 2025 a German business must be able to send
+  e-invoices to other businesses, and GoBD asks that a written invoice stays as it was.
+- **Decision:** Writing an invoice gives it the next number and keeps the sender and the customer with it; it is not
+  edited afterwards. Its PDF is set from those values on each download by Typst, a binary of the image, as PDF/A-3
+  with the EN 16931 XML of ZUGFeRD's profile EN 16931 attached as `factur-x.xml`. The XML is written by Abakus
+  itself, without a library.
+- **Consequences:** A mistake in a written invoice needs a corrected or cancelling invoice, which Abakus does not
+  write yet. Typst's PDF/A-3 has no XMP extension schema for ZUGFeRD's own metadata (document type, profile), so a
+  strict ZUGFeRD validator warns about it while readers of e-invoices take the attached XML. A new Typst release can
+  change how a PDF looks; the image pins its version.
