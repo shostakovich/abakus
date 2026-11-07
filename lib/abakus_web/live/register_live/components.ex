@@ -649,7 +649,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   attr :bookkeeping, :map,
     required: true,
     doc:
-      "`%{tax_lines, receipts}` from `Abakus.Bookkeeping.tax_lines/2` and `Abakus.Bookkeeping.Attachments.list/2`"
+      "`%{tax_lines, attachments}` from `Abakus.Bookkeeping.tax_lines/2` and `Abakus.Bookkeeping.Attachments.list/2`"
 
   attr :selected, :any, required: true
 
@@ -667,7 +667,7 @@ defmodule AbakusWeb.RegisterLive.Components do
   subtransactions below it, collapsible, and the editor (`TransactionEditor`) takes its place while it is edited.
   A match proposal is no row to select or edit: below it is what it matches, with "Zuordnen" and "Trennen".
   For a user who keeps books, the column Buchhaltung shows each side's bookkeeping category, which opens its dialog,
-  and a paperclip per receipt, which opens its PDF.
+  and a paperclip per attachment, which opens its PDF.
   """
   def table(assigns) do
     assigns = assign(assigns, :edited, assigns.editor && assigns.editor.row_id)
@@ -1066,7 +1066,7 @@ defmodule AbakusWeb.RegisterLive.Components do
           if(@all, do: @accounts[@transaction.account_id].name),
           category_text(@transaction, @accounts),
           tax_text(@transaction, @bookkeeping),
-          receipts_text(@transaction, @bookkeeping),
+          attachments_text(@transaction, @bookkeeping),
           @transaction.memo
         ])}
       </:meta>
@@ -1197,7 +1197,7 @@ defmodule AbakusWeb.RegisterLive.Components do
       assign(assigns,
         taxed?: assigns.side in Bookkeeping.sides(assigns.transaction),
         line: assigns.bookkeeping.tax_lines[key],
-        receipts: assigns.bookkeeping.receipts[key] || []
+        attachments: assigns.bookkeeping.attachments[key] || []
       )
 
     ~H"""
@@ -1216,14 +1216,14 @@ defmodule AbakusWeb.RegisterLive.Components do
         <.icon :if={!@line} name="pencil" class="app-tax-add size-3.5" />
       </button>
       <a
-        :for={{receipt, index} <- Enum.with_index(@receipts)}
-        id={"#{@id}-receipt-#{index}"}
-        href={~p"/buchhaltung/paperless/#{receipt.paperless_id}"}
+        :for={{attachment, index} <- Enum.with_index(@attachments)}
+        id={"#{@id}-attachment-#{index}"}
+        href={~p"/buchhaltung/paperless/#{attachment.paperless_id}"}
         target="_blank"
         rel="noopener"
-        class="app-tax-receipt"
-        title={receipt.title}
-        aria-label={"Beleg öffnen: #{receipt.title}"}
+        class="app-tax-attachment"
+        title={attachment.title}
+        aria-label={"Beleg öffnen: #{attachment.title}"}
       >
         <.icon name="paperclip" class="size-3.5" />
       </a>
@@ -1231,7 +1231,12 @@ defmodule AbakusWeb.RegisterLive.Components do
     """
   end
 
-  defp tax_name(line), do: Bookkeeping.Category.get(line.category).name
+  defp tax_name(line) do
+    case Bookkeeping.Category.get(line.category) do
+      nil -> line.category
+      category -> category.name
+    end
+  end
 
   defp tax_text(transaction, bookkeeping) do
     for(
@@ -1244,10 +1249,10 @@ defmodule AbakusWeb.RegisterLive.Components do
     |> Enum.join(", ")
   end
 
-  defp receipts_text(transaction, bookkeeping) do
+  defp attachments_text(transaction, bookkeeping) do
     case Enum.sum_by(
            Attachments.sides(transaction),
-           &length(bookkeeping.receipts[{transaction.id, &1}] || [])
+           &length(bookkeeping.attachments[{transaction.id, &1}] || [])
          ) do
       0 -> nil
       1 -> "1 Beleg"

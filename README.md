@@ -9,6 +9,8 @@ Self-hosted envelope budgeting for one household, meant to replace YNAB for my o
   server ([docs/MCP.md](docs/MCP.md)). They write into the budget owner's accounts.
 - **Depot:** portfolios with holdings, dividends and performance, prices from Yahoo, and a receipt inbox for bank
   PDFs. Transactions write their cash into the accounts. Vermögen is the money in all accounts plus the securities.
+- **Buchhaltung:** a freelancer's books: categories and receipts from Paperless at transactions, ZUGFeRD invoices,
+  an asset register, the VAT returns and the EÜR, sent through ELSTER, and a one-off import from Lexoffice.
 
 ## Development
 

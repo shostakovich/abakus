@@ -133,13 +133,13 @@ defmodule Abakus.Bookkeeping.InvoicesTest do
   describe "settings" do
     test "check the IBAN", %{scope: scope} do
       assert {:error, changeset} =
-               Invoices.save_settings(scope, %{"iban" => "DE89 3704 0044 0532 0130 01"})
+               Settings.save_settings(scope, %{"iban" => "DE89 3704 0044 0532 0130 01"})
 
       assert %{iban: ["ist keine gültige IBAN"]} = errors_on(changeset)
     end
 
     test "may lose the IBAN and the VAT id again", %{scope: scope} do
-      assert {:ok, settings} = Invoices.save_settings(scope, %{"iban" => "", "vat_id" => ""})
+      assert {:ok, settings} = Settings.save_settings(scope, %{"iban" => "", "vat_id" => ""})
       assert {settings.iban, settings.vat_id} == {nil, nil}
     end
 

@@ -8,7 +8,7 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLiveTest do
   import AbakusWeb.PageText, only: [text: 2, flash: 2]
 
   alias Abakus.Bookkeeping
-  alias Abakus.Bookkeeping.{FakeElster, Filings, FixedAssets}
+  alias Abakus.Bookkeeping.{FakeElster, Filings, FixedAssets, LexofficeReceipts}
 
   setup :register_and_log_in_user
 
@@ -114,5 +114,51 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLiveTest do
     confirm_click(view, "#{row}-delete-menu-item", "„Lastenrad“ löschen?")
     assert flash(view, :error) =~ "Zeitraum ist festgeschrieben"
     assert FixedAssets.get(c.scope, asset.id).disposal.date == ~D[2027-01-20]
+  end
+
+  describe "a receipt from Lexoffice in an Anlagevermögen category" do
+    setup %{scope: scope} do
+      lexoffice_fixture(scope)
+      [receipt] = LexofficeReceipts.asset_proposals(scope)
+      %{row: "#asset-proposal-#{receipt.id}"}
+    end
+
+    test "is proposed and recorded as an asset, filled in from the receipt", %{
+      conn: conn,
+      scope: scope,
+      row: row
+    } do
+      {:ok, view, _html} = live(conn, ~p"/buchhaltung/assets")
+      assert text(view, row) =~ "Büromarkt Nord GmbH"
+      assert text(view, row) =~ "06.06.2025 · RE-55120 · Betriebs-und Geschäftsausstattung"
+      assert text(view, row) =~ "1.200,00 €"
+
+      view |> element("#{row}-record-menu-item") |> render_click()
+
+      assert has_element?(
+               view,
+               "#asset-form input[name='fixed_asset[purchased_on]'][value='2025-06-06']"
+             )
+
+      assert has_element?(view, "#asset-form input[name='fixed_asset[net]'][value='1.200,00']")
+
+      view
+      |> form("#asset-form",
+        fixed_asset: %{"name" => "Schreibtisch", "useful_life" => "13"}
+      )
+      |> render_submit()
+
+      assert flash(view, :info) == "„Schreibtisch“ gespeichert."
+      refute has_element?(view, "#asset-proposals")
+      assert [%{name: "Schreibtisch", net: 120_000}] = FixedAssets.list(scope)
+    end
+
+    test "is dismissed", %{conn: conn, scope: scope, row: row} do
+      {:ok, view, _html} = live(conn, ~p"/buchhaltung/assets")
+
+      confirm_click(view, "#{row}-dismiss-menu-item", "Keine Anlage?")
+      refute has_element?(view, "#asset-proposals")
+      assert FixedAssets.list(scope) == []
+    end
   end
 end

@@ -1,7 +1,7 @@
 defmodule Abakus.BookkeepingFixtures do
   @moduledoc "The sender, ELSTER, customers, invoices and fixed assets of the Buchhaltung for tests."
 
-  alias Abakus.Bookkeeping.{FakeLexoffice, Filings, FixedAssets, Invoices, LexofficeImport}
+  alias Abakus.Bookkeeping.{FakeLexoffice, FixedAssets, Invoices, LexofficeImport, Settings}
   alias Abakus.{FakePaperless, Paperless}
   alias Abakus.Users.Scope
 
@@ -32,14 +32,14 @@ defmodule Abakus.BookkeepingFixtures do
   end
 
   def sender_fixture(%Scope{} = scope, attrs \\ %{}) do
-    {:ok, settings} = Invoices.save_settings(scope, sender_attrs(attrs))
+    {:ok, settings} = Settings.save_settings(scope, sender_attrs(attrs))
     settings
   end
 
   @doc "The sender with the state of their tax office and an ELSTER certificate, all that sending needs."
   def elster_fixture(%Scope{} = scope) do
     sender_fixture(scope, %{"tax_state" => "BE", "business_activity" => "Softwareentwicklung"})
-    {:ok, settings} = Filings.put_certificate(scope, {"PKCS12 certificate", "Robert.pfx"})
+    {:ok, settings} = Settings.put_certificate(scope, {"PKCS12 certificate", "Robert.pfx"})
     settings
   end
 

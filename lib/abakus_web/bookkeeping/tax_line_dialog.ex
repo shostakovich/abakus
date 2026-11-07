@@ -2,18 +2,18 @@ defmodule AbakusWeb.Bookkeeping.TaxLineDialog do
   @moduledoc """
   The dialog „Buchhaltung“ for one transaction: a Kategorie and its Umsatzsteuer per side (the transaction, or each
   part of a split), with the net and VAT amount they make; choosing a category sets its usual VAT treatment, and
-  „Keine“ removes the side's tax line. „Kein Beleg nötig“ marks a transaction that needs no receipt. Beside the form
-  are its receipts (`AbakusWeb.Bookkeeping.ReceiptPane`), which change at once, not on saving. With `next` the
-  button reads „Speichern und weiter“. In a period a sent return locks, category and VAT are shown read-only and not
-  submitted, so that „Kein Beleg nötig“ still saves. Tells its
-  LiveView `{TaxLineDialog, :done, transaction_id}` once saved, or once the transaction is gone; `close_tax_lines`
-  goes to the LiveView itself.
+  „Keine“ removes the side's tax line. „Kein Beleg nötig“ marks a transaction that needs no attachment. Beside the
+  form are its attachments (`AbakusWeb.Bookkeeping.AttachmentPane`), which change at once, not on saving. With `next`
+  the button reads „Speichern und weiter“. In a period a sent return locks, category and VAT are shown read-only and not
+  submitted, so that „Kein Beleg nötig“ still saves. The payment of a disposal says so and offers no category. Tells
+  its LiveView `{TaxLineDialog, :done, transaction_id}` once saved, or once the transaction is gone;
+  `close_tax_lines` goes to the LiveView itself.
   """
   use AbakusWeb, :live_component
 
   alias Abakus.{Bookkeeping, Format, Money}
   alias Abakus.Bookkeeping.{Attachments, Category, Filings, Vat}
-  alias AbakusWeb.Bookkeeping.ReceiptPane
+  alias AbakusWeb.Bookkeeping.AttachmentPane
 
   @impl true
   def render(assigns) do
@@ -39,8 +39,8 @@ defmodule AbakusWeb.Bookkeeping.TaxLineDialog do
         </p>
         <div class="grid gap-6 lg:grid-cols-[3fr_2fr]">
           <.live_component
-            module={ReceiptPane}
-            id="receipts"
+            module={AttachmentPane}
+            id="attachments"
             current_scope={@current_scope}
             transaction={@transaction}
           />
@@ -60,7 +60,16 @@ defmodule AbakusWeb.Bookkeeping.TaxLineDialog do
             >
               Der Zeitraum dieses Datums ist an ELSTER gesendet, Kategorie und Umsatzsteuer bleiben, wie sie sind.
             </.alert>
-            <fieldset :for={side <- @shown} id={"tax-side-#{side.key}"} class="flex flex-col">
+            <.alert :if={@disposal} id="tax-lines-disposal" title="Bezahlt einen Abgang">
+              Die Buchung bezahlt den Verkauf von „{@disposal.fixed_asset.name}“ und zählt mit ihm
+              im Anlagenverzeichnis, ohne eigene Kategorie.
+            </.alert>
+            <fieldset
+              :for={side <- @shown}
+              :if={!@disposal}
+              id={"tax-side-#{side.key}"}
+              class="flex flex-col"
+            >
               <legend :if={side.part} class="text-sm font-medium">
                 {join_meta([
                   part_name(side.part, @transaction),
@@ -102,7 +111,7 @@ defmodule AbakusWeb.Bookkeeping.TaxLineDialog do
               </p>
             </fieldset>
             <.input
-              :if={@receipts?}
+              :if={@attachments?}
               id="tax-lines-no-receipt"
               type="checkbox"
               name="no_receipt"
@@ -130,8 +139,7 @@ defmodule AbakusWeb.Bookkeeping.TaxLineDialog do
     """
   end
 
-  @doc "The categories for a select, in their Lexoffice groups."
-  def category_options do
+  defp category_options do
     for {group, categories} <- Category.grouped(),
         do: {group, Enum.map(categories, &{&1.name, &1.key})}
   end
@@ -211,7 +219,8 @@ defmodule AbakusWeb.Bookkeeping.TaxLineDialog do
       params: params,
       errors: %{},
       locked: Filings.locked?(socket.assigns.current_scope, transaction.date),
-      receipts?: Attachments.sides(transaction) != [],
+      disposal: Bookkeeping.paid_disposal(socket.assigns.current_scope, transaction),
+      attachments?: Attachments.sides(transaction) != [],
       no_receipt:
         transaction.id in Attachments.waived(socket.assigns.current_scope, [transaction])
     )
@@ -237,7 +246,7 @@ defmodule AbakusWeb.Bookkeeping.TaxLineDialog do
       {:error, :not_found} ->
         done(socket)
 
-      {:error, :locked} ->
+      {:error, reason} when reason in [:locked, :pays_disposal] ->
         {:noreply, load(socket, transaction)}
 
       {:error, errors} ->
@@ -245,7 +254,7 @@ defmodule AbakusWeb.Bookkeeping.TaxLineDialog do
          assign(socket, params: sides, errors: errors, no_receipt: no_receipt?(form, socket))}
 
       {:ok, _lines} ->
-        if socket.assigns.receipts?,
+        if socket.assigns.attachments?,
           do: :ok = Attachments.waive(scope, transaction, no_receipt?(form, socket))
 
         done(socket)

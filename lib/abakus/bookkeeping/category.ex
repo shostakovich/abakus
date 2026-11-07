@@ -128,6 +128,14 @@ defmodule Abakus.Bookkeeping.Category do
   @doc "The keys of every category."
   def keys, do: @keys
 
+  @doc "The category of the Lexoffice category with `id`, or nil for one the owner does not use."
+  def by_lexoffice_id(id) do
+    case List.keyfind(@all, id, 6) do
+      nil -> nil
+      row -> build(row)
+    end
+  end
+
   defp build({key, name, group, kind, euer, vat, lexoffice_id}) do
     {vat, vat_return} = if is_integer(vat), do: {:reverse_charge, vat}, else: {vat, nil}
 

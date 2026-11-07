@@ -6,7 +6,7 @@ defmodule AbakusWeb.Bookkeeping.InvoiceSettingsLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Bookkeeping.Invoices
+  alias Abakus.Bookkeeping.Settings
   alias AbakusWeb.{Areas, NotFoundError}
 
   @impl true
@@ -68,28 +68,28 @@ defmodule AbakusWeb.Bookkeeping.InvoiceSettingsLive do
     scope = socket.assigns.current_scope
     Areas.allowed?(scope, :bookkeeping) || raise NotFoundError
 
-    settings = Invoices.get_settings(scope)
+    settings = Settings.get_settings(scope)
 
     {:ok,
      assign(socket,
        page_title: "Rechnungen",
        settings: settings,
-       form: to_form(Invoices.change_settings(settings))
+       form: to_form(Settings.change_settings(settings))
      )}
   end
 
   @impl true
   def handle_event("validate", %{"settings" => params}, socket) do
-    changeset = Invoices.change_settings(socket.assigns.settings, params)
+    changeset = Settings.change_settings(socket.assigns.settings, params)
     {:noreply, assign(socket, :form, to_form(changeset, action: :validate))}
   end
 
   def handle_event("save", %{"settings" => params}, socket) do
-    case Invoices.save_settings(socket.assigns.current_scope, params) do
+    case Settings.save_settings(socket.assigns.current_scope, params) do
       {:ok, settings} ->
         {:noreply,
          socket
-         |> assign(settings: settings, form: to_form(Invoices.change_settings(settings)))
+         |> assign(settings: settings, form: to_form(Settings.change_settings(settings)))
          |> push_saved("invoice-settings-save")}
 
       {:error, changeset} ->

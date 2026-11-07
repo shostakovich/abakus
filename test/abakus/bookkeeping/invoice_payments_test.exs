@@ -82,6 +82,19 @@ defmodule Abakus.Bookkeeping.InvoicePaymentsTest do
       assert InvoicePayments.proposals(c.scope, [c.invoice]) == %{}
     end
 
+    test "leave out a transaction that pays a disposal", c do
+      payment = incoming(c.business)
+      asset = fixed_asset_fixture(c.scope, %{"purchased_on" => "2025-03-01"})
+
+      disposal_fixture(c.scope, asset, %{
+        "amount" => "990,68",
+        "transaction_id" => payment.id
+      })
+
+      assert proposed_ids(c.scope, c.invoice) == []
+      assert InvoicePayments.confirm(c.scope, c.invoice, payment.id) == {:error, :not_found}
+    end
+
     test "are the user's own", c do
       incoming(c.business)
       other = Scope.for_user(UsersFixtures.user_fixture())
@@ -123,6 +136,14 @@ defmodule Abakus.Bookkeeping.InvoicePaymentsTest do
       assert InvoicePayments.confirm(c.scope, c.invoice, second.id) == {:error, :paid}
     end
 
+    test "refuses a payment for a voided invoice", c do
+      c.invoice |> Ecto.Changeset.change(voided: true) |> Repo.update!()
+      payment = incoming(c.business)
+
+      assert InvoicePayments.confirm(c.scope, c.invoice, payment.id) == {:error, :voided}
+      assert paid_by(c.scope, c.invoice) == nil
+    end
+
     test "takes a new payment once the confirmed one left the register", c do
       first = incoming(c.business)
       {:ok, _payment} = InvoicePayments.confirm(c.scope, c.invoice, first.id)
@@ -149,9 +170,9 @@ defmodule Abakus.Bookkeeping.InvoicePaymentsTest do
     assert paid_by(c.scope, c.invoice) == payment.id
   end
 
-  test "a transaction that pays an invoice needs no receipt in the inbox", c do
+  test "a transaction that pays an invoice needs no attachment in the inbox", c do
     payment = incoming(c.business)
-    assert [{%{id: id}, [:category, :receipt]}] = Bookkeeping.inbox(c.scope)
+    assert [{%{id: id}, [:category, :attachment]}] = Bookkeeping.inbox(c.scope)
     assert id == payment.id
 
     {:ok, _payment} = InvoicePayments.confirm(c.scope, c.invoice, payment.id)

@@ -440,7 +440,6 @@ Accepted, 2026-11-08 (#147, #156, #157).
   so the mounted ERiC has to be updated each year, and the helper follows the ERiC 44 signatures. A change to a sent
   period needs a corrected return, which Abakus does not send yet.
 
-
 ## 0036. Invoices from Lexoffice keep their original PDF and status
 
 Accepted, 2026-11-08 (#147, #158). Narrows 0034 for imported invoices.
@@ -450,8 +449,32 @@ Accepted, 2026-11-08 (#147, #158). Narrows 0034 for imported invoices.
 - **Decision:** An imported invoice keeps Lexoffice's number, dates, amounts and positions, and its original PDF goes
   to Paperless like an uploaded receipt (0033); a download serves that PDF, Typst never sets one for it. It keeps the
   day Lexoffice saw it paid, or that it was voided there, instead of a confirmed payment, and then takes none. Its
-  VAT may be the 16 % of 2020, which new invoices do not offer. Customer and invoice keep their Lexoffice ids, by
-  which a second run skips them.
+  VAT may be the 16 % of 2020, which new invoices do not offer. Only contacts with Lexoffice's customer role become
+  customers, as Abakus keeps no vendors; a vendor's name stays on its receipts (0037). Customer and invoice keep
+  their Lexoffice ids, by which a second run skips them.
 - **Consequences:** An imported invoice's PDF needs Paperless, and its positions are a record only. Its incoming
   payment is not linked to the transaction that paid it, so that transaction still asks for a receipt in the inbox
   unless its period is locked. A voided invoice keeps its number.
+
+## 0037. Receipts from Lexoffice are matched by payment, and filed periods locked as filed elsewhere
+
+Accepted, 2026-11-08 (#147, #159).
+
+- **Context:** Lexoffice holds the receipts of every year since 2018 with their categories, VAT rates, payments and
+  files, while the business account's history comes into the Ledger from its CSV export. The returns before Abakus,
+  Voranmeldungen of the current year among them, went to the tax office from Lexoffice, outside Abakus, and its
+  asset register does not come over.
+- **Decision:** Each receipt is kept as a Lexoffice receipt (`bookkeeping_lexoffice_receipts`) with its items,
+  payments and the Paperless ids of its files (0033). One with a single payment is attached to the business
+  transaction of that day and amount when that is the only one and no other waiting receipt has the same payment;
+  its files become the transaction's attachments and, when its items are of one category and VAT treatment, they
+  become its tax line. Any other waits on a review list until the owner attaches it to a proposal or dismisses it.
+  A receipt in an Anlagevermögen category is proposed as a fixed asset. The owner names the last Voranmeldung filed,
+  which may be of the current year, and the last year whose Umsatzsteuererklärung and EÜR were filed. From the first
+  year from Lexoffice on, each quarter up to the first and each year, with its quarters, up to the second is locked
+  by a filing per return marked `filed_elsewhere`, without Kennzahlen or protocol. Such a filing locks tax lines and
+  cannot be sent, but leaves the asset register open.
+- **Consequences:** Abakus does not split a transaction for a receipt of several categories or rates, so it still
+  asks for a category in the inbox, or stays without one in a locked period. A receipt paid in parts waits for review
+  and is attached to one transaction only. Assets and disposals of locked years can be recorded afterwards, so the
+  EÜR Abakus computes for them is a comparison, not what was filed.

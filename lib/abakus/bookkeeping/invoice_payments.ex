@@ -5,11 +5,13 @@ defmodule Abakus.Bookkeeping.InvoicePayments do
   register. An invoice from Lexoffice that was paid or voided there is so here too, and takes no payment.
 
   Proposed as an open invoice's payment are the business accounts' transactions of exactly its total, dated on or
-  after it, that are no transfer and pay no other invoice, the earliest first.
+  after it, that are no transfer and pay nothing else yet (`Abakus.Bookkeeping.claimed_transactions/2`), the
+  earliest first.
   """
 
   import Ecto.Query
   import Abakus.Owned
+  import Abakus.JsonList
 
   alias Abakus.{Bookkeeping, Ids, Ledger, Repo}
   alias Abakus.Bookkeeping.{Invoice, InvoicePayment, Invoices}
@@ -20,19 +22,14 @@ defmodule Abakus.Bookkeeping.InvoicePayments do
     by_transaction =
       Repo.all(
         from p in owned(InvoicePayment, scope),
-          where: fragment("? IN (SELECT value FROM json_each(?))", p.invoice_id, ^ids(invoices)),
+          where: in_json(p.invoice_id, ids(invoices)),
           select: {p.transaction_id, p.invoice_id}
       )
       |> Map.new()
 
     Repo.all(
       from t in Ledger.in_register(scope),
-        where:
-          fragment(
-            "? IN (SELECT value FROM json_each(?))",
-            t.id,
-            ^JSON.encode!(Map.keys(by_transaction))
-          ),
+        where: in_json(t.id, Map.keys(by_transaction)),
         preload: :payee
     )
     |> Map.new(&{by_transaction[&1.id], &1})
@@ -69,8 +66,7 @@ defmodule Abakus.Bookkeeping.InvoicePayments do
     from t in Bookkeeping.business_transactions(scope),
       where: t.amount > 0,
       where: is_nil(t.transfer_transaction_id) and is_nil(t.transfer_subtransaction_id),
-      where:
-        t.id not in subquery(from p in owned(InvoicePayment, scope), select: p.transaction_id)
+      where: t.id not in subquery(Bookkeeping.claimed_transactions(scope))
   end
 
   defp proposal?(transaction, %Invoice{} = invoice),
@@ -126,6 +122,4 @@ defmodule Abakus.Bookkeeping.InvoicePayments do
     Repo.delete_all(from p in owned(InvoicePayment, scope), where: p.invoice_id == ^id)
     :ok
   end
-
-  defp ids(records), do: records |> Enum.map(& &1.id) |> JSON.encode!()
 end

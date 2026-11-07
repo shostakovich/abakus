@@ -4,16 +4,18 @@ defmodule Abakus.Bookkeeping do
   a part of a split, a bookkeeping category and VAT treatment, on any of their accounts. It annotates the Ledger's
   transactions and leads none; its tables are not synced. Transfers between the user's accounts take no tax line.
 
-  The inbox lists the business accounts' transactions that still miss a category or a receipt
+  The inbox lists the business accounts' transactions that still miss a category or an attachment
   (`Abakus.Bookkeeping.Attachments`): in the register, not zero, no transfer and no opening balance, a split while one
-  of its parts does; a receipt of the whole split counts for all its parts, and a transaction marked so needs none,
-  as does an invoice's payment (`Abakus.Bookkeeping.InvoicePayments`), whose receipt is the invoice. A transaction
-  that pays a disposal (`Abakus.Bookkeeping.FixedAssets`) needs no category. A transaction in a period locked by a
-  sent return (`Abakus.Bookkeeping.Filings`) is out of the inbox, and its tax lines can no longer change.
+  of its parts does; one on another account while a side with a tax line misses an attachment. An attachment of the
+  whole split counts for all its parts, and a transaction marked so needs none, as does an invoice's payment
+  (`Abakus.Bookkeeping.InvoicePayments`), whose proof is the invoice. A transaction that pays a disposal
+  (`Abakus.Bookkeeping.FixedAssets`) needs no category. A transaction in a period locked by a sent return
+  (`Abakus.Bookkeeping.Filings`) is out of the inbox, and its tax lines can no longer change.
   """
 
   import Ecto.Query
   import Abakus.Owned
+  import Abakus.JsonList
 
   alias Abakus.Bookkeeping.{
     Attachment,
@@ -22,12 +24,13 @@ defmodule Abakus.Bookkeeping do
     Disposal,
     Filings,
     InvoicePayment,
+    LexofficeReceipt,
     ReceiptWaiver,
     TaxLine
   }
 
   alias Abakus.{Ids, Ledger, Repo}
-  alias Abakus.Ledger.{Account, Payee, Subtransaction, Transaction}
+  alias Abakus.Ledger.{Account, Subtransaction, Transaction}
   alias Abakus.Users.{Scope, User}
 
   @doc "Whether the user keeps books: they have a business account."
@@ -60,16 +63,16 @@ defmodule Abakus.Bookkeeping do
   end
 
   @doc """
-  The business transactions still missing a category or a receipt, newest first, with payees and parts, each as
-  `{transaction, missing}` with `:category`, `:receipt` or both.
+  The business transactions still missing a category or an attachment, newest first, with payees and parts, each as
+  `{transaction, missing}` with `:category`, `:attachment` or both.
   """
   def inbox(%Scope{} = scope) do
     without_category = MapSet.new(Repo.all(without_category(scope)))
-    without_receipt = MapSet.new(Repo.all(without_receipt(scope)))
-    ids = without_category |> MapSet.union(without_receipt) |> MapSet.to_list()
+    without_attachment = MapSet.new(Repo.all(without_attachment(scope)))
+    ids = without_category |> MapSet.union(without_attachment) |> MapSet.to_list()
 
     from(t in Transaction,
-      where: fragment("? IN (SELECT value FROM json_each(?))", t.id, ^JSON.encode!(ids)),
+      where: in_json(t.id, ids),
       order_by: [desc: t.date, desc: t.id],
       preload: [:payee, subtransactions: :payee]
     )
@@ -77,7 +80,7 @@ defmodule Abakus.Bookkeeping do
     |> Enum.map(fn t ->
       {t,
        for(
-         {kind, open} <- [category: without_category, receipt: without_receipt],
+         {kind, open} <- [category: without_category, attachment: without_attachment],
          t.id in open,
          do: kind
        )}
@@ -89,15 +92,36 @@ defmodule Abakus.Bookkeeping do
       where: t.id not in subquery(disposal_payments(scope))
   end
 
-  defp without_receipt(scope) do
+  defp without_attachment(scope) do
     whole = whole_attachments(scope)
+    parts = part_attachments(scope)
 
-    from t in open(scope, whole, part_attachments(scope)),
+    open(scope, whole, parts)
+    |> missing_attachment(scope, whole)
+    |> union(^missing_attachment(taxed_elsewhere(scope, whole, parts), scope, whole))
+  end
+
+  defp missing_attachment(query, scope, whole) do
+    from t in query,
       where: t.id not in subquery(whole),
       where:
         t.id not in subquery(from w in owned(ReceiptWaiver, scope), select: w.transaction_id),
       where:
         t.id not in subquery(from p in owned(InvoicePayment, scope), select: p.transaction_id)
+  end
+
+  # On another account only the sides with a tax line are business, and so need an attachment.
+  defp taxed_elsewhere(scope, whole_done, parts_done) do
+    from(t in Ledger.in_register(scope),
+      where: t.account_id not in subquery(business_accounts(scope)),
+      where:
+        (t.id not in subquery(split_ids()) and t.amount != 0 and
+           t.id in subquery(whole_lines(scope)) and t.id not in subquery(whole_done)) or
+          t.id in subquery(open_taxed_parts(scope, parts_done)),
+      select: t.id
+    )
+    |> Ledger.without_opening_balances(scope)
+    |> where(^dynamic(not (^Filings.locked_date(scope))))
   end
 
   # A transaction that is no split counts while its whole is not `done`, a split while one of its parts is not.
@@ -110,31 +134,42 @@ defmodule Abakus.Bookkeeping do
           t.id in subquery(open_parts(parts_done)),
       select: t.id
     )
-    |> outside_locked(scope)
-  end
-
-  defp outside_locked(query, scope) do
-    Enum.reduce(Filings.locked_spans(scope), query, fn {first, last}, query ->
-      where(query, [t], t.date < ^first or t.date > ^last)
-    end)
+    |> where(^dynamic(not (^Filings.locked_date(scope))))
   end
 
   @doc "The business accounts' transactions in the register, without their opening balance."
   def business_transactions(%Scope{} = scope) do
-    from t in Ledger.in_register(scope),
-      where: t.account_id in subquery(business_accounts(scope)),
-      where: is_nil(t.payee_id) or t.payee_id not in subquery(opening_payees(scope))
+    from(t in Ledger.in_register(scope),
+      where: t.account_id in subquery(business_accounts(scope))
+    )
+    |> Ledger.without_opening_balances(scope)
+  end
+
+  @doc """
+  The ids of the transactions that already pay something, so that they pay nothing else: an invoice, a disposal
+  other than the one with the id `except_disposal`, or a Lexoffice receipt.
+  """
+  def claimed_transactions(%Scope{} = scope, except_disposal \\ nil) do
+    disposals =
+      from d in owned(Disposal, scope),
+        where: not is_nil(d.transaction_id),
+        select: d.transaction_id
+
+    disposals =
+      if except_disposal, do: where(disposals, [d], d.id != ^except_disposal), else: disposals
+
+    receipts =
+      from r in owned(LexofficeReceipt, scope),
+        where: not is_nil(r.transaction_id),
+        select: r.transaction_id
+
+    from(p in owned(InvoicePayment, scope), select: p.transaction_id)
+    |> union_all(^disposals)
+    |> union_all(^receipts)
   end
 
   defp business_accounts(scope),
     do: from(b in owned(BusinessAccount, scope), select: b.account_id)
-
-  defp opening_payees(scope),
-    do:
-      from(p in owned(Payee, scope),
-        where: p.hidden and p.name == ^Ledger.opening_payee(),
-        select: p.id
-      )
 
   defp parts, do: from(s in Subtransaction, where: is_nil(s.deleted_at))
 
@@ -168,6 +203,12 @@ defmodule Abakus.Bookkeeping do
         select: a.subtransaction_id
       )
 
+  defp open_taxed_parts(scope, done) do
+    from s in parts(),
+      where: s.amount != 0 and s.id in subquery(part_lines(scope)) and s.id not in subquery(done),
+      select: s.transaction_id
+  end
+
   defp open_parts(done) do
     from s in parts(),
       where: s.amount != 0 and is_nil(s.transfer_transaction_id) and s.id not in subquery(done),
@@ -192,13 +233,11 @@ defmodule Abakus.Bookkeeping do
   subtransactions.
   """
   def tax_lines(%Scope{} = scope, transactions) do
-    ids = Enum.map(transactions, & &1.id)
     counting = MapSet.new(for t <- transactions, side <- sides(t), do: {t.id, side})
 
     Repo.all(
       from l in owned(TaxLine, scope),
-        where:
-          fragment("? IN (SELECT value FROM json_each(?))", l.transaction_id, ^JSON.encode!(ids))
+        where: in_json(l.transaction_id, ids(transactions))
     )
     |> Map.new(&{{&1.transaction_id, &1.subtransaction_id}, &1})
     |> Map.filter(fn {key, _line} -> key in counting end)
@@ -247,6 +286,13 @@ defmodule Abakus.Bookkeeping do
         select: d.transaction_id
       )
 
+  @doc "The disposal the transaction pays, with its asset; nil if it pays none."
+  def paid_disposal(%Scope{} = scope, %Transaction{id: id}),
+    do:
+      Repo.one(
+        from d in owned(Disposal, scope), where: d.transaction_id == ^id, preload: :fixed_asset
+      )
+
   @doc "The user's transaction with what `sides/1` needs, nil if there is none in the register."
   def get_transaction(%Scope{} = scope, id) do
     case Ledger.get_transaction(scope, id) do
@@ -260,7 +306,7 @@ defmodule Abakus.Bookkeeping do
   part's id) with `"category"` and `"vat"`; a side without category loses its line, and sides not in `params` keep
   theirs. `{:error, changesets}` maps each invalid side to its changeset, and nothing is saved; `{:error,
   :not_found}` when the transaction is no longer in the user's register, `{:error, :locked}` when it would change a
-  tax line of a locked period.
+  tax line of a locked period, `{:error, :pays_disposal}` when it would set one on a disposal's payment.
   """
   def save_tax_lines(%Scope{} = scope, %Transaction{id: id}, params) do
     case get_transaction(scope, id) do
@@ -283,6 +329,9 @@ defmodule Abakus.Bookkeeping do
       Enum.any?(changes, &changes?/1) and Filings.locked?(scope, transaction.date) ->
         {:error, :locked}
 
+      Enum.any?(changes, &sets_line?/1) and paid_disposal(scope, transaction) != nil ->
+        {:error, :pays_disposal}
+
       invalid != %{} ->
         {:error, invalid}
 
@@ -290,6 +339,9 @@ defmodule Abakus.Bookkeeping do
         apply_changes(changes)
     end
   end
+
+  defp sets_line?({_side, %Ecto.Changeset{}} = change), do: changes?(change)
+  defp sets_line?(_change), do: false
 
   defp changes?({_side, nil}), do: false
   defp changes?({_side, {:delete, _line}}), do: true

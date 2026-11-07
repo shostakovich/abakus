@@ -67,7 +67,7 @@ defmodule AbakusWeb.Bookkeeping.IncomeStatementLiveTest do
     assert text(view, "#euer-send-test") =~ "ELSTER nimmt die EÜR an"
 
     view |> form("#euer-send-form", %{"pin" => "4711"}) |> render_submit()
-    render_async(view)
+    FakeElster.await_sends(view.pid)
 
     assert flash(view, :info) == "EÜR an ELSTER gesendet."
     refute has_element?(view, "#euer-send")
@@ -95,7 +95,7 @@ defmodule AbakusWeb.Bookkeeping.IncomeStatementLiveTest do
 
   test "says what the settings still lack for the EÜR", c do
     elster_fixture(c.scope)
-    {:ok, _settings} = Bookkeeping.Invoices.save_settings(c.scope, %{"business_activity" => ""})
+    {:ok, _settings} = Bookkeeping.Settings.save_settings(c.scope, %{"business_activity" => ""})
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/euer")
 
     view |> element("#euer-send") |> render_click()

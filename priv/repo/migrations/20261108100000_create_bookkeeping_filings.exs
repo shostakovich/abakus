@@ -22,6 +22,7 @@ defmodule Abakus.Repo.Migrations.CreateBookkeepingFilings do
       add :transfer_ticket, :string
       add :protocol, :binary
       add :sent_at, :utc_datetime_usec, null: false
+      add :pending, :boolean, null: false, default: false
 
       timestamps()
     end

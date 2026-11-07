@@ -1,0 +1,16 @@
+{
+  "openAmount": 0.0,
+  "paymentStatus": "balanced",
+  "currency": "EUR",
+  "voucherType": "purchasecreditnote",
+  "paidDate": "2026-01-12T00:00:00.000+01:00",
+  "paymentItems": [
+    {
+      "paymentItemType": "partPaymentFinancialTransaction",
+      "postingDate": "2026-01-12T00:00:00.000+01:00",
+      "amount": 32.73,
+      "currency": "EUR"
+    }
+  ],
+  "voucherStatus": "paidoff"
+}

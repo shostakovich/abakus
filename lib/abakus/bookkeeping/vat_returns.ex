@@ -5,7 +5,7 @@ defmodule Abakus.Bookkeeping.VatReturns do
   """
 
   alias Abakus.Bookkeeping
-  alias Abakus.Bookkeeping.{FixedAssets, VatReturn}
+  alias Abakus.Bookkeeping.{Filings, FixedAssets, VatReturn}
   alias Abakus.Users.Scope
 
   @doc "The Voranmeldung of `quarter` (1 to 4) of `year`."
@@ -14,9 +14,21 @@ defmodule Abakus.Bookkeeping.VatReturns do
     VatReturn.quarter(year, quarter, entries(scope, first, last))
   end
 
-  @doc "The Umsatzsteuererklärung of `year`."
-  def year(%Scope{} = scope, year),
-    do: VatReturn.year(year, entries(scope, Date.new!(year, 1, 1), Date.new!(year, 12, 31)))
+  @doc "The Umsatzsteuererklärung of `year`, with the dues of the quarters sent from Abakus as they were sent."
+  def year(%Scope{} = scope, year) do
+    sent_dues =
+      for quarter <- 1..4,
+          filing = Filings.sent(scope, {:vat_quarter, year, quarter}),
+          filing && not filing.filed_elsewhere,
+          into: %{},
+          do: {quarter, filing.kennzahlen["83"]}
+
+    VatReturn.year(
+      year,
+      entries(scope, Date.new!(year, 1, 1), Date.new!(year, 12, 31)),
+      sent_dues
+    )
+  end
 
   defp entries(scope, first, last),
     do:

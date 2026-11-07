@@ -8,7 +8,8 @@ defmodule Abakus.Bookkeeping.VatReturn do
 
   A line's base is whole euros, rounded down in the owner's favour, its tax cents; where the form takes only the base
   (19 % and 7 %), the tax is the base at that rate. `due` is the VAT the period comes to (negative: a surplus); the
-  annual return also has the quarters' dues as `prepaid` and the `balance` left after them.
+  annual return also has the quarters' dues as `prepaid`, as sent for a quarter whose Voranmeldung was sent, and the
+  `balance` left after them.
   """
 
   alias Abakus.Bookkeeping.{Category, Vat}
@@ -76,15 +77,20 @@ defmodule Abakus.Bookkeeping.VatReturn do
     }
   end
 
-  @doc "The Umsatzsteuererklärung of `year` from the entries of the whole year."
-  def year(year, entries) do
+  @doc """
+  The Umsatzsteuererklärung of `year` from the entries of the whole year and the dues sent for its quarters, by
+  quarter.
+  """
+  def year(year, entries, sent_dues) do
     lines = lines(:year, entries)
     due = due(lines)
 
     prepaid =
       Enum.sum_by(1..4, fn quarter ->
-        {first, last} = quarter_span(year, quarter)
-        quarter(year, quarter, Enum.filter(entries, &(&1.date in Date.range(first, last)))).due
+        Map.get_lazy(sent_dues, quarter, fn ->
+          {first, last} = quarter_span(year, quarter)
+          quarter(year, quarter, Enum.filter(entries, &(&1.date in Date.range(first, last)))).due
+        end)
       end)
 
     %__MODULE__{

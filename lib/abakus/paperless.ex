@@ -14,6 +14,12 @@ defmodule Abakus.Paperless do
   def get_connection(%Scope{user: user}),
     do: Repo.get_by(Connection, user_id: user.id) || %Connection{user_id: user.id}
 
+  @doc "The user's connection when it can reach Paperless, else `{:error, :not_connected}`."
+  def connection(%Scope{} = scope) do
+    connection = get_connection(scope)
+    if connected?(connection), do: {:ok, connection}, else: {:error, :not_connected}
+  end
+
   @doc "Whether the connection has a URL and token to reach Paperless with."
   def connected?(%Connection{url: url, token: token}), do: url != nil and token != nil
 

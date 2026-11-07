@@ -1,6 +1,6 @@
 defmodule AbakusWeb.Bookkeeping.PaperlessController do
   @moduledoc """
-  Shows a document of the signed-in user's Paperless in the browser, such as a receipt: only a PDF or an image, its
+  Shows a document of the signed-in user's Paperless in the browser, such as an attachment: only a PDF or an image, its
   type told by its first bytes. A document Paperless does not have is 404, Paperless failing or sending anything
   else 502.
   """

@@ -1,0 +1,22 @@
+{
+  "openAmount": 0.0,
+  "paymentStatus": "balanced",
+  "currency": "EUR",
+  "voucherType": "purchaseinvoice",
+  "paidDate": "2025-12-24T00:00:00.000+01:00",
+  "paymentItems": [
+    {
+      "paymentItemType": "partPaymentFinancialTransaction",
+      "postingDate": "2025-12-24T00:00:00.000+01:00",
+      "amount": 4.49,
+      "currency": "EUR"
+    },
+    {
+      "paymentItemType": "currencyConversion",
+      "postingDate": "2025-12-24T00:00:00.000+01:00",
+      "amount": 0.02,
+      "currency": "EUR"
+    }
+  ],
+  "voucherStatus": "paid"
+}

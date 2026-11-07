@@ -1,8 +1,8 @@
 defmodule AbakusWeb.Bookkeeping.InboxLive do
   @moduledoc """
-  The Buchhaltung's Posteingang: the business transactions still missing a category or a receipt
+  The Buchhaltung's Posteingang: the business transactions still missing a category or an attachment
   (`Abakus.Bookkeeping.inbox/1`), newest first, each saying what it misses. A row opens `TaxLineDialog` with the
-  receipt beside it; once saved, the dialog moves on to the next transaction still open.
+  attachments beside it; once saved, the dialog moves on to the next transaction still open.
   """
   use AbakusWeb, :live_view
 
@@ -70,9 +70,9 @@ defmodule AbakusWeb.Bookkeeping.InboxLive do
   defp count_text(1), do: "1 geschäftliche Buchung ohne Kategorie oder Beleg."
   defp count_text(count), do: "#{count} geschäftliche Buchungen ohne Kategorie oder Beleg."
 
-  defp missing_text([:category, :receipt]), do: "Kategorie und Beleg fehlen"
+  defp missing_text([:category, :attachment]), do: "Kategorie und Beleg fehlen"
   defp missing_text([:category]), do: "Kategorie fehlt"
-  defp missing_text([:receipt]), do: "Beleg fehlt"
+  defp missing_text([:attachment]), do: "Beleg fehlt"
 
   defp title(%{payee: %{name: name}}), do: name
   defp title(_transaction), do: "Ohne Empfänger"

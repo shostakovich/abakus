@@ -2,6 +2,7 @@ defmodule Abakus.BookkeepingTest do
   use Abakus.DataCase
 
   import Abakus.DomainFixtures
+  import Abakus.BookkeepingFixtures
 
   alias Abakus.{Bookkeeping, Categories, Ledger, UsersFixtures}
   alias Abakus.Bookkeeping.TaxLine
@@ -79,7 +80,7 @@ defmodule Abakus.BookkeepingTest do
 
       assert Enum.find_value(Bookkeeping.inbox(c.scope), fn {t, missing} ->
                t.id == categorised.id && missing
-             end) == [:receipt]
+             end) == [:attachment]
     end
 
     test "leaves out transfers, deleted transactions, match proposals and the opening balance",
@@ -228,6 +229,43 @@ defmodule Abakus.BookkeepingTest do
                Bookkeeping.save_tax_lines(c.scope, transfer, %{
                  "transaction" => %{"category" => "private", "vat" => "0"}
                })
+    end
+
+    test "puts a line saved meanwhile on the category", c do
+      expense = transaction(c.business)
+      split = split(c.business, [-1_000, -500])
+      [part, _other] = split.subtransactions
+
+      for {transaction_id, part_id} <- [{expense.id, nil}, {split.id, part.id}] do
+        line = %TaxLine{
+          user_id: c.scope.user.id,
+          transaction_id: transaction_id,
+          subtransaction_id: part_id
+        }
+
+        attrs = %{"category" => "internet", "vat" => "19"}
+        {:ok, _line} = Repo.insert(TaxLine.changeset(line, attrs))
+        assert {:error, changeset} = Repo.insert(TaxLine.changeset(line, attrs))
+
+        assert errors_on(changeset) == %{
+                 category: ["wurde inzwischen anderswo gesetzt, bitte neu öffnen"]
+               }
+      end
+    end
+
+    test "sets no line on a disposal's payment", c do
+      payment = transaction(c.business, date: ~D[2027-01-20], amount: 23_800)
+      asset = fixed_asset_fixture(c.scope, %{"purchased_on" => "2025-03-01"})
+      disposal_fixture(c.scope, asset, %{"transaction_id" => payment.id})
+      payment = Bookkeeping.get_transaction(c.scope, payment.id)
+
+      assert Bookkeeping.paid_disposal(c.scope, payment).fixed_asset.id == asset.id
+
+      assert Bookkeeping.save_tax_lines(c.scope, payment, %{
+               "transaction" => %{"category" => "revenue", "vat" => "19"}
+             }) == {:error, :pays_disposal}
+
+      assert Repo.aggregate(TaxLine, :count) == 0
     end
 
     test "finds no transaction of another user", c do

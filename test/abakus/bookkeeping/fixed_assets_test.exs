@@ -4,8 +4,9 @@ defmodule Abakus.Bookkeeping.FixedAssetsTest do
   import Abakus.BookkeepingFixtures
   import Abakus.DomainFixtures
 
-  alias Abakus.Bookkeeping
-  alias Abakus.Bookkeeping.{Disposal, FixedAssets}
+  alias Abakus.{Bookkeeping, UsersFixtures}
+  alias Abakus.Bookkeeping.{Disposal, FixedAssets, LexofficeReceipt}
+  alias Abakus.Users.Scope
 
   setup do
     scope = budget_scope()
@@ -90,6 +91,24 @@ defmodule Abakus.Bookkeeping.FixedAssetsTest do
     assert errors_on(changeset) == %{transaction_id: ["passt nicht zum Verkauf"]}
   end
 
+  test "proposes no transaction a Lexoffice receipt is attached to", c do
+    payment = transaction_fixture(account_id: c.kontist.id, date: ~D[2027-01-20], amount: 23_800)
+
+    Repo.insert!(%LexofficeReceipt{
+      user_id: c.scope.user.id,
+      lexoffice_id: "r1",
+      date: ~D[2027-01-20],
+      total: 23_800,
+      paperless_ids: [],
+      items: [%LexofficeReceipt.Item{amount: 23_800, net: 20_000}],
+      payments: [%LexofficeReceipt.Payment{date: ~D[2027-01-20], amount: 23_800}],
+      transaction_id: payment.id
+    })
+
+    sale = %Disposal{kind: :sale, date: ~D[2027-01-20], amount: 23_800, vat: :rate_19}
+    assert FixedAssets.payment_proposals(c.scope, sale) == []
+  end
+
   test "a withdrawal has no payment, and a disposal can be taken back", c do
     asset = fixed_asset_fixture(c.scope, %{"purchased_on" => "2025-03-01"})
     payment = transaction_fixture(account_id: c.kontist.id, date: ~D[2027-01-20], amount: 23_800)
@@ -111,5 +130,28 @@ defmodule Abakus.Bookkeeping.FixedAssetsTest do
     assert {:ok, _asset} = FixedAssets.delete(scope, asset)
     assert FixedAssets.list(scope) == []
     assert Repo.all(Disposal) == []
+  end
+
+  test "refuses to change, dispose of or delete another user's asset", %{scope: scope} do
+    asset =
+      scope
+      |> fixed_asset_fixture(%{"purchased_on" => "2025-03-01"})
+      |> then(&disposal_fixture(scope, &1))
+
+    other = Scope.for_user(UsersFixtures.user_fixture())
+
+    assert FixedAssets.get(other, asset.id) == nil
+
+    for change <- [
+          &FixedAssets.update(&1, asset, %{"name" => "Fremd"}),
+          &FixedAssets.record_disposal(&1, asset, %{"amount" => "1"}),
+          &FixedAssets.remove_disposal(&1, asset),
+          &FixedAssets.delete(&1, asset)
+        ] do
+      assert_raise Ecto.NoResultsError, fn -> change.(other) end
+    end
+
+    assert %{name: "Notebook", disposal: %Disposal{amount: 23_800}} =
+             FixedAssets.get(scope, asset.id)
   end
 end

@@ -16,9 +16,9 @@ defmodule Abakus.Bookkeeping.Invoice do
 
   import Ecto.Changeset
 
-  alias Abakus.Bookkeeping.{Customer, Party, Position}
+  alias Abakus.Bookkeeping.{Customer, Party, Position, Vat}
 
-  @rates [rate_19: 19, rate_16: 16, rate_7: 7, reverse_charge: 0]
+  @treatments [:rate_19, :rate_16, :rate_7, :reverse_charge]
 
   schema "bookkeeping_invoices" do
     field :number, :string
@@ -28,8 +28,7 @@ defmodule Abakus.Bookkeeping.Invoice do
     field :service_to, :date
     field :due_date, :date
 
-    field :vat, Ecto.Enum,
-      values: [rate_19: "19", rate_16: "16", rate_7: "7", reverse_charge: "reverse_charge"]
+    field :vat, Ecto.Enum, values: Keyword.take(Vat.stored(), @treatments)
 
     field :net, :integer
     field :vat_amount, :integer
@@ -52,8 +51,12 @@ defmodule Abakus.Bookkeeping.Invoice do
   @doc "The VAT treatments a new invoice offers."
   def treatments, do: [:rate_19, :rate_7, :reverse_charge]
 
+  @doc "The VAT treatments an invoice may have, with the 16 % only one from Lexoffice carries."
+  def all_treatments, do: @treatments
+
   @doc "The rate of a treatment in percent."
-  def rate(treatment), do: Keyword.fetch!(@rates, treatment)
+  def rate(:reverse_charge), do: 0
+  def rate(treatment), do: Vat.rate(treatment)
 
   @doc "What the owner fills in: the customer, the dates, the VAT and the positions; it adds up the amounts."
   def changeset(invoice, attrs) do

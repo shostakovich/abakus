@@ -1,8 +1,8 @@
-defmodule AbakusWeb.Bookkeeping.ReceiptPane do
+defmodule AbakusWeb.Bookkeeping.AttachmentPane do
   @moduledoc """
-  The receipts beside a transaction in the dialog „Buchhaltung“: those attached, the documents Paperless proposes
-  (`Abakus.Bookkeeping.Attachments.proposals/2`), an upload to Paperless, and the receipt shown with its text and
-  its PDF. For a split, „Für“ chooses whether a receipt is the whole transaction's or one part's. Paperless is read
+  The attachments beside a transaction in the dialog „Buchhaltung“: those attached, the documents Paperless proposes
+  (`Abakus.Bookkeeping.Attachments.proposals/2`), an upload to Paperless, and the document shown with its text and
+  its PDF. For a split, „Für“ chooses whether an attachment is the whole transaction's or one part's. Paperless is read
   in the background, so the dialog opens at once; without a Paperless connection the pane points to the settings.
   """
   use AbakusWeb, :live_component
@@ -21,7 +21,7 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
     ~H"""
     <section id={@id} class="flex min-w-0 flex-col gap-4" aria-labelledby={"#{@id}-heading"}>
       <h3 id={"#{@id}-heading"} class="text-sm font-medium">Belege</h3>
-      <.alert :if={!@connected} id="receipts-not-connected" tone={:neutral}>
+      <.alert :if={!@connected} id="attachments-not-connected" tone={:neutral}>
         Belege liegen in Paperless. Verbinde es unter <.link
           navigate={~p"/settings/paperless"}
           class="link"
@@ -29,12 +29,12 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
       </.alert>
       <form
         :if={@connected and length(@sides) > 1}
-        id="receipts-side-form"
+        id="attachments-side-form"
         phx-change="side"
         phx-target={@myself}
       >
         <.input
-          id="receipts-side"
+          id="attachments-side"
           type="select"
           name="side"
           value={@side}
@@ -42,10 +42,10 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
           label="Für"
         />
       </form>
-      <.list :if={@attachments != []} id="receipts-attached" size={:compact}>
+      <.list :if={@attachments != []} id="attachments-attached" size={:compact}>
         <.list_row
           :for={attachment <- @attachments}
-          id={"receipt-#{attachment.id}"}
+          id={"attachment-#{attachment.id}"}
           title={attachment.title}
           on_click={JS.push("show", value: %{id: attachment.paperless_id}, target: @myself)}
           selected={@shown == attachment.paperless_id}
@@ -53,22 +53,22 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
           <:leading><.icon name="paperclip" class="size-4 text-base-content/70" /></:leading>
           <:meta :if={attachment.subtransaction_id}>{side_label(@sides, attachment)}</:meta>
           <:action
-            id={"receipt-#{attachment.id}-detach"}
+            id={"attachment-#{attachment.id}-detach"}
             label="Lösen"
             icon="unlink"
             on_click={JS.push("detach", value: %{id: attachment.id}, target: @myself)}
           />
         </.list_row>
       </.list>
-      <div :if={@connected} id="receipts-proposals" class="flex flex-col gap-1">
+      <div :if={@connected} id="attachments-proposals" class="flex flex-col gap-1">
         <h4 class="text-sm text-base-content/70">Vorschläge aus Paperless</h4>
-        <p :if={@proposals == nil} id="receipts-searching" class="text-sm text-base-content/70">
+        <p :if={@proposals == nil} id="attachments-searching" class="text-sm text-base-content/70">
           Paperless wird durchsucht …
         </p>
-        <p :if={@proposals == []} id="receipts-no-proposals" class="text-sm text-base-content/70">
+        <p :if={@proposals == []} id="attachments-no-proposals" class="text-sm text-base-content/70">
           Kein Dokument mit diesem Betrag aus der Zeit der Buchung.
         </p>
-        <.list :if={@proposals not in [nil, []]} id="receipts-proposed" size={:compact}>
+        <.list :if={@proposals not in [nil, []]} id="attachments-proposed" size={:compact}>
           <.list_row
             :for={document <- @proposals}
             id={"proposal-#{document.id}"}
@@ -88,7 +88,7 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
       </div>
       <form
         :if={@connected}
-        id="receipts-upload"
+        id="attachments-upload"
         phx-change="validate"
         phx-submit="validate"
         phx-target={@myself}
@@ -101,10 +101,10 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
           <.icon name="upload" /> {if @uploading,
             do: "Wird an Paperless übergeben …",
             else: "Hochladen"}
-          <.live_file_input upload={@uploads.receipt} class="sr-only" disabled={@uploading} />
+          <.live_file_input upload={@uploads.attachment} class="sr-only" disabled={@uploading} />
         </label>
       </form>
-      <.alert :if={errors(@error, @uploads) != []} id="receipts-error" tone={:error}>
+      <.alert :if={errors(@error, @uploads) != []} id="attachments-error" tone={:error}>
         <p :for={message <- errors(@error, @uploads)}>{message}</p>
       </.alert>
       <.shown :if={@shown} id={@shown} document={@shown_document} />
@@ -117,11 +117,11 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
 
   defp shown(assigns) do
     ~H"""
-    <div id="receipt-shown" class="flex min-w-0 flex-col gap-2">
+    <div id="attachment-shown" class="flex min-w-0 flex-col gap-2">
       <div class="flex min-h-8 items-center justify-between gap-2">
         <h4 class="min-w-0 truncate text-sm text-base-content/70">{title(@document)}</h4>
         <.button
-          id="receipt-pdf"
+          id="attachment-pdf"
           href={~p"/buchhaltung/paperless/#{@id}"}
           target="_blank"
           rel="noopener"
@@ -137,13 +137,13 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
         class="max-h-96 overflow-y-auto rounded-box border border-base-content/10 bg-base-100 p-4"
       >
         <pre
-          id="receipt-text"
+          id="attachment-text"
           class="app-receipt-lines"
           tabindex="0"
           aria-label="Text des Belegs"
         >{text(@document)}</pre>
       </div>
-      <p :if={!text(@document)} id="receipt-text" class="text-sm text-base-content/70">
+      <p :if={!text(@document)} id="attachment-text" class="text-sm text-base-content/70">
         Paperless hat zu diesem Dokument keinen Text.
       </p>
     </div>
@@ -178,8 +178,8 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
   defp errors(error, uploads) do
     upload_errors =
       Enum.map(
-        upload_errors(uploads.receipt) ++
-          Enum.flat_map(uploads.receipt.entries, &upload_errors(uploads.receipt, &1)),
+        upload_errors(uploads.attachment) ++
+          Enum.flat_map(uploads.attachment.entries, &upload_errors(uploads.attachment, &1)),
         &upload_error/1
       )
 
@@ -195,7 +195,7 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
     {:ok,
      socket
      |> assign(transaction: nil, uploading: false)
-     |> allow_upload(:receipt,
+     |> allow_upload(:attachment,
        accept: @accept,
        max_entries: 1,
        max_file_size: @max_file_size,
@@ -346,7 +346,7 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
 
   def handle_event("validate", _params, socket), do: {:noreply, socket}
 
-  defp uploaded(:receipt, %{done?: true} = entry, socket) do
+  defp uploaded(:attachment, %{done?: true} = entry, socket) do
     %{current_scope: scope, transaction: transaction} = socket.assigns
     side = side(socket)
 
@@ -369,7 +369,7 @@ defmodule AbakusWeb.Bookkeeping.ReceiptPane do
     {:noreply, socket}
   end
 
-  defp uploaded(:receipt, _entry, socket), do: {:noreply, socket}
+  defp uploaded(:attachment, _entry, socket), do: {:noreply, socket}
 
   defp attached(socket, attachment) do
     %{current_scope: scope, transaction: transaction} = socket.assigns

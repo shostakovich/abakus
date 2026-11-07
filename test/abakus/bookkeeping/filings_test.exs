@@ -8,12 +8,13 @@ defmodule Abakus.Bookkeeping.FilingsTest do
   alias Abakus.{Bookkeeping, Ledger, UsersFixtures}
 
   alias Abakus.Bookkeeping.{
+    Disposal,
     FakeElster,
     Filing,
     Filings,
     FixedAssets,
     IncomeStatements,
-    Invoices,
+    Settings,
     VatReturns
   }
 
@@ -110,9 +111,81 @@ defmodule Abakus.Bookkeeping.FilingsTest do
       assert length(FakeElster.submissions()) == 1
     end
 
+    test "refuses a second send of the quarter while the first one is with ELSTER", c do
+      FakeElster.serve(hold: self())
+      first = Task.async(fn -> Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711") end)
+      assert_receive {FakeElster, :holding, sender}
+
+      assert Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711") ==
+               {:error, "Die Voranmeldung 1. Quartal 2027 wird gerade gesendet."}
+
+      assert Filings.sent(c.scope, {:vat_quarter, 2027, 1}) == nil
+      refute Filings.locked?(c.scope, ~D[2027-02-10])
+
+      FakeElster.release(sender)
+      assert {:ok, %Filing{transfer_ticket: "et-1", pending: false}} = Task.await(first)
+      assert length(FakeElster.submissions()) == 1
+      assert Filings.locked?(c.scope, ~D[2027-02-10])
+    end
+
+    test "frees the quarter when sending fails or crashes", c do
+      FakeElster.serve(crash: true)
+
+      assert_raise RuntimeError, "ELSTER crashed", fn ->
+        Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711")
+      end
+
+      assert Repo.all(Filing) == []
+      stop_supervised!(FakeElster)
+      FakeElster.serve()
+      assert {:ok, _filing} = Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711")
+    end
+
+    test "logs the transfer ticket and keeps the quarter reserved when ELSTER took it but it was not stored",
+         c do
+      FakeElster.serve()
+
+      Repo.query!("""
+      CREATE TEMP TRIGGER refuse_filings BEFORE UPDATE ON bookkeeping_filings
+      BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END
+      """)
+
+      log =
+        capture_log(fn ->
+          assert Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711") ==
+                   {:error,
+                    "ELSTER hat die Voranmeldung 1. Quartal 2027 angenommen (Transferticket et-1), " <>
+                      "Abakus konnte sie aber nicht speichern."}
+        end)
+
+      Repo.query!("DROP TRIGGER refuse_filings")
+      assert log =~ "transfer ticket et-1"
+      assert log =~ "disk I/O error"
+      refute log =~ "4711"
+
+      assert Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711") ==
+               {:error, "Die Voranmeldung 1. Quartal 2027 wird gerade gesendet."}
+
+      assert length(FakeElster.submissions()) == 1
+    end
+
+    test "a restart frees the quarter of an interrupted send and keeps the sent ones", c do
+      sent!(c)
+      stop_supervised!(FakeElster)
+      FakeElster.serve(hold: self())
+      Task.start(fn -> Filings.send_return(c.scope, {:vat_quarter, 2026, 4}, "4711") end)
+      assert_receive {FakeElster, :holding, sender}
+      Process.exit(sender, :kill)
+
+      log = capture_log(fn -> assert Filings.release_interrupted() == :ok end)
+
+      assert log =~ "Voranmeldung 4. Quartal 2026"
+      assert [%Filing{first: ~D[2027-01-01], pending: false}] = Repo.all(Filing)
+    end
+
     test "sends nothing without what ELSTER needs or without a PIN", c do
       FakeElster.serve()
-      {:ok, _settings} = Filings.remove_certificate(c.scope)
+      {:ok, _settings} = Settings.remove_certificate(c.scope)
 
       assert Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711") ==
                {:error, "Es fehlt: ELSTER-Zertifikat."}
@@ -126,7 +199,7 @@ defmodule Abakus.Bookkeeping.FilingsTest do
       Application.put_env(:abakus, Abakus.Bookkeeping.Elster, Keyword.delete(config, :vendor_id))
       on_exit(fn -> Application.put_env(:abakus, Abakus.Bookkeeping.Elster, config) end)
 
-      assert Filings.missing(c.scope) == ["ELSTER auf dem Server"]
+      assert Filings.missing(c.scope, :vat) == ["ELSTER auf dem Server"]
       assert FakeElster.submissions() == []
     end
   end
@@ -198,7 +271,7 @@ defmodule Abakus.Bookkeeping.FilingsTest do
 
     test "sends no EÜR without the kind of business", c do
       FakeElster.serve()
-      {:ok, _settings} = Invoices.save_settings(c.scope, %{"business_activity" => ""})
+      {:ok, _settings} = Settings.save_settings(c.scope, %{"business_activity" => ""})
 
       assert Filings.missing_for(c.scope, {:euer, 2026}) == ["Art des Betriebs"]
       assert Filings.missing_for(c.scope, {:vat_year, 2026}) == []
@@ -240,6 +313,16 @@ defmodule Abakus.Bookkeeping.FilingsTest do
       assert errors_on(changeset).purchased_on == ["Zeitraum ist festgeschrieben"]
       assert FixedAssets.delete(c.scope, c.kept) == {:error, :locked}
 
+      assert {:error, changeset} =
+               FixedAssets.record_disposal(c.scope, c.kept, %{
+                 "kind" => "withdrawal",
+                 "date" => "2026-12-01",
+                 "amount" => "1.000",
+                 "vat" => "19"
+               })
+
+      assert errors_on(changeset).date == ["Zeitraum ist festgeschrieben"]
+
       assert {:ok, renamed} = FixedAssets.update(c.scope, c.kept, %{"name" => "Laptop"})
       assert renamed.name == "Laptop"
 
@@ -270,7 +353,7 @@ defmodule Abakus.Bookkeeping.FilingsTest do
   test "names what sending lacks in the settings", c do
     other = Scope.for_user(UsersFixtures.user_fixture())
 
-    assert Filings.missing(other) ==
+    assert Filings.missing(other, :vat) ==
              ["Name", "Straße", "PLZ", "Ort", "Steuernummer", "Bundesland", "ELSTER-Zertifikat"]
 
     assert Filings.missing(other, :euer) ==
@@ -285,7 +368,7 @@ defmodule Abakus.Bookkeeping.FilingsTest do
                "Art des Betriebs"
              ]
 
-    assert Filings.missing(c.scope) == []
+    assert Filings.missing(c.scope, :vat) == []
   end
 
   describe "a sent quarter" do
@@ -347,6 +430,58 @@ defmodule Abakus.Bookkeeping.FilingsTest do
 
       assert {:ok, _asset} = FixedAssets.record_disposal(c.scope, disposed, %{"amount" => "238"})
     end
+
+    test "keeps the payments dated in it linked or unlinked as they are", c do
+      march = transaction_fixture(account_id: c.kontist.id, date: ~D[2027-03-25], amount: 23_800)
+      also = transaction_fixture(account_id: c.kontist.id, date: ~D[2027-03-28], amount: 23_800)
+      april = transaction_fixture(account_id: c.kontist.id, date: ~D[2027-04-10], amount: 23_800)
+      asset = fixed_asset_fixture(c.scope, %{"purchased_on" => "2025-03-01"})
+
+      linked =
+        disposal_fixture(c.scope, asset, %{"date" => "2027-04-05", "transaction_id" => march.id})
+
+      other = fixed_asset_fixture(c.scope, %{"purchased_on" => "2025-03-01"})
+      sent!(c)
+
+      sale = %Disposal{kind: :sale, date: ~D[2027-04-05], amount: 23_800, vat: :rate_19}
+      assert Enum.map(FixedAssets.payment_proposals(c.scope, sale), & &1.id) == [april.id]
+
+      assert Enum.map(FixedAssets.payment_proposals(c.scope, linked.disposal), & &1.id) ==
+               [march.id, april.id]
+
+      for attrs <- [
+            %{"transaction_id" => april.id},
+            %{"transaction_id" => ""},
+            %{"kind" => "withdrawal"}
+          ] do
+        assert {:error, changeset} = FixedAssets.record_disposal(c.scope, linked, attrs)
+        assert errors_on(changeset).transaction_id == ["Zeitraum ist festgeschrieben"]
+      end
+
+      assert FixedAssets.remove_disposal(c.scope, linked) == {:error, :locked}
+      assert FixedAssets.delete(c.scope, linked) == {:error, :locked}
+      assert {:ok, _asset} = FixedAssets.record_disposal(c.scope, linked, %{"vat" => "7"})
+
+      assert {:error, changeset} =
+               FixedAssets.record_disposal(c.scope, other, %{
+                 "kind" => "sale",
+                 "date" => "2027-04-05",
+                 "amount" => "238",
+                 "vat" => "19",
+                 "transaction_id" => also.id
+               })
+
+      assert errors_on(changeset).transaction_id == ["Zeitraum ist festgeschrieben"]
+    end
+  end
+
+  test "the annual return takes the dues of the quarters sent from Abakus as they were sent", c do
+    first = booked(c, ~D[2027-01-20], 119_000, "revenue", "19")
+    booked(c, ~D[2027-05-20], 119_000, "revenue", "19")
+    sent!(c)
+    {:ok, _changed} = Ledger.update_transaction(c.scope, first, %{amount: 238_000})
+
+    assert VatReturns.year(c.scope, 2027).prepaid == 19_000 + 19_000
   end
 
   test "tells whether the Kennzahlen still match those sent", c do

@@ -1,0 +1,28 @@
+{
+  "id": "cccccccc-0000-4000-8000-000000000001",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "type": "purchaseinvoice",
+  "voucherStatus": "paid",
+  "voucherNumber": "BN-2024-0512",
+  "voucherDate": "2024-05-02T00:00:00.000+02:00",
+  "dueDate": "2024-05-02T00:00:00.000+02:00",
+  "totalGrossAmount": 19.9,
+  "totalTaxAmount": 3.18,
+  "taxType": "gross",
+  "useCollectiveContact": false,
+  "contactId": "aaaaaaaa-0000-4000-8000-000000000004",
+  "voucherItems": [
+    {
+      "amount": 19.9,
+      "taxAmount": 3.18,
+      "taxRatePercent": 19.0,
+      "categoryId": "16d04a21-fd91-11e1-a21f-0800200c9a66"
+    }
+  ],
+  "files": [
+    "ffffffff-0000-4000-8000-000000000011"
+  ],
+  "createdDate": "2024-05-02T00:00:00.000+02:00",
+  "updatedDate": "2024-05-02T00:00:00.000+02:00",
+  "version": 2
+}

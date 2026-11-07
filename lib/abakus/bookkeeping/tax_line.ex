@@ -23,14 +23,16 @@ defmodule Abakus.Bookkeeping.TaxLine do
     timestamps()
   end
 
+  @saved_meanwhile "wurde inzwischen anderswo gesetzt, bitte neu öffnen"
+
   def changeset(tax_line, attrs) do
     tax_line
     |> cast(attrs, [:category, :vat])
     |> validate_required([:category, :vat])
     |> validate_inclusion(:category, Category.keys())
     |> validate_vat()
-    |> unique_constraint(:transaction_id, name: :bookkeeping_tax_lines_transaction_index)
-    |> unique_constraint(:subtransaction_id)
+    |> unique_constraint(:transaction_id, error_key: :category, message: @saved_meanwhile)
+    |> unique_constraint(:subtransaction_id, error_key: :category, message: @saved_meanwhile)
   end
 
   defp validate_vat(changeset) do

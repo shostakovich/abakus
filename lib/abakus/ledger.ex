@@ -32,6 +32,7 @@ defmodule Abakus.Ledger do
 
   import Ecto.Query
   import Abakus.Owned
+  import Abakus.JsonList, only: [in_json: 2]
 
   alias Abakus.Categories
   alias Abakus.Categories.Category
@@ -94,9 +95,6 @@ defmodule Abakus.Ledger do
   def change_account(%Account{} = account, attrs \\ %{}), do: Account.changeset(account, attrs)
 
   @opening_payee "Anfangssaldo"
-
-  @doc "The name of the hidden payee of an account's opening balance."
-  def opening_payee, do: @opening_payee
 
   @doc """
   Creates an account together with its transfer payee; without a position it goes after the others. `balance:`
@@ -427,14 +425,7 @@ defmodule Abakus.Ledger do
   defp narrow(query, {:filter, :uncleared}), do: where(query, [t], t.cleared == :uncleared)
   defp narrow(query, {:filter, :needs_category}), do: needing_category(query)
 
-  # One JSON parameter, as SQLite takes at most 32766 variables and a selection can hold more ids.
-  defp narrow(query, {:ids, ids}),
-    do:
-      where(
-        query,
-        [t],
-        fragment("? IN (SELECT value FROM json_each(?))", t.id, ^JSON.encode!(ids))
-      )
+  defp narrow(query, {:ids, ids}), do: where(query, [t], in_json(t.id, ids))
 
   defp narrow(query, {:without_accounts, ids}), do: where(query, [t], t.account_id not in ^ids)
   defp narrow(query, {:limit, limit}), do: limit(query, ^limit)
@@ -667,6 +658,14 @@ defmodule Abakus.Ledger do
   def in_register(%Scope{} = scope) do
     from t in owned(Transaction, scope),
       where: is_nil(t.deleted_at) and is_nil(t.matched_transaction_id)
+  end
+
+  @doc "The transactions of `query` without the accounts' opening balances (the hidden payee \"Anfangssaldo\")."
+  def without_opening_balances(query, %Scope{} = scope) do
+    opening =
+      from p in owned(Payee, scope), where: p.hidden and p.name == @opening_payee, select: p.id
+
+    from t in query, where: is_nil(t.payee_id) or t.payee_id not in subquery(opening)
   end
 
   @doc "The account's balance up to and including `through`: the sum of its transactions in the register dated so."

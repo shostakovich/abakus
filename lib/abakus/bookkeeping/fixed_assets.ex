@@ -4,12 +4,13 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   (`Abakus.Bookkeeping.Disposal`).
 
   Proposed as the payment of a sale are the business accounts' incoming transactions of exactly its amount, from a
-  month before to a month after it, that are no transfer and pay no invoice or other disposal. A trade-in moves no
-  money and has none.
+  month before to a month after it, that are no transfer, pay nothing else yet
+  (`Abakus.Bookkeeping.claimed_transactions/2`) and lie in no locked period. A trade-in moves no money and has none.
 
-  A disposal in a period locked by a sent return (`Abakus.Bookkeeping.Filings`) can no longer change, be taken back
-  or go with its asset. Nor can an asset change, come or go where that changes what it counts for in a year whose
-  EÜR was sent.
+  A disposal in a period locked by a return sent from Abakus (`Abakus.Bookkeeping.Filings`) can no longer change, be
+  taken back or go with its asset, nor can a payment in a locked period be linked to a sale or unlinked from it,
+  since its tax line would count again or no more. Nor can an asset change, come or go where that changes what it
+  counts for in a year whose EÜR was sent from Abakus.
   """
 
   import Ecto.Changeset
@@ -17,7 +18,7 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   import Abakus.Owned
 
   alias Abakus.{Bookkeeping, Ids, Repo}
-  alias Abakus.Bookkeeping.{Disposal, Filings, FixedAsset, IncomeStatement, InvoicePayment}
+  alias Abakus.Bookkeeping.{Disposal, Filings, FixedAsset, IncomeStatement}
   alias Abakus.Users.Scope
 
   @preloads [disposal: [transaction: :payee]]
@@ -88,10 +89,13 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   defp validate_euer_unchanged(changeset, scope, before) do
     changed = changeset |> apply_changes() |> Map.put(:disposal, before && before.disposal)
 
-    if Enum.any?(Filings.euer_years(scope), &(counted(before, &1) != counted(changed, &1))),
+    if euer_changed?(scope, before, changed),
       do: add_error(changeset, :purchased_on, Filings.locked_message()),
       else: changeset
   end
+
+  defp euer_changed?(scope, before, changed),
+    do: Enum.any?(Filings.euer_years(scope), &(counted(before, &1) != counted(changed, &1)))
 
   defp counted(nil, _year), do: %{}
   defp counted(asset, year), do: IncomeStatement.asset_kennzahlen(asset, year)
@@ -103,10 +107,9 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   def delete(%Scope{} = scope, %FixedAsset{} = asset) do
     asset = scope |> own!(asset) |> Repo.preload(:disposal, force: true)
 
-    if locked_disposal?(scope, asset.disposal) or
-         Enum.any?(Filings.euer_years(scope), &(counted(asset, &1) != %{})),
-       do: {:error, :locked},
-       else: Repo.delete(asset, allow_stale: true)
+    if locked_disposal?(scope, asset.disposal) or euer_changed?(scope, asset, nil),
+      do: {:error, :locked},
+      else: Repo.delete(asset, allow_stale: true)
   end
 
   def change_disposal(%FixedAsset{} = asset, attrs \\ %{}),
@@ -124,6 +127,8 @@ defmodule Abakus.Bookkeeping.FixedAssets do
       |> Disposal.changeset(attrs, asset.purchased_on)
       |> validate_payment(scope)
       |> validate_unlocked(scope)
+      |> validate_payment_unlocked(scope)
+      |> validate_disposal_euer_unchanged(scope, asset)
 
     with {:ok, _disposal} <- Repo.insert_or_update(changeset) do
       {:ok, Repo.preload(asset, @preloads, force: true)}
@@ -149,19 +154,46 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   defp validate_unlocked(changeset, scope) do
     dates = [changeset.data.date, get_field(changeset, :date)]
 
-    if Enum.any?(dates, &(&1 && Filings.locked?(scope, &1))),
+    if Enum.any?(dates, &(&1 && Filings.register_locked?(scope, &1))),
       do: add_error(changeset, :date, Filings.locked_message()),
       else: changeset
   end
 
+  defp validate_disposal_euer_unchanged(%{valid?: false} = changeset, _scope, _asset),
+    do: changeset
+
+  defp validate_disposal_euer_unchanged(changeset, scope, asset) do
+    if euer_changed?(scope, asset, %{asset | disposal: apply_changes(changeset)}),
+      do: add_error(changeset, :date, Filings.locked_message()),
+      else: changeset
+  end
+
+  defp validate_payment_unlocked(changeset, scope) do
+    {before, now} = {changeset.data.transaction_id, get_field(changeset, :transaction_id)}
+
+    if before != now and (payment_locked?(scope, before) or payment_locked?(scope, now)),
+      do: add_error(changeset, :transaction_id, Filings.locked_message()),
+      else: changeset
+  end
+
+  defp payment_locked?(_scope, nil), do: false
+
+  defp payment_locked?(scope, transaction_id) do
+    case Bookkeeping.get_transaction(scope, transaction_id) do
+      nil -> false
+      transaction -> Filings.locked?(scope, transaction.date)
+    end
+  end
+
   @doc """
-  Takes the disposal back: the asset is in the register again. `{:error, :locked}` while the disposal is in a
-  locked period.
+  Takes the disposal back: the asset is in the register again. `{:error, :locked}` while the disposal or its payment
+  is in a locked period, or taking it back changes a sent EÜR.
   """
   def remove_disposal(%Scope{} = scope, %FixedAsset{} = asset) do
     asset = scope |> own!(asset) |> Repo.preload(:disposal, force: true)
 
-    if locked_disposal?(scope, asset.disposal) do
+    if locked_disposal?(scope, asset.disposal) or
+         euer_changed?(scope, asset, %{asset | disposal: nil}) do
       {:error, :locked}
     else
       Repo.delete_all(from d in owned(Disposal, scope), where: d.fixed_asset_id == ^asset.id)
@@ -170,9 +202,16 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   end
 
   defp locked_disposal?(_scope, nil), do: false
-  defp locked_disposal?(scope, %Disposal{date: date}), do: Filings.locked?(scope, date)
 
-  @doc "The transactions proposed as the payment of a sale, with their payees, the earliest first."
+  defp locked_disposal?(scope, %Disposal{} = disposal),
+    do:
+      Filings.register_locked?(scope, disposal.date) or
+        payment_locked?(scope, disposal.transaction_id)
+
+  @doc """
+  The transactions proposed as the payment of a sale, with their payees, the earliest first; the payment the sale
+  names stays among them in a locked period.
+  """
   def payment_proposals(%Scope{} = scope, %Disposal{kind: :sale, date: %Date{} = date} = disposal)
       when is_integer(disposal.amount) and disposal.amount > 0 do
     Repo.all(
@@ -180,9 +219,8 @@ defmodule Abakus.Bookkeeping.FixedAssets do
         where: t.amount == ^disposal.amount,
         where: t.date >= ^Date.shift(date, month: -1) and t.date <= ^Date.shift(date, month: 1),
         where: is_nil(t.transfer_transaction_id) and is_nil(t.transfer_subtransaction_id),
-        where:
-          t.id not in subquery(from p in owned(InvoicePayment, scope), select: p.transaction_id),
-        where: t.id not in subquery(other_payments(scope, disposal)),
+        where: t.id not in subquery(Bookkeeping.claimed_transactions(scope, disposal.id)),
+        where: ^unlocked_or(scope, disposal.transaction_id),
         order_by: [asc: t.date, asc: t.id],
         preload: :payee
     )
@@ -190,14 +228,10 @@ defmodule Abakus.Bookkeeping.FixedAssets do
 
   def payment_proposals(%Scope{}, %Disposal{}), do: []
 
-  defp other_payments(scope, %Disposal{id: id}) do
-    query =
-      from d in owned(Disposal, scope),
-        where: not is_nil(d.transaction_id),
-        select: d.transaction_id
+  defp unlocked_or(scope, nil), do: dynamic(not (^Filings.locked_date(scope)))
 
-    if id, do: where(query, [d], d.id != ^id), else: query
-  end
+  defp unlocked_or(scope, transaction_id),
+    do: dynamic([t], not (^Filings.locked_date(scope)) or t.id == ^transaction_id)
 
   @doc "The disposals from `first` to `last` as entries of `Abakus.Bookkeeping.VatReturn`, each on its own date."
   def disposal_entries(%Scope{} = scope, %Date{} = first, %Date{} = last) do

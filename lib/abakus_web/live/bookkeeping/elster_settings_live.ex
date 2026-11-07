@@ -6,7 +6,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Bookkeeping.{Filings, Invoices, States}
+  alias Abakus.Bookkeeping.{Filings, Settings, States}
   alias AbakusWeb.{Areas, NotFoundError}
 
   @max_file_size 100_000
@@ -134,7 +134,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
     {:ok,
      socket
      |> assign(page_title: "ELSTER", upload_errors: @upload_errors, certificate_errors: nil)
-     |> assign_settings(Invoices.get_settings(scope))
+     |> assign_settings(Settings.get_settings(scope))
      |> allow_upload(:certificate,
        accept: ~w(.pfx .p12),
        max_entries: 1,
@@ -147,7 +147,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
   defp assign_settings(socket, settings) do
     assign(socket,
       settings: settings,
-      form: to_form(Invoices.change_settings(settings)),
+      form: to_form(Settings.change_settings(settings)),
       missing: Filings.missing(socket.assigns.current_scope, :euer)
     )
   end
@@ -156,7 +156,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
     content =
       consume_uploaded_entry(socket, entry, fn %{path: path} -> {:ok, File.read!(path)} end)
 
-    case Filings.put_certificate(socket.assigns.current_scope, {content, entry.client_name}) do
+    case Settings.put_certificate(socket.assigns.current_scope, {content, entry.client_name}) do
       {:ok, settings} ->
         {:noreply,
          socket
@@ -178,7 +178,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
   def handle_event("validate_certificate", _params, socket), do: {:noreply, socket}
 
   def handle_event("save", %{"settings" => params}, socket) do
-    case Invoices.save_settings(
+    case Settings.save_settings(
            socket.assigns.current_scope,
            Map.take(params, ["tax_state", "business_activity", "income_kind"])
          ) do
@@ -191,7 +191,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
   end
 
   def handle_event("remove_certificate", _params, socket) do
-    {:ok, settings} = Filings.remove_certificate(socket.assigns.current_scope)
+    {:ok, settings} = Settings.remove_certificate(socket.assigns.current_scope)
     {:noreply, socket |> assign_settings(settings) |> put_flash(:info, "Zertifikat entfernt.")}
   end
 end

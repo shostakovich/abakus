@@ -17,6 +17,13 @@ defmodule Abakus.Bookkeeping.Vat do
       Enum.map(@rates, fn {t, rate} -> {t, to_string(rate)} end) ++
         [reverse_charge: "reverse_charge"]
 
+  @doc "The rate of a treatment other than reverse charge, in percent."
+  def rate(treatment), do: Keyword.fetch!(@rates, treatment)
+
+  @doc "The treatment of a rate in percent, nil for a rate it does not know."
+  def treatment(rate),
+    do: Enum.find_value(@rates, fn {treatment, r} -> r == rate && treatment end)
+
   def label(:reverse_charge), do: "§13b Reverse Charge"
   def label(treatment), do: "#{Keyword.fetch!(@rates, treatment)} %"
 

@@ -46,7 +46,7 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
 
   defp save(view), do: view |> form("#tax-lines-form") |> render_submit()
 
-  defp save_without_receipt(view),
+  defp save_without_attachment(view),
     do: view |> form("#tax-lines-form", %{"no_receipt" => "true"}) |> render_submit()
 
   defp connect_paperless(c, documents) do
@@ -78,7 +78,7 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
     assert has_element?(view, "#tax-transaction-vat option[value='19'][selected]")
     assert text(view, "#tax-transaction-amounts") == "Netto −19,90 € · USt −3,78 €"
 
-    save_without_receipt(view)
+    save_without_attachment(view)
     refute has_element?(view, "#inbox-#{c.hosting.id}")
     assert has_element?(view, "#tax-lines-transaction", "Software Ltd")
     assert has_element?(view, "#tax-lines-save", "Speichern")
@@ -88,7 +88,7 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
     assert has_element?(view, "#tax-transaction-vat option[value='reverse_charge'][selected]")
     assert text(view, "#tax-transaction-amounts") == "Netto −100,00 € · USt −19,00 €"
 
-    save_without_receipt(view)
+    save_without_attachment(view)
     refute has_element?(view, "#tax-lines-modal")
     assert has_element?(view, "#inbox-empty", "Alles zugeordnet")
 
@@ -118,7 +118,7 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
     assert has_element?(view, "#inbox-#{c.license.id}")
   end
 
-  test "keeps a transaction with its category until it has a receipt", c do
+  test "keeps a transaction with its category until it has an attachment", c do
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung")
     open(view, c.hosting, "Hosting GmbH")
 
@@ -129,7 +129,7 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
     assert has_element?(view, "#tax-lines-transaction", "Software Ltd")
   end
 
-  test "shows a receipt Paperless proposes beside the transaction and attaches it", c do
+  test "shows a document Paperless proposes beside the transaction and attaches it", c do
     connect_paperless(c, [
       FakePaperless.fixture(41, [],
         title: "Rechnung Oktober",
@@ -144,13 +144,13 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
 
     assert has_element?(view, "#proposal-41", "Rechnung Oktober")
     refute has_element?(view, "#proposal-42")
-    assert has_element?(view, "#receipt-text", "Summe 23,68 EUR")
-    assert has_element?(view, "#receipt-pdf[href='/buchhaltung/paperless/41'][target=_blank]")
+    assert has_element?(view, "#attachment-text", "Summe 23,68 EUR")
+    assert has_element?(view, "#attachment-pdf[href='/buchhaltung/paperless/41'][target=_blank]")
 
     view |> element("#proposal-41-attach") |> render_click()
 
     assert [%{paperless_id: 41, title: "Rechnung Oktober"} = attachment] = attached(c, c.hosting)
-    assert has_element?(view, "#receipt-#{attachment.id}", "Rechnung Oktober")
+    assert has_element?(view, "#attachment-#{attachment.id}", "Rechnung Oktober")
     refute has_element?(view, "#proposal-41")
 
     choose(view, "internet")
@@ -168,35 +168,35 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
     open(view, c.hosting, "Hosting GmbH")
 
     view |> element("#proposal-41 button", "Dokument 41") |> render_click(%{"id" => "../tags"})
-    assert has_element?(view, "#receipt-pdf[href='/buchhaltung/paperless/41']")
+    assert has_element?(view, "#attachment-pdf[href='/buchhaltung/paperless/41']")
 
     view |> element("#proposal-41-attach") |> render_click(%{"id" => "41/../../tags"})
     assert attached(c, c.hosting) == []
-    refute has_element?(view, "#receipts-error")
+    refute has_element?(view, "#attachments-error")
   end
 
-  test "uploads a receipt to Paperless and attaches it", c do
+  test "uploads a file to Paperless and attaches it", c do
     connect_paperless(c, [])
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung")
     open(view, c.license, "Software Ltd")
-    assert has_element?(view, "#receipts-no-proposals")
+    assert has_element?(view, "#attachments-no-proposals")
 
-    receipt =
-      file_input(view, "#receipts-upload", :receipt, [
+    upload =
+      file_input(view, "#attachments-upload", :attachment, [
         %{name: "Lizenz.pdf", content: "%PDF-1.4 Lizenz", type: "application/pdf"}
       ])
 
-    render_upload(receipt, "Lizenz.pdf")
+    render_upload(upload, "Lizenz.pdf")
     render_async(view)
 
     assert [%{title: "Lizenz", paperless_id: id} = attachment] = attached(c, c.license)
     assert [%{pdf: "%PDF-1.4 Lizenz"}] = FakePaperless.documents(@url)
-    assert has_element?(view, "#receipt-#{attachment.id}", "Lizenz")
-    assert has_element?(view, "#receipt-pdf[href='/buchhaltung/paperless/#{id}']")
+    assert has_element?(view, "#attachment-#{attachment.id}", "Lizenz")
+    assert has_element?(view, "#attachment-pdf[href='/buchhaltung/paperless/#{id}']")
 
-    view |> element("#receipt-#{attachment.id}-detach") |> render_click()
+    view |> element("#attachment-#{attachment.id}-detach") |> render_click()
     assert attached(c, c.license) == []
-    refute has_element?(view, "#receipt-#{attachment.id}")
+    refute has_element?(view, "#attachment-#{attachment.id}")
   end
 
   test "an upload still running when the dialog moves on stays with its own transaction", c do
@@ -206,24 +206,24 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
     open(view, c.license, "Software Ltd")
 
     view
-    |> file_input("#receipts-upload", :receipt, [
+    |> file_input("#attachments-upload", :attachment, [
       %{name: "Lizenz.pdf", content: "%PDF-1.4 Lizenz", type: "application/pdf"}
     ])
     |> render_upload("Lizenz.pdf")
 
     assert_receive {:uploading, uploader}
-    assert has_element?(view, "#receipts-upload", "Wird an Paperless übergeben")
+    assert has_element?(view, "#attachments-upload", "Wird an Paperless übergeben")
 
     view |> element("#inbox-#{c.hosting.id} button", "Hosting GmbH") |> render_click()
-    assert has_element?(view, "#receipts-upload", "Hochladen")
+    assert has_element?(view, "#attachments-upload", "Hochladen")
 
     send(uploader, :go)
     render_async(view)
 
     assert [%{title: "Lizenz"}] = attached(c, c.license)
     assert attached(c, c.hosting) == []
-    refute has_element?(view, "#receipt-shown")
-    assert has_element?(view, "#receipts-upload", "Hochladen")
+    refute has_element?(view, "#attachment-shown")
+    assert has_element?(view, "#attachments-upload", "Hochladen")
   end
 
   test "tells a rejected token and a file too large for Paperless", c do
@@ -236,28 +236,28 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
 
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung")
     open(view, c.license, "Software Ltd")
-    assert has_element?(view, "#receipts-error", "Paperless hat den API-Token abgelehnt.")
+    assert has_element?(view, "#attachments-error", "Paperless hat den API-Token abgelehnt.")
 
     {:ok, _connection} = Paperless.update_connection(c.scope, %{"url" => @url, "token" => "t"})
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung")
     open(view, c.license, "Software Ltd")
 
     view
-    |> file_input("#receipts-upload", :receipt, [
+    |> file_input("#attachments-upload", :attachment, [
       %{name: "Lizenz.pdf", content: "%PDF-1.4 Lizenz", type: "application/pdf"}
     ])
     |> render_upload("Lizenz.pdf")
 
     render_async(view)
-    assert has_element?(view, "#receipts-error", "Die Datei ist zu groß für Paperless.")
+    assert has_element?(view, "#attachments-error", "Die Datei ist zu groß für Paperless.")
   end
 
   test "points to the settings without Paperless", c do
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung")
     open(view, c.hosting, "Hosting GmbH")
 
-    assert has_element?(view, "#receipts-not-connected a[href='/settings/paperless']")
-    refute has_element?(view, "#receipts-upload")
+    assert has_element?(view, "#attachments-not-connected a[href='/settings/paperless']")
+    refute has_element?(view, "#attachments-upload")
   end
 
   test "tells when Paperless cannot be reached", c do
@@ -268,6 +268,6 @@ defmodule AbakusWeb.Bookkeeping.InboxLiveTest do
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung")
     open(view, c.hosting, "Hosting GmbH")
 
-    assert has_element?(view, "#receipts-error", "Paperless ist gerade nicht erreichbar.")
+    assert has_element?(view, "#attachments-error", "Paperless ist gerade nicht erreichbar.")
   end
 end

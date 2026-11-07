@@ -10,8 +10,11 @@ defmodule Abakus.Bookkeeping.Settings do
   use Abakus.Schema, uuid: true
 
   import Ecto.Changeset
+  import Abakus.Owned
 
   alias Abakus.Bookkeeping.{Party, States}
+  alias Abakus.Repo
+  alias Abakus.Users.Scope
 
   schema "bookkeeping_settings" do
     field :name, :string
@@ -48,6 +51,25 @@ defmodule Abakus.Bookkeeping.Settings do
   ]
 
   @max_certificate_size 100_000
+
+  @doc "The user's bookkeeping settings, new ones if they have none yet."
+  def get_settings(%Scope{} = scope),
+    do: Repo.one(owned(__MODULE__, scope)) || %__MODULE__{user_id: user_id(scope)}
+
+  def change_settings(%__MODULE__{} = settings, attrs \\ %{}), do: changeset(settings, attrs)
+
+  def save_settings(%Scope{} = scope, attrs),
+    do: scope |> get_settings() |> changeset(attrs) |> Repo.insert_or_update()
+
+  @doc "Stores the ELSTER certificate, `{content, filename}` of a .pfx file."
+  def put_certificate(%Scope{} = scope, {_content, _filename} = certificate),
+    do: save_certificate(scope, certificate)
+
+  @doc "Forgets the ELSTER certificate."
+  def remove_certificate(%Scope{} = scope), do: save_certificate(scope, nil)
+
+  defp save_certificate(scope, certificate),
+    do: scope |> get_settings() |> certificate_changeset(certificate) |> Repo.insert_or_update()
 
   def changeset(settings, attrs) do
     settings
@@ -91,7 +113,7 @@ defmodule Abakus.Bookkeeping.Settings do
   What sending a return of `kind` (`:vat` or `:euer`) to ELSTER still lacks, in the words of the settings: none when
   nothing does.
   """
-  def missing_for_elster(%__MODULE__{} = settings, kind \\ :vat) do
+  def missing_for_elster(%__MODULE__{} = settings, kind) do
     for {field, label} <- elster_fields(kind),
         not present?(Map.fetch!(settings, field)),
         do: label

@@ -1,14 +1,23 @@
 defmodule Abakus.Bookkeeping.Lexoffice.Records do
   @moduledoc """
-  Lexoffice's JSON as Abakus's records: a contact as a customer's attributes, an invoice as an invoice's, with
-  Lexoffice's amounts in cents. An invoice's counter is what follows the year in its number, 0 for a number of
+  Lexoffice's JSON as Abakus's records: a contact as a customer's attributes, an invoice as an invoice's, a receipt
+  (a voucher of another type) as a `Abakus.Bookkeeping.LexofficeReceipt`'s, with Lexoffice's amounts in cents. An invoice's counter is what follows the year in its number, 0 for a number of
   another form. A position's unit is read from its name, a piece for one Abakus does not know; text lines are left
   out. The sender is unknown, as Lexoffice's invoice does not name it; the original PDF does.
   """
 
-  alias Abakus.Bookkeeping.{Party, Position}
+  alias Abakus.Bookkeeping.{Category, Invoice, Party, Position, Vat}
+  alias Abakus.Bookkeeping.LexofficeReceipt.{Item, Payment}
 
-  @rates %{19 => :rate_19, 16 => :rate_16, 7 => :rate_7}
+  @receipt_signs %{
+    "purchaseinvoice" => -1,
+    "salescreditnote" => -1,
+    "salesinvoice" => 1,
+    "purchasecreditnote" => 1
+  }
+
+  # Lexoffice's other payment items, such as a currency conversion, move no money on the bank account.
+  @money_payments ["partPaymentFinancialTransaction", "manualPayment"]
 
   @units %{
     "stunde" => "HUR",
@@ -33,7 +42,7 @@ defmodule Abakus.Bookkeeping.Lexoffice.Records do
 
     %{
       lexoffice_id: contact["id"],
-      name: contact_name(contact),
+      name: name(contact),
       street: address["street"],
       postal_code: address["zip"],
       city: address["city"],
@@ -42,12 +51,93 @@ defmodule Abakus.Bookkeeping.Lexoffice.Records do
     }
   end
 
-  defp contact_name(%{"company" => %{"name" => name}}), do: present(name)
+  @doc "The name of a contact, its company's or its person's, nil without one."
+  def name(%{"company" => %{"name" => name}}), do: present(name)
 
-  defp contact_name(%{"person" => person}) when is_map(person),
+  def name(%{"person" => person}) when is_map(person),
     do: present(Enum.join(Enum.reject([person["firstName"], person["lastName"]], &blank?/1), " "))
 
-  defp contact_name(_contact), do: nil
+  def name(_contact), do: nil
+
+  @doc "The voucher types of receipts, which `receipt/3` takes over."
+  def receipt_types, do: Map.keys(@receipt_signs)
+
+  @doc """
+  The attributes of a receipt from its voucher, its `payments`, nil when it has none, and the contacts' names by
+  id, with `:file_ids`, the ids of its files. What the business paid is negative. An item's VAT is nil for a rate that
+  does not fit its category, and its category nil for one the owner does not use. `{:error, reason}` in German for
+  one without date or total.
+  """
+  def receipt(json, payments, names) do
+    sign = Map.get(@receipt_signs, json["type"], -1)
+
+    with {:ok, date} <- receipt_day(json["voucherDate"]),
+         total when is_integer(total) <- cents(json["totalGrossAmount"]) do
+      {:ok,
+       %{
+         lexoffice_id: json["id"],
+         number: present(json["voucherNumber"]),
+         date: date,
+         contact: names[json["contactId"]] || present(json["contactName"]),
+         total: sign * total,
+         items: Enum.map(json["voucherItems"] || [], &item(&1, json["taxType"], sign)),
+         payments: receipt_payments(payments, sign),
+         file_ids: Enum.filter(json["files"] || [], &is_binary/1)
+       }}
+    else
+      {:error, reason} -> {:error, reason}
+      nil -> {:error, "ohne Betrag"}
+    end
+  end
+
+  defp receipt_day(value) do
+    case day(value) do
+      nil -> {:error, "ohne Belegdatum"}
+      date -> {:ok, date}
+    end
+  end
+
+  defp item(item, tax_type, sign) do
+    amount = cents(item["amount"]) || 0
+    tax = cents(item["taxAmount"]) || 0
+    gross = if tax_type == "net", do: amount + tax, else: amount
+    category = Category.by_lexoffice_id(item["categoryId"])
+
+    %Item{
+      category: category && category.key,
+      vat: item_vat(category, percent(item["taxRatePercent"])),
+      amount: sign * gross,
+      net: sign * (gross - tax)
+    }
+  end
+
+  defp item_vat(nil, _rate), do: nil
+
+  defp item_vat(category, rate) do
+    treatment =
+      if Category.reverse_charge?(category), do: :reverse_charge, else: Vat.treatment(rate)
+
+    if treatment && Category.fits?(category, treatment), do: treatment
+  end
+
+  defp receipt_payments(nil, _sign), do: []
+
+  defp receipt_payments(payments, sign) do
+    for item <- payments["paymentItems"] || [],
+        item["paymentItemType"] in @money_payments,
+        payment = payment(item, sign),
+        do: payment
+  end
+
+  defp payment(item, sign) do
+    case {day(item["postingDate"]), cents(item["amount"])} do
+      {%Date{} = date, amount} when is_integer(amount) ->
+        %Payment{date: date, amount: sign * amount}
+
+      _missing ->
+        nil
+    end
+  end
 
   @doc """
   The attributes of an invoice, with `:contact_id`, the id of its contact if it has one; without its payment, see
@@ -123,18 +213,33 @@ defmodule Abakus.Bookkeeping.Lexoffice.Records do
       {"intraCommunitySupply", _rates} ->
         {:ok, :reverse_charge}
 
-      {type, [rate]} when type in ["net", "gross"] and is_map_key(@rates, rate) ->
-        {:ok, @rates[rate]}
+      {type, rates} when type in ["net", "gross"] ->
+        rates_vat(rates)
 
-      {type, [rate]} when type in ["net", "gross"] ->
-        {:error, "mit #{rate} % Umsatzsteuer"}
-
-      {type, [_rate | _more]} when type in ["net", "gross"] ->
-        {:error, "mit mehreren Steuersätzen"}
+      {type, _rates} when type in [nil, ""] ->
+        {:error, "ohne Steuerart"}
 
       {type, _rates} ->
         {:error, "mit der Steuerart „#{type}“"}
     end
+  end
+
+  defp rates_vat([]), do: {:error, "ohne Positionen"}
+
+  defp rates_vat(rates) do
+    cond do
+      nil in rates -> {:error, "mit einer Position ohne Steuersatz"}
+      match?([_rate], rates) -> invoice_vat(hd(rates))
+      true -> {:error, "mit mehreren Steuersätzen"}
+    end
+  end
+
+  defp invoice_vat(rate) do
+    treatment = Vat.treatment(rate)
+
+    if treatment in Invoice.all_treatments(),
+      do: {:ok, treatment},
+      else: {:error, "mit #{rate} % Umsatzsteuer"}
   end
 
   defp percent(rate) do

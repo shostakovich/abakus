@@ -1,6 +1,7 @@
 defmodule Abakus.Bookkeeping.Invoices do
   @moduledoc """
-  The user's customers and the invoices they write to them, with the sender of the bookkeeping settings.
+  The user's customers and the invoices they write to them, from the sender of the bookkeeping settings
+  (`Abakus.Bookkeeping.Settings`).
 
   Writing an invoice gives it the next number: the year of its date followed by a counter one above the user's
   highest, so the counter runs on across years and continues what the Lexoffice import brought. It also fixes the
@@ -16,16 +17,6 @@ defmodule Abakus.Bookkeeping.Invoices do
   alias Abakus.Bookkeeping.{Countries, Customer, Invoice, Party, Position, Settings}
   alias Abakus.{Ids, Repo}
   alias Abakus.Users.Scope
-
-  @doc "The user's bookkeeping settings, new ones if they have none yet."
-  def get_settings(%Scope{} = scope),
-    do: Repo.one(owned(Settings, scope)) || %Settings{user_id: user_id(scope)}
-
-  def change_settings(%Settings{} = settings, attrs \\ %{}),
-    do: Settings.changeset(settings, attrs)
-
-  def save_settings(%Scope{} = scope, attrs),
-    do: scope |> get_settings() |> Settings.changeset(attrs) |> Repo.insert_or_update()
 
   @doc "The user's customers by name."
   def list_customers(%Scope{} = scope),
@@ -81,7 +72,7 @@ defmodule Abakus.Bookkeeping.Invoices do
   `{:error, changeset}` for invalid attrs.
   """
   def write_invoice(%Scope{} = scope, attrs) do
-    settings = get_settings(scope)
+    settings = Settings.get_settings(scope)
 
     if Settings.complete?(settings) do
       %Invoice{user_id: user_id(scope)}

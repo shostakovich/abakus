@@ -2,11 +2,24 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
   @moduledoc """
   The Buchhaltung's „Anlagen“: the asset register (`Abakus.Bookkeeping.FixedAssets`), the latest purchase first,
   each with its book value today. A dialog adds or changes an asset, another records how it left the register, sold
-  or withdrawn, with the payment of a sale among the transactions proposed for it.
+  or withdrawn, with the payment of a sale among the transactions proposed for it. Above it, the receipts from
+  Lexoffice proposed as assets (`Abakus.Bookkeeping.LexofficeReceipts`), each recorded through the same dialog,
+  filled in from the receipt, or dismissed.
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Bookkeeping.{Depreciation, Disposal, Filings, FixedAsset, FixedAssets, Vat}
+  alias Abakus.Bookkeeping.{
+    Category,
+    Depreciation,
+    Disposal,
+    Filings,
+    FixedAsset,
+    FixedAssets,
+    LexofficeReceipt,
+    LexofficeReceipts,
+    Vat
+  }
+
   alias Abakus.{Format, LocalTime, Money}
 
   @impl true
@@ -36,6 +49,61 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
           </.button>
         </:actions>
       </.header>
+      <section
+        :if={@asset_proposals != []}
+        id="asset-proposals"
+        class="mb-8"
+        aria-labelledby="asset-proposals-title"
+      >
+        <.section_heading id="asset-proposals-title" count={length(@asset_proposals)}>
+          Vorschläge aus Lexoffice
+        </.section_heading>
+        <p class="mb-3 max-w-prose text-sm text-base-content/70">
+          Belege in einer Kategorie des Anlagevermögens. Als Anlage erfasst, fehlt meist nur noch die Nutzungsdauer.
+        </p>
+        <.list>
+          <.list_row
+            :for={receipt <- @asset_proposals}
+            id={"asset-proposal-#{receipt.id}"}
+            title={receipt.contact || LexofficeReceipt.title(receipt)}
+            menu={:always}
+            trailing_on_phone={:title}
+          >
+            <:meta>
+              {join_meta([Format.date(receipt.date), receipt.number, asset_categories(receipt)])}
+            </:meta>
+            <:trailing>
+              <div class="text-end">
+                <.amount value={LexofficeReceipts.purchase(receipt)} />
+                <div class="text-xs text-base-content/70">netto</div>
+              </div>
+            </:trailing>
+            <:action
+              id={"asset-proposal-#{receipt.id}-record"}
+              label="Als Anlage erfassen"
+              icon="plus"
+              inline
+              on_click={JS.push("record_proposal", value: %{id: receipt.id})}
+            />
+            <:action
+              :for={paperless_id <- Enum.take(receipt.paperless_ids, 1)}
+              id={"asset-proposal-#{receipt.id}-file"}
+              label="Beleg ansehen"
+              icon="file-text"
+              href={~p"/buchhaltung/paperless/#{paperless_id}"}
+            />
+            <:action
+              id={"asset-proposal-#{receipt.id}-dismiss"}
+              label="Keine Anlage"
+              icon="x"
+              confirm="Keine Anlage?"
+              confirm_text="Der Beleg wird nicht mehr als Anlage vorgeschlagen."
+              confirm_label="Verwerfen"
+              on_click={JS.push("dismiss_proposal", value: %{id: receipt.id})}
+            />
+          </.list_row>
+        </.list>
+      </section>
       <.list :if={@assets != []} id="assets">
         <.list_row
           :for={asset <- @assets}
@@ -224,6 +292,14 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
     """
   end
 
+  defp asset_categories(receipt) do
+    receipt.items
+    |> Enum.map(&(&1.category && Category.get(&1.category)))
+    |> Enum.filter(&(&1 && Category.fixed_asset?(&1)))
+    |> Enum.map_join(", ", & &1.name)
+    |> then(&if(&1 == "", do: nil, else: &1))
+  end
+
   defp life_text(%FixedAsset{net: net, useful_life: years}) do
     cond do
       Depreciation.low_value?(net) -> "geringwertig"
@@ -256,7 +332,14 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
      |> load()}
   end
 
-  defp load(socket), do: assign(socket, :assets, FixedAssets.list(socket.assigns.current_scope))
+  defp load(socket) do
+    scope = socket.assigns.current_scope
+
+    assign(socket,
+      assets: FixedAssets.list(scope),
+      asset_proposals: LexofficeReceipts.asset_proposals(scope)
+    )
+  end
 
   defp close(socket),
     do:
@@ -264,6 +347,7 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
         asset_form: nil,
         disposal_form: nil,
         editing: nil,
+        receipt: nil,
         disposal: nil,
         proposals: []
       )
@@ -273,6 +357,27 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
 
   def handle_event("edit", %{"id" => id}, socket),
     do: {:noreply, with_asset(socket, id, &open/2)}
+
+  def handle_event("record_proposal", %{"id" => id}, socket) do
+    case LexofficeReceipts.get(socket.assigns.current_scope, id) do
+      nil ->
+        {:noreply, socket |> put_flash(:error, "Beleg nicht gefunden.") |> close() |> load()}
+
+      receipt ->
+        {:noreply, open(socket, LexofficeReceipts.proposed_asset(receipt), receipt)}
+    end
+  end
+
+  def handle_event("dismiss_proposal", %{"id" => id}, socket) do
+    scope = socket.assigns.current_scope
+
+    case LexofficeReceipts.get(scope, id) do
+      nil -> :ok
+      receipt -> LexofficeReceipts.dismiss_asset(scope, receipt)
+    end
+
+    {:noreply, load(socket)}
+  end
 
   def handle_event("dispose", %{"id" => id}, socket),
     do: {:noreply, with_asset(socket, id, &open_disposal/2)}
@@ -285,10 +390,19 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
   end
 
   def handle_event("save", %{"fixed_asset" => params}, socket) do
-    case save(socket.assigns.current_scope, socket.assigns.editing, params) do
+    %{current_scope: scope, editing: asset, receipt: receipt} = socket.assigns
+
+    case save(scope, asset, receipt, params) do
       {:ok, asset} ->
         {:noreply,
          socket |> put_flash(:info, "„#{asset.name}“ gespeichert.") |> close() |> load()}
+
+      {:error, :not_proposed} ->
+        {:noreply,
+         socket
+         |> put_flash(:error, "Der Beleg ist nicht mehr als Anlage vorgeschlagen.")
+         |> close()
+         |> load()}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :asset_form, to_form(changeset))}
@@ -360,11 +474,20 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
     end
   end
 
-  defp save(scope, %FixedAsset{id: nil}, params), do: FixedAssets.create(scope, params)
-  defp save(scope, asset, params), do: FixedAssets.update(scope, asset, params)
+  defp save(scope, %FixedAsset{id: nil}, nil, params), do: FixedAssets.create(scope, params)
 
-  defp open(socket, asset),
-    do: assign(socket, editing: asset, asset_form: to_form(FixedAssets.change(asset)))
+  defp save(scope, %FixedAsset{id: nil}, receipt, params),
+    do: LexofficeReceipts.create_asset(scope, receipt, params)
+
+  defp save(scope, asset, _receipt, params), do: FixedAssets.update(scope, asset, params)
+
+  defp open(socket, asset, receipt \\ nil),
+    do:
+      assign(socket,
+        editing: asset,
+        receipt: receipt,
+        asset_form: to_form(FixedAssets.change(asset))
+      )
 
   defp open_disposal(socket, asset) do
     changeset = FixedAssets.change_disposal(asset)

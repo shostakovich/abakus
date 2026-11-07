@@ -1,0 +1,34 @@
+{
+  "id": "cccccccc-0000-4000-8000-000000000003",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "type": "purchaseinvoice",
+  "voucherStatus": "paid",
+  "voucherNumber": "SW-2025-1028",
+  "voucherDate": "2025-10-24T00:00:00.000+02:00",
+  "dueDate": "2025-10-24T00:00:00.000+02:00",
+  "totalGrossAmount": 31.95,
+  "totalTaxAmount": 5.1,
+  "taxType": "gross",
+  "useCollectiveContact": true,
+  "contactName": "Softwarehaus Süd GmbH",
+  "voucherItems": [
+    {
+      "amount": 5.89,
+      "taxAmount": 0.94,
+      "taxRatePercent": 19.0,
+      "categoryId": "16d04a23-fd91-11e1-a21f-0800200c9a66"
+    },
+    {
+      "amount": 26.06,
+      "taxAmount": 4.16,
+      "taxRatePercent": 19.0,
+      "categoryId": "b49aae5f-4121-4262-b8bd-f49278b66423"
+    }
+  ],
+  "files": [
+    "ffffffff-0000-4000-8000-000000000013"
+  ],
+  "createdDate": "2025-10-24T00:00:00.000+02:00",
+  "updatedDate": "2025-10-24T00:00:00.000+02:00",
+  "version": 2
+}

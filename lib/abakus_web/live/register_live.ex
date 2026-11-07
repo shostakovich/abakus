@@ -33,7 +33,7 @@ defmodule AbakusWeb.RegisterLive do
   the scheduled transactions open when some use it.
 
   For a user who keeps books the column Buchhaltung opens `AbakusWeb.Bookkeeping.TaxLineDialog` on a transaction and
-  its receipts' PDFs.
+  its attachments' PDFs.
 
   The pencil beside the name opens the account form (`AbakusWeb.AccountDialog`); the account shown is the one in
   `account_groups`, so it is as fresh as the sidebar. The portfolios' cash is the Depot's
@@ -345,9 +345,12 @@ defmodule AbakusWeb.RegisterLive do
   end
 
   defp bookkeeping(%{bookkeeping: true} = scope, rows),
-    do: %{tax_lines: Bookkeeping.tax_lines(scope, rows), receipts: Attachments.list(scope, rows)}
+    do: %{
+      tax_lines: Bookkeeping.tax_lines(scope, rows),
+      attachments: Attachments.list(scope, rows)
+    }
 
-  defp bookkeeping(_scope, _rows), do: %{tax_lines: %{}, receipts: %{}}
+  defp bookkeeping(_scope, _rows), do: %{tax_lines: %{}, attachments: %{}}
 
   defp load_scheduled(%{assigns: assigns} = socket) do
     {register, shown} = register(assigns)

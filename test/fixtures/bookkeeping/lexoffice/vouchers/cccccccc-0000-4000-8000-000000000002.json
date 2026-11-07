@@ -1,0 +1,28 @@
+{
+  "id": "cccccccc-0000-4000-8000-000000000002",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "type": "purchaseinvoice",
+  "voucherStatus": "paid",
+  "voucherNumber": "NT-88172",
+  "voucherDate": "2025-03-01T00:00:00.000+01:00",
+  "dueDate": "2025-03-01T00:00:00.000+01:00",
+  "totalGrossAmount": 119.0,
+  "totalTaxAmount": 19.0,
+  "taxType": "gross",
+  "useCollectiveContact": true,
+  "contactName": "Netzwerk Telekom AG",
+  "voucherItems": [
+    {
+      "amount": 119.0,
+      "taxAmount": 19.0,
+      "taxRatePercent": 19.0,
+      "categoryId": "b3a1f841-fd90-11e1-a21f-0800200c9a66"
+    }
+  ],
+  "files": [
+    "ffffffff-0000-4000-8000-000000000012"
+  ],
+  "createdDate": "2025-03-01T00:00:00.000+01:00",
+  "updatedDate": "2025-03-01T00:00:00.000+01:00",
+  "version": 2
+}

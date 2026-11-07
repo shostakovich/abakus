@@ -23,7 +23,8 @@ defmodule Abakus.Bookkeeping.FakeLexoffice do
   def requests, do: Agent.get(__MODULE__, &Enum.reverse(&1.requests))
 
   @impl true
-  def get(key, path, params) do
+  def get(key, segments, params) do
+    path = Enum.join(segments, "/")
     path = if params[:page] in [nil, 0], do: path, else: "#{path}-#{params[:page]}"
 
     with :ok <- check(key, path) do

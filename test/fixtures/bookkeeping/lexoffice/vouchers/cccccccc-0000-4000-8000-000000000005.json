@@ -1,0 +1,28 @@
+{
+  "id": "cccccccc-0000-4000-8000-000000000005",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "type": "purchasecreditnote",
+  "voucherStatus": "paidoff",
+  "voucherNumber": "UStVA-2025-Q4",
+  "voucherDate": "2025-12-31T00:00:00.000+01:00",
+  "dueDate": "2025-12-31T00:00:00.000+01:00",
+  "totalGrossAmount": 32.73,
+  "totalTaxAmount": 0,
+  "taxType": "net",
+  "useCollectiveContact": true,
+  "contactName": "Finanzamt Musterstadt",
+  "voucherItems": [
+    {
+      "amount": 32.73,
+      "taxAmount": 0,
+      "taxRatePercent": 0.0,
+      "categoryId": "222b6f72-fd92-11e1-a21f-0800200c9a66"
+    }
+  ],
+  "files": [
+    "ffffffff-0000-4000-8000-000000000016"
+  ],
+  "createdDate": "2025-12-31T00:00:00.000+01:00",
+  "updatedDate": "2025-12-31T00:00:00.000+01:00",
+  "version": 2
+}

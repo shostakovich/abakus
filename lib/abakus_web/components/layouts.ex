@@ -74,7 +74,8 @@ defmodule AbakusWeb.Layouts do
   balance and how many transactions wait for approval; then the section Depots with the active portfolios and their
   values, each shown with the leading emoji of its name, else the briefcase; a user without the budget sees only
   Vermögen, Alle Depots, Import & Sync and Depots. The Kasse: Ausgaben, Salden and Aktivität. The Buchhaltung:
-  Posteingang, Rechnungen and Kunden. Accounts and portfolios stay out of the icon rail and the dock. Entries show plush images, the Lucide icon only where a plush has no image.
+  Posteingang, Rechnungen, Kunden, Anlagen, Umsatzsteuer and EÜR. Accounts and portfolios stay out of the icon rail
+  and the dock. Entries show plush images, the Lucide icon only where a plush has no image.
 
   With one area the brand is its name; with more, a segmented switch tops the sidebar, and in the top bar the
   brand is a menu that switches the area. On phones the dock holds the current area's pages; its "Mehr" opens

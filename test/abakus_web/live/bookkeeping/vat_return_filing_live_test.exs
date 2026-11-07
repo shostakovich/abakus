@@ -30,7 +30,7 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
   defp send_with_pin(view, pin) do
     view |> element("#vat-send") |> render_click()
     view |> form("#vat-send-form", %{"pin" => pin}) |> render_submit()
-    render_async(view)
+    FakeElster.await_sends(view.pid)
   end
 
   defp stored_anywhere?(text) do
@@ -69,7 +69,7 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
         assert has_element?(view, "#vat-send-test")
 
         view |> form("#vat-send-form", %{"pin" => "geheim-4711"}) |> render_submit()
-        render_async(view)
+        FakeElster.await_sends(view.pid)
 
         assert flash(view, :info) == "Voranmeldung an ELSTER gesendet."
         refute has_element?(view, "#vat-send-modal")
@@ -94,6 +94,37 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
     assert has_element?(view, "#vat-send-modal")
     assert Filings.sent(c.scope, {:vat_quarter, 2027, 1}) == nil
     refute has_element?(view, "#vat-filing")
+  end
+
+  test "a crashed send says so and locks nothing", c do
+    elster_fixture(c.scope)
+    FakeElster.serve(crash: true)
+    {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/vat")
+
+    log = capture_log(fn -> send_with_pin(view, "4711") end)
+
+    assert log =~ "ELSTER crashed"
+    assert text(view, "#vat-send-error") =~ "Das Senden ist abgebrochen. Bitte noch einmal."
+    assert Filings.sent(c.scope, {:vat_quarter, 2027, 1}) == nil
+  end
+
+  test "a send goes on when the page is closed", c do
+    elster_fixture(c.scope)
+    FakeElster.serve(hold: self())
+    {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/vat")
+
+    view |> element("#vat-send") |> render_click()
+    view |> form("#vat-send-form", %{"pin" => "4711"}) |> render_submit()
+    assert_receive {FakeElster, :holding, sender}
+
+    Process.flag(:trap_exit, true)
+    ref = Process.monitor(view.pid)
+    Process.exit(view.pid, {:shutdown, :closed})
+    assert_receive {:DOWN, ^ref, :process, _pid, _reason}
+
+    FakeElster.release(sender)
+    FakeElster.await_sends()
+    assert %{transfer_ticket: "et-1"} = Filings.sent(c.scope, {:vat_quarter, 2027, 1})
   end
 
   test "says what the settings still lack instead of asking for the PIN", c do
@@ -154,7 +185,7 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
     assert text(view, "#vat-send-modal") =~ "Nach dem Senden ist das Jahr festgeschrieben."
 
     view |> form("#vat-send-form", %{"pin" => "4711"}) |> render_submit()
-    render_async(view)
+    FakeElster.await_sends(view.pid)
 
     assert flash(view, :info) == "Umsatzsteuererklärung an ELSTER gesendet."
     assert has_element?(view, "#vat-filing")
@@ -163,5 +194,19 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
     view |> element("#vat-period a", "Q4") |> render_click()
     assert has_element?(view, "#vat-send")
     refute has_element?(view, "#vat-filing")
+  end
+
+  test "a return filed before Abakus is locked and offers no send", c do
+    Filings.lock_filed_elsewhere(c.scope, [{:vat_year, 2026}, {:vat_quarter, 2026, 3}])
+
+    for period <- ["2026", "2026-q3"] do
+      {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/vat?period=#{period}")
+
+      assert text(view, "#vat-filing") =~ "Vor Abakus abgegeben"
+      assert text(view, "#vat-filing") =~ "Zeitraum ist festgeschrieben"
+      refute has_element?(view, "#vat-send")
+      refute has_element?(view, "#vat-protocol")
+      refute has_element?(view, "#vat-filing-changed")
+    end
   end
 end

@@ -286,8 +286,10 @@ _Avoid_: Settings (it is a task, not a setting)
 
 **Settings hub**:
 The sidebar's settings mode: a way back to the area used last, then the sections grouped by area, Allgemein for
-everyone with Paperless and, for the budget owner, Geräte; Kasse for its participants; Depot for everyone, so anyone may start a
-Depot, with Belegeingang once they have a portfolio; Buchhaltung with Geschäftskonten for everyone in Finanzen. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI "Einstellungen".
+everyone with Paperless and, for the budget owner, Geräte; Kasse for its participants; Depot for everyone, so anyone
+may start a Depot, with Belegeingang once they have a portfolio; Buchhaltung with Geschäftskonten for everyone in
+Finanzen, and Rechnungen and ELSTER once they have the Buchhaltung. Pages live under `/settings/…`. Code:
+`AbakusWeb.SettingsNav`. UI "Einstellungen".
 _Avoid_: Settings page, Mehr (that is the dock's button)
 
 **Paperless connection**:
@@ -530,8 +532,8 @@ _Avoid_: Accounting, Lexoffice
 
 **Business account**:
 An account in Finanzen the user marks as their business's, such as the Kontist account; its transactions are the
-business transactions the inbox asks a category and a receipt for. A business expense on another account is a business
-transaction too, once it has a tax line. UI "Geschäftskonto", the settings page "Geschäftskonten".
+business transactions the inbox asks a category and an attachment for. A business expense on another account is a
+business transaction too, once it has a tax line. UI "Geschäftskonto", the settings page "Geschäftskonten".
 _Avoid_: Company account
 
 **Bookkeeping category**:
@@ -580,9 +582,9 @@ _Avoid_: Bill, receipt (that is the Depot's), attachment (that is a transaction'
 
 **Invoice payment**:
 The incoming business transaction the owner confirmed as an invoice's payment, proposed by the invoice's total from
-its date on. An invoice with one is paid, else open; the invoice is that transaction's receipt. Code:
+its date on. An invoice with one is paid, else open; the invoice stands in for that transaction's attachment. Code:
 `Abakus.Bookkeeping.InvoicePayment`, `Abakus.Bookkeeping.InvoicePayments`. UI "Zahlung", "bezahlt", "offen".
-_Avoid_: Settlement, attachment (that is a receipt in Paperless)
+_Avoid_: Settlement, attachment (that is a transaction's document in Paperless)
 
 **Invoice number**:
 The year of the invoice's date followed by a counter that runs on across years, continuing the Lexoffice sequence:
@@ -617,11 +619,22 @@ The number of a field on an ELSTER form, such as 81 for the base of sales at 19 
 `kennzahl`, `VatReturn.kennzahlen/1`, `IncomeStatement.kennzahlen/1`. UI "Kz".
 
 **Lexoffice import**:
-The one-off takeover from Lexoffice with an API key that is not stored: its customers and the invoices written there,
-each with its original PDF filed in Paperless. A second run brings only what is new, by the Lexoffice ids the
+The one-off takeover from Lexoffice with an API key that is not stored: its customers, the invoices written there,
+each with its original PDF filed in Paperless, and its receipts, which are matched to the business transactions;
+then it locks the returns the owner names as filed: the Voranmeldungen up to the last quarter filed, and the years
+up to the last one whose annual returns were filed. A second run brings only what is new, by the Lexoffice ids the
 records keep. Code: `Abakus.Bookkeeping.LexofficeImport`, `Abakus.Bookkeeping.Lexoffice`. UI Import & Sync's tab
-"Lexoffice".
+"Lexoffice", "Letzte abgegebene Voranmeldung", "Jahreserklärungen abgegeben bis einschließlich".
 _Avoid_: Migration, sync (it runs once, not continually)
+
+**Lexoffice receipt**:
+A receipt taken over from Lexoffice with its items (category and VAT treatment), payments and files in Paperless
+(ADR 0037). Attached to the business transaction of its payment's day and amount when there is exactly one, else
+on the review list with the transactions proposed until the owner attaches or dismisses it; attaching makes its files
+the transaction's attachments and its items, if of one category and VAT treatment, its tax line. One in an
+Anlagevermögen category is proposed as a fixed asset. Code: `Abakus.Bookkeeping.LexofficeReceipt`,
+`Abakus.Bookkeeping.LexofficeReceipts`. UI "Beleg", the list "Belege zu prüfen", "Vorschläge aus Lexoffice".
+_Avoid_: Voucher (Lexoffice's word), attachment (that is the link to the transaction)
 
 **Fixed asset**:
 A purchase the business uses for years, in the asset register with its purchase date, net amount and useful life.
@@ -646,14 +659,15 @@ _Avoid_: Profit and loss, balance sheet (the owner keeps no double-entry books)
 **Filing**:
 A return sent to ELSTER through ERiC (ADR 0035): a quarter's advance VAT return, a year's annual VAT return or its
 EÜR (with the Anlage AVEÜR), kept with the Kennzahlen it declared, ELSTER's transfer ticket and its transmission
-protocol. Each is sent once its period is over, and once. Code: `Abakus.Bookkeeping.Filing`,
-`Abakus.Bookkeeping.Filings`. UI "An ELSTER senden", "gesendet", "Übertragungsprotokoll".
+protocol. Each is sent once its period is over, and once. A return filed before Abakus is locked by the Lexoffice
+import as a filing filed elsewhere, without Kennzahlen or protocol. Code: `Abakus.Bookkeeping.Filing`,
+`Abakus.Bookkeeping.Filings`. UI "An ELSTER senden", "gesendet", "Übertragungsprotokoll", "Vor Abakus abgegeben".
 _Avoid_: Submission, report, declaration
 
 **Locked period**:
 The period of a filing, a quarter or a year: its tax lines and disposals can no longer change, nor, once its EÜR is
-sent, what a fixed asset counts for in the year. A change in the Ledger that alters its numbers needs a corrected
-return, which Abakus does not send yet. Code: `Filings.locked?/2`. UI "Zeitraum ist festgeschrieben".
+sent, what a fixed asset counts for in the year. A period filed elsewhere locks only its tax lines. A change in the
+Ledger that alters its numbers needs a corrected return, which Abakus does not send yet. Code: `Filings.locked?/2`. UI "Zeitraum ist festgeschrieben".
 _Avoid_: Closed, frozen
 
 **ELSTER certificate**:

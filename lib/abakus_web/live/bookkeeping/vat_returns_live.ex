@@ -8,7 +8,7 @@ defmodule AbakusWeb.Bookkeeping.VatReturnsLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Bookkeeping.VatReturns
+  alias Abakus.Bookkeeping.Filings
   alias Abakus.{Format, LocalTime, Money}
   alias AbakusWeb.Bookkeeping.FilingPanel
 
@@ -25,7 +25,10 @@ defmodule AbakusWeb.Bookkeeping.VatReturnsLive do
       <.header>
         Umsatzsteuer
         <:subtitle>
-          {join_meta([title(@period), Format.date_span(@vat_return.first, @vat_return.last)])}
+          {join_meta([
+            Filings.title(@period),
+            Format.date_span(@vat_return.first, @vat_return.last)
+          ])}
         </:subtitle>
         <:actions>
           <div class="flex items-center gap-1">
@@ -97,7 +100,7 @@ defmodule AbakusWeb.Bookkeeping.VatReturnsLive do
         id="vat-filing-panel"
         prefix="vat"
         current_scope={@current_scope}
-        period={filing_period(@period)}
+        period={@period}
         computed={@vat_return}
         summary={summary(@period, @vat_return)}
       />
@@ -105,18 +108,19 @@ defmodule AbakusWeb.Bookkeeping.VatReturnsLive do
     """
   end
 
-  defp filing_period({year, nil}), do: {:vat_year, year}
-  defp filing_period({year, quarter}), do: {:vat_quarter, year, quarter}
-
-  defp summary({_year, nil} = period, vat_return),
+  defp summary({:vat_year, _year} = period, vat_return),
     do:
       join_meta([
-        title(period),
+        Filings.title(period),
         "Abschlusszahlung / Erstattung #{Money.euros(vat_return.balance)}"
       ])
 
   defp summary(period, vat_return),
-    do: join_meta([title(period), "Verbleibende Vorauszahlung #{Money.euros(vat_return.due)}"])
+    do:
+      join_meta([
+        Filings.title(period),
+        "Verbleibende Vorauszahlung #{Money.euros(vat_return.due)}"
+      ])
 
   defp total_row(total),
     do: %{
@@ -131,24 +135,22 @@ defmodule AbakusWeb.Bookkeeping.VatReturnsLive do
 
   defp kennzahlen(line), do: Enum.reject([line.base_kennzahl, line.tax_kennzahl], &is_nil/1)
 
-  defp periods(year), do: Enum.map(1..4, &{year, &1}) ++ [{year, nil}]
+  defp periods(year), do: Enum.map(1..4, &{:vat_quarter, year, &1}) ++ [{:vat_year, year}]
 
-  defp year({year, _quarter}), do: year
+  defp year(period), do: elem(period, 1)
 
-  defp shift({year, quarter}, by), do: {year + by, quarter}
+  defp shift({:vat_quarter, year, quarter}, by), do: {:vat_quarter, year + by, quarter}
+  defp shift({:vat_year, year}, by), do: {:vat_year, year + by}
 
-  defp title({year, nil}), do: "Umsatzsteuererklärung #{year}"
-  defp title({year, quarter}), do: "Voranmeldung #{quarter}. Quartal #{year}"
+  defp long_label(period), do: "#{short_label(period)} #{year(period)}"
 
-  defp long_label({year, _quarter} = period), do: "#{short_label(period)} #{year}"
-
-  defp short_label({_year, nil}), do: "Jahr"
-  defp short_label({_year, quarter}), do: "Q#{quarter}"
+  defp short_label({:vat_year, _year}), do: "Jahr"
+  defp short_label({:vat_quarter, _year, quarter}), do: "Q#{quarter}"
 
   defp path(period), do: ~p"/buchhaltung/vat?#{[period: param(period)]}"
 
-  defp param({year, nil}), do: "#{year}"
-  defp param({year, quarter}), do: "#{year}-q#{quarter}"
+  defp param({:vat_year, year}), do: "#{year}"
+  defp param({:vat_quarter, year, quarter}), do: "#{year}-q#{quarter}"
 
   @impl true
   def mount(_params, _session, socket), do: {:ok, assign(socket, page_title: "Umsatzsteuer")}
@@ -156,7 +158,8 @@ defmodule AbakusWeb.Bookkeeping.VatReturnsLive do
   @impl true
   def handle_params(params, _uri, socket) do
     period = parse(params["period"]) || last_quarter(LocalTime.today())
-    {:noreply, assign(socket, period: period, vat_return: compute(socket, period))}
+    vat_return = Filings.compute(socket.assigns.current_scope, period)
+    {:noreply, assign(socket, period: period, vat_return: vat_return)}
   end
 
   @impl true
@@ -165,19 +168,16 @@ defmodule AbakusWeb.Bookkeeping.VatReturnsLive do
 
   defp parse(param) when is_binary(param) do
     case Regex.run(~r/\A(\d{4})(?:-q([1-4]))?\z/, param) do
-      [_all, year] -> {String.to_integer(year), nil}
-      [_all, year, quarter] -> {String.to_integer(year), String.to_integer(quarter)}
+      [_all, year] -> {:vat_year, String.to_integer(year)}
+      [_all, year, quarter] -> {:vat_quarter, String.to_integer(year), String.to_integer(quarter)}
       nil -> nil
     end
   end
 
   defp parse(_none), do: nil
 
-  defp last_quarter(%Date{year: year, month: month}) when month <= 3, do: {year - 1, 4}
-  defp last_quarter(%Date{year: year, month: month}), do: {year, div(month - 1, 3)}
+  defp last_quarter(%Date{year: year, month: month}) when month <= 3,
+    do: {:vat_quarter, year - 1, 4}
 
-  defp compute(socket, {year, nil}), do: VatReturns.year(socket.assigns.current_scope, year)
-
-  defp compute(socket, {year, quarter}),
-    do: VatReturns.quarter(socket.assigns.current_scope, year, quarter)
+  defp last_quarter(%Date{year: year, month: month}), do: {:vat_quarter, year, div(month - 1, 3)}
 end

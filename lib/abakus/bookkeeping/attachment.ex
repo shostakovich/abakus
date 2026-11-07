@@ -1,6 +1,6 @@
 defmodule Abakus.Bookkeeping.Attachment do
   @moduledoc """
-  A receipt of a transaction, or of one part of a split: a document in the user's Paperless, by its id there, with
+  The proof of a transaction, or of one part of a split: a document in the user's Paperless, by its id there, with
   its title as it was when attached. One of the whole transaction counts for all its parts.
   """
 

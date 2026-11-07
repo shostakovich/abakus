@@ -8,7 +8,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLiveTest do
   import Setzkasten.Test.Confirm
 
   alias Abakus.Bookkeeping
-  alias Abakus.Bookkeeping.Invoices
+  alias Abakus.Bookkeeping.Settings
 
   setup :register_and_log_in_user
 
@@ -47,14 +47,14 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLiveTest do
     assert text(view, "#elster-certificate-stored") =~ "Robert.pfx"
     assert text(view, "#elster-status") == "Bereit"
 
-    settings = Invoices.get_settings(scope)
+    settings = Settings.get_settings(scope)
     assert {settings.tax_state, settings.elster_certificate} == {"BE", "PKCS12 certificate"}
     assert {settings.business_activity, settings.income_kind} == {"Softwareentwicklung", :trade}
     assert settings.tax_number == "30/123/45678"
 
     confirm_click(view, "#elster-certificate-remove", "Zertifikat entfernen?")
     refute has_element?(view, "#elster-certificate-stored")
-    assert Invoices.get_settings(scope).elster_certificate == nil
+    assert Settings.get_settings(scope).elster_certificate == nil
   end
 
   test "is only there with the Buchhaltung", %{conn: conn} do

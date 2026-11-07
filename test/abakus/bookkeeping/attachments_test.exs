@@ -37,46 +37,71 @@ defmodule Abakus.Bookkeeping.AttachmentsTest do
     Bookkeeping.get_transaction(budget_scope(), split.id)
   end
 
-  defp without_receipt(scope),
-    do: for({t, missing} <- Bookkeeping.inbox(scope), :receipt in missing, do: t.id)
+  defp without_attachment(scope),
+    do: for({t, missing} <- Bookkeeping.inbox(scope), :attachment in missing, do: t.id)
 
   defp proposed(scope, transaction) do
     {:ok, documents} = Attachments.proposals(scope, transaction)
     Enum.map(documents, & &1.id)
   end
 
-  test "the inbox keeps a business transaction until it has a receipt or needs none", c do
+  test "the inbox keeps a business transaction until it has an attachment or needs none", c do
     serve([document(1, "Rechnung", ~D[2026-10-09])])
     fee = transaction(c.business, amount: -990)
     hosting = transaction(c.business)
 
-    assert Enum.sort(without_receipt(c.scope)) == Enum.sort([hosting.id, fee.id])
+    assert Enum.sort(without_attachment(c.scope)) == Enum.sort([hosting.id, fee.id])
 
     assert {:ok, _attachment} = Attachments.attach(c.scope, hosting, nil, 1)
     assert :ok = Attachments.waive(c.scope, fee, true)
-    assert without_receipt(c.scope) == []
+    assert without_attachment(c.scope) == []
 
     assert :ok = Attachments.waive(c.scope, fee, false)
-    assert without_receipt(c.scope) == [fee.id]
+    assert without_attachment(c.scope) == [fee.id]
   end
 
-  test "a receipt of the whole split counts for its parts, else each part needs its own", c do
+  test "an attachment of the whole split counts for its parts, else each part needs its own", c do
     serve([document(1, "Beleg", ~D[2026-10-09]), document(2, "Beleg", ~D[2026-10-09])])
     split = split(c.business, [-1_000, -500])
     [first, second] = split.subtransactions
 
     {:ok, _attachment} = Attachments.attach(c.scope, split, first.id, 1)
-    assert without_receipt(c.scope) == [split.id]
+    assert without_attachment(c.scope) == [split.id]
 
     {:ok, _attachment} = Attachments.attach(c.scope, split, second.id, 2)
-    assert without_receipt(c.scope) == []
+    assert without_attachment(c.scope) == []
 
     other = split(c.business, [-300, -200])
     {:ok, _attachment} = Attachments.attach(c.scope, other, nil, 1)
-    refute other.id in without_receipt(c.scope)
+    refute other.id in without_attachment(c.scope)
   end
 
-  test "lists the receipts by side, and only those of current sides", c do
+  test "the inbox keeps a business expense on another account until it has an attachment", c do
+    serve([document(1, "Beleg", ~D[2026-10-09])])
+    private = account_fixture(name: "Girokonto", kind: :tracking)
+    _groceries = transaction(private)
+    laptop = transaction(private, amount: -120_000)
+    split = split(private, [-1_000, -500])
+    [first, _private_part] = split.subtransactions
+
+    for {transaction, side} <- [{laptop, "transaction"}, {split, first.id}] do
+      {:ok, _lines} =
+        Bookkeeping.save_tax_lines(c.scope, transaction, %{
+          side => %{"category" => "office_supplies", "vat" => "19"}
+        })
+    end
+
+    assert Bookkeeping.inbox(c.scope) |> Enum.map(&elem(&1, 0).id) |> Enum.sort() ==
+             Enum.sort([laptop.id, split.id])
+
+    assert Enum.sort(without_attachment(c.scope)) == Enum.sort([laptop.id, split.id])
+
+    {:ok, _attachment} = Attachments.attach(c.scope, split, first.id, 1)
+    :ok = Attachments.waive(c.scope, laptop, true)
+    assert without_attachment(c.scope) == []
+  end
+
+  test "lists the attachments by side, and only those of current sides", c do
     serve([document(1, "Beleg", ~D[2026-10-09], title: "Rechnung Mai"), document(2, "x", nil)])
     split = split(c.business, [-1_000, -500])
     [first, second] = split.subtransactions
@@ -119,7 +144,17 @@ defmodule Abakus.Bookkeeping.AttachmentsTest do
     assert Attachments.attach(c.scope, hosting, nil, 1) == {:error, :not_found}
   end
 
-  test "takes no receipts for a transfer", c do
+  test "waives and links only the user's own transaction", c do
+    hosting = transaction(c.business)
+    other = Scope.for_user(UsersFixtures.user_fixture())
+
+    assert Attachments.waive(other, hosting, true) == {:error, :not_found}
+    assert Attachments.link(other, hosting, 1, "Beleg") == {:error, :not_found}
+    assert Attachments.waived(c.scope, [hosting]) == MapSet.new()
+    assert Attachments.list(c.scope, [hosting]) == %{}
+  end
+
+  test "takes no attachments for a transfer", c do
     serve([document(1, "Beleg", ~D[2026-10-09])])
     private = account_fixture(name: "Girokonto")
 
@@ -155,6 +190,31 @@ defmodule Abakus.Bookkeeping.AttachmentsTest do
     assert proposed(c.scope, transaction(c.business, amount: 0)) == []
   end
 
+  test "proposes again a document whose transaction or part has left the register", c do
+    serve([
+      document(1, "Betrag 15,00", ~D[2026-10-09]),
+      document(2, "Betrag 15,00", ~D[2026-10-09])
+    ])
+
+    deleted = transaction(c.business, amount: -1_500)
+    {:ok, _attachment} = Attachments.attach(c.scope, deleted, nil, 1)
+    split = split(c.business, [-1_000, -500])
+    [first, second] = split.subtransactions
+    {:ok, _attachment} = Attachments.attach(c.scope, split, first.id, 2)
+    hosting = transaction(c.business, amount: -1_500)
+
+    assert proposed(c.scope, hosting) == []
+
+    {:ok, _deleted} = Ledger.delete_transaction(c.scope, deleted)
+
+    {:ok, _changed} =
+      Ledger.update_transaction(c.scope, split, %{
+        subtransactions: [%{id: second.id, amount: -500}, %{amount: -1_000}]
+      })
+
+    assert Enum.sort(proposed(c.scope, hosting)) == [1, 2]
+  end
+
   test "proposes nothing without Paperless", c do
     {:ok, _none} = Paperless.disconnect(c.scope)
 
@@ -185,7 +245,7 @@ defmodule Abakus.Bookkeeping.AttachmentsTest do
              {:error, :not_consumed}
   end
 
-  test "writes amounts as receipts do" do
+  test "writes amounts as documents do" do
     assert Attachments.notations(-123_456) == ["1.234,56", "1234,56", "1,234.56", "1234.56"]
     assert Attachments.notations(1_990) == ["19,90", "19.90"]
   end

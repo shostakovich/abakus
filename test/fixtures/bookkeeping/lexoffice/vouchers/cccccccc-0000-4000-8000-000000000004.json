@@ -1,0 +1,29 @@
+{
+  "id": "cccccccc-0000-4000-8000-000000000004",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "type": "purchaseinvoice",
+  "voucherStatus": "paid",
+  "voucherNumber": "RE-55120",
+  "voucherDate": "2025-06-06T00:00:00.000+02:00",
+  "dueDate": "2025-06-06T00:00:00.000+02:00",
+  "totalGrossAmount": 1428.0,
+  "totalTaxAmount": 228.0,
+  "taxType": "gross",
+  "useCollectiveContact": false,
+  "contactId": "aaaaaaaa-0000-4000-8000-000000000004",
+  "voucherItems": [
+    {
+      "amount": 1428.0,
+      "taxAmount": 228.0,
+      "taxRatePercent": 19.0,
+      "categoryId": "60a5a91b-6b4a-485e-b610-232b423a161d"
+    }
+  ],
+  "files": [
+    "ffffffff-0000-4000-8000-000000000014",
+    "ffffffff-0000-4000-8000-000000000015"
+  ],
+  "createdDate": "2025-06-06T00:00:00.000+02:00",
+  "updatedDate": "2025-06-06T00:00:00.000+02:00",
+  "version": 2
+}

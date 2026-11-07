@@ -1,5 +1,5 @@
 defmodule Abakus.Bookkeeping.ReceiptWaiver do
-  @moduledoc "The mark that a transaction needs no receipt, such as a bank fee."
+  @moduledoc "The mark that a transaction needs no attachment, such as a bank fee."
 
   use Abakus.Schema, uuid: true
 

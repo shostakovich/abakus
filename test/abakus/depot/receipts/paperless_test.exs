@@ -185,6 +185,21 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
     refute polled_at(unreachable)
   end
 
+  test "skips a user who has disconnected since the poll started" do
+    user = paperless_user("abakus")
+
+    FakePaperless.serve(%{
+      @url => %{token: "token", documents: [FakePaperless.fixture(1, ["abakus"])]}
+    })
+
+    [setting] = Settings.list_paperless()
+    {:ok, _connection} = Paperless.disconnect(user)
+
+    assert Receipts.poll_paperless(setting) == {:error, :not_connected}
+    assert inbox(user) == []
+    refute polled_at(user)
+  end
+
   test "the last poll counts for the connection and tag it was made with" do
     user = paperless_user("abakus")
     FakePaperless.serve(%{@url => %{token: "token", documents: []}})

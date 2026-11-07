@@ -5,7 +5,7 @@ defmodule AbakusWeb.Bookkeeping.InvoiceSettingsLiveTest do
   import Abakus.DomainFixtures
 
   alias Abakus.Bookkeeping
-  alias Abakus.Bookkeeping.Invoices
+  alias Abakus.Bookkeeping.Settings
 
   setup :register_and_log_in_user
 
@@ -33,7 +33,7 @@ defmodule AbakusWeb.Bookkeeping.InvoiceSettingsLiveTest do
     |> render_submit()
 
     assert_push_event(view, "setzkasten:saved", %{id: "invoice-settings-save"})
-    settings = Invoices.get_settings(scope)
+    settings = Settings.get_settings(scope)
     assert {settings.iban, settings.payment_days} == {"DE89370400440532013000", 30}
   end
 

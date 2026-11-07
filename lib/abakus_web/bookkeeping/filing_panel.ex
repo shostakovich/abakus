@@ -3,10 +3,13 @@ defmodule AbakusWeb.Bookkeeping.FilingPanel do
   Sending the return of `period` (`Abakus.Bookkeeping.Filings`) from the page that shows it, `computed`. A sent
   return shows when it was sent, its protocol, and a warning once its numbers no longer match those sent. One not
   sent yet offers „An ELSTER senden“ once its period is over: the dialog asks for the PIN of the certificate at every
-  send, or says what the settings still lack. `summary` names what the return comes to. Its ids start with `prefix`;
-  it tells its LiveView `{FilingPanel, :sent, period}` once sent.
+  send, or says what the settings still lack. One filed before Abakus only shows that it is locked. `summary` names
+  what the return comes to. Its ids start with `prefix`; it tells its LiveView `{FilingPanel, :sent, period}` once
+  sent. The send runs apart from the LiveView and goes on when the page is closed.
   """
   use AbakusWeb, :live_component
+
+  require Logger
 
   alias Abakus.Bookkeeping.{Elster, Filings}
   alias Abakus.Format
@@ -15,7 +18,12 @@ defmodule AbakusWeb.Bookkeeping.FilingPanel do
   def render(assigns) do
     ~H"""
     <div id={@id}>
-      <div :if={@filing} class="mt-6 flex max-w-3xl flex-col gap-3">
+      <div :if={@filing && @filing.filed_elsewhere} class="mt-6 max-w-3xl">
+        <.alert id={"#{@prefix}-filing"} tone={:success} title="Vor Abakus abgegeben">
+          {Filings.locked_message()}, seit dem Lexoffice-Import am {Format.datetime(@filing.sent_at)}.
+        </.alert>
+      </div>
+      <div :if={@filing && !@filing.filed_elsewhere} class="mt-6 flex max-w-3xl flex-col gap-3">
         <.alert
           id={"#{@prefix}-filing"}
           tone={:success}
@@ -145,6 +153,21 @@ defmodule AbakusWeb.Bookkeeping.FilingPanel do
     do: {:ok, assign(socket, sending: false, submitting: false, send_error: nil, missing: [])}
 
   @impl true
+  def update(%{sent: {sent, result}}, socket) do
+    %{current_scope: scope, period: period} = socket.assigns
+
+    case result do
+      {:ok, _filing} ->
+        send(self(), {__MODULE__, :sent, sent})
+
+        {:ok,
+         assign(socket, submitting: false, sending: false, filing: Filings.sent(scope, period))}
+
+      {:error, message} ->
+        {:ok, assign(socket, submitting: false, send_error: message)}
+    end
+  end
+
   def update(assigns, socket) do
     socket =
       if assigns.period != socket.assigns[:period],
@@ -169,33 +192,24 @@ defmodule AbakusWeb.Bookkeeping.FilingPanel do
     do: {:noreply, assign(socket, sending: false)}
 
   def handle_event("send", %{"pin" => pin}, %{assigns: %{submitting: false}} = socket) do
-    %{current_scope: scope, period: period} = socket.assigns
+    %{current_scope: scope, period: period, myself: myself} = socket.assigns
+    live_view = self()
 
-    {:noreply,
-     socket
-     |> assign(submitting: true, send_error: nil)
-     |> start_async(:send, fn -> {period, Filings.send_return(scope, period, pin)} end)}
+    {:ok, _pid} =
+      Task.Supervisor.start_child(Abakus.Bookkeeping.TaskSupervisor, fn ->
+        send_update(live_view, myself, sent: {period, send_return(scope, period, pin)})
+      end)
+
+    {:noreply, assign(socket, submitting: true, send_error: nil)}
   end
 
   def handle_event("send", _params, socket), do: {:noreply, socket}
 
-  @impl true
-  def handle_async(:send, {:ok, {sent, {:ok, _filing}}}, socket) do
-    %{current_scope: scope, period: period} = socket.assigns
-    send(self(), {__MODULE__, :sent, sent})
-
-    {:noreply,
-     assign(socket, submitting: false, sending: false, filing: Filings.sent(scope, period))}
+  defp send_return(scope, period, pin) do
+    Filings.send_return(scope, period, pin)
+  catch
+    kind, reason ->
+      Logger.error(Exception.format(kind, reason, __STACKTRACE__))
+      {:error, "Das Senden ist abgebrochen. Bitte noch einmal."}
   end
-
-  def handle_async(:send, {:ok, {_period, {:error, message}}}, socket),
-    do: {:noreply, assign(socket, submitting: false, send_error: message)}
-
-  def handle_async(:send, {:exit, _reason}, socket),
-    do:
-      {:noreply,
-       assign(socket,
-         submitting: false,
-         send_error: "Das Senden ist abgebrochen. Bitte noch einmal."
-       )}
 end

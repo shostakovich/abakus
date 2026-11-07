@@ -94,10 +94,14 @@ defmodule Abakus.Bookkeeping.Elster.XmlTest do
   describe "the Umsatzsteuererklärung of a year" do
     test "goes as form E50 of its year, to the state of the tax office" do
       vat_return =
-        VatReturn.year(2027, [
-          entry(~D[2027-01-20], 119_000, "revenue", :rate_19),
-          entry(~D[2027-02-05], -11_900, "internet", :rate_19)
-        ])
+        VatReturn.year(
+          2027,
+          [
+            entry(~D[2027-01-20], 119_000, "revenue", :rate_19),
+            entry(~D[2027-02-05], -11_900, "internet", :rate_19)
+          ],
+          %{}
+        )
 
       xml = Xml.vat_year(vat_return, @settings, "1130012345678", @opts)
 
@@ -131,7 +135,11 @@ defmodule Abakus.Bookkeeping.Elster.XmlTest do
 
     test "declares reverse charge as owed and deducted, without sales it has not" do
       vat_return =
-        VatReturn.year(2027, [entry(~D[2027-02-10], -10_000, "licenses_13b_eu", :reverse_charge)])
+        VatReturn.year(
+          2027,
+          [entry(~D[2027-02-10], -10_000, "licenses_13b_eu", :reverse_charge)],
+          %{}
+        )
 
       xml = Xml.vat_year(vat_return, @settings, "1130012345678", @opts)
 

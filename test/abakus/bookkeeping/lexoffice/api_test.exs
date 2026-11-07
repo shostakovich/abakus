@@ -74,7 +74,7 @@ defmodule Abakus.Bookkeeping.Lexoffice.APITest do
   defp requests(state), do: Agent.get(state, & &1.requests)
 
   test "gets the JSON of a path with the key as bearer token and the query", %{state: state} do
-    assert API.get(key(), "contacts", customer: true, page: 0) ==
+    assert API.get(key(), ["contacts"], customer: true, page: 0) ==
              {:ok, %{"content" => [], "last" => true}}
 
     assert requests(state) ==
@@ -86,14 +86,14 @@ defmodule Abakus.Bookkeeping.Lexoffice.APITest do
   end
 
   test "a refused key is unauthorized, a voucher without payments and a missing path not found" do
-    assert API.get(fn -> "wrong" end, "contacts", []) == {:error, :unauthorized}
-    assert API.get(key(), "payments/p1", []) == {:error, :not_found}
-    assert API.get(key(), "invoices/missing", []) == {:error, :not_found}
+    assert API.get(fn -> "wrong" end, ["contacts"], []) == {:error, :unauthorized}
+    assert API.get(key(), ["payments", "p1"], []) == {:error, :not_found}
+    assert API.get(key(), ["invoices", "missing"], []) == {:error, :not_found}
   end
 
   test "asks again after a 429, and gives up after three more", %{state: state} do
-    assert API.get(key(), "invoices/busy", []) == {:ok, %{"id" => "busy"}}
-    assert API.get(key(), "invoices/always-busy", []) == {:error, :rate_limited}
+    assert API.get(key(), ["invoices", "busy"], []) == {:ok, %{"id" => "busy"}}
+    assert API.get(key(), ["invoices", "always-busy"], []) == {:error, :rate_limited}
     assert length(requests(state)) == 2 + 4
   end
 
@@ -101,7 +101,7 @@ defmodule Abakus.Bookkeeping.Lexoffice.APITest do
     configure(interval: 500)
     started = System.monotonic_time(:millisecond)
 
-    for _request <- 1..3, do: API.get(key(), "contacts", [])
+    for _request <- 1..3, do: API.get(key(), ["contacts"], [])
 
     assert System.monotonic_time(:millisecond) - started >= 1000
   end

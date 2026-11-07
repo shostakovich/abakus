@@ -13,7 +13,9 @@ defmodule Abakus.Bookkeeping.Lexoffice.API do
   @retries 3
 
   @impl true
-  def get(key, path, params) do
+  def get(key, segments, params) do
+    path = Enum.map_join(segments, "/", &segment/1)
+
     with {:ok, body} <- request(key, path, params, "application/json", @retries) do
       case JSON.decode(body) do
         {:ok, json} -> {:ok, json}

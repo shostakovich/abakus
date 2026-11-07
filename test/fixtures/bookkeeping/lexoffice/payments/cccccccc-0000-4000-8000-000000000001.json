@@ -1,0 +1,16 @@
+{
+  "openAmount": 0.0,
+  "paymentStatus": "balanced",
+  "currency": "EUR",
+  "voucherType": "purchaseinvoice",
+  "paidDate": "2024-05-02T00:00:00.000+02:00",
+  "paymentItems": [
+    {
+      "paymentItemType": "partPaymentFinancialTransaction",
+      "postingDate": "2024-05-02T00:00:00.000+02:00",
+      "amount": 19.9,
+      "currency": "EUR"
+    }
+  ],
+  "voucherStatus": "paid"
+}

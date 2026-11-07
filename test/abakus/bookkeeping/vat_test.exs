@@ -14,4 +14,10 @@ defmodule Abakus.Bookkeeping.VatTest do
     assert Vat.amounts(-10_000, :reverse_charge, ~D[2027-02-10]) == %{net: -10_000, vat: -1_900}
     assert Vat.amounts(-10_000, :reverse_charge, ~D[2020-08-01]) == %{net: -10_000, vat: -1_600}
   end
+
+  test "knows the treatment of a rate" do
+    assert Vat.treatment(16) == :rate_16
+    assert Vat.rate(:rate_16) == 16
+    assert Vat.treatment(8) == nil
+  end
 end

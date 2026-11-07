@@ -6,7 +6,7 @@ defmodule AbakusWeb.Bookkeeping.InvoiceFormLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Bookkeeping.{Invoice, Invoices, Position, Settings}
+  alias Abakus.Bookkeeping.{Invoice, Invoices, Position, Settings, Vat}
   alias Abakus.{LocalTime, Money}
 
   @impl true
@@ -147,9 +147,10 @@ defmodule AbakusWeb.Bookkeeping.InvoiceFormLive do
     """
   end
 
-  defp vat_options do
-    [{"19 %", "19"}, {"7 %", "7"}, {"Reverse Charge (Kunde im EU-Ausland)", "reverse_charge"}]
-  end
+  defp vat_options, do: for(t <- Invoice.treatments(), do: {vat_option(t), Vat.stored()[t]})
+
+  defp vat_option(:reverse_charge), do: "Reverse Charge (Kunde im EU-Ausland)"
+  defp vat_option(treatment), do: Vat.label(treatment)
 
   defp vat_label(:reverse_charge), do: "Umsatzsteuer (Reverse Charge)"
   defp vat_label(treatment), do: "Umsatzsteuer #{Invoice.rate(treatment)} %"
@@ -166,7 +167,7 @@ defmodule AbakusWeb.Bookkeeping.InvoiceFormLive do
      |> assign(
        page_title: "Neue Rechnung",
        customers: Invoices.list_customers(scope),
-       sender?: Settings.complete?(Invoices.get_settings(scope))
+       sender?: Settings.complete?(Settings.get_settings(scope))
      )
      |> assign_form(Invoices.change_invoice(Invoices.new_invoice(LocalTime.today())))}
   end

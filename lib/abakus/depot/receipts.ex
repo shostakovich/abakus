@@ -160,21 +160,22 @@ defmodule Abakus.Depot.Receipts do
   the user, with Paperless' text, and once a document is there swaps its tag for
   „<tag>-erledigt“; a document the inbox has already, or which was discarded, only loses its
   tag. Notes the time of the poll; a document that fails, or is larger than an upload may be,
-  stays tagged for the next one.
+  stays tagged for the next one. `{:error, :not_connected}` for a user no longer connected.
   """
   def poll_paperless(%Setting{} = setting) do
     %Setting{user: user} = setting = Repo.preload(setting, :user)
-    connection = Paperless.get_connection(Scope.for_user(user))
 
-    case Paperless.client().documents(connection, setting.paperless_tag) do
-      {:ok, documents} ->
-        Enum.each(documents, &take_document(setting, connection, &1))
-        :ok = Settings.paperless_polled(setting)
-        broadcast(user.id)
+    with {:ok, connection} <- Paperless.connection(Scope.for_user(user)) do
+      case Paperless.client().documents(connection, setting.paperless_tag) do
+        {:ok, documents} ->
+          Enum.each(documents, &take_document(setting, connection, &1))
+          :ok = Settings.paperless_polled(setting)
+          broadcast(user.id)
 
-      {:error, reason} ->
-        Logger.warning("polling Paperless of user #{user.id} failed: #{inspect(reason)}")
-        {:error, reason}
+        {:error, reason} ->
+          Logger.warning("polling Paperless of user #{user.id} failed: #{inspect(reason)}")
+          {:error, reason}
+      end
     end
   end
 

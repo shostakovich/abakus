@@ -59,10 +59,9 @@ defmodule Abakus.Bookkeeping.IncomeStatement do
   @doc "The EÜR of `year` from its entries and the fixed assets, each with its disposal loaded."
   def year(year, entries, assets) do
     sums =
-      (Enum.flat_map(entries, &shares/1) ++ Enum.flat_map(assets, &asset_shares(&1, year)))
-      |> Enum.reduce(%{}, fn {kennzahl, cents}, sums ->
-        Map.update(sums, kennzahl, cents, &(&1 + cents))
-      end)
+      by_kennzahl(
+        Enum.flat_map(entries, &shares/1) ++ Enum.flat_map(assets, &asset_shares(&1, year))
+      )
 
     income = lines(@income, sums)
     expenses = lines(@expenses, sums)
@@ -92,7 +91,11 @@ defmodule Abakus.Bookkeeping.IncomeStatement do
     asset
     |> asset_shares(year)
     |> Enum.reject(fn {_kennzahl, cents} -> cents == 0 end)
-    |> Enum.reduce(%{}, fn {kennzahl, cents}, sums ->
+    |> by_kennzahl()
+  end
+
+  defp by_kennzahl(shares) do
+    Enum.reduce(shares, %{}, fn {kennzahl, cents}, sums ->
       Map.update(sums, kennzahl, cents, &(&1 + cents))
     end)
   end

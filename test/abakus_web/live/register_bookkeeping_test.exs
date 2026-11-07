@@ -7,7 +7,7 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
   import AbakusWeb.PageText, only: [text: 2]
 
   alias Abakus.{Bookkeeping, FakePaperless, Ledger, Paperless}
-  alias Abakus.Bookkeeping.{Attachments, FakeElster, Filings}
+  alias Abakus.Bookkeeping.{Attachments, FakeElster, Filings, TaxLine}
 
   @url "http://paperless.test"
 
@@ -61,6 +61,21 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
     assert has_element?(view, "#tx-card-#{c.book.id}", "Zeitschriften/Bücher")
   end
 
+  test "shows the stored key of a category no longer in the code list", c do
+    keep_books(c)
+
+    Abakus.Repo.insert!(%TaxLine{
+      user_id: c.scope.user.id,
+      transaction_id: c.book.id,
+      category: "retired",
+      vat: :rate_19
+    })
+
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.giro}")
+
+    assert text(view, "#tx-#{c.book.id}-tax") == "retired"
+  end
+
   test "shows the category and VAT of a transaction in a sent quarter read-only", c do
     keep_books(c)
     fix_today(~D[2027-04-15])
@@ -90,6 +105,22 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
     assert has_element?(view, "#tx-#{licence.id}-tax[title='19 %']")
     licence = Bookkeeping.get_transaction(c.scope, licence.id)
     assert licence.id in Attachments.waived(c.scope, [licence])
+  end
+
+  test "says that a transaction pays a disposal and offers it no category", c do
+    keep_books(c)
+    payment = transaction_fixture(account_id: c.kontist.id, date: ~D[2027-01-20], amount: 23_800)
+    asset = fixed_asset_fixture(c.scope, %{"purchased_on" => "2025-03-01"})
+    disposal_fixture(c.scope, asset, %{"transaction_id" => payment.id})
+
+    {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.kontist}")
+    view |> element("#tx-#{payment.id}-tax") |> render_click()
+
+    assert text(view, "#tax-lines-disposal") =~ "bezahlt den Verkauf von „Notebook“"
+    refute has_element?(view, "#tax-transaction-category")
+
+    view |> form("#tax-lines-form", %{"no_receipt" => "true"}) |> render_submit()
+    refute has_element?(view, "#tax-lines-modal")
   end
 
   test "annotates a split per part and a transfer not at all", c do
@@ -135,7 +166,7 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
     assert text(view, "#tx-#{split.id}-part-1-tax") == "Nebenkosten des Geldverkehrs"
   end
 
-  test "shows a paperclip per receipt that opens its PDF, a split's own on its row", c do
+  test "shows a paperclip per attachment that opens its PDF, a split's own on its row", c do
     keep_books(c)
 
     FakePaperless.serve(%{
@@ -169,22 +200,26 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
 
     assert has_element?(
              view,
-             "a#tx-#{c.book.id}-tax-receipt-0[href='/buchhaltung/paperless/1'][target=_blank][title=Quittung]"
+             "a#tx-#{c.book.id}-tax-attachment-0[href='/buchhaltung/paperless/1'][target=_blank][title=Quittung]"
            )
-
-    assert has_element?(view, "a#tx-#{c.book.id}-tax-receipt-1[href='/buchhaltung/paperless/2']")
-    assert has_element?(view, "#tx-#{split.id}-tax-receipt-0[href='/buchhaltung/paperless/2']")
 
     assert has_element?(
              view,
-             "#tx-#{split.id}-part-0-tax-receipt-0[href='/buchhaltung/paperless/1']"
+             "a#tx-#{c.book.id}-tax-attachment-1[href='/buchhaltung/paperless/2']"
            )
 
-    refute has_element?(view, "#tx-#{split.id}-part-1-tax-receipt-0")
+    assert has_element?(view, "#tx-#{split.id}-tax-attachment-0[href='/buchhaltung/paperless/2']")
+
+    assert has_element?(
+             view,
+             "#tx-#{split.id}-part-0-tax-attachment-0[href='/buchhaltung/paperless/1']"
+           )
+
+    refute has_element?(view, "#tx-#{split.id}-part-1-tax-attachment-0")
     assert has_element?(view, "#tx-card-#{c.book.id}", "2 Belege")
   end
 
-  test "attaches a receipt to one part of a split", c do
+  test "attaches a document to one part of a split", c do
     keep_books(c)
 
     FakePaperless.serve(%{
@@ -208,9 +243,9 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
     view |> element("#tx-#{split.id}-part-1-tax") |> render_click()
     render_async(view)
 
-    assert has_element?(view, "#receipts-side option", "Ganze Buchung")
+    assert has_element?(view, "#attachments-side option", "Ganze Buchung")
     [_server, domain] = Bookkeeping.get_transaction(c.scope, split.id).subtransactions
-    view |> form("#receipts-side-form", %{"side" => domain.id}) |> render_change()
+    view |> form("#attachments-side-form", %{"side" => domain.id}) |> render_change()
     view |> element("#proposal-3-attach") |> render_click()
 
     assert [%{subtransaction_id: part_id}] =
@@ -220,6 +255,6 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
              |> List.flatten()
 
     assert part_id == domain.id
-    assert text(view, "#receipts-attached") =~ "Domain · −5,00 €"
+    assert text(view, "#attachments-attached") =~ "Domain · −5,00 €"
   end
 end

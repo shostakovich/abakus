@@ -3,6 +3,7 @@ defmodule Abakus.Application do
 
   use Application
 
+  alias Abakus.Bookkeeping.Filings
   alias Abakus.Depot.Receipts
 
   @impl true
@@ -16,6 +17,8 @@ defmodule Abakus.Application do
         # Sends sign-in links in the background; a flood of requests is dropped.
         {Task.Supervisor, name: Abakus.TaskSupervisor, max_children: 50},
         {Task.Supervisor, name: Abakus.Depot.TaskSupervisor},
+        # Sends returns to ELSTER apart from the page, so that closing it does not stop a send.
+        {Task.Supervisor, name: Abakus.Bookkeeping.TaskSupervisor},
         Abakus.Depot.Receipts.Recognition,
         AbakusWeb.Endpoint
       ] ++ jobs()
@@ -23,8 +26,9 @@ defmodule Abakus.Application do
     Supervisor.start_link(children, strategy: :one_for_one, name: Abakus.Supervisor)
   end
 
-  defp jobs do
-    if Application.fetch_env!(:abakus, :jobs),
+  @doc false
+  def jobs(enabled? \\ Application.fetch_env!(:abakus, :jobs)) do
+    if enabled?,
       do: [
         Abakus.ExchangeRates.Job,
         Abakus.Kasse.Recurring.Job,
@@ -33,7 +37,8 @@ defmodule Abakus.Application do
         Abakus.Depot.Receipts.PaperlessJob,
         Abakus.BankSync.Job,
         Abakus.Ledger.Scheduled.Job,
-        {Task, &Receipts.resume_recognition/0}
+        Supervisor.child_spec({Task, &Receipts.resume_recognition/0}, id: :resume_recognition),
+        Supervisor.child_spec({Task, &Filings.release_interrupted/0}, id: :release_interrupted)
       ],
       else: []
   end

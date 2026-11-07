@@ -1,0 +1,28 @@
+{
+  "id": "cccccccc-0000-4000-8000-000000000007",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "type": "purchaseinvoice",
+  "voucherStatus": "paid",
+  "voucherNumber": "SD-2025-12",
+  "voucherDate": "2025-12-23T00:00:00.000+01:00",
+  "dueDate": "2025-12-23T00:00:00.000+01:00",
+  "totalGrossAmount": 4.51,
+  "totalTaxAmount": 0,
+  "taxType": "gross",
+  "useCollectiveContact": true,
+  "contactName": "Suchdienst Ltd.",
+  "voucherItems": [
+    {
+      "amount": 4.51,
+      "taxAmount": 0,
+      "taxRatePercent": 0.0,
+      "categoryId": "b49aae5f-4121-4262-b8bd-f49278b66423"
+    }
+  ],
+  "files": [
+    "ffffffff-0000-4000-8000-000000000018"
+  ],
+  "createdDate": "2025-12-23T00:00:00.000+01:00",
+  "updatedDate": "2025-12-23T00:00:00.000+01:00",
+  "version": 2
+}
