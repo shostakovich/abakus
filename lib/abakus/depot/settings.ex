@@ -1,13 +1,14 @@
 defmodule Abakus.Depot.Settings do
   @moduledoc """
-  Each user's settings of the Depot: the benchmark they compare their portfolios with and the Paperless their
-  receipts come from.
+  Each user's settings of the Depot: the benchmark they compare their portfolios with and the tag of the documents
+  in their Paperless that are receipts.
   """
 
   import Ecto.Query, warn: false
 
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Settings.Setting
+  alias Abakus.Paperless.Connection
   alias Abakus.Repo
   alias Abakus.Users.Scope
 
@@ -29,46 +30,29 @@ defmodule Abakus.Depot.Settings do
     |> Repo.insert_or_update()
   end
 
-  @doc "The form of the user's Paperless."
-  def change_paperless(%Setting{} = setting, attrs \\ %{}),
-    do: Setting.paperless_changeset(setting, attrs)
+  @doc "The form of the tag of the user's receipt intake."
+  def change_paperless_tag(%Setting{} = setting, attrs \\ %{}),
+    do: Setting.paperless_tag_changeset(setting, attrs)
 
-  @doc """
-  Sets the user's Paperless URL, API token and tag, see `Setting.paperless_changeset/2`; another URL or tag has
-  not been polled yet.
-  """
-  def update_paperless(%Scope{} = scope, attrs) do
-    changeset = scope |> get_settings() |> Setting.paperless_changeset(attrs)
+  @doc "Sets the tag of the documents the Depot takes from the user's Paperless; another tag has not been polled yet."
+  def update_paperless_tag(%Scope{} = scope, attrs) do
+    changeset = scope |> get_settings() |> Setting.paperless_tag_changeset(attrs)
 
-    if Ecto.Changeset.changed?(changeset, :paperless_url) or
-         Ecto.Changeset.changed?(changeset, :paperless_tag),
-       do:
-         changeset
-         |> Ecto.Changeset.put_change(:paperless_polled_at, nil)
-         |> Repo.insert_or_update(),
-       else: Repo.insert_or_update(changeset)
+    if Ecto.Changeset.changed?(changeset, :paperless_tag),
+      do:
+        changeset
+        |> Ecto.Changeset.put_change(:paperless_polled_at, nil)
+        |> Repo.insert_or_update(),
+      else: Repo.insert_or_update(changeset)
   end
 
-  @doc "Forgets the user's Paperless."
-  def disconnect_paperless(%Scope{} = scope) do
-    scope
-    |> get_settings()
-    |> Ecto.Changeset.change(
-      paperless_url: nil,
-      paperless_token: nil,
-      paperless_tag: nil,
-      paperless_polled_at: nil
-    )
-    |> Repo.insert_or_update()
-  end
-
-  @doc "The settings of the users who have entered a Paperless, for polling it."
+  @doc "The settings of the users with a tag and a Paperless connection, for polling it."
   def list_paperless do
     Repo.all(
       from s in Setting,
-        where:
-          not is_nil(s.paperless_url) and not is_nil(s.paperless_token) and
-            not is_nil(s.paperless_tag),
+        join: c in Connection,
+        on: c.user_id == s.user_id,
+        where: not is_nil(s.paperless_tag),
         order_by: s.user_id,
         preload: :user
     )

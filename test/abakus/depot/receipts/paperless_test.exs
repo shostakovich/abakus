@@ -10,19 +10,15 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
   alias Abakus.Depot.{FakeModel, FakePaperless, FakeTextExtractor, Receipts, Settings}
   alias Abakus.Depot.Portfolios.Receipt
   alias Abakus.Depot.Receipts.PaperlessJob
+  alias Abakus.Paperless
 
   @url "http://paperless.test"
 
   defp paperless_user(tag, url \\ @url, token \\ "token") do
     scope = user_scope_fixture()
 
-    {:ok, _setting} =
-      Settings.update_paperless(scope, %{
-        "paperless_url" => url,
-        "paperless_token" => token,
-        "paperless_tag" => tag
-      })
-
+    {:ok, _connection} = Paperless.update_connection(scope, %{"url" => url, "token" => token})
+    {:ok, _setting} = Settings.update_paperless_tag(scope, %{"paperless_tag" => tag})
     scope
   end
 
@@ -186,5 +182,19 @@ defmodule Abakus.Depot.Receipts.PaperlessTest do
     assert tags(4) == ["abakus"]
     assert inbox(unreachable) == [] and inbox(wrong_token) == []
     refute polled_at(unreachable)
+  end
+
+  test "the last poll counts for the connection and tag it was made with" do
+    user = paperless_user("abakus")
+    FakePaperless.serve(%{@url => %{token: "token", documents: []}})
+
+    poll_all()
+    assert Receipts.paperless_polled_at(user)
+
+    {:ok, _connection} =
+      Paperless.update_connection(user, %{"url" => "http://other.test", "token" => "token"})
+
+    refute Receipts.paperless_polled_at(user)
+    assert polled_at(user)
   end
 end

@@ -24,7 +24,10 @@ defmodule AbakusWeb.SettingsNav do
   def groups(scope) do
     [
       {"Allgemein",
-       Enum.filter([access(), appearance(), Scope.budget_owner?(scope) && devices()], & &1)},
+       Enum.filter(
+         [access(), appearance(), Scope.budget_owner?(scope) && devices(), paperless()],
+         & &1
+       )},
       Areas.allowed?(scope, :kasse) && {"Kasse", kasse(scope)},
       {"Depot", depot(scope)}
     ]
@@ -40,6 +43,8 @@ defmodule AbakusWeb.SettingsNav do
   defp appearance, do: entry(:appearance, "Aussehen", "palette", ~p"/settings/appearance")
 
   defp devices, do: entry(:devices, "Geräte", "smartphone", ~p"/settings/devices")
+
+  defp paperless, do: entry(:paperless, "Paperless", "archive", ~p"/settings/paperless")
 
   defp kasse(scope) do
     [

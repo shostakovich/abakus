@@ -162,6 +162,7 @@ defmodule AbakusWeb.Router do
       ] do
       live "/appearance", SettingsLive
       live "/devices", DevicesLive
+      live "/paperless", PaperlessLive
       live "/depot/portfolios", Depot.PortfoliosLive
       live "/depot/receipt-intake", Depot.ReceiptIntakeLive
     end

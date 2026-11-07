@@ -1,8 +1,8 @@
 defmodule Abakus.Depot.Receipts.PaperlessJob do
   @moduledoc """
-  Polls the Paperless of every user who entered one, see `Abakus.Depot.Receipts.poll_paperless/1`,
+  Polls the Paperless of every user with a receipt intake, see `Abakus.Depot.Receipts.poll_paperless/1`,
   at boot and then every 15 minutes, one user after the other; one failing instance does not stop
-  the others. A user who has just entered their Paperless is polled at once.
+  the others. A user who has just saved their Paperless connection or tag is polled at once.
   """
   use GenServer
 
@@ -36,7 +36,7 @@ defmodule Abakus.Depot.Receipts.PaperlessJob do
     {:noreply, state}
   end
 
-  @doc "Polls the Paperless of every user who entered one."
+  @doc "Polls the Paperless of every user with a receipt intake."
   def poll_all, do: Enum.each(Settings.list_paperless(), &poll/1)
 
   # A crash would restart the job, which would poll again at once.

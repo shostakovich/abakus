@@ -64,7 +64,7 @@ defmodule AbakusWeb.Depot.ReceiptsLive do
         icon="file-text"
         title="Keine Belege im Eingang"
       >
-        Lade den PDF-Beleg deiner Bank hoch, oder verbinde Paperless-ngx unter Einstellungen › Belegeingang.
+        Lade den PDF-Beleg deiner Bank hoch, oder verbinde Paperless-ngx unter Einstellungen › Paperless und Belegeingang.
       </.empty_state>
     </Layouts.depot>
     """

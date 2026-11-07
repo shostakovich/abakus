@@ -15,7 +15,7 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
   }
 
   alias Abakus.Depot.Portfolios.Receipt
-  alias Abakus.Repo
+  alias Abakus.{Paperless, Repo}
 
   # The model's failures are logged.
   @moduletag :capture_log
@@ -247,12 +247,8 @@ defmodule AbakusWeb.Depot.ReceiptInboxTest do
       url => %{token: "t", documents: [FakePaperless.document(4812, ["zf"])]}
     })
 
-    {:ok, setting} =
-      Settings.update_paperless(ctx.scope, %{
-        "paperless_url" => url,
-        "paperless_token" => "t",
-        "paperless_tag" => "zf"
-      })
+    {:ok, _connection} = Paperless.update_connection(ctx.scope, %{"url" => url, "token" => "t"})
+    {:ok, setting} = Settings.update_paperless_tag(ctx.scope, %{"paperless_tag" => "zf"})
 
     {:ok, lv, _html} = live(ctx.conn, ~p"/depot/receipts")
     Receipts.poll_paperless(setting)

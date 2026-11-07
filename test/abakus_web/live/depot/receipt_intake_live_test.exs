@@ -5,6 +5,7 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLiveTest do
   import Abakus.Depot.PortfoliosFixtures
 
   alias Abakus.Depot.{FakeModel, Settings}
+  alias Abakus.Paperless
 
   setup :register_and_log_in_user
 
@@ -22,8 +23,16 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLiveTest do
     |> Enum.map(&LazyHTML.text/1)
   end
 
-  defp save_paperless(lv, params),
-    do: lv |> form("#paperless-form", %{"paperless" => params}) |> render_submit()
+  defp save_tag(lv, tag),
+    do:
+      lv
+      |> form("#paperless-tag-form", %{"paperless" => %{"paperless_tag" => tag}})
+      |> render_submit()
+
+  defp connect(scope),
+    do:
+      {:ok, _connection} =
+        Paperless.update_connection(scope, %{"url" => "http://paperless:8000", "token" => "t"})
 
   test "is a section of the settings once the user has the Depot", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
@@ -43,65 +52,47 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLiveTest do
     assert_error_sent 404, fn -> get(conn, ~p"/settings/depot/receipt-intake") end
   end
 
-  test "connects the user's Paperless and never shows the token again", %{conn: conn} = ctx do
+  test "takes documents with the user's tag once Paperless is connected", %{conn: conn} = ctx do
     {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
     assert has_element?(lv, "#paperless-status [data-status]", "Nicht verbunden")
-    refute has_element?(lv, "#paperless-form button", "Trennen")
+    assert has_element?(lv, ~s|#paperless-link[href="/settings/paperless"]|)
 
-    result =
-      save_paperless(lv, %{
-        "paperless_url" => " https://paperless.example.org/ ",
-        "paperless_token" => "geheim123",
-        "paperless_tag" => "abakus"
-      })
+    connect(ctx.scope)
+    {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
+    assert has_element?(lv, "#paperless-status [data-status]", "Kein Tag")
 
-    assert_push_event(lv, "setzkasten:saved", %{id: "paperless-save"})
-    assert has_element?(lv, "#paperless-save.setzkasten-saved")
-    refute has_element?(lv, "#flash-info")
-    refute result =~ "geheim123"
+    save_tag(lv, " abakus ")
 
+    assert_push_event(lv, "setzkasten:saved", %{id: "paperless-tag-save"})
     assert has_element?(lv, "#paperless-status [data-status]", "Verbunden")
 
     assert status(lv, "#paperless-status") ==
              ["Tag „abakus“,", "danach „abakus-erledigt“ ·", "noch nicht abgefragt"]
 
-    settings = Settings.get_settings(ctx.scope)
-    assert settings.paperless_url == "https://paperless.example.org"
-    assert settings.paperless_token == "geheim123"
-    refute inspect(settings) =~ "geheim123"
+    assert Settings.get_settings(ctx.scope).paperless_tag == "abakus"
 
-    save_paperless(lv, %{"paperless_token" => "", "paperless_tag" => "belege"})
-    assert Settings.get_settings(ctx.scope).paperless_token == "geheim123"
-    assert has_element?(lv, "#paperless-status", "Tag „belege“")
-
-    confirm_click(lv, "#paperless-disconnect", "Paperless trennen?")
-    assert has_element?(lv, "#paperless-status", "Nicht verbunden")
-    assert Settings.get_settings(ctx.scope).paperless_token == nil
+    save_tag(lv, "")
+    assert has_element?(lv, "#paperless-status [data-status]", "Kein Tag")
+    assert Settings.get_settings(ctx.scope).paperless_tag == nil
   end
 
   test "shows when Paperless was polled last", %{conn: conn, scope: scope} do
-    {:ok, settings} =
-      Settings.update_paperless(scope, %{
-        "paperless_url" => "http://paperless:8000",
-        "paperless_token" => "t",
-        "paperless_tag" => "abakus"
-      })
-
+    connect(scope)
+    {:ok, settings} = Settings.update_paperless_tag(scope, %{"paperless_tag" => "abakus"})
     :ok = Settings.paperless_polled(settings)
+
     {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
 
     assert has_element?(lv, "#paperless-status", "zuletzt abgefragt")
   end
 
-  test "refuses a URL without scheme and a missing token or tag", %{conn: conn} do
+  test "refuses a tag that is too long", %{conn: conn} do
     {:ok, lv, _html} = live(conn, ~p"/settings/depot/receipt-intake")
 
-    result = save_paperless(lv, %{"paperless_url" => "paperless.local"})
+    save_tag(lv, String.duplicate("a", 101))
 
-    assert result =~ "Braucht http:// oder https:// und einen Host"
-    refute_push_event(lv, "setzkasten:saved", %{id: "paperless-save"})
-    assert has_element?(lv, ~s(#paperless-form p[id$="-error-0"]), "Muss ausgefüllt werden")
-    assert has_element?(lv, "#paperless-status", "Nicht verbunden")
+    refute_push_event(lv, "setzkasten:saved", %{id: "paperless-tag-save"})
+    assert has_element?(lv, ~s(#paperless-tag-form p[id$="-error-0"]))
   end
 
   test "names the recognition model, or that there is none", %{conn: conn} do

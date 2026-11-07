@@ -19,6 +19,7 @@ defmodule Abakus.Depot.Receipts do
   alias Abakus.Depot.Receipts.{Checks, Correction, Fields, Recognition}
   alias Abakus.Depot.Securities.Security
   alias Abakus.Depot.Settings.Setting
+  alias Abakus.Paperless
   alias Abakus.Repo
   alias Abakus.Users.Scope
 
@@ -163,7 +164,7 @@ defmodule Abakus.Depot.Receipts do
   """
   def poll_paperless(%Setting{} = setting) do
     %Setting{user: user} = setting = Repo.preload(setting, :user)
-    connection = %{url: setting.paperless_url, token: setting.paperless_token}
+    connection = Paperless.get_connection(Scope.for_user(user))
 
     case paperless().documents(connection, setting.paperless_tag) do
       {:ok, documents} ->
@@ -218,10 +219,23 @@ defmodule Abakus.Depot.Receipts do
   @doc "The model that recognises receipts, nil when none is configured."
   def model_name, do: model().name()
 
-  @doc "When the user's Paperless was polled last, nil without one or before the first poll."
+  @doc "Whether the Depot takes receipts from the user's Paperless: the user is connected and the Depot has a tag."
+  def paperless_intake?(%Scope{} = scope),
+    do:
+      Settings.get_settings(scope).paperless_tag != nil and
+        Paperless.connected?(Paperless.get_connection(scope))
+
+  @doc """
+  When the user's Paperless was polled last with its current connection and tag, nil without both or before the
+  first such poll.
+  """
   def paperless_polled_at(%Scope{} = scope) do
-    setting = Settings.get_settings(scope)
-    if Setting.paperless?(setting), do: setting.paperless_polled_at
+    %Setting{paperless_tag: tag, paperless_polled_at: polled_at} = Settings.get_settings(scope)
+    connection = Paperless.get_connection(scope)
+
+    if tag && polled_at && Paperless.connected?(connection) &&
+         DateTime.compare(polled_at, connection.updated_at) != :lt,
+       do: polled_at
   end
 
   @doc "Discards a receipt of the user's inbox; it comes back when uploaded again."

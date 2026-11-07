@@ -285,9 +285,13 @@ _Avoid_: Settings (it is a task, not a setting)
 
 **Settings hub**:
 The sidebar's settings mode: a way back to the area used last, then the sections grouped by area, Allgemein for
-everyone with Geräte for the budget owner, Kasse for its participants; Depot for everyone, so anyone may start a
+everyone with Paperless and, for the budget owner, Geräte; Kasse for its participants; Depot for everyone, so anyone may start a
 Depot, with Belegeingang once they have a portfolio. Pages live under `/settings/…`. Code: `AbakusWeb.SettingsNav`. UI "Einstellungen".
 _Avoid_: Settings page, Mehr (that is the dock's button)
+
+**Paperless connection**:
+The URL and API token of a user's own Paperless-ngx (ADR 0016), kept under Allgemein in the settings and used by
+every area that reads or files documents there. Code: `Abakus.Paperless`. UI "Paperless".
 
 ## Kasse
 
@@ -496,8 +500,8 @@ A user's receipts waiting for them to confirm, correct or discard what a languag
 0015); nothing is booked without confirmation. Code: `Abakus.Depot.Receipts`. UI "Eingang", Import & Sync's tab "Belege".
 
 **Receipt intake**:
-Where a user's receipts come from besides uploads: their own Paperless-ngx, polled every 15 minutes for documents
-with their tag (ADR 0016), kept in their Depot settings. UI "Belegeingang".
+Where a user's receipts come from besides uploads: their Paperless connection, polled every 15 minutes for documents
+with their tag (ADR 0016), which is kept in their Depot settings. UI "Belegeingang".
 
 **Taxonomy**:
 A user's named tree of classifications with target weights, such as regions or asset classes; securities and

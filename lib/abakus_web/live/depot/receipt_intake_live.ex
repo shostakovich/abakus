@@ -1,14 +1,14 @@
 defmodule AbakusWeb.Depot.ReceiptIntakeLive do
   @moduledoc """
-  „Belegeingang“ in the settings, for users with a portfolio: the user's Paperless-ngx, whose documents with their
-  tag land in the inbox every 15 minutes (ADR 0016), and whether a model recognises receipts (ADR 0015).
+  „Belegeingang“ in the settings, for users with a portfolio: the tag of the documents in the user's Paperless-ngx
+  that land in the inbox every 15 minutes (ADR 0016), and whether a model recognises receipts (ADR 0015).
   """
   use AbakusWeb, :depot_live_view
 
   alias Abakus.Depot.{Receipts, Settings}
   alias Abakus.Depot.Receipts.PaperlessJob
   alias Abakus.Depot.Settings.Setting
-  alias Abakus.Format
+  alias Abakus.{Format, Paperless}
   alias AbakusWeb.{Areas, NotFoundError}
 
   @impl true
@@ -26,14 +26,19 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLive do
       <section id="receipt-intake">
         <p class="mb-3 max-w-prose text-sm text-base-content/70">
           Holt alle 15 Minuten die Dokumente mit deinem Tag aus Paperless-ngx in den Eingang unter Import &amp; Sync.
+          Die Verbindung steht unter <.link
+            id="paperless-link"
+            navigate={~p"/settings/paperless"}
+            class="link"
+          >Paperless</.link>.
         </p>
         <ul class="mb-4 flex flex-col gap-3">
           <.intake_row
             id="paperless-status"
             title="Paperless-ngx"
-            status={if Setting.paperless?(@settings), do: "Verbunden", else: "Nicht verbunden"}
-            tone={if Setting.paperless?(@settings), do: :success, else: :warning}
-            detail={paperless_status(@settings)}
+            status={paperless_badge(@connected, @settings)}
+            tone={paperless_tone(@connected, @settings)}
+            detail={paperless_status(@connected, @settings, @polled_at)}
           />
           <.intake_row
             id="recognition-status"
@@ -43,51 +48,18 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLive do
             detail={recognition_status(@model_name)}
           />
         </ul>
-        <.form for={@paperless_form} id="paperless-form" phx-submit="save_paperless">
+        <.form for={@tag_form} id="paperless-tag-form" phx-submit="save_tag">
           <.input
-            field={@paperless_form[:paperless_url]}
-            type="url"
-            label="URL"
-            placeholder="https://paperless.example.org"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <.input
-            field={@paperless_form[:paperless_token]}
-            type="password"
-            label="API-Token"
-            value=""
-            autocomplete="off"
-            placeholder={if @settings.paperless_token, do: "gespeichert"}
-            help={
-              if @settings.paperless_token,
-                do:
-                  "Leer lassen, um den gespeicherten Token zu behalten; eine neue URL braucht einen neuen.",
-                else: "In Paperless unter „Mein Profil“."
-            }
-          />
-          <.input
-            field={@paperless_form[:paperless_tag]}
+            field={@tag_form[:paperless_tag]}
             label="Tag"
             placeholder="abakus"
             autocomplete="off"
             spellcheck="false"
+            help="Leer lassen, um keine Belege aus Paperless zu holen."
           />
           <.action_bar class="mt-4">
-            <:secondary :if={Setting.paperless?(@settings)}>
-              <.button
-                id="paperless-disconnect"
-                variant={:danger_outline}
-                confirm="Paperless trennen?"
-                confirm_text="URL, Token und Tag werden gelöscht."
-                confirm_label="Trennen"
-                phx-click="disconnect_paperless"
-              >
-                Trennen
-              </.button>
-            </:secondary>
             <.button
-              id="paperless-save"
+              id="paperless-tag-save"
               type="submit"
               variant={:primary}
               saved
@@ -124,20 +96,23 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLive do
     """
   end
 
-  defp paperless_status(settings) do
-    if Setting.paperless?(settings) do
-      tag = settings.paperless_tag
+  defp paperless_badge(false, _settings), do: "Nicht verbunden"
+  defp paperless_badge(true, %Setting{paperless_tag: nil}), do: "Kein Tag"
+  defp paperless_badge(true, _settings), do: "Verbunden"
 
-      polled =
-        if settings.paperless_polled_at,
-          do: "zuletzt abgefragt #{Format.recent(settings.paperless_polled_at)}",
-          else: "noch nicht abgefragt"
+  defp paperless_tone(true, %Setting{paperless_tag: tag}) when tag != nil, do: :success
+  defp paperless_tone(_connected, _settings), do: :warning
 
-      ["Tag „#{tag}“,", "danach „#{Receipts.done_tag(tag)}“ ·", polled]
-    else
-      []
-    end
+  defp paperless_status(true, %Setting{paperless_tag: tag}, polled_at) when tag != nil do
+    polled =
+      if polled_at,
+        do: "zuletzt abgefragt #{Format.recent(polled_at)}",
+        else: "noch nicht abgefragt"
+
+    ["Tag „#{tag}“,", "danach „#{Receipts.done_tag(tag)}“ ·", polled]
   end
+
+  defp paperless_status(_connected, _settings, _polled_at), do: []
 
   defp recognition_status(nil), do: ["Belege öffnen", "ein leeres Formular."]
 
@@ -153,31 +128,29 @@ defmodule AbakusWeb.Depot.ReceiptIntakeLive do
      socket
      |> assign(:page_title, "Belegeingang")
      |> assign(:model_name, Receipts.model_name())
+     |> assign(:connected, Paperless.connected?(Paperless.get_connection(scope)))
      |> assign_settings(Settings.get_settings(scope))}
   end
 
   defp assign_settings(socket, settings) do
     assign(socket,
       settings: settings,
-      paperless_form: to_form(Settings.change_paperless(settings), as: :paperless)
+      polled_at: Receipts.paperless_polled_at(socket.assigns.current_scope),
+      tag_form: to_form(Settings.change_paperless_tag(settings), as: :paperless)
     )
   end
 
   @impl true
-  def handle_event("save_paperless", %{"paperless" => params}, socket) do
-    case Settings.update_paperless(socket.assigns.current_scope, params) do
+  def handle_event("save_tag", %{"paperless" => params}, socket) do
+    scope = socket.assigns.current_scope
+
+    case Settings.update_paperless_tag(scope, params) do
       {:ok, settings} ->
-        PaperlessJob.poll_soon(settings)
-        {:noreply, socket |> push_saved("paperless-save") |> assign_settings(settings)}
+        if Receipts.paperless_intake?(scope), do: PaperlessJob.poll_soon(settings)
+        {:noreply, socket |> push_saved("paperless-tag-save") |> assign_settings(settings)}
 
       {:error, changeset} ->
-        {:noreply,
-         assign(socket, :paperless_form, to_form(changeset, as: :paperless, action: :update))}
+        {:noreply, assign(socket, :tag_form, to_form(changeset, as: :paperless, action: :update))}
     end
-  end
-
-  def handle_event("disconnect_paperless", _params, socket) do
-    {:ok, settings} = Settings.disconnect_paperless(socket.assigns.current_scope)
-    {:noreply, socket |> put_flash(:info, "Paperless getrennt.") |> assign_settings(settings)}
   end
 end

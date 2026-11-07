@@ -183,15 +183,17 @@ Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
 
 ## 0016. Paperless access per user
 
-Accepted, 2026-10-16. From zipfelfolio, where it was decided first.
+Accepted, 2026-10-16. From zipfelfolio, where it was decided first. Amended 2026-11-07: URL and token move to the
+user's settings for the Buchhaltung (#148).
 
 - **Context:** Receipts belong to the user whose portfolio they concern; other users may have their own Paperless
   instance or none.
-- **Decision:** Each user enters Paperless URL, token and tag in their Depot settings (`depot_settings`); not one
-  global connection in the environment.
+- **Decision:** Each user enters Paperless URL and token once in their own settings (`paperless_connections`), used
+  by the Depot and the Buchhaltung, and the Depot's tag in their Depot settings (`depot_settings`); not one global
+  connection in the environment.
 - **Consequences:** Ownership is clear without guessing from depot numbers, and nothing needs a redeploy. The token
-  lives in the database, so a database backup grants access to Paperless. Any user with a portfolio can make the
-  server call the URL they enter, which is acceptable for a self-hosted app with invited users only.
+  lives in the database, so a database backup grants access to Paperless. Any user can make the server call the
+  URL they enter, which is acceptable for a self-hosted app with invited users only.
 
 ## 0017. A portfolio is a kind of account, not an area
 
