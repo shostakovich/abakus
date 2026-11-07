@@ -12,16 +12,30 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLiveTest do
 
   setup :register_and_log_in_user
 
-  test "keeps the state of the tax office and the ELSTER certificate", %{conn: conn, scope: scope} do
+  test "keeps the state of the tax office, the business and the ELSTER certificate", %{
+    conn: conn,
+    scope: scope
+  } do
     {:ok, _ids} = Bookkeeping.put_business_accounts(scope, [account_fixture(kind: :tracking).id])
     sender_fixture(scope)
     {:ok, view, _html} = live(conn, ~p"/settings/buchhaltung/elster")
 
     assert has_element?(view, "#settings-elster-settings-sidebar[aria-current=page]")
     assert text(view, "#elster-tax-number") =~ "Steuernummer: 30/123/45678"
-    assert text(view, "#elster-status") == "Es fehlt: Bundesland, ELSTER-Zertifikat"
 
-    view |> form("#elster-settings-form", settings: %{"tax_state" => "BE"}) |> render_submit()
+    assert text(view, "#elster-status") ==
+             "Es fehlt: Bundesland, ELSTER-Zertifikat, Art des Betriebs"
+
+    view
+    |> form("#elster-settings-form",
+      settings: %{
+        "tax_state" => "BE",
+        "business_activity" => " Softwareentwicklung ",
+        "income_kind" => "trade"
+      }
+    )
+    |> render_submit()
+
     assert_push_event(view, "setzkasten:saved", %{id: "elster-settings-save"})
 
     view
@@ -35,6 +49,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLiveTest do
 
     settings = Invoices.get_settings(scope)
     assert {settings.tax_state, settings.elster_certificate} == {"BE", "PKCS12 certificate"}
+    assert {settings.business_activity, settings.income_kind} == {"Softwareentwicklung", :trade}
     assert settings.tax_number == "30/123/45678"
 
     confirm_click(view, "#elster-certificate-remove", "Zertifikat entfernen?")

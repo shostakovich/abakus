@@ -24,7 +24,7 @@ defmodule Abakus.BookkeepingFixtures do
 
   @doc "The sender with the state of their tax office and an ELSTER certificate, all that sending needs."
   def elster_fixture(%Scope{} = scope) do
-    sender_fixture(scope, %{"tax_state" => "BE"})
+    sender_fixture(scope, %{"tax_state" => "BE", "business_activity" => "Softwareentwicklung"})
     {:ok, settings} = Filings.put_certificate(scope, {"PKCS12 certificate", "Robert.pfx"})
     settings
   end

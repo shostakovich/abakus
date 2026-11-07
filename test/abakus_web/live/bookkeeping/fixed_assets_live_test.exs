@@ -103,7 +103,7 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLiveTest do
     disposal_fixture(c.scope, asset, %{"date" => "2027-01-20"})
     elster_fixture(c.scope)
     FakeElster.serve()
-    {:ok, _filing} = Filings.send_vat_quarter(c.scope, 2027, 1, "4711")
+    {:ok, _filing} = Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711")
 
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/assets")
     row = "#asset-#{asset.id}"

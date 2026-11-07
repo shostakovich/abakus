@@ -92,7 +92,7 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
 
     assert text(view, "#vat-send-error") =~ "ERiC-Fehler 610201101: Die PIN ist falsch."
     assert has_element?(view, "#vat-send-modal")
-    assert Filings.vat_quarter(c.scope, 2027, 1) == nil
+    assert Filings.sent(c.scope, {:vat_quarter, 2027, 1}) == nil
     refute has_element?(view, "#vat-filing")
   end
 
@@ -106,7 +106,7 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
     refute has_element?(view, "#vat-send-form")
   end
 
-  test "offers to send only a quarter that is over", c do
+  test "offers to send only a period that is over", c do
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/vat?period=2027-q2")
     refute has_element?(view, "#vat-send")
 
@@ -117,7 +117,7 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
   test "shows a sent quarter with its protocol, and once its numbers changed", c do
     elster_fixture(c.scope)
     FakeElster.serve()
-    {:ok, filing} = Filings.send_vat_quarter(c.scope, 2027, 1, "4711")
+    {:ok, filing} = Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711")
 
     {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/vat")
     assert has_element?(view, "#vat-protocol[href='/buchhaltung/filings/#{filing.id}/protocol']")
@@ -136,8 +136,32 @@ defmodule AbakusWeb.Bookkeeping.VatReturnFilingLiveTest do
     other = Scope.for_user(UsersFixtures.user_fixture())
     elster_fixture(other)
     FakeElster.serve()
-    {:ok, filing} = Filings.send_vat_quarter(other, 2027, 1, "4711")
+    {:ok, filing} = Filings.send_return(other, {:vat_quarter, 2027, 1}, "4711")
 
     assert c.conn |> get(~p"/buchhaltung/filings/#{filing.id}/protocol") |> response(404)
+  end
+
+  test "sends the Umsatzsteuererklärung of a year that is over", c do
+    elster_fixture(c.scope)
+    FakeElster.serve()
+    {:ok, view, _html} = live(c.conn, ~p"/buchhaltung/vat?period=2026")
+
+    view |> element("#vat-send") |> render_click()
+
+    assert text(view, "#vat-send-modal") =~
+             "Umsatzsteuererklärung 2026 · Abschlusszahlung / Erstattung 0,00 €"
+
+    assert text(view, "#vat-send-modal") =~ "Nach dem Senden ist das Jahr festgeschrieben."
+
+    view |> form("#vat-send-form", %{"pin" => "4711"}) |> render_submit()
+    render_async(view)
+
+    assert flash(view, :info) == "Umsatzsteuererklärung an ELSTER gesendet."
+    assert has_element?(view, "#vat-filing")
+    assert [%{datenart_version: "USt_2026"}] = FakeElster.submissions()
+
+    view |> element("#vat-period a", "Q4") |> render_click()
+    assert has_element?(view, "#vat-send")
+    refute has_element?(view, "#vat-filing")
   end
 end

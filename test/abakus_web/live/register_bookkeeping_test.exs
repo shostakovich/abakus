@@ -61,7 +61,7 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
     assert has_element?(view, "#tx-card-#{c.book.id}", "Zeitschriften/Bücher")
   end
 
-  test "refuses to change the VAT rate of a transaction in a sent quarter", c do
+  test "shows the category and VAT of a transaction in a sent quarter read-only", c do
     keep_books(c)
     fix_today(~D[2027-04-15])
 
@@ -75,20 +75,21 @@ defmodule AbakusWeb.RegisterBookkeepingTest do
 
     elster_fixture(c.scope)
     FakeElster.serve()
-    {:ok, _filing} = Filings.send_vat_quarter(c.scope, 2027, 1, "4711")
+    {:ok, _filing} = Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711")
 
     {:ok, view, _html} = live(c.conn, ~p"/budget/accounts/#{c.kontist}")
     view |> element("#tx-#{licence.id}-tax") |> render_click()
 
-    view
-    |> form("#tax-lines-form", %{"sides" => %{"transaction" => %{"vat" => "7"}}})
-    |> render_submit()
-
     assert text(view, "#tax-lines-locked p") == "Zeitraum ist festgeschrieben"
-    assert has_element?(view, "#tax-transaction-vat option[value='19'][selected]")
+    assert has_element?(view, "#tax-transaction-category[disabled]")
+    assert has_element?(view, "#tax-transaction-vat[disabled] option[value='19'][selected]")
 
-    render_click(view, "close_tax_lines", %{})
+    view |> form("#tax-lines-form", %{"no_receipt" => "true"}) |> render_submit()
+
+    refute has_element?(view, "#tax-lines-modal")
     assert has_element?(view, "#tx-#{licence.id}-tax[title='19 %']")
+    licence = Bookkeeping.get_transaction(c.scope, licence.id)
+    assert licence.id in Attachments.waived(c.scope, [licence])
   end
 
   test "annotates a split per part and a transfer not at all", c do

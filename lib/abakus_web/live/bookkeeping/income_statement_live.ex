@@ -2,12 +2,14 @@ defmodule AbakusWeb.Bookkeeping.IncomeStatementLive do
   @moduledoc """
   The Buchhaltung's „EÜR“: the Einnahmenüberschussrechnung of a year (`Abakus.Bookkeeping.IncomeStatements`) under
   the Kennzahlen of the Anlage EÜR, the income first, then the expenses and the totals. `?year=2027` picks it;
-  without one it shows the year before today's, the one to file next.
+  without one it shows the year before today's, the one to file next. A year that is over is sent to ELSTER from
+  here (`AbakusWeb.Bookkeeping.FilingPanel`).
   """
   use AbakusWeb, :live_view
 
   alias Abakus.Bookkeeping.IncomeStatements
-  alias Abakus.LocalTime
+  alias Abakus.{LocalTime, Money}
+  alias AbakusWeb.Bookkeeping.FilingPanel
 
   @impl true
   def render(assigns) do
@@ -72,11 +74,25 @@ defmodule AbakusWeb.Bookkeeping.IncomeStatementLive do
         Nach Zufluss und Abfluss: jede Buchung zählt an ihrem Datum, ein Abgang an seinem. Käufe in
         Kategorien des Anlagevermögens zählen nur mit ihrer Vorsteuer, die Anschaffung über die Anlagen.
       </p>
+      <.live_component
+        module={FilingPanel}
+        id="euer-filing-panel"
+        prefix="euer"
+        current_scope={@current_scope}
+        period={{:euer, @year}}
+        computed={@statement}
+        summary={summary(@statement)}
+      />
     </Layouts.app>
     """
   end
 
   defp path(year), do: ~p"/buchhaltung/euer?#{[year: year]}"
+
+  defp summary(statement) do
+    profit = Enum.find(statement.totals, &(&1.key == :profit))
+    join_meta(["EÜR #{statement.year}", "#{profit.label} #{Money.euros(profit.amount)}"])
+  end
 
   @impl true
   def mount(_params, _session, socket), do: {:ok, assign(socket, page_title: "EÜR")}
@@ -91,6 +107,10 @@ defmodule AbakusWeb.Bookkeeping.IncomeStatementLive do
        statement: IncomeStatements.year(socket.assigns.current_scope, year)
      )}
   end
+
+  @impl true
+  def handle_info({FilingPanel, :sent, period}, socket),
+    do: {:noreply, put_flash(socket, :info, "#{FilingPanel.noun(period)} an ELSTER gesendet.")}
 
   defp parse(param) when is_binary(param) do
     case Integer.parse(param) do

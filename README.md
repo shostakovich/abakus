@@ -42,7 +42,7 @@ A native macOS client in [`apple/`](apple/), a Swift package with its own setup 
   API; `MCP_SECRET`, `MCP_ALLOWED_CIDRS`, `TRUSTED_PROXIES` for MCP; `ENABLE_BANKING_APP_ID`,
   `ENABLE_BANKING_KEY_FILE` (path of the application's private key) for bank sync; `ERIC_HOME` (ERiC, mounted read
   only, with its `lib/`) and `ELSTER_VENDOR_ID` (your Hersteller-ID; ELSTER's demo id `74931` sends test cases) for
-  sending VAT returns to ELSTER.
+  sending VAT returns and the EÜR to ELSTER.
 
 ```sh
 docker compose exec abakus bin/abakus eval 'Abakus.Release.invite("you@example.com")'

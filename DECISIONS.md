@@ -423,9 +423,9 @@ Accepted, 2026-11-07 (#147, #152).
 
 ## 0035. ELSTER through ERiC in a helper process
 
-Accepted, 2026-11-08 (#147, #156).
+Accepted, 2026-11-08 (#147, #156, #157).
 
-- **Context:** The VAT returns go to the tax office through ELSTER, whose only supported client is ERiC, a native C
+- **Context:** The VAT returns and the EÜR go to the tax office through ELSTER, whose only supported client is ERiC, a native C
   library that ELSTER hands to registered vendors under a licence that forbids passing it on. A crash in native code
   inside the BEAM takes the whole app down.
 - **Decision:** A small C helper (`c_src/elster.c`, built into the image as `priv/elster`) runs as a port for each
@@ -438,5 +438,5 @@ Accepted, 2026-11-08 (#147, #156).
   library.
 - **Consequences:** A crash or hang of ERiC fails only that send. Every ERiC release brings the year's form versions,
   so the mounted ERiC has to be updated each year, and the helper follows the ERiC 44 signatures. A change to a sent
-  quarter needs a corrected return, which Abakus does not send yet.
+  period needs a corrected return, which Abakus does not send yet.
 

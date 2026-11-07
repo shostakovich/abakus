@@ -8,7 +8,8 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   money and has none.
 
   A disposal in a period locked by a sent return (`Abakus.Bookkeeping.Filings`) can no longer change, be taken back
-  or go with its asset.
+  or go with its asset. Nor can an asset change, come or go where that changes what it counts for in a year whose
+  EÜR was sent.
   """
 
   import Ecto.Changeset
@@ -16,7 +17,7 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   import Abakus.Owned
 
   alias Abakus.{Bookkeeping, Ids, Repo}
-  alias Abakus.Bookkeeping.{Disposal, Filings, FixedAsset, InvoicePayment}
+  alias Abakus.Bookkeeping.{Disposal, Filings, FixedAsset, IncomeStatement, InvoicePayment}
   alias Abakus.Users.Scope
 
   @preloads [disposal: [transaction: :payee]]
@@ -43,15 +44,25 @@ defmodule Abakus.Bookkeeping.FixedAssets do
   def change(%FixedAsset{} = asset, attrs \\ %{}), do: FixedAsset.changeset(asset, attrs)
 
   def create(%Scope{} = scope, attrs) do
-    with {:ok, asset} <-
-           %FixedAsset{user_id: user_id(scope)} |> FixedAsset.changeset(attrs) |> Repo.insert() do
+    changeset =
+      %FixedAsset{user_id: user_id(scope)}
+      |> FixedAsset.changeset(attrs)
+      |> validate_euer_unchanged(scope, nil)
+
+    with {:ok, asset} <- Repo.insert(changeset) do
       {:ok, Repo.preload(asset, @preloads)}
     end
   end
 
   @doc "Changes the asset; a disposal it has can no longer come before its purchase."
   def update(%Scope{} = scope, %FixedAsset{} = asset, attrs) do
-    changeset = scope |> own!(asset) |> FixedAsset.changeset(attrs) |> validate_disposal_after()
+    asset = scope |> own!(asset) |> Repo.preload(:disposal)
+
+    changeset =
+      asset
+      |> FixedAsset.changeset(attrs)
+      |> validate_disposal_after()
+      |> validate_euer_unchanged(scope, asset)
 
     with {:ok, asset} <- Repo.update(changeset) do
       {:ok, Repo.preload(asset, @preloads, force: true)}
@@ -72,13 +83,30 @@ defmodule Abakus.Bookkeeping.FixedAssets do
     end
   end
 
-  @doc "Deletes the asset with its disposal; `{:error, :locked}` while the disposal is in a locked period."
+  defp validate_euer_unchanged(%{valid?: false} = changeset, _scope, _before), do: changeset
+
+  defp validate_euer_unchanged(changeset, scope, before) do
+    changed = changeset |> apply_changes() |> Map.put(:disposal, before && before.disposal)
+
+    if Enum.any?(Filings.euer_years(scope), &(counted(before, &1) != counted(changed, &1))),
+      do: add_error(changeset, :purchased_on, Filings.locked_message()),
+      else: changeset
+  end
+
+  defp counted(nil, _year), do: %{}
+  defp counted(asset, year), do: IncomeStatement.asset_kennzahlen(asset, year)
+
+  @doc """
+  Deletes the asset with its disposal; `{:error, :locked}` while the disposal is in a locked period or the asset
+  counts in a sent EÜR.
+  """
   def delete(%Scope{} = scope, %FixedAsset{} = asset) do
     asset = scope |> own!(asset) |> Repo.preload(:disposal, force: true)
 
-    if locked_disposal?(scope, asset.disposal),
-      do: {:error, :locked},
-      else: Repo.delete(asset, allow_stale: true)
+    if locked_disposal?(scope, asset.disposal) or
+         Enum.any?(Filings.euer_years(scope), &(counted(asset, &1) != %{})),
+       do: {:error, :locked},
+       else: Repo.delete(asset, allow_stale: true)
   end
 
   def change_disposal(%FixedAsset{} = asset, attrs \\ %{}),

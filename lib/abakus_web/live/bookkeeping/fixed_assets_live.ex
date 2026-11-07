@@ -330,7 +330,7 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
            put_flash(
              socket,
              :error,
-             "#{Filings.locked_message()}: Der Abgang zählt in einer gesendeten Voranmeldung."
+             "#{Filings.locked_message()}: Der Abgang zählt in einem gesendeten Zeitraum."
            )
        end
      end)}
@@ -347,7 +347,7 @@ defmodule AbakusWeb.Bookkeeping.FixedAssetsLive do
            put_flash(
              socket,
              :error,
-             "#{Filings.locked_message()}: Der Abgang zählt in einer gesendeten Voranmeldung."
+             "#{Filings.locked_message()}: Die Anlage zählt in einem gesendeten Zeitraum."
            )
        end
      end)}

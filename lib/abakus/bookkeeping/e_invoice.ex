@@ -4,7 +4,10 @@ defmodule Abakus.Bookkeeping.EInvoice do
   of ZUGFeRD and Factur-X, which the invoice's PDF carries as `factur-x.xml`.
   """
 
+  import Abakus.Xml, only: [element: 2, element: 3]
+
   alias Abakus.Bookkeeping.{Invoice, Party, Position}
+  alias Abakus.Money
 
   @namespaces [
     {"xmlns:rsm", "urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"},
@@ -149,32 +152,7 @@ defmodule Abakus.Bookkeeping.EInvoice do
   defp date(%Date{} = date),
     do: element("udt:DateTimeString", [{"format", "102"}], Calendar.strftime(date, "%Y%m%d"))
 
-  defp amount(cents) do
-    sign = if cents < 0, do: "-", else: ""
-    cents = abs(cents)
-    "#{sign}#{div(cents, 100)}.#{String.pad_leading(Integer.to_string(rem(cents, 100)), 2, "0")}"
-  end
+  defp amount(cents), do: Money.format_minor(cents, 2, separator: ".")
 
   defp present?(value), do: value not in [nil, ""]
-
-  defp element(name, attributes \\ [], content)
-
-  defp element(name, attributes, content) when is_list(content) do
-    children = Enum.filter(content, & &1)
-    ["<", name, attributes(attributes), ">", children, "</", name, ">"]
-  end
-
-  defp element(name, attributes, text) when is_binary(text),
-    do: ["<", name, attributes(attributes), ">", escape(text), "</", name, ">"]
-
-  defp attributes(attributes),
-    do: for({key, value} <- attributes, do: [" ", key, ~s(="), escape(value), ~s(")])
-
-  defp escape(text) do
-    text
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-    |> String.replace("\"", "&quot;")
-  end
 end

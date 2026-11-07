@@ -2,7 +2,9 @@ defmodule Abakus.Bookkeeping.Settings do
   @moduledoc """
   A user's bookkeeping settings: the sender their invoices name, with the tax number or VAT id an invoice must
   carry, the IBAN it is paid to and the days until it is due; the state of the tax office, which ELSTER needs with
-  the tax number, and the ELSTER certificate (a .pfx file) returns are sent with. Its PIN is never stored.
+  the tax number, and the ELSTER certificate (a .pfx file) returns are sent with. Its PIN is never stored. The EÜR
+  also names the kind of business ("Art des Betriebs") and whether its income is from self-employment, as a
+  freelancer's, or from a trade.
   """
 
   use Abakus.Schema, uuid: true
@@ -21,6 +23,8 @@ defmodule Abakus.Bookkeeping.Settings do
     field :iban, :string
     field :payment_days, :integer, default: 14
     field :tax_state, :string
+    field :business_activity, :string
+    field :income_kind, Ecto.Enum, values: [:self_employment, :trade], default: :self_employment
     field :elster_certificate, :binary, redact: true
     field :elster_certificate_name, :string
 
@@ -37,6 +41,8 @@ defmodule Abakus.Bookkeeping.Settings do
     :vat_id,
     :tax_number,
     :tax_state,
+    :business_activity,
+    :income_kind,
     :iban,
     :payment_days
   ]
@@ -47,7 +53,9 @@ defmodule Abakus.Bookkeeping.Settings do
     settings
     |> cast(attrs, @fields)
     |> Party.normalize([:vat_id, :iban])
-    |> validate_required([:payment_days])
+    |> update_change(:business_activity, &(&1 && String.trim(&1)))
+    |> validate_required([:payment_days, :income_kind])
+    |> validate_length(:business_activity, max: 100)
     |> validate_number(:payment_days, greater_than_or_equal_to: 0, less_than_or_equal_to: 365)
     |> validate_inclusion(:tax_state, States.codes())
     |> Party.validate_vat_id()
@@ -79,20 +87,28 @@ defmodule Abakus.Bookkeeping.Settings do
     end)
   end
 
-  @doc "What sending to ELSTER still lacks, in the words of the settings: none when nothing does."
-  def missing_for_elster(%__MODULE__{} = settings) do
-    for {field, label} <- [
-          name: "Name",
-          street: "Straße",
-          postal_code: "PLZ",
-          city: "Ort",
-          tax_number: "Steuernummer",
-          tax_state: "Bundesland",
-          elster_certificate: "ELSTER-Zertifikat"
-        ],
+  @doc """
+  What sending a return of `kind` (`:vat` or `:euer`) to ELSTER still lacks, in the words of the settings: none when
+  nothing does.
+  """
+  def missing_for_elster(%__MODULE__{} = settings, kind \\ :vat) do
+    for {field, label} <- elster_fields(kind),
         not present?(Map.fetch!(settings, field)),
         do: label
   end
+
+  defp elster_fields(:vat),
+    do: [
+      name: "Name",
+      street: "Straße",
+      postal_code: "PLZ",
+      city: "Ort",
+      tax_number: "Steuernummer",
+      tax_state: "Bundesland",
+      elster_certificate: "ELSTER-Zertifikat"
+    ]
+
+  defp elster_fields(:euer), do: elster_fields(:vat) ++ [business_activity: "Art des Betriebs"]
 
   defp present?(value), do: value not in [nil, ""]
 

@@ -8,11 +8,15 @@ defmodule Abakus.Bookkeeping.IncomeStatement do
   Anlagevermögen counts only its input VAT, since the asset register writes it off (`Abakus.Bookkeeping.Depreciation`):
   a low-value asset at once, any other by its depreciation. A disposal counts the book value it leaves as an expense
   and its amount as income, with its VAT as VAT received.
+
+  `assets` is the year's asset register as the Anlage AVEÜR lists it: every depreciated asset with a book value at
+  the start of the year or bought in it, with that book value, the year's depreciation, the book value a disposal
+  leaves and the book value at the end of the year.
   """
 
   alias Abakus.Bookkeeping.{Category, Depreciation, Vat}
 
-  defstruct [:year, :income, :expenses, :totals]
+  defstruct [:year, :income, :expenses, :totals, :assets]
 
   @income [
     {112, "Umsatzsteuerpflichtige Betriebseinnahmen"},
@@ -78,8 +82,42 @@ defmodule Abakus.Bookkeeping.IncomeStatement do
           kennzahl: nil,
           amount: total_income - total_expenses
         }
-      ]
+      ],
+      assets: register(assets, year)
     }
+  end
+
+  @doc "What the asset, with its disposal loaded, counts for in the EÜR of `year`, by Kennzahl: none when nothing."
+  def asset_kennzahlen(asset, year) do
+    asset
+    |> asset_shares(year)
+    |> Enum.reject(fn {_kennzahl, cents} -> cents == 0 end)
+    |> Enum.reduce(%{}, fn {kennzahl, cents}, sums ->
+      Map.update(sums, kennzahl, cents, &(&1 + cents))
+    end)
+  end
+
+  defp register(assets, year) do
+    last_year = Date.new!(year - 1, 12, 31)
+    year_end = Date.new!(year, 12, 31)
+
+    for asset <- Enum.sort_by(assets, & &1.purchased_on, Date),
+        not Depreciation.low_value?(asset.net),
+        asset.purchased_on.year <= year,
+        start = Depreciation.current_value(asset, last_year),
+        start > 0 or asset.purchased_on.year == year do
+      counted = Depreciation.year(asset, year)
+
+      %{
+        name: asset.name,
+        purchased_on: asset.purchased_on,
+        net: asset.net,
+        start: start,
+        write_off: counted.write_off,
+        remaining: counted.remaining,
+        end: Depreciation.current_value(asset, year_end)
+      }
+    end
   end
 
   @doc "The statement's amounts by Kennzahl: every line that is not zero, and the totals."

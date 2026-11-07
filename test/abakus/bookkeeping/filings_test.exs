@@ -6,7 +6,17 @@ defmodule Abakus.Bookkeeping.FilingsTest do
   import ExUnit.CaptureLog
 
   alias Abakus.{Bookkeeping, Ledger, UsersFixtures}
-  alias Abakus.Bookkeeping.{FakeElster, Filing, Filings, FixedAssets, VatReturns}
+
+  alias Abakus.Bookkeeping.{
+    FakeElster,
+    Filing,
+    Filings,
+    FixedAssets,
+    IncomeStatements,
+    Invoices,
+    VatReturns
+  }
+
   alias Abakus.Users.Scope
 
   setup do
@@ -37,16 +47,17 @@ defmodule Abakus.Bookkeeping.FilingsTest do
 
   defp sent!(c) do
     FakeElster.serve()
-    {:ok, filing} = Filings.send_vat_quarter(c.scope, 2027, 1, "4711")
+    {:ok, filing} = Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711")
     filing
   end
 
-  describe "send_vat_quarter/4" do
+  describe "send_return/3 of a quarter" do
     test "sends the quarter through ELSTER, keeps its protocol and locks the quarter", c do
       booked(c, ~D[2027-01-20], 119_000, "revenue", "19")
       FakeElster.serve()
 
-      assert {:ok, %Filing{} = filing} = Filings.send_vat_quarter(c.scope, 2027, 1, "4711")
+      assert {:ok, %Filing{} = filing} =
+               Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711")
 
       assert filing.kind == :vat_quarter
       assert {filing.first, filing.last} == {~D[2027-01-01], ~D[2027-03-31]}
@@ -76,24 +87,24 @@ defmodule Abakus.Bookkeeping.FilingsTest do
 
       log =
         capture_log(fn ->
-          assert Filings.send_vat_quarter(c.scope, 2027, 1, "4711") ==
+          assert Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711") ==
                    {:error, "ERiC-Fehler 610301200: Die Daten sind fehlerhaft."}
         end)
 
       assert log =~ "610301200"
       refute log =~ "4711"
 
-      assert Filings.vat_quarter(c.scope, 2027, 1) == nil
+      assert Filings.sent(c.scope, {:vat_quarter, 2027, 1}) == nil
       refute Filings.locked?(c.scope, ~D[2027-02-10])
     end
 
     test "sends a quarter once, and only once it is over", c do
       sent!(c)
 
-      assert Filings.send_vat_quarter(c.scope, 2027, 1, "4711") ==
+      assert Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711") ==
                {:error, "Zeitraum ist festgeschrieben"}
 
-      assert Filings.send_vat_quarter(c.scope, 2027, 2, "4711") ==
+      assert Filings.send_return(c.scope, {:vat_quarter, 2027, 2}, "4711") ==
                {:error, "Das Quartal ist noch nicht vorbei."}
 
       assert length(FakeElster.submissions()) == 1
@@ -103,12 +114,12 @@ defmodule Abakus.Bookkeeping.FilingsTest do
       FakeElster.serve()
       {:ok, _settings} = Filings.remove_certificate(c.scope)
 
-      assert Filings.send_vat_quarter(c.scope, 2027, 1, "4711") ==
+      assert Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, "4711") ==
                {:error, "Es fehlt: ELSTER-Zertifikat."}
 
       elster_fixture(c.scope)
 
-      assert Filings.send_vat_quarter(c.scope, 2027, 1, " ") ==
+      assert Filings.send_return(c.scope, {:vat_quarter, 2027, 1}, " ") ==
                {:error, "Bitte die PIN des Zertifikats eingeben."}
 
       config = Application.fetch_env!(:abakus, Abakus.Bookkeeping.Elster)
@@ -120,11 +131,159 @@ defmodule Abakus.Bookkeeping.FilingsTest do
     end
   end
 
+  describe "send_return/3 of a year" do
+    test "sends the Umsatzsteuererklärung and locks the year", c do
+      booked(c, ~D[2026-05-20], 119_000, "revenue", "19")
+      FakeElster.serve()
+
+      assert {:ok, %Filing{} = filing} = Filings.send_return(c.scope, {:vat_year, 2026}, "4711")
+
+      assert filing.kind == :vat_year
+      assert {filing.first, filing.last} == {~D[2026-01-01], ~D[2026-12-31]}
+      assert filing.kennzahlen == %{"177" => 1_000, "816" => 19_000, "820" => 0}
+
+      assert Filings.protocol_filename(filing) ==
+               "Übertragungsprotokoll Umsatzsteuererklärung 2026.pdf"
+
+      assert [sent] = FakeElster.submissions()
+      assert sent.datenart_version == "USt_2026"
+      assert sent.xml =~ "<Ziel>BE</Ziel>"
+      assert sent.xml =~ "<E3003303>1000</E3003303>"
+
+      assert Filings.locked?(c.scope, ~D[2026-01-01])
+      assert Filings.locked?(c.scope, ~D[2026-12-31])
+      refute Filings.locked?(c.scope, ~D[2027-01-01])
+      assert Filings.sent(c.scope, {:vat_year, 2026}).id == filing.id
+      assert Filings.sent(c.scope, {:euer, 2026}) == nil
+    end
+
+    test "sends the EÜR and locks the year", c do
+      booked(c, ~D[2026-05-20], 119_000, "revenue", "19")
+      FakeElster.serve()
+
+      assert {:ok, %Filing{} = filing} = Filings.send_return(c.scope, {:euer, 2026}, "4711")
+
+      assert filing.kind == :euer
+      assert {filing.first, filing.last} == {~D[2026-01-01], ~D[2026-12-31]}
+
+      assert filing.kennzahlen == %{
+               "112" => 100_000,
+               "140" => 19_000,
+               "159" => 119_000,
+               "199" => 0
+             }
+
+      assert Filings.matches?(filing, IncomeStatements.year(c.scope, 2026))
+      assert Filings.protocol_filename(filing) == "Übertragungsprotokoll EÜR 2026.pdf"
+
+      assert [sent] = FakeElster.submissions()
+      assert sent.datenart_version == "EUER_2026"
+      assert sent.xml =~ "<E6000017>Softwareentwicklung</E6000017>"
+      assert Filings.locked?(c.scope, ~D[2026-07-01])
+    end
+
+    test "sends a year once, and only once it is over", c do
+      FakeElster.serve()
+      {:ok, _filing} = Filings.send_return(c.scope, {:vat_year, 2026}, "4711")
+
+      assert Filings.send_return(c.scope, {:vat_year, 2026}, "4711") ==
+               {:error, "Zeitraum ist festgeschrieben"}
+
+      assert Filings.send_return(c.scope, {:euer, 2027}, "4711") ==
+               {:error, "Das Jahr ist noch nicht vorbei."}
+
+      assert {:ok, _filing} = Filings.send_return(c.scope, {:euer, 2026}, "4711")
+      assert length(FakeElster.submissions()) == 2
+    end
+
+    test "sends no EÜR without the kind of business", c do
+      FakeElster.serve()
+      {:ok, _settings} = Invoices.save_settings(c.scope, %{"business_activity" => ""})
+
+      assert Filings.missing_for(c.scope, {:euer, 2026}) == ["Art des Betriebs"]
+      assert Filings.missing_for(c.scope, {:vat_year, 2026}) == []
+
+      assert Filings.send_return(c.scope, {:euer, 2026}, "4711") ==
+               {:error, "Es fehlt: Art des Betriebs."}
+    end
+
+    test "sends no Umsatzsteuererklärung with sales at other rates", c do
+      booked(c, ~D[2026-05-20], 116_000, "revenue", "16")
+      FakeElster.serve()
+
+      assert Filings.send_return(c.scope, {:vat_year, 2026}, "4711") ==
+               {:error, "Umsätze zu anderen Steuersätzen sendet Abakus nicht."}
+
+      assert FakeElster.submissions() == []
+    end
+  end
+
+  describe "a sent EÜR" do
+    setup c do
+      FakeElster.serve()
+      kept = fixed_asset_fixture(c.scope, %{"purchased_on" => "2026-04-10"})
+      {:ok, _filing} = Filings.send_return(c.scope, {:euer, 2026}, "4711")
+      %{kept: kept}
+    end
+
+    test "keeps what an asset counts for in its year", c do
+      assert {:error, changeset} = FixedAssets.update(c.scope, c.kept, %{"useful_life" => "5"})
+      assert errors_on(changeset).purchased_on == ["Zeitraum ist festgeschrieben"]
+
+      assert {:error, changeset} =
+               FixedAssets.create(c.scope, %{
+                 "name" => "Monitor",
+                 "purchased_on" => "2026-11-02",
+                 "net" => "650"
+               })
+
+      assert errors_on(changeset).purchased_on == ["Zeitraum ist festgeschrieben"]
+      assert FixedAssets.delete(c.scope, c.kept) == {:error, :locked}
+
+      assert {:ok, renamed} = FixedAssets.update(c.scope, c.kept, %{"name" => "Laptop"})
+      assert renamed.name == "Laptop"
+
+      assert {:ok, later} =
+               FixedAssets.create(c.scope, %{
+                 "name" => "Monitor",
+                 "purchased_on" => "2027-01-02",
+                 "net" => "650"
+               })
+
+      assert {:ok, _asset} = FixedAssets.update(c.scope, later, %{"net" => "700"})
+      assert {:ok, _asset} = FixedAssets.delete(c.scope, later)
+    end
+
+    test "lets an asset leave the register after its year", c do
+      assert {:ok, _asset} =
+               FixedAssets.record_disposal(c.scope, c.kept, %{
+                 "kind" => "withdrawal",
+                 "date" => "2027-02-01",
+                 "amount" => "1.000",
+                 "vat" => "19"
+               })
+
+      refute Filings.locked?(c.scope, ~D[2027-02-01])
+    end
+  end
+
   test "names what sending lacks in the settings", c do
     other = Scope.for_user(UsersFixtures.user_fixture())
 
     assert Filings.missing(other) ==
              ["Name", "Straße", "PLZ", "Ort", "Steuernummer", "Bundesland", "ELSTER-Zertifikat"]
+
+    assert Filings.missing(other, :euer) ==
+             [
+               "Name",
+               "Straße",
+               "PLZ",
+               "Ort",
+               "Steuernummer",
+               "Bundesland",
+               "ELSTER-Zertifikat",
+               "Art des Betriebs"
+             ]
 
     assert Filings.missing(c.scope) == []
   end

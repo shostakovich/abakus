@@ -56,6 +56,13 @@ defmodule Abakus.Bookkeeping.EInvoiceTest do
     assert text(xml, "//ram:BuyerTradeParty/ram:PostalTradeAddress/*") == ["DE"]
   end
 
+  test "takes out the control characters XML does not allow", %{scope: scope} do
+    invoice = invoice_fixture(scope, customer_fixture(scope))
+    xml = EInvoice.xml(%{invoice | recipient: %{invoice.recipient | name: "Muster\u0001 & Co"}})
+
+    assert text(xml, "//ram:BuyerTradeParty/ram:Name") == ["Muster & Co"]
+  end
+
   test "an invoice under reverse charge is valid EN 16931 XML", %{scope: scope} do
     customer = customer_fixture(scope, %{"country" => "AT", "vat_id" => "ATU12345678"})
     xml = EInvoice.xml(invoice_fixture(scope, customer, %{"vat" => "reverse_charge"}))

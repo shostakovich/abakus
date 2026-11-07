@@ -635,18 +635,21 @@ purchase in an Anlagevermögen category only with its VAT, since the asset regis
 _Avoid_: Profit and loss, balance sheet (the owner keeps no double-entry books)
 
 **Filing**:
-A return sent to ELSTER through ERiC (ADR 0035), for now a quarter's advance VAT return, kept with the Kennzahlen it
-declared, ELSTER's transfer ticket and its transmission protocol. A quarter is sent once it is over, and once. Code:
-`Abakus.Bookkeeping.Filing`, `Abakus.Bookkeeping.Filings`. UI "An ELSTER senden", "gesendet", "Übertragungsprotokoll".
+A return sent to ELSTER through ERiC (ADR 0035): a quarter's advance VAT return, a year's annual VAT return or its
+EÜR (with the Anlage AVEÜR), kept with the Kennzahlen it declared, ELSTER's transfer ticket and its transmission
+protocol. Each is sent once its period is over, and once. Code: `Abakus.Bookkeeping.Filing`,
+`Abakus.Bookkeeping.Filings`. UI "An ELSTER senden", "gesendet", "Übertragungsprotokoll".
 _Avoid_: Submission, report, declaration
 
 **Locked period**:
-The period of a filing: its tax lines and disposals can no longer change, and a change in the Ledger that alters its
-numbers needs a corrected return, which Abakus does not send yet. Code: `Filings.locked?/2`. UI "Zeitraum ist
-festgeschrieben".
+The period of a filing, a quarter or a year: its tax lines and disposals can no longer change, nor, once its EÜR is
+sent, what a fixed asset counts for in the year. A change in the Ledger that alters its numbers needs a corrected
+return, which Abakus does not send yet. Code: `Filings.locked?/2`. UI "Zeitraum ist festgeschrieben".
 _Avoid_: Closed, frozen
 
 **ELSTER certificate**:
 The owner's certificate file (.pfx) from "Mein ELSTER", kept in the bookkeeping settings with the state of their tax
-office, which ERiC needs to write the tax number in ELSTER's format; its PIN is asked at every send and never stored.
-Code: `Abakus.Bookkeeping.Settings`, `Abakus.Bookkeeping.States`. UI "Zertifikat", "PIN", the settings page "ELSTER".
+office, which ERiC needs to write the tax number in ELSTER's format, and, for the EÜR, the kind of business and of
+income; its PIN is asked at every send and never stored.
+Code: `Abakus.Bookkeeping.Settings`, `Abakus.Bookkeeping.States`. UI "Zertifikat", "PIN", "Art des Betriebs",
+"Einkunftsart", the settings page "ELSTER".

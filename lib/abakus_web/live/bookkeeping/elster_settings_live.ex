@@ -1,8 +1,8 @@
 defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
   @moduledoc """
   „ELSTER“ in the settings, for a user with the Buchhaltung: what sending a return needs (`Abakus.Bookkeeping.Filings`),
-  the state of the tax office, which ELSTER takes with the tax number of „Rechnungen“, and the ELSTER certificate, a
-  .pfx file. Its PIN is asked at every send.
+  the state of the tax office, which ELSTER takes with the tax number of „Rechnungen“, what the EÜR says of the
+  business, and the ELSTER certificate, a .pfx file. Its PIN is asked at every send.
   """
   use AbakusWeb, :live_view
 
@@ -30,7 +30,9 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
     >
       <.header>
         ELSTER
-        <:subtitle>Womit Abakus die Voranmeldungen an das Finanzamt sendet.</:subtitle>
+        <:subtitle>
+          Womit Abakus Voranmeldungen, Umsatzsteuererklärung und EÜR an das Finanzamt sendet.
+        </:subtitle>
       </.header>
       <p class="mb-4 flex flex-wrap items-center gap-x-2 font-medium">
         Senden<span class="sr-only">:</span>
@@ -49,6 +51,22 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
           label="Bundesland des Finanzamts"
           options={States.options()}
           prompt="Bitte wählen"
+          class="max-w-80"
+        />
+        <.input
+          field={@form[:business_activity]}
+          label="Art des Betriebs"
+          help="Für die EÜR, zum Beispiel „Softwareentwicklung“."
+          class="max-w-80"
+        />
+        <.input
+          field={@form[:income_kind]}
+          type="select"
+          label="Einkunftsart"
+          options={[
+            {"Selbständige Arbeit (freier Beruf)", "self_employment"},
+            {"Gewerbebetrieb", "trade"}
+          ]}
           class="max-w-80"
         />
         <.action_bar class="mt-4">
@@ -130,7 +148,7 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
     assign(socket,
       settings: settings,
       form: to_form(Invoices.change_settings(settings)),
-      missing: Filings.missing(socket.assigns.current_scope)
+      missing: Filings.missing(socket.assigns.current_scope, :euer)
     )
   end
 
@@ -160,7 +178,10 @@ defmodule AbakusWeb.Bookkeeping.ElsterSettingsLive do
   def handle_event("validate_certificate", _params, socket), do: {:noreply, socket}
 
   def handle_event("save", %{"settings" => params}, socket) do
-    case Invoices.save_settings(socket.assigns.current_scope, Map.take(params, ["tax_state"])) do
+    case Invoices.save_settings(
+           socket.assigns.current_scope,
+           Map.take(params, ["tax_state", "business_activity", "income_kind"])
+         ) do
       {:ok, settings} ->
         {:noreply, socket |> assign_settings(settings) |> push_saved("elster-settings-save")}
 
