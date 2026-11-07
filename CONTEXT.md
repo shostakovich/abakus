@@ -280,7 +280,8 @@ _Avoid_: Budget area, Depot area, finances
 
 **Import & Sync**:
 Finanzen's page for what comes in from outside, in tabs: Bankdateien (the budget owner's file import),
-Bankverbindungen (their bank connections) and Belege (the inbox, for users with a portfolio). UI "Import & Sync".
+Bankverbindungen (their bank connections), Lexoffice (the Lexoffice import, with the Buchhaltung) and Belege (the
+inbox, for users with a portfolio). UI "Import & Sync".
 _Avoid_: Settings (it is a task, not a setting)
 
 **Settings hub**:
@@ -572,8 +573,9 @@ _Avoid_: Contact, client, account
 
 **Invoice**:
 What the owner bills a customer: positions, a service period, the VAT and a number, written once and never changed.
-It keeps its sender and recipient as they were when it was written. Its PDF is an e-invoice. Code:
-`Abakus.Bookkeeping.Invoice`, `Abakus.Bookkeeping.Invoices`. UI "Rechnung".
+It keeps its sender and recipient as they were when it was written. Its PDF is an e-invoice; one from Lexoffice keeps
+its original PDF in Paperless and whether it was paid or voided there. Code: `Abakus.Bookkeeping.Invoice`,
+`Abakus.Bookkeeping.Invoices`. UI "Rechnung", "storniert".
 _Avoid_: Bill, receipt (that is the Depot's), attachment (that is a transaction's proof)
 
 **Invoice payment**:
@@ -613,6 +615,13 @@ _Avoid_: Tax return (that is the income tax), report
 **Kennzahl**:
 The number of a field on an ELSTER form, such as 81 for the base of sales at 19 % in the advance return. Code:
 `kennzahl`, `VatReturn.kennzahlen/1`, `IncomeStatement.kennzahlen/1`. UI "Kz".
+
+**Lexoffice import**:
+The one-off takeover from Lexoffice with an API key that is not stored: its customers and the invoices written there,
+each with its original PDF filed in Paperless. A second run brings only what is new, by the Lexoffice ids the
+records keep. Code: `Abakus.Bookkeeping.LexofficeImport`, `Abakus.Bookkeeping.Lexoffice`. UI Import & Sync's tab
+"Lexoffice".
+_Avoid_: Migration, sync (it runs once, not continually)
 
 **Fixed asset**:
 A purchase the business uses for years, in the asset register with its purchase date, net amount and useful life.

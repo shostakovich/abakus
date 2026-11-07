@@ -1,0 +1,102 @@
+{
+  "content": [
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000001",
+      "organizationId": "00000000-0000-4000-8000-0000000000aa",
+      "version": 2,
+      "roles": {
+        "customer": {
+          "number": 10001
+        }
+      },
+      "company": {
+        "name": "Muster & Söhne GmbH",
+        "allowTaxFreeInvoices": false
+      },
+      "addresses": {
+        "billing": [
+          {
+            "supplement": "",
+            "street": "Hauptstraße 1",
+            "zip": "80331",
+            "city": "München",
+            "countryCode": "DE"
+          }
+        ]
+      },
+      "archived": false
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000002",
+      "organizationId": "00000000-0000-4000-8000-0000000000aa",
+      "version": 1,
+      "roles": {
+        "customer": {
+          "number": 10002
+        }
+      },
+      "company": {
+        "name": "Esempio Digitale S.r.l.",
+        "vatRegistrationId": "IT 01234567897",
+        "allowTaxFreeInvoices": true
+      },
+      "addresses": {
+        "billing": [
+          {
+            "street": "Via Roma 12",
+            "zip": "39100",
+            "city": "Bozen",
+            "countryCode": "IT"
+          }
+        ]
+      },
+      "archived": false
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000003",
+      "organizationId": "00000000-0000-4000-8000-0000000000aa",
+      "version": 1,
+      "roles": {
+        "customer": {
+          "number": 10003
+        }
+      },
+      "person": {
+        "salutation": "Frau",
+        "firstName": "Erika",
+        "lastName": "Beispiel"
+      },
+      "archived": true
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000004",
+      "organizationId": "00000000-0000-4000-8000-0000000000aa",
+      "version": 1,
+      "roles": {
+        "vendor": {
+          "number": 70001
+        }
+      },
+      "company": {
+        "name": "Büromarkt Nord GmbH"
+      },
+      "archived": false
+    }
+  ],
+  "first": true,
+  "last": true,
+  "totalPages": 1,
+  "totalElements": 4,
+  "numberOfElements": 4,
+  "size": 250,
+  "number": 0,
+  "sort": [
+    {
+      "property": "name",
+      "direction": "ASC",
+      "ignoreCase": false,
+      "nullHandling": "NATIVE",
+      "ascending": true
+    }
+  ]
+}

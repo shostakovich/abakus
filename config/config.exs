@@ -39,6 +39,8 @@ config :abakus, Abakus.Paperless, client: Abakus.Paperless.API
 
 config :abakus, Abakus.Bookkeeping.Elster, client: Abakus.Bookkeeping.Elster.Eric
 
+config :abakus, Abakus.Bookkeeping.Lexoffice, client: Abakus.Bookkeeping.Lexoffice.API
+
 config :abakus, Abakus.Depot.Receipts,
   model: Abakus.Depot.Receipts.ChatAPI,
   text_extractor: Abakus.Depot.Receipts.Pdftotext

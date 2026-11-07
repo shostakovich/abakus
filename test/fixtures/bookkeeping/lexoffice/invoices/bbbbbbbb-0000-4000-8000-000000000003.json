@@ -1,0 +1,60 @@
+{
+  "id": "bbbbbbbb-0000-4000-8000-000000000003",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "createdDate": "2026-03-02T00:00:00.000+01:00",
+  "updatedDate": "2026-03-02T00:00:00.000+01:00",
+  "version": 3,
+  "language": "de",
+  "archived": false,
+  "voucherStatus": "paid",
+  "voucherNumber": "2026124",
+  "voucherDate": "2026-03-02T00:00:00.000+01:00",
+  "dueDate": "2026-03-02T00:00:00.000+01:00",
+  "address": {
+    "name": "Jonas Käufer",
+    "street": "Am Markt 3",
+    "city": "Hamburg",
+    "zip": "20095",
+    "countryCode": "DE"
+  },
+  "electronicDocumentProfile": "NONE",
+  "lineItems": [
+    {
+      "type": "material",
+      "name": "Notebook, gebraucht",
+      "quantity": 1,
+      "unitName": "Stück",
+      "unitPrice": {
+        "currency": "EUR",
+        "netAmount": 420.17,
+        "grossAmount": 500.0,
+        "taxRatePercentage": 19
+      },
+      "discountPercentage": 0,
+      "lineItemAmount": 420.17
+    }
+  ],
+  "totalPrice": {
+    "currency": "EUR",
+    "totalNetAmount": 420.17,
+    "totalGrossAmount": 500.0,
+    "totalTaxAmount": 79.83
+  },
+  "taxAmounts": [],
+  "taxConditions": {
+    "taxType": "gross"
+  },
+  "paymentConditions": {
+    "paymentTermLabel": "Zahlbar in 14 Tagen",
+    "paymentTermDuration": 14
+  },
+  "shippingConditions": {
+    "shippingDate": "2026-02-27T00:00:00.000+01:00",
+    "shippingType": "delivery"
+  },
+  "closingInvoice": false,
+  "relatedVouchers": [],
+  "introduction": "Unsere Leistungen stellen wir Ihnen wie folgt in Rechnung.",
+  "remark": "Vielen Dank.",
+  "title": "Rechnung"
+}

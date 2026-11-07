@@ -1,0 +1,79 @@
+{
+  "id": "bbbbbbbb-0000-4000-8000-000000000005",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "createdDate": "2025-05-05T00:00:00.000+02:00",
+  "updatedDate": "2025-05-05T00:00:00.000+02:00",
+  "version": 3,
+  "language": "de",
+  "archived": false,
+  "voucherStatus": "paid",
+  "voucherNumber": "2025110",
+  "voucherDate": "2025-05-05T00:00:00.000+02:00",
+  "dueDate": "2025-05-19T00:00:00.000+02:00",
+  "address": {
+    "contactId": "aaaaaaaa-0000-4000-8000-000000000001",
+    "name": "Muster & Söhne GmbH",
+    "street": "Hauptstraße 1",
+    "city": "München",
+    "zip": "80331",
+    "countryCode": "DE"
+  },
+  "electronicDocumentProfile": "NONE",
+  "lineItems": [
+    {
+      "type": "custom",
+      "name": "Hosting",
+      "quantity": 1,
+      "unitName": "Monat",
+      "unitPrice": {
+        "currency": "EUR",
+        "netAmount": 150.0,
+        "grossAmount": 178.5,
+        "taxRatePercentage": 19
+      },
+      "discountPercentage": 0,
+      "lineItemAmount": 150.0
+    },
+    {
+      "type": "custom",
+      "name": "Fachbuch",
+      "quantity": 1,
+      "unitName": "Stück",
+      "unitPrice": {
+        "currency": "EUR",
+        "netAmount": 40.0,
+        "grossAmount": 42.8,
+        "taxRatePercentage": 7
+      },
+      "discountPercentage": 0,
+      "lineItemAmount": 40.0
+    }
+  ],
+  "totalPrice": {
+    "currency": "EUR",
+    "totalNetAmount": 190.0,
+    "totalGrossAmount": 221.3,
+    "totalTaxAmount": 31.3
+  },
+  "taxAmounts": [],
+  "taxConditions": {
+    "taxType": "net"
+  },
+  "paymentConditions": {
+    "paymentTermLabel": "Zahlbar in 14 Tagen",
+    "paymentTermDuration": 14
+  },
+  "shippingConditions": {
+    "shippingDate": "2025-04-01T00:00:00.000+02:00",
+    "shippingEndDate": "2025-04-30T23:59:59.999+02:00",
+    "shippingType": "serviceperiod"
+  },
+  "closingInvoice": false,
+  "relatedVouchers": [],
+  "introduction": "Unsere Leistungen stellen wir Ihnen wie folgt in Rechnung.",
+  "remark": "Vielen Dank.",
+  "title": "Rechnung",
+  "files": {
+    "documentFileId": "ffffffff-0000-4000-8000-000000000005"
+  }
+}

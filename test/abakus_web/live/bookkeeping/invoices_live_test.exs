@@ -159,6 +159,29 @@ defmodule AbakusWeb.Bookkeeping.InvoicesLiveTest do
     refute has_element?(view, "#invoice-#{invoice.id}-release")
   end
 
+  test "shows invoices from Lexoffice as paid, voided or open as they were there", %{
+    conn: conn,
+    scope: scope,
+    business: business
+  } do
+    invoices = lexoffice_fixture(scope)
+    transaction_fixture(%{account_id: business.id, date: ~D[2026-03-05], amount: 50_000})
+
+    {:ok, view, _html} = live(conn, ~p"/buchhaltung/invoices")
+
+    paid = "#invoice-#{invoices["2026124"].id}"
+    assert has_element?(view, paid, "bezahlt am 05.03.2026")
+    refute has_element?(view, paid, "Zahlung eingegangen")
+    refute has_element?(view, paid, "offen")
+    refute has_element?(view, "#{paid}-release")
+
+    voided = "#invoice-#{invoices["2024102"].id}"
+    assert has_element?(view, voided, "storniert")
+    refute has_element?(view, voided, "offen")
+
+    assert has_element?(view, "#invoice-#{invoices["2026125"].id}", "offen")
+  end
+
   test "lists no invoice of another user", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/buchhaltung/invoices")
     assert has_element?(view, "#invoices-empty")

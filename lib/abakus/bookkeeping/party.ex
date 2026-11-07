@@ -36,7 +36,11 @@ defmodule Abakus.Bookkeeping.Party do
   @doc "Takes the spaces out of `fields` and writes them in capitals, as an IBAN or a VAT id is written."
   def normalize(changeset, fields) do
     Enum.reduce(fields, changeset, fn field, changeset ->
-      update_change(changeset, field, &(&1 |> String.replace(~r/\s/u, "") |> String.upcase()))
+      update_change(
+        changeset,
+        field,
+        &(&1 && &1 |> String.replace(~r/\s/u, "") |> String.upcase())
+      )
     end)
   end
 

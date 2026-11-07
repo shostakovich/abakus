@@ -1,0 +1,76 @@
+{
+  "id": "bbbbbbbb-0000-4000-8000-000000000001",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "createdDate": "2020-09-01T00:00:00.000+02:00",
+  "updatedDate": "2020-09-01T00:00:00.000+02:00",
+  "version": 3,
+  "language": "de",
+  "archived": false,
+  "voucherStatus": "paid",
+  "voucherNumber": "2020041",
+  "voucherDate": "2020-09-01T00:00:00.000+02:00",
+  "dueDate": "2020-09-15T00:00:00.000+02:00",
+  "address": {
+    "contactId": "aaaaaaaa-0000-4000-8000-000000000001",
+    "name": "Muster & Söhne GmbH",
+    "street": "Hauptstraße 1",
+    "city": "München",
+    "zip": "80331",
+    "countryCode": "DE"
+  },
+  "electronicDocumentProfile": "NONE",
+  "lineItems": [
+    {
+      "type": "custom",
+      "name": "Softwareentwicklung",
+      "quantity": 10,
+      "unitName": "Stunde",
+      "unitPrice": {
+        "currency": "EUR",
+        "netAmount": 95.0,
+        "grossAmount": 110.2,
+        "taxRatePercentage": 16
+      },
+      "discountPercentage": 0,
+      "lineItemAmount": 950.0,
+      "description": "August 2020"
+    },
+    {
+      "type": "text",
+      "name": "Danke für den Auftrag"
+    }
+  ],
+  "totalPrice": {
+    "currency": "EUR",
+    "totalNetAmount": 950.0,
+    "totalGrossAmount": 1102.0,
+    "totalTaxAmount": 152.0
+  },
+  "taxAmounts": [
+    {
+      "taxRatePercentage": 16.0,
+      "taxAmount": 152.0,
+      "netAmount": 950.0
+    }
+  ],
+  "taxConditions": {
+    "taxType": "net"
+  },
+  "paymentConditions": {
+    "paymentTermLabel": "Zahlbar in 14 Tagen",
+    "paymentTermDuration": 14
+  },
+  "shippingConditions": {
+    "shippingDate": "2020-08-01T00:00:00.000+02:00",
+    "shippingEndDate": "2020-08-31T23:59:59.999+02:00",
+    "shippingType": "serviceperiod"
+  },
+  "closingInvoice": false,
+  "relatedVouchers": [],
+  "introduction": "Unsere Leistungen stellen wir Ihnen wie folgt in Rechnung.",
+  "remark": "Vielen Dank.",
+  "title": "Rechnung",
+  "files": {
+    "documentFileId": "ffffffff-0000-4000-8000-000000000001"
+  }
+}

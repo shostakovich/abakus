@@ -1,0 +1,79 @@
+{
+  "id": "bbbbbbbb-0000-4000-8000-000000000004",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "createdDate": "2026-12-20T00:00:00.000+01:00",
+  "updatedDate": "2026-12-20T00:00:00.000+01:00",
+  "version": 3,
+  "language": "de",
+  "archived": false,
+  "voucherStatus": "open",
+  "voucherNumber": "2026125",
+  "voucherDate": "2026-12-20T00:00:00.000+01:00",
+  "dueDate": "2027-01-03T00:00:00.000+01:00",
+  "address": {
+    "contactId": "aaaaaaaa-0000-4000-8000-000000000002",
+    "name": "Esempio Digitale S.r.l.",
+    "street": "Via Roma 12",
+    "city": "Bozen",
+    "zip": "39100",
+    "countryCode": "IT"
+  },
+  "electronicDocumentProfile": "NONE",
+  "lineItems": [
+    {
+      "type": "custom",
+      "name": "Wartung",
+      "quantity": 1,
+      "unitName": "Monat",
+      "unitPrice": {
+        "currency": "EUR",
+        "netAmount": 1500.0,
+        "grossAmount": 1500.0,
+        "taxRatePercentage": 0
+      },
+      "discountPercentage": 0,
+      "lineItemAmount": 1500.0
+    },
+    {
+      "type": "custom",
+      "name": "Schulung",
+      "quantity": 4,
+      "unitName": "Stunde",
+      "unitPrice": {
+        "currency": "EUR",
+        "netAmount": 125.0,
+        "grossAmount": 125.0,
+        "taxRatePercentage": 0
+      },
+      "discountPercentage": 0,
+      "lineItemAmount": 500.0
+    }
+  ],
+  "totalPrice": {
+    "currency": "EUR",
+    "totalNetAmount": 2000.0,
+    "totalGrossAmount": 2000.0,
+    "totalTaxAmount": 0.0
+  },
+  "taxAmounts": [],
+  "taxConditions": {
+    "taxType": "intraCommunitySupply"
+  },
+  "paymentConditions": {
+    "paymentTermLabel": "Zahlbar in 14 Tagen",
+    "paymentTermDuration": 14
+  },
+  "shippingConditions": {
+    "shippingDate": "2026-11-01T00:00:00.000+01:00",
+    "shippingEndDate": "2026-11-30T23:59:59.999+01:00",
+    "shippingType": "serviceperiod"
+  },
+  "closingInvoice": false,
+  "relatedVouchers": [],
+  "introduction": "Unsere Leistungen stellen wir Ihnen wie folgt in Rechnung.",
+  "remark": "Vielen Dank.",
+  "title": "Rechnung",
+  "files": {
+    "documentFileId": "ffffffff-0000-4000-8000-000000000004"
+  }
+}

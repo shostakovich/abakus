@@ -1,0 +1,67 @@
+{
+  "content": [
+    {
+      "id": "bbbbbbbb-0000-4000-8000-000000000003",
+      "voucherType": "invoice",
+      "voucherStatus": "paid",
+      "voucherNumber": "2026124",
+      "voucherDate": "2026-03-02T00:00:00.000+01:00",
+      "createdDate": "2026-03-02T00:00:00.000+01:00",
+      "updatedDate": "2026-03-02T00:00:00.000+01:00",
+      "dueDate": "2026-03-02T00:00:00.000+01:00",
+      "contactName": "Jonas Käufer",
+      "totalAmount": 500.0,
+      "openAmount": 0.0,
+      "currency": "EUR",
+      "archived": false
+    },
+    {
+      "id": "bbbbbbbb-0000-4000-8000-000000000004",
+      "voucherType": "invoice",
+      "voucherStatus": "open",
+      "voucherNumber": "2026125",
+      "voucherDate": "2026-12-20T00:00:00.000+01:00",
+      "createdDate": "2026-12-20T00:00:00.000+01:00",
+      "updatedDate": "2026-12-20T00:00:00.000+01:00",
+      "dueDate": "2026-12-20T00:00:00.000+01:00",
+      "contactName": "Esempio Digitale S.r.l.",
+      "totalAmount": 2000.0,
+      "openAmount": 2000.0,
+      "currency": "EUR",
+      "archived": false,
+      "contactId": "aaaaaaaa-0000-4000-8000-000000000002"
+    },
+    {
+      "id": "bbbbbbbb-0000-4000-8000-000000000005",
+      "voucherType": "invoice",
+      "voucherStatus": "paid",
+      "voucherNumber": "2025110",
+      "voucherDate": "2025-05-05T00:00:00.000+02:00",
+      "createdDate": "2025-05-05T00:00:00.000+02:00",
+      "updatedDate": "2025-05-05T00:00:00.000+02:00",
+      "dueDate": "2025-05-05T00:00:00.000+02:00",
+      "contactName": "Muster & Söhne GmbH",
+      "totalAmount": 221.3,
+      "openAmount": 0.0,
+      "currency": "EUR",
+      "archived": false,
+      "contactId": "aaaaaaaa-0000-4000-8000-000000000001"
+    }
+  ],
+  "first": false,
+  "last": true,
+  "totalPages": 2,
+  "totalElements": 6,
+  "numberOfElements": 3,
+  "size": 250,
+  "number": 1,
+  "sort": [
+    {
+      "property": "name",
+      "direction": "ASC",
+      "ignoreCase": false,
+      "nullHandling": "NATIVE",
+      "ascending": true
+    }
+  ]
+}

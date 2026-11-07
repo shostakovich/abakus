@@ -33,6 +33,10 @@ config :abakus, Abakus.Bookkeeping.Elster,
   client: Abakus.Bookkeeping.FakeElster,
   vendor_id: "74931"
 
+config :abakus, Abakus.Bookkeeping.Lexoffice, client: Abakus.Bookkeeping.FakeLexoffice
+
+config :abakus, Abakus.Bookkeeping.Lexoffice.API, interval: 0, retry_after: 0
+
 config :abakus, Abakus.Depot.Receipts,
   model: Abakus.Depot.FakeModel,
   text_extractor: Abakus.Depot.FakeTextExtractor

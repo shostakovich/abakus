@@ -6,6 +6,10 @@ defmodule Abakus.Bookkeeping.Invoice do
 
   The VAT is the invoice's: 19 or 7 % of the net amount, or reverse charge, where a business customer in another EU
   country owes it.
+
+  An invoice taken over from Lexoffice keeps Lexoffice's amounts and its original PDF in Paperless, which stands
+  for it instead of one Abakus sets; it may carry the 16 % of the second half of 2020, the day Lexoffice recorded
+  its payment, or that it was voided there.
   """
 
   use Abakus.Schema, uuid: true
@@ -14,7 +18,7 @@ defmodule Abakus.Bookkeeping.Invoice do
 
   alias Abakus.Bookkeeping.{Customer, Party, Position}
 
-  @rates [rate_19: 19, rate_7: 7, reverse_charge: 0]
+  @rates [rate_19: 19, rate_16: 16, rate_7: 7, reverse_charge: 0]
 
   schema "bookkeeping_invoices" do
     field :number, :string
@@ -23,10 +27,17 @@ defmodule Abakus.Bookkeeping.Invoice do
     field :service_from, :date
     field :service_to, :date
     field :due_date, :date
-    field :vat, Ecto.Enum, values: [rate_19: "19", rate_7: "7", reverse_charge: "reverse_charge"]
+
+    field :vat, Ecto.Enum,
+      values: [rate_19: "19", rate_16: "16", rate_7: "7", reverse_charge: "reverse_charge"]
+
     field :net, :integer
     field :vat_amount, :integer
     field :total, :integer
+    field :lexoffice_id, :string
+    field :paperless_id, :integer
+    field :paid_on, :date
+    field :voided, :boolean, default: false
 
     embeds_many :positions, Position, on_replace: :delete
     embeds_one :sender, Party
@@ -38,8 +49,8 @@ defmodule Abakus.Bookkeeping.Invoice do
     timestamps()
   end
 
-  @doc "The VAT treatments an invoice offers."
-  def treatments, do: Keyword.keys(@rates)
+  @doc "The VAT treatments a new invoice offers."
+  def treatments, do: [:rate_19, :rate_7, :reverse_charge]
 
   @doc "The rate of a treatment in percent."
   def rate(treatment), do: Keyword.fetch!(@rates, treatment)
@@ -54,6 +65,7 @@ defmodule Abakus.Bookkeeping.Invoice do
       drop_param: :positions_drop
     )
     |> validate_required([:customer_id, :date, :service_from, :service_to, :vat])
+    |> validate_inclusion(:vat, treatments())
     |> validate_positions()
     |> validate_period()
     |> put_amounts()
@@ -80,6 +92,57 @@ defmodule Abakus.Bookkeeping.Invoice do
     amounts = amounts(get_field(changeset, :positions), get_field(changeset, :vat))
     change(changeset, net: amounts.net, vat_amount: amounts.vat, total: amounts.total)
   end
+
+  @doc """
+  An invoice from Lexoffice as it was written there: its number and counter, dates, amounts, positions, parties
+  and status are given, nothing is computed.
+  """
+  def import_changeset(invoice, attrs) do
+    invoice
+    |> cast(attrs, [
+      :customer_id,
+      :number,
+      :counter,
+      :date,
+      :service_from,
+      :service_to,
+      :due_date,
+      :vat,
+      :net,
+      :vat_amount,
+      :total,
+      :lexoffice_id,
+      :paperless_id,
+      :paid_on,
+      :voided
+    ])
+    |> put_embed(:positions, attrs.positions)
+    |> put_embed(:sender, attrs.sender)
+    |> put_embed(:recipient, attrs.recipient)
+    |> validate_required([
+      :customer_id,
+      :number,
+      :counter,
+      :date,
+      :service_from,
+      :service_to,
+      :due_date,
+      :vat,
+      :net,
+      :vat_amount,
+      :total,
+      :lexoffice_id,
+      :paperless_id
+    ])
+    |> unique_constraint(:number, name: :bookkeeping_invoices_user_id_number_index)
+    |> unique_constraint(:lexoffice_id, name: :bookkeeping_invoices_user_id_lexoffice_id_index)
+  end
+
+  @doc "Whether the invoice came from Lexoffice, so its PDF is the original in Paperless."
+  def imported?(%__MODULE__{paperless_id: id}), do: id != nil
+
+  @doc "Whether Lexoffice saw the invoice paid or voided, so it takes no payment here."
+  def settled?(%__MODULE__{} = invoice), do: invoice.voided or invoice.paid_on != nil
 
   @doc "The net amount, the VAT and the total in cents of `positions` under `treatment`."
   def amounts(positions, treatment) do

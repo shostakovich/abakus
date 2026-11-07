@@ -55,7 +55,8 @@ defmodule Abakus.Bookkeeping.Countries do
     do:
       Enum.sort_by(@eu ++ @others, &elem(&1, 1)) |> Enum.map(fn {code, name} -> {name, code} end)
 
-  def name(code), do: Map.fetch!(@names, code)
+  @doc "The German name of a country, its code for one not in the list, such as a customer's from Lexoffice."
+  def name(code), do: Map.get(@names, code, code)
 
   @doc "Whether a country is in the EU but not Germany, where a business customer owes the VAT itself."
   def other_eu?(code), do: code != "DE" and List.keymember?(@eu, code, 0)

@@ -138,6 +138,11 @@ defmodule Abakus.Bookkeeping.InvoicesTest do
       assert %{iban: ["ist keine gültige IBAN"]} = errors_on(changeset)
     end
 
+    test "may lose the IBAN and the VAT id again", %{scope: scope} do
+      assert {:ok, settings} = Invoices.save_settings(scope, %{"iban" => "", "vat_id" => ""})
+      assert {settings.iban, settings.vat_id} == {nil, nil}
+    end
+
     test "are complete with name, address, IBAN and a tax number or VAT id" do
       complete = %Settings{
         name: "A",
@@ -163,6 +168,14 @@ defmodule Abakus.Bookkeeping.InvoicesTest do
 
       assert Enum.map(Invoices.list_customers(scope), & &1.id) == [aachen.id, customer.id]
       assert Invoices.get_customer(other, customer.id) == nil
+    end
+
+    test "may lose the VAT id, not the name", %{scope: scope} do
+      customer = customer_fixture(scope, %{"vat_id" => "ATU12345678", "country" => "AT"})
+
+      assert {:ok, %{vat_id: nil}} = Invoices.update_customer(scope, customer, %{"vat_id" => ""})
+      assert {:error, changeset} = Invoices.update_customer(scope, customer, %{"name" => ""})
+      assert %{name: [_]} = errors_on(changeset)
     end
 
     test "need a name and an address", %{scope: scope} do

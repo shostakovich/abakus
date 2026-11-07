@@ -1,0 +1,65 @@
+{
+  "id": "bbbbbbbb-0000-4000-8000-000000000002",
+  "organizationId": "00000000-0000-4000-8000-0000000000aa",
+  "createdDate": "2024-06-27T00:00:00.000+02:00",
+  "updatedDate": "2024-06-27T00:00:00.000+02:00",
+  "version": 3,
+  "language": "de",
+  "archived": false,
+  "voucherStatus": "voided",
+  "voucherNumber": "2024102",
+  "voucherDate": "2024-06-27T00:00:00.000+02:00",
+  "dueDate": "2024-07-11T00:00:00.000+02:00",
+  "address": {
+    "contactId": "aaaaaaaa-0000-4000-8000-000000000001",
+    "name": "Muster & Söhne GmbH",
+    "street": "Hauptstraße 1",
+    "city": "München",
+    "zip": "80331",
+    "countryCode": "DE"
+  },
+  "electronicDocumentProfile": "NONE",
+  "lineItems": [
+    {
+      "type": "custom",
+      "name": "Beratung",
+      "quantity": 8,
+      "unitName": "Stunde",
+      "unitPrice": {
+        "currency": "EUR",
+        "netAmount": 100.0,
+        "grossAmount": 119.0,
+        "taxRatePercentage": 19
+      },
+      "discountPercentage": 0,
+      "lineItemAmount": 800.0
+    }
+  ],
+  "totalPrice": {
+    "currency": "EUR",
+    "totalNetAmount": 800.0,
+    "totalGrossAmount": 952.0,
+    "totalTaxAmount": 152.0
+  },
+  "taxAmounts": [],
+  "taxConditions": {
+    "taxType": "net"
+  },
+  "paymentConditions": {
+    "paymentTermLabel": "Zahlbar in 14 Tagen",
+    "paymentTermDuration": 14
+  },
+  "shippingConditions": {
+    "shippingDate": "2024-05-01T00:00:00.000+02:00",
+    "shippingEndDate": "2024-06-04T23:59:59.999+02:00",
+    "shippingType": "serviceperiod"
+  },
+  "closingInvoice": false,
+  "relatedVouchers": [],
+  "introduction": "Unsere Leistungen stellen wir Ihnen wie folgt in Rechnung.",
+  "remark": "Vielen Dank.",
+  "title": "Rechnung",
+  "files": {
+    "documentFileId": "ffffffff-0000-4000-8000-000000000002"
+  }
+}

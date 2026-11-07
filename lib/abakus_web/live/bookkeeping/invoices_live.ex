@@ -3,11 +3,12 @@ defmodule AbakusWeb.Bookkeeping.InvoicesLive do
   The Buchhaltung's „Rechnungen“: the invoices the user wrote, the latest number first, each with its PDF to
   download and whether it is paid; „Neue Rechnung“ writes the next one (`AbakusWeb.Bookkeeping.InvoiceFormLive`).
   An open invoice offers the incoming transactions proposed as its payment to confirm, a paid one to release its
-  payment (`Abakus.Bookkeeping.InvoicePayments`).
+  payment (`Abakus.Bookkeeping.InvoicePayments`). An invoice from Lexoffice may have been paid or voided there; its
+  PDF is the original.
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.Bookkeeping.{InvoicePayments, Invoices}
+  alias Abakus.Bookkeeping.{Invoice, InvoicePayments, Invoices}
   alias Abakus.{Format, Money}
 
   @impl true
@@ -40,7 +41,7 @@ defmodule AbakusWeb.Bookkeeping.InvoicesLive do
           id={"invoice-#{invoice.id}"}
           title={"#{invoice.number} · #{invoice.recipient.name}"}
           href={pdf_path(invoice)}
-          muted={Map.has_key?(@payments, invoice.id)}
+          muted={Map.has_key?(@payments, invoice.id) or Invoice.settled?(invoice)}
         >
           <:meta>
             {join_meta([
@@ -51,7 +52,8 @@ defmodule AbakusWeb.Bookkeeping.InvoicesLive do
           </:meta>
           <:trailing>
             <.badge :if={@proposals[invoice.id]} tone={:info}>Zahlung eingegangen</.badge>
-            <.badge :if={!@payments[invoice.id] and !@proposals[invoice.id]}>offen</.badge>
+            <.badge :if={invoice.voided}>storniert</.badge>
+            <.badge :if={open?(invoice, @payments, @proposals)}>offen</.badge>
             <.amount value={invoice.total} />
           </:trailing>
           <:action
@@ -101,7 +103,12 @@ defmodule AbakusWeb.Bookkeeping.InvoicesLive do
   defp pdf_path(invoice), do: ~p"/buchhaltung/invoices/#{invoice.id}/pdf"
 
   defp status_text(_invoice, %{date: date}), do: "bezahlt am #{Format.date(date)}"
+  defp status_text(%{voided: true}, nil), do: nil
+  defp status_text(%{paid_on: %Date{} = date}, nil), do: "bezahlt am #{Format.date(date)}"
   defp status_text(invoice, nil), do: "fällig #{Format.date(invoice.due_date)}"
+
+  defp open?(invoice, payments, proposals),
+    do: !payments[invoice.id] and !proposals[invoice.id] and !Invoice.settled?(invoice)
 
   defp payment_text(%{payee: %{name: name}} = payment),
     do: "#{name} hat am #{Format.date(payment.date)} #{Money.euros(payment.amount)} überwiesen."

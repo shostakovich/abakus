@@ -52,7 +52,7 @@ defmodule Abakus.Repo.Migrations.CreateBookkeepingInvoices do
         null: false,
         check: %{
           name: "bookkeeping_invoices_vat_check",
-          expr: "vat IN ('19', '7', 'reverse_charge')"
+          expr: "vat IN ('19', '16', '7', 'reverse_charge')"
         }
 
       add :net, :integer, null: false

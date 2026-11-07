@@ -1,8 +1,22 @@
 defmodule Abakus.BookkeepingFixtures do
   @moduledoc "The sender, ELSTER, customers, invoices and fixed assets of the Buchhaltung for tests."
 
-  alias Abakus.Bookkeeping.{Filings, FixedAssets, Invoices}
+  alias Abakus.Bookkeeping.{FakeLexoffice, Filings, FixedAssets, Invoices, LexofficeImport}
+  alias Abakus.{FakePaperless, Paperless}
   alias Abakus.Users.Scope
+
+  @paperless "http://paperless.test"
+
+  @doc "The customers and invoices of the recorded Lexoffice responses, imported with the PDFs in a Paperless."
+  def lexoffice_fixture(%Scope{} = scope) do
+    {:ok, _connection} =
+      Paperless.update_connection(scope, %{"url" => @paperless, "token" => "t"})
+
+    FakePaperless.serve(%{@paperless => %{token: "t", documents: []}})
+    FakeLexoffice.serve("lexoffice-key")
+    {:ok, _result} = LexofficeImport.run(scope, fn -> "lexoffice-key" end)
+    Map.new(Invoices.list_invoices(scope), &{&1.number, &1})
+  end
 
   def sender_attrs(attrs \\ %{}) do
     Enum.into(attrs, %{

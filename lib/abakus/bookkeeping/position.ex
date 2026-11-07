@@ -14,6 +14,7 @@ defmodule Abakus.Bookkeeping.Position do
   @units [
     {"HUR", "Stunden", "Std."},
     {"DAY", "Tage", "Tage"},
+    {"MON", "Monate", "Mon."},
     {"C62", "Stück", "Stk."},
     {"LS", "Pauschal", "pauschal"}
   ]

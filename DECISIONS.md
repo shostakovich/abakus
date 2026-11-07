@@ -440,3 +440,18 @@ Accepted, 2026-11-08 (#147, #156, #157).
   so the mounted ERiC has to be updated each year, and the helper follows the ERiC 44 signatures. A change to a sent
   period needs a corrected return, which Abakus does not send yet.
 
+
+## 0036. Invoices from Lexoffice keep their original PDF and status
+
+Accepted, 2026-11-08 (#147, #158). Narrows 0034 for imported invoices.
+
+- **Context:** Ten years of invoices written in Lexoffice come over once, so that Lexoffice can be cancelled. Their
+  PDFs are what the customers got, and many were paid years before the business account's history is in the Ledger.
+- **Decision:** An imported invoice keeps Lexoffice's number, dates, amounts and positions, and its original PDF goes
+  to Paperless like an uploaded receipt (0033); a download serves that PDF, Typst never sets one for it. It keeps the
+  day Lexoffice saw it paid, or that it was voided there, instead of a confirmed payment, and then takes none. Its
+  VAT may be the 16 % of 2020, which new invoices do not offer. Customer and invoice keep their Lexoffice ids, by
+  which a second run skips them.
+- **Consequences:** An imported invoice's PDF needs Paperless, and its positions are a record only. Its incoming
+  payment is not linked to the transaction that paid it, so that transaction still asks for a receipt in the inbox
+  unless its period is locked. A voided invoice keeps its number.

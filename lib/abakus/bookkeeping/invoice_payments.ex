@@ -2,7 +2,7 @@ defmodule Abakus.Bookkeeping.InvoicePayments do
   @moduledoc """
   Whether the user's invoices are paid: an invoice is paid once the owner confirms an incoming transaction as its
   payment (`Abakus.Bookkeeping.InvoicePayment`), and open while it has none or that transaction has left the
-  register.
+  register. An invoice from Lexoffice that was paid or voided there is so here too, and takes no payment.
 
   Proposed as an open invoice's payment are the business accounts' transactions of exactly its total, dated on or
   after it, that are no transfer and pay no other invoice, the earliest first.
@@ -42,7 +42,7 @@ defmodule Abakus.Bookkeeping.InvoicePayments do
   def proposals(%Scope{} = scope, invoices) do
     paid = payments(scope, invoices)
 
-    case Enum.reject(invoices, &Map.has_key?(paid, &1.id)) do
+    case Enum.reject(invoices, &(Map.has_key?(paid, &1.id) or Invoice.settled?(&1))) do
       [] -> %{}
       open -> propose(scope, open)
     end
@@ -79,8 +79,8 @@ defmodule Abakus.Bookkeeping.InvoicePayments do
 
   @doc """
   Confirms the transaction with `transaction_id` as the payment of the user's open invoice, which is then paid.
-  `{:error, :paid}` when the invoice is paid already, `{:error, :not_found}` when the transaction is no proposal for
-  it.
+  `{:error, :paid}` when the invoice is paid already, `{:error, :voided}` when it was voided, `{:error, :not_found}`
+  when the transaction is no proposal for it.
   """
   def confirm(%Scope{} = scope, %Invoice{id: invoice_id}, transaction_id) do
     Repo.transact(fn ->
@@ -99,10 +99,14 @@ defmodule Abakus.Bookkeeping.InvoicePayments do
       else
         nil -> {:error, :not_found}
         :paid -> {:error, :paid}
+        :voided -> {:error, :voided}
         :error -> {:error, :not_found}
       end
     end)
   end
+
+  defp status(_scope, %Invoice{voided: true}), do: :voided
+  defp status(_scope, %Invoice{paid_on: %Date{}}), do: :paid
 
   defp status(scope, invoice),
     do: if(Map.has_key?(payments(scope, [invoice]), invoice.id), do: :paid, else: :open)

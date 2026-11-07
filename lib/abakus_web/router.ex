@@ -107,6 +107,7 @@ defmodule AbakusWeb.Router do
       live "/import", ImportLive
       live "/bank-connections", BankConnectionsLive, :index
       live "/bank-connections/:id/accounts", BankConnectionsLive, :accounts
+      live "/lexoffice", LexofficeImportLive
     end
   end
 

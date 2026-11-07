@@ -93,7 +93,8 @@ defmodule AbakusWeb.Bookkeeping.CustomersLive do
 
   defp address(customer) do
     country = if customer.country != "DE", do: [Countries.name(customer.country)], else: []
-    [customer.street, "#{customer.postal_code} #{customer.city}"] ++ country
+    place = [customer.postal_code, customer.city] |> Enum.reject(&is_nil/1) |> Enum.join(" ")
+    [customer.street, if(place != "", do: place)] ++ country
   end
 
   @impl true
