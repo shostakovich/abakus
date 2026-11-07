@@ -24,6 +24,9 @@ defmodule Abakus.FileImport.OFX do
           ledger_balance: %{amount: integer(), date: Date.t()} | nil
         }
 
+  @doc "Whether the content looks like OFX: it has an `<OFX>` tag."
+  def ofx?(content) when is_binary(content), do: Regex.match?(~r/<OFX>/i, content)
+
   @spec parse(binary()) :: {:ok, [statement()]} | {:error, String.t()}
   def parse(content) when is_binary(content) do
     with {:ok, body} <- body(utf8(content)) do

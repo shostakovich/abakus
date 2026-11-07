@@ -3,7 +3,7 @@
 Self-hosted envelope budgeting for one household, meant to replace YNAB for my own use. **The UI is German.**
 
 - **Budget:** YNAB's rules in a multi-month view like [Actual Budget](https://actualbudget.org/), targets, an
-  editable register, reconciling, OFX/QFX import and bank sync through [Enable Banking](https://enablebanking.com/),
+  editable register, reconciling, OFX/QFX and Kontist CSV import and bank sync through [Enable Banking](https://enablebanking.com/),
   both with match proposals.
 - **Kasse:** the household's shared expenses with balances, recurring expenses, exchange rates, export and an MCP
   server ([docs/MCP.md](docs/MCP.md)). They write into the budget owner's accounts.

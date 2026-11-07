@@ -171,6 +171,65 @@ defmodule Abakus.FileImportTest do
     end
   end
 
+  describe "Kontist export" do
+    setup do
+      %{kontist: account_fixture(name: "Kontist", kind: :tracking)}
+    end
+
+    defp kontist(name) do
+      {:ok, [statement]} = FileImport.read(File.read!("test/fixtures/kontist/#{name}"))
+      statement
+    end
+
+    test "reads a sample export into the tracking account and skips what is already there",
+         %{kontist: kontist} do
+      september = kontist("geschaeftskonto_2026-09.csv")
+      october = kontist("geschaeftskonto_2026-10.csv")
+
+      assert {:ok, %{new: 5, matched: 0}} =
+               FileImport.import(budget_scope(), [{september, kontist}])
+
+      assert FileImport.linked_account(budget_scope(), october).id == kontist.id
+      assert %{new: 2, existing: 3} = FileImport.preview(budget_scope(), october, kontist)
+
+      assert {:ok, %{new: 2, matched: 0}} =
+               FileImport.import(budget_scope(), [{october, kontist}])
+
+      assert {:ok, %{new: 0, matched: 0}} =
+               FileImport.import(budget_scope(), [{october, kontist}])
+
+      assert {:ok, %{new: 0, matched: 0}} =
+               FileImport.import(budget_scope(), [{september, kontist}])
+
+      assert kontist |> register() |> Enum.map(&{&1.date, &1.amount, &1.payee.name, &1.memo}) == [
+               {~D[2026-09-01], 238_000, "Kunde Beispiel eG", "RE 2026101"},
+               {~D[2026-09-10], -2_380, "Software Muster Ltd", "Rechnung 4711; Abo September"},
+               {~D[2026-09-15], -450, "Bahn Beispiel", nil},
+               {~D[2026-09-15], -450, "Bahn Beispiel", nil},
+               {~D[2026-09-30], -150_000, "Erika Mustermann", "Privatentnahme September"},
+               {~D[2026-10-01], -1_190, "Hosting Beispiel GmbH", nil},
+               {~D[2026-10-05], 238_000, "Kunde Beispiel eG", "RE 2026102"}
+             ]
+
+      assert Ledger.balances(budget_scope())[kontist.id].balance == 321_530
+      assert Repo.aggregate(BankBalance, :count) == 0
+    end
+
+    test "proposes a match for a transaction the register has already", %{kontist: kontist} do
+      fare = transaction_fixture(account_id: kontist.id, date: ~D[2026-09-14], amount: -450)
+
+      assert {:ok, %{new: 4, matched: 1}} =
+               FileImport.import(budget_scope(), [
+                 {kontist("geschaeftskonto_2026-09.csv"), kontist}
+               ])
+
+      assert [%Transaction{matched_transaction_id: id}] =
+               Ledger.list_match_proposals(budget_scope(), kontist)
+
+      assert id == fare.id
+    end
+  end
+
   describe "matching" do
     setup %{giro: giro} do
       bakery =

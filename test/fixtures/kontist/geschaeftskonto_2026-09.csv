@@ -1,0 +1,7 @@
+"Buchungsdatum";"Wertstellungsdatum";"Transaktionstyp";"Empfänger";"Betrag";"IBAN";"Verwendungszweck";"end_to_end_id";"Buchungsstatus";"Kategorie";"Persönliche Notiz"
+"2026-09-30";"2026-09-30";"Überweisung";"Erika Mustermann";"-1.500,00";"DE02120300000000202051";"Privatentnahme September";"NOTPROVIDED";"Gebucht";"Privatentnahme";""
+"2026-09-28";;"Kartenzahlung";"Hosting Beispiel GmbH";"-11,90";;;;"Vorgemerkt";"Umsatzsteuer 19%";
+"2026-09-15";"2026-09-15";"Kartenzahlung";"Bahn Beispiel";"-4,50";;;;"Gebucht";"Umsatzsteuer 7%";
+"2026-09-15";"2026-09-15";"Kartenzahlung";"Bahn Beispiel";"-4,50";;;;"Gebucht";"Umsatzsteuer 7%";
+"2026-09-10";"2026-09-10";"Lastschrift";"Software Muster Ltd";"-23,80";"IE29AIBK93115212345678";"Rechnung 4711; Abo September";"E2E-0001";"Gebucht";"Umsatzsteuer 19%";"Jahresabo prüfen"
+"2026-09-01";"2026-09-01";"Überweisung";"Kunde Beispiel eG";"2.380,00";"DE89370400440532013000";"RE 2026101";"E2E-0002";"Gebucht";"Einnahmen";""

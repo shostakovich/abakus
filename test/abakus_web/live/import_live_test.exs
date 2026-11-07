@@ -18,7 +18,8 @@ defmodule AbakusWeb.ImportLiveTest do
   end
 
   defp upload(view, name) do
-    content = File.read!("test/fixtures/ofx/#{name}")
+    folder = if Path.extname(name) == ".csv", do: "kontist", else: "ofx"
+    content = File.read!("test/fixtures/#{folder}/#{name}")
 
     view
     |> file_input("#import-form", :file, [
@@ -50,7 +51,7 @@ defmodule AbakusWeb.ImportLiveTest do
     assert has_element?(view, ~s|#import-tabs a[href="/budget/import"][aria-current=page]|)
     refute has_element?(view, ~s|#import-tabs a[href="/depot/receipts"]|)
     assert_error_sent 404, fn -> get(conn, ~p"/depot/receipts") end
-    assert has_element?(view, ~s|#import-form input[type=file][accept=".ofx,.qfx"]|)
+    assert has_element?(view, ~s|#import-form input[type=file][accept=".ofx,.qfx,.csv"]|)
     refute has_element?(view, "#import-preview")
   end
 
@@ -127,6 +128,32 @@ defmodule AbakusWeb.ImportLiveTest do
 
     assert render(register) =~ "Keine neuen Buchungen. Banksaldo aus der Datei gemerkt."
     assert length(Ledger.list_transactions(budget_scope(), giro)) == 6
+  end
+
+  test "a Kontist export goes into the tracking account and finds it the next time", %{conn: conn} do
+    kontist = account_fixture(name: "Kontist", kind: :tracking)
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
+
+    upload(view, "geschaeftskonto_2026-09.csv")
+
+    assert has_element?(view, "#import-preview", "5 Buchungen\u2060\u00A0· 01.09.2026–30.09.2026")
+    assert has_element?(view, "#statement-0", "Kontist")
+    refute has_element?(view, "#statement-0-balance")
+    assert has_element?(view, "#statement-0-new", "5 neu")
+    assert has_element?(view, "#statement-0 tbody tr", "Erika Mustermann")
+    refute has_element?(view, "#statement-0 tbody tr", "Hosting Beispiel")
+
+    view |> form("#statement-0-form", %{index: "0", account_id: kontist.id}) |> render_change()
+    {:ok, register, _html} = import_file(view, conn)
+
+    assert render(register) =~ "5 Buchungen importiert, zur Bestätigung in Kontist."
+
+    {:ok, view, _html} = live(conn, ~p"/budget/import")
+    upload(view, "geschaeftskonto_2026-10.csv")
+
+    assert has_element?(view, "#statement-0-account option[selected]", "Kontist")
+    assert has_element?(view, "#statement-0-new", "2 neu")
+    assert has_element?(view, "#statement-0-existing", "3 bereits vorhanden")
   end
 
   test "a linked file account can go into another account, which takes the link",
@@ -263,7 +290,7 @@ defmodule AbakusWeb.ImportLiveTest do
     refute has_element?(view, "#import-preview")
   end
 
-  test "a file that is no OFX says so", %{conn: conn} do
+  test "a file that is neither OFX nor a Kontist export says so", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/budget/import")
 
     view
@@ -272,7 +299,9 @@ defmodule AbakusWeb.ImportLiveTest do
     ])
     |> render_upload("umsaetze.csv")
 
-    assert render(view) =~ "Die Datei ist keine OFX- oder QFX-Datei."
+    assert render(view) =~
+             "Die Datei ist keine OFX- oder QFX-Datei und kein CSV-Export von Kontist."
+
     refute has_element?(view, "#import-preview")
   end
 

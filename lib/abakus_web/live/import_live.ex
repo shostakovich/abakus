@@ -1,6 +1,7 @@
 defmodule AbakusWeb.ImportLive do
   @moduledoc """
-  Import & Sync's Bankdateien, the file import: a chosen OFX/QFX file is read at once and previewed per statement, with
+  Import & Sync's Bankdateien, the file import: a chosen OFX/QFX file or Kontist CSV export is read at once and
+  previewed per statement, with
   the file's account, the bank balance it reports, the account it goes into and its transactions: new, there
   already, a match proposal for a transaction in the register, or before the last reconcile (skipped). A file
   account seen before has its linked account chosen; an unknown one asks for the account. The import remembers the
@@ -9,7 +10,7 @@ defmodule AbakusWeb.ImportLive do
   """
   use AbakusWeb, :live_view
 
-  alias Abakus.{FileImport, Format, Ledger}
+  alias Abakus.{FileImport, Format, Ledger, Money}
   alias AbakusWeb.ImportSync
   alias AbakusWeb.RegisterLive.{Components, TransactionEditor}
 
@@ -18,7 +19,7 @@ defmodule AbakusWeb.ImportLive do
   @upload_errors %{
     too_large: "Die Datei ist größer als 5 MB.",
     too_many_files: "Bitte nur eine Datei wählen.",
-    not_accepted: "Die Datei ist keine OFX- oder QFX-Datei."
+    not_accepted: "Die Datei ist keine OFX-, QFX- oder CSV-Datei."
   }
 
   @impl true
@@ -41,19 +42,20 @@ defmodule AbakusWeb.ImportLive do
         inbox={@depot_sidebar.inbox}
       >
         <:subtitle>
-          Umsätze aus dem Bank-Export (OFX oder QFX). Konten, die eine andere App füllt, nehmen keinen
-          Datei-Import.
+          Umsätze aus dem Bank-Export (OFX oder QFX) oder dem CSV-Export von Kontist. Konten, die eine
+          andere App füllt, nehmen keinen Datei-Import.
         </:subtitle>
       </ImportSync.import_header>
       <div class="flex flex-col gap-6">
         <form id="import-form" phx-change="validate" phx-submit="validate">
           <p id="import-steps" class="max-w-prose pb-2 text-sm text-base-content/70">
-            In der Banking-App die Umsätze des Kontos als OFX oder QFX exportieren und die Datei hier ablegen.
-            Buchungen, die schon da sind, erkennt Abakus an der FITID der Bank.
+            In der Banking-App die Umsätze des Kontos als OFX oder QFX exportieren, bei Kontist als CSV, und
+            die Datei hier ablegen. Buchungen, die schon da sind, erkennt Abakus an der FITID der Bank, im
+            Kontist-Export an Datum, Betrag und Empfänger.
           </p>
           <.file_drop
             upload={@uploads.file}
-            label="OFX- oder QFX-Datei"
+            label="OFX-, QFX- oder Kontist-CSV-Datei"
             error_labels={upload_errors()}
           />
         </form>
@@ -247,7 +249,7 @@ defmodule AbakusWeb.ImportLive do
        transfer_accounts: %{}
      )
      |> allow_upload(:file,
-       accept: ~w(.ofx .qfx),
+       accept: ~w(.ofx .qfx .csv),
        max_entries: 1,
        max_file_size: @max_file_size,
        auto_upload: true,
@@ -356,7 +358,7 @@ defmodule AbakusWeb.ImportLive do
 
   defp error_text({transaction, changeset}),
     do:
-      "Buchung vom #{Format.date(transaction.date)} (FITID #{transaction.fitid}): " <>
+      "Buchung vom #{Format.date(transaction.date)} über #{Money.euros(transaction.amount)}: " <>
         TransactionEditor.error_message(changeset)
 
   defp error_text(reason), do: TransactionEditor.error_message(reason)

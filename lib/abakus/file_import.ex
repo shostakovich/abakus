@@ -1,23 +1,30 @@
 defmodule Abakus.FileImport do
   @moduledoc """
-  The file import: the statements of an OFX/QFX file (`Abakus.FileImport.OFX`) into accounts. An account remembers
-  the file's account (`BANKID`, `ACCTID`) once a statement went into it, so the next file finds it.
+  The file import: the statements of an OFX/QFX file (`Abakus.FileImport.OFX`) or of Kontist's CSV export
+  (`Abakus.FileImport.Kontist`) into accounts. An account remembers the file's account (`BANKID`, `ACCTID`) once a
+  statement went into it, so the next file finds it.
 
   Transactions come in through the import core (`Abakus.Import`) from source `file`, with their FITID as external id,
-  the payee from `NAME` and the memo from `MEMO`. The statement's ledger balance becomes the account's bank balance
-  from the file.
+  the payee from `NAME` and the memo from `MEMO`. The statement's ledger balance, if any, becomes the account's bank
+  balance from the file.
 
   Only the accounts of `Abakus.Import.accounts/1` take a file import. Everything goes through the Ledger with the
   caller's scope.
   """
 
-  alias Abakus.FileImport.OFX
+  alias Abakus.FileImport.{Kontist, OFX}
   alias Abakus.{Import, Ledger, Sync}
   alias Abakus.Ledger.Account
   alias Abakus.Users.Scope
 
   @doc "The statements of a file, or why it cannot be read."
-  defdelegate read(content), to: OFX, as: :parse
+  def read(content) when is_binary(content) do
+    cond do
+      Kontist.export?(content) -> Kontist.parse(content)
+      OFX.ofx?(content) -> OFX.parse(content)
+      true -> {:error, "Die Datei ist keine OFX- oder QFX-Datei und kein CSV-Export von Kontist."}
+    end
+  end
 
   @doc "The accounts a statement can go into, in their order."
   def accounts(%Scope{} = scope), do: Import.accounts(scope)
